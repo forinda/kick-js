@@ -1,8 +1,11 @@
 # Route Flags — a shared vocabulary for "this endpoint is open"
 
-> Status: **phase 1 implemented** (`defineRouteFlag`, `ctx.route`, contributor
-> `skipWhen` / `onlyWhen`) — see `packages/kickjs/__tests__/route-flags.test.ts`.
-> Phases 2–4 (CSRF, rate limiting, OpenAPI + DevTools readers) are still proposals.
+> Status: **phases 1–2 implemented.** Phase 1: `defineRouteFlag`, `ctx.route`,
+> contributor `skipWhen` / `onlyWhen`. Phase 2: `exemptWhen` on the ctx-style
+> guards — `csrfGuard()` (new) and `rateLimitGuard()`. See
+> `packages/kickjs/__tests__/route-flags.test.ts` and `route-flag-guards.test.ts`.
+> Phase 3 (the connect-style `rateLimit()` policy table) and phase 4 (OpenAPI +
+> DevTools readers) are still proposals.
 > Decisions taken: core primitive in `@forinda/kickjs`; auth first, other consumers follow;
 > declaration must sit on the controller and propagate to its routes.
 
@@ -268,6 +271,19 @@ a second implementation of routing that can disagree with the engine's.
 Recommendation: **(a) for CSRF** (a token check is meaningless on an unmatched route) and **(b)
 for rate limiting** (an abuse control must see traffic that matches nothing). They are different
 problems wearing the same word.
+
+**How phase 2 actually resolved this.** Neither, in the end — a third option the framework had
+already invented for the edge. `rateLimitGuard()` was shipped as a **ctx-style** counterpart to
+the connect-style `rateLimit()` so it could run on the web entry; a ctx-style middleware runs
+_inside_ the matched route, which means it can read `ctx.route.flags` with no re-mounting and no
+path matcher. Phase 2 therefore added `csrfGuard()` in the same shape and gave both an
+`exemptWhen`.
+
+The connect-style `csrf()` and `rateLimit()` keep their path lists and their pre-match position,
+unchanged. That leaves a real choice rather than a migration: mount the connect middleware
+app-wide when you want unmatched requests covered too, or the guard per controller when you want
+flags. Option (b)'s policy table is still the answer for flag-aware limiting of traffic that
+matches no route — deferred to phase 3, where it is the only remaining case.
 
 ## Phasing
 

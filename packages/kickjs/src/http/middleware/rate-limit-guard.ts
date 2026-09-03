@@ -3,6 +3,7 @@
 // entry (via `@Middleware()` or `createWebApp({ middleware })`), unlike the
 // connect-style `rateLimit()` which is node-only. Zero runtime imports —
 // part of the edge purity graph.
+import { matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
 import type { RateLimitStore } from './rate-limit'
@@ -49,6 +50,22 @@ export interface RateLimitGuardOptions {
   store?: RateLimitStore
   /** Skip limiting for a request (health checks, allowlists). */
   skip?: (ctx: RequestContext) => boolean
+  /**
+   * Skip limiting on routes carrying a route flag — a name, a list of names
+   * (any-of), or a predicate. Declared on the route rather than restated as a
+   * path here, so it cannot drift when `apiPrefix` or a module's `version`
+   * changes:
+   *
+   * ```ts
+   * const Public = defineRouteFlag('auth.public')
+   * rateLimitGuard({ max: 60, exemptWhen: 'auth.public' })
+   * ```
+   *
+   * Only meaningful where a route has been matched — as `@Middleware()` on a
+   * class or method, or in `createWebApp({ middleware })`. Mounted app-wide
+   * ahead of routing there is no route to read, and nothing is exempted.
+   */
+  exemptWhen?: RouteFlagTest
 }
 
 /** Timer-free in-memory store: sweeps expired entries when the map grows. */
@@ -115,8 +132,13 @@ export function rateLimitGuard(options: RateLimitGuardOptions = {}): MiddlewareH
   const sendHeaders = options.headers ?? true
   const store = options.store ?? new LazyMemoryStore(windowMs)
 
+  const exemptWhen = options.exemptWhen
+
   return async (ctx: RequestContext, next: () => void): Promise<void> => {
     if (options.skip?.(ctx)) return next()
+    if (exemptWhen !== undefined && matchesFlagTest(exemptWhen, ctx.route?.flags, ctx.route)) {
+      return next()
+    }
 
     const { totalHits, resetTime } = await store.increment(keyGenerator(ctx))
     const remaining = Math.max(0, max - totalHits)

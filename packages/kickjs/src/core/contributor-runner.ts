@@ -2,7 +2,7 @@ import type { Container } from './container'
 import type { ContributorRegistration } from './context-decorator'
 import type { ExecutionContext } from './execution-context'
 import type { ContributorPipeline } from './contributor-pipeline'
-import type { RouteFlagTest } from './route-flag'
+import { matchesFlagTest } from './route-flag'
 import type { MatchedRoute } from '../http/runtime'
 
 export interface RunContributorsOptions {
@@ -28,30 +28,6 @@ export interface RunContributorsOptions {
  * requires owning that key. A flag is declared on the route, so an adopter can
  * exempt a contributor shipped by a plugin without forking it.
  */
-/**
- * Evaluate a flag test.
- *
- * - `'auth.public'` — the flag is present
- * - `['auth.public', 'internal']` — **any** of them is present. Any-of is the
- *   right default: the list reads as "these are all reasons to skip", and
- *   all-of is the rarer case, expressible with a predicate.
- * - `({ flags, route }) => boolean` — anything else: all-of, a flag's value, a
- *   path check, an env switch.
- */
-function matches(
-  test: RouteFlagTest,
-  flags: ReadonlyMap<string, unknown>,
-  ctx: ExecutionContext,
-): boolean {
-  if (typeof test === 'string') return flags.has(test)
-  // `Array.isArray` doesn't narrow a `readonly string[]` union member, so the
-  // check is written against the callable side instead.
-  if (typeof test === 'function') {
-    return test({ flags, route: (ctx as { route?: MatchedRoute }).route })
-  }
-  return test.some((name) => flags.has(name))
-}
-
 function shouldRun(
   reg: ContributorRegistration,
   ctx: ExecutionContext,
@@ -59,8 +35,9 @@ function shouldRun(
 ): boolean {
   if (reg.skipWhen === undefined && reg.onlyWhen === undefined) return true
   const resolved = flags ?? EMPTY_FLAGS
-  if (reg.skipWhen !== undefined && matches(reg.skipWhen, resolved, ctx)) return false
-  if (reg.onlyWhen !== undefined && !matches(reg.onlyWhen, resolved, ctx)) return false
+  const route = (ctx as { route?: MatchedRoute }).route
+  if (reg.skipWhen !== undefined && matchesFlagTest(reg.skipWhen, resolved, route)) return false
+  if (reg.onlyWhen !== undefined && !matchesFlagTest(reg.onlyWhen, resolved, route)) return false
   return true
 }
 

@@ -110,3 +110,36 @@ When validation fails, the middleware returns:
 ```
 
 with HTTP status **403**.
+
+## Exempting routes by flag
+
+`csrf()` runs before route matching, so its only handle on "not this endpoint" is
+`ignorePaths` — an exact pathname. That cannot express `/webhooks/:provider`, and
+it keeps parsing after an `apiPrefix` or `version` change that silently voids it.
+
+`csrfGuard()` is the ctx-style counterpart. It runs inside the matched route, so
+it reads [route flags](./route-flags.md) and works on every runtime including the
+web entry:
+
+```ts
+import { csrfGuard, defineRouteFlag, Middleware } from '@forinda/kickjs'
+
+const CsrfExempt = defineRouteFlag('csrf.exempt')
+
+@Middleware(csrfGuard({ exemptWhen: 'csrf.exempt' }))
+@Controller()
+export class WebhooksController {
+  @CsrfExempt
+  @Post('/:provider') // exempt, params and all
+  receive(ctx: RequestContext) {}
+
+  @Post('/settings') // still protected
+  settings(ctx: RequestContext) {}
+}
+```
+
+`exemptWhen` takes a flag name, a list of names (matched any-of), or a predicate
+`({ flags, route }) => boolean`.
+
+Keep `csrf()` when you want one app-wide middleware that also covers requests
+matching no route — there is nothing to exempt there, and nothing to read.

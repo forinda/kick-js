@@ -106,3 +106,40 @@ class RedisStore implements RateLimitStore {
 
 rateLimit({ store: new RedisStore(redis, 60_000) })
 ```
+
+## Exempting routes by flag
+
+`rateLimitGuard()` accepts `exemptWhen`, so "this endpoint is not limited" is
+declared on the route rather than restated as a path here:
+
+```ts
+import { defineRouteFlag, rateLimitGuard, Middleware } from '@forinda/kickjs'
+
+const Public = defineRouteFlag('auth.public')
+
+@Middleware(rateLimitGuard({ max: 60, exemptWhen: 'auth.public' }))
+@Controller()
+export class ApiController {
+  @Public
+  @Get('/health') // never limited
+  health(ctx: RequestContext) {}
+
+  @Get('/search') // limited
+  search(ctx: RequestContext) {}
+}
+```
+
+It takes a flag name, a list (any-of), or a predicate — including one that reads
+a flag's value:
+
+```ts
+rateLimitGuard({ max: 60, exemptWhen: ['auth.public', 'health.probe'] })
+rateLimitGuard({
+  max: 60,
+  exemptWhen: ({ flags }) => (flags.get('rate.limit') as { rpm: number })?.rpm === 0,
+})
+```
+
+The connect-style `rateLimit()` keeps `skipPaths` / `skip`: it runs before route
+matching, which is what you want for an abuse control that must also see traffic
+matching no route — but it cannot read flags. See [route flags](./route-flags.md).

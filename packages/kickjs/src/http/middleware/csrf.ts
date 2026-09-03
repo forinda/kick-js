@@ -3,6 +3,9 @@ import type { Request, Response, NextFunction } from 'express'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { randomHex } from '../../core/web-crypto'
+import { matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
+import type { MiddlewareHandler } from '../../core/decorators'
+import type { RequestContext } from '../context'
 
 export interface CsrfOptions {
   /** Cookie name for the CSRF token (default: '_csrf') */
@@ -96,6 +99,97 @@ export function csrf(options: CsrfOptions = {}) {
       return sendJson(res, 403, {
         message: 'CSRF token mismatch',
       })
+    }
+
+    next()
+  }
+}
+
+export interface CsrfGuardOptions extends CsrfOptions {
+  /**
+   * Skip the token check on routes carrying a route flag — a name, a list of
+   * names (any-of), or a predicate.
+   *
+   * This is the reason the guard exists. `csrf()` runs before route matching,
+   * so its only handle on "not this endpoint" is {@link CsrfOptions.ignorePaths}
+   * — an exact pathname string that cannot express `/webhooks/:provider` and
+   * keeps parsing after an `apiPrefix` change that voids it. A flag is declared
+   * on the route itself:
+   *
+   * ```ts
+   * const CsrfExempt = defineRouteFlag('csrf.exempt')
+   *
+   * @CsrfExempt
+   * @Controller()
+   * class WebhooksController {
+   *   @Post('/:provider') receive(ctx: RequestContext) {}
+   * }
+   * ```
+   */
+  exemptWhen?: RouteFlagTest
+}
+
+/**
+ * Double-submit cookie CSRF protection as a `(ctx, next)` middleware.
+ *
+ * The ctx-style counterpart of {@link csrf}: it runs inside the matched route,
+ * so it can read `ctx.route.flags` and be exempted per route, and it works on
+ * every runtime including the `@forinda/kickjs/web` fetch entry.
+ *
+ * ```ts
+ * // per controller — the flag-aware form
+ * @Middleware(csrfGuard({ exemptWhen: 'csrf.exempt' }))
+ * @Controller()
+ * class BillingController {}
+ *
+ * // edge, app-wide
+ * createWebApp({ h3, modules, middleware: [csrfGuard()] })
+ * ```
+ *
+ * Mount `csrf()` instead when you want one app-wide connect middleware that
+ * also covers requests matching no route — nothing to exempt, nothing to read.
+ */
+export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
+  const cookieName = options.cookie ?? '_csrf'
+  const headerName = options.header ?? 'x-csrf-token'
+  const protectedMethods = new Set(
+    (options.methods ?? ['POST', 'PUT', 'PATCH', 'DELETE']).map((m) => m.toUpperCase()),
+  )
+  const ignorePaths = new Set(options.ignorePaths ?? [])
+  const tokenLength = options.tokenLength ?? 32
+  const exemptWhen = options.exemptWhen
+  const cookieOpts = {
+    httpOnly: true,
+    sameSite: 'strict' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    ...options.cookieOptions,
+  }
+
+  return (ctx: RequestContext, next: () => void): void => {
+    const cookies = readCookies(ctx.req)
+    let token = cookies[cookieName]
+
+    if (!token) {
+      token = randomHex(tokenLength)
+      setCookie(ctx.res, cookieName, token, cookieOpts)
+    }
+
+    // Safe methods only ever issue the token.
+    const method = ctx.route?.method ?? (ctx.req as { method?: string }).method ?? 'GET'
+    if (!protectedMethods.has(method.toUpperCase())) return next()
+
+    // Flag first: it is the declared exemption, and cheaper than the path set.
+    if (exemptWhen !== undefined && matchesFlagTest(exemptWhen, ctx.route?.flags, ctx.route)) {
+      return next()
+    }
+
+    if (ignorePaths.has(resolvePathname(ctx.req as unknown as ClientRequestLike))) return next()
+
+    const headerToken = ctx.headers[headerName] as string | undefined
+    if (!headerToken || headerToken !== token) {
+      ctx.json({ message: 'CSRF token mismatch' }, 403)
+      return
     }
 
     next()
