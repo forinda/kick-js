@@ -36,7 +36,7 @@ csrf({
   ignorePaths: ['/webhooks/stripe', '/webhooks/github'],
   tokenLength: 32, // bytes before hex encoding (default: 32 = 64 hex chars)
   cookieOptions: {
-    httpOnly: false, // MUST be false for the client flow below — see the warning
+    httpOnly: false, // default: false — the page must be able to read the token
     sameSite: 'strict', // default: 'strict'
     secure: true, // default: true in production
     path: '/', // default: '/'
@@ -44,16 +44,16 @@ csrf({
 })
 ```
 
-::: danger `httpOnly` defaults to `true`, and that breaks the flow below
-Double-submit CSRF requires the **client** to read the token cookie and echo it in a header. The
-default `cookieOptions.httpOnly: true` hides the cookie from JavaScript, so `document.cookie`
-returns nothing, the header is omitted, and every mutating request answers `403`.
+::: tip Why `httpOnly` defaults to `false` here
+Double-submit CSRF requires the **client** to read the token cookie and echo it in a header. Under
+`httpOnly: true`, `document.cookie` returns nothing, no header is sent, and every mutating request
+answers `403` — the flow below could not work.
 
-Pass `cookieOptions: { httpOnly: false }` if your frontend reads the cookie — the CSRF token is
-not a credential, and a token an attacker cannot read is also a token your own page cannot send.
+The token is not a credential: it is compared against the cookie the browser already sends, so a
+token an attacker cannot read is also one your own page cannot send.
 
-Keep the default only when you deliver the token some other way: rendered into the page by the
-server, or fetched from an endpoint of your own.
+Set `httpOnly: true` only when the client receives the token another way — rendered into the page
+by the server, or fetched from an endpoint of your own.
 :::
 
 | Option          | Type       | Default                              |
@@ -70,8 +70,7 @@ The `secure` cookie flag defaults to `true` when `NODE_ENV` is `'production'` an
 ## Client-Side Usage
 
 Your frontend needs to read the CSRF cookie and send it back as a header on every mutating
-request — which requires `cookieOptions: { httpOnly: false }` on the server, since the default
-hides the cookie from JavaScript.
+request. The default cookie is readable by JavaScript for exactly this reason.
 
 ### JavaScript / Fetch
 
@@ -140,7 +139,7 @@ import { csrfGuard, defineRouteFlag, Middleware } from '@forinda/kickjs'
 
 const CsrfExempt = defineRouteFlag('csrf.exempt')
 
-@Middleware(csrfGuard({ exemptWhen: 'csrf.exempt', cookieOptions: { httpOnly: false } }))
+@Middleware(csrfGuard({ exemptWhen: 'csrf.exempt' }))
 @Controller()
 export class WebhooksController {
   @CsrfExempt

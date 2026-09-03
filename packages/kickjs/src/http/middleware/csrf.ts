@@ -20,6 +20,11 @@ export interface CsrfOptions {
   tokenLength?: number
   /** Cookie options */
   cookieOptions?: {
+    /**
+     * Default `false`, because double-submit CSRF needs the page to read the
+     * token and echo it in a header. Set `true` only if the client receives
+     * the token another way — server-rendered, or from your own endpoint.
+     */
     httpOnly?: boolean
     sameSite?: 'strict' | 'lax' | 'none'
     secure?: boolean
@@ -61,7 +66,14 @@ export function csrf(options: CsrfOptions = {}) {
   const ignorePaths = new Set(options.ignorePaths ?? [])
   const tokenLength = options.tokenLength ?? 32
   const cookieOpts = {
-    httpOnly: true,
+    // `false`, not `true`: double-submit CSRF requires the PAGE to read this
+    // cookie and echo it in a header. Under `httpOnly: true` `document.cookie`
+    // returns nothing, no header is sent, and every mutating request answers
+    // 403 — the documented client flow could not work. The token is not a
+    // credential; a token an attacker cannot read is also one your own page
+    // cannot send. Set `cookieOptions: { httpOnly: true }` only when the token
+    // reaches the client some other way (server-rendered, or your own endpoint).
+    httpOnly: false,
     sameSite: 'strict' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
@@ -159,7 +171,8 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
   const tokenLength = options.tokenLength ?? 32
   const exemptWhen = options.exemptWhen
   const cookieOpts = {
-    httpOnly: true,
+    // Same default as `csrf()` above, and for the same reason.
+    httpOnly: false,
     sameSite: 'strict' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',

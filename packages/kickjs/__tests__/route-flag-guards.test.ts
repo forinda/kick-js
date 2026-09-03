@@ -75,6 +75,30 @@ describe('csrfGuard + route flags', () => {
     expect(String(res.headers['set-cookie'])).toContain('_csrf=')
   })
 
+  it('issues a cookie the page can read — the double-submit flow depends on it', async () => {
+    const app = await boot(makeController())
+    const res = await request(app.handle.bind(app)).get('/api/v1/t/token')
+    const cookie = String(res.headers['set-cookie'])
+    // httpOnly would hide the token from document.cookie, so the client could
+    // never echo it and every mutating request would 403.
+    expect(cookie).not.toContain('HttpOnly')
+    expect(cookie).toContain('SameSite=Strict')
+  })
+
+  it('honours httpOnly: true for apps that deliver the token another way', async () => {
+    @Middleware(csrfGuard({ cookieOptions: { httpOnly: true } }))
+    @Controller()
+    class H {
+      @Get('/token')
+      token(ctx: RequestContext) {
+        ctx.json({ ok: true })
+      }
+    }
+    const app = await boot(H)
+    const res = await request(app.handle.bind(app)).get('/api/v1/t/token')
+    expect(String(res.headers['set-cookie'])).toContain('HttpOnly')
+  })
+
   it('rejects a mutating request with no token', async () => {
     const app = await boot(makeController())
     const res = await request(app.handle.bind(app)).post('/api/v1/t/pay').send({})
