@@ -24,6 +24,7 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
     kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
     kick__db.d.ts               # DB model types (when a DB adapter is configured)
     kick__context.d.ts          # ContextKeys augmentation (when context decorators exist)
+    kick__route-flags.d.ts      # KickRouteFlags augmentation (from defineRouteFlag calls)
 ```
 
 Each file is emitted by its own typegen plugin. There is no barrel
@@ -470,6 +471,37 @@ defineHttpContextDecorator({
 ```
 
 `ContextMeta` still drives the value type of `ctx.get('tenant')`; `ContextKeys` only records that the key exists. Scaffold a contributor (and its `ContextMeta` stub) with [`kick g contributor`](./context-decorators.md). Empty project → no `kick__context.d.ts` emitted and `dependsOn` falls back to `string[]`.
+
+### Route flags — `kick__route-flags.d.ts`
+
+The same pass collects every `defineRouteFlag('name')` call into a `KickRouteFlags` augmentation:
+
+```ts
+// src/flags.ts
+export const Public = defineRouteFlag('auth.public')
+export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+```
+
+```ts
+// .kickjs/types/kick__route-flags.d.ts (generated)
+declare module '@forinda/kickjs' {
+  interface KickRouteFlags {
+    'auth.public': true
+    'rate.limit': { rpm: number }
+  }
+}
+```
+
+This one carries the **value type** as well as the name, which is why it can do more than
+`ContextKeys` does for contributors: `flags.get('rate.limit')` is typed, not just checked for
+existence. A bare flag registers as `true`; an explicit generic registers that type verbatim.
+
+It is also the cheapest plugin in the set. A flag is a positional string literal with no
+`dependsOn` graph and no per-route ordering to resolve, so discovery is a single AST branch and
+the output is a flat map — where the context-key registry has to reason about the contributor
+pipeline before it can say anything. See [Route Flags](./route-flags.md).
+
+Empty project → an empty registry, and every flag name falls back to `string`.
 
 ## Augmentation catalogue
 

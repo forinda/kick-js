@@ -241,6 +241,27 @@ export interface DiscoveredPluginOrAdapter {
  * plugin, which emits the `ContextKeys` augmentation so `dependsOn`
  * typo-checking is automatic and complete.
  */
+/**
+ * A `defineRouteFlag('name')` call site.
+ *
+ * Cheaper to discover than a context key: the name is a positional string
+ * literal, there is no `dependsOn` graph to resolve and no per-route narrowing
+ * to compute — a flag is just a name, so scanning is one AST branch and the
+ * emitted registry is a flat map.
+ */
+export interface DiscoveredRouteFlag {
+  /** The literal name — `'auth.public'`. */
+  name: string
+  /**
+   * Source text of an explicit value type, when the call site writes one:
+   * `defineRouteFlag<{ rpm: number }>('rate.limit')` → `'{ rpm: number }'`.
+   * `null` for a bare flag, which is emitted as `true`.
+   */
+  valueType: string | null
+  filePath: string
+  relativePath: string
+}
+
 export interface DiscoveredContextKey {
   /** The literal `key:` value the contributor writes. */
   key: string
@@ -315,6 +336,8 @@ export interface ScanResult {
   augmentations: DiscoveredAugmentation[]
   /** Context keys from `define(Http)ContextDecorator({ key })` calls */
   contextKeys: DiscoveredContextKey[]
+  /** Route flags from `defineRouteFlag('name')` calls. */
+  routeFlags: DiscoveredRouteFlag[]
   /**
    * Decorated classes that sit inside a module directory but aren't
    * picked up by any of the module's `import.meta.glob(...)` patterns.
@@ -1699,6 +1722,7 @@ export interface FileExtract {
   pluginsAndAdapters: DiscoveredPluginOrAdapter[]
   augmentations: DiscoveredAugmentation[]
   contextKeys: DiscoveredContextKey[]
+  routeFlags: DiscoveredRouteFlag[]
   /** Routes with own-path `pathParams` only — mount prefix applied at join. */
   routes: DiscoveredRoute[]
   /** `{ controller, mountPath }` pairs from this file's `routes()` body. */
@@ -1780,6 +1804,8 @@ export function extractFileRegex(source: string, filePath: string, cwd: string):
     tokens: extractTokensFromSource(source, filePath, cwd),
     injects: extractInjectsFromSource(source, filePath, cwd),
     pluginsAndAdapters: extractPluginsAndAdaptersFromSource(source, filePath, cwd),
+    // The regex fallback does not scan flags — the AST extractor owns that.
+    routeFlags: [],
     augmentations: extractAugmentationsFromSource(source, filePath, cwd),
     contextKeys: extractContextKeysFromSource(source, filePath, cwd),
     // Empty mount map → own-path params only; prefix re-applied at join.
@@ -1979,6 +2005,7 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
   const pluginsAndAdapters: DiscoveredPluginOrAdapter[] = []
   const augmentations: DiscoveredAugmentation[] = []
   const contextKeys: DiscoveredContextKey[] = []
+  const routeFlags: DiscoveredRouteFlag[] = []
 
   // forinda/kick-js#235 §3 — build a `Controller → mountPath` map from every
   // module file's `routes()` body so per-route `pathParams` can include
@@ -2007,6 +2034,7 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
     pluginsAndAdapters.push(...extract.pluginsAndAdapters)
     augmentations.push(...extract.augmentations)
     contextKeys.push(...extract.contextKeys)
+    routeFlags.push(...extract.routeFlags)
     if (extract.globPatterns.length > 0) globPatternsByFile.set(files[i], extract.globPatterns)
 
     // Re-apply the cross-file mount prefix to each cached route's
@@ -2109,6 +2137,7 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
     pluginsAndAdapters,
     augmentations,
     contextKeys,
+    routeFlags,
     orphanedClasses,
   }
 }

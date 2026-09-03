@@ -192,7 +192,17 @@ Flag names are plain strings by default, which means a typo is a flag that silen
 Declare them once and every use narrows — the same `ContextMeta` mechanism [context
 decorators](./context-decorators.md) use:
 
+**`kick typegen` writes this for you.** It scans every `defineRouteFlag('name')` call and emits
+the registry to `.kickjs/types/kick__route-flags.d.ts` — so declaring a flag is the only step:
+
 ```ts
+// src/flags.ts — this is all you write
+export const Public = defineRouteFlag('auth.public')
+export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+```
+
+```ts
+// .kickjs/types/kick__route-flags.d.ts — generated, on every `kick dev` save
 declare module '@forinda/kickjs' {
   interface KickRouteFlags {
     'auth.public': true
@@ -200,6 +210,10 @@ declare module '@forinda/kickjs' {
   }
 }
 ```
+
+A bare flag registers as `true`; one declared with an explicit value type registers that type. You
+can also hand-write the augmentation if you prefer — the generated file is a normal declaration
+merge — but there is rarely a reason to.
 
 Three things switch on at once:
 
