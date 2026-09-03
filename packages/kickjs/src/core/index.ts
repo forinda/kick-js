@@ -298,6 +298,7 @@ export {
 } from './asset-keys'
 
 export { defineRouteFlag, resolveRouteFlags } from './route-flag'
+export { RoutePolicyTable, bindRoutePolicy, offerRoutePolicy } from './route-policy'
 export type {
   RouteFlag,
   RouteFlagContext,

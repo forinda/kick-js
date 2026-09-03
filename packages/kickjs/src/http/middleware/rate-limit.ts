@@ -1,3 +1,5 @@
+import { matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
+import { bindRoutePolicy, type RoutePolicyTable } from '../../core/route-policy'
 import { sendJson } from './respond'
 import type { Request, Response, NextFunction } from 'express'
 import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../client-ip'
@@ -29,6 +31,25 @@ export interface RateLimitOptions {
   skip?: (req: Request) => boolean
   /** Paths to exclude from rate limiting */
   skipPaths?: string[]
+  /**
+   * Skip limiting on routes carrying a route flag — a name, a list of names
+   * (any-of), or a predicate.
+   *
+   * This middleware runs before route matching, so it has no `ctx.route` to
+   * read. Instead the Application hands it a table of every mounted route's
+   * flags at boot, and the incoming method + pathname is looked up against it.
+   * Requests matching no route match no flags — which is the point of limiting
+   * here rather than in a route-scoped guard.
+   *
+   * ```ts
+   * const Public = defineRouteFlag('auth.public')
+   * bootstrap({ middlewares: [rateLimit({ max: 60, exemptWhen: 'auth.public' })] })
+   * ```
+   *
+   * Prefer `skipPaths` only for paths that are not routes at all (a static
+   * mount, a proxied prefix); a flag cannot describe those.
+   */
+  exemptWhen?: RouteFlagTest
 }
 
 interface MemoryStoreEntry {
@@ -129,13 +150,30 @@ export function rateLimit(options: RateLimitOptions = {}) {
   const store = options.store ?? new MemoryStore(windowMs)
   const skip = options.skip
   const skipPaths = new Set(options.skipPaths ?? [])
+  const exemptWhen = options.exemptWhen
 
-  return async (req: Request, res: Response, next: NextFunction) => {
+  // Filled in by the Application once routes are mounted, via the slot
+  // declared below. Absent when this middleware runs outside an Application
+  // (a bare connect stack, a unit test) — `exemptWhen` then matches nothing,
+  // which fails closed: everything stays limited.
+  let policy: RoutePolicyTable | undefined
+
+  const handler = async (req: Request, res: Response, next: NextFunction) => {
     // Skip if path is in the skip list
     // `req.path` is Express-only; `has(undefined)` never matched, so
     // configured skips were silently dead on the other runtimes.
-    if (skipPaths.has(resolvePathname(req as ClientRequestLike))) {
+    const pathname = resolvePathname(req as ClientRequestLike)
+    if (skipPaths.has(pathname)) {
       return next()
+    }
+
+    // Flag exemption: ask the table what flags the matched route WOULD carry.
+    // A request matching no route matches no flags and stays limited.
+    if (exemptWhen !== undefined && policy) {
+      const flags = policy.lookup(String(req.method ?? 'GET'), pathname)
+      if (matchesFlagTest(exemptWhen, flags)) {
+        return next()
+      }
     }
 
     // Skip if the skip function returns true
@@ -159,4 +197,8 @@ export function rateLimit(options: RateLimitOptions = {}) {
 
     next()
   }
+
+  return bindRoutePolicy(handler, (table) => {
+    policy = table
+  })
 }
