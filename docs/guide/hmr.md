@@ -17,7 +17,7 @@ import { modules } from './modules'
 bootstrap({ modules })
 ```
 
-On the first call, `bootstrap()` creates the application and registers error/shutdown handlers. In dev, Vite owns the `http.Server` and exposes it as `globalThis.__kickjs_httpServer`; `bootstrap()` attaches to that server rather than creating or listening on its own. (Outside dev, with no such global, it does create and listen.) On subsequent calls (triggered by HMR), it **tears the previous app down**, rebuilds the Express app, and swaps the request handler on the existing server — no restart needed.
+On the first call, `bootstrap()` creates the application and registers error/shutdown handlers. In dev, Vite owns the `http.Server` and exposes it as `globalThis.__kickjs_httpServer`; `bootstrap()` attaches to that server rather than creating or listening on its own. (Outside dev, with no such global, it does create and listen.) On subsequent calls (triggered by HMR), it **tears the previous app down**, rebuilds the application on whichever runtime is configured, and swaps the request handler on the existing server — no restart needed.
 
 ### What Is Preserved
 
