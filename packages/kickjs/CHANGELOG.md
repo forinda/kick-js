@@ -1,5 +1,213 @@
 # @forinda/kickjs
 
+## 8.2.0
+
+### Minor Changes
+
+- [#634](https://github.com/forinda/kick-js/pull/634) [`17bd26e`](https://github.com/forinda/kick-js/commit/17bd26e05825e86045d589963e291c725d68b8fc) Thanks [@forinda](https://github.com/forinda)! - `csrf()` and `csrfGuard()` now issue the token cookie with `httpOnly: false` by default.
+  
+  **Behaviour change.** The previous default was `true`, which made the documented client flow impossible: double-submit CSRF requires the page to read the token cookie and echo it in a header, and an `httpOnly` cookie is invisible to `document.cookie`. Following the guide produced no `x-csrf-token` header and a `403` on every mutating request.
+  
+  The token is not a credential — it is only compared against the cookie the browser already sends — so a token an attacker cannot read is also one your own page cannot send.
+  
+  **If you deliver the token some other way** (rendered into the page by the server, or fetched from an endpoint of your own) and want the cookie kept out of JavaScript, restore the old behaviour explicitly:
+  
+  ```ts
+  csrf({ cookieOptions: { httpOnly: true } })
+  csrfGuard({ cookieOptions: { httpOnly: true } })
+  ```
+  
+  Nothing else about the cookie changed: `sameSite: 'strict'`, `secure` in production, and `path: '/'` are unchanged.
+
+- [#634](https://github.com/forinda/kick-js/pull/634) [`aa78fbf`](https://github.com/forinda/kick-js/commit/aa78fbfe7265ea10aa2d1f986e8325fbe875d6f2) Thanks [@forinda](https://github.com/forinda)! - `exemptWhen` on the ctx-style guards, and a new `csrfGuard()` (phase 2 of `route-flags-design.md`).
+  
+  Route flags shipped in the previous minor could be read by anything holding a `RequestContext`, but the two middlewares that most need per-route exemption — CSRF and rate limiting — are mounted app-wide in their connect-style form and run before a route is matched. Their only handle on "not this endpoint" was an exact pathname string: `csrf({ ignorePaths })` / `rateLimit({ skipPaths })`, which cannot express `/webhooks/:provider` and keeps parsing after an `apiPrefix` or `version` change that silently voids it.
+  
+  **`csrfGuard(options)`** is the ctx-style counterpart of `csrf()` — same double-submit cookie behaviour, but it runs inside the matched route, so it works on every runtime including `@forinda/kickjs/web`, and it can be exempted by flag:
+  
+  ```ts
+  const CsrfExempt = defineRouteFlag('csrf.exempt')
+  
+  @Middleware(csrfGuard({ exemptWhen: 'csrf.exempt' }))
+  @Controller()
+  class WebhooksController {
+    @CsrfExempt
+    @Post('/:provider') // exempt, params and all
+    receive(ctx: RequestContext) {}
+  
+    @Post('/settings') // still protected
+    settings(ctx: RequestContext) {}
+  }
+  ```
+  
+  **`rateLimitGuard({ exemptWhen })`** does the same for limiting:
+  
+  ```ts
+  rateLimitGuard({ max: 60, exemptWhen: 'auth.public' })
+  rateLimitGuard({ max: 60, exemptWhen: ['auth.public', 'health.probe'] }) // any-of
+  rateLimitGuard({ max: 60, exemptWhen: ({ flags }) => flags.get('rate.limit')?.rpm === 0 })
+  ```
+  
+  Both accept a flag name, a list (matched any-of), or a predicate — the same `RouteFlagTest` the contributor `skipWhen` takes, now shared through one `matchesFlagTest()` so "which routes does this apply to" means the same thing everywhere.
+  
+  The connect-style `csrf()` and `rateLimit()` are unchanged, path lists included. Mount those app-wide when you want requests matching no route covered too; reach for the guards when you want flags.
+
+- [#637](https://github.com/forinda/kick-js/pull/637) [`872bc63`](https://github.com/forinda/kick-js/commit/872bc63d2ec5c0be01b2c28015491f981c911c3c) Thanks [@forinda](https://github.com/forinda)! - Negated route-flag tests: `'!auth.public'`.
+  
+  Every `skipWhen` / `onlyWhen` / `exemptWhen` now accepts a name with `!` in front, matching routes that do **not** carry the flag:
+  
+  ```ts
+  rateLimitGuard({ max: 60, exemptWhen: '!billing.metered' }) // exempt everything unmetered
+  ```
+  
+  Previously the only way to express that was a predicate. It matters most on `exemptWhen`, which has no `onlyWhen` counterpart — `skipWhen: '!x'` is just `onlyWhen: 'x'` written differently.
+  
+  A list stays single-polarity, and the type enforces it:
+  
+  ```ts
+  ;['auth.public', 'health.probe'] // carries ANY of these
+  ;['!auth.public', '!health.probe'] // carries NONE of these
+  ;['auth.public', '!health.probe'] // compile error
+  ```
+  
+  Mixed polarity would mean "public present **or** probe absent" under any-of, which most readers parse as "and" — so instead of picking a reading, the type rejects it and a predicate expresses the compound case. Mixing at runtime (from untyped config) throws where the consumer is constructed rather than on the first request that reaches it.
+  
+  Negated names narrow with `KickRouteFlags` like positive ones, so `'!auth.pubic'` is a compile error too.
+
+- [#637](https://github.com/forinda/kick-js/pull/637) [`7c4446c`](https://github.com/forinda/kick-js/commit/7c4446c7991bc93a226baeaf861e57180df1711e) Thanks [@forinda](https://github.com/forinda)! - Route flags: removal is `@Flag.off`, and `false` becomes an ordinary value.
+  
+  `false` was doing two jobs — "remove this flag" and "the value false" — and the first won. A flag declared `boolean` could never read back as `false`, because `@Enabled(false)` deleted it:
+  
+  ```ts
+  const Enabled = defineRouteFlag<boolean>('feature.enabled')
+  
+  @Enabled(false)                       // before: removed the flag
+                                        // now:    stores false
+  flags.get('feature.enabled')          // before: undefined
+                                        // now:    false
+  ```
+  
+  Removal now has its own spelling, applied bare like the flag itself:
+  
+  ```ts
+  @Public
+  @Controller()
+  class WebhooksController {
+    @Public.off // drops what the controller set
+    @Post('/admin')
+    admin(ctx) {}
+  }
+  ```
+  
+  `@Flag(false)` on a flag whose declared value is `true` is now a compile error pointing you at `.off`, so the old form cannot silently change meaning. Nothing else about resolution changed: a flag is absent or present, and `has()` remains the right question.
+  
+  Also: `defineRouteFlag` rejects a name starting with `!`, which is reserved for negated tests — `'!x'` as a name would be indistinguishable from the negation of `'x'`.
+
+- [#635](https://github.com/forinda/kick-js/pull/635) [`6983c06`](https://github.com/forinda/kick-js/commit/6983c0693b31e9fdc073868773c6271defa79ece) Thanks [@forinda](https://github.com/forinda)! - Route flags reach the OpenAPI spec and the DevTools dashboard (phase 4 of `route-flags-design.md`).
+  
+  **`getRouteFlags(controllerClass, handlerName)`** resolves a route's flags from the controller — the same method-over-class result `ctx.route.flags` carries at request time, for consumers that see a controller and a method name rather than a live request: an adapter's `onRouteMount`, spec generation, tooling.
+  
+  **Swagger gains `publicFlag`.** Name the flag your project uses for public endpoints and the spec reads the same declaration the runtime does, instead of asking for a second annotation that can drift from it:
+  
+  ```ts
+  export const Public = defineRouteFlag('auth.public')
+  
+  SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+  ```
+  
+  The name is configuration rather than a constant, because the framework deliberately names no flags — one project's `auth.public` is another's `public` or `security.none`. A list accepts several. It sits after `@ApiPublic` and `securityResolver` in the resolution order and before the `@ApiSecurity` / `@ApiBearerAuth` decorators, so an explicit resolver still wins while a flag still overrides class-level security.
+  
+  **DevTools reports flags per route.** `GET /_debug/routes` includes a `flags` object on each entry, and the dashboard's Routes tab shows them in a Flags column — so "why does this endpoint not require auth" is answerable from the route list rather than by reading the controller. Only flags in force appear: one turned off at the method is absent, not `false`.
+
+- [#637](https://github.com/forinda/kick-js/pull/637) [`f90e9f4`](https://github.com/forinda/kick-js/commit/f90e9f4a4b8a4daf107acabd852426e8c6eb2957) Thanks [@forinda](https://github.com/forinda)! - `KickRouteFlags` — route flags get the same type safety contributors have.
+  
+  Flag names were plain strings, so a typo produced a flag that silently never matched. Declare them once and every use narrows:
+  
+  ```ts
+  declare module '@forinda/kickjs' {
+    interface KickRouteFlags {
+      'auth.public': true
+      'rate.limit': { rpm: number }
+    }
+  }
+  ```
+  
+  - `defineRouteFlag('auth.pubic')` is a compile error, with TypeScript's "Did you mean" suggestion
+  - `defineRouteFlag('rate.limit')` infers `RouteFlag<{ rpm: number }>` from the registry — the explicit generic is no longer needed (and still works)
+  - `ctx.route.flags.get('rate.limit')` is typed `{ rpm: number } | undefined` instead of `unknown`, and `has()` takes only declared names
+  - `skipWhen`, `onlyWhen` and `exemptWhen` accept only declared names, in every consumer
+  
+  Additive and opt-in: `KickRouteFlags` is empty by default, and every one of those falls back to plain `string` / `unknown` while it stays empty — a project that declares nothing keeps compiling unchanged, and flags can be adopted one at a time. Same `[Known] extends [never]` fallback `ContextMetaKey` uses.
+  
+  The framework declares no flags of its own in the registry.
+
+- [#631](https://github.com/forinda/kick-js/pull/631) [`f6da2c0`](https://github.com/forinda/kick-js/commit/f6da2c08bed0f0bcd23be9c8521765c37454eb16) Thanks [@forinda](https://github.com/forinda)! - Route flags — one vocabulary for per-route policy (phase 1 of `route-flags-design.md`).
+  
+  `defineRouteFlag()` declares a named, inheritable fact about a route. Declare it on a controller and it applies to every route below; a method overrides its class:
+  
+  ```ts
+  export const Public = defineRouteFlag('auth.public')
+  
+  @Public
+  @Controller()
+  class WebhooksController {
+    @Get('/health') health(ctx: RequestContext) {} // inherits auth.public
+  
+    @Public(false) // method wins
+    @Post('/admin')
+    admin(ctx: RequestContext) {} // flag is ABSENT here
+  }
+  ```
+  
+  A flag resolves to **absent**, or **present with a value defaulting to `true`** — never present-and-false. That is what makes `flags.has(name)` safe to write in a guard: `@Public(false)` removes the flag the class set rather than storing `false`, so a presence check can't read a re-protected route as public.
+  
+  **`ctx.route`** exposes the matched route — `method`, `path`, `controller`, `handlerName`, and the resolved `flags` — to anything holding a `RequestContext`: handlers, `@Middleware()`, guards, contributors. Works identically on Express, Fastify, h3, and the `@forinda/kickjs/web` fetch entry.
+  
+  ```ts
+  const requireAuth = (ctx: RequestContext, next: () => void) => {
+    if (ctx.route?.flags.has('auth.public')) return next()
+    // …
+  }
+  ```
+  
+  **Contributors gain `skipWhen` / `onlyWhen`**, which is what makes exemption composable. Previously a contributor could only be opted out of by registering a permissive twin under the same key — something only its author can do. A flag lives on the route, so an adopter can exempt a plugin's contributor without owning its key:
+  
+  ```ts
+  defineHttpContextDecorator({ key: 'user', skipWhen: 'auth.public', resolve })
+  defineHttpContextDecorator({ key: 'usage', onlyWhen: 'billing.metered', resolve })
+  ```
+  
+  Both accept a flag name, a list of names (matched **any-of**), or a predicate `({ flags, route }) => boolean` for anything else — all-of, a flag's value, a path check.
+  
+  Additive: no existing API changes behaviour, and a route with no flags resolves an empty map.
+
+- [#636](https://github.com/forinda/kick-js/pull/636) [`42ba41d`](https://github.com/forinda/kick-js/commit/42ba41d99feff8f48e615e1bb6ac2d0774692739) Thanks [@forinda](https://github.com/forinda)! - `rateLimit({ exemptWhen })` — the app-wide limiter reads route flags (phase 3 of `route-flags-design.md`).
+  
+  `rateLimit()` runs before route matching, so it has no `ctx.route` to read, and its only exemption handle was `skipPaths` — an exact pathname that cannot express `/probe/:name` and drifts when `apiPrefix` or a module's `version` changes.
+  
+  It now reads a **policy table**: every mounted route registers its method, path and resolved flags at boot, and the limiter looks up the incoming request.
+  
+  ```ts
+  const Public = defineRouteFlag('auth.public')
+  
+  bootstrap({
+    modules,
+    middlewares: [rateLimit({ max: 60, exemptWhen: 'auth.public' })],
+  })
+  ```
+  
+  ```ts
+  @Public
+  @Get('/probe/:name')   // exempt for every :name — skipPaths could not say this
+  probe(ctx: RequestContext) {}
+  ```
+  
+  **A request matching no route matches no flags and stays limited.** That is why this middleware keeps running before matching rather than becoming a route-scoped guard: an abuse control has to see traffic that hits nothing.
+  
+  `exemptWhen` takes the same name / any-of list / predicate as everywhere else. `skipPaths` still applies to paths that are not routes at all — a static mount, a proxied prefix — which no flag can describe.
+  
+  Pre-match middleware of your own can read the table by declaring the slot with the exported `bindRoutePolicy(handler, receive)`. The table is per-application, not a global, so two apps in one process never see each other's routes.
+
 ## 8.1.0
 
 ### Minor Changes

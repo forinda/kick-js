@@ -1,5 +1,25 @@
 # @forinda/kickjs-swagger
 
+## 7.2.0
+
+### Minor Changes
+
+- [#635](https://github.com/forinda/kick-js/pull/635) [`6983c06`](https://github.com/forinda/kick-js/commit/6983c0693b31e9fdc073868773c6271defa79ece) Thanks [@forinda](https://github.com/forinda)! - Route flags reach the OpenAPI spec and the DevTools dashboard (phase 4 of `route-flags-design.md`).
+  
+  **`getRouteFlags(controllerClass, handlerName)`** resolves a route's flags from the controller — the same method-over-class result `ctx.route.flags` carries at request time, for consumers that see a controller and a method name rather than a live request: an adapter's `onRouteMount`, spec generation, tooling.
+  
+  **Swagger gains `publicFlag`.** Name the flag your project uses for public endpoints and the spec reads the same declaration the runtime does, instead of asking for a second annotation that can drift from it:
+  
+  ```ts
+  export const Public = defineRouteFlag('auth.public')
+  
+  SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+  ```
+  
+  The name is configuration rather than a constant, because the framework deliberately names no flags — one project's `auth.public` is another's `public` or `security.none`. A list accepts several. It sits after `@ApiPublic` and `securityResolver` in the resolution order and before the `@ApiSecurity` / `@ApiBearerAuth` decorators, so an explicit resolver still wins while a flag still overrides class-level security.
+  
+  **DevTools reports flags per route.** `GET /_debug/routes` includes a `flags` object on each entry, and the dashboard's Routes tab shows them in a Flags column — so "why does this endpoint not require auth" is answerable from the route list rather than by reading the controller. Only flags in force appear: one turned off at the method is absent, not `false`.
+
 ## 7.1.1
 
 ### Patch Changes

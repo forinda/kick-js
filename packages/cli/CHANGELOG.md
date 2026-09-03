@@ -1,5 +1,60 @@
 # @forinda/kickjs-cli
 
+## 8.1.0
+
+### Minor Changes
+
+- [#637](https://github.com/forinda/kick-js/pull/637) [`f903f2b`](https://github.com/forinda/kick-js/commit/f903f2b53a38a4b92644e32ada30987f3280ceb3) Thanks [@forinda](https://github.com/forinda)! - `kick typegen` generates the `KickRouteFlags` registry.
+  
+  Every `defineRouteFlag('name')` call in `src/` is collected into `.kickjs/types/kick__route-flags.d.ts`, so declaring the flag is the only step — no hand-written `declare module` block:
+  
+  ```ts
+  // src/flags.ts — all you write
+  export const Public = defineRouteFlag('auth.public')
+  export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+  ```
+  
+  ```ts
+  // .kickjs/types/kick__route-flags.d.ts — generated, refreshed on every `kick dev` save
+  declare module '@forinda/kickjs' {
+    interface KickRouteFlags {
+      'auth.public': true
+      'rate.limit': { rpm: number }
+    }
+  }
+  ```
+  
+  From there a misspelt flag name is a compile error at every consumer (`skipWhen`, `onlyWhen`, `exemptWhen`, `flags.has`), and `flags.get('rate.limit')` is typed rather than `unknown`.
+  
+  Unlike the `ContextKeys` registry, this one records the **value type** too: a bare flag registers as `true`, an explicit generic registers that type verbatim. Empty project emits an empty registry and every name falls back to `string`.
+  
+  Disable it like any other plugin: `typegen: { disable: ['kick/route-flags'] }`.
+
+### Patch Changes
+
+- [#637](https://github.com/forinda/kick-js/pull/637) [`426132a`](https://github.com/forinda/kick-js/commit/426132abd1d73f2413c320bff7f66073c21441a9) Thanks [@forinda](https://github.com/forinda)! - `kick add` installs the engine peers your project actually uses.
+  
+  The catalog listed `express` as a static peer of `@forinda/kickjs`, so `kick add kickjs` pulled Express into a Fastify or h3 project. The HTTP engine is chosen at `bootstrap({ runtime })` — which engine package a project needs is a runtime question, not a fixed dependency.
+  
+  It now resolves from the project's runtime (the `runtime` field in `kick.config.ts`, else the engine already in `package.json`), matching what `kick new` scaffolds for the same engine:
+  
+  | Runtime   | Installed with `@forinda/kickjs`             |
+  | --------- | -------------------------------------------- |
+  | `express` | `express`                                    |
+  | `fastify` | `fastify`, `@fastify/middie`, `serve-static` |
+  | `h3`      | `h3`, `serve-static`                         |
+  
+  Resolution order: `--runtime <engine>` (new flag) → `runtime` in `kick.config.ts` → an engine in `dependencies` → an engine in `devDependencies`. A production dependency outranks a dev one, so Fastify in devDependencies (a benchmark, a comparison test) no longer decides what an Express app installs.
+  
+  When two engines sit at the same level and nothing settles it, `kick add` **stops** instead of guessing — installing writes `package.json` and `node_modules`, so a wrong guess is work to undo — and names both remedies: set `runtime` in `kick.config.ts`, or pass `--runtime` for one command.
+  
+  `kick add --list` names the resolved engine on the row and accepts the same flag. `kick add upload` already resolved its multipart driver this way; this brings the framework package itself in line.
+  
+  Also: `kick typegen --list` now prints the file each plugin owns and a copy-pasteable `typegen: { disable: [...] }` snippet, since "which plugin writes this file" is the question you have when deciding to turn one off.
+- Updated dependencies [[`17bd26e`](https://github.com/forinda/kick-js/commit/17bd26e05825e86045d589963e291c725d68b8fc), [`aa78fbf`](https://github.com/forinda/kick-js/commit/aa78fbfe7265ea10aa2d1f986e8325fbe875d6f2), [`872bc63`](https://github.com/forinda/kick-js/commit/872bc63d2ec5c0be01b2c28015491f981c911c3c), [`7c4446c`](https://github.com/forinda/kick-js/commit/7c4446c7991bc93a226baeaf861e57180df1711e), [`6983c06`](https://github.com/forinda/kick-js/commit/6983c0693b31e9fdc073868773c6271defa79ece), [`f90e9f4`](https://github.com/forinda/kick-js/commit/f90e9f4a4b8a4daf107acabd852426e8c6eb2957), [`f6da2c0`](https://github.com/forinda/kick-js/commit/f6da2c08bed0f0bcd23be9c8521765c37454eb16), [`42ba41d`](https://github.com/forinda/kick-js/commit/42ba41d99feff8f48e615e1bb6ac2d0774692739)]:
+  - @forinda/kickjs@8.2.0
+  - @forinda/kickjs-db@7.2.1
+
 ## 8.0.2
 
 ### Patch Changes
