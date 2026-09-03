@@ -76,8 +76,13 @@ export type RouteFlagValue<K extends string, Fallback = unknown> = K extends key
  * `@Enabled(false)` deleted the flag while `flags.get('enabled')` could never
  * return `false`. With the sentinel, `false` stores like any other value and
  * removal is spelled `@Enabled.off`.
+ *
+ * Module-private and NOT `Symbol.for`: a registry-global symbol is reachable
+ * by application code, so a flag declared with a `symbol` value could be handed
+ * this exact sentinel and be deleted instead of stored. It is created and
+ * consumed in this module, so it never needs to cross a realm.
  */
-export const FLAG_UNSET: unique symbol = Symbol.for('kick.flagUnset') as never
+const FLAG_UNSET: unique symbol = Symbol('kick.flagUnset') as never
 
 /** One `@Flag` application, before precedence resolution. */
 export interface RouteFlagDeclaration {

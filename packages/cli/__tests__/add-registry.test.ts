@@ -145,8 +145,9 @@ describe('planAddPackages', () => {
     // Fastify in devDependencies (a benchmark, a comparison test) must not
     // decide which engine the app deploys on.
     const detected = detectRuntimeFromDepsDetailed(dir)
-    expect(detected.runtime).toBe('express')
-    expect(detected.ambiguous).toBe(true)
+    // Resolved, not ambiguous: the prod/dev rule settles it, so `kick add`
+    // must not refuse here.
+    expect(detected).toMatchObject({ runtime: 'express', ambiguous: false })
     rmSync(dir, { recursive: true, force: true })
   })
 

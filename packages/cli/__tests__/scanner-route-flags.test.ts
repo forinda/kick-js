@@ -135,6 +135,36 @@ describe('renderRouteFlags', () => {
     expect(() => renderRouteFlags([...a, ...b])).toThrow(/two different value types/)
   })
 
+  it('treats literal types differing only in whitespace as a conflict', () => {
+    // `'a b'` and `'ab'` are different types to TypeScript — collapsing all
+    // whitespace would let one silently win.
+    const a = extractFileAst(
+      `const L = defineRouteFlag<'a b'>('mode')`,
+      '/proj/src/a.ts',
+      '/proj',
+    ).routeFlags
+    const b = extractFileAst(
+      `const L = defineRouteFlag<'ab'>('mode')`,
+      '/proj/src/b.ts',
+      '/proj',
+    ).routeFlags
+    expect(() => renderRouteFlags([...a, ...b])).toThrow(/two different value types/)
+  })
+
+  it('still ignores whitespace outside literals', () => {
+    const a = extractFileAst(
+      `const L = defineRouteFlag<{ mode: 'a b' }>('mode')`,
+      '/proj/src/a.ts',
+      '/proj',
+    ).routeFlags
+    const b = extractFileAst(
+      `const L = defineRouteFlag<{mode:'a b'}>('mode')`,
+      '/proj/src/b.ts',
+      '/proj',
+    ).routeFlags
+    expect(renderRouteFlags([...a, ...b])).toContain('"mode"')
+  })
+
   it('tolerates the same flag declared identically twice', () => {
     const decl = `const L = defineRouteFlag<{ rpm: number }>('rate.limit')`
     const a = extractFileAst(decl, '/proj/src/a.ts', '/proj').routeFlags

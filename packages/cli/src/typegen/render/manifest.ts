@@ -282,8 +282,26 @@ export function isSelfContainedType(typeText: string): boolean {
   return identifiers.every((id) => SELF_CONTAINED_NAMES.has(id))
 }
 
-/** Whitespace-insensitive comparison — `{ rpm: number }` and `{rpm:number}` are one type. */
-const normaliseType = (t: string | null): string => (t ?? 'true').replace(/\s+/g, '')
+/**
+ * Compare two type texts ignoring only *syntactic* whitespace.
+ *
+ * `{ rpm: number }` and `{rpm:number}` are one type, so a re-export with
+ * different formatting must not read as a conflict. But whitespace inside a
+ * string or template literal type is significant — `'a b'` and `'ab'` are
+ * different types — so literals are held out of the collapse and compared
+ * verbatim.
+ */
+const normaliseType = (t: string | null): string => {
+  const text = t ?? 'true'
+  const literals: string[] = []
+  // Park each literal behind a marker that contains no whitespace to collapse.
+  const parked = text.replace(/'[^']*'|"[^"]*"|`[^`]*`/g, (lit) => {
+    literals.push(lit)
+    return `\u0000${literals.length - 1}\u0000`
+  })
+  const collapsed = parked.replace(/\s+/g, '')
+  return collapsed.replace(/\u0000(\d+)\u0000/g, (_, i) => literals[Number(i)])
+}
 
 export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
   // Two calls with the same name are the same flag. Identical declarations are

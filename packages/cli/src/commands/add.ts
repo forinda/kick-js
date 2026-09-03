@@ -314,8 +314,11 @@ export function detectRuntimeFromDepsDetailed(cwd = process.cwd()): RuntimeDetec
   const inDev = ENGINE_BY_PACKAGE.filter(([p]) => p in dev && !(p in prod)).map(([, r]) => r)
   const candidates = [...inProd, ...inDev]
 
-  // A runtime dependency outranks a dev one: you deploy on what you ship.
-  if (inProd.length === 1) return { runtime: inProd[0], candidates, ambiguous: inDev.length > 0 }
+  // A runtime dependency outranks a dev one: you deploy on what you ship. That
+  // IS a resolution, so it is not ambiguous — reporting otherwise made the
+  // refusal below block the exact case this rule exists to allow (an Express
+  // app keeping fastify in devDependencies for a benchmark).
+  if (inProd.length === 1) return { runtime: inProd[0], candidates, ambiguous: false }
   if (inProd.length === 0 && inDev.length === 1) {
     return { runtime: inDev[0], candidates, ambiguous: false }
   }

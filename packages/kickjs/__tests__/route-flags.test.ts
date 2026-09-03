@@ -498,6 +498,24 @@ describe('route flags — false is a value, not a sentinel', () => {
     expect(byPath['/on'].get('feature.enabled')).toBe(true)
   })
 
+  it('a symbol-valued flag can hold any symbol, including a lookalike sentinel', () => {
+    const Marker = defineRouteFlag<symbol>('marker')
+    // A registry-global sentinel would be reachable here and would delete the
+    // flag instead of storing this value.
+    const lookalike = Symbol.for('kick.flagUnset')
+
+    @Controller()
+    class C {
+      @Marker(lookalike)
+      @Get('/x')
+      x(_ctx: RequestContext) {}
+    }
+
+    const flags = buildRouteTable(C)[0].meta.flags!
+    expect(flags.has('marker')).toBe(true)
+    expect(flags.get('marker')).toBe(lookalike)
+  })
+
   it('`.off` is what removes an inherited flag', () => {
     @Enabled(true)
     @Controller()
