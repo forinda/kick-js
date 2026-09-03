@@ -477,6 +477,24 @@ These match what `kick new` scaffolds for the same engine, so adding the framewo
 Fastify project no longer pulls in Express. `kick add upload` resolves its multipart driver the
 same way.
 
+Resolution order: `--runtime <engine>` → `runtime` in `kick.config.ts` → the engine in
+`dependencies` → the engine in `devDependencies`. A production dependency outranks a dev one,
+since that is what you deploy on.
+
+If two engines sit at the same level and nothing settles it — Fastify and h3 both in
+`dependencies`, say — `kick add` **stops** rather than guessing:
+
+```text
+  Cannot tell which HTTP engine this app boots on: found fastify, h3 in package.json.
+
+  Installing engine peers for the wrong one is worse than not installing them, so:
+    • set `runtime: '<engine>'` in kick.config.ts (permanent, also fixes kick doctor), or
+    • pass --runtime <fastify|h3> for this command
+```
+
+Installing writes `package.json` and `node_modules`, so a wrong guess is work to undo — refusing
+costs one flag.
+
 The framework runtime (`@forinda/kickjs`), the dev/build/HMR layer (`@forinda/kickjs-vite`), and the CLI (`@forinda/kickjs-cli`) are the only members of the core set. Everything else — auth, swagger, db, ws, queue, devtools, mcp, testing — is opt-in via `kick add`.
 
 ### Package manager resolution

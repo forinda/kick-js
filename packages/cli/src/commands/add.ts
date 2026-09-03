@@ -243,6 +243,13 @@ export type AppRuntime = 'express' | 'fastify' | 'h3'
  * the engine-correct multipart driver even in projects scaffolded before the
  * `runtime` field existed.
  */
+/** Validate `--runtime`, returning undefined when absent and exiting on a bad value. */
+export function parseRuntimeFlag(value: unknown): AppRuntime | undefined {
+  if (value === undefined) return undefined
+  if (value === 'express' || value === 'fastify' || value === 'h3') return value
+  throw new Error(`Invalid --runtime '${String(value)}'. Expected express, fastify or h3.`)
+}
+
 export async function resolveAppRuntime(cwd = process.cwd()): Promise<AppRuntime> {
   return (await resolveAppRuntimeDetailed(cwd)).runtime
 }
@@ -527,8 +534,12 @@ export function registerListCommand(program: Command): void {
     .alias('ls')
     .description('List KickJS packages (core only; pair with --all for the full catalog)')
     .option('--all', 'Include the full optional catalog')
-    .action(async (opts: { all?: boolean }) => {
-      printPackageList(Boolean(opts.all), await resolveAppRuntime())
+    .option('--runtime <engine>', 'HTTP engine to show peers for: express | fastify | h3')
+    .action(async (opts: { all?: boolean; runtime?: string }) => {
+      printPackageList(
+        Boolean(opts.all),
+        parseRuntimeFlag(opts.runtime) ?? (await resolveAppRuntime()),
+      )
     })
 }
 
@@ -539,11 +550,18 @@ export function registerAddCommand(program: Command): void {
     .option('--pm <manager>', 'Package manager override')
     .option('-D, --dev', 'Install as dev dependency')
     .option('--list', 'List packages (core only by default; pair with --all)')
+    .option(
+      '--runtime <engine>',
+      'HTTP engine for peer resolution: express | fastify | h3 (overrides kick.config.ts)',
+    )
     .option('--all', 'When listing, include the full optional catalog')
     .action(async (packages: string[], opts: any) => {
       // List mode
       if (opts.list || packages.length === 0) {
-        printPackageList(Boolean(opts.all), await resolveAppRuntime())
+        printPackageList(
+          Boolean(opts.all),
+          parseRuntimeFlag(opts.runtime) ?? (await resolveAppRuntime()),
+        )
         return
       }
 
@@ -552,17 +570,24 @@ export function registerAddCommand(program: Command): void {
       // Resolve the runtime so `kick add upload` installs the right multipart
       // driver (express → multer, fastify → @fastify/multipart, h3 → none) and
       // the framework gets the engine peers it actually runs on.
+      const fromFlag = parseRuntimeFlag(opts.runtime)
       const detection = await resolveAppRuntimeDetailed(process.cwd())
-      const runtime = detection.runtime
-      if (detection.ambiguous) {
-        // More than one engine installed and nothing says which one boots.
-        // Guessing here installs peers for an engine the app may not use, so
-        // name the guess and point at the field that settles it.
-        console.warn(
-          `\n  WARNING: found ${detection.candidates.join(' and ')} in package.json and cannot tell ` +
-            `which engine this app boots on — assuming ${runtime}.` +
-            `\n           Set \`runtime: '<engine>'\` in kick.config.ts to make this exact.`,
+      const runtime = fromFlag ?? detection.runtime
+
+      // Two engines at the same dependency level and nothing to break the tie.
+      // Installing writes package.json and node_modules, so guessing here
+      // leaves an adopter to undo it by hand — refuse instead, with both ways
+      // to say what the app actually boots on.
+      if (!fromFlag && detection.ambiguous) {
+        console.error(
+          `\n  Cannot tell which HTTP engine this app boots on: found ` +
+            `${detection.candidates.join(', ')} in package.json.\n` +
+            `\n  Installing engine peers for the wrong one is worse than not installing them, so:\n` +
+            `    • set \`runtime: '<engine>'\` in kick.config.ts (permanent, also fixes kick doctor), or\n` +
+            `    • pass --runtime <${detection.candidates.join('|')}> for this command\n`,
         )
+        process.exitCode = 1
+        return
       }
       const { prodDeps, devDeps, unknown, warnings, notices } = planAddPackages(
         packages,

@@ -14,6 +14,10 @@ It now resolves from the project's runtime (the `runtime` field in `kick.config.
 | `fastify` | `fastify`, `@fastify/middie`, `serve-static` |
 | `h3`      | `h3`, `serve-static`                         |
 
-`kick add --list` names the resolved engine on the row, and the install prints a notice saying which peers it added and why. `kick add upload` already worked this way; this brings the framework package itself in line.
+Resolution order: `--runtime <engine>` (new flag) → `runtime` in `kick.config.ts` → an engine in `dependencies` → an engine in `devDependencies`. A production dependency outranks a dev one, so Fastify in devDependencies (a benchmark, a comparison test) no longer decides what an Express app installs.
+
+When two engines sit at the same level and nothing settles it, `kick add` **stops** instead of guessing — installing writes `package.json` and `node_modules`, so a wrong guess is work to undo — and names both remedies: set `runtime` in `kick.config.ts`, or pass `--runtime` for one command.
+
+`kick add --list` names the resolved engine on the row and accepts the same flag. `kick add upload` already resolved its multipart driver this way; this brings the framework package itself in line.
 
 Also: `kick typegen --list` now prints the file each plugin owns and a copy-pasteable `typegen: { disable: [...] }` snippet, since "which plugin writes this file" is the question you have when deciding to turn one off.

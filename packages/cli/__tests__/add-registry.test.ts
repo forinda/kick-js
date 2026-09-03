@@ -10,6 +10,7 @@ import {
   UPLOAD_DRIVERS,
   ENGINE_PEERS,
   detectRuntimeFromDepsDetailed,
+  parseRuntimeFlag,
   AVAILABLE_ADD_PACKAGES,
 } from '../src/commands/add'
 
@@ -127,6 +128,12 @@ describe('planAddPackages', () => {
     expect([...ENGINE_PEERS.express]).toEqual(['express'])
     expect([...ENGINE_PEERS.fastify]).toEqual(['fastify', '@fastify/middie', 'serve-static'])
     expect([...ENGINE_PEERS.h3]).toEqual(['h3', 'serve-static'])
+  })
+
+  it('--runtime overrides everything, including an ambiguous package.json', () => {
+    expect(parseRuntimeFlag('fastify')).toBe('fastify')
+    expect(parseRuntimeFlag(undefined)).toBeUndefined()
+    expect(() => parseRuntimeFlag('bun')).toThrow(/Expected express, fastify or h3/)
   })
 
   it('prefers a prod engine dep over a dev one', () => {
