@@ -94,19 +94,15 @@ const guideSidebar = [
     text: 'Database',
     items: [
       { text: 'Overview & Getting Started', link: '/guide/database/' },
+      { text: 'Adopting on an Existing DB', link: '/guide/database/adopting' },
       { text: 'Schema', link: '/guide/database/schema' },
+      { text: 'Schema Types', link: '/guide/db-schema-types' },
       { text: 'Queries', link: '/guide/database/queries' },
+      { text: 'Relational Queries', link: '/guide/db-relational-query' },
       { text: 'Migrations', link: '/guide/database/migrations' },
       { text: 'CLI', link: '/guide/database/cli' },
       { text: 'Drivers', link: '/guide/database/drivers' },
       { text: 'Repositories', link: '/guide/database/repositories' },
-    ],
-  },
-  {
-    text: 'Database (kickjs-db)',
-    items: [
-      { text: 'Schema Types', link: '/guide/db-schema-types' },
-      { text: 'Relational Queries', link: '/guide/db-relational-query' },
       { text: 'Extensions', link: '/guide/db-extensions' },
     ],
   },

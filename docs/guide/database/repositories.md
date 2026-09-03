@@ -47,7 +47,7 @@ export const users = table('users', {
 
 ## A database-backed repository
 
-Implement `IUserRepository` against the injected `KickDbClient`. Inject the client through `DB_PRIMARY` and use the typed query builder:
+Implement `IUserRepository` against the injected client. Inject it through whichever token you registered the client under — the examples here use the shipped `DB_PRIMARY`, but an app-owned token (`createToken<typeof db>('app/db')`) types better because it carries your schema without an augmentation. See [Getting started](./index#_6-make-it-injectable).
 
 ```ts
 // src/modules/users/infrastructure/repositories/db-user.repository.ts
