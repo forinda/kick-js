@@ -7,6 +7,13 @@ import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config
 interface PackageEntry {
   pkg: string
   peers: string[]
+  /**
+   * Peers depend on the project's HTTP engine, so they are resolved from
+   * {@link resolveAppRuntime} rather than listed statically. Set on the
+   * framework package itself: the engine is chosen at `bootstrap({ runtime })`,
+   * so a Fastify project must not be handed `express`.
+   */
+  enginePeers?: boolean
   description: string
   dev?: boolean
   /**
@@ -28,7 +35,9 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   // Core (always installed by kick new — required for the framework to run)
   kickjs: {
     pkg: '@forinda/kickjs',
-    peers: ['express'],
+    // Resolved per runtime — see `enginePeers` / ENGINE_PEERS.
+    peers: [],
+    enginePeers: true,
     description: 'Unified framework: DI, decorators, routing, middleware',
     core: true,
   },
@@ -192,6 +201,20 @@ export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
  * engine. `planAddPackages` resolves `upload` against the configured runtime
  * (see {@link KickConfig.runtime}); `kick doctor` validates the same mapping.
  */
+/**
+ * Engine peers per runtime — the same set `kick new` scaffolds for the chosen
+ * engine (`generators/templates/project-config.ts`). `@forinda/kickjs` declares
+ * all three as optional peers; which ones a project actually needs is decided
+ * by `bootstrap({ runtime })`, so installing them is a runtime-dependent
+ * question, not a static dependency.
+ */
+export const ENGINE_PEERS: Record<'express' | 'fastify' | 'h3', readonly string[]> = {
+  express: ['express'],
+  // `serve-static` rather than express for static files — no express dependency.
+  fastify: ['fastify', '@fastify/middie', 'serve-static'],
+  h3: ['h3', 'serve-static'],
+}
+
 export const UPLOAD_DRIVERS: Record<
   'express' | 'fastify' | 'h3',
   { prod?: string; dev?: string; note: string }
@@ -345,7 +368,7 @@ export async function resolvePackageManager(flagPm: string | undefined): Promise
  * everything; that's what `kick add --list --all` triggers when an
  * adopter genuinely wants the live catalog.
  */
-export function printPackageList(all = false): void {
+export function printPackageList(all = false, runtime?: 'express' | 'fastify' | 'h3'): void {
   const entries = Object.entries(PACKAGE_REGISTRY)
   const maxName = Math.max(...entries.map(([k]) => k.length))
   const core = entries.filter(([, info]) => info.core)
@@ -353,7 +376,13 @@ export function printPackageList(all = false): void {
 
   const formatRow = ([name, info]: [string, PackageEntry]): string => {
     const padded = name.padEnd(maxName + 2)
-    const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
+    // Engine peers depend on the runtime, so name it rather than printing a
+    // list that would be wrong for two projects out of three.
+    const resolved = info.enginePeers
+      ? [...info.peers, ...ENGINE_PEERS[runtime ?? 'express']]
+      : info.peers
+    const engineNote = info.enginePeers ? ` [${runtime ?? 'express'} engine]` : ''
+    const peers = resolved.length ? ` (+ ${resolved.join(', ')})${engineNote}` : ''
     const deprecated = info.deprecated ? ` [DEPRECATED — ${info.deprecated}]` : ''
     return `    ${padded} ${info.description}${peers}${deprecated}`
   }
@@ -426,6 +455,11 @@ export function planAddPackages(
     for (const peer of entry.peers) {
       target.add(peer)
     }
+    if (entry.enginePeers) {
+      const enginePeers = ENGINE_PEERS[runtime]
+      for (const peer of enginePeers) target.add(peer)
+      notices.push(`${name} (${runtime}): engine peers ${enginePeers.join(', ')}`)
+    }
   }
 
   return { prodDeps: [...prodDeps], devDeps: [...devDeps], unknown, warnings, notices }
@@ -437,8 +471,8 @@ export function registerListCommand(program: Command): void {
     .alias('ls')
     .description('List KickJS packages (core only; pair with --all for the full catalog)')
     .option('--all', 'Include the full optional catalog')
-    .action((opts: { all?: boolean }) => {
-      printPackageList(Boolean(opts.all))
+    .action(async (opts: { all?: boolean }) => {
+      printPackageList(Boolean(opts.all), await resolveAppRuntime())
     })
 }
 
@@ -453,7 +487,7 @@ export function registerAddCommand(program: Command): void {
     .action(async (packages: string[], opts: any) => {
       // List mode
       if (opts.list || packages.length === 0) {
-        printPackageList(Boolean(opts.all))
+        printPackageList(Boolean(opts.all), await resolveAppRuntime())
         return
       }
 
