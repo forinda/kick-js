@@ -1,4 +1,4 @@
-import type { RouteFlagTest } from './route-flag'
+import { assertFlagTest, type RouteFlagTest } from './route-flag'
 import 'reflect-metadata'
 import { METADATA, type Constructor, type MaybePromise } from './interfaces'
 import { pushClassMeta, pushMethodMeta } from './metadata'
@@ -706,6 +706,10 @@ function defineContextDecoratorImpl<
       ctx: Ctx,
       deps: ResolvedDeps<D>,
     ) => spec.resolve(ctx, deps, frozenParams)
+    if (spec.skipWhen !== undefined)
+      assertFlagTest(spec.skipWhen, `contributor '${spec.key}' skipWhen`)
+    if (spec.onlyWhen !== undefined)
+      assertFlagTest(spec.onlyWhen, `contributor '${spec.key}' onlyWhen`)
     return Object.freeze({
       key: spec.key,
       deps: sharedDeps,

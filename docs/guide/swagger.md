@@ -242,7 +242,7 @@ SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
 export class WebhooksController {
   @Get('/health') health(ctx: RequestContext) {}
 
-  @Public(false) // this one is documented as secured again
+  @Public.off // this one is documented as secured again
   @Post('/admin')
   admin(ctx: RequestContext) {}
 }

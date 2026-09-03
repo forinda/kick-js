@@ -102,7 +102,7 @@ describe('DevTools: debug endpoints', () => {
       }
 
       @Limit({ rpm: 10 })
-      @Public(false)
+      @Public.off
       @Get('/metered')
       metered(ctx: RequestContext) {
         ctx.json({})

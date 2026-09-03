@@ -300,9 +300,14 @@ export {
 export { defineRouteFlag, getRouteFlags, matchesFlagTest, resolveRouteFlags } from './route-flag'
 export { RoutePolicyTable, bindRoutePolicy, offerRoutePolicy } from './route-policy'
 export type {
+  KickRouteFlags,
   RouteFlag,
   RouteFlagContext,
   RouteFlagDeclaration,
+  NegatedRouteFlagName,
+  RouteFlagName,
   RouteFlagPredicate,
   RouteFlagTest,
+  RouteFlagValue,
+  RouteFlags,
 } from './route-flag'

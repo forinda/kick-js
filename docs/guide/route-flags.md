@@ -15,7 +15,7 @@ export class WebhooksController {
   @Get('/health')
   health(ctx: RequestContext) {} // public
 
-  @Public(false) // the method wins
+  @Public.off // the method wins
   @Post('/admin')
   admin(ctx: RequestContext) {} // not public
 }
@@ -59,19 +59,20 @@ ctx.route?.flags.get('rate.limit') // { rpm: 10 }
 
 ## A `false` flag is absent, not false
 
-::: warning This is the rule that makes `has()` safe
-`@Public(false)` **removes** the flag its class set — it does not store `false`. So a resolved flag is either absent or present with a value defaulting to `true`, and there is no present-but-falsy state.
+::: warning Removal is `.off`, not a falsy value
+`@Public.off` **removes** the flag its class set. A resolved flag is either absent or present — presence is the whole question `has()` answers, so there is no "present but turned off" state to reason about.
 
-Without that rule, `flags.has('auth.public')` would answer `true` for the route that just opted back _in_, and every presence-checking consumer would read a protected route as public.
+Removal is spelled as its own member rather than `@Public(false)` for two reasons. It keeps `false` usable as a real value: a flag declared `boolean` can store it, and `flags.get()` can return it. And it removes the trap where `@Public(false)` looked like "not public" while a presence check still answered `true` — which would read a protected route as public.
 :::
 
-| Declaration                                    | Resolved                   |
-| ---------------------------------------------- | -------------------------- |
-| `@Public` on the class, nothing on the method  | `auth.public → true`       |
-| `@Public` on the class, `@Public(false)` on it | _absent_                   |
-| `@RateLimit({ rpm: 10 })`                      | `rate.limit → { rpm: 10 }` |
+| Declaration                                   | Resolved                   |
+| --------------------------------------------- | -------------------------- |
+| `@Public` on the class, nothing on the method | `auth.public → true`       |
+| `@Public` on the class, `@Public.off` on it   | _absent_                   |
+| `@RateLimit({ rpm: 10 })`                     | `rate.limit → { rpm: 10 }` |
+| `@Enabled(false)` (flag declared `boolean`)   | `feature.enabled → false`  |
 
-`@Public(false)` on a route that never inherited the flag is a no-op — usually a sign the author expected an inheritance that isn't there.
+`@Public.off` on a route that never inherited the flag is a no-op — usually a sign the author expected an inheritance that isn't there.
 
 ## Consumers
 
@@ -172,12 +173,27 @@ method name rather than a live request.
 Every `skipWhen` / `onlyWhen` / `exemptWhen` accepts the same three forms:
 
 ```ts
-'auth.public' // this flag
-;['auth.public', 'health.probe'] // any of these
+'auth.public' // carries this flag
+'!auth.public' // does NOT carry it
+;['auth.public', 'health.probe'] // carries any of these
+;['!auth.public', '!health.probe'] // carries none of these
 ;({ flags, route }) => flags.has('a') && flags.has('b') // anything else
 ```
 
-A list is **any-of** — it reads as "these are all reasons to skip". All-of, value checks and path checks go through a predicate:
+A positive list is **any-of** — it reads as "these are all reasons to skip". A negated list is its
+complement, **none-of**, so flipping every entry inverts the meaning the way a reader expects.
+
+::: warning A list is single-polarity
+`['auth.public', '!metered']` is a compile error. Under any-of it would mean "public present **or**
+metered absent", which almost everyone reads as "and" — so rather than pick a reading, the type
+forbids it and a predicate says it unambiguously. Mixing them at runtime (from untyped config)
+throws where the consumer is constructed, not on the first request that hits it.
+:::
+
+Negation matters most on `exemptWhen`, which has no `onlyWhen` counterpart — `skipWhen: '!x'` is
+just `onlyWhen: 'x'` written differently.
+
+All-of, value checks and path checks go through a predicate:
 
 ```ts
 exemptWhen: ({ flags }) => (flags.get('rate.limit') as { rpm: number } | undefined)?.rpm === 0
@@ -185,6 +201,67 @@ exemptWhen: ({ route }) => route?.path.startsWith('/internal') ?? false
 ```
 
 Keep predicates cheap — they run per request, per consumer.
+
+## Type safety: declare your flags
+
+Flag names are plain strings by default, which means a typo is a flag that silently never matches.
+Declare them once and every use narrows — the same `ContextMeta` mechanism [context
+decorators](./context-decorators.md) use:
+
+**`kick typegen` writes this for you.** It scans every `defineRouteFlag('name')` call and emits
+the registry to `.kickjs/types/kick__route-flags.d.ts` — so declaring a flag is the only step:
+
+```ts
+// src/flags.ts — this is all you write
+export const Public = defineRouteFlag('auth.public')
+export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+```
+
+```ts
+// .kickjs/types/kick__route-flags.d.ts — generated, on every `kick dev` save
+declare module '@forinda/kickjs' {
+  interface KickRouteFlags {
+    'auth.public': true
+    'rate.limit': { rpm: number }
+  }
+}
+```
+
+A bare flag registers as `true`; one declared with an explicit value type registers that type. You
+can also hand-write the augmentation if you prefer — the generated file is a normal declaration
+merge — but there is rarely a reason to.
+
+Three things switch on at once:
+
+```ts
+defineRouteFlag('auth.pubic') // tsc: Did you mean '"auth.public"'?
+
+const Limit = defineRouteFlag('rate.limit') // RouteFlag<{ rpm: number }> — no generic needed
+ctx.route?.flags.get('rate.limit')?.rpm // typed, not `unknown`
+
+rateLimitGuard({ exemptWhen: 'auth.pubic' }) // tsc error, in every consumer
+```
+
+`skipWhen`, `onlyWhen` and `exemptWhen` all take the narrowed name, so a misspelling fails at the
+call site rather than at 3am.
+
+::: tip It stays optional
+`KickRouteFlags` is empty until you augment it, and everything falls back to plain `string` while
+it is — a project that never declares a flag keeps compiling. The narrowing switches on with the
+first declaration, and you can adopt it one flag at a time.
+:::
+
+The framework declares nothing in this registry. `auth.public` above is a name you chose — see
+[Naming](#naming).
+
+Two constraints on what a flag can be:
+
+- **A name cannot start with `!`.** That prefix means "does not carry this flag" in a test, so a
+  flag literally named `!x` would be indistinguishable from the negation of `x`. `defineRouteFlag`
+  rejects it.
+- **Removal is `@Flag.off`, not `@Flag(false)`.** `false` is an ordinary value, so a flag declared
+  `boolean` stores and reads it back normally — `@Enabled(false)` means the feature is off, and
+  `flags.get('feature.enabled')` returns `false`. Only `.off` removes.
 
 ## Where flags can be declared
 

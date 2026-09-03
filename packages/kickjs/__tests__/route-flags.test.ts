@@ -2,7 +2,7 @@
  * Route flags (spec: `route-flags-design.md`).
  *
  * The load-bearing case is the last group: a class-level `@Public` with a
- * method-level `@Public(false)` must resolve with the flag ABSENT on that
+ * method-level `@Public.off` must resolve with the flag ABSENT on that
  * method, not present-and-false. Both directions are asserted, because a
  * resolver that dropped the key everywhere would pass a one-sided test.
  */
@@ -101,7 +101,7 @@ describe('route flags — resolution', () => {
     class C {
       @Get('/inherits') inherits(_ctx: RequestContext) {}
 
-      @Public(false)
+      @Public.off
       @Get('/overrides')
       overrides(_ctx: RequestContext) {}
     }
@@ -114,6 +114,18 @@ describe('route flags — resolution', () => {
     expect(flags['/overrides'].has('auth.public')).toBe(false)
     // …and specifically not stored as `false`, which `has()` would report true.
     expect(flags['/overrides'].get('auth.public')).toBeUndefined()
+  })
+})
+
+describe('route flags — reserved names', () => {
+  it("rejects a flag name starting with '!'", () => {
+    // '!x' as a NAME would be indistinguishable from the negation of 'x', so a
+    // test written as `exemptWhen: '!x'` would silently change meaning.
+    expect(() => defineRouteFlag('!csrf.exempt' as never)).toThrow(/cannot start with '!'/)
+  })
+
+  it('still accepts a name containing ! elsewhere', () => {
+    expect(() => defineRouteFlag('urgent!' as never)).not.toThrow()
   })
 })
 
@@ -217,7 +229,7 @@ describe('route flags — contributor skipWhen', () => {
       ctx.json({ user: ctx.get('user') ?? null })
     }
 
-    @Public(false)
+    @Public.off
     @Get('/admin')
     admin(ctx: RequestContext) {
       ctx.json({ user: ctx.get('user') ?? null })
@@ -387,5 +399,136 @@ describe('route flags — buildRoutes parity', () => {
     // buildRoutes wraps buildRouteTable; the flag must survive that path too.
     expect(() => buildRoutes(C)).not.toThrow()
     expect(buildRouteTable(C)[0].meta.flags?.has('auth.public')).toBe(true)
+  })
+})
+
+describe('route flags — negated tests', () => {
+  beforeEach(() => Container.reset())
+
+  const Metered = defineRouteFlag('billing.metered')
+
+  const runsFor = async (skipWhen: unknown) => {
+    const ran: string[] = []
+    const Track = defineHttpContextDecorator({
+      key: 'user',
+      skipWhen: skipWhen as never,
+      resolve: (ctx: RequestContext) => {
+        ran.push(ctx.route?.path ?? '?')
+        return null
+      },
+    })
+
+    @Controller()
+    class C {
+      @Public
+      @Get('/pub')
+      pub(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Metered
+      @Get('/metered')
+      metered(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Public
+      @Metered
+      @Get('/both')
+      both(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Get('/plain')
+      plain(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+
+    const app = await bootWith({ modules: [mod('/n', C)], contributors: [Track.registration] })
+    const h = app.handle.bind(app)
+    for (const p of ['/pub', '/metered', '/both', '/plain']) await request(h).get(`/api/v1/n${p}`)
+    return ran
+  }
+
+  it("'!flag' skips the routes that do NOT carry it", async () => {
+    // Skip where auth.public is absent → only the flagged routes run.
+    expect(await runsFor('!auth.public')).toEqual(['/pub', '/both'])
+  })
+
+  it('a negated list means "carries none of these"', async () => {
+    // Skip only where BOTH are absent → /plain is the only one skipped.
+    expect(await runsFor(['!auth.public', '!billing.metered'])).toEqual([
+      '/pub',
+      '/metered',
+      '/both',
+    ])
+  })
+
+  it('a positive list still means "carries any of these"', async () => {
+    expect(await runsFor(['auth.public', 'billing.metered'])).toEqual(['/plain'])
+  })
+
+  it('throws on a mixed-polarity list rather than guessing', async () => {
+    await expect(runsFor(['auth.public', '!billing.metered'])).rejects.toThrow(/mixes polarities/)
+  })
+})
+
+describe('route flags — false is a value, not a sentinel', () => {
+  beforeEach(() => Container.reset())
+
+  const Enabled = defineRouteFlag<boolean>('feature.enabled')
+
+  it('stores `false` as a value rather than deleting the flag', () => {
+    @Controller()
+    class C {
+      @Enabled(false)
+      @Get('/off')
+      off(_ctx: RequestContext) {}
+
+      @Enabled(true)
+      @Get('/on')
+      on(_ctx: RequestContext) {}
+    }
+
+    const byPath = Object.fromEntries(buildRouteTable(C).map((e) => [e.path, e.meta.flags!]))
+    // Present AND false — the old `false`-as-removal made this unreachable.
+    expect(byPath['/off'].has('feature.enabled')).toBe(true)
+    expect(byPath['/off'].get('feature.enabled')).toBe(false)
+    expect(byPath['/on'].get('feature.enabled')).toBe(true)
+  })
+
+  it('a symbol-valued flag can hold any symbol, including a lookalike sentinel', () => {
+    const Marker = defineRouteFlag<symbol>('marker')
+    // A registry-global sentinel would be reachable here and would delete the
+    // flag instead of storing this value.
+    const lookalike = Symbol.for('kick.flagUnset')
+
+    @Controller()
+    class C {
+      @Marker(lookalike)
+      @Get('/x')
+      x(_ctx: RequestContext) {}
+    }
+
+    const flags = buildRouteTable(C)[0].meta.flags!
+    expect(flags.has('marker')).toBe(true)
+    expect(flags.get('marker')).toBe(lookalike)
+  })
+
+  it('`.off` is what removes an inherited flag', () => {
+    @Enabled(true)
+    @Controller()
+    class C {
+      @Get('/keeps') keeps(_ctx: RequestContext) {}
+
+      @Enabled.off
+      @Get('/drops')
+      drops(_ctx: RequestContext) {}
+    }
+
+    const byPath = Object.fromEntries(buildRouteTable(C).map((e) => [e.path, e.meta.flags!]))
+    expect(byPath['/keeps'].get('feature.enabled')).toBe(true)
+    expect(byPath['/drops'].has('feature.enabled')).toBe(false)
   })
 })

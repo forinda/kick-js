@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
@@ -7,6 +8,9 @@ import {
   PACKAGE_REGISTRY,
   planAddPackages,
   UPLOAD_DRIVERS,
+  ENGINE_PEERS,
+  detectRuntimeFromDepsDetailed,
+  parseRuntimeFlag,
   AVAILABLE_ADD_PACKAGES,
 } from '../src/commands/add'
 
@@ -101,6 +105,75 @@ describe('planAddPackages', () => {
     expect(plan.prodDeps).not.toContain('@forinda/kickjs-auth')
     expect(plan.prodDeps).not.toContain('jsonwebtoken')
     expect(plan.unknown).toEqual(['auth'])
+  })
+
+  it('installs the engine peers for the project runtime, not always express', () => {
+    // The engine is chosen at `bootstrap({ runtime })`, so a Fastify project
+    // getting `express` from `kick add kickjs` was simply wrong.
+    expect(planAddPackages(['kickjs'], false, 'express').prodDeps).toContain('express')
+
+    const fastify = planAddPackages(['kickjs'], false, 'fastify').prodDeps
+    expect(fastify).toContain('fastify')
+    expect(fastify).toContain('@fastify/middie')
+    expect(fastify).not.toContain('express')
+
+    const h3 = planAddPackages(['kickjs'], false, 'h3').prodDeps
+    expect(h3).toContain('h3')
+    expect(h3).not.toContain('express')
+  })
+
+  it('matches what `kick new` scaffolds for each engine', () => {
+    // Drift here means `kick add` and `kick new` disagree about what a project
+    // needs — the failure mode is a missing peer at boot.
+    expect([...ENGINE_PEERS.express]).toEqual(['express'])
+    expect([...ENGINE_PEERS.fastify]).toEqual(['fastify', '@fastify/middie', 'serve-static'])
+    expect([...ENGINE_PEERS.h3]).toEqual(['h3', 'serve-static'])
+  })
+
+  it('--runtime overrides everything, including an ambiguous package.json', () => {
+    expect(parseRuntimeFlag('fastify')).toBe('fastify')
+    expect(parseRuntimeFlag(undefined)).toBeUndefined()
+    expect(() => parseRuntimeFlag('bun')).toThrow(/Expected express, fastify or h3/)
+  })
+
+  it('prefers a prod engine dep over a dev one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-engine-'))
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { express: '^5' }, devDependencies: { fastify: '^5' } }),
+    )
+    // Fastify in devDependencies (a benchmark, a comparison test) must not
+    // decide which engine the app deploys on.
+    const detected = detectRuntimeFromDepsDetailed(dir)
+    // Resolved, not ambiguous: the prod/dev rule settles it, so `kick add`
+    // must not refuse here.
+    expect(detected).toMatchObject({ runtime: 'express', ambiguous: false })
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('flags genuine ambiguity instead of picking by precedence', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-engine-'))
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { fastify: '^5', h3: '^1' } }),
+    )
+    const detected = detectRuntimeFromDepsDetailed(dir)
+    expect(detected.ambiguous).toBe(true)
+    expect(detected.candidates).toEqual(['fastify', 'h3'])
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('is unambiguous with a single engine', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-engine-'))
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { h3: '^1' } }))
+    const detected = detectRuntimeFromDepsDetailed(dir)
+    expect(detected).toMatchObject({ runtime: 'h3', ambiguous: false })
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('names the engine in a notice so the install is explainable', () => {
+    const plan = planAddPackages(['kickjs'], false, 'h3')
+    expect(plan.notices.join(' ')).toContain('h3')
   })
 
   it('collects unknown names without dropping known ones', () => {

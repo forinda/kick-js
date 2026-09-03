@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { randomHex } from '../../core/web-crypto'
-import { matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
+import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
 
@@ -170,6 +170,7 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
   const ignorePaths = new Set(options.ignorePaths ?? [])
   const tokenLength = options.tokenLength ?? 32
   const exemptWhen = options.exemptWhen
+  if (exemptWhen !== undefined) assertFlagTest(exemptWhen, 'csrfGuard({ exemptWhen })')
   const cookieOpts = {
     // Same default as `csrf()` above, and for the same reason.
     httpOnly: false,

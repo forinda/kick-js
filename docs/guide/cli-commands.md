@@ -452,13 +452,48 @@ kick add --list --all     # full optional catalog
 ```text
   Core packages (always installed by `kick new`):
 
-    kickjs           Unified framework: DI, decorators, routing, middleware (+ express)
+    kickjs           Unified framework: DI, decorators, routing, middleware (+ express) [express engine]
     vite             Vite plugin: dev server, HMR, module discovery (+ vite)
     cli              CLI tool and code generators
 
   Plus N optional packages (swagger, db, queue, …).
   Run `kick add --list --all` for the full catalog.
 ```
+
+### Engine peers follow your runtime
+
+The HTTP engine is chosen at `bootstrap({ runtime })`, so which engine package a project needs is
+not a fixed dependency. `kick add` resolves it from your project's runtime — `kick.config.ts`'s
+`runtime` field, or the engine already in `package.json` — and the listing names the engine it
+resolved:
+
+| Runtime   | Installed with `@forinda/kickjs`             |
+| --------- | -------------------------------------------- |
+| `express` | `express`                                    |
+| `fastify` | `fastify`, `@fastify/middie`, `serve-static` |
+| `h3`      | `h3`, `serve-static`                         |
+
+These match what `kick new` scaffolds for the same engine, so adding the framework to an existing
+Fastify project no longer pulls in Express. `kick add upload` resolves its multipart driver the
+same way.
+
+Resolution order: `--runtime <engine>` → `runtime` in `kick.config.ts` → the engine in
+`dependencies` → the engine in `devDependencies`. A production dependency outranks a dev one,
+since that is what you deploy on.
+
+If two engines sit at the same level and nothing settles it — Fastify and h3 both in
+`dependencies`, say — `kick add` **stops** rather than guessing:
+
+```text
+  Cannot tell which HTTP engine this app boots on: found fastify, h3 in package.json.
+
+  Installing engine peers for the wrong one is worse than not installing them, so:
+    • set `runtime: '<engine>'` in kick.config.ts (permanent, also fixes kick doctor), or
+    • pass --runtime <fastify|h3> for this command
+```
+
+Installing writes `package.json` and `node_modules`, so a wrong guess is work to undo — refusing
+costs one flag.
 
 The framework runtime (`@forinda/kickjs`), the dev/build/HMR layer (`@forinda/kickjs-vite`), and the CLI (`@forinda/kickjs-cli`) are the only members of the core set. Everything else — auth, swagger, db, ws, queue, devtools, mcp, testing — is opt-in via `kick add`.
 

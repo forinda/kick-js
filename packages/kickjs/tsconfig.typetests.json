@@ -33,6 +33,7 @@
     // assertions below would pass while proving nothing.
     "__tests__/context-meta.d.ts",
     "__tests__/context-decorator-public-types.test.ts",
+    "__tests__/route-flag-registry.d.ts",
     "__tests__/route-flag-types.test.ts"
   ]
 }

@@ -7,6 +7,13 @@ import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config
 interface PackageEntry {
   pkg: string
   peers: string[]
+  /**
+   * Peers depend on the project's HTTP engine, so they are resolved from
+   * {@link resolveAppRuntime} rather than listed statically. Set on the
+   * framework package itself: the engine is chosen at `bootstrap({ runtime })`,
+   * so a Fastify project must not be handed `express`.
+   */
+  enginePeers?: boolean
   description: string
   dev?: boolean
   /**
@@ -28,7 +35,9 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   // Core (always installed by kick new — required for the framework to run)
   kickjs: {
     pkg: '@forinda/kickjs',
-    peers: ['express'],
+    // Resolved per runtime — see `enginePeers` / ENGINE_PEERS.
+    peers: [],
+    enginePeers: true,
     description: 'Unified framework: DI, decorators, routing, middleware',
     core: true,
   },
@@ -192,6 +201,20 @@ export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
  * engine. `planAddPackages` resolves `upload` against the configured runtime
  * (see {@link KickConfig.runtime}); `kick doctor` validates the same mapping.
  */
+/**
+ * Engine peers per runtime — the same set `kick new` scaffolds for the chosen
+ * engine (`generators/templates/project-config.ts`). `@forinda/kickjs` declares
+ * all three as optional peers; which ones a project actually needs is decided
+ * by `bootstrap({ runtime })`, so installing them is a runtime-dependent
+ * question, not a static dependency.
+ */
+export const ENGINE_PEERS: Record<'express' | 'fastify' | 'h3', readonly string[]> = {
+  express: ['express'],
+  // `serve-static` rather than express for static files — no express dependency.
+  fastify: ['fastify', '@fastify/middie', 'serve-static'],
+  h3: ['h3', 'serve-static'],
+}
+
 export const UPLOAD_DRIVERS: Record<
   'express' | 'fastify' | 'h3',
   { prod?: string; dev?: string; note: string }
@@ -220,29 +243,95 @@ export type AppRuntime = 'express' | 'fastify' | 'h3'
  * the engine-correct multipart driver even in projects scaffolded before the
  * `runtime` field existed.
  */
+/** Validate `--runtime`, returning undefined when absent and exiting on a bad value. */
+export function parseRuntimeFlag(value: unknown): AppRuntime | undefined {
+  if (value === undefined) return undefined
+  if (value === 'express' || value === 'fastify' || value === 'h3') return value
+  throw new Error(`Invalid --runtime '${String(value)}'. Expected express, fastify or h3.`)
+}
+
 export async function resolveAppRuntime(cwd = process.cwd()): Promise<AppRuntime> {
+  return (await resolveAppRuntimeDetailed(cwd)).runtime
+}
+
+/**
+ * As {@link resolveAppRuntime}, but says whether the answer was a guess.
+ *
+ * `kick.config.ts`'s `runtime` is authoritative and never ambiguous. Sniffing
+ * is, so callers that act on the result — installing engine peers — surface the
+ * ambiguity instead of silently picking.
+ */
+export async function resolveAppRuntimeDetailed(
+  cwd = process.cwd(),
+): Promise<RuntimeDetection & { fromConfig: boolean }> {
   const config = await loadKickConfig(cwd)
   const fromConfig = (config as { runtime?: AppRuntime } | null)?.runtime
   if (fromConfig === 'express' || fromConfig === 'fastify' || fromConfig === 'h3') {
-    return fromConfig
+    return { runtime: fromConfig, candidates: [fromConfig], ambiguous: false, fromConfig: true }
   }
-  return detectRuntimeFromDeps(cwd)
+  return { ...detectRuntimeFromDepsDetailed(cwd), fromConfig: false }
 }
 
 /** Sniff the runtime from installed deps when kick.config has no `runtime`. */
-export function detectRuntimeFromDeps(cwd = process.cwd()): AppRuntime {
+/**
+ * Sniff result, with enough detail for a caller to say when it is guessing.
+ *
+ * `ambiguous` means more than one engine is installed and nothing settles which
+ * one the app boots on. That happens legitimately — a project on Express with
+ * Fastify in devDependencies for a benchmark — and the old precedence order
+ * (fastify first, whether prod or dev) answered `fastify` there, which installed
+ * the wrong engine peers.
+ */
+export interface RuntimeDetection {
+  runtime: AppRuntime
+  /** Engines found, in `dependencies` then `devDependencies`. */
+  candidates: AppRuntime[]
+  ambiguous: boolean
+}
+
+const ENGINE_BY_PACKAGE: ReadonlyArray<readonly [string, AppRuntime]> = [
+  ['express', 'express'],
+  ['fastify', 'fastify'],
+  ['h3', 'h3'],
+]
+
+/** Sniff the runtime from installed deps when kick.config has no `runtime`. */
+export function detectRuntimeFromDepsDetailed(cwd = process.cwd()): RuntimeDetection {
   const dir = findUp('package.json', cwd)
-  if (dir) {
-    try {
-      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf-8'))
-      const deps = { ...pkg.dependencies, ...pkg.devDependencies } as Record<string, unknown>
-      if ('fastify' in deps) return 'fastify'
-      if ('h3' in deps) return 'h3'
-    } catch {
-      // ignore — fall through to the default engine
-    }
+  if (!dir) return { runtime: 'express', candidates: [], ambiguous: false }
+
+  let prod: Record<string, unknown> = {}
+  let dev: Record<string, unknown> = {}
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf-8'))
+    prod = (pkg.dependencies ?? {}) as Record<string, unknown>
+    dev = (pkg.devDependencies ?? {}) as Record<string, unknown>
+  } catch {
+    return { runtime: 'express', candidates: [], ambiguous: false }
   }
-  return 'express'
+
+  const inProd = ENGINE_BY_PACKAGE.filter(([p]) => p in prod).map(([, r]) => r)
+  const inDev = ENGINE_BY_PACKAGE.filter(([p]) => p in dev && !(p in prod)).map(([, r]) => r)
+  const candidates = [...inProd, ...inDev]
+
+  // A runtime dependency outranks a dev one: you deploy on what you ship. That
+  // IS a resolution, so it is not ambiguous — reporting otherwise made the
+  // refusal below block the exact case this rule exists to allow (an Express
+  // app keeping fastify in devDependencies for a benchmark).
+  if (inProd.length === 1) return { runtime: inProd[0], candidates, ambiguous: false }
+  if (inProd.length === 0 && inDev.length === 1) {
+    return { runtime: inDev[0], candidates, ambiguous: false }
+  }
+  if (candidates.length === 0) return { runtime: 'express', candidates, ambiguous: false }
+
+  // Two or more engines at the same level — nothing here can tell them apart.
+  // Default to the framework default and let the caller say it is guessing.
+  return { runtime: 'express', candidates, ambiguous: true }
+}
+
+/** Back-compat wrapper — the runtime only. */
+export function detectRuntimeFromDeps(cwd = process.cwd()): AppRuntime {
+  return detectRuntimeFromDepsDetailed(cwd).runtime
 }
 
 /**
@@ -345,7 +434,7 @@ export async function resolvePackageManager(flagPm: string | undefined): Promise
  * everything; that's what `kick add --list --all` triggers when an
  * adopter genuinely wants the live catalog.
  */
-export function printPackageList(all = false): void {
+export function printPackageList(all = false, runtime?: 'express' | 'fastify' | 'h3'): void {
   const entries = Object.entries(PACKAGE_REGISTRY)
   const maxName = Math.max(...entries.map(([k]) => k.length))
   const core = entries.filter(([, info]) => info.core)
@@ -353,7 +442,13 @@ export function printPackageList(all = false): void {
 
   const formatRow = ([name, info]: [string, PackageEntry]): string => {
     const padded = name.padEnd(maxName + 2)
-    const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
+    // Engine peers depend on the runtime, so name it rather than printing a
+    // list that would be wrong for two projects out of three.
+    const resolved = info.enginePeers
+      ? [...info.peers, ...ENGINE_PEERS[runtime ?? 'express']]
+      : info.peers
+    const engineNote = info.enginePeers ? ` [${runtime ?? 'express'} engine]` : ''
+    const peers = resolved.length ? ` (+ ${resolved.join(', ')})${engineNote}` : ''
     const deprecated = info.deprecated ? ` [DEPRECATED — ${info.deprecated}]` : ''
     return `    ${padded} ${info.description}${peers}${deprecated}`
   }
@@ -426,6 +521,11 @@ export function planAddPackages(
     for (const peer of entry.peers) {
       target.add(peer)
     }
+    if (entry.enginePeers) {
+      const enginePeers = ENGINE_PEERS[runtime]
+      for (const peer of enginePeers) target.add(peer)
+      notices.push(`${name} (${runtime}): engine peers ${enginePeers.join(', ')}`)
+    }
   }
 
   return { prodDeps: [...prodDeps], devDeps: [...devDeps], unknown, warnings, notices }
@@ -437,8 +537,12 @@ export function registerListCommand(program: Command): void {
     .alias('ls')
     .description('List KickJS packages (core only; pair with --all for the full catalog)')
     .option('--all', 'Include the full optional catalog')
-    .action((opts: { all?: boolean }) => {
-      printPackageList(Boolean(opts.all))
+    .option('--runtime <engine>', 'HTTP engine to show peers for: express | fastify | h3')
+    .action(async (opts: { all?: boolean; runtime?: string }) => {
+      printPackageList(
+        Boolean(opts.all),
+        parseRuntimeFlag(opts.runtime) ?? (await resolveAppRuntime()),
+      )
     })
 }
 
@@ -449,19 +553,45 @@ export function registerAddCommand(program: Command): void {
     .option('--pm <manager>', 'Package manager override')
     .option('-D, --dev', 'Install as dev dependency')
     .option('--list', 'List packages (core only by default; pair with --all)')
+    .option(
+      '--runtime <engine>',
+      'HTTP engine for peer resolution: express | fastify | h3 (overrides kick.config.ts)',
+    )
     .option('--all', 'When listing, include the full optional catalog')
     .action(async (packages: string[], opts: any) => {
       // List mode
       if (opts.list || packages.length === 0) {
-        printPackageList(Boolean(opts.all))
+        printPackageList(
+          Boolean(opts.all),
+          parseRuntimeFlag(opts.runtime) ?? (await resolveAppRuntime()),
+        )
         return
       }
 
       const { pm, source } = await resolvePackageManagerWithSource(opts.pm)
       console.log(`\n  Using ${pm} (resolved from ${source})`)
       // Resolve the runtime so `kick add upload` installs the right multipart
-      // driver (express → multer, fastify → @fastify/multipart, h3 → none).
-      const runtime = await resolveAppRuntime(process.cwd())
+      // driver (express → multer, fastify → @fastify/multipart, h3 → none) and
+      // the framework gets the engine peers it actually runs on.
+      const fromFlag = parseRuntimeFlag(opts.runtime)
+      const detection = await resolveAppRuntimeDetailed(process.cwd())
+      const runtime = fromFlag ?? detection.runtime
+
+      // Two engines at the same dependency level and nothing to break the tie.
+      // Installing writes package.json and node_modules, so guessing here
+      // leaves an adopter to undo it by hand — refuse instead, with both ways
+      // to say what the app actually boots on.
+      if (!fromFlag && detection.ambiguous) {
+        console.error(
+          `\n  Cannot tell which HTTP engine this app boots on: found ` +
+            `${detection.candidates.join(', ')} in package.json.\n` +
+            `\n  Installing engine peers for the wrong one is worse than not installing them, so:\n` +
+            `    • set \`runtime: '<engine>'\` in kick.config.ts (permanent, also fixes kick doctor), or\n` +
+            `    • pass --runtime <${detection.candidates.join('|')}> for this command\n`,
+        )
+        process.exitCode = 1
+        return
+      }
       const { prodDeps, devDeps, unknown, warnings, notices } = planAddPackages(
         packages,
         Boolean(opts.dev),

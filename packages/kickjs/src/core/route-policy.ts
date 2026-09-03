@@ -15,14 +15,16 @@
  * an embedded admin app) each get their own.
  */
 
+import type { RouteFlags } from './route-flag'
+
 /** Flags for one mounted route, keyed for lookup by an incoming request. */
 interface PolicyEntry {
   /** Compiled from the mounted path — `/users/:id` → `^/users/([^/]+)$`. */
   readonly pattern: RegExp
-  readonly flags: ReadonlyMap<string, unknown>
+  readonly flags: RouteFlags
 }
 
-const EMPTY: ReadonlyMap<string, unknown> = new Map()
+const EMPTY: RouteFlags = new Map() as RouteFlags
 
 /**
  * Turn a mounted path into a matcher.
@@ -44,7 +46,7 @@ export class RoutePolicyTable {
   /** Bucketed by method: an incoming request only scans its own verb. */
   private readonly byMethod = new Map<string, PolicyEntry[]>()
 
-  add(method: string, path: string, flags: ReadonlyMap<string, unknown> | undefined): void {
+  add(method: string, path: string, flags: RouteFlags | undefined): void {
     if (!flags || flags.size === 0) return // nothing to say about this route
     const verb = method.toUpperCase()
     const bucket = this.byMethod.get(verb) ?? []
@@ -57,7 +59,7 @@ export class RoutePolicyTable {
    * matches no flagged route — including when it matches no route at all,
    * which is exactly the traffic this exists to keep visible.
    */
-  lookup(method: string, pathname: string): ReadonlyMap<string, unknown> {
+  lookup(method: string, pathname: string): RouteFlags {
     const bucket = this.byMethod.get(method.toUpperCase())
     if (!bucket) return EMPTY
     for (const entry of bucket) {

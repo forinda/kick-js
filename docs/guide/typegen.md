@@ -24,6 +24,7 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
     kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
     kick__db.d.ts               # DB model types (when a DB adapter is configured)
     kick__context.d.ts          # ContextKeys augmentation (when context decorators exist)
+    kick__route-flags.d.ts      # KickRouteFlags augmentation (from defineRouteFlag calls)
 ```
 
 Each file is emitted by its own typegen plugin. There is no barrel
@@ -340,16 +341,23 @@ The plugin still loads (so merge-time conflict detection still runs); only its `
 
 <PmCommand exec="kick typegen --list" />
 
-Prints every typegen plugin id with its watched inputs:
+Prints every typegen plugin id, the file it owns, and the inputs it watches:
 
 ```
   Registered typegen plugins:
 
-    kick/db      inputs: src/db/schema.ts, src/db/schema/**/*.ts
-    kick/assets  inputs: kick.config.ts, kick.config.js, kick.config.mjs
+    kick/db      → .kickjs/types/kick__db.d.ts
+                   watches: src/db/schema.ts, src/db/schema/**/*.ts
+    kick/assets  → .kickjs/types/kick__assets.d.ts
+                   watches: kick.config.ts, kick.config.js, kick.config.mjs
+
+  Disable one in kick.config.ts:
+
+    typegen: { disable: ['kick/db'] }
 ```
 
-Disabled ids show `(disabled)` next to the entry. Unknown ids in `typegen.disable` (typos, removed plugins) surface as a startup warning rather than a hard error so the dev loop stays alive while you fix the config.
+The output file is the part you usually want: it answers "which plugin writes this file, and what
+happens if I turn it off". Disabled ids show `(disabled)` next to the entry. Unknown ids in `typegen.disable` (typos, removed plugins) surface as a startup warning rather than a hard error so the dev loop stays alive while you fix the config.
 
 See [CLI Plugins](./cli-plugins.md) for the full plugin contract — every typegen above ships as a `KickCliPlugin.typegens[]` entry, including the built-ins.
 
@@ -470,6 +478,37 @@ defineHttpContextDecorator({
 ```
 
 `ContextMeta` still drives the value type of `ctx.get('tenant')`; `ContextKeys` only records that the key exists. Scaffold a contributor (and its `ContextMeta` stub) with [`kick g contributor`](./context-decorators.md). Empty project → no `kick__context.d.ts` emitted and `dependsOn` falls back to `string[]`.
+
+### Route flags — `kick__route-flags.d.ts`
+
+The same pass collects every `defineRouteFlag('name')` call into a `KickRouteFlags` augmentation:
+
+```ts
+// src/flags.ts
+export const Public = defineRouteFlag('auth.public')
+export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+```
+
+```ts
+// .kickjs/types/kick__route-flags.d.ts (generated)
+declare module '@forinda/kickjs' {
+  interface KickRouteFlags {
+    'auth.public': true
+    'rate.limit': { rpm: number }
+  }
+}
+```
+
+This one carries the **value type** as well as the name, which is why it can do more than
+`ContextKeys` does for contributors: `flags.get('rate.limit')` is typed, not just checked for
+existence. A bare flag registers as `true`; an explicit generic registers that type verbatim.
+
+It is also the cheapest plugin in the set. A flag is a positional string literal with no
+`dependsOn` graph and no per-route ordering to resolve, so discovery is a single AST branch and
+the output is a flat map — where the context-key registry has to reason about the contributor
+pipeline before it can say anything. See [Route Flags](./route-flags.md).
+
+Empty project → an empty registry, and every flag name falls back to `string`.
 
 ## Augmentation catalogue
 
