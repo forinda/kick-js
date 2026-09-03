@@ -6,14 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import 'reflect-metadata'
 import request from 'supertest'
-import {
-  Container,
-  Scope,
-  Controller,
-  Get,
-  Post,
-  type AppAdapter,
-} from '@forinda/kickjs-core'
+import { Container, Scope, Controller, Get, Post, type AppAdapter } from '@forinda/kickjs-core'
 import { buildRoutes, RequestContext } from '@forinda/kickjs-http'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
@@ -46,7 +39,7 @@ describe('DevTools: debug endpoints', () => {
       routes: () => ({ path: '/app', router: buildRoutes(AppCtrl), controller: AppCtrl }),
     })
 
-    const devtools = new DevToolsAdapter({
+    const devtools = DevToolsAdapter({
       secret: false, // disable auth for tests
       adapters: opts?.adapters ?? [],
     })
@@ -122,7 +115,7 @@ describe('DevTools: queue adapter peer discovery', () => {
       routes: () => ({ path: '/q', router: buildRoutes(QCtrl), controller: QCtrl }),
     })
 
-    const devtools = new DevToolsAdapter({
+    const devtools = DevToolsAdapter({
       secret: false,
       adapters: [mockQueueAdapter],
     })
@@ -156,7 +149,7 @@ describe('DevTools: queue adapter peer discovery', () => {
       routes: () => ({ path: '/noq', router: buildRoutes(NoQCtrl), controller: NoQCtrl }),
     })
 
-    const devtools = new DevToolsAdapter({
+    const devtools = DevToolsAdapter({
       secret: false,
       adapters: [], // no queue adapter
     })
@@ -194,7 +187,7 @@ describe('DevTools: queue adapter peer discovery', () => {
       routes: () => ({ path: '/broken', router: buildRoutes(BrokenCtrl), controller: BrokenCtrl }),
     })
 
-    const devtools = new DevToolsAdapter({
+    const devtools = DevToolsAdapter({
       secret: false,
       adapters: [brokenQueueAdapter],
     })
@@ -240,7 +233,7 @@ describe('DevTools: ws adapter peer discovery', () => {
       routes: () => ({ path: '/ws', router: buildRoutes(WsCtrl), controller: WsCtrl }),
     })
 
-    const devtools = new DevToolsAdapter({
+    const devtools = DevToolsAdapter({
       secret: false,
       adapters: [mockWsAdapter],
     })
@@ -270,7 +263,7 @@ describe('DevTools: ws adapter peer discovery', () => {
       routes: () => ({ path: '/nows', router: buildRoutes(NoWsCtrl), controller: NoWsCtrl }),
     })
 
-    const devtools = new DevToolsAdapter({
+    const devtools = DevToolsAdapter({
       secret: false,
       adapters: [],
     })
