@@ -252,6 +252,87 @@ async processDocument(ctx: RequestContext) {
 
 `cleanupFiles()` listens to the `finish` event on the response. It only attempts to delete files that have a `path` property (disk-stored files). If the file was already moved or deleted by your handler, the cleanup silently ignores the missing file.
 
+## Sending the request
+
+Everything above is the server half. The client half is a `multipart/form-data`
+body whose **field name matches `fieldName`** — that match is the whole contract,
+and a mismatch is the most common reason `ctx.file` is `undefined` on a request
+that otherwise looks fine.
+
+For this handler:
+
+```ts
+@Post('/upload')
+@FileUpload({ mode: 'single', fieldName: 'document' })
+handle(ctx: RequestContext) {
+  ctx.json({ name: ctx.file.originalname })
+}
+```
+
+**curl** — `-F` sets the multipart encoding for you; `@` reads a file:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/files/upload \
+  -F 'document=@./report.pdf'
+
+# extra text fields ride along and arrive on ctx.body
+curl -X POST http://localhost:3000/api/v1/files/upload \
+  -F 'document=@./report.pdf' \
+  -F 'title=Q3 report'
+```
+
+**Browser / fetch** — build a `FormData` and pass it as the body:
+
+```ts
+const form = new FormData()
+form.append('document', fileInput.files[0]) // key === fieldName
+form.append('title', 'Q3 report') // → ctx.body.title
+
+await fetch('/api/v1/files/upload', { method: 'POST', body: form })
+```
+
+::: danger Don't set Content-Type yourself
+`fetch` derives `multipart/form-data; boundary=…` from the `FormData` body. Set
+the header by hand and you overwrite the generated boundary, the parser finds no
+parts, and `ctx.file` is `undefined` — with no error to explain it. Omit
+`headers` entirely, or set only headers unrelated to the body (auth, tracing).
+:::
+
+**Array mode** repeats the same field name once per file — it is not
+`documents[]` or `documents[0]`:
+
+```ts
+@Post('/photos')
+@FileUpload({ mode: 'array', fieldName: 'photos', maxCount: 5 })
+```
+
+```bash
+curl -X POST http://localhost:3000/api/v1/media/photos \
+  -F 'photos=@./a.png' \
+  -F 'photos=@./b.png'
+```
+
+```ts
+const form = new FormData()
+for (const file of input.files) form.append('photos', file) // same key each time
+```
+
+**Node / tests** — supertest's `.attach()` takes the field name first, and
+`.field()` adds text parts:
+
+```ts
+const res = await request(app.handle.bind(app))
+  .post('/api/v1/files/upload')
+  .field('title', 'Q3 report')
+  .attach('document', Buffer.from('…'), 'report.pdf')
+```
+
+::: tip The typed client doesn't do multipart
+[`@forinda/kickjs-client`](./typed-client.md) serializes bodies as JSON. Upload
+endpoints go through plain `fetch` with a `FormData` body as above — you keep the
+typed client for the rest of the API.
+:::
+
 ## Accessing Uploaded Files
 
 Uploaded files are available on the `RequestContext`:
