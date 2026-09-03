@@ -36,13 +36,25 @@ csrf({
   ignorePaths: ['/webhooks/stripe', '/webhooks/github'],
   tokenLength: 32, // bytes before hex encoding (default: 32 = 64 hex chars)
   cookieOptions: {
-    httpOnly: true, // default: true
+    httpOnly: false, // MUST be false for the client flow below — see the warning
     sameSite: 'strict', // default: 'strict'
     secure: true, // default: true in production
     path: '/', // default: '/'
   },
 })
 ```
+
+::: danger `httpOnly` defaults to `true`, and that breaks the flow below
+Double-submit CSRF requires the **client** to read the token cookie and echo it in a header. The
+default `cookieOptions.httpOnly: true` hides the cookie from JavaScript, so `document.cookie`
+returns nothing, the header is omitted, and every mutating request answers `403`.
+
+Pass `cookieOptions: { httpOnly: false }` if your frontend reads the cookie — the CSRF token is
+not a credential, and a token an attacker cannot read is also a token your own page cannot send.
+
+Keep the default only when you deliver the token some other way: rendered into the page by the
+server, or fetched from an endpoint of your own.
+:::
 
 | Option          | Type       | Default                              |
 | --------------- | ---------- | ------------------------------------ |
@@ -57,7 +69,9 @@ The `secure` cookie flag defaults to `true` when `NODE_ENV` is `'production'` an
 
 ## Client-Side Usage
 
-Your frontend needs to read the CSRF cookie and send it back as a header on every mutating request.
+Your frontend needs to read the CSRF cookie and send it back as a header on every mutating
+request — which requires `cookieOptions: { httpOnly: false }` on the server, since the default
+hides the cookie from JavaScript.
 
 ### JavaScript / Fetch
 
@@ -126,7 +140,7 @@ import { csrfGuard, defineRouteFlag, Middleware } from '@forinda/kickjs'
 
 const CsrfExempt = defineRouteFlag('csrf.exempt')
 
-@Middleware(csrfGuard({ exemptWhen: 'csrf.exempt' }))
+@Middleware(csrfGuard({ exemptWhen: 'csrf.exempt', cookieOptions: { httpOnly: false } }))
 @Controller()
 export class WebhooksController {
   @CsrfExempt

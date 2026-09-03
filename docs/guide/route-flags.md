@@ -180,7 +180,7 @@ Every `skipWhen` / `onlyWhen` / `exemptWhen` accepts the same three forms:
 A list is **any-of** — it reads as "these are all reasons to skip". All-of, value checks and path checks go through a predicate:
 
 ```ts
-exemptWhen: ({ flags }) => (flags.get('rate.limit') as Limit | undefined)?.rpm === 0
+exemptWhen: ({ flags }) => (flags.get('rate.limit') as { rpm: number } | undefined)?.rpm === 0
 exemptWhen: ({ route }) => route?.path.startsWith('/internal') ?? false
 ```
 
