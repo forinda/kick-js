@@ -76,6 +76,8 @@ export const METADATA = {
   METHOD_MIDDLEWARES: 'kick:method:middlewares',
   CLASS_CONTRIBUTORS: 'kick:class:contributors',
   METHOD_CONTRIBUTORS: 'kick:method:contributors',
+  CLASS_FLAGS: 'kick:class:flags',
+  METHOD_FLAGS: 'kick:method:flags',
   FILE_UPLOAD: 'kick:file:upload',
   VALUE: 'kick:value',
   ASSET: 'kick:asset',

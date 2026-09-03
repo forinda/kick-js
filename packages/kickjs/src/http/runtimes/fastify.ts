@@ -20,6 +20,7 @@ import { createRequire } from 'node:module'
 import { HttpException } from '../../core/errors'
 import { unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
+import { publishMatchedRoute } from '../runtime'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
@@ -251,6 +252,7 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     reply.raw.once('close', () => disposeRequestStore(store))
 
     await requestStore.run(store, async () => {
+      publishMatchedRoute(raw, entry)
       const ctx = new RequestContext(raw as never, reply as never, NOOP_NEXT, replyDriver(reply))
 
       // Validation (from @Get(path, schema) / route.validation). `validator` is a

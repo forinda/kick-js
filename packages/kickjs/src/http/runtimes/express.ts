@@ -19,6 +19,7 @@ import { buildRouteTable, type BuildRoutesOptions } from '../router-builder'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { validate } from '../middleware/validate'
+import { publishMatchedRoute } from '../runtime'
 import { buildUploadMiddleware } from '../middleware/upload'
 import type {
   ConnectMiddleware,
@@ -43,6 +44,13 @@ export function materializeRouter(entries: RouteEntry[]): Router {
   for (const entry of entries) {
     const method = entry.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
     const handlers: RequestHandler[] = []
+
+    // Publish the matched route first, so every later step — validation,
+    // upload, middleware, contributors, handler — reads the same `ctx.route`.
+    handlers.push((req: Request, _res: Response, next: NextFunction) => {
+      publishMatchedRoute(req, entry)
+      next()
+    })
 
     // Validation middleware (shared with the standalone validate() export).
     if (entry.meta.validation) {

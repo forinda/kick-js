@@ -1,6 +1,8 @@
 # Route Flags — a shared vocabulary for "this endpoint is open"
 
-> Status: **proposal**. Working spec, not shipped.
+> Status: **phase 1 implemented** (`defineRouteFlag`, `ctx.route`, contributor
+> `skipWhen` / `onlyWhen`) — see `packages/kickjs/__tests__/route-flags.test.ts`.
+> Phases 2–4 (CSRF, rate limiting, OpenAPI + DevTools readers) are still proposals.
 > Decisions taken: core primitive in `@forinda/kickjs`; auth first, other consumers follow;
 > declaration must sit on the controller and propagate to its routes.
 

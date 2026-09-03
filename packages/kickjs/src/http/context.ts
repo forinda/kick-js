@@ -1,6 +1,7 @@
 /// <reference types="multer" />
 import type { Request, NextFunction } from 'express'
-import type { ActiveRuntime, RuntimeResponse } from './runtime'
+import { ROUTE_SLOT } from '../core/route-flag'
+import type { ActiveRuntime, MatchedRoute, RuntimeResponse } from './runtime'
 import {
   type ContextMetaKey,
   type ExecutionContext,
@@ -297,6 +298,22 @@ export class RequestContext<
    * over their native reply as the optional fourth argument.
    */
   private readonly _response: RuntimeResponse
+
+  /**
+   * The route this request matched: its method, path, controller, handler name
+   * and resolved {@link MatchedRoute.flags}.
+   *
+   * Available to anything running inside the matched route — route middleware,
+   * contributors, guards, the handler. Global middleware runs before route
+   * matching, so it sees `undefined` there.
+   *
+   * ```ts
+   * if (ctx.route?.flags.has('auth.public')) return next()
+   * ```
+   */
+  get route(): MatchedRoute | undefined {
+    return (this.req as unknown as Record<symbol, MatchedRoute | undefined>)?.[ROUTE_SLOT]
+  }
 
   constructor(
     public readonly req: ActiveRuntime['request'],

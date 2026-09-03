@@ -1,3 +1,4 @@
+import type { RouteFlagTest } from './route-flag'
 import 'reflect-metadata'
 import { METADATA, type Constructor, type MaybePromise } from './interfaces'
 import { pushClassMeta, pushMethodMeta } from './metadata'
@@ -111,6 +112,16 @@ export interface ContextDecoratorSpec<
 > {
   /** ContextMeta key the resolved value is written to. */
   key: K
+  /**
+   * Skip this contributor on routes carrying the named route flag
+   * (`defineRouteFlag`). See {@link ContributorRegistration.skipWhen}.
+   */
+  skipWhen?: RouteFlagTest
+  /**
+   * Run this contributor only on routes carrying the named route flag, or
+   * matching the predicate.
+   */
+  onlyWhen?: RouteFlagTest
   /**
    * DI dependencies resolved by the runner before `resolve()` runs.
    * Map entry keys become property names on the resolved-deps argument
@@ -247,6 +258,25 @@ export interface ContributorRegistration<
    * the first non-framework frame for display.
    */
   readonly definedAt?: string
+  /**
+   * Skip this contributor on routes carrying the named route flag.
+   *
+   * The composable way to say "not here". Exempting a contributor otherwise
+   * means registering a permissive twin under the same key, which only its
+   * author can do — a flag is declared on the route, so an adopter can exempt
+   * a plugin's contributor without owning its key or forking it.
+   *
+   * ```ts
+   * defineHttpContextDecorator({ key: 'user', skipWhen: 'auth.public', resolve })
+   * ```
+   */
+  readonly skipWhen?: RouteFlagTest
+  /**
+   * Run this contributor **only** on routes carrying the named flag. The
+   * inverse of {@link skipWhen}, and the case with no expression today short
+   * of an `if` inside every resolver.
+   */
+  readonly onlyWhen?: RouteFlagTest
 }
 
 /**
@@ -681,6 +711,8 @@ function defineContextDecoratorImpl<
       deps: sharedDeps,
       dependsOn: sharedDependsOn,
       optional: sharedOptional,
+      skipWhen: spec.skipWhen,
+      onlyWhen: spec.onlyWhen,
       onError,
       resolve,
       definedAt,
