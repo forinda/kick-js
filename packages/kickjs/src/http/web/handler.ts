@@ -6,6 +6,7 @@
 import { HttpException } from '../../core/errors'
 import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
+import { publishMatchedRoute } from '../runtime'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
@@ -159,6 +160,8 @@ export function compileWebRoute(
 
     const driver = new WebResponseDriver(request.signal)
     driver.setHeader('x-request-id', store.requestId)
+
+    publishMatchedRoute(req, entry)
 
     const pipeline = requestStore.run(store, async () => {
       if (bodyError) throw bodyError

@@ -296,3 +296,12 @@ export {
   type GroupAssetKeysOptions,
   type GroupAssetKeysResult,
 } from './asset-keys'
+
+export { defineRouteFlag, resolveRouteFlags } from './route-flag'
+export type {
+  RouteFlag,
+  RouteFlagContext,
+  RouteFlagDeclaration,
+  RouteFlagPredicate,
+  RouteFlagTest,
+} from './route-flag'

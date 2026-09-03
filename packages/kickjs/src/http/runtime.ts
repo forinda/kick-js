@@ -11,6 +11,7 @@
 // that lets `RequestContext` run engine-agnostically lands with them (M3), since
 // under Express the drivers ARE the Express request/response objects already.
 
+import { ROUTE_SLOT } from '../core/route-flag'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   RequestHandler,
@@ -92,6 +93,50 @@ export interface RouteMeta {
   validation?: RouteDefinition['validation']
   /** `@FileUpload` config, if present — the runtime supplies the backend. */
   upload?: FileUploadConfig
+  /**
+   * Route flags in force here, resolved at build time (method over class).
+   * Enabled flags only: a flag declared `false` at a higher-precedence site is
+   * absent rather than present-and-false, so `has()` is always the right
+   * question. See `core/route-flag.ts`.
+   */
+  flags?: ReadonlyMap<string, unknown>
+}
+
+/**
+ * The route a request matched, published on `ctx.route`.
+ *
+ * Everything that holds a {@link RequestContext} — handlers, `@Middleware()`,
+ * guards, contributors — can read it, which is what lets one declaration on a
+ * route serve every consumer.
+ */
+/**
+ * Publish the matched route on the request, for `ctx.route` to read.
+ *
+ * Called by each runtime once per dispatch, before it builds a RequestContext.
+ * It lives on `req` rather than on the ctx because the Express runtime
+ * constructs a fresh RequestContext per middleware step — anything written to
+ * one ctx would be invisible to the next and to the handler.
+ */
+export function publishMatchedRoute(req: unknown, entry: RouteEntry): void {
+  ;(req as Record<symbol, MatchedRoute>)[ROUTE_SLOT] = {
+    method: entry.method,
+    path: entry.path,
+    controller: entry.meta.controller,
+    handlerName: entry.meta.handlerName,
+    flags: entry.meta.flags ?? EMPTY_FLAGS,
+  }
+}
+
+const EMPTY_FLAGS: ReadonlyMap<string, unknown> = new Map()
+
+export interface MatchedRoute {
+  method: RouteMethod
+  /** Path as declared on the handler, e.g. `/:id`. */
+  path: string
+  controller?: Constructor
+  handlerName?: string
+  /** Enabled flags only — see {@link RouteMeta.flags}. */
+  flags: ReadonlyMap<string, unknown>
 }
 
 /** A controller's routes grouped under the module mount prefix. */

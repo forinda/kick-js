@@ -21,6 +21,7 @@ import { createRequire } from 'node:module'
 
 import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
+import { publishMatchedRoute } from '../runtime'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
@@ -248,6 +249,7 @@ function makeEventHandler(
     res.once('close', () => disposeRequestStore(store))
 
     await requestStore.run(store, async () => {
+      publishMatchedRoute(req, entry)
       const ctx = new RequestContext(req as never, res as never, NOOP_NEXT, resDriver(res))
 
       if (validator) {

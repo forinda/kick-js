@@ -8,6 +8,11 @@ import { METADATA } from '../core/interfaces'
 import type { ContributorRegistration } from '../core/context-decorator'
 import type { FileUploadConfig, MiddlewareHandler, RouteDefinition } from '../core/decorators'
 import { getClassMeta, getMethodMeta, getMethodMetaOrUndefined } from '../core/metadata'
+import {
+  getClassFlagDeclarations,
+  getMethodFlagDeclarations,
+  resolveRouteFlags,
+} from '../core/route-flag'
 import { duplicateRouteError } from '../core/kick-errors'
 import type { CtxHandler, RouteEntry, RouteMethod } from './runtime'
 
@@ -114,6 +119,10 @@ export function buildRouteTable(
     [],
   )
 
+  // Route flags declared on the controller — inherited by every method below
+  // unless a method declares the same flag `false` (see core/route-flag.ts).
+  const classFlagDeclarations = getClassFlagDeclarations(controllerClass)
+
   const entries: RouteEntry[] = []
 
   for (const route of routes) {
@@ -144,6 +153,13 @@ export function buildRouteTable(
       [],
     )
 
+    // Flags in force for THIS route: class declarations overridden by method
+    // ones. Resolved at build time so the per-request cost is a map lookup.
+    const flags = resolveRouteFlags(
+      classFlagDeclarations,
+      getMethodFlagDeclarations(controllerClass, route.handlerName),
+    )
+
     let contributorRunner: CtxHandler | null = null
     if (
       classContributors.length > 0 ||
@@ -170,7 +186,7 @@ export function buildRouteTable(
       const pipeline = buildPipeline(sources, {
         route: `${method} ${fullPath}`,
       })
-      contributorRunner = (ctx) => runContributors({ pipeline, ctx, container })
+      contributorRunner = (ctx) => runContributors({ pipeline, ctx, container, flags })
     }
 
     // Terminal handler — resolve controller per-request to respect DI scoping.
@@ -187,6 +203,7 @@ export function buildRouteTable(
         handlerName: route.handlerName,
         validation: route.validation,
         upload: fileUploadConfig,
+        flags,
       },
     })
   }

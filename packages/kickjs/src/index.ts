@@ -31,6 +31,14 @@ export {
   type SseHandler,
 } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
+export { defineRouteFlag } from './core/route-flag'
+export type {
+  RouteFlag,
+  RouteFlagContext,
+  RouteFlagPredicate,
+  RouteFlagTest,
+} from './core/route-flag'
+export type { MatchedRoute } from './http/runtime'
 
 // Return-value handlers + response inference (response-inference-design.md)
 export {
