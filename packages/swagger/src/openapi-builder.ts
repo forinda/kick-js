@@ -8,6 +8,7 @@ import {
   getMethodMeta,
   getMethodMetaOrUndefined,
   hasClassMeta,
+  getRouteFlags,
 } from '@forinda/kickjs'
 import {
   SWAGGER_KEYS,
@@ -136,6 +137,27 @@ export interface SwaggerOptions {
    * })
    * ```
    */
+  /**
+   * Name of the route flag that marks an endpoint public — the spec then reads
+   * the same declaration the runtime does, instead of asking for a second
+   * annotation that can drift from it.
+   *
+   * The name is configuration rather than a constant because the framework
+   * deliberately names no flags: one project's `auth.public` is another's
+   * `public` or `security.none`. Pass a list to accept several.
+   *
+   * ```ts
+   * // src/flags.ts
+   * export const Public = defineRouteFlag('auth.public')
+   *
+   * SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+   * ```
+   *
+   * Checked after {@link ApiPublic} and {@link securityResolver}, before the
+   * `@ApiSecurity` / `@ApiBearerAuth` decorators — so an explicit resolver
+   * still wins, and a flag still overrides class-level security.
+   */
+  publicFlag?: string | readonly string[]
   securityResolver?: (
     ctx: SecurityResolverContext,
   ) => string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[] | null | undefined
@@ -707,8 +729,9 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       //      — adopter-provided bridge for external auth libraries.
       //        Returning `null` is "explicitly public" (same as
       //        @ApiPublic); a value or array drives the requirements.
-      //   3. @ApiSecurity / @ApiBearerAuth on the method.
-      //   4. @ApiSecurity / @ApiBearerAuth on the class.
+      //   3. options.publicFlag — a route flag naming this endpoint public.
+      //   4. @ApiSecurity / @ApiBearerAuth on the method.
+      //   5. @ApiSecurity / @ApiBearerAuth on the class.
       const isPublicMethod = !!getMethodMetaOrUndefined<boolean>(
         SWAGGER_KEYS.PUBLIC,
         controllerClass,
@@ -728,6 +751,22 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
           : normaliseSecurity(resolverOutput)
       const resolverPublic = resolverOutput === null
 
+      // A route flag naming this endpoint public. Resolved from the controller
+      // metadata, so it is the same method-over-class value `ctx.route.flags`
+      // carries at request time.
+      const publicFlagNames =
+        options.publicFlag === undefined
+          ? []
+          : typeof options.publicFlag === 'string'
+            ? [options.publicFlag]
+            : options.publicFlag
+      const flagPublic =
+        publicFlagNames.length > 0 &&
+        (() => {
+          const flags = getRouteFlags(controllerClass, route.handlerName)
+          return publicFlagNames.some((name) => flags.has(name))
+        })()
+
       let requirements: ApiSecurityRequirement[] | undefined
       // Track whether the resolution path came from `@ApiBearerAuth`
       // (any name) so a bearer-shaped scheme gets auto-synthesised
@@ -738,7 +777,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       // generic — adopters must declare custom schemes via
       // `SwaggerOptions.securitySchemes` when using those paths.
       let bearerAuthSourced = false
-      if (isPublicMethod || resolverPublic) {
+      if (isPublicMethod || resolverPublic || (flagPublic && resolverSecurity === undefined)) {
         requirements = undefined
       } else if (resolverSecurity && resolverSecurity.length > 0) {
         requirements = resolverSecurity

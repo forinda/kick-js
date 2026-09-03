@@ -31,7 +31,7 @@ export {
   type SseHandler,
 } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
-export { defineRouteFlag } from './core/route-flag'
+export { defineRouteFlag, getRouteFlags } from './core/route-flag'
 export type {
   RouteFlag,
   RouteFlagContext,

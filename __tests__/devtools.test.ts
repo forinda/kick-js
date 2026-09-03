@@ -6,7 +6,15 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import 'reflect-metadata'
 import request from 'supertest'
-import { Container, Scope, Controller, Get, Post, type AppAdapter } from '@forinda/kickjs-core'
+import {
+  Container,
+  Scope,
+  Controller,
+  Get,
+  Post,
+  defineRouteFlag,
+  type AppAdapter,
+} from '@forinda/kickjs-core'
 import { buildRoutes, RequestContext } from '@forinda/kickjs-http'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
@@ -79,6 +87,49 @@ describe('DevTools: debug endpoints', () => {
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('routes')
     expect(Array.isArray(res.body.routes)).toBe(true)
+  })
+
+  it("/_debug/routes reports each route's resolved flags", async () => {
+    const Public = defineRouteFlag('auth.public')
+    const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+
+    @Public
+    @Controller()
+    class FlaggedCtrl {
+      @Get('/open')
+      open(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Limit({ rpm: 10 })
+      @Public(false)
+      @Get('/metered')
+      metered(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+
+    const module = createTestModule({
+      register: (c) => reg(FlaggedCtrl, c),
+      routes: () => ({
+        path: '/flagged',
+        router: buildRoutes(FlaggedCtrl),
+        controller: FlaggedCtrl,
+      }),
+    })
+    const { expressApp } = await createTestApp({
+      modules: [module],
+      adapters: [DevToolsAdapter({ secret: false })],
+    })
+
+    const res = await request(expressApp).get('/_debug/routes')
+    const byPath = Object.fromEntries(
+      res.body.routes.map((r: { path: string; flags: unknown }) => [r.path, r.flags]),
+    )
+
+    expect(byPath['/api/v1/flagged/open']).toEqual({ 'auth.public': true })
+    // Class flag turned off at the method, so it is absent — not `false`.
+    expect(byPath['/api/v1/flagged/metered']).toEqual({ 'rate.limit': { rpm: 10 } })
   })
 })
 

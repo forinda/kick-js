@@ -1,5 +1,5 @@
 /**
- * Route registry tab — method/path/controller/handler/middleware
+ * Route registry tab — method/path/controller/handler/middleware/flags
  * listing with search + method-filter + pagination.
  *
  * Sources its data from the shared store (`store.routes()`), which
@@ -17,6 +17,16 @@ import { Pagination, usePagination } from '../lib/pagination'
 
 const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
 type MethodFilter = (typeof METHODS)[number]
+
+/**
+ * Render resolved route flags. A flag whose value is `true` carries no more
+ * information than its name, so only valued flags show one.
+ */
+function formatFlags(flags?: Record<string, unknown>): string {
+  const entries = Object.entries(flags ?? {})
+  if (!entries.length) return '—'
+  return entries.map(([k, v]) => (v === true ? k : `${k}=${JSON.stringify(v)}`)).join(', ')
+}
 
 export const RoutesTab: Component = () => {
   const [search, setSearch] = createSignal('')
@@ -108,6 +118,7 @@ export const RoutesTab: Component = () => {
                 <th>Controller</th>
                 <th>Handler</th>
                 <th>Middleware</th>
+                <th>Flags</th>
               </tr>
             </thead>
             <tbody>
@@ -123,6 +134,7 @@ export const RoutesTab: Component = () => {
                     <td class="text-text-muted text-xs">
                       {r.middleware.length ? r.middleware.join(', ') : '—'}
                     </td>
+                    <td class="text-text-muted text-xs">{formatFlags(r.flags)}</td>
                   </tr>
                 )}
               </For>
