@@ -20,6 +20,7 @@ import {
   type ComputedRef,
   getClassMeta,
   getMethodMeta,
+  getRouteFlags,
 } from '@forinda/kickjs'
 import {
   MemoryAnalyzer,
@@ -41,6 +42,12 @@ interface RouteInfo {
   controller: string
   handler: string
   middleware: string[]
+  /**
+   * Route flags in force, resolved method-over-class. Present so the dashboard
+   * can answer "why is this endpoint not requiring auth" from the route list
+   * itself, rather than by reading the controller.
+   */
+  flags: Record<string, unknown>
 }
 
 /** Per-route latency stats with percentile tracking */
@@ -1062,6 +1069,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               ...classMiddleware.map((m: any) => m.name || 'anonymous'),
               ...methodMiddleware.map((m: any) => m.name || 'anonymous'),
             ],
+            flags: Object.fromEntries(getRouteFlags(controllerClass, route.handlerName)),
           })
         }
       },

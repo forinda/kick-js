@@ -17,7 +17,15 @@ import {
   redocHtml,
   type SchemaParser,
 } from '@forinda/kickjs-swagger'
-import { Controller, Get, Post, Delete, Container } from '@forinda/kickjs'
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Container,
+  defineRouteFlag,
+  getRouteFlags,
+} from '@forinda/kickjs'
 
 // ── Decorator Metadata Tests ──────────────────────────────────────────
 
@@ -715,6 +723,128 @@ describe('buildOpenAPISpec — security (Swagger-owned, not coupled to any auth 
     })
     expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
     expect(spec.paths['/api/health']?.get?.security).toBeUndefined()
+  })
+
+  it('options.publicFlag reads the flag name the project chose', () => {
+    // The flag name is configuration, not a constant: one project's
+    // 'auth.public' is another's 'public'. Swagger looks up whichever name it
+    // was given, so the spec agrees with the runtime without a second
+    // annotation on every route.
+    const Open = defineRouteFlag('my.open')
+
+    @Controller()
+    @ApiSecurity('BearerAuth')
+    class NamedFlagController {
+      @Open
+      @Get('/open')
+      open() {}
+
+      @Get('/secret')
+      secret() {}
+    }
+
+    registerControllerForDocs(NamedFlagController, '/api')
+    const spec = buildOpenAPISpec({ publicFlag: 'my.open' })
+
+    expect(spec.paths['/api/open']?.get?.security).toBeUndefined()
+    expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
+  })
+
+  it('options.publicFlag accepts several names', () => {
+    const A = defineRouteFlag('team.public')
+    const B = defineRouteFlag('probe')
+
+    @Controller()
+    @ApiSecurity('BearerAuth')
+    class MultiFlagController {
+      @A
+      @Get('/a')
+      a() {}
+
+      @B
+      @Get('/b')
+      b() {}
+
+      @Get('/c')
+      c() {}
+    }
+
+    registerControllerForDocs(MultiFlagController, '/api')
+    const spec = buildOpenAPISpec({ publicFlag: ['team.public', 'probe'] })
+
+    expect(spec.paths['/api/a']?.get?.security).toBeUndefined()
+    expect(spec.paths['/api/b']?.get?.security).toBeUndefined()
+    expect(spec.paths['/api/c']?.get?.security).toEqual([{ BearerAuth: [] }])
+  })
+
+  it('publicFlag inherits from the class and a method can turn it off', () => {
+    const Public = defineRouteFlag('auth.public')
+
+    @Public
+    @Controller()
+    @ApiSecurity('BearerAuth')
+    class InheritedFlagController {
+      @Get('/open')
+      open() {}
+
+      @Public(false)
+      @Get('/admin')
+      admin() {}
+    }
+
+    registerControllerForDocs(InheritedFlagController, '/api')
+    const spec = buildOpenAPISpec({ publicFlag: 'auth.public' })
+
+    expect(spec.paths['/api/open']?.get?.security).toBeUndefined()
+    // The flag is absent here, not false — so the class security applies.
+    expect(spec.paths['/api/admin']?.get?.security).toEqual([{ BearerAuth: [] }])
+  })
+
+  it('an explicit securityResolver still wins over publicFlag', () => {
+    const Public = defineRouteFlag('auth.public')
+
+    @Public
+    @Controller()
+    class OverriddenController {
+      @Get('/open')
+      open() {}
+    }
+
+    registerControllerForDocs(OverriddenController, '/api')
+    const spec = buildOpenAPISpec({
+      publicFlag: 'auth.public',
+      securityResolver: () => 'BearerAuth',
+    })
+
+    expect(spec.paths['/api/open']?.get?.security).toEqual([{ BearerAuth: [] }])
+  })
+
+  it('securityResolver + getRouteFlags marks flagged routes public', () => {
+    // Phase 4 of route-flags-design.md: the OpenAPI spec reads the same flag
+    // the auth contributor and the guards read, so a route declared public in
+    // one place is documented public without a second annotation.
+    const Public = defineRouteFlag('auth.public')
+
+    @Public
+    @Controller()
+    @ApiSecurity('BearerAuth')
+    class FlagController {
+      @Get('/open')
+      open() {}
+
+      @Public(false)
+      @Get('/secret')
+      secret() {}
+    }
+
+    registerControllerForDocs(FlagController, '/api')
+    const spec = buildOpenAPISpec({
+      securityResolver: ({ controllerClass, handlerName }) =>
+        getRouteFlags(controllerClass, handlerName).has('auth.public') ? null : undefined,
+    })
+
+    expect(spec.paths['/api/open']?.get?.security).toBeUndefined()
+    expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
   })
 
   it('refuses to silently synthesise a scheme for non-BearerAuth names — adopter must declare', () => {

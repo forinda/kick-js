@@ -66,7 +66,8 @@ Resolution order: explicit `enabled` option → `KICKJS_DEVTOOLS=0|1|true|false`
 
 ### `GET /_debug/routes`
 
-Lists all registered routes with their HTTP method, path, controller, handler, and middleware.
+Lists all registered routes with their HTTP method, path, controller, handler, middleware, and
+resolved [route flags](./route-flags.md).
 
 ```json
 {
@@ -76,18 +77,33 @@ Lists all registered routes with their HTTP method, path, controller, handler, a
       "path": "/api/v1/users",
       "controller": "UserController",
       "handler": "getAll",
-      "middleware": ["authGuard"]
+      "middleware": ["authGuard"],
+      "flags": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "controller": "HealthController",
+      "handler": "live",
+      "middleware": [],
+      "flags": { "auth.public": true }
     },
     {
       "method": "POST",
-      "path": "/api/v1/users",
-      "controller": "UserController",
-      "handler": "create",
-      "middleware": ["authGuard", "validate"]
+      "path": "/api/v1/login",
+      "controller": "AuthController",
+      "handler": "login",
+      "middleware": ["validate"],
+      "flags": { "rate.limit": { "rpm": 10 } }
     }
   ]
 }
 ```
+
+`flags` holds only the flags in force: one turned off at the method (`@Public(false)`) is absent
+rather than `false`, matching what every other consumer sees. The dashboard's Routes tab shows the
+same values in a Flags column, so "why does this endpoint not require auth" is answerable from the
+route list instead of by reading the controller.
 
 ### `GET /_debug/container`
 

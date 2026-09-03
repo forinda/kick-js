@@ -30,7 +30,19 @@ export interface RouteFlagDeclaration {
  * (`@Public(false)`, `@RateLimit({ rpm: 10 })`), on a class or a method.
  */
 export interface RouteFlag<V = true> {
-  (target: object, propertyKey?: string | symbol): void
+  /**
+   * Bare on a class — `@Public`. Typed against `Function` rather than `object`
+   * so a flag VALUE that happens to be an object (`@Limit({ rpm: 10 })`) cannot
+   * match this signature: overload resolution would otherwise pick it, return
+   * `void`, and fail with "Type 'void' has no call signatures".
+   */
+  (target: Function): void
+  /**
+   * Bare on a method — `@Public`. `propertyKey` is required for the same
+   * reason: it makes a one-argument call unambiguous.
+   */
+  (target: object, propertyKey: string | symbol, descriptor?: PropertyDescriptor): void
+  /** Called with a value — `@Public(false)`, `@Limit({ rpm: 10 })`. */
   (value: V | false): (target: object, propertyKey?: string | symbol) => void
   readonly flagName: string
 }
@@ -204,6 +216,34 @@ const EMPTY_FLAGS: ReadonlyMap<string, unknown> = new Map()
  * (pnpm hoisting, a bundled copy) still reads the same slot.
  */
 export const ROUTE_SLOT: unique symbol = Symbol.for('kick.route') as never
+
+/**
+ * Resolve the flags in force for one handler, straight from the controller
+ * class — the same method-over-class result `buildRouteTable` computes.
+ *
+ * For consumers that see a controller and a method name rather than a live
+ * request: an adapter's `onRouteMount`, an OpenAPI generator, a DevTools route
+ * listing. Inside a request, read `ctx.route.flags` instead — it is already
+ * resolved.
+ *
+ * ```ts
+ * // Mark flagged routes public in the OpenAPI spec:
+ * SwaggerAdapter({
+ *   bearerAuth: true,
+ *   securityResolver: ({ controllerClass, handlerName }) =>
+ *     getRouteFlags(controllerClass, handlerName).has('auth.public') ? null : undefined,
+ * })
+ * ```
+ */
+export function getRouteFlags(
+  controllerClass: object,
+  handlerName: string,
+): ReadonlyMap<string, unknown> {
+  return resolveRouteFlags(
+    getClassFlagDeclarations(controllerClass),
+    getMethodFlagDeclarations(controllerClass, handlerName),
+  )
+}
 
 /** Read the class-level declarations off a controller. */
 export function getClassFlagDeclarations(controllerClass: object): RouteFlagDeclaration[] {
