@@ -2,6 +2,10 @@
 
 This document captures ideas for how to evolve KickJS. Each proposal carries enough detail to deliberate on it without re-deriving the motivation every time. **DB-related items are deferred** — we're working through the non-DB tracks first.
 
+> **Last audited 2026-09-03** against the source, not from memory. Statuses below reflect what
+> actually ships; where a proposal was delivered by a different design than the one sketched, the
+> status says so rather than quietly matching the text to the code.
+
 ## How to read this document
 
 Each proposal uses the same template:
@@ -29,7 +33,7 @@ Things that make a developer say "I'm using KickJS specifically because nothing 
 
 ### A.1 End-to-end typed client
 
-**Status:** `proposed`
+**Status:** `shipped` — `@forinda/kickjs-client` (typed `api.get/post`), `kick typegen` emitting `KickRoutes.Api`, and `createRpc(api, kickRpc)` for the tRPC-style namespace. See the [typed client guide](./typed-client.md).
 **Effort:** 2–3 months
 
 **Why it matters.** tRPC's whole pitch is full-stack type safety without a separate schema. KickJS already has the inputs (decorator-introspectable controllers, Zod schemas, the `kick typegen` command), but no consumer-side SDK. A developer using a kickjs backend with a Next/Remix/Vite frontend has to either hand-write API clients or pull in a separate schema layer (OpenAPI generator, gRPC, etc.) — and pay the schema-drift tax.
@@ -63,7 +67,7 @@ const user = await api.users.create({ email: 'a@b.com' })
 
 ### A.2 First-class observability
 
-**Status:** `proposed`
+**Status:** `proposed` — **premise has moved.** `@forinda/kickjs-otel` was deprecated to a [BYO recipe](./byo-recipes.md) rather than promoted, so the sketch below (a `bootstrap({ observability })` block owned by the framework) now runs against the BYO direction. What did ship is the seam: `Logger.setProvider()`, `processHooks` so an observability SDK can own SIGTERM, and adapter `introspect()`. Re-scope before building.
 **Effort:** 1–2 months
 
 **Why it matters.** The `@forinda/kickjs-otel` package exists but isn't the headline experience. Production-readiness is one of the top reasons engineering teams pick a framework — and "just install us, every controller is traced" is a story Nest doesn't have.
@@ -95,7 +99,7 @@ Auto-instrument: every controller method, every adapter call (db, queue, cron, m
 
 ### A.3 Runtime-portable core
 
-**Status:** `proposed`
+**Status:** `shipped` — **via a different shape than sketched below.** There is no `kickjs-core` / `-hono` / `-edge` / `-bun` package split. Instead the engine is a runtime seam inside `@forinda/kickjs` (`bootstrap({ runtime })` → Express / Fastify / h3), and `@forinda/kickjs/web` is a `fetch(Request) → Response` entry running on Cloudflare Workers, Bun and Deno, kept honest by a bundle-purity test that fails on any node-only import. The open questions below were answered as: Web Streams in the runtime seam, Fetch `Request`/`Response` at the web entry, `nodejs_compat` for AsyncLocalStorage on Workers.
 **Effort:** 2–4 months (gradual)
 
 **Why it matters.** Every decorator framework is locked to Node + Express (Nest, KickJS today). Hono runs everywhere — Bun, Deno, Cloudflare Workers, Vercel Edge, Fastly — and that's a real audience. Being the only decorator-driven framework that runs on edge runtimes is a genuine wedge.
@@ -168,7 +172,7 @@ The scaffolder picks the user's chosen dirs and renders them in order. Code/text
 
 ### B.2 Error messages with "here's the fix"
 
-**Status:** `proposed`
+**Status:** `shipped` (first pass, codes still being added) — `KickError` carries `code` / `summary` / `cause` / `fix`, and six `KICK00x` codes use it today (e.g. KICK005 missing controller-or-router, KICK006 duplicate route). Adding a code to a new failure is now the pattern rather than a project.
 **Effort:** 2–3 weeks per pass; ongoing
 
 **Why it matters.** NestJS errors are infamous for being cryptic. KickJS errors today are functional but rarely tell the user _how to fix_ the problem. The framework that has the best error messages — Rust's compiler, Elm, Astro — wins on first-impressions retention.
@@ -216,7 +220,7 @@ A centralized error catalog (`packages/kickjs/src/core/error-catalog.ts`) keyed 
 
 ### B.3 Interactive docs / WebContainers playground
 
-**Status:** `proposed`
+**Status:** `proposed` — nothing in the docs site references WebContainers or an embedded playground yet.
 **Effort:** 2–4 weeks
 
 **Why it matters.** VitePress + markdown is great, but everything is static. Vue's docs let you tweak code in the page and see it run. SvelteKit, Astro, Hono — they all do this now. For a backend framework, the friction-to-evaluation is even higher (you need a terminal, Node, a port…) — letting visitors try `bootstrap({ modules: [HelloModule] })` in the docs without leaving the page would be a real adoption boost.
@@ -235,7 +239,7 @@ A centralized error catalog (`packages/kickjs/src/core/error-catalog.ts`) keyed 
 
 ### B.4 `kick doctor` command
 
-**Status:** `proposed`
+**Status:** `shipped` — `kick doctor` runs pre-flight checks and reports each with a fix (tsconfig decorator flags, env-file layering, and more). See `packages/cli/src/commands/doctor.ts`.
 **Effort:** 1 week
 
 **Why it matters.** "It works on my machine" debugging eats hours. Common misconfigs (env not loaded, peer dep missing, typegen stale, decorators not enabled in tsconfig, prisma not generated) are all detectable.
@@ -272,7 +276,7 @@ $ kick doctor
 
 ### B.5 RFC 9457 Problem Details on `ctx`
 
-**Status:** `proposed`
+**Status:** `shipped` — `ctx.problem(...)` plus the typed convenience methods (`ctx.problem.notFound()`, `.unauthorized()`, …). The generated guard template uses them, and they are the runtime-portable way to answer from a guard or middleware.
 **Effort:** 1–2 weeks
 
 **Why it matters.** Every API has the same error-shape bikeshedding conversation: should the JSON be `{ error: ... }` or `{ message: ... }` or `{ status, message }` or some custom envelope? [RFC 9457 — Problem Details for HTTP APIs](https://datatracker.ietf.org/doc/html/rfc9457) (July 2024, supersedes RFC 7807) is the standard answer: a single canonical shape with five fields and a known content type. Adopting it gives kickjs a "standards-compliant by default" line without forcing anything — most Node frameworks make adopters reach for a library.
@@ -348,13 +352,60 @@ Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@
 
 ---
 
+### B.6 Route flags — one vocabulary for per-route policy
+
+**Status:** `in design` — working spec at [`route-flags-design.md`](https://github.com/forinda/kick-js/blob/main/route-flags-design.md)
+**Effort:** 1–2 weeks for phase 1; phases 2–4 independently schedulable
+
+**Why it matters.** "Whitelist these endpoints" is a request every API eventually makes, and today the answer depends on which subsystem is asking. Auth uses a contributor (`@Public` = `LoadAuthUser({ on401: 'allow' })`). CSRF uses `ignorePaths`. Rate limiting uses `skipPaths` / `skip`. One fact — _this endpoint is open_ — stated three ways, in two places, under two notions of identity.
+
+The path-string half has real defects: both are an exact `Set.has(pathname)`, so `/users/:id` cannot be expressed; and the list keeps parsing after an `apiPrefix` or `version` change that silently voids it.
+
+The contributor half looks better but doesn't compose. `@Public` wins by being a _second instance of the same contributor_ at higher precedence — which only works if you own the key. You cannot exempt a plugin's contributor, and you cannot exempt anything that isn't a contributor at all.
+
+**What it looks like.** A flag is a named, inheritable fact about a route, resolved through the existing five registration sites (`method > class > module > adapter > global`) and readable by every consumer:
+
+```ts
+export const Public = defineRouteFlag('auth.public')
+
+@Public // class level — propagates to every route below
+@Controller()
+class WebhooksController {
+  @Get('/health') health(ctx: RequestContext) {} // inherits
+
+  @Public(false) // method wins
+  @Post('/admin')
+  admin(ctx: RequestContext) {}
+}
+```
+
+Consumers read them wherever they already hold a `RequestContext`:
+
+```ts
+ctx.route.flags.has('auth.public')          // guards, @Middleware(), handlers
+defineHttpContextDecorator({ skipWhen: 'auth.public', … })   // contributors
+csrf({ exemptWhen: 'csrf.exempt' })                          // phase 2
+```
+
+That split is what keeps the cost down: everything after route matching gets flags from one addition (`ctx.route`), with no per-consumer API. Only the two pre-match middleware need further mechanism.
+
+Phasing: **1)** primitive + `ctx.route` + contributor `skipWhen`/`onlyWhen`; **2)** CSRF; **3)** rate limiting (also unlocks per-route limits, which the current shape cannot express); **4)** OpenAPI security schemes + DevTools display. Phase 1 stands alone.
+
+**Open questions.**
+
+- Do flags carry values, or is presence enough? `@RateLimit({ rpm: 10 })` wants values, and values turn precedence into a merge question rather than pick-one.
+- `skipWhen` as a flag name only, or also a predicate? A predicate that reads anything but flags reintroduces the coupling this removes.
+- Pre-match consumers: per-route mounting (exact, but a 404 then skips the check) or a boot-compiled policy table (preserves ordering, but is a second implementation of routing)? Current thinking: per-route for CSRF, table for rate limiting — a token check is meaningless on an unmatched route, an abuse control is not.
+
+**Risk.** `kickjs-auth` was deprecated for baking in an auth opinion. Mitigation: core ships `defineRouteFlag` and names no flags. `auth.public` is a string the adopter picks; nothing in core branches on it.
+
 ## Track C — Bold Bets
 
 High-risk, high-reward. Each of these could be the thing KickJS is famous for, if it works.
 
 ### C.1 Schema-first via one decorator
 
-**Status:** `proposed`
+**Status:** `proposed` — **partially superseded.** `@forinda/kickjs-db` took the code-first route instead: schema defined in TS, with snapshot / diff / migrate and dialect subpaths. That covers the schema-to-database projection; the `@Schema` / `@Field` class projecting to validator + OpenAPI + types in one declaration is still unbuilt. Decide whether this is now "project kick/db schemas into Zod + OpenAPI" rather than a fresh decorator surface.
 **Effort:** 4–6 months
 
 **Why it matters.** Today an entity is defined four times: Prisma/Drizzle schema, Zod validator, TypeScript type, OpenAPI doc. Each has its own syntax. Drift is constant. A single source of truth — declared once, projected to all four — is the holy grail.
@@ -401,7 +452,7 @@ From this one class:
 
 ### C.2 TS compiler plugin for runtime types
 
-**Status:** `proposed`
+**Status:** `proposed` — **partially superseded.** `kick typegen` gets much of this from a source scan rather than a compiler transformer: `KickRoutes`, `KickEnv`, `KickAssets`, `KickJsPluginRegistry`. What a transformer would still add is inference the scan cannot do. Worth re-reading against typegen's current reach before committing months to it.
 **Effort:** 3–6 months
 
 **Why it matters.** TypeScript's types are erased at runtime. That's why we need decorators in the first place — to recover the type info at runtime. A `ts-patch` / `swc` plugin (like `ts-runtime-checks`, `typia`, or `tspl`) preserves the type info, making decorators in some cases unnecessary.
@@ -442,7 +493,7 @@ class UserService {
 
 ### C.3 Multi-tenant as a config flag
 
-**Status:** `proposed`
+**Status:** `rejected` — superseded by BYO. `@forinda/kickjs-multi-tenant` was deprecated to a [recipe](./multi-tenancy.md) built on `defineContextDecorator`, which is the opposite direction to a framework-owned config flag: tenancy models vary too much per project to bless one. Kept here so the idea is not relitigated.
 **Effort:** 2–3 months
 
 **Why it matters.** The [multi-tenant examples in the archive](https://github.com/forinda/kickjs-examples-archive) exist (`multi-tenant-drizzle-api`, `multi-tenant-prisma-api`, `multi-tenant-mongoose-api`) but they're separate templates with significant boilerplate. SaaS teams pick frameworks partly on how easy multi-tenancy is. Making it `bootstrap({ multiTenant: ... })` instead of a project rewrite is a real differentiator.
@@ -476,15 +527,15 @@ The framework wires per-request tenant resolution, scopes the DI container, swit
 
 Small enough to bundle into other work or do in a half-day. Listed for visibility.
 
-| #   | Idea                                                           | Effort | Status          |
-| --- | -------------------------------------------------------------- | ------ | --------------- |
-| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `proposed`      |
-| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB) |
-| Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `proposed`      |
-| Q.4 | `kick new --with auth,swagger,drizzle,docker` preset bundles   | 3 days | `proposed`      |
-| Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed`      |
-| Q.6 | First-party `SentryLoggerProvider` example snippet in docs     | 1 day  | `proposed`      |
-| Q.7 | `kick info` — print resolved versions, peer deps, runtime info | 1 day  | `proposed`      |
+| #   | Idea                                                           | Effort | Status                                                                                                         |
+| --- | -------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `proposed` — overlaps [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy); fold in or drop             |
+| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                |
+| Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `proposed`                                                                                                     |
+| Q.4 | `kick new --with auth,swagger,drizzle,docker` preset bundles   | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                |
+| Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed` — `createTestApp` + supertest covers it without a command; confirm the wrapper still earns its keep |
+| Q.6 | First-party `SentryLoggerProvider` example snippet in docs     | 1 day  | `shipped` — [Sentry integration](./integrations/sentry.md)                                                     |
+| Q.7 | `kick info` — print resolved versions, peer deps, runtime info | 1 day  | `shipped` — `kick info`                                                                                        |
 
 ---
 
@@ -529,17 +580,18 @@ These will get their own track once we have a clearer picture from the non-DB wo
 
 ## Prioritization — current thinking
 
+Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
+**B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, and **A.3**
+runtime portability (via the runtime seam + web entry rather than the package split sketched
+above). The list below is what remains.
+
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.5 — RFC 9457 Problem Details on `ctx`** (1–2 weeks, clear spec, no breaking change, "standards-compliant" pitch)
-2. **B.2 — Error messages with fix hints** (2–3 weeks, changes how the framework feels forever)
-3. **B.4 — `kick doctor` command** (1 week, kills a huge category of support questions)
-4. **A.1 — Typed client** (2–3 months, but it's the moat)
-5. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-6. **A.2 — Observability** (1–2 months, production-readiness story)
-7. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-8. **A.3 — Runtime-portable core** (long arc — gradual, every peer-dep cleanup advances it)
-9. **C.1, C.2, C.3** — bold bets, sequence after the moat is in place
+1. **B.6 — Route flags** (1–2 weeks for phase 1, retires three exemption mechanisms and unblocks per-route rate limits)
+2. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+3. **A.2 — Observability** (re-scope first — the BYO turn changed the premise)
+4. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+5. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 
