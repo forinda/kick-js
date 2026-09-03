@@ -6,26 +6,32 @@ KickJS processes every request through a deterministic pipeline of middleware ph
 
 When `bootstrap()` is called, the application is assembled in this order:
 
-```
+```text
  1. Adapter beforeMount hooks            (mount early routes that bypass middleware)
  2. Hardened defaults                    (disable x-powered-by, trust proxy)
- 3. Request tracking + health endpoints
+ 3. In-flight request tracking           (drains on shutdown)
  4. Request scope (AsyncLocalStorage)    (requestScopeMiddleware)
  5. Adapter middleware: beforeGlobal     (e.g. tracing / scope-resolving adapters)
  6. Plugin registration + middleware
  7. Security defaults (auto-helmet)
  8. User middleware (cors, json, session, etc.)
  9. Adapter middleware: afterGlobal
-10. Module registration + DI bootstrap
-11. Adapter middleware: beforeRoutes     (e.g. AuthAdapter, rate limit)
+10. Module registration + DI bootstrap   (incl. the built-in health module)
+11. Adapter middleware: beforeRoutes     (e.g. rate limit, request validators)
 12. Mount module routes                  (onRouteMount notifies adapters per controller)
 13. Adapter middleware: afterRoutes
-14. Error handlers (404 + global)
-15. Adapter beforeStart hooks            (final DI registrations, log banner)
+14. Adapter beforeStart hooks            (final DI registrations, log banner)
+15. Error handlers (404 + global)
 16. HTTP server listen                   (then afterStart hooks fire)
 ```
 
-Steps 5 and 11 are where most adapter logic runs. Adapters that resolve cross-cutting per-request state (locale, tenant/workspace scope, geo, feature flags) typically run at `beforeGlobal`; auth / RBAC / rate limit run at `beforeRoutes` so they only protect matched routes.
+Steps 5 and 11 are where most adapter logic runs. Adapters resolving cross-cutting per-request
+state (locale, tenant/workspace scope, geo, feature flags) typically run at `beforeGlobal`.
+
+Note what step 11 is **not**: `beforeRoutes` runs before route _matching_, so middleware there sees
+every request including ones that match no route. That is right for an abuse control and wrong for
+anything that needs to know which handler it is protecting — those belong in `@Middleware()` or a
+contributor, where `ctx.route` exists.
 
 ## Request Flow
 

@@ -142,6 +142,10 @@ type LoadAuthUserParams = {
 export const LoadAuthUser = defineHttpContextDecorator.withParams<LoadAuthUserParams>()({
   key: 'user',
   deps: { strategies: AUTH_STRATEGIES },
+  // Routes flagged @Public (step 5) never reach the resolver. Without this the
+  // adapter's global registration runs here on every route and the default
+  // `on401: 'reject'` answers 401 — including on the routes you marked public.
+  skipWhen: 'auth.public',
   paramDefaults: { on401: 'reject' },
   resolve: async (ctx, { strategies }, params) => {
     for (const strategy of strategies) {
@@ -202,11 +206,8 @@ import { defineRouteFlag } from '@forinda/kickjs'
 export const Public = defineRouteFlag('auth.public')
 ```
 
-The contributor from step 4 skips it by name:
-
-```ts
-defineHttpContextDecorator({ key: 'user', skipWhen: 'auth.public', resolve })
-```
+The contributor in step 4 already skips it by name — `skipWhen: 'auth.public'` is what connects
+the two halves, and the flag does nothing without it.
 
 The older shim — `export const Public = LoadAuthUser({ on401: 'allow' })` — still works, and
 relies on method-level precedence beating class-level. Prefer the flag: it composes.
