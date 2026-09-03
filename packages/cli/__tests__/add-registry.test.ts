@@ -7,6 +7,7 @@ import {
   PACKAGE_REGISTRY,
   planAddPackages,
   UPLOAD_DRIVERS,
+  ENGINE_PEERS,
   AVAILABLE_ADD_PACKAGES,
 } from '../src/commands/add'
 
@@ -101,6 +102,34 @@ describe('planAddPackages', () => {
     expect(plan.prodDeps).not.toContain('@forinda/kickjs-auth')
     expect(plan.prodDeps).not.toContain('jsonwebtoken')
     expect(plan.unknown).toEqual(['auth'])
+  })
+
+  it('installs the engine peers for the project runtime, not always express', () => {
+    // The engine is chosen at `bootstrap({ runtime })`, so a Fastify project
+    // getting `express` from `kick add kickjs` was simply wrong.
+    expect(planAddPackages(['kickjs'], false, 'express').prodDeps).toContain('express')
+
+    const fastify = planAddPackages(['kickjs'], false, 'fastify').prodDeps
+    expect(fastify).toContain('fastify')
+    expect(fastify).toContain('@fastify/middie')
+    expect(fastify).not.toContain('express')
+
+    const h3 = planAddPackages(['kickjs'], false, 'h3').prodDeps
+    expect(h3).toContain('h3')
+    expect(h3).not.toContain('express')
+  })
+
+  it('matches what `kick new` scaffolds for each engine', () => {
+    // Drift here means `kick add` and `kick new` disagree about what a project
+    // needs — the failure mode is a missing peer at boot.
+    expect([...ENGINE_PEERS.express]).toEqual(['express'])
+    expect([...ENGINE_PEERS.fastify]).toEqual(['fastify', '@fastify/middie', 'serve-static'])
+    expect([...ENGINE_PEERS.h3]).toEqual(['h3', 'serve-static'])
+  })
+
+  it('names the engine in a notice so the install is explainable', () => {
+    const plan = planAddPackages(['kickjs'], false, 'h3')
+    expect(plan.notices.join(' ')).toContain('h3')
   })
 
   it('collects unknown names without dropping known ones', () => {

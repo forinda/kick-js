@@ -124,12 +124,17 @@ export function registerTypegenCommand(program: Command): void {
         const idWidth = Math.max(...merged.typegens.map((t) => t.id.length))
         console.log('\n  Registered typegen plugins:\n')
         for (const tg of merged.typegens) {
-          const status = disabled.has(tg.id) ? ' (disabled)' : ''
+          const status = disabled.has(tg.id) ? '  (disabled)' : ''
+          // Same derivation as the runner — the file it owns is what an
+          // adopter actually needs when deciding whether to disable it.
+          const outFile = `${tg.id.replace(/\//g, '__')}${tg.outExtension ?? '.d.ts'}`
+          console.log(`    ${tg.id.padEnd(idWidth + 2)}→ .kickjs/types/${outFile}${status}`)
           console.log(
-            `    ${tg.id.padEnd(idWidth + 2)}inputs: ${tg.inputs.join(', ') || '(none)'}${status}`,
+            `    ${' '.repeat(idWidth + 2)}  watches: ${tg.inputs.join(', ') || '(none)'}`,
           )
         }
-        console.log()
+        console.log('\n  Disable one in kick.config.ts:\n')
+        console.log("    typegen: { disable: ['" + (merged.typegens[0]?.id ?? 'kick/x') + "'] }\n")
         return
       }
       const cliValidator = parseSchemaValidatorFlag(opts.schemaValidator)

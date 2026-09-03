@@ -341,16 +341,23 @@ The plugin still loads (so merge-time conflict detection still runs); only its `
 
 <PmCommand exec="kick typegen --list" />
 
-Prints every typegen plugin id with its watched inputs:
+Prints every typegen plugin id, the file it owns, and the inputs it watches:
 
 ```
   Registered typegen plugins:
 
-    kick/db      inputs: src/db/schema.ts, src/db/schema/**/*.ts
-    kick/assets  inputs: kick.config.ts, kick.config.js, kick.config.mjs
+    kick/db      → .kickjs/types/kick__db.d.ts
+                   watches: src/db/schema.ts, src/db/schema/**/*.ts
+    kick/assets  → .kickjs/types/kick__assets.d.ts
+                   watches: kick.config.ts, kick.config.js, kick.config.mjs
+
+  Disable one in kick.config.ts:
+
+    typegen: { disable: ['kick/db'] }
 ```
 
-Disabled ids show `(disabled)` next to the entry. Unknown ids in `typegen.disable` (typos, removed plugins) surface as a startup warning rather than a hard error so the dev loop stays alive while you fix the config.
+The output file is the part you usually want: it answers "which plugin writes this file, and what
+happens if I turn it off". Disabled ids show `(disabled)` next to the entry. Unknown ids in `typegen.disable` (typos, removed plugins) surface as a startup warning rather than a hard error so the dev loop stays alive while you fix the config.
 
 See [CLI Plugins](./cli-plugins.md) for the full plugin contract — every typegen above ships as a `KickCliPlugin.typegens[]` entry, including the built-ins.
 
