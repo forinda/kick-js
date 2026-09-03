@@ -295,12 +295,14 @@ const normaliseType = (t: string | null): string => {
   const text = t ?? 'true'
   const literals: string[] = []
   // Park each literal behind a marker that contains no whitespace to collapse.
+  // Marker is plain ASCII with no whitespace: a control character would trip
+  // `no-control-regex`, and the collapse below must not touch it.
   const parked = text.replace(/'[^']*'|"[^"]*"|`[^`]*`/g, (lit) => {
     literals.push(lit)
-    return `\u0000${literals.length - 1}\u0000`
+    return `@@kicklit${literals.length - 1}@@`
   })
   const collapsed = parked.replace(/\s+/g, '')
-  return collapsed.replace(/\u0000(\d+)\u0000/g, (_, i) => literals[Number(i)])
+  return collapsed.replace(/@@kicklit(\d+)@@/g, (_, i) => literals[Number(i)])
 }
 
 export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
