@@ -29,6 +29,7 @@ import {
   type DiscoveredAugmentation,
   type DiscoveredClass,
   type DiscoveredContextKey,
+  type DiscoveredRouteFlag,
   type DiscoveredInject,
   type DiscoveredPluginOrAdapter,
   type DiscoveredRoute,
@@ -451,6 +452,8 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
   const pluginsAndAdapters: DiscoveredPluginOrAdapter[] = []
   const augmentations: DiscoveredAugmentation[] = []
   const contextKeys: DiscoveredContextKey[] = []
+  const routeFlags: DiscoveredRouteFlag[] = []
+  const seenRouteFlags = new Set<string>()
   const routes: DiscoveredRoute[] = []
   const moduleMounts: ModuleMount[] = []
   const globPatterns: string[] = []
@@ -619,6 +622,28 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           name: augName,
           description: stringValue(getProp(meta, 'description')),
           example: stringValue(getProp(meta, 'example')),
+          filePath,
+          relativePath: relPath,
+        })
+      }
+      return
+    }
+
+    // defineRouteFlag('name') — the name is a positional string literal, and
+    // an explicit value type (`defineRouteFlag<{ rpm: number }>('x')`) is
+    // taken verbatim from the source span. Nothing else to resolve: a flag has
+    // no deps and no per-route narrowing, which is why this is one branch
+    // where a context key needs a graph.
+    if (name === 'defineRouteFlag') {
+      const flagName = stringValue((node as { arguments?: Node[] }).arguments?.[0])
+      if (flagName !== null && !seenRouteFlags.has(flagName)) {
+        seenRouteFlags.add(flagName)
+        const typeArgs = (node as { typeArguments?: { start: number; end: number } }).typeArguments
+        const raw = typeArgs ? source.slice(typeArgs.start, typeArgs.end) : null
+        routeFlags.push({
+          name: flagName,
+          // Strip the surrounding angle brackets: `<{ rpm: number }>` → `{ rpm: number }`.
+          valueType: raw ? raw.slice(1, -1).trim() : null,
           filePath,
           relativePath: relPath,
         })
@@ -872,6 +897,7 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     pluginsAndAdapters,
     augmentations,
     contextKeys,
+    routeFlags,
     routes,
     moduleMounts,
     globPatterns: /\.module\.[mc]?[tj]sx?$/.test(filePath) ? globPatterns : [],

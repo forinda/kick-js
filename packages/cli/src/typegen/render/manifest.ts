@@ -18,6 +18,7 @@
 
 import { dirname, relative, sep } from 'node:path'
 import type {
+  DiscoveredRouteFlag,
   ClassCollision,
   DiscoveredAugmentation,
   DiscoveredClass,
@@ -214,6 +215,49 @@ export function buildModuleTokens(classes: DiscoveredClass[]): string[] {
  * `keyof` constraint resolves to `never` (harmless — `dependsOn: []`
  * still works).
  */
+/**
+ * Emit the `KickRouteFlags` registry from discovered `defineRouteFlag` calls.
+ *
+ * Once emitted, a misspelt flag name is a compile error at every consumer
+ * (`skipWhen`, `exemptWhen`, `flags.has`), and `flags.get(name)` is typed —
+ * without anyone hand-writing a `declare module` block.
+ */
+export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
+  // Two calls with the same name are the same flag; first wins, and a
+  // conflicting value type is the author's problem to notice, not ours to
+  // guess at.
+  const byName = new Map<string, DiscoveredRouteFlag>()
+  for (const item of items) {
+    if (!byName.has(item.name)) byName.set(item.name, item)
+  }
+
+  const sorted = [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))
+  const entries = sorted.map((item) => `    '${item.name}': ${item.valueType ?? 'true'}`).join('\n')
+
+  const body = entries
+    ? entries
+    : '    // (no route flags discovered yet — `defineRouteFlag(...)` calls feed this)'
+
+  return `${HEADER}
+declare module '@forinda/kickjs' {
+  /**
+   * Every route flag declared in this project, from its \`defineRouteFlag\`
+   * call site. A bare flag carries \`true\`; one declared with an explicit
+   * value type carries that type.
+   *
+   * The \`keyof\` narrows every flag name in the codebase — \`skipWhen\`,
+   * \`onlyWhen\`, \`exemptWhen\`, \`flags.has()\` — so a typo is a compile
+   * error rather than a flag that silently never matches.
+   */
+  interface KickRouteFlags {
+${body}
+  }
+}
+
+export {}
+`
+}
+
 export function renderPlugins(items: DiscoveredPluginOrAdapter[]): string {
   // Dedupe by name — two declarations with the same name are a runtime
   // boot-time error in `mount-sort.ts`; we surface the conflict via a
