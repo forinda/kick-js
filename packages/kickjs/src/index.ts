@@ -34,10 +34,14 @@ export { defineHttpContextDecorator } from './http/define-http-context-decorator
 export { defineRouteFlag, getRouteFlags } from './core/route-flag'
 export { bindRoutePolicy, type RoutePolicyTable } from './core/route-policy'
 export type {
+  KickRouteFlags,
   RouteFlag,
   RouteFlagContext,
+  RouteFlagName,
   RouteFlagPredicate,
   RouteFlagTest,
+  RouteFlagValue,
+  RouteFlags,
 } from './core/route-flag'
 export type { MatchedRoute } from './http/runtime'
 

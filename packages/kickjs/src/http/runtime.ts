@@ -11,7 +11,7 @@
 // that lets `RequestContext` run engine-agnostically lands with them (M3), since
 // under Express the drivers ARE the Express request/response objects already.
 
-import { ROUTE_SLOT } from '../core/route-flag'
+import { ROUTE_SLOT, type RouteFlags } from '../core/route-flag'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   RequestHandler,
@@ -99,7 +99,7 @@ export interface RouteMeta {
    * absent rather than present-and-false, so `has()` is always the right
    * question. See `core/route-flag.ts`.
    */
-  flags?: ReadonlyMap<string, unknown>
+  flags?: RouteFlags
 }
 
 /**
@@ -127,7 +127,7 @@ export function publishMatchedRoute(req: unknown, entry: RouteEntry): void {
   }
 }
 
-const EMPTY_FLAGS: ReadonlyMap<string, unknown> = new Map()
+const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
 
 export interface MatchedRoute {
   method: RouteMethod
@@ -136,7 +136,7 @@ export interface MatchedRoute {
   controller?: Constructor
   handlerName?: string
   /** Enabled flags only — see {@link RouteMeta.flags}. */
-  flags: ReadonlyMap<string, unknown>
+  flags: RouteFlags
 }
 
 /** A controller's routes grouped under the module mount prefix. */

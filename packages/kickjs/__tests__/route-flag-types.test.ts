@@ -8,10 +8,48 @@
  * the factory discriminates on its arguments — so only a type test catches it.
  */
 import { describe, it, expectTypeOf } from 'vitest'
-import { defineRouteFlag, type RouteFlag } from '../src/index'
+import { defineRouteFlag, getRouteFlags, type RouteFlag, type RouteFlagTest } from '../src/index'
 
 const Public = defineRouteFlag('auth.public')
 const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+
+describe('KickRouteFlags narrowing', () => {
+  it('infers a flag value from the registry, no explicit generic', () => {
+    const Limit = defineRouteFlag('rate.limit')
+    expectTypeOf(Limit).toEqualTypeOf<RouteFlag<{ rpm: number }>>()
+
+    const Pub = defineRouteFlag('auth.public')
+    expectTypeOf(Pub).toEqualTypeOf<RouteFlag<true>>()
+  })
+
+  it('rejects a name the registry does not declare', () => {
+    // @ts-expect-error 'auth.pubic' is a typo — the whole point of the registry
+    defineRouteFlag('auth.pubic')
+  })
+
+  it('types flags.get by name', () => {
+    const flags = getRouteFlags(class {}, 'x')
+    expectTypeOf(flags.get('rate.limit')).toEqualTypeOf<{ rpm: number } | undefined>()
+    expectTypeOf(flags.get('auth.public')).toEqualTypeOf<true | undefined>()
+  })
+
+  it('rejects a misspelt name in has() and in a flag test', () => {
+    const flags = getRouteFlags(class {}, 'x')
+    // @ts-expect-error not a declared flag
+    flags.has('nope')
+
+    // @ts-expect-error not a declared flag
+    const bad: RouteFlagTest = 'auth.pubic'
+    void bad
+  })
+
+  it('accepts a declared name, a list of them, and a predicate', () => {
+    expectTypeOf<'auth.public'>().toMatchTypeOf<RouteFlagTest>()
+    expectTypeOf<['auth.public', 'rate.limit']>().toMatchTypeOf<RouteFlagTest>()
+    const predicate: RouteFlagTest = ({ flags }) => flags.has('auth.public')
+    void predicate
+  })
+})
 
 describe('RouteFlag overloads', () => {
   it('applies bare and with a value, on both methods and classes', () => {

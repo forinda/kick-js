@@ -2,7 +2,7 @@ import type { Container } from './container'
 import type { ContributorRegistration } from './context-decorator'
 import type { ExecutionContext } from './execution-context'
 import type { ContributorPipeline } from './contributor-pipeline'
-import { matchesFlagTest } from './route-flag'
+import { matchesFlagTest, type RouteFlags } from './route-flag'
 import type { MatchedRoute } from '../http/runtime'
 
 export interface RunContributorsOptions {
@@ -17,7 +17,7 @@ export interface RunContributorsOptions {
    * registration's `skipWhen` / `onlyWhen`. Omitted outside a route (the
    * pipeline then runs every contributor, as before).
    */
-  flags?: ReadonlyMap<string, unknown>
+  flags?: RouteFlags
 }
 
 /**
@@ -31,7 +31,7 @@ export interface RunContributorsOptions {
 function shouldRun(
   reg: ContributorRegistration,
   ctx: ExecutionContext,
-  flags?: ReadonlyMap<string, unknown>,
+  flags?: RouteFlags,
 ): boolean {
   if (reg.skipWhen === undefined && reg.onlyWhen === undefined) return true
   const resolved = flags ?? EMPTY_FLAGS
@@ -41,7 +41,7 @@ function shouldRun(
   return true
 }
 
-const EMPTY_FLAGS: ReadonlyMap<string, unknown> = new Map()
+const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
 
 /**
  * Execute a built {@link ContributorPipeline} against an {@link ExecutionContext}.

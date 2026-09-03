@@ -186,6 +186,44 @@ exemptWhen: ({ route }) => route?.path.startsWith('/internal') ?? false
 
 Keep predicates cheap — they run per request, per consumer.
 
+## Type safety: declare your flags
+
+Flag names are plain strings by default, which means a typo is a flag that silently never matches.
+Declare them once and every use narrows — the same `ContextMeta` mechanism [context
+decorators](./context-decorators.md) use:
+
+```ts
+declare module '@forinda/kickjs' {
+  interface KickRouteFlags {
+    'auth.public': true
+    'rate.limit': { rpm: number }
+  }
+}
+```
+
+Three things switch on at once:
+
+```ts
+defineRouteFlag('auth.pubic') // tsc: Did you mean '"auth.public"'?
+
+const Limit = defineRouteFlag('rate.limit') // RouteFlag<{ rpm: number }> — no generic needed
+ctx.route?.flags.get('rate.limit')?.rpm // typed, not `unknown`
+
+rateLimitGuard({ exemptWhen: 'auth.pubic' }) // tsc error, in every consumer
+```
+
+`skipWhen`, `onlyWhen` and `exemptWhen` all take the narrowed name, so a misspelling fails at the
+call site rather than at 3am.
+
+::: tip It stays optional
+`KickRouteFlags` is empty until you augment it, and everything falls back to plain `string` while
+it is — a project that never declares a flag keeps compiling. The narrowing switches on with the
+first declaration, and you can adopt it one flag at a time.
+:::
+
+The framework declares nothing in this registry. `auth.public` above is a name you chose — see
+[Naming](#naming).
+
 ## Where flags can be declared
 
 Method and class today, resolved method-over-class. Module, adapter and global registration sites are planned, matching the [context contributor](./context-decorators.md) precedence chain.
