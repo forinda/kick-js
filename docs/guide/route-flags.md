@@ -136,6 +136,37 @@ The Application hands the table to any middleware declaring that slot, once rout
 
 The connect-style `csrf()` has no table equivalent — a token check on an unmatched route is meaningless, so use `csrfGuard()` where you want flags.
 
+### Readers: OpenAPI and DevTools
+
+Two consumers read flags without running per request.
+
+**OpenAPI.** Name the flag your project uses for public endpoints and the spec reads the same
+declaration the runtime does, instead of a second annotation that can drift from it:
+
+```ts
+SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+SwaggerAdapter({ bearerAuth: true, publicFlag: ['auth.public', 'health.probe'] })
+```
+
+The name is configuration because the framework names no flags — see [Naming](#naming). For
+anything richer than a name (a flag's value, two flags combined), `securityResolver` plus
+`getRouteFlags` covers it:
+
+```ts
+SwaggerAdapter({
+  securityResolver: ({ controllerClass, handlerName }) =>
+    getRouteFlags(controllerClass, handlerName).has('auth.public') ? null : undefined,
+})
+```
+
+**DevTools.** `GET /_debug/routes` reports each route's resolved flags, and the dashboard's Routes
+tab shows them in a Flags column — so "why does this endpoint not require auth" is answerable from
+the route list rather than by reading the controller.
+
+`getRouteFlags(controllerClass, handlerName)` is the out-of-request resolver behind both: the same
+method-over-class result `ctx.route.flags` carries, for consumers that see a controller and a
+method name rather than a live request.
+
 ## Matching: name, list, or predicate
 
 Every `skipWhen` / `onlyWhen` / `exemptWhen` accepts the same three forms:
