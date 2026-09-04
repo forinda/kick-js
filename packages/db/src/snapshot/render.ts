@@ -1,3 +1,4 @@
+import { derivedFkName, derivedUniqueName } from './name'
 import type {
   ColumnSnapshot,
   ForeignKeySnapshot,
@@ -54,7 +55,7 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
       (f) =>
         f.columns.length === 1 &&
         f.columns[0] === col.name &&
-        f.name === `${table.name}_${col.name}_fk`,
+        f.name === derivedFkName(table.name, col.name),
     )
     const inlineUnique =
       table.indexes.find(
@@ -70,7 +71,7 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
   // Constraints that don't fit on a column chain.
   const explicitIndexes = table.indexes.filter((i) => !isAutoUniqueName(table.name, i))
   const explicitFks = table.foreignKeys.filter(
-    (f) => f.name !== `${table.name}_${f.columns[0]}_fk` || f.columns.length !== 1,
+    (f) => f.name !== derivedFkName(table.name, f.columns[0]) || f.columns.length !== 1,
   )
 
   const hasThirdArg = explicitIndexes.length > 0
@@ -168,7 +169,9 @@ function renderIndexCall(idx: IndexSnapshot): string {
 
 function isAutoUniqueName(tableName: string, idx: IndexSnapshot): boolean {
   return (
-    idx.unique && idx.columns.length === 1 && idx.name === `${tableName}_${idx.columns[0]}_unique`
+    idx.unique &&
+    idx.columns.length === 1 &&
+    idx.name === derivedUniqueName(tableName, idx.columns[0])
   )
 }
 

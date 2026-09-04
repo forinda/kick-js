@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
 
-import { introspectPg } from '@forinda/kickjs-db'
+import { introspectPg, emitPg, diff, extractSnapshot } from '@forinda/kickjs-db'
+import { table, serial, integer } from '@forinda/kickjs-db'
 
 let container: StartedPostgreSqlContainer
 let client: pg.Client
@@ -35,6 +36,37 @@ beforeEach(async () => {
       END LOOP;
     END $$;
   `)
+})
+
+describe('long derived constraint names against a real database (#647)', () => {
+  it('applies two foreign keys whose derived names both exceed 63 characters', async () => {
+    // Under plain truncation both derive to the same 63-character name and
+    // Postgres rejects the second with "constraint … already exists", stopping
+    // the migration.
+    const accounts = table('finance_vote_head_accounts', { id: serial().primaryKey() })
+    const ledgers = table('finance_vote_head_account_reference_ledgers', {
+      id: serial().primaryKey(),
+      finance_vote_head_account_id: integer().references(() => accounts.id),
+      finance_vote_head_account_ref_id: integer().references(() => accounts.id),
+    })
+
+    const snap = extractSnapshot({ accounts, ledgers }, 'postgres')
+    await client.query(emitPg(diff({ version: 1, dialect: 'postgres', tables: {} }, snap)))
+
+    const names = (
+      await client.query<{ conname: string }>(
+        `SELECT conname FROM pg_constraint
+         WHERE contype = 'f'
+           AND conrelid = 'finance_vote_head_account_reference_ledgers'::regclass
+         ORDER BY conname`,
+      )
+    ).rows.map((r) => r.conname)
+
+    expect(names).toHaveLength(2)
+    expect(new Set(names).size).toBe(2)
+    // Postgres stores what it was given; nothing was silently truncated.
+    for (const n of names) expect(Buffer.byteLength(n)).toBeLessThanOrEqual(63)
+  })
 })
 
 describe('introspectPg()', () => {
