@@ -124,7 +124,11 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
       // been bound, so self-references (`() => self.id`) work.
       const ref = state.references.thunk()
       foreignKeys.push({
-        name: derivedFkName(t.__name, colKey),
+        // An explicit name wins — it is the constraint that actually exists in
+        // the database. Only derive when the schema didn't say, and derive
+        // through the helper so a long one is shortened the same way the
+        // renderer expects to see it.
+        name: state.references.name ?? derivedFkName(t.__name, colKey),
         columns: [colKey],
         refTable: ref.__tableName,
         refColumns: [ref.__name],

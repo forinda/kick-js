@@ -133,6 +133,20 @@ export const posts = table('posts', {
 
 `onDelete` / `onUpdate` accept the standard FK actions (`'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'`). Both default to `'no_action'`.
 
+### Constraint names
+
+By default the constraint is named `<table>_<column>_fk`. Pass `name` when the
+constraint already exists in the database under a different one:
+
+```ts
+userId: uuid().references(() => users.id, { name: 'orders_user_id_fkey' }),
+```
+
+You rarely write this by hand — `kick db introspect` emits it. A database names
+its own constraints (Postgres' default is `<table>_<column>_fkey`), and keeping
+the real name is what stops the next diff from proposing a rename of every
+foreign key in the schema.
+
 For a self-reference, annotate the thunk return type so the const can refer to itself:
 
 ```ts
