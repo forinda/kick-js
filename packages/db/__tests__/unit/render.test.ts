@@ -144,3 +144,91 @@ describe('renderSchemaSource()', () => {
     expect(src).toContain('TODO: tsvector')
   })
 })
+
+describe('renderSchemaSource() — foreign keys (#643)', () => {
+  const twoTables = (fkName: string, onDelete = 'no_action' as const): SchemaSnapshot => ({
+    version: 1,
+    dialect: 'postgres',
+    tables: {
+      users: {
+        name: 'users',
+        columns: {
+          id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+        },
+        indexes: [],
+        foreignKeys: [],
+        checks: [],
+      },
+      orders: {
+        name: 'orders',
+        columns: {
+          id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+          customer_id: {
+            name: 'customer_id',
+            type: 'integer',
+            nullable: false,
+            default: null,
+            primaryKey: false,
+          },
+        },
+        indexes: [],
+        foreignKeys: [
+          {
+            name: fkName,
+            columns: ['customer_id'],
+            refTable: 'users',
+            refColumns: ['id'],
+            onDelete,
+            onUpdate: 'no_action',
+          },
+        ],
+        checks: [],
+      },
+    },
+  })
+
+  it('renders a Postgres-named foreign key instead of dropping it to a TODO', () => {
+    // Postgres names constraints `<table>_<col>_fkey`. The renderer used to
+    // inline an FK only when the name matched the DSL-derived `_fk` form, so
+    // every key from a real database became a comment.
+    const src = renderSchemaSource(twoTables('orders_customer_id_fkey'))
+
+    expect(src).toContain('.references(() => users.id')
+    expect(src).not.toContain('TODO')
+  })
+
+  it('preserves a non-derived constraint name so the next diff is empty', () => {
+    const src = renderSchemaSource(twoTables('fk_orders_customer'))
+    expect(src).toContain("name: 'fk_orders_customer'")
+  })
+
+  it('omits the name when it is the one the DSL would derive', () => {
+    const src = renderSchemaSource(twoTables('orders_customer_id_fk'))
+    expect(src).toContain('.references(() => users.id)')
+    expect(src).not.toContain('name:')
+  })
+
+  it('keeps onDelete alongside a preserved name', () => {
+    const src = renderSchemaSource(twoTables('orders_customer_id_fkey', 'cascade'))
+    expect(src).toContain(
+      ".references(() => users.id, { onDelete: 'cascade', name: 'orders_customer_id_fkey' })",
+    )
+  })
+
+  it('still reports a composite foreign key as a TODO', () => {
+    const snap = twoTables('orders_customer_id_fkey')
+    snap.tables.orders.foreignKeys = [
+      {
+        name: 'orders_composite_fkey',
+        columns: ['customer_id', 'id'],
+        refTable: 'users',
+        refColumns: ['id', 'id'],
+        onDelete: 'no_action',
+        onUpdate: 'no_action',
+      },
+    ]
+    const src = renderSchemaSource(snap)
+    expect(src).toContain('TODO: kick db introspect — composite foreign keys')
+    expect(src).toContain('orders_composite_fkey')
+  })
+})

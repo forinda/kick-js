@@ -50,12 +50,15 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
   const ident = jsIdent(table.name)
   const columns: string[] = []
   for (const col of Object.values(table.columns)) {
-    const fk = table.foreignKeys.find(
-      (f) =>
-        f.columns.length === 1 &&
-        f.columns[0] === col.name &&
-        f.name === `${table.name}_${col.name}_fk`,
-    )
+    // Match on SHAPE — one column, this column — not on the constraint's name.
+    //
+    // Matching by name meant only `<table>_<col>_fk` was ever inlined, which is
+    // the name this DSL derives. A real database names constraints itself:
+    // Postgres' default is `<table>_<col>_fkey`, and a DBA may have chosen
+    // anything at all. So introspecting a live schema matched nothing and every
+    // foreign key fell through to a TODO comment — 1,330 of them on a
+    // 242-table schema (#643). The name is preserved separately below.
+    const fk = table.foreignKeys.find((f) => f.columns.length === 1 && f.columns[0] === col.name)
     const inlineUnique =
       table.indexes.find(
         (i) =>
@@ -64,14 +67,16 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
           i.columns[0] === col.name &&
           isAutoUniqueName(table.name, i),
       ) !== undefined
-    columns.push(`  ${jsKey(col.name)}: ${renderColumn(col, helpers, fk, inlineUnique)},`)
+    columns.push(
+      `  ${jsKey(col.name)}: ${renderColumn(col, helpers, fk, inlineUnique, table.name)},`,
+    )
   }
 
   // Constraints that don't fit on a column chain.
   const explicitIndexes = table.indexes.filter((i) => !isAutoUniqueName(table.name, i))
-  const explicitFks = table.foreignKeys.filter(
-    (f) => f.name !== `${table.name}_${f.columns[0]}_fk` || f.columns.length !== 1,
-  )
+  // Only composite keys are left over now: a single-column FK always renders
+  // on its column, whatever it is called.
+  const compositeFks = table.foreignKeys.filter((f) => f.columns.length !== 1)
 
   const hasThirdArg = explicitIndexes.length > 0
   const tableArgs: string[] = [`'${table.name}'`, `{\n${columns.join('\n')}\n}`]
@@ -85,13 +90,12 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
 
   let src = `export const ${ident} = table(${tableArgs.join(', ')})`
 
-  // Explicit FKs that don't fit the auto-derived <table>_<col>_fk pattern get
-  // logged as TODO comments — adopter handles them manually. M3 may upgrade
+  // Composite foreign keys have no column-level form in the DSL, so they are
+  // still logged as TODO comments for the adopter to handle. M3 may upgrade
   // this to emit a separate ALTER snippet.
-  if (explicitFks.length > 0) {
-    src +=
-      '\n// TODO: kick db introspect — composite or custom-named foreign keys not auto-rendered:\n'
-    for (const f of explicitFks) {
+  if (compositeFks.length > 0) {
+    src += '\n// TODO: kick db introspect — composite foreign keys not auto-rendered:\n'
+    for (const f of compositeFks) {
       src += `// ${f.name}: (${f.columns.join(', ')}) → ${f.refTable}(${f.refColumns.join(', ')})\n`
     }
   }
@@ -104,6 +108,7 @@ function renderColumn(
   helpers: Set<string>,
   fk: ForeignKeySnapshot | undefined,
   inlineUnique: boolean,
+  tableName: string,
 ): string {
   const { helperName, args } = pickColumnHelper(col)
   helpers.add(helperName)
@@ -115,8 +120,17 @@ function renderColumn(
   if (inlineUnique) chain += '.unique()'
   if (fk) {
     const ref = `${jsIdent(fk.refTable)}.${jsIdent(fk.refColumns[0])}`
-    const onDelete = fk.onDelete === 'no_action' ? '' : `, { onDelete: '${fk.onDelete}' }`
-    chain += `.references(() => ${ref}${onDelete})`
+    const opts: string[] = []
+    if (fk.onDelete !== 'no_action') opts.push(`onDelete: '${fk.onDelete}'`)
+    if (fk.onUpdate !== undefined && fk.onUpdate !== 'no_action') {
+      opts.push(`onUpdate: '${fk.onUpdate}'`)
+    }
+    // Carry the real constraint name whenever it isn't the one the DSL would
+    // derive, so re-extracting this file reproduces the database rather than
+    // proposing a rename of every key.
+    if (fk.name !== `${tableName}_${col.name}_fk`) opts.push(`name: '${fk.name}'`)
+    const optArg = opts.length > 0 ? `, { ${opts.join(', ')} }` : ''
+    chain += `.references(() => ${ref}${optArg})`
   }
   return chain
 }
