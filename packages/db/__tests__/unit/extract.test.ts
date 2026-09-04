@@ -97,3 +97,41 @@ describe('extractSnapshot()', () => {
     })
   })
 })
+
+describe('extractSnapshot() — explicit foreign key names (#643)', () => {
+  const owners = table('owners', { id: serial().primaryKey() })
+
+  it('derives the constraint name when the schema does not give one', () => {
+    const pets = table('pets', {
+      id: serial().primaryKey(),
+      owner_id: integer().references(() => owners.id),
+    })
+    const snap = extractSnapshot({ owners, pets }, 'postgres')
+    expect(snap.tables.pets.foreignKeys[0].name).toBe('pets_owner_id_fk')
+  })
+
+  it('keeps the name a rendered schema carries, so introspect round-trips', () => {
+    // What `kick db introspect` now emits for a Postgres-named constraint.
+    const pets = table('pets', {
+      id: serial().primaryKey(),
+      owner_id: integer().references(() => owners.id, { name: 'pets_owner_id_fkey' }),
+    })
+    const snap = extractSnapshot({ owners, pets }, 'postgres')
+    expect(snap.tables.pets.foreignKeys[0].name).toBe('pets_owner_id_fkey')
+  })
+
+  it('carries the name alongside onDelete', () => {
+    const pets = table('pets', {
+      id: serial().primaryKey(),
+      owner_id: integer().references(() => owners.id, {
+        onDelete: 'cascade',
+        name: 'fk_pets_owner',
+      }),
+    })
+    const fk = extractSnapshot({ owners, pets }, 'postgres').tables.pets.foreignKeys[0]
+    expect({ name: fk.name, onDelete: fk.onDelete }).toEqual({
+      name: 'fk_pets_owner',
+      onDelete: 'cascade',
+    })
+  })
+})
