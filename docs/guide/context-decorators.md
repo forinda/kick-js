@@ -543,7 +543,7 @@ The cost would only matter if you wrote code that relied on object identity (`ct
 The framework explicitly does NOT cache the ctx on `req` (e.g. `req.kickjsCtx`) because: (a) it would pollute Express's public `Request` type for non-kickjs middleware in the chain; (b) advanced adopters can layer in their own caching at the wrapper they own, but the framework shouldn't make the policy choice for them.
 :::
 
-### What survives the chain — and what doesn't
+### What survives the chain — and what doesn't {#what-survives-the-chain-and-what-doesnt}
 
 | Pattern                                                | Survives across instances? | Why                                                                                      |
 | ------------------------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------- |
