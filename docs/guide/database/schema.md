@@ -177,12 +177,27 @@ export const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
 
 export const tasks = table('tasks', {
   id: uuid().primaryKey().defaultRandom(),
-  status: taskStatus().notNull().default("'todo'"),
+  status: taskStatus().notNull().default('todo'),
 })
 // db.selectFrom('tasks').select('status') → status: 'todo' | 'in_progress' | 'done'
 ```
 
+Pass the default as the bare value — `.default('todo')`, not `.default("'todo'")`. The emitter quotes it for you; pre-quoting produces `DEFAULT '''todo'''`, which is the four-character string `'todo'` and not a member of the type.
+
 The enum name and values are tracked so the migration pipeline can emit `CREATE TYPE … AS ENUM (...)` and handle value add / rename / removal. Enum value removal is gated behind a confirmation flag at apply time — see [Migrations](./migrations#enum-value-removal).
+
+`kick db introspect` reads enum types back out, so adopting an existing database gives you the declarations too:
+
+```ts
+export const mood = pgEnum('mood', 'sad', 'ok', 'happy')
+
+export const people = table('people', {
+  id: serial().primaryKey(),
+  mood: mood().notNull().default('ok'),
+})
+```
+
+Value order is preserved as declared, because for an enum it is part of the type — comparisons and `ORDER BY` follow it.
 
 ::: warning Postgres only
 `pgEnum` (and the other `@forinda/kickjs-db/pg` types) are dialect-specific. Importing them while targeting SQLite or MySQL will not produce a valid migration for those dialects.

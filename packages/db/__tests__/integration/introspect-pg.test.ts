@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
 
-import { introspectPg } from '@forinda/kickjs-db'
+import { introspectPg, renderSchemaSource } from '@forinda/kickjs-db'
 
 let container: StartedPostgreSqlContainer
 let client: pg.Client
@@ -33,8 +33,79 @@ beforeEach(async () => {
       FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
         EXECUTE 'DROP TABLE IF EXISTS "' || r.tablename || '" CASCADE';
       END LOOP;
+      -- Types outlive their tables, so a leftover enum would leak into the
+      -- next test's snapshot.
+      FOR r IN (
+        SELECT t.typname FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = 'public' AND t.typtype = 'e'
+      ) LOOP
+        EXECUTE 'DROP TYPE IF EXISTS "' || r.typname || '" CASCADE';
+      END LOOP;
+      -- Same for standalone sequences left behind by a dropped default.
+      FOR r IN (SELECT sequencename FROM pg_sequences WHERE schemaname = 'public') LOOP
+        EXECUTE 'DROP SEQUENCE IF EXISTS "' || r.sequencename || '" CASCADE';
+      END LOOP;
     END $$;
   `)
+})
+
+describe('enum types against a real database (#644)', () => {
+  it('reads enum types and their value order into the snapshot', async () => {
+    await client.query(`
+      CREATE TYPE "enum_grading_systems_type" AS ENUM ('departmental', 'general');
+      CREATE TYPE "enum_strands_term_order" AS ENUM ('1', '2', '3');
+      CREATE TABLE "grading_systems" (
+        "id" serial PRIMARY KEY,
+        "type" "enum_grading_systems_type" NOT NULL DEFAULT 'departmental'
+      );
+    `)
+
+    const snap = await introspectPg(client)
+
+    expect(snap.enums).toEqual({
+      enum_grading_systems_type: {
+        name: 'enum_grading_systems_type',
+        // Declaration order, not alphabetical — for an enum it is part of the
+        // type: comparisons and ORDER BY follow it.
+        values: ['departmental', 'general'],
+      },
+      enum_strands_term_order: {
+        name: 'enum_strands_term_order',
+        values: ['1', '2', '3'],
+      },
+    })
+
+    // The column already carried the type name; it now has a declaration.
+    expect(snap.tables.grading_systems.columns.type).toMatchObject({
+      type: 'enum_grading_systems_type',
+      default: 'departmental',
+    })
+  })
+
+  it('omits the enums key entirely when the database declares none', async () => {
+    await client.query(`CREATE TABLE "plain" ("id" serial PRIMARY KEY);`)
+    expect((await introspectPg(client)).enums).toBeUndefined()
+  })
+
+  it('rebuilds the enum type from the rendered schema', async () => {
+    // The end of the reported bug: introspect a database with an enum, render
+    // it, and the generated schema must declare the type rather than reference
+    // one that does not exist.
+    await client.query(`
+      CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
+      CREATE TABLE "people" (
+        "id" serial PRIMARY KEY,
+        "mood" "mood" NOT NULL DEFAULT 'ok'
+      );
+    `)
+
+    const src = renderSchemaSource(await introspectPg(client))
+
+    expect(src).toContain("export const mood = pgEnum('mood', 'sad', 'ok', 'happy')")
+    expect(src).toContain('mood: mood().notNull().default("ok")')
+    expect(src).not.toContain('TODO')
+  })
 })
 
 describe('introspectPg()', () => {

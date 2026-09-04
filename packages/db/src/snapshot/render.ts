@@ -1,5 +1,6 @@
 import type {
   ColumnSnapshot,
+  EnumSnapshot,
   ForeignKeySnapshot,
   IndexSnapshot,
   SchemaSnapshot,
@@ -26,9 +27,13 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   const usedColumnHelpers = new Set<string>()
   const tableSources: string[] = []
 
+  // An enum column's SQL type IS the type's name, so the renderer needs to know
+  // which names are enums to reach for the factory instead of a column helper.
+  const enums = snapshot.enums ?? {}
+
   // First pass: render every table, accumulating which column helpers we used.
   for (const table of Object.values(snapshot.tables)) {
-    tableSources.push(renderTable(table, usedColumnHelpers))
+    tableSources.push(renderTable(table, usedColumnHelpers, enums))
   }
 
   const helpers = ['table', ...Array.from(usedColumnHelpers).toSorted()]
@@ -42,11 +47,43 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   )
   if (needsUnique && !helpers.includes('unique')) helpers.push('unique')
 
-  const importLine = `import { ${helpers.join(', ')} } from '@forinda/kickjs-db'`
-  return [importLine, '', ...tableSources].join('\n').trimEnd() + '\n'
+  const lines = [`import { ${helpers.join(', ')} } from '@forinda/kickjs-db'`]
+
+  // `pgEnum` lives on the dialect subpath, so it needs its own import line.
+  const enumDecls = Object.values(enums)
+  if (enumDecls.length > 0) {
+    lines.push(`import { pgEnum } from '@forinda/kickjs-db/pg'`)
+  }
+
+  const body: string[] = []
+  if (enumDecls.length > 0) {
+    // Declared before the tables that use them: these are plain consts, and a
+    // column reads the factory at table-definition time.
+    for (const e of enumDecls.toSorted((a, b) => a.name.localeCompare(b.name))) {
+      const values = e.values.map((v) => `'${v.replace(/'/g, "\\'")}'`).join(', ')
+      body.push(`export const ${enumIdent(e.name)} = pgEnum('${e.name}', ${values})`)
+    }
+    body.push('')
+  }
+
+  return [...lines, '', ...body, ...tableSources].join('\n').trimEnd() + '\n'
 }
 
-function renderTable(table: TableSnapshot, helpers: Set<string>): string {
+/**
+ * The const name for an enum declaration.
+ *
+ * Postgres puts types and tables in one namespace, so an enum can never share a
+ * name with a table and `jsIdent` alone is unambiguous.
+ */
+function enumIdent(enumName: string): string {
+  return jsIdent(enumName)
+}
+
+function renderTable(
+  table: TableSnapshot,
+  helpers: Set<string>,
+  enums: Record<string, EnumSnapshot>,
+): string {
   const ident = jsIdent(table.name)
   const columns: string[] = []
   for (const col of Object.values(table.columns)) {
@@ -64,7 +101,7 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
           i.columns[0] === col.name &&
           isAutoUniqueName(table.name, i),
       ) !== undefined
-    columns.push(`  ${jsKey(col.name)}: ${renderColumn(col, helpers, fk, inlineUnique)},`)
+    columns.push(`  ${jsKey(col.name)}: ${renderColumn(col, helpers, fk, inlineUnique, enums)},`)
   }
 
   // Constraints that don't fit on a column chain.
@@ -104,11 +141,34 @@ function renderColumn(
   helpers: Set<string>,
   fk: ForeignKeySnapshot | undefined,
   inlineUnique: boolean,
+  enums: Record<string, EnumSnapshot>,
 ): string {
+  // An enum column calls the factory declared above rather than a helper
+  // imported from the package, so nothing is added to the import line.
+  if (enums[col.type]) {
+    return chainSuffix(`${enumIdent(col.type)}()`, col, fk, inlineUnique)
+  }
+
   const { helperName, args } = pickColumnHelper(col)
   helpers.add(helperName)
+  return chainSuffix(`${helperName}(${args})`, col, fk, inlineUnique)
+}
 
-  let chain = `${helperName}(${args})`
+/**
+ * Append the modifier chain — nullability, default, unique, references — to a
+ * column expression.
+ *
+ * Shared so an enum column, whose expression comes from a declared factory
+ * rather than an imported helper, gets exactly the same modifiers in exactly
+ * the same order.
+ */
+function chainSuffix(
+  base: string,
+  col: ColumnSnapshot,
+  fk: ForeignKeySnapshot | undefined,
+  inlineUnique: boolean,
+): string {
+  let chain = base
   if (col.primaryKey) chain += '.primaryKey()'
   if (!col.primaryKey && !col.nullable) chain += '.notNull()'
   if (col.default !== null) chain += `.default(${JSON.stringify(col.default)})`

@@ -1,4 +1,5 @@
 import type {
+  EnumSnapshot,
   ForeignKeySnapshot,
   FkAction,
   IndexSnapshot,
@@ -18,6 +19,11 @@ interface ColumnRow {
   character_maximum_length: number | null
   numeric_precision: number | null
   numeric_scale: number | null
+}
+
+interface EnumRow {
+  enum_name: string
+  enum_value: string
 }
 
 interface IndexRow {
@@ -62,7 +68,47 @@ export async function introspectPg(
       checks: [],
     }
   }
-  return { version: 1, dialect: 'postgres', tables }
+  const enums = await readEnums(client, schema)
+
+  const snapshot: SchemaSnapshot = { version: 1, dialect: 'postgres', tables }
+  // Only carry `enums` when the database has some, matching what
+  // `extractSnapshot` does — an empty `enums: {}` would change the serialized
+  // snapshot and invalidate every existing migration hash.
+  if (Object.keys(enums).length > 0) snapshot.enums = enums
+  return snapshot
+}
+
+/**
+ * Read every enum type declared in the schema.
+ *
+ * Enum columns were already introspected as their type name — `status
+ * enum_grading_systems_type` — but the type itself was never read, so a
+ * generated schema referenced 37 types it did not declare and the renderer had
+ * nothing to build them from (#644). `enumsortorder` is what preserves the
+ * declaration order, which for an enum is part of its meaning: comparisons and
+ * ORDER BY follow it.
+ */
+async function readEnums(
+  client: PgQueryRunner,
+  schema: string,
+): Promise<Record<string, EnumSnapshot>> {
+  const rows = await client.query<EnumRow>(
+    `SELECT t.typname AS enum_name, e.enumlabel AS enum_value
+     FROM pg_type t
+     JOIN pg_enum e ON e.enumtypid = t.oid
+     JOIN pg_namespace n ON n.oid = t.typnamespace
+     WHERE n.nspname = $1
+     ORDER BY t.typname, e.enumsortorder`,
+    [schema],
+  )
+
+  const out: Record<string, EnumSnapshot> = {}
+  for (const r of rows.rows) {
+    const entry = out[r.enum_name]
+    if (entry) (entry.values as string[]).push(r.enum_value)
+    else out[r.enum_name] = { name: r.enum_name, values: [r.enum_value] }
+  }
+  return out
 }
 
 async function readColumns(
