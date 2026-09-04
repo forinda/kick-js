@@ -1,4 +1,5 @@
 import type {
+  EnumSnapshot,
   ForeignKeySnapshot,
   FkAction,
   IndexSnapshot,
@@ -18,6 +19,26 @@ interface ColumnRow {
   character_maximum_length: number | null
   numeric_precision: number | null
   numeric_scale: number | null
+  /**
+   * The sequence this column OWNS, or null. `pg_get_serial_sequence` answers
+   * only for an owned sequence — the thing `serial` creates.
+   */
+  owned_sequence: string | null
+  /**
+   * The sequence this column's DEFAULT actually draws from, or null.
+   *
+   * Ownership and use are separate facts, and `SET DEFAULT nextval(...)` can
+   * repoint a former serial at another sequence while it keeps owning its
+   * original one. Both are normalised through `regclass::text` so they are
+   * comparable — `pg_get_serial_sequence` always schema-qualifies while a
+   * regclass renders bare when the object is on the search path.
+   */
+  default_sequence: string | null
+}
+
+interface EnumRow {
+  enum_name: string
+  enum_value: string
 }
 
 interface IndexRow {
@@ -62,7 +83,47 @@ export async function introspectPg(
       checks: [],
     }
   }
-  return { version: 1, dialect: 'postgres', tables }
+  const enums = await readEnums(client, schema)
+
+  const snapshot: SchemaSnapshot = { version: 1, dialect: 'postgres', tables }
+  // Only carry `enums` when the database has some, matching what
+  // `extractSnapshot` does — an empty `enums: {}` would change the serialized
+  // snapshot and invalidate every existing migration hash.
+  if (Object.keys(enums).length > 0) snapshot.enums = enums
+  return snapshot
+}
+
+/**
+ * Read every enum type declared in the schema.
+ *
+ * Enum columns were already introspected as their type name — `status
+ * enum_grading_systems_type` — but the type itself was never read, so a
+ * generated schema referenced 37 types it did not declare and the renderer had
+ * nothing to build them from (#644). `enumsortorder` is what preserves the
+ * declaration order, which for an enum is part of its meaning: comparisons and
+ * ORDER BY follow it.
+ */
+async function readEnums(
+  client: PgQueryRunner,
+  schema: string,
+): Promise<Record<string, EnumSnapshot>> {
+  const rows = await client.query<EnumRow>(
+    `SELECT t.typname AS enum_name, e.enumlabel AS enum_value
+     FROM pg_type t
+     JOIN pg_enum e ON e.enumtypid = t.oid
+     JOIN pg_namespace n ON n.oid = t.typnamespace
+     WHERE n.nspname = $1
+     ORDER BY t.typname, e.enumsortorder`,
+    [schema],
+  )
+
+  const out: Record<string, EnumSnapshot> = {}
+  for (const r of rows.rows) {
+    const entry = out[r.enum_name]
+    if (entry) (entry.values as string[]).push(r.enum_value)
+    else out[r.enum_name] = { name: r.enum_name, values: [r.enum_value] }
+  }
+  return out
 }
 
 async function readColumns(
@@ -72,7 +133,12 @@ async function readColumns(
 ): Promise<TableSnapshot['columns']> {
   const cols = await client.query<ColumnRow>(
     `SELECT column_name, data_type, udt_name, is_nullable, column_default,
-            character_maximum_length, numeric_precision, numeric_scale
+            character_maximum_length, numeric_precision, numeric_scale,
+            pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name)
+              ::regclass::text AS owned_sequence,
+            to_regclass(
+              (regexp_match(column_default, 'nextval\\(''([^'']+)''(::regclass)?\\)'))[1]
+            )::text AS default_sequence
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -107,9 +173,38 @@ async function readColumns(
   return out
 }
 
+/**
+ * Is this column a `serial`, as opposed to an integer that happens to default
+ * from a sequence?
+ *
+ * A `nextval(...)` default alone does not answer it. `CREATE SEQUENCE s` then
+ * `ALTER TABLE t ALTER c SET DEFAULT nextval('s')` produces exactly that
+ * default while the sequence is standalone — shared between tables, or kept
+ * deliberately independent of the column's lifetime.
+ *
+ * Treating those as `serial` was wrong twice over: `serial` implies NOT NULL,
+ * so a nullable column came back non-nullable, and the default is collapsed to
+ * null on the way out, so the link to the sequence was dropped entirely (#649).
+ *
+ * Three extra conditions settle it:
+ *
+ * - The column OWNS a sequence — what `serial` creates and what `DROP TABLE`
+ *   takes with it. `pg_get_serial_sequence` answers only for those.
+ * - It owns the sequence its default actually draws from. Ownership and use are
+ *   separate facts: `ALTER COLUMN id SET DEFAULT nextval('shared_ids')` repoints
+ *   a former serial at another sequence while it keeps owning its original one.
+ *   Calling that `serial` discards the active default and would silently point
+ *   the column back at the sequence it no longer uses.
+ * - The column is NOT NULL. An owned sequence whose column has had its NOT NULL
+ *   dropped is no longer expressible as `serial`, and restoring the constraint
+ *   on the next migration would reject the rows that made someone drop it.
+ */
 function isSerialColumn(r: ColumnRow): boolean {
   if (!r.column_default) return false
   if (!r.column_default.startsWith('nextval(')) return false
+  if (r.owned_sequence === null) return false
+  if (r.owned_sequence !== r.default_sequence) return false
+  if (r.is_nullable === 'YES') return false
   return r.udt_name === 'int2' || r.udt_name === 'int4' || r.udt_name === 'int8'
 }
 
@@ -140,13 +235,46 @@ function normalizeType(r: ColumnRow): string {
   if (r.data_type === 'double precision') return 'double precision'
   if (r.data_type === 'USER-DEFINED') return r.udt_name
   if (r.data_type === 'ARRAY') {
-    // udt_name for arrays is _<element>; strip and append [].
-    const elem = r.udt_name.replace(/^_/, '')
-    return `${elem}[]`
+    // For an array, `data_type` is just 'ARRAY' and the element lives in
+    // `udt_name` as `_<pg internal name>`. Those internal names are not the
+    // DSL's: int4, float8, bool, bpchar. Stripping the underscore alone gave
+    // `int4[]`, which then matched no column helper and rendered as
+    // text(/* TODO */) — the array and its element type both lost (#648).
+    return `${dslTypeForUdt(r.udt_name.replace(/^_/, ''))}[]`
   }
   // bigint, integer, smallint, text, boolean, date, json, jsonb, bytea, uuid,
   // interval, etc — pass through as data_type when it matches the DSL.
   return r.data_type
+}
+
+/**
+ * PG's internal type name → the name the schema DSL uses.
+ *
+ * Only needed for arrays: for a scalar column `information_schema` reports a
+ * usable `data_type` ('integer', 'boolean'), but for an array it reports
+ * 'ARRAY' and leaves the element in `udt_name`, which is always the internal
+ * spelling. Anything unmapped passes through — text, uuid, json, jsonb, bytea,
+ * numeric, interval and every user-defined type already share both names.
+ */
+const UDT_TO_DSL: Record<string, string> = {
+  int2: 'smallint',
+  int4: 'integer',
+  int8: 'bigint',
+  float4: 'real',
+  float8: 'double precision',
+  bool: 'boolean',
+  bpchar: 'char',
+  // Element length/precision is not reported for array columns, so these come
+  // back unparameterised — `varchar[]`, not `varchar(255)[]`.
+  varchar: 'varchar',
+  timestamp: 'timestamp',
+  timestamptz: 'timestamptz',
+  time: 'time',
+  date: 'date',
+}
+
+function dslTypeForUdt(udt: string): string {
+  return UDT_TO_DSL[udt] ?? udt
 }
 
 function normalizeDefault(raw: string | null): string | null {

@@ -179,6 +179,28 @@ export const posts = table(
 
 Keeping constraints in one callback means every constraint name lives in a single place, which keeps migration diffing simple.
 
+### Derived names and the 63-character limit
+
+A single-column `.unique()` or `.references()` derives its constraint name as
+`<table>_<column>_unique` / `<table>_<column>_fk`. Postgres caps identifiers at
+63 bytes and **truncates silently** rather than erroring, so two derived names
+sharing a long prefix would become the same name and the migration would fail
+part-way through with `constraint … already exists`.
+
+Derived names that would exceed the limit are shortened deterministically —
+truncated, with a short hash of the full name inserted before the `_fk` /
+`_unique` marker:
+
+```
+finance_vote_head_account_reference_ledgers_fin_a3f19c_fk
+```
+
+The hash is taken over the untruncated name, so the result is stable across
+regenerations and two names that differ anywhere still differ here. Names within
+the limit are untouched, so existing schemas keep the constraint names they
+already have. Names you write yourself — in `index()` / `unique()` — are used
+exactly as given; keeping them under 63 bytes is up to you.
+
 ## Postgres enums
 
 `pgEnum()` is imported from the `@forinda/kickjs-db/pg` subpath. It returns a column factory whose phantom type narrows to the union of declared values:
@@ -191,12 +213,27 @@ export const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
 
 export const tasks = table('tasks', {
   id: uuid().primaryKey().defaultRandom(),
-  status: taskStatus().notNull().default("'todo'"),
+  status: taskStatus().notNull().default('todo'),
 })
 // db.selectFrom('tasks').select('status') → status: 'todo' | 'in_progress' | 'done'
 ```
 
+Pass the default as the bare value — `.default('todo')`, not `.default("'todo'")`. The emitter quotes it for you; pre-quoting produces `DEFAULT '''todo'''`, which is the four-character string `'todo'` and not a member of the type.
+
 The enum name and values are tracked so the migration pipeline can emit `CREATE TYPE … AS ENUM (...)` and handle value add / rename / removal. Enum value removal is gated behind a confirmation flag at apply time — see [Migrations](./migrations#enum-value-removal).
+
+`kick db introspect` reads enum types back out, so adopting an existing database gives you the declarations too:
+
+```ts
+export const mood = pgEnum('mood', 'sad', 'ok', 'happy')
+
+export const people = table('people', {
+  id: serial().primaryKey(),
+  mood: mood().notNull().default('ok'),
+})
+```
+
+Value order is preserved as declared, because for an enum it is part of the type — comparisons and `ORDER BY` follow it.
 
 ::: warning Postgres only
 `pgEnum` (and the other `@forinda/kickjs-db/pg` types) are dialect-specific. Importing them while targeting SQLite or MySQL will not produce a valid migration for those dialects.
