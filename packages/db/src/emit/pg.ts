@@ -273,7 +273,7 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
     stmts.push(
       after.default === null
         ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default)};`,
+        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default, after.type)};`,
     )
   }
   const emitNullable = () => {
@@ -336,17 +336,59 @@ function bareName(qualified: string): string {
 function emitColumnDecl(c: ColumnSnapshot): string {
   let s = `${quoteIdent(c.name)} ${c.type}`
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default)}`
+  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type)}`
   return s
 }
 
-function formatDefault(value: unknown): string {
+/**
+ * Types on which a bare expression default is legitimate.
+ *
+ * Stated as an allow-list rather than its complement, because the complement is
+ * open-ended: every enum, domain and extension type an adopter declares lands
+ * outside it. Listing the types that *do* take expressions — `defaultNow()` on
+ * the temporal builders, `defaultRandom()` on uuid, `nextval(...)` on the
+ * integer family, plain numeric and boolean literals — means a type the
+ * emitter has never heard of gets its default quoted, which is the safe answer.
+ *
+ * Arrays are decided by their element type, so `integer[]` keeps the integer
+ * rule and `text[]` keeps the text one.
+ */
+function allowsExpressionDefault(type: string): boolean {
+  const base = type.endsWith('[]') ? type.slice(0, -2) : type
+  return /^(smallint|integer|int|int2|int4|int8|bigint|serial|bigserial|smallserial|real|float4|float8|double precision|numeric|decimal|money|bool|boolean|timestamp|timestamptz|date|time|timetz|interval|uuid)\b/i.test(
+    base,
+  )
+}
+
+/**
+ * Render a column default as SQL.
+ *
+ * The column's type decides how, because the value's own shape cannot. A
+ * default of `ACTIVE` on a varchar column looks exactly like a SQL keyword,
+ * and emitting it bare produced `DEFAULT ACTIVE` — invalid SQL (#646). The
+ * same applies to a status column defaulting to `PENDING`, and to any text
+ * default that reads as a number (`0800`) or a boolean (`true`).
+ *
+ * This is not hypothetical for round-trips: `kick db introspect` strips the
+ * quotes and the cast off `'ACTIVE'::text`, so the snapshot legitimately holds
+ * the bare word and only the type says how to put it back. Enum columns are the
+ * sharpest case — an enum label is *always* a literal, and one spelled `ACTIVE`
+ * or `1` reads as a keyword or a number to any value-shaped heuristic.
+ */
+function formatDefault(value: unknown, type?: string): string {
   // Defensive: a snapshot authored before defaults were normalised to
   // strings (or hand-edited) may carry a raw boolean/number. Coerce so
   // `quoteLiteral` (String.prototype.replace) never sees a non-string.
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value)
+  // A value already carrying an explicit cast is SQL the caller composed —
+  // `'active'::"status"` from the enum recreate path — and is passed through
+  // whatever the column type is.
+  if (/::/.test(str)) return str
+  // Unknown type included: quoting a value that wanted to be an expression is
+  // wrong but valid, while the reverse is a syntax error.
+  if (type === undefined || !allowsExpressionDefault(type)) return quoteLiteral(str)
   // SQL keywords pass through bare.
   if (/^[A-Z_]+$/.test(str)) return str // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
   // SQL function calls pass through bare: NOW(), gen_random_uuid(), etc.

@@ -4,6 +4,7 @@ import pg from 'pg'
 
 import { introspectPg, renderSchemaSource, emitPg, diff, extractSnapshot } from '@forinda/kickjs-db'
 import { table, serial, integer } from '@forinda/kickjs-db'
+import type { ChangeSet } from '@forinda/kickjs-db'
 
 let container: StartedPostgreSqlContainer
 let client: pg.Client
@@ -137,6 +138,130 @@ describe('enum types against a real database (#644)', () => {
     expect(src).toContain("export const mood = pgEnum('mood', 'sad', 'ok', 'happy')")
     expect(src).toContain('mood: mood().notNull().default("ok")')
     expect(src).not.toContain('TODO')
+  })
+})
+
+describe('emitPg() defaults execute against a real database (#646)', () => {
+  it('creates an enum column whose label reads as SQL', async () => {
+    // An enum label is always a literal. `ACTIVE` reads as a keyword and `1` as
+    // a number to any value-shaped heuristic, so both used to be emitted bare
+    // and rejected by Postgres.
+    await client.query(`
+      CREATE TYPE "order_status" AS ENUM ('ACTIVE', 'CLOSED');
+      CREATE TYPE "term_order" AS ENUM ('1', '2', '3');
+    `)
+
+    const cs: ChangeSet = [
+      {
+        kind: 'createTable',
+        table: {
+          name: 'orders',
+          columns: {
+            id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+            status: {
+              name: 'status',
+              type: 'order_status',
+              nullable: false,
+              default: 'ACTIVE',
+              primaryKey: false,
+            },
+            term: {
+              name: 'term',
+              type: 'term_order',
+              nullable: false,
+              default: '1',
+              primaryKey: false,
+            },
+          },
+          indexes: [],
+          foreignKeys: [],
+          checks: [],
+        },
+      },
+    ]
+
+    await client.query(emitPg(cs))
+    await client.query(`INSERT INTO "orders" DEFAULT VALUES;`)
+
+    const row = (await client.query(`SELECT * FROM "orders"`)).rows[0]
+    expect({ status: row.status, term: row.term }).toEqual({ status: 'ACTIVE', term: '1' })
+
+    // And the defaults survive the round-trip, so the next diff is empty.
+    const cols = (await introspectPg(client)).tables.orders.columns
+    expect(cols.status.default).toBe('ACTIVE')
+    expect(cols.term.default).toBe('1')
+  })
+
+  it('creates a table whose text defaults survive a round-trip', async () => {
+    // Every one of these values reads as SQL by shape — a keyword, a number, a
+    // boolean, a function call — and every one is text the author typed. The
+    // emitter used to pass them through bare, so this CREATE TABLE was a
+    // syntax error.
+    const cs: ChangeSet = [
+      {
+        kind: 'createTable',
+        table: {
+          name: 'accounts',
+          columns: {
+            id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+            status: {
+              name: 'status',
+              type: 'varchar(20)',
+              nullable: false,
+              default: 'ACTIVE',
+              primaryKey: false,
+            },
+            code: {
+              name: 'code',
+              type: 'text',
+              nullable: false,
+              default: '0800',
+              primaryKey: false,
+            },
+            label: {
+              name: 'label',
+              type: 'text',
+              nullable: false,
+              default: 'true',
+              primaryKey: false,
+            },
+            meta: {
+              name: 'meta',
+              type: 'jsonb',
+              nullable: false,
+              default: '{}',
+              primaryKey: false,
+            },
+            seen_at: {
+              name: 'seen_at',
+              type: 'timestamptz',
+              nullable: false,
+              default: 'CURRENT_TIMESTAMP',
+              primaryKey: false,
+            },
+          },
+          indexes: [],
+          foreignKeys: [],
+          checks: [],
+        },
+      },
+    ]
+
+    await client.query(emitPg(cs))
+    await client.query(`INSERT INTO "accounts" DEFAULT VALUES;`)
+
+    const row = (await client.query(`SELECT * FROM "accounts"`)).rows[0]
+    expect(row.status).toBe('ACTIVE')
+    expect(row.code).toBe('0800')
+    expect(row.label).toBe('true')
+    expect(row.meta).toEqual({})
+    expect(row.seen_at).toBeInstanceOf(Date)
+
+    // And the defaults come back out unchanged, so the next diff is empty.
+    const cols = (await introspectPg(client)).tables.accounts.columns
+    expect(cols.status.default).toBe('ACTIVE')
+    expect(cols.code.default).toBe('0800')
+    expect(cols.seen_at.default).toBe('CURRENT_TIMESTAMP')
   })
 })
 
