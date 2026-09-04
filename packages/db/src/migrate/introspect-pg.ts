@@ -19,6 +19,13 @@ interface ColumnRow {
   character_maximum_length: number | null
   numeric_precision: number | null
   numeric_scale: number | null
+  /**
+   * The sequence this column OWNS, or null. `pg_get_serial_sequence` answers
+   * only for an owned sequence — the thing `serial` creates — so it is what
+   * separates a real serial from a column that merely defaults from some
+   * sequence declared elsewhere.
+   */
+  serial_sequence: string | null
 }
 
 interface EnumRow {
@@ -118,7 +125,9 @@ async function readColumns(
 ): Promise<TableSnapshot['columns']> {
   const cols = await client.query<ColumnRow>(
     `SELECT column_name, data_type, udt_name, is_nullable, column_default,
-            character_maximum_length, numeric_precision, numeric_scale
+            character_maximum_length, numeric_precision, numeric_scale,
+            pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name)
+              AS serial_sequence
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -153,9 +162,32 @@ async function readColumns(
   return out
 }
 
+/**
+ * Is this column a `serial`, as opposed to an integer that happens to default
+ * from a sequence?
+ *
+ * A `nextval(...)` default alone does not answer it. `CREATE SEQUENCE s` then
+ * `ALTER TABLE t ALTER c SET DEFAULT nextval('s')` produces exactly that
+ * default while the sequence is standalone — shared between tables, or kept
+ * deliberately independent of the column's lifetime.
+ *
+ * Treating those as `serial` was wrong twice over: `serial` implies NOT NULL,
+ * so a nullable column came back non-nullable, and the default is collapsed to
+ * null on the way out, so the link to the sequence was dropped entirely (#649).
+ *
+ * Two extra conditions settle it:
+ *
+ * - `pg_get_serial_sequence` returns a name only for a sequence the column
+ *   OWNS, which is what `serial` creates and what `DROP TABLE` takes with it.
+ * - The column is NOT NULL. An owned sequence whose column has had its NOT NULL
+ *   dropped is no longer expressible as `serial`, and restoring the constraint
+ *   on the next migration would reject the rows that made someone drop it.
+ */
 function isSerialColumn(r: ColumnRow): boolean {
   if (!r.column_default) return false
   if (!r.column_default.startsWith('nextval(')) return false
+  if (r.serial_sequence === null) return false
+  if (r.is_nullable === 'YES') return false
   return r.udt_name === 'int2' || r.udt_name === 'int4' || r.udt_name === 'int8'
 }
 
@@ -186,13 +218,46 @@ function normalizeType(r: ColumnRow): string {
   if (r.data_type === 'double precision') return 'double precision'
   if (r.data_type === 'USER-DEFINED') return r.udt_name
   if (r.data_type === 'ARRAY') {
-    // udt_name for arrays is _<element>; strip and append [].
-    const elem = r.udt_name.replace(/^_/, '')
-    return `${elem}[]`
+    // For an array, `data_type` is just 'ARRAY' and the element lives in
+    // `udt_name` as `_<pg internal name>`. Those internal names are not the
+    // DSL's: int4, float8, bool, bpchar. Stripping the underscore alone gave
+    // `int4[]`, which then matched no column helper and rendered as
+    // text(/* TODO */) — the array and its element type both lost (#648).
+    return `${dslTypeForUdt(r.udt_name.replace(/^_/, ''))}[]`
   }
   // bigint, integer, smallint, text, boolean, date, json, jsonb, bytea, uuid,
   // interval, etc — pass through as data_type when it matches the DSL.
   return r.data_type
+}
+
+/**
+ * PG's internal type name → the name the schema DSL uses.
+ *
+ * Only needed for arrays: for a scalar column `information_schema` reports a
+ * usable `data_type` ('integer', 'boolean'), but for an array it reports
+ * 'ARRAY' and leaves the element in `udt_name`, which is always the internal
+ * spelling. Anything unmapped passes through — text, uuid, json, jsonb, bytea,
+ * numeric, interval and every user-defined type already share both names.
+ */
+const UDT_TO_DSL: Record<string, string> = {
+  int2: 'smallint',
+  int4: 'integer',
+  int8: 'bigint',
+  float4: 'real',
+  float8: 'double precision',
+  bool: 'boolean',
+  bpchar: 'char',
+  // Element length/precision is not reported for array columns, so these come
+  // back unparameterised — `varchar[]`, not `varchar(255)[]`.
+  varchar: 'varchar',
+  timestamp: 'timestamp',
+  timestamptz: 'timestamptz',
+  time: 'time',
+  date: 'date',
+}
+
+function dslTypeForUdt(udt: string): string {
+  return UDT_TO_DSL[udt] ?? udt
 }
 
 function normalizeDefault(raw: string | null): string | null {

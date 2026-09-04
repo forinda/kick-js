@@ -1,4 +1,5 @@
 import type { ColumnBuilder } from '../dsl/columns/types'
+import { derivedFkName, derivedUniqueName } from './name'
 import { qualifiedTableName, type TableDecl } from '../dsl/table'
 import { extractRelations } from '../query/extract-relations'
 import type {
@@ -113,7 +114,7 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
     const state = builder.__state()
     if (state.unique) {
       indexes.push({
-        name: `${t.__name}_${colKey}_unique`,
+        name: derivedUniqueName(t.__name, colKey),
         columns: [colKey],
         unique: true,
       })
@@ -124,8 +125,10 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
       const ref = state.references.thunk()
       foreignKeys.push({
         // An explicit name wins — it is the constraint that actually exists in
-        // the database. Only derive when the schema didn't say.
-        name: state.references.name ?? `${t.__name}_${colKey}_fk`,
+        // the database. Only derive when the schema didn't say, and derive
+        // through the helper so a long one is shortened the same way the
+        // renderer expects to see it.
+        name: state.references.name ?? derivedFkName(t.__name, colKey),
         columns: [colKey],
         refTable: ref.__tableName,
         refColumns: [ref.__name],

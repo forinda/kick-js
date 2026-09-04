@@ -179,6 +179,28 @@ export const posts = table(
 
 Keeping constraints in one callback means every constraint name lives in a single place, which keeps migration diffing simple.
 
+### Derived names and the 63-character limit
+
+A single-column `.unique()` or `.references()` derives its constraint name as
+`<table>_<column>_unique` / `<table>_<column>_fk`. Postgres caps identifiers at
+63 bytes and **truncates silently** rather than erroring, so two derived names
+sharing a long prefix would become the same name and the migration would fail
+part-way through with `constraint … already exists`.
+
+Derived names that would exceed the limit are shortened deterministically —
+truncated, with a short hash of the full name inserted before the `_fk` /
+`_unique` marker:
+
+```
+finance_vote_head_account_reference_ledgers_fin_a3f19c_fk
+```
+
+The hash is taken over the untruncated name, so the result is stable across
+regenerations and two names that differ anywhere still differ here. Names within
+the limit are untouched, so existing schemas keep the constraint names they
+already have. Names you write yourself — in `index()` / `unique()` — are used
+exactly as given; keeping them under 63 bytes is up to you.
+
 ## Postgres enums
 
 `pgEnum()` is imported from the `@forinda/kickjs-db/pg` subpath. It returns a column factory whose phantom type narrows to the union of declared values:

@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
 
-import { introspectPg, renderSchemaSource } from '@forinda/kickjs-db'
+import { introspectPg, renderSchemaSource, emitPg, diff, extractSnapshot } from '@forinda/kickjs-db'
+import { table, serial, integer } from '@forinda/kickjs-db'
 
 let container: StartedPostgreSqlContainer
 let client: pg.Client
@@ -48,6 +49,37 @@ beforeEach(async () => {
       END LOOP;
     END $$;
   `)
+})
+
+describe('long derived constraint names against a real database (#647)', () => {
+  it('applies two foreign keys whose derived names both exceed 63 characters', async () => {
+    // Under plain truncation both derive to the same 63-character name and
+    // Postgres rejects the second with "constraint … already exists", stopping
+    // the migration.
+    const accounts = table('finance_vote_head_accounts', { id: serial().primaryKey() })
+    const ledgers = table('finance_vote_head_account_reference_ledgers', {
+      id: serial().primaryKey(),
+      finance_vote_head_account_id: integer().references(() => accounts.id),
+      finance_vote_head_account_ref_id: integer().references(() => accounts.id),
+    })
+
+    const snap = extractSnapshot({ accounts, ledgers }, 'postgres')
+    await client.query(emitPg(diff({ version: 1, dialect: 'postgres', tables: {} }, snap)))
+
+    const names = (
+      await client.query<{ conname: string }>(
+        `SELECT conname FROM pg_constraint
+         WHERE contype = 'f'
+           AND conrelid = 'finance_vote_head_account_reference_ledgers'::regclass
+         ORDER BY conname`,
+      )
+    ).rows.map((r) => r.conname)
+
+    expect(names).toHaveLength(2)
+    expect(new Set(names).size).toBe(2)
+    // Postgres stores what it was given; nothing was silently truncated.
+    for (const n of names) expect(Buffer.byteLength(n)).toBeLessThanOrEqual(63)
+  })
 })
 
 describe('enum types against a real database (#644)', () => {
@@ -109,6 +141,64 @@ describe('enum types against a real database (#644)', () => {
 })
 
 describe('introspectPg()', () => {
+  it('distinguishes a serial from a column defaulting off a standalone sequence (#649)', async () => {
+    // Three columns with a `nextval(...)` default, only one of which is a
+    // serial. Detection used to key on the default alone, so all three came
+    // back as serial() — losing the sequence link and, for the nullable one,
+    // silently making the column NOT NULL.
+    await client.query(`
+      CREATE SEQUENCE "shared_counter";
+      CREATE TABLE "events" (
+        "id" serial NOT NULL,
+        "ticket_no" integer NOT NULL DEFAULT nextval('shared_counter'),
+        "maybe_no" integer DEFAULT nextval('shared_counter'),
+        PRIMARY KEY ("id")
+      );
+    `)
+
+    const snap = await introspectPg(client)
+    const cols = snap.tables.events.columns
+
+    // An owned sequence + NOT NULL: a real serial, default collapsed.
+    expect(cols.id).toMatchObject({ type: 'serial', nullable: false, default: null })
+
+    // Standalone sequence: an ordinary integer that keeps its default.
+    expect(cols.ticket_no).toMatchObject({ type: 'integer', nullable: false })
+    expect(cols.ticket_no.default).toContain('nextval')
+
+    // Same, and nullable — the case where serial() changed the column's shape.
+    expect(cols.maybe_no).toMatchObject({ type: 'integer', nullable: true })
+    expect(cols.maybe_no.default).toContain('nextval')
+  })
+
+  it('keeps a serial whose NOT NULL was dropped as a plain integer (#649)', async () => {
+    // The sequence is still owned, so ownership alone would say "serial" — but
+    // serial implies NOT NULL, and re-imposing it would reject the rows that
+    // made someone drop it.
+    await client.query(`
+      CREATE TABLE "loose" ("id" serial);
+      ALTER TABLE "loose" ALTER COLUMN "id" DROP NOT NULL;
+    `)
+
+    const col = (await introspectPg(client)).tables.loose.columns.id
+    expect(col).toMatchObject({ type: 'integer', nullable: true })
+    expect(col.default).toContain('nextval')
+  })
+
+  it('keeps the element type of an array column (#648)', async () => {
+    await client.query(`
+      CREATE TABLE "docs" (
+        "id" serial PRIMARY KEY,
+        "tags" text[] NOT NULL,
+        "scores" integer[]
+      );
+    `)
+
+    const cols = (await introspectPg(client)).tables.docs.columns
+    expect(cols.tags).toMatchObject({ type: 'text[]', nullable: false })
+    expect(cols.scores).toMatchObject({ type: 'integer[]', nullable: true })
+  })
+
   it('extracts the canonical SchemaSnapshot for a 2-table schema with FK + indexes', async () => {
     await client.query(`
       CREATE TABLE "users" (

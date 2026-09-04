@@ -11,6 +11,7 @@ export type {
 } from './snapshot/types'
 
 export { extractSnapshot } from './snapshot/extract'
+export { fitIdentifier } from './snapshot/name'
 export { renderSchemaSource } from './snapshot/render'
 
 export type * from './diff/types'
