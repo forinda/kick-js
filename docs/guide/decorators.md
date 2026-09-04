@@ -167,9 +167,9 @@ if (ctx.route?.flags.has('auth.public')) return next()
 ```
 
 `ctx.route` is optional because it is `undefined` before route matching: global
-middleware runs too early to have one. Pre-match middleware that needs flags
-(the connect-style `rateLimit()`) reads them from the boot-built policy table
-instead.
+middleware runs too early to have one. That is about `ctx.route`, not about
+flags — pre-match middleware can still read a route's flags through the boot-built
+policy table, which is how `rateLimit({ exemptWhen })` works.
 
 Or let a consumer do the reading: contributors take `skipWhen` / `onlyWhen`, and
 the ctx-style guards take `exemptWhen`. Full surface in
