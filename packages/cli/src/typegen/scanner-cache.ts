@@ -31,7 +31,11 @@ import type { FileExtract } from './scanner'
 // v2: per-file extraction switched to AST-first (extract-ast.ts) — v1
 // entries hold regex-era results that can differ (template-literal
 // paths, aliased schema-ref resolution), so they must not be served.
-const CACHE_VERSION = 2
+// v3: `FileExtract` gained `routeFlags`. A v2 entry has no such field, and
+// the join phase spreads it — every upgraded project with a warm cache hit
+// `routeFlags is not iterable` on the first typegen until the cache was
+// deleted by hand.
+const CACHE_VERSION = 3
 
 /** The array-valued keys every `FileExtract` must carry. */
 const EXTRACT_ARRAY_KEYS = [
@@ -41,10 +45,31 @@ const EXTRACT_ARRAY_KEYS = [
   'pluginsAndAdapters',
   'augmentations',
   'contextKeys',
+  'routeFlags',
   'routes',
   'moduleMounts',
   'globPatterns',
 ] as const
+
+/**
+ * Compile-time coverage: every required array field of `FileExtract` must be
+ * listed above.
+ *
+ * `routeFlags` was added to `FileExtract` without touching this list, so the
+ * validator below happily served entries that lacked it and the join phase
+ * spread `undefined`. The list is now derived-checked rather than remembered —
+ * adding an array field to `FileExtract` fails to compile here until it is
+ * listed, which is the only moment anyone is looking at this file.
+ */
+type RequiredArrayKeys<T> = {
+  [K in keyof T]-?: undefined extends T[K] ? never : T[K] extends readonly unknown[] ? K : never
+}[keyof T]
+
+type MissingArrayKeys = Exclude<RequiredArrayKeys<FileExtract>, (typeof EXTRACT_ARRAY_KEYS)[number]>
+
+// If this errors, add the named key(s) to EXTRACT_ARRAY_KEYS and bump CACHE_VERSION.
+const _extractKeysCovered: MissingArrayKeys extends never ? true : MissingArrayKeys = true
+void _extractKeysCovered
 
 /**
  * Structurally validate a cached extract before trusting it. The join

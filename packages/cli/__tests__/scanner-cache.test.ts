@@ -111,6 +111,38 @@ export class UsersService {}
     expect(healed).toEqual(truth)
   })
 
+  it('rejects an entry written before a FileExtract field existed', async () => {
+    // The real upgrade path: a project whose cache predates `routeFlags`.
+    // Every entry validated fine under the old key list and then crashed the
+    // join phase with `routeFlags is not iterable`. Deleting the field
+    // reproduces exactly what an older CLI wrote.
+    const truth = await scanProject({ root: src, cwd: root })
+    await scanProject(opts())
+
+    const cacheFile = join(cacheDir, 'scan.json')
+    const doc = JSON.parse(await readFile(cacheFile, 'utf-8'))
+    for (const key of Object.keys(doc.files)) {
+      delete doc.files[key].extract.routeFlags
+    }
+    await writeFile(cacheFile, JSON.stringify(doc))
+
+    // Must re-scan rather than throw, and produce the same result as cold.
+    const healed = await scanProject(opts())
+    expect(healed).toEqual(truth)
+  })
+
+  it('ignores a cache written under an older CACHE_VERSION', async () => {
+    const truth = await scanProject({ root: src, cwd: root })
+    await scanProject(opts())
+
+    const cacheFile = join(cacheDir, 'scan.json')
+    const doc = JSON.parse(await readFile(cacheFile, 'utf-8'))
+    doc.version = doc.version - 1
+    await writeFile(cacheFile, JSON.stringify(doc))
+
+    expect(await scanProject(opts())).toEqual(truth)
+  })
+
   it('re-extracts a file whose signature changed', async () => {
     await scanProject(opts()) // cold
     const changed = join(src, 'users', 'users.service.ts')
