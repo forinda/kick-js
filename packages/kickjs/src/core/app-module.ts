@@ -1,5 +1,6 @@
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
+import type { RouteFlagDeclarations } from './route-flag'
 
 /**
  * Route set returned by a module's routes() method.
@@ -49,6 +50,23 @@ export interface ModuleRoutes {
    * for OpenAPI spec generation via `SwaggerAdapter`.
    */
   controller?: any
+
+  /**
+   * Route flags applied to every route this mount produces.
+   *
+   * The module-level registration site: a flag stated here reaches routes on a
+   * controller the module does not own, which is what a decorator cannot do.
+   * The built-in health module uses it to let an app name its own "public"
+   * flag without the framework picking one.
+   *
+   * ```ts
+   * routes: () => ({ path: '/webhooks', controller: WebhooksController, flags: ['auth.public'] })
+   * ```
+   *
+   * Lowest precedence — method > class > mount, matching the contributor
+   * chain. A method can drop an inherited one with `@Flag.off`.
+   */
+  flags?: RouteFlagDeclarations
 }
 
 /**

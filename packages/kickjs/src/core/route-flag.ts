@@ -249,9 +249,9 @@ export function defineRouteFlag(name: string): RouteFlag<never> {
 /**
  * Resolve the flags in force for one route.
  *
- * Precedence is method > class, matching the contributor pipeline's top two
- * levels. Within a level the last declaration wins (decorators apply bottom-up,
- * so the one nearest the handler is applied last).
+ * Precedence is method > class > mount, matching the contributor pipeline's top
+ * three levels. Within a level the last declaration wins (decorators apply
+ * bottom-up, so the one nearest the handler is applied last).
  *
  * A resolved `false` deletes the key rather than storing it — see the module
  * docblock.
@@ -259,11 +259,18 @@ export function defineRouteFlag(name: string): RouteFlag<never> {
 export function resolveRouteFlags(
   classDeclarations: readonly RouteFlagDeclaration[],
   methodDeclarations: readonly RouteFlagDeclaration[],
+  mountDeclarations: readonly RouteFlagDeclaration[] = [],
 ): RouteFlags {
   const resolved = new Map<string, unknown>()
 
-  // Lowest precedence first, so higher levels overwrite.
-  for (const { name, value } of [...classDeclarations, ...methodDeclarations]) {
+  // Lowest precedence first, so higher levels overwrite. Mount comes first
+  // despite being the last parameter — it was added after the other two, and
+  // moving it to the front would break every existing caller for no gain.
+  for (const { name, value } of [
+    ...mountDeclarations,
+    ...classDeclarations,
+    ...methodDeclarations,
+  ]) {
     if (value === FLAG_UNSET) {
       resolved.delete(name)
       continue
@@ -470,6 +477,7 @@ export function getRouteFlags(controllerClass: object, handlerName: string): Rou
   return resolveRouteFlags(
     getClassFlagDeclarations(controllerClass),
     getMethodFlagDeclarations(controllerClass, handlerName),
+    getMountFlagDeclarations(controllerClass),
   )
 }
 
@@ -489,4 +497,89 @@ export function getMethodFlagDeclarations(
     handlerName,
     [],
   )
+}
+
+/**
+ * Flags declared as data rather than as a decorator, keyed by name.
+ *
+ * ```ts
+ * { 'auth.public': true, 'rate.limit': { rpm: 10 } }
+ * ```
+ */
+export type RouteFlagRecord = { [K in RouteFlagName]?: RouteFlagValue<K, true> }
+
+/**
+ * What a non-decorator registration site accepts.
+ *
+ * A list is the common case — bare flags, each stored as `true`:
+ * `flags: ['auth.public']`. The record form exists for flags that carry a
+ * value. Both narrow against {@link KickRouteFlags} once it is augmented.
+ */
+export type RouteFlagDeclarations = readonly RouteFlagName[] | RouteFlagRecord
+
+/**
+ * Normalise either input form into declarations.
+ *
+ * @param site Where the flags came from, for the error message — a name is
+ * validated here rather than at read time so a typo'd `!` fails at boot.
+ */
+export function toFlagDeclarations(
+  flags: RouteFlagDeclarations | undefined,
+  site: string,
+): RouteFlagDeclaration[] {
+  if (!flags) return []
+  const entries: [string, unknown][] = Array.isArray(flags)
+    ? flags.map((name) => [name as string, true])
+    : Object.entries(flags as Record<string, unknown>)
+
+  return entries.map(([name, value]) => {
+    // Same reservation as `defineRouteFlag`: `!name` is a negated *test*, and a
+    // flag named that way could never be tested for. Declaring one is always a
+    // mistake — usually someone reaching for "not public" on the wrong side.
+    if (name.startsWith('!')) {
+      throw new Error(
+        `${site}: a flag name cannot start with '!' — that prefix is reserved for negated ` +
+          `tests, and a declaration has no negative form. Remove the flag instead of ` +
+          `declaring '${name}'.`,
+      )
+    }
+    return { name, value }
+  })
+}
+
+/**
+ * Mount-level declarations, keyed by controller class.
+ *
+ * A module declares flags for every route it mounts (`ModuleRoutes.flags`), so
+ * unlike class and method declarations they are not written by a decorator and
+ * have nowhere on the class to live. They are recorded here at mount time so
+ * that {@link getRouteFlags} — which sees only a controller and a method name —
+ * reports the same flags the runtime resolved. Without it an OpenAPI spec or a
+ * DevTools route listing would disagree with `ctx.route.flags`.
+ *
+ * A `WeakMap`, so a controller from a torn-down app (a test, an HMR reload) is
+ * collectable. Mounting the same controller twice replaces rather than appends:
+ * a reload re-declares the same flags, and appending would grow without bound.
+ */
+const MOUNT_FLAGS = new WeakMap<object, RouteFlagDeclaration[]>()
+
+/**
+ * Record the flags a mount declares for `controllerClass`.
+ *
+ * @internal Called by the route-table builder; not part of the app-facing API.
+ */
+export function registerMountFlags(
+  controllerClass: object,
+  declarations: readonly RouteFlagDeclaration[],
+): void {
+  if (declarations.length === 0) {
+    MOUNT_FLAGS.delete(controllerClass)
+    return
+  }
+  MOUNT_FLAGS.set(controllerClass, [...declarations])
+}
+
+/** Read the mount-level declarations recorded for a controller. */
+export function getMountFlagDeclarations(controllerClass: object): RouteFlagDeclaration[] {
+  return MOUNT_FLAGS.get(controllerClass) ?? []
 }

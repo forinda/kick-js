@@ -83,9 +83,20 @@ Request In
 The built-in health endpoints are an **ordinary module, mounted last** — not a
 short-circuit at the top of the pipeline. They pass through global middleware
 like any other route, which means app-wide auth applies to them unless you
-exempt the path. That is deliberate: a framework route quietly bypassing your
+exempt them. That is deliberate: a framework route quietly bypassing your
 middleware is the bigger surprise. Mounting last also means your own `/health`
 module wins if you declare one, and `health: false` skips the built-in entirely.
+
+To exempt them, put your own [route flag](./route-flags.md) on both probes:
+
+```ts
+bootstrap({ health: { flags: ['auth.public'] } })
+```
+
+Whatever already skips on that flag — an auth contributor's `skipWhen`, a
+guard's `exemptWhen`, `SwaggerAdapter({ publicFlag })` — now covers health too.
+Prefer it to exempting the pathnames, which stop matching if the probe paths
+ever move.
 :::
 
 ### Where a value can be read
