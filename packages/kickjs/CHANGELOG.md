@@ -1,5 +1,26 @@
 # @forinda/kickjs
 
+## 8.2.1
+
+### Patch Changes
+
+- [#642](https://github.com/forinda/kick-js/pull/642) [`4d1291d`](https://github.com/forinda/kick-js/commit/4d1291de0420fcf856a8c616f22a63acc3ad1e74) Thanks [@forinda](https://github.com/forinda)! - Export `BareRouteFlag` and `ValuedRouteFlag` so a consumer can export a flag ([#641](https://github.com/forinda/kick-js/issues/641)).
+  
+  `RouteFlag<V>` is a conditional over those two interfaces, and only the alias was exported. A consumer writing the documented shape:
+  
+  ```ts
+  export const Public = defineRouteFlag('auth.public')
+  ```
+  
+  failed to emit declarations:
+  
+  ```text
+  error TS4023: Exported variable 'Public' has or is using name 'BareRouteFlag'
+  from external module ".../dist/route-flag-GzEeUmws" but cannot be named.
+  ```
+  
+  Flags are meant to be shared across controllers, so `export const` in a small module is the natural usage — and there was no non-exported way to use one across files. Both interfaces are now re-exported from the entry; the `RouteFlag` annotation workaround is no longer needed.
+
 ## 8.2.0
 
 ### Minor Changes
