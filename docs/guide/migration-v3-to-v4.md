@@ -194,7 +194,7 @@ The `dependsOn` narrowing is one slice of the broader v4 push to make plugin/ada
 
 None of these break v3 source. They're all opt-in surfaces that light up when you adopt them.
 
-## Dropped packages — bring-your-own via `defineAdapter` / `definePlugin`
+## Dropped packages — bring-your-own via `defineAdapter` / `definePlugin` {#dropped-packages-bring-your-own-via-defineadapter-defineplugin}
 
 A handful of v3 packages were thin wrappers around fast-moving ecosystems where adopters consistently swapped the wrapper for direct upstream usage within weeks. v4 stops shipping them and replaces each with a guide page showing how to compose the same behaviour using `defineAdapter` / `definePlugin` / `defineHttpContextDecorator` / `getRequestValue` and the upstream library directly. The framework keeps the small, stable interfaces; adopters keep control of the ecosystem-specific glue.
 

@@ -15,17 +15,12 @@ interface SwaggerAdapterOptions extends SwaggerOptions {
   specPath?: string // default: '/openapi.json'
   adapters?: any[] // peer adapters to discover (e.g. WsAdapter)
   disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
-}
-
-interface SwaggerOptions {
-  bearerAuth?: boolean
-  /** Route flag(s) naming a public endpoint — those routes get `security: []`. */
-  publicFlag?: string | readonly string[]
-  /** Full control: return `null` for public, `undefined` to fall through. */
-  securityResolver?: (ctx: { controllerClass: any; handlerName: string }) => any
-  // …title, version, description, servers, tags
+  renderSwaggerUI?: UIRenderer // swap the Swagger UI shell
+  renderReDoc?: UIRenderer // swap the ReDoc shell
 }
 ```
+
+`SwaggerAdapterOptions` extends [`SwaggerOptions`](#types).
 
 ### Marking endpoints public from route flags
 
@@ -151,6 +146,35 @@ Mark an endpoint or controller as requiring Bearer token authentication.
 function ApiBearerAuth(name?: string): ClassDecorator & MethodDecorator
 ```
 
+### ApiSecurity
+
+Require a named security scheme on an endpoint or controller. Accepts a scheme
+name, a `{ name, scopes }` requirement, or a list of either.
+
+```typescript
+function ApiSecurity(
+  requirement: string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[],
+): ClassDecorator & MethodDecorator
+```
+
+A method-level requirement replaces the class-level one rather than adding to
+it. Reference a scheme declared in [`securitySchemes`](#swaggeradapter); only
+the literal name `BearerAuth` is auto-synthesised.
+
+### ApiPublic
+
+Mark a single method as public — it opts out of any class-level requirement.
+
+```typescript
+function ApiPublic(): MethodDecorator
+```
+
+Method-only, and the highest-precedence answer in the [resolution
+order](../guide/swagger.md#resolution-order). When the spec carries a global
+requirement (`bearerAuth: true`), the operation emits `security: []`, which is
+how OpenAPI spells "this one is open" — omitting the key would mean "inherit the
+global requirement".
+
 ### ApiExclude
 
 Exclude a controller or method from the generated OpenAPI spec.
@@ -168,10 +192,31 @@ interface OpenAPIInfo {
   description?: string
 }
 
+interface SecurityResolverContext {
+  controllerClass: any
+  handlerName: string
+}
+
+interface ApiSecurityRequirement {
+  name: string
+  scopes?: string[]
+}
+
+/** Renders the HTML for a docs UI — `swaggerUIHtml` and `redocHtml` implement it. */
+type UIRenderer = (specUrl: string, title?: string, assetsPath?: string) => string
+
 interface SwaggerOptions {
   info?: Partial<OpenAPIInfo>
   servers?: { url: string; description?: string }[]
+  /** Add the `BearerAuth` scheme and apply it as a GLOBAL security requirement. */
   bearerAuth?: boolean
+  /** Route flag(s) naming a public endpoint — those routes emit `security: []`. */
+  publicFlag?: string | readonly string[]
+  /** Full control: `null` is public, `undefined` falls through, anything else sets the requirement. */
+  securityResolver?: (
+    ctx: SecurityResolverContext,
+  ) => string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[] | null | undefined
+  securitySchemes?: Record<string, OpenAPISecurityScheme>
   schemaParser?: SchemaParser
 }
 ```

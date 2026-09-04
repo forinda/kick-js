@@ -1,5 +1,7 @@
+import { derivedFkName, derivedUniqueName } from './name'
 import type {
   ColumnSnapshot,
+  EnumSnapshot,
   ForeignKeySnapshot,
   IndexSnapshot,
   SchemaSnapshot,
@@ -26,9 +28,13 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   const usedColumnHelpers = new Set<string>()
   const tableSources: string[] = []
 
+  // An enum column's SQL type IS the type's name, so the renderer needs to know
+  // which names are enums to reach for the factory instead of a column helper.
+  const enums = snapshot.enums ?? {}
+
   // First pass: render every table, accumulating which column helpers we used.
   for (const table of Object.values(snapshot.tables)) {
-    tableSources.push(renderTable(table, usedColumnHelpers))
+    tableSources.push(renderTable(table, usedColumnHelpers, enums))
   }
 
   const helpers = ['table', ...Array.from(usedColumnHelpers).toSorted()]
@@ -42,20 +48,73 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   )
   if (needsUnique && !helpers.includes('unique')) helpers.push('unique')
 
-  const importLine = `import { ${helpers.join(', ')} } from '@forinda/kickjs-db'`
-  return [importLine, '', ...tableSources].join('\n').trimEnd() + '\n'
+  const lines = [`import { ${helpers.join(', ')} } from '@forinda/kickjs-db'`]
+
+  // `pgEnum` lives on the dialect subpath, so it needs its own import line.
+  const enumDecls = Object.values(enums)
+  if (enumDecls.length > 0) {
+    lines.push(`import { pgEnum } from '@forinda/kickjs-db/pg'`)
+  }
+
+  const body: string[] = []
+  if (enumDecls.length > 0) {
+    // Declared before the tables that use them: these are plain consts, and a
+    // column reads the factory at table-definition time.
+    for (const e of enumDecls.toSorted((a, b) => a.name.localeCompare(b.name))) {
+      const values = e.values.map((v) => `'${v.replace(/'/g, "\\'")}'`).join(', ')
+      body.push(`export const ${enumIdent(e.name)} = pgEnum('${e.name}', ${values})`)
+    }
+    body.push('')
+  }
+
+  return [...lines, '', ...body, ...tableSources].join('\n').trimEnd() + '\n'
 }
 
-function renderTable(table: TableSnapshot, helpers: Set<string>): string {
+/**
+ * The const name for an enum declaration.
+ *
+ * Postgres puts types and tables in one namespace, so an enum can never share a
+ * name with a table and `jsIdent` alone is unambiguous.
+ */
+function enumIdent(enumName: string): string {
+  return jsIdent(enumName)
+}
+
+function renderTable(
+  table: TableSnapshot,
+  helpers: Set<string>,
+  enums: Record<string, EnumSnapshot>,
+): string {
   const ident = jsIdent(table.name)
   const columns: string[] = []
+
+  // Grouped so a column with more than one foreign key is visible as such.
+  const singleColumnFks = new Map<string, ForeignKeySnapshot[]>()
+  for (const f of table.foreignKeys) {
+    if (f.columns.length !== 1) continue
+    const list = singleColumnFks.get(f.columns[0]) ?? []
+    list.push(f)
+    singleColumnFks.set(f.columns[0], list)
+  }
+  /** The ones actually rendered on a column; everything else is deferred. */
+  const inlined = new Set<ForeignKeySnapshot>()
   for (const col of Object.values(table.columns)) {
-    const fk = table.foreignKeys.find(
-      (f) =>
-        f.columns.length === 1 &&
-        f.columns[0] === col.name &&
-        f.name === `${table.name}_${col.name}_fk`,
-    )
+    // Match on SHAPE — one column, this column — not on the constraint's name.
+    //
+    // Matching by name meant only `<table>_<col>_fk` was ever inlined, which is
+    // the name this DSL derives. A real database names constraints itself:
+    // Postgres' default is `<table>_<col>_fkey`, and a DBA may have chosen
+    // anything at all. So introspecting a live schema matched nothing and every
+    // foreign key fell through to a TODO comment — 1,330 of them on a
+    // 242-table schema (#643). The name is preserved separately below.
+    //
+    // Exactly one, or none: `.references()` says "this column points at X", and
+    // a column carrying two constraints cannot say both. Inlining the first
+    // would make the file look complete while the second lived only in a
+    // comment, so neither is inlined and both are reported below.
+    const candidates = singleColumnFks.get(col.name) ?? []
+    const fk = candidates.length === 1 ? candidates[0] : undefined
+    if (fk) inlined.add(fk)
     const inlineUnique =
       table.indexes.find(
         (i) =>
@@ -64,17 +123,19 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
           i.columns[0] === col.name &&
           isAutoUniqueName(table.name, i),
       ) !== undefined
-    columns.push(`  ${jsKey(col.name)}: ${renderColumn(col, helpers, fk, inlineUnique)},`)
+    columns.push(
+      `  ${jsKey(col.name)}: ${renderColumn(col, helpers, fk, inlineUnique, table.name, enums)},`,
+    )
   }
 
   // Constraints that don't fit on a column chain.
   const explicitIndexes = table.indexes.filter((i) => !isAutoUniqueName(table.name, i))
-  const explicitFks = table.foreignKeys.filter(
-    (f) => f.name !== `${table.name}_${f.columns[0]}_fk` || f.columns.length !== 1,
-  )
+  // Whatever did not render on a column: composite keys, which have no
+  // column-level form, and the members of any column carrying more than one.
+  const deferredFks = table.foreignKeys.filter((f) => !inlined.has(f))
 
   const hasThirdArg = explicitIndexes.length > 0
-  const tableArgs: string[] = [`'${table.name}'`, `{\n${columns.join('\n')}\n}`]
+  const tableArgs: string[] = [strLit(table.name), `{\n${columns.join('\n')}\n}`]
 
   if (hasThirdArg) {
     const callbacks = explicitIndexes
@@ -85,13 +146,13 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
 
   let src = `export const ${ident} = table(${tableArgs.join(', ')})`
 
-  // Explicit FKs that don't fit the auto-derived <table>_<col>_fk pattern get
-  // logged as TODO comments — adopter handles them manually. M3 may upgrade
-  // this to emit a separate ALTER snippet.
-  if (explicitFks.length > 0) {
+  // Foreign keys with no column-level form in the DSL are logged as TODO
+  // comments for the adopter to handle. M3 may upgrade this to emit a separate
+  // ALTER snippet.
+  if (deferredFks.length > 0) {
     src +=
-      '\n// TODO: kick db introspect — composite or custom-named foreign keys not auto-rendered:\n'
-    for (const f of explicitFks) {
+      '\n// TODO: kick db introspect — composite foreign keys, and columns with more than one, not auto-rendered:\n'
+    for (const f of deferredFks) {
       src += `// ${f.name}: (${f.columns.join(', ')}) → ${f.refTable}(${f.refColumns.join(', ')})\n`
     }
   }
@@ -104,55 +165,101 @@ function renderColumn(
   helpers: Set<string>,
   fk: ForeignKeySnapshot | undefined,
   inlineUnique: boolean,
+  tableName: string,
+  enums: Record<string, EnumSnapshot>,
 ): string {
-  const { helperName, args } = pickColumnHelper(col)
-  helpers.add(helperName)
+  // An enum column calls the factory declared above rather than a helper
+  // imported from the package, so nothing is added to the import line.
+  if (enums[col.type]) {
+    return chainSuffix(`${enumIdent(col.type)}()`, col, fk, inlineUnique, tableName)
+  }
 
-  let chain = `${helperName}(${args})`
+  const { helperName, args, isArray } = pickColumnHelper(col)
+  helpers.add(helperName)
+  // `.array()` goes first in the chain: it rewrites the column's type, and
+  // reads as part of the type rather than as a constraint on it.
+  const base = `${helperName}(${args})${isArray ? '.array()' : ''}`
+  return chainSuffix(base, col, fk, inlineUnique, tableName)
+}
+
+/**
+ * Append the modifier chain — nullability, default, unique, references — to a
+ * column expression.
+ *
+ * Shared so an enum column, whose expression comes from a declared factory
+ * rather than an imported helper, gets exactly the same modifiers in exactly
+ * the same order.
+ */
+function chainSuffix(
+  base: string,
+  col: ColumnSnapshot,
+  fk: ForeignKeySnapshot | undefined,
+  inlineUnique: boolean,
+  tableName: string,
+): string {
+  let chain = base
   if (col.primaryKey) chain += '.primaryKey()'
   if (!col.primaryKey && !col.nullable) chain += '.notNull()'
   if (col.default !== null) chain += `.default(${JSON.stringify(col.default)})`
   if (inlineUnique) chain += '.unique()'
   if (fk) {
     const ref = `${jsIdent(fk.refTable)}.${jsIdent(fk.refColumns[0])}`
-    const onDelete = fk.onDelete === 'no_action' ? '' : `, { onDelete: '${fk.onDelete}' }`
-    chain += `.references(() => ${ref}${onDelete})`
+    const opts: string[] = []
+    if (fk.onDelete !== 'no_action') opts.push(`onDelete: '${fk.onDelete}'`)
+    if (fk.onUpdate !== undefined && fk.onUpdate !== 'no_action') {
+      opts.push(`onUpdate: '${fk.onUpdate}'`)
+    }
+    // Carry the real constraint name whenever it isn't the one the DSL would
+    // derive, so re-extracting this file reproduces the database rather than
+    // proposing a rename of every key.
+    if (fk.name !== derivedFkName(tableName, col.name)) opts.push(`name: ${strLit(fk.name)}`)
+    const optArg = opts.length > 0 ? `, { ${opts.join(', ')} }` : ''
+    chain += `.references(() => ${ref}${optArg})`
   }
   return chain
 }
 
-function pickColumnHelper(col: ColumnSnapshot): { helperName: string; args: string } {
-  // Strip array suffix; render as base type + .array() chain in renderColumn
-  // (M2 — for now arrays land as a literal `<T>[]` type which the DSL doesn't
-  // round-trip). For M1, just pick the closest helper.
-  const t = col.type
+function pickColumnHelper(col: ColumnSnapshot): {
+  helperName: string
+  args: string
+  isArray: boolean
+} {
+  // An array type is its element type plus `.array()`. Introspect already
+  // reports `integer[]`, but every such column used to miss every branch below
+  // and land on the `text(/* TODO */)` fallback, losing the element type and
+  // the array-ness together (#648).
+  const isArray = col.type.endsWith('[]')
+  const t = isArray ? col.type.slice(0, -2) : col.type
 
-  if (t === 'serial') return { helperName: 'serial', args: '' }
-  if (t === 'bigserial') return { helperName: 'bigSerial', args: '' }
-  if (t === 'smallserial') return { helperName: 'serial', args: '' }
-  if (t === 'integer') return { helperName: 'integer', args: '' }
-  if (t === 'bigint') return { helperName: 'bigint', args: '' }
-  if (t === 'smallint') return { helperName: 'smallint', args: '' }
-  if (t === 'real') return { helperName: 'real', args: '' }
-  if (t === 'double precision') return { helperName: 'doublePrecision', args: '' }
-  if (/^numeric(\(.+\))?$/.test(t)) return { helperName: 'numeric', args: extractParens(t) }
-  if (/^varchar(\(\d+\))?$/.test(t)) return { helperName: 'varchar', args: extractParens(t) }
-  if (/^char(\(\d+\))?$/.test(t)) return { helperName: 'char', args: extractParens(t) }
-  if (t === 'text') return { helperName: 'text', args: '' }
-  if (t === 'boolean') return { helperName: 'boolean', args: '' }
-  if (t === 'timestamp') return { helperName: 'timestamp', args: '' }
-  if (t === 'timestamptz') return { helperName: 'timestamptz', args: '' }
-  if (t === 'date') return { helperName: 'date', args: '' }
-  if (t === 'time') return { helperName: 'time', args: '' }
-  if (t === 'interval') return { helperName: 'interval', args: '' }
-  if (t === 'uuid') return { helperName: 'uuid', args: '' }
-  if (t === 'jsonb') return { helperName: 'jsonb', args: '' }
-  if (t === 'json') return { helperName: 'json', args: '' }
-  if (t === 'bytea') return { helperName: 'bytea', args: '' }
+  if (t === 'serial') return { helperName: 'serial', args: '', isArray }
+  if (t === 'bigserial') return { helperName: 'bigSerial', args: '', isArray }
+  if (t === 'smallserial') return { helperName: 'serial', args: '', isArray }
+  if (t === 'integer') return { helperName: 'integer', args: '', isArray }
+  if (t === 'bigint') return { helperName: 'bigint', args: '', isArray }
+  if (t === 'smallint') return { helperName: 'smallint', args: '', isArray }
+  if (t === 'real') return { helperName: 'real', args: '', isArray }
+  if (t === 'double precision') return { helperName: 'doublePrecision', args: '', isArray }
+  if (/^numeric(\(.+\))?$/.test(t))
+    return { helperName: 'numeric', args: extractParens(t), isArray }
+  if (/^varchar(\(\d+\))?$/.test(t))
+    return { helperName: 'varchar', args: extractParens(t), isArray }
+  if (/^char(\(\d+\))?$/.test(t)) return { helperName: 'char', args: extractParens(t), isArray }
+  if (t === 'text') return { helperName: 'text', args: '', isArray }
+  if (t === 'boolean') return { helperName: 'boolean', args: '', isArray }
+  if (t === 'timestamp') return { helperName: 'timestamp', args: '', isArray }
+  if (t === 'timestamptz') return { helperName: 'timestamptz', args: '', isArray }
+  if (t === 'date') return { helperName: 'date', args: '', isArray }
+  if (t === 'time') return { helperName: 'time', args: '', isArray }
+  if (t === 'interval') return { helperName: 'interval', args: '', isArray }
+  if (t === 'uuid') return { helperName: 'uuid', args: '', isArray }
+  if (t === 'jsonb') return { helperName: 'jsonb', args: '', isArray }
+  if (t === 'json') return { helperName: 'json', args: '', isArray }
+  if (t === 'bytea') return { helperName: 'bytea', args: '', isArray }
 
   // Fallback: emit as a comment + placeholder text() so the file still
-  // parses. Adopter edits to the right helper.
-  return { helperName: 'text', args: `/* TODO: ${t} */` }
+  // parses. Adopter edits to the right helper. `isArray` still rides along, so
+  // an array of an unmapped element type keeps at least its array-ness.
+  return { helperName: 'text', args: `/* TODO: ${t} */`, isArray }
 }
 
 function extractParens(t: string): string {
@@ -163,13 +270,31 @@ function extractParens(t: string): string {
 function renderIndexCall(idx: IndexSnapshot): string {
   const helper = idx.unique ? 'unique' : 'index'
   const cols = idx.columns.map((c) => `t.${jsIdent(c)}`).join(', ')
-  return `${helper}('${idx.name}').on(${cols})`
+  return `${helper}(${strLit(idx.name)}).on(${cols})`
 }
 
 function isAutoUniqueName(tableName: string, idx: IndexSnapshot): boolean {
   return (
-    idx.unique && idx.columns.length === 1 && idx.name === `${tableName}_${idx.columns[0]}_unique`
+    idx.unique &&
+    idx.columns.length === 1 &&
+    idx.name === derivedUniqueName(tableName, idx.columns[0])
   )
+}
+
+/**
+ * Render a database-supplied string as a JS literal.
+ *
+ * Table, index and constraint names come from the database, and a quoted
+ * Postgres identifier may legally contain a quote or a backslash —
+ * `"customer'fk"` is a valid constraint name. Interpolating one straight into a
+ * single-quoted literal produced a schema file that did not parse.
+ *
+ * Single quotes are kept for everything that can hold them verbatim, so
+ * ordinary names render exactly as they always have; anything else falls back
+ * to JSON, which escapes quotes, backslashes and line terminators alike.
+ */
+function strLit(value: string): string {
+  return /^[^'\\\r\n\u2028\u2029]*$/.test(value) ? `'${value}'` : JSON.stringify(value)
 }
 
 /** Make a JS-safe identifier from a snake_case column/table name. */
