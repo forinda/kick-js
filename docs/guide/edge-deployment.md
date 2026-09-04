@@ -29,7 +29,7 @@ export const app = createWebApp({ h3, modules })
 `createWebApp` accepts the same module shapes as `bootstrap({ modules })`, plus
 `apiPrefix` (default `/api`), `defaultVersion` (default `1`),
 `contributors` (global context contributors), and `env` (see
-[Environment](#environment--config)).
+[Environment](#environment-config)).
 
 The h3 module is **passed in by you** rather than imported internally — edge
 bundlers have no `createRequire`, and this keeps the peer optional for everyone

@@ -16,16 +16,9 @@ interface SwaggerAdapterOptions extends SwaggerOptions {
   adapters?: any[] // peer adapters to discover (e.g. WsAdapter)
   disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
 }
-
-interface SwaggerOptions {
-  bearerAuth?: boolean
-  /** Route flag(s) naming a public endpoint — those routes get `security: []`. */
-  publicFlag?: string | readonly string[]
-  /** Full control: return `null` for public, `undefined` to fall through. */
-  securityResolver?: (ctx: { controllerClass: any; handlerName: string }) => any
-  // …title, version, description, servers, tags
-}
 ```
+
+`SwaggerAdapterOptions` extends [`SwaggerOptions`](#types).
 
 ### Marking endpoints public from route flags
 
@@ -171,7 +164,13 @@ interface OpenAPIInfo {
 interface SwaggerOptions {
   info?: Partial<OpenAPIInfo>
   servers?: { url: string; description?: string }[]
+  /** Add the `BearerAuth` scheme and apply it as a GLOBAL security requirement. */
   bearerAuth?: boolean
+  /** Route flag(s) naming a public endpoint — those routes emit `security: []`. */
+  publicFlag?: string | readonly string[]
+  /** Full control: return `null` for public, requirements to set them, `undefined` to fall through. */
+  securityResolver?: (ctx: { controllerClass: any; handlerName: string }) => any
+  securitySchemes?: Record<string, OpenAPISecurityScheme>
   schemaParser?: SchemaParser
 }
 ```

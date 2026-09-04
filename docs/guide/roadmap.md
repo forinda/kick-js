@@ -352,7 +352,7 @@ Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@
 
 ---
 
-### B.6 Route flags — one vocabulary for per-route policy
+### B.6 Route flags — one vocabulary for per-route policy {#b-6-route-flags-one-vocabulary-for-per-route-policy}
 
 **Status:** `in design` — working spec at [`route-flags-design.md`](https://github.com/forinda/kick-js/blob/main/route-flags-design.md)
 **Effort:** 1–2 weeks for phase 1; phases 2–4 independently schedulable
