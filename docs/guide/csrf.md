@@ -126,9 +126,16 @@ with HTTP status **403**.
 
 ## Exempting routes by flag
 
-`csrf()` runs before route matching, so its only handle on "not this endpoint" is
-`ignorePaths` — an exact pathname. That cannot express `/webhooks/:provider`, and
-it keeps parsing after an `apiPrefix` or `version` change that silently voids it.
+`csrf()` takes `ignorePaths` — an exact pathname — which cannot express
+`/webhooks/:provider` and keeps parsing after an `apiPrefix` or `version` change
+that silently voids it.
+
+Running before route matching is **not** the reason it has no flag option: the
+connect-style `rateLimit()` runs there too and takes `exemptWhen`, reading a
+policy table built at boot. CSRF has no equivalent because the check itself is
+meaningless off a matched route — a token mismatch on a path that routes nowhere
+is a 404, not a 403 — so exempting one was never the useful half. The flag-aware
+path is the guard below.
 
 `csrfGuard()` is the ctx-style counterpart. It runs inside the matched route, so
 it reads [route flags](./route-flags.md) and works on every runtime including the

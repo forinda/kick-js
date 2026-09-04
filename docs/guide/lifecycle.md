@@ -90,18 +90,24 @@ module wins if you declare one, and `health: false` skips the built-in entirely.
 
 ### Where a value can be read
 
-| You are in                        | `ctx.route`  | Route flags             | Per-request bag        |
-| --------------------------------- | ------------ | ----------------------- | ---------------------- |
-| Global middleware (`middlewares`) | ❌ pre-match | via policy table        | ✅                     |
-| Adapter middleware (any phase)    | ❌ pre-match | via policy table        | ✅                     |
-| `@Middleware()` / guards          | ✅           | `ctx.route.flags`       | ✅                     |
-| Context contributors              | ✅           | `skipWhen` / `onlyWhen` | ✅                     |
-| Controller handler                | ✅           | `ctx.route.flags`       | ✅                     |
-| A service with no `ctx`           | —            | —                       | ✅ `getRequestValue()` |
+| You are in                        | `ctx.route`  | Route flags                 | Per-request bag        |
+| --------------------------------- | ------------ | --------------------------- | ---------------------- |
+| Global middleware (`middlewares`) | ❌ pre-match | policy table, if it opts in | ✅                     |
+| Adapter middleware (any phase)    | ❌ pre-match | policy table, if it opts in | ✅                     |
+| `@Middleware()` / guards          | ✅           | `ctx.route.flags`           | ✅                     |
+| Context contributors              | ✅           | `skipWhen` / `onlyWhen`     | ✅                     |
+| Controller handler                | ✅           | `ctx.route.flags`           | ✅                     |
+| A service with no `ctx`           | —            | —                           | ✅ `getRequestValue()` |
 
 The split is route matching: everything after it knows which handler it is
-headed for, everything before it does not. See [Route Flags](./route-flags.md)
-for the flags themselves and the policy table that carries them across that line.
+headed for, everything before it does not.
+
+"Pre-match" does not mean "no flags", though — it means no `ctx.route`. Middleware
+that runs before matching can still read a route's flags by opting into the
+**policy table**, which records every mounted route's flags at boot;
+`rateLimit({ exemptWhen })` does exactly that, and your own middleware can via
+`bindRoutePolicy`. What it cannot do is know which handler it is headed for,
+because nothing has matched yet. See [Route Flags](./route-flags.md).
 
 ### One context, or several
 
