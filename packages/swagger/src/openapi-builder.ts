@@ -777,7 +777,9 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       // generic — adopters must declare custom schemes via
       // `SwaggerOptions.securitySchemes` when using those paths.
       let bearerAuthSourced = false
-      if (isPublicMethod || resolverPublic || (flagPublic && resolverSecurity === undefined)) {
+      const explicitlyPublic =
+        isPublicMethod || resolverPublic || (flagPublic && resolverSecurity === undefined)
+      if (explicitlyPublic) {
         requirements = undefined
       } else if (resolverSecurity && resolverSecurity.length > 0) {
         requirements = resolverSecurity
@@ -791,6 +793,17 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       } else if (classAuth) {
         requirements = [{ name: classAuth, scopes: [] }]
         bearerAuthSourced = true
+      }
+
+      if (!requirements && explicitlyPublic && options.bearerAuth) {
+        // `bearerAuth: true` puts a security requirement at the ROOT of the
+        // spec, and OpenAPI applies a root requirement to every operation that
+        // does not override it. Omitting `security` therefore documents a
+        // public route as requiring a token — the opposite of what
+        // `@ApiPublic` / `securityResolver` / `publicFlag` just said.
+        //
+        // An empty array is the only way the spec spells "this one is open".
+        op.security = []
       }
 
       if (requirements) {

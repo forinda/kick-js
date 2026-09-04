@@ -750,6 +750,59 @@ describe('buildOpenAPISpec — security (Swagger-owned, not coupled to any auth 
     expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
   })
 
+  it('a public route overrides the global requirement bearerAuth installs', () => {
+    // `bearerAuth: true` sets `security` at the ROOT of the spec, and OpenAPI
+    // applies a root requirement to every operation that does not override it.
+    // Omitting `security` on a public operation therefore documents it as
+    // requiring a token — the opposite of what the flag said. An empty array
+    // is the only spelling of "open".
+    const Open = defineRouteFlag('probe.open')
+
+    @Controller()
+    class GlobalAuthController {
+      @Open
+      @Get('/live')
+      live() {}
+
+      @Get('/orders')
+      orders() {}
+    }
+
+    registerControllerForDocs(GlobalAuthController, '/api')
+    const spec = buildOpenAPISpec({ bearerAuth: true, publicFlag: 'probe.open' })
+
+    expect(spec.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.paths['/api/live']?.get?.security).toEqual([])
+    // The protected one inherits the root requirement, so it stays unset.
+    expect(spec.paths['/api/orders']?.get?.security).toBeUndefined()
+  })
+
+  it('@ApiPublic overrides the global requirement too', () => {
+    @Controller()
+    class ApiPublicController {
+      @Get('/open')
+      @ApiPublic()
+      open() {}
+    }
+
+    registerControllerForDocs(ApiPublicController, '/api')
+    expect(buildOpenAPISpec({ bearerAuth: true }).paths['/api/open']?.get?.security).toEqual([])
+  })
+
+  it('leaves security unset on a public route when no global requirement exists', () => {
+    // Without `bearerAuth` there is nothing to override, and an empty array
+    // would be noise in every spec that documents no auth at all.
+    @Controller()
+    class NoGlobalController {
+      @Get('/open')
+      @ApiPublic()
+      open() {}
+    }
+
+    registerControllerForDocs(NoGlobalController, '/api')
+    expect(buildOpenAPISpec().paths['/api/open']?.get?.security).toBeUndefined()
+  })
+
   it('options.publicFlag accepts several names', () => {
     const A = defineRouteFlag('team.public')
     const B = defineRouteFlag('probe')
