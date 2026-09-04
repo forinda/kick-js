@@ -298,6 +298,7 @@ export {
 } from './asset-keys'
 
 export { defineRouteFlag, getRouteFlags, matchesFlagTest, resolveRouteFlags } from './route-flag'
+export type { RouteFlagDeclarations, RouteFlagRecord } from './route-flag'
 export { RoutePolicyTable, bindRoutePolicy, offerRoutePolicy } from './route-policy'
 export type {
   KickRouteFlags,

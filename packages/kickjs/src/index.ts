@@ -16,6 +16,7 @@ export {
   HEALTH_PROBE,
   type HealthProbe,
   type HealthCheckResult,
+  type HealthModuleConfig,
 } from './http/health-module'
 
 export { bootstrap } from './http/bootstrap'
@@ -41,7 +42,9 @@ export type {
   RouteFlagContext,
   NegatedRouteFlagName,
   RouteFlagName,
+  RouteFlagDeclarations,
   RouteFlagPredicate,
+  RouteFlagRecord,
   RouteFlagTest,
   RouteFlagValue,
   RouteFlags,

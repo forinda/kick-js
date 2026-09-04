@@ -165,8 +165,9 @@ tab shows them in a Flags column — so "why does this endpoint not require auth
 the route list rather than by reading the controller.
 
 `getRouteFlags(controllerClass, handlerName)` is the out-of-request resolver behind both: the same
-method-over-class result `ctx.route.flags` carries, for consumers that see a controller and a
-method name rather than a live request.
+method-over-class-over-mount result `ctx.route.flags` carries, for consumers that see a controller
+and a method name rather than a live request. Mount flags are recorded against the controller when
+it mounts, so a spec cannot report a route public that the runtime protects.
 
 ## Matching: name, list, or predicate
 
@@ -265,7 +266,43 @@ Two constraints on what a flag can be:
 
 ## Where flags can be declared
 
-Method and class today, resolved method-over-class. Module, adapter and global registration sites are planned, matching the [context contributor](./context-decorators.md) precedence chain.
+Method, class, and module mount — resolved **method > class > mount**, the top
+three levels of the [context contributor](./context-decorators.md) precedence
+chain. Adapter and global sites are planned.
+
+The mount site is where a module flags routes on a controller it does not own,
+which no decorator can do:
+
+```ts
+routes: () => ({ path: '/webhooks', controller: WebhooksController, flags: ['auth.public'] })
+```
+
+A list stores each flag as `true`. Use the record form for flags that carry a
+value:
+
+```ts
+flags: { 'auth.public': true, 'rate.limit': { rpm: 10 } }
+```
+
+Both narrow against `KickRouteFlags`, and a name starting with `!` is rejected
+at boot — a declaration has no negative form; remove the flag instead.
+
+Since it is the lowest level, a class or method declaration of the same flag
+wins and `@Flag.off` on a method still removes it.
+
+### The built-in health probes
+
+`GET /health/live` and `GET /health/ready` are an ordinary module inside the
+middleware chain, so app-wide auth applies to them. The controller is the
+framework's and the flag names are yours, so the flag goes on the mount:
+
+```ts
+bootstrap({ health: { flags: ['auth.public'] } })
+```
+
+That is the whole wiring — every consumer already reading `auth.public` now
+exempts the probes, including the OpenAPI spec. Exempting `/health/live` and
+`/health/ready` by pathname does the same thing until the paths move.
 
 ## Naming
 

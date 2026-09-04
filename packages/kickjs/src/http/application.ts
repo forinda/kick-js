@@ -40,7 +40,7 @@ import {
   assertRouteUnique,
   buildRouteTable,
 } from './router-builder'
-import { HEALTH_PROBE, healthModule } from './health-module'
+import { HEALTH_PROBE, healthModule, type HealthModuleConfig } from './health-module'
 import { expressRuntime } from './runtimes/express'
 import type {
   ActiveRuntime,
@@ -234,9 +234,15 @@ export interface ApplicationOptions {
    *
    * They mount as an ordinary module, which means they sit inside the
    * middleware chain: whatever guards the rest of the app guards these too.
-   * Exempt the path if your orchestrator must reach them unauthenticated.
+   * Pass `{ flags: [...] }` to put your own route flags on both probes — the
+   * way to make them reachable unauthenticated without exempting a pathname
+   * that can move:
+   *
+   * ```ts
+   * bootstrap({ health: { flags: ['auth.public'] } })
+   * ```
    */
-  health?: boolean
+  health?: boolean | HealthModuleConfig
 
   runtime?: HttpRuntime
 
@@ -830,7 +836,7 @@ export class Application {
           )
         },
       })
-      moduleRegistry.mount(healthModule())
+      moduleRegistry.mount(healthModule(this.options.health === true ? {} : this.options.health))
     }
     const allModuleEntries: AppModuleEntry[] = moduleRegistry.entries
     const modules = allModuleEntries.map((entry) => {
@@ -971,7 +977,7 @@ export class Application {
           if (route.router) {
             this.runtime.useConnect(this.app, route.router, { path: mountPath })
           } else if (route.controller) {
-            const routeTable = buildRouteTable(route.controller)
+            const routeTable = buildRouteTable(route.controller, { mountFlags: route.flags })
             const ctrl = route.controller.name ?? 'controller'
             for (const entry of routeTable) {
               // Per-handler owner so intra-controller duplicates name both methods.

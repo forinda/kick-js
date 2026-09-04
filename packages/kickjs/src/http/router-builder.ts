@@ -11,7 +11,10 @@ import { getClassMeta, getMethodMeta, getMethodMetaOrUndefined } from '../core/m
 import {
   getClassFlagDeclarations,
   getMethodFlagDeclarations,
+  registerMountFlags,
   resolveRouteFlags,
+  toFlagDeclarations,
+  type RouteFlagDeclarations,
 } from '../core/route-flag'
 import { duplicateRouteError } from '../core/kick-errors'
 import type { CtxHandler, RouteEntry, RouteMethod } from './runtime'
@@ -70,6 +73,12 @@ export interface BuildRoutesOptions {
    * falls back to the slot set by Application.setup().
    */
   externalSources?: readonly SourcedRegistration[]
+  /**
+   * Flags the mounting module declares for every route on this controller
+   * (`ModuleRoutes.flags`). Lowest precedence — a class or method declaration
+   * of the same name wins, and `@Flag.off` on a method removes it.
+   */
+  mountFlags?: RouteFlagDeclarations
 }
 
 /**
@@ -123,6 +132,15 @@ export function buildRouteTable(
   // unless a method declares the same flag `false` (see core/route-flag.ts).
   const classFlagDeclarations = getClassFlagDeclarations(controllerClass)
 
+  // Flags the module declared for this whole mount. Recorded against the class
+  // so `getRouteFlags()` — the resolver Swagger and DevTools use, which sees no
+  // mount — reports what the runtime actually resolved.
+  const mountFlagDeclarations = toFlagDeclarations(
+    options.mountFlags,
+    `${controllerClass?.name ?? 'controller'} mount flags`,
+  )
+  registerMountFlags(controllerClass, mountFlagDeclarations)
+
   const entries: RouteEntry[] = []
 
   for (const route of routes) {
@@ -158,6 +176,7 @@ export function buildRouteTable(
     const flags = resolveRouteFlags(
       classFlagDeclarations,
       getMethodFlagDeclarations(controllerClass, route.handlerName),
+      mountFlagDeclarations,
     )
 
     let contributorRunner: CtxHandler | null = null

@@ -243,7 +243,7 @@ interface HealthProbe {
 }
 ```
 
-Mounted automatically at `/health/live` and `/health/ready`; pass `bootstrap({ health: false })` to replace it. It reads draining state and adapter checks through `HEALTH_PROBE` rather than Application internals, so a replacement module can satisfy the same contract. Behaviour and the v8 mounting change are documented in the [core reference](./core.md#health-endpoints).
+Mounted automatically at `/health/live` and `/health/ready`; pass `bootstrap({ health: false })` to replace it, or `bootstrap({ health: { flags: ['auth.public'] } })` to put your own [route flags](../guide/route-flags.md) on both probes. It reads draining state and adapter checks through `HEALTH_PROBE` rather than Application internals, so a replacement module can satisfy the same contract. Behaviour and the v8 mounting change are documented in the [core reference](./core.md#health-endpoints).
 
 ## Query String Parsing
 

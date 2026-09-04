@@ -21,7 +21,7 @@ Inversion-of-Control container, decorators, logger, and error types shared by al
 | `trustProxy`      | `boolean \| number \| string \| fn`   | `false`                         | Express `trust proxy` setting.                                                                                                                                   |
 | `jsonLimit`       | `string \| number`                    | `'1mb'`                         | Max JSON body size — only applied when `middlewares` is omitted.                                                                                                 |
 | `security`        | `{ helmet?: boolean }`                | `{ helmet: true }`              | Auto-inject helmet headers unless opted out.                                                                                                                     |
-| `health`          | `boolean`                             | `true`                          | Mount the built-in [health module](#health-endpoints). `false` leaves `/health/*` to you.                                                                        |
+| `health`          | `boolean \| { flags }`                | `true`                          | Mount the built-in [health module](#health-endpoints). `false` leaves `/health/*` to you; `{ flags: ['auth.public'] }` puts your own route flags on both probes. |
 | `contextStore`    | `'auto' \| 'manual'`                  | `'auto'`                        | ALS frame for `RequestContext.set/get` + REQUEST-scoped DI. `'manual'` only if you own the frame.                                                                |
 | `processHooks`    | `'auto' \| 'errors-only' \| 'manual'` | `'auto'`                        | Process-level error loggers + SIGINT/SIGTERM → shutdown. Use `'errors-only'` when an SDK owns shutdown.                                                          |
 | `cluster`         | `boolean \| { workers?: number }`     | `false`                         | Fork workers across CPU cores (shared port).                                                                                                                     |
@@ -689,7 +689,13 @@ They ship as an ordinary module — `healthModule()`, registered automatically �
 ::: warning They run INSIDE the middleware chain
 Before v8 these were mounted straight onto the engine, ahead of every middleware. They are now mounted with your other modules, which means **global auth applies to them**. An app with app-wide authentication will require it on its probes.
 
-That is the intended default — your app controls its own auth, and a framework route quietly bypassing it is the surprise — but it will fail a liveness check the first time it runs. Exempt the path as you would any other, or pass `health: false` and mount your own.
+That is the intended default — your app controls its own auth, and a framework route quietly bypassing it is the surprise — but it will fail a liveness check the first time it runs. Flag both probes with whatever name your app already treats as public:
+
+```ts
+bootstrap({ health: { flags: ['auth.public'] } })
+```
+
+The flags land on the mount, not on `HealthController` — the class is the framework's, the names are yours — and every consumer that reads them (an auth contributor's `skipWhen`, a guard's `exemptWhen`, `SwaggerAdapter({ publicFlag })`) covers health with no further wiring. See [Route Flags](../guide/route-flags.md#the-built-in-health-probes). You can still exempt the pathnames instead, or pass `health: false` and mount your own module.
 :::
 
 `version: false` **and** `prefix: false` on their `ModuleRoutes` is what keeps them at the root: a probe URL an orchestrator is configured against must not move when `apiPrefix` or the API version changes. The two flags are independent — `prefix: false` alone drops `/api` but keeps `/v1`, mounting at `/v1/health`.

@@ -185,7 +185,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
         }
         const version = route.version ?? defaultVersion
         const mountPath = buildMountPath(apiPrefix, version, route.path)
-        for (const entry of buildRouteTable(route.controller)) {
+        for (const entry of buildRouteTable(route.controller, { mountFlags: route.flags })) {
           const url = joinPath(mountPath, entry.path)
           // Per-handler owner so intra-controller duplicates name both methods.
           const owner = `${route.controller.name ?? 'controller'}.${String(entry.meta.handlerName ?? '?')}`

@@ -19,8 +19,9 @@
  * Mounting it with the other modules also puts it INSIDE the middleware chain,
  * where it was previously ahead of it. That is deliberate: an app controls its
  * own auth, and a framework route quietly bypassing it is the surprise, not the
- * other way round. An app that wants its probes unauthenticated exempts the
- * path the same way it would any other.
+ * other way round. An app that wants its probes unauthenticated exempts them —
+ * `health: { flags: ['auth.public'] }` puts the app's own flag on both routes,
+ * and whatever already skips on that flag skips these too.
  *
  * @module @forinda/kickjs/http/health-module
  */
@@ -28,6 +29,7 @@ import { Controller, Get } from '../core/decorators'
 import { createToken } from '../core/token'
 import { defineModule } from '../core/define-module'
 import type { Container } from '../core/container'
+import type { RouteFlagDeclarations } from '../core/route-flag'
 import { reply } from './reply'
 
 /** One adapter's answer to `onHealthCheck()`. */
@@ -51,6 +53,27 @@ export interface HealthProbe {
 }
 
 export const HEALTH_PROBE = createToken<HealthProbe>('kick/Health/probe')
+
+/** Config for {@link healthModule}. */
+export interface HealthModuleConfig {
+  /**
+   * Route flags to put on `GET /health/live` and `GET /health/ready`.
+   *
+   * The framework names no flags, so it cannot decide these probes are
+   * "public" on your behalf — the name is yours, and every consumer that
+   * already reads it (an auth contributor's `skipWhen`, a guard's
+   * `exemptWhen`, `SwaggerAdapter({ publicFlag })`) then covers health with no
+   * further wiring:
+   *
+   * ```ts
+   * bootstrap({ health: { flags: ['auth.public'] } })
+   * ```
+   *
+   * This replaces exempting `/health/live` and `/health/ready` by pathname,
+   * which silently stops matching if the probe paths ever move.
+   */
+  flags?: RouteFlagDeclarations
+}
 
 @Controller()
 export class HealthController {
@@ -87,11 +110,12 @@ export class HealthController {
  * shape only the framework can produce.
  *
  * Registered automatically unless the app passes `health: false` or supplies a
- * module of its own.
+ * module of its own. Pass `health: { flags: [...] }` to `bootstrap()` to flag
+ * both probes — see {@link HealthModuleConfig}.
  */
-export const healthModule = defineModule({
+export const healthModule = defineModule<HealthModuleConfig>({
   name: 'HealthModule',
-  build: () => ({
+  build: (config) => ({
     register(container: Container) {
       // Resolve through the token so a replacement probe — or a test double —
       // can be bound before this runs.
@@ -103,7 +127,15 @@ export const healthModule = defineModule({
     routes() {
       // Root-mounted and unversioned: the probe URL an orchestrator is
       // configured against must not move when the API prefix or version does.
-      return { path: '/health', controller: HealthController, version: false, prefix: false }
+      return {
+        path: '/health',
+        controller: HealthController,
+        version: false,
+        prefix: false,
+        // Declared at the mount rather than on HealthController: the class is
+        // the framework's, the flag names are the app's.
+        flags: config.flags,
+      }
     },
   }),
 })
