@@ -68,6 +68,22 @@ describe('introspectPg()', () => {
     expect(cols.maybe_no.default).toContain('nextval')
   })
 
+  it('keeps a serial repointed at another sequence as a plain integer (#649)', async () => {
+    // Ownership and use are separate facts. This column still OWNS
+    // reassigned_id_seq — `pg_get_serial_sequence` reports it — but its default
+    // now draws from a different sequence. Calling it serial would discard the
+    // active default and point the column back at the one it no longer uses.
+    await client.query(`
+      CREATE TABLE "reassigned" ("id" serial NOT NULL);
+      CREATE SEQUENCE "shared_ids";
+      ALTER TABLE "reassigned" ALTER COLUMN "id" SET DEFAULT nextval('shared_ids');
+    `)
+
+    const col = (await introspectPg(client)).tables.reassigned.columns.id
+    expect(col).toMatchObject({ type: 'integer', nullable: false })
+    expect(col.default).toContain('shared_ids')
+  })
+
   it('keeps a serial whose NOT NULL was dropped as a plain integer (#649)', async () => {
     // The sequence is still owned, so ownership alone would say "serial" — but
     // serial implies NOT NULL, and re-imposing it would reject the rows that

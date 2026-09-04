@@ -9,7 +9,7 @@ Detection keyed on the `nextval(...)` default alone, so an ordinary integer
 whose default came from a separately declared sequence was reported as a serial.
 That dropped the sequence link (a serial's default is collapsed to null) and,
 for a nullable column, silently made it NOT NULL. A column is now a serial only
-if it OWNS its sequence (`pg_get_serial_sequence`) and is NOT NULL — a serial
+if it OWNS the sequence its default actually draws from, and is NOT NULL — a serial
 whose NOT NULL has been dropped comes back as a plain integer keeping its
 default, since re-imposing the constraint would reject the rows that caused it
 to be dropped.
