@@ -21,11 +21,19 @@ interface ColumnRow {
   numeric_scale: number | null
   /**
    * The sequence this column OWNS, or null. `pg_get_serial_sequence` answers
-   * only for an owned sequence — the thing `serial` creates — so it is what
-   * separates a real serial from a column that merely defaults from some
-   * sequence declared elsewhere.
+   * only for an owned sequence — the thing `serial` creates.
    */
-  serial_sequence: string | null
+  owned_sequence: string | null
+  /**
+   * The sequence this column's DEFAULT actually draws from, or null.
+   *
+   * Ownership and use are separate facts, and `SET DEFAULT nextval(...)` can
+   * repoint a former serial at another sequence while it keeps owning its
+   * original one. Both are normalised through `regclass::text` so they are
+   * comparable — `pg_get_serial_sequence` always schema-qualifies while a
+   * regclass renders bare when the object is on the search path.
+   */
+  default_sequence: string | null
 }
 
 interface EnumRow {
@@ -127,7 +135,10 @@ async function readColumns(
     `SELECT column_name, data_type, udt_name, is_nullable, column_default,
             character_maximum_length, numeric_precision, numeric_scale,
             pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name)
-              AS serial_sequence
+              ::regclass::text AS owned_sequence,
+            to_regclass(
+              (regexp_match(column_default, 'nextval\\(''([^'']+)''(::regclass)?\\)'))[1]
+            )::text AS default_sequence
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -175,10 +186,15 @@ async function readColumns(
  * so a nullable column came back non-nullable, and the default is collapsed to
  * null on the way out, so the link to the sequence was dropped entirely (#649).
  *
- * Two extra conditions settle it:
+ * Three extra conditions settle it:
  *
- * - `pg_get_serial_sequence` returns a name only for a sequence the column
- *   OWNS, which is what `serial` creates and what `DROP TABLE` takes with it.
+ * - The column OWNS a sequence — what `serial` creates and what `DROP TABLE`
+ *   takes with it. `pg_get_serial_sequence` answers only for those.
+ * - It owns the sequence its default actually draws from. Ownership and use are
+ *   separate facts: `ALTER COLUMN id SET DEFAULT nextval('shared_ids')` repoints
+ *   a former serial at another sequence while it keeps owning its original one.
+ *   Calling that `serial` discards the active default and would silently point
+ *   the column back at the sequence it no longer uses.
  * - The column is NOT NULL. An owned sequence whose column has had its NOT NULL
  *   dropped is no longer expressible as `serial`, and restoring the constraint
  *   on the next migration would reject the rows that made someone drop it.
@@ -186,7 +202,8 @@ async function readColumns(
 function isSerialColumn(r: ColumnRow): boolean {
   if (!r.column_default) return false
   if (!r.column_default.startsWith('nextval(')) return false
-  if (r.serial_sequence === null) return false
+  if (r.owned_sequence === null) return false
+  if (r.owned_sequence !== r.default_sequence) return false
   if (r.is_nullable === 'YES') return false
   return r.udt_name === 'int2' || r.udt_name === 'int4' || r.udt_name === 'int8'
 }
