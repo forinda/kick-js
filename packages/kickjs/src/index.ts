@@ -35,7 +35,9 @@ export { defineRouteFlag, getRouteFlags } from './core/route-flag'
 export { bindRoutePolicy, type RoutePolicyTable } from './core/route-policy'
 export type {
   KickRouteFlags,
+  BareRouteFlag,
   RouteFlag,
+  ValuedRouteFlag,
   RouteFlagContext,
   NegatedRouteFlagName,
   RouteFlagName,

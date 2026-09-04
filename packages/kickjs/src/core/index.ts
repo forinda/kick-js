@@ -301,7 +301,9 @@ export { defineRouteFlag, getRouteFlags, matchesFlagTest, resolveRouteFlags } fr
 export { RoutePolicyTable, bindRoutePolicy, offerRoutePolicy } from './route-policy'
 export type {
   KickRouteFlags,
+  BareRouteFlag,
   RouteFlag,
+  ValuedRouteFlag,
   RouteFlagContext,
   RouteFlagDeclaration,
   NegatedRouteFlagName,
