@@ -1,5 +1,24 @@
 # @forinda/kickjs-cli
 
+## 8.1.2
+
+### Patch Changes
+
+- [#652](https://github.com/forinda/kick-js/pull/652) [`5a9e827`](https://github.com/forinda/kick-js/commit/5a9e82743776c863e3870f7765a026c830a08dc1) Thanks [@forinda](https://github.com/forinda)! - Fix `typegen failed (routeFlags is not iterable)` on projects with a warm scanner cache.
+  
+  Adding `routeFlags` to `FileExtract` did not bump `CACHE_VERSION` or extend the
+  cached-entry validator, so every project that had run typegen before route flags
+  shipped served v2 entries lacking the field and crashed in the join phase. The
+  only workaround was deleting `.kickjs/cache/scan.json` by hand.
+  
+  The cache version is bumped (stale entries are ignored), the validator now
+  rejects an entry missing `routeFlags`, and a compile-time check makes the key
+  list impossible to forget: adding an array field to `FileExtract` now fails to
+  build until the validator lists it.
+- Updated dependencies [[`b8e6807`](https://github.com/forinda/kick-js/commit/b8e68077e076c5820f92ff2ca5002a864160d9cb)]:
+  - @forinda/kickjs@8.3.0
+  - @forinda/kickjs-db@7.2.1
+
 ## 8.1.1
 
 ### Patch Changes
