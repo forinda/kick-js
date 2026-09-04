@@ -133,6 +133,7 @@ the generated file doubles as this reference — delete what you don't need.
 | `onHealthCheck()`          | on `GET /health/ready`                 | the built-in readiness endpoint                                      |
 | `shutdown()`               | real shutdown **and** every HMR reload | the framework, time-boxed and concurrent                             |
 | `introspect()`             | DevTools topology poll                 | the `/_debug` dashboard                                              |
+| `devtoolsTabs()`           | DevTools panel discovery               | the `/_debug` dashboard                                              |
 
 ### Reading route flags in `onRouteMount`
 
@@ -158,7 +159,6 @@ An adapter can also **consume** flags per request: `contributors()` registration
 accept `skipWhen` / `onlyWhen`, so a contributor an adapter ships can be exempted
 by an app that never edits the adapter — see
 [Context Decorators](./context-decorators.md#skipping-a-contributor-per-route-skipwhen-onlywhen).
-| `devtoolsTabs()` | DevTools panel discovery | the `/_debug` dashboard |
 
 Two are worth calling out because nothing else surfaces them:
 

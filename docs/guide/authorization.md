@@ -12,7 +12,7 @@ The role check below is a contributor — `kick g contributor <name> --params "r
 Full flag list: [Generators](./generators.md#kick-g-contributor).
 :::
 
-## BYO role checks — `@RequireRole`
+## BYO role checks — `@RequireRole` {#byo-role-checks}
 
 A role check is a contributor that depends on the auth user and throws 401/403.
 
@@ -57,7 +57,7 @@ dashboard(ctx: RequestContext) { /* ctx.get('user') is non-null here */ }
 
 Because `roles` is your own `AuthUser` type, literal-union role names give you compile-time typo checking with zero augmentation machinery — you declared the type yourself in Step 1.
 
-## Policies — bring your own engine via DI
+## Policies — bring your own engine via DI {#policies}
 
 There is no first-party `@Policy` / `@Can` to migrate to — but nothing about a policy engine needs framework support. Context decorators have everything required to compose one: **`deps` injects any DI token** (your engine service), **`dependsOn` orders it after `user`**, and **parameterised decorators carry the action**. The engine is just a service you register:
 
@@ -166,16 +166,21 @@ Prefer this to a pathname allow-list: a flag is declared on the route and surviv
 | A [route flag](./route-flags.md)  | Recording a fact about the route that several checks read        | `auth.public` on webhooks and health probes |
 | `rateLimit()`                     | Throttle specific endpoints                                      | Login endpoint, search API                  |
 
-The first two are code you own — see [BYO role checks](#byo-role-checks-requirerole) and [Policies](#policies-bring-your-own-engine-via-di) above. The framework ships the primitives they are built from, not the checks themselves.
+The first two are code you own — see [BYO role checks](#byo-role-checks) and [Policies](#policies) above. The framework ships the primitives they are built from, not the checks themselves.
 
 **Ordering is yours to set.** There is no built-in auth middleware imposing a precedence any more, so the order is simply the order you register things:
 
 1. Global middleware, in the order given to `bootstrap({ middlewares })` — no `ctx.route` yet
-2. Context contributors, topologically sorted by `dependsOn` — this is where the user is loaded, and where `skipWhen` lets a route flag opt out of loading one
-3. `@Middleware()` guards, class-level then method-level
-4. The handler
+2. Validation (`{ body, query, params }`), then `@FileUpload`
+3. `@Middleware()` guards — class-level, then method-level
+4. Context contributors, topologically sorted by `dependsOn` — this is where the user is loaded, and where `skipWhen` lets a route flag opt out of loading one
+5. The handler
 
-A role check that reads `ctx.get('user')` therefore has to run as a contributor that `dependsOn` the one loading the user, or as a guard mounted after it. See [Context Decorators](./context-decorators.md#ordering).
+::: warning A guard cannot read a contributor's value
+Guards run at step 3, contributors at step 4, so `ctx.get('user')` inside a `@Middleware()` guard is `undefined` — on Express, Fastify and h3 alike. A role check that reads the user has to **be** a contributor that `dependsOn` the one loading it, and reject from there. See [Context Decorators](./context-decorators.md#ordering-with-dependson).
+
+The same order is documented from the middleware side in [Middleware → Execution order](./middleware.md#execution-order).
+:::
 
 ## See Also
 
