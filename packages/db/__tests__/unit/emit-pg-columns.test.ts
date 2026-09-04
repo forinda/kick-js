@@ -129,3 +129,71 @@ describe('emitPg() — column changes', () => {
     )
   })
 })
+
+describe('emitPg() — defaults are rendered from the column type (#646)', () => {
+  const col = (type: string, def: string) => ({
+    name: 'status',
+    type,
+    nullable: false,
+    default: def,
+    primaryKey: false,
+  })
+
+  const addColumn = (type: string, def: string): ChangeSet => [
+    { kind: 'addColumn', table: 'users', column: col(type, def) },
+  ]
+
+  it('quotes an uppercase word on a varchar instead of emitting bare SQL', () => {
+    // `DEFAULT ACTIVE` is a syntax error. The value's shape says "SQL keyword";
+    // only the column type says otherwise.
+    expect(emitPg(addColumn('varchar(20)', 'ACTIVE'))).toContain("DEFAULT 'ACTIVE'")
+  })
+
+  it('quotes a digits-only text default', () => {
+    expect(emitPg(addColumn('text', '0800'))).toContain("DEFAULT '0800'")
+  })
+
+  it('quotes a text default that reads as a boolean', () => {
+    expect(emitPg(addColumn('text', 'true'))).toContain("DEFAULT 'true'")
+  })
+
+  it('quotes a text default that reads as a function call', () => {
+    expect(emitPg(addColumn('varchar(40)', 'now()'))).toContain("DEFAULT 'now()'")
+  })
+
+  it('quotes a jsonb default rather than reading the braces as SQL', () => {
+    expect(emitPg(addColumn('jsonb', '{}'))).toContain("DEFAULT '{}'")
+  })
+
+  it('decides an array by its element type', () => {
+    expect(emitPg(addColumn('text[]', '{}'))).toContain("DEFAULT '{}'")
+  })
+
+  it('still passes expression defaults through on the types that have them', () => {
+    expect(emitPg(addColumn('timestamptz', 'CURRENT_TIMESTAMP'))).toContain(
+      'DEFAULT CURRENT_TIMESTAMP',
+    )
+    expect(emitPg(addColumn('uuid', 'gen_random_uuid()'))).toContain('DEFAULT gen_random_uuid()')
+    expect(emitPg(addColumn('integer', '0'))).toContain('DEFAULT 0')
+    expect(emitPg(addColumn('boolean', 'false'))).toContain('DEFAULT false')
+  })
+
+  it('passes a value that already carries a cast straight through', () => {
+    // The enum recreate path composes `'active'::"status"` itself.
+    expect(emitPg(addColumn('status', `'active'::"status"`))).toContain(
+      'DEFAULT \'active\'::"status"',
+    )
+  })
+
+  it('applies the same rule to ALTER COLUMN SET DEFAULT', () => {
+    const cs: ChangeSet = [
+      {
+        kind: 'alterColumn',
+        table: 'users',
+        before: { ...col('varchar(20)', 'DRAFT'), default: null },
+        after: col('varchar(20)', 'DRAFT'),
+      },
+    ]
+    expect(emitPg(cs)).toContain("SET DEFAULT 'DRAFT'")
+  })
+})

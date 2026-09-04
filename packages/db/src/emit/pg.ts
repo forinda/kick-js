@@ -273,7 +273,7 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
     stmts.push(
       after.default === null
         ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default)};`,
+        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default, after.type)};`,
     )
   }
   const emitNullable = () => {
@@ -336,17 +336,51 @@ function bareName(qualified: string): string {
 function emitColumnDecl(c: ColumnSnapshot): string {
   let s = `${quoteIdent(c.name)} ${c.type}`
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default)}`
+  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type)}`
   return s
 }
 
-function formatDefault(value: unknown): string {
+/**
+ * Types whose default is always a literal, never an expression.
+ *
+ * The DSL's expression defaults belong to other types — `defaultNow()` is on
+ * the temporal builders, `defaultRandom()` on uuid — so for a text-shaped
+ * column there is nothing to pass through bare, and every value is text the
+ * author typed.
+ *
+ * Arrays are decided by their element type, so `text[]` lands here too and its
+ * `{}` default is quoted rather than read as SQL.
+ */
+function isTextLike(type: string): boolean {
+  const base = type.endsWith('[]') ? type.slice(0, -2) : type
+  return /^(text|varchar|char|bpchar|citext|json|jsonb)\b/i.test(base)
+}
+
+/**
+ * Render a column default as SQL.
+ *
+ * The column's type decides how, because the value's own shape cannot. A
+ * default of `ACTIVE` on a varchar column looks exactly like a SQL keyword,
+ * and emitting it bare produced `DEFAULT ACTIVE` — invalid SQL (#646). The
+ * same applies to a status column defaulting to `PENDING`, and to any text
+ * default that reads as a number (`0800`) or a boolean (`true`).
+ *
+ * This is not hypothetical for round-trips: `kick db introspect` strips the
+ * quotes and the cast off `'ACTIVE'::text`, so the snapshot legitimately holds
+ * the bare word and only the type says how to put it back.
+ */
+function formatDefault(value: unknown, type?: string): string {
   // Defensive: a snapshot authored before defaults were normalised to
   // strings (or hand-edited) may carry a raw boolean/number. Coerce so
   // `quoteLiteral` (String.prototype.replace) never sees a non-string.
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value)
+  // A value already carrying an explicit cast is SQL the caller composed —
+  // `'active'::"status"` from the enum recreate path — and is passed through
+  // whatever the column type is.
+  if (/::/.test(str)) return str
+  if (type !== undefined && isTextLike(type)) return quoteLiteral(str)
   // SQL keywords pass through bare.
   if (/^[A-Z_]+$/.test(str)) return str // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
   // SQL function calls pass through bare: NOW(), gen_random_uuid(), etc.
