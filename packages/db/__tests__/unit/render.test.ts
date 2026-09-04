@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { renderSchemaSource } from '@forinda/kickjs-db'
-import type { SchemaSnapshot } from '@forinda/kickjs-db'
+import type { FkAction, SchemaSnapshot } from '@forinda/kickjs-db'
 
 describe('renderSchemaSource()', () => {
   it('renders a simple two-table schema with FK + indexes', () => {
@@ -146,7 +146,7 @@ describe('renderSchemaSource()', () => {
 })
 
 describe('renderSchemaSource() — foreign keys (#643)', () => {
-  const twoTables = (fkName: string, onDelete = 'no_action' as const): SchemaSnapshot => ({
+  const twoTables = (fkName: string, onDelete: FkAction = 'no_action'): SchemaSnapshot => ({
     version: 1,
     dialect: 'postgres',
     tables: {
