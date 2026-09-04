@@ -608,16 +608,17 @@ export class Application {
 
   /**
    * Full setup pipeline:
-   * 1. Adapter beforeMount hooks (early routes — docs, health)
+   * 1. Adapter beforeMount hooks (early routes — e.g. docs UI)
    * 2. Adapter middleware (phase: beforeGlobal)
    * 3. Global middleware (user-declared or defaults)
    * 4. Adapter middleware (phase: afterGlobal)
-   * 5. Module registration + DI bootstrap
+   * 5. Module registration + DI bootstrap (the built-in health module mounts
+   *    here with everything else — it is NOT an early route)
    * 6. Adapter middleware (phase: beforeRoutes)
    * 7. Module route mounting
    * 8. Adapter middleware (phase: afterRoutes)
-   * 9. Error handlers (notFound + global)
-   * 10. Adapter beforeStart hooks
+   * 9. Adapter beforeStart hooks
+   * 10. Error handlers (notFound + global)
    */
   /** Build the adapter context object (shared across all hooks) */
   private adapterCtx(server?: any): AdapterContext {

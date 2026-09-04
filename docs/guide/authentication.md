@@ -32,19 +32,40 @@ export const LoadAuthUser = defineHttpContextDecorator.withParams<{
 }>()({
   key: 'user',
   deps: { strategies: AUTH_STRATEGIES },
+  skipWhen: 'auth.public', // ← routes flagged @Public never reach the resolver
   paramDefaults: { on401: 'reject' },
   resolve: async (ctx, { strategies }, params) => {
     /* try strategies in order */
   },
 })
 
-// 4. `@Public` is sugar: LoadAuthUser({ on401: 'allow' }).
-export const Public = LoadAuthUser({ on401: 'allow' })
+// 4. `@Public` is a route flag the contributor skips on. The flag is a fact
+//    about the route; `skipWhen` on the contributor reads it (see below).
+export const Public = defineRouteFlag('auth.public')
 
 // 5. AuthAdapter (defineAdapter) registers the strategy list in DI and
 //    ships LoadAuthUser as a GLOBAL contributor when defaultPolicy is
 //    'protected' — every route requires a user unless marked @Public.
 ```
+
+::: tip Why a flag rather than a permissive twin
+`@Public` used to be `LoadAuthUser({ on401: 'allow' })` — a second instance of the same
+contributor, registered at higher precedence. That works, and still does, but it only composes if
+you own the contributor's key: you cannot exempt a contributor a plugin shipped, and no other
+consumer (CSRF, rate limiting, the OpenAPI spec) can tell the route is public.
+
+A [route flag](./route-flags.md) puts the fact on the route instead, so every consumer reads the
+same declaration:
+
+```ts
+csrfGuard({ exemptWhen: 'csrf.exempt' })
+rateLimitGuard({ max: 60, exemptWhen: 'auth.public' })
+SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+```
+
+Declared on a controller it covers every route below; `@Public.off` on one method opts that
+route back in.
+:::
 
 Usage reads the same as the old package:
 

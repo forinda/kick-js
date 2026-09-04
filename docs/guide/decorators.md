@@ -134,6 +134,47 @@ class TxService {
 
 ## Method & Class Decorators
 
+### Route flags — `defineRouteFlag(name)`
+
+A flag is a decorator you define, recording a fact about the route that other
+things read — auth, CSRF, rate limiting, the OpenAPI spec:
+
+```ts
+import { defineRouteFlag } from '@forinda/kickjs'
+
+export const Public = defineRouteFlag('auth.public')
+export const RateLimit = defineRouteFlag<{ rpm: number }>('rate.limit')
+```
+
+```ts
+@Public // class level — every route below inherits it
+@Controller()
+class WebhooksController {
+  @Get('/health') health(ctx: RequestContext) {}
+
+  @Public.off // this one opts back in
+  @RateLimit({ rpm: 10 }) // flags can carry a value
+  @Post('/admin')
+  admin(ctx: RequestContext) {}
+}
+```
+
+Read them anywhere a route has been matched — a guard, `@Middleware()`, a
+contributor, the handler:
+
+```ts
+if (ctx.route?.flags.has('auth.public')) return next()
+```
+
+`ctx.route` is optional because it is `undefined` before route matching: global
+middleware runs too early to have one. Pre-match middleware that needs flags
+(the connect-style `rateLimit()`) reads them from the boot-built policy table
+instead.
+
+Or let a consumer do the reading: contributors take `skipWhen` / `onlyWhen`, and
+the ctx-style guards take `exemptWhen`. Full surface in
+[Route Flags](./route-flags.md).
+
 ### @Middleware(...handlers)
 
 Attach middleware to a class (all routes) or a specific method. Handlers receive `(ctx: RequestContext, next: () => void)`.
@@ -453,6 +494,7 @@ class TaskController {
 | `@PostConstruct`             | Method               | core    | Post-instantiation hook                             |
 | `@PreDestroy`                | Method               | core    | Teardown hook (request-scope close)                 |
 | `@Middleware`                | Class/Method         | core    | Attach middleware                                   |
+| flags via `defineRouteFlag`  | Class/Method         | core    | Per-route facts read by guards, contributors, docs  |
 | `@FileUpload`                | Method               | core    | Configure file upload                               |
 | `@Autowired`                 | Property / Parameter | core    | Dependency injection — either position works        |
 | `@Value`                     | Property             | core    | Env variable injection                              |

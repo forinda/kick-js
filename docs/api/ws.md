@@ -145,7 +145,7 @@ bootstrap({
 ## Related
 
 - [WebSocket Guide](../guide/websockets.md) — full walkthrough with rooms, auth, heartbeat
-- [WebSocket Example](../examples/ws-api.md) — chat app with notifications
+- [Examples](../examples/) — runnable reference apps, in the examples archive
 - [DevTools `/_debug/ws`](../guide/devtools.md) — live WebSocket metrics
 - [@forinda/kickjs-core](./core.md) — DI container, decorators
 - [@forinda/kickjs-http](./http.md) — HTTP server that WsAdapter attaches to

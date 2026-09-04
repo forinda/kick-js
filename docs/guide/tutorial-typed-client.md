@@ -444,9 +444,9 @@ Decorator-driven frameworks — KickJS, NestJS, Ts.ED, Hono — are increasingly
 
 The frameworks that win the next wave of TypeScript adoption will be the ones that close this loop. tRPC proved the DX is possible. The question is whether decorator-driven frameworks can offer the same safety without requiring developers to abandon their preferred patterns.
 
-KickJS already collects the metadata. It already has `SpaAdapter` for serving frontends. It already has `SwaggerAdapter` for API documentation. A typed client generator would be the third leg of the full-stack stool — turning a backend framework into a full-stack platform.
+KickJS already collects the metadata. It already has `SpaAdapter` for serving frontends. It already has `SwaggerAdapter` for API documentation. A typed client generator was the third leg of the full-stack stool — turning a backend framework into a full-stack platform.
 
-I've filed this as [KICK-018](./framework-filed-issues/KICK-018.md) in the framework issue tracker. If you're building with KickJS and want this feature, add a thumbs up on the GitHub issue.
+**This shipped.** `kick typegen` emits the route map, [`@forinda/kickjs-client`](./typed-client.md) consumes it, and `createRpc(api, kickRpc)` gives the tRPC-style namespace on top. The rest of this article is the argument that led there, kept as written.
 
 ---
 
