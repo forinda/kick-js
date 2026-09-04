@@ -133,6 +133,29 @@ class InternalController {
 }
 ```
 
+### Exempting routes: flags, not path lists
+
+A guard that must let some routes through should read a [route flag](./route-flags.md). `ctx.route` is populated for any `@Middleware()`, because it runs inside the matched route:
+
+```ts
+export async function ipWhitelistGuard(ctx: RequestContext, next: () => void) {
+  if (ctx.route?.flags.has('ops.internal')) return next()
+  // …check as above
+}
+```
+
+The built-in `csrfGuard()` and `rateLimitGuard()` take `exemptWhen`, which accepts a flag name, `'!name'`, a single-polarity list, or a predicate:
+
+```ts
+@Middleware(rateLimitGuard({ max: 60, exemptWhen: 'auth.public' }))
+@Controller()
+export class ApiController {}
+```
+
+Prefer this to a pathname allow-list: a flag is declared on the route and survives an `apiPrefix` or version change that voids `/api/v1/...` strings.
+
+**Global** middleware is the exception — it runs before a route is matched, so it has no `ctx.route`. `rateLimit()` mounted in `bootstrap()` reads flags from the route policy table instead; see [Route Flags → Middleware that runs before routing](./route-flags.md#middleware-that-runs-before-routing).
+
 ### When to Use What
 
 | Mechanism                         | Use when                                                         | Example                                     |
@@ -140,14 +163,15 @@ class InternalController {
 | `@RequireRole('admin')` (yours)   | The user needs a string role                                     | Admin panel access                          |
 | A policy resolved from DI (yours) | The check depends on the specific resource                       | "Can this user edit THIS post?"             |
 | `@Middleware(guard)`              | Logic not tied to roles or resources, or that must short-circuit | IP whitelist, feature flags, API versioning |
+| A [route flag](./route-flags.md)  | Recording a fact about the route that several checks read        | `auth.public` on webhooks and health probes |
 | `rateLimit()`                     | Throttle specific endpoints                                      | Login endpoint, search API                  |
 
 The first two are code you own — see [BYO role checks](#byo-role-checks-requirerole) and [Policies](#policies-bring-your-own-engine-via-di) above. The framework ships the primitives they are built from, not the checks themselves.
 
 **Ordering is yours to set.** There is no built-in auth middleware imposing a precedence any more, so the order is simply the order you register things:
 
-1. Global middleware, in the order given to `bootstrap({ middlewares })`
-2. Context contributors, topologically sorted by `dependsOn` — this is where the user is loaded
+1. Global middleware, in the order given to `bootstrap({ middlewares })` — no `ctx.route` yet
+2. Context contributors, topologically sorted by `dependsOn` — this is where the user is loaded, and where `skipWhen` lets a route flag opt out of loading one
 3. `@Middleware()` guards, class-level then method-level
 4. The handler
 

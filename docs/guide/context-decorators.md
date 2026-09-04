@@ -400,6 +400,9 @@ A `defineContextDecorator(...)` call returns a function that works as both a dec
 
 Same-precedence collisions on the same key throw `DuplicateContributorError` at boot. Cross-level collisions are silent overrides — the higher-precedence contributor wins.
 
+To exempt one route from a contributor registered above it — including one you
+don't own — see [`skipWhen` / `onlyWhen`](#skipping-a-contributor-per-route-skipwhen-onlywhen) below.
+
 ```ts
 // Method-level
 class C {
@@ -442,6 +445,73 @@ bootstrap({
 ```
 
 The `.registration` property on the returned function is the immutable `ContributorRegistration` the runner consumes. Decorator usage hides this; non-decorator usage exposes it.
+
+## Skipping a contributor per route: `skipWhen` / `onlyWhen`
+
+Precedence answers "which contributor wins for this key". It does not answer
+"don't run this one here at all" — and overriding a key you don't own is not an
+option when a plugin or adapter registered it.
+
+That is what [route flags](./route-flags.md) are for. A flag is a named fact
+declared on the route; a contributor states the flag condition under which it
+steps aside:
+
+```ts
+const LoadAuthUser = defineHttpContextDecorator({
+  key: 'user',
+  skipWhen: 'auth.public', // don't run on routes carrying this flag
+  resolve: (ctx) => verify(ctx.headers.authorization),
+})
+```
+
+```ts
+const Public = defineRouteFlag('auth.public')
+
+@Public // the whole controller opts out
+@Controller()
+export class WebhooksController {
+  @Get('/stripe')
+  stripe(ctx: RequestContext) {} // LoadAuthUser does not run
+
+  @Public.off // this one opts back in
+  @Post('/admin')
+  admin(ctx: RequestContext) {} // LoadAuthUser runs
+}
+```
+
+`onlyWhen` is the inverse — run **only** where the flag is present.
+
+This is what makes exemption composable across ownership. Without it, the only
+way to opt out of a contributor is to register a permissive twin under the same
+key, which requires owning that key. A flag lives on the route, so the app can
+exempt a contributor an adapter shipped without touching it.
+
+### What the condition accepts
+
+`skipWhen` and `onlyWhen` take the same `RouteFlagTest` every flag consumer does:
+
+| Form                              | Means                 |
+| --------------------------------- | --------------------- |
+| `'auth.public'`                   | carries this flag     |
+| `'!auth.public'`                  | does **not** carry it |
+| `['auth.public', 'health.probe']` | carries any of these  |
+| `['!a', '!b']`                    | carries none of these |
+| `({ flags, route }) => boolean`   | anything else         |
+
+A list is single-polarity — `['a', '!b']` is a compile error, because "any-of"
+would read it as "a present **or** b absent" while most readers expect "and". Use
+a predicate to say it unambiguously. Keep predicates cheap: they run per request,
+per contributor.
+
+Flags are resolved from the route's method, class and mount declarations before
+the pipeline runs, so a skipped contributor costs a map lookup, not a resolve.
+
+### Skipping and `ctx.require()`
+
+A skipped contributor sets no key, so `ctx.require('user')` throws on a route
+where it was skipped. That is the intended pairing: use `ctx.get('user')` on
+routes that can be public, and `ctx.require('user')` only where the flag
+guarantees the contributor ran.
 
 ## How values flow: instances, ALS, and what survives
 

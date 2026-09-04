@@ -122,6 +122,23 @@ export class AdminController { ... }
 
 **Reach for a contributor instead when the job is to produce a value** rather than to reject — see below.
 
+### Exempting routes with flags
+
+A guard that has to let some routes through should read a [route flag](./route-flags.md), not a list of pathnames. `ctx.route` is available to any `@Middleware()`, because it runs inside the matched route:
+
+```ts
+export async function adminGuard(ctx: RequestContext, next: () => void): Promise<void> {
+  if (ctx.route?.flags.has('auth.public')) return next()
+  if (!ctx.headers.authorization) {
+    ctx.problem.unauthorized({ detail: 'Missing or invalid authorization header' })
+    return
+  }
+  next()
+}
+```
+
+`ctx.route` also carries `method`, `path`, `controller` and `handlerName`. The built-in `csrfGuard()` and `rateLimitGuard()` take an `exemptWhen` option that accepts the same flag tests — a name, `'!name'`, a single-polarity list, or a predicate.
+
 ## Middleware vs context decorators
 
 KickJS has two ways to "do something before the handler runs". Picking the right one matters for type safety, ordering, and reusability.
@@ -132,6 +149,7 @@ KickJS has two ways to "do something before the handler runs". Picking the right
 | Short-circuit the response                  | Yes (`return ctx.notFound()`)  | Not the right tool                            |
 | Mutate the response stream                  | Yes (compression, etc.)        | No                                            |
 | Run before route matching                   | Yes (global middleware)        | No (per-route only)                           |
+| Read `ctx.route.flags`                      | Yes — unless mounted globally  | Yes, plus `skipWhen` / `onlyWhen`             |
 | Declare ordering against another middleware | Manual array position          | `dependsOn: ['otherKey']` enforced at startup |
 | Reusable across plugins/adapters            | Pass closures around           | Built-in `contributors?()` hook               |
 | Errors abort boot if misconfigured          | No (silent until requests hit) | Yes (cycles/missing deps fail `app.setup()`)  |
