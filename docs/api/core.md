@@ -222,7 +222,16 @@ interface ModuleRoutes {
   version?: number | false
   /** `false` drops `apiPrefix` — for probes, fixed webhook URLs, `/.well-known`. Pair with `version: false` to mount at `path` exactly. */
   prefix?: false
+  /** [Route flags](#route-flags) applied to every route this mount produces. Lowest precedence: method > class > mount. */
+  flags?: readonly RouteFlagName[] | RouteFlagRecord
 }
+```
+
+`flags` is the **module registration site** — the only way to flag routes on a
+controller you do not own, since a decorator has to be written on the class:
+
+```ts
+routes: () => ({ path: '/webhooks', controller: WebhooksController, flags: ['auth.public'] })
 ```
 
 ## AppAdapter
@@ -509,6 +518,134 @@ type MetaValue<K extends string, Fallback = unknown> = K extends keyof ContextMe
 ```
 
 `RequestContext` (HTTP) implements `ExecutionContext`. Future `WsContext` / `QueueContext` / `CronContext` (V2) will too.
+
+## Route Flags
+
+A named, inheritable fact about a route — `this endpoint is public`, `this one is
+unmetered`. The core carries the fact; consumers decide what it means. Full guide
+at [Route Flags](../guide/route-flags.md); this section is the reference.
+
+The framework declares **no flag names**. Every name below is one an app chose.
+
+### defineRouteFlag
+
+```typescript
+function defineRouteFlag<const N extends RouteFlagName>(name: N): RouteFlag<RouteFlagValue<N, true>>
+function defineRouteFlag<V>(name: RouteFlagName): RouteFlag<V>
+```
+
+```ts
+const Public = defineRouteFlag('auth.public') // bare: @Public
+const Limit = defineRouteFlag<{ rpm: number }>('rate.limit') // valued: @Limit({ rpm: 10 })
+```
+
+Applicable to a class (every route below inherits it) or a method. `Flag.off`
+removes an inherited one; `Flag.flagName` is the string. A name starting with
+`!` throws — that prefix is reserved for negated tests.
+
+### Declaration sites and precedence
+
+| Site   | How                                            | Precedence |
+| ------ | ---------------------------------------------- | ---------- |
+| Method | `@Public` / `@Limit({ rpm: 10 })` on a handler | highest    |
+| Class  | `@Public` on the `@Controller()`               | middle     |
+| Mount  | `ModuleRoutes.flags`                           | lowest     |
+
+Resolved at boot, so the per-request cost is a map lookup. A resolved flag is
+present or absent — `@Flag.off` deletes the key rather than storing `false`, so
+`false` stays usable as a real value.
+
+### Reading flags
+
+```typescript
+interface MatchedRoute {
+  readonly method: string
+  readonly path: string
+  readonly controller: string
+  readonly handlerName: string
+  readonly flags: RouteFlags
+}
+
+interface RouteFlags extends ReadonlyMap<string, unknown> {
+  has(name: RouteFlagName): boolean
+  get<K extends RouteFlagName>(name: K): RouteFlagValue<K> | undefined
+}
+```
+
+`ctx.route` is the in-request reader — available to handlers, `@Middleware()`,
+guards and contributors. It is `undefined` in **global** middleware, which runs
+before a route is matched.
+
+```typescript
+function getRouteFlags(controllerClass: object, handlerName: string): RouteFlags
+```
+
+The out-of-request reader, for consumers that see a controller and a method name
+rather than a live request — an adapter's `onRouteMount`, an OpenAPI generator, a
+DevTools listing. It resolves all three sites, so it cannot disagree with
+`ctx.route.flags`.
+
+### Flag tests
+
+Every consumer option that takes a flag condition (`skipWhen`, `onlyWhen`,
+`exemptWhen`) accepts the same type:
+
+```typescript
+type RouteFlagTest =
+  | RouteFlagName // carries this flag
+  | NegatedRouteFlagName // '!name' — does NOT carry it
+  | readonly RouteFlagName[] // any-of
+  | readonly NegatedRouteFlagName[] // none-of
+  | ((ctx: RouteFlagContext) => boolean) // anything else
+```
+
+A list is **single-polarity**: `['a', '!b']` is a compile error, because any-of
+would read it as "a present or b absent" while most readers expect "and". Mixing
+them at runtime throws where the consumer is constructed, not on the first
+request. All-of and value checks go through a predicate.
+
+### Consumers
+
+| Surface                | Option                             |
+| ---------------------- | ---------------------------------- |
+| Context contributors   | `skipWhen` / `onlyWhen`            |
+| `csrfGuard()`          | `exemptWhen`                       |
+| `rateLimitGuard()`     | `exemptWhen`                       |
+| `rateLimit()` (global) | `exemptWhen`, via the policy table |
+| `SwaggerAdapter()`     | `publicFlag`, `securityResolver`   |
+| DevTools               | `GET /_debug/routes` → `flags`     |
+| Health module          | `bootstrap({ health: { flags } })` |
+
+### Pre-match middleware: the policy table
+
+Middleware mounted app-wide runs before routing, so it has no `ctx.route`. The
+flags come to it instead: every mounted route registers its method, path and
+flags in a per-application table.
+
+```typescript
+class RoutePolicyTable {
+  lookup(method: string, pathname: string): RouteFlags
+}
+
+function bindRoutePolicy<T extends object>(handler: T, receive: (t: RoutePolicyTable) => void): T
+```
+
+The Application hands the table to any middleware that declared the slot, once
+routes are mounted. A request matching no route matches no flags and stays
+subject to the middleware — which is why an abuse control belongs here rather
+than in a route-scoped guard.
+
+### Type safety
+
+```typescript
+interface KickRouteFlags {} // augment to narrow every flag name
+```
+
+Empty by default, so flag names are plain `string` and everything compiles. Once
+augmented, `defineRouteFlag`, `has`, `get`, and every consumer option narrow to
+the declared names and value types. `kick typegen` writes the augmentation from
+your `defineRouteFlag()` calls into `.kickjs/types/kick__route-flags.d.ts` — see
+[Typegen](../guide/typegen.md).
 
 ## Logger
 

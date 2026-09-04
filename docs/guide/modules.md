@@ -84,12 +84,36 @@ interface ModuleRoutes {
   controller?: any // Controller class — framework derives the router via buildRoutes(controller)
   router?: any // Express Router — only when you need to hand-build the router
   version?: number | false // API version override (false = no /v{n} segment)
+  prefix?: false // drop apiPrefix — pair with version: false to mount at `path` exactly
+  flags?: readonly RouteFlagName[] | RouteFlagRecord // route flags for every route in this mount
 }
 ```
 
 Either `controller` **or** `router` is required. Pass `controller` for the common case — the framework calls `buildRoutes(controller)` internally to produce the Express Router and uses the same controller for OpenAPI spec generation through `SwaggerAdapter`. Pass `router` directly only when you need to compose multiple controllers under one path or hand-build the router yourself.
 
 Routes mount at `/{apiPrefix}/v{version}{path}`. With the defaults (`apiPrefix: '/api'`, `defaultVersion: 1`), a module returning `path: '/todos'` mounts at `/api/v1/todos`.
+
+### Flagging every route in a mount
+
+`flags` is the module-level declaration site for [route flags](./route-flags.md) — the one place you can flag routes on a controller you don't own, since a decorator has to be written on the class:
+
+```ts
+routes: () => ({
+  path: '/webhooks',
+  controller: WebhooksController,
+  flags: ['auth.public'], // bare flags, each stored as `true`
+})
+```
+
+Use the record form for flags that carry a value:
+
+```ts
+flags: { 'auth.public': true, 'rate.limit': { rpm: 10 } }
+```
+
+Precedence is **method > class > mount**, so a `@Flag` on the controller or handler wins and `@Flag.off` on a method still drops an inherited one. A name starting with `!` throws at boot — a declaration has no negative form; remove the flag instead.
+
+The built-in health module is the framework's own use of this: `bootstrap({ health: { flags: ['auth.public'] } })` puts your flag on both probes, whose controller belongs to the framework.
 
 ## Multiple route sets + versioning
 

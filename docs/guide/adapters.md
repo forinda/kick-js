@@ -122,18 +122,43 @@ one — those methods don't exist, or don't mean the same thing, elsewhere.
 All ten are optional. `kick g adapter <name>` scaffolds every one of them, so
 the generated file doubles as this reference — delete what you don't need.
 
-| Hook                       | Runs when                              | Consumed by                                                |
-| -------------------------- | -------------------------------------- | ---------------------------------------------------------- |
-| `middleware()`             | during setup                           | the pipeline, at the phase each entry names                |
-| `contributors()`           | during setup                           | the [context-contributor](./context-decorators.md) chain   |
-| `beforeMount(ctx)`         | before routes mount                    | you — early routes, docs, static assets                    |
-| `onRouteMount(ctrl, path)` | per controller mounted                 | you — route metadata, spec building                        |
-| `beforeStart(ctx)`         | inside `app.setup()`                   | you — also fires under `createTestApp`                     |
-| `afterStart(ctx)`          | once the server listens                | you — needs a live `server`; **not** under `createTestApp` |
-| `onHealthCheck()`          | on `GET /health/ready`                 | the built-in readiness endpoint                            |
-| `shutdown()`               | real shutdown **and** every HMR reload | the framework, time-boxed and concurrent                   |
-| `introspect()`             | DevTools topology poll                 | the `/_debug` dashboard                                    |
-| `devtoolsTabs()`           | DevTools panel discovery               | the `/_debug` dashboard                                    |
+| Hook                       | Runs when                              | Consumed by                                                          |
+| -------------------------- | -------------------------------------- | -------------------------------------------------------------------- |
+| `middleware()`             | during setup                           | the pipeline, at the phase each entry names                          |
+| `contributors()`           | during setup                           | the [context-contributor](./context-decorators.md) chain             |
+| `beforeMount(ctx)`         | before routes mount                    | you — early routes, docs, static assets                              |
+| `onRouteMount(ctrl, path)` | per controller mounted                 | you — route metadata, spec building, [route flags](./route-flags.md) |
+| `beforeStart(ctx)`         | inside `app.setup()`                   | you — also fires under `createTestApp`                               |
+| `afterStart(ctx)`          | once the server listens                | you — needs a live `server`; **not** under `createTestApp`           |
+| `onHealthCheck()`          | on `GET /health/ready`                 | the built-in readiness endpoint                                      |
+| `shutdown()`               | real shutdown **and** every HMR reload | the framework, time-boxed and concurrent                             |
+| `introspect()`             | DevTools topology poll                 | the `/_debug` dashboard                                              |
+
+### Reading route flags in `onRouteMount`
+
+`onRouteMount` sees a controller class and a mount path, not a live request, so
+`ctx.route` is not available. `getRouteFlags(controllerClass, handlerName)` is
+the out-of-request resolver — it returns the same method-over-class-over-mount
+result the runtime computes, which is how `SwaggerAdapter` marks flagged routes
+public in the spec and how DevTools fills its Flags column:
+
+```ts
+import { getRouteFlags } from '@forinda/kickjs'
+
+onRouteMount(controllerClass, mountPath) {
+  for (const route of getRoutes(controllerClass)) {
+    if (getRouteFlags(controllerClass, route.handlerName).has('auth.public')) {
+      this.publicRoutes.push(`${mountPath}${route.path}`)
+    }
+  }
+}
+```
+
+An adapter can also **consume** flags per request: `contributors()` registrations
+accept `skipWhen` / `onlyWhen`, so a contributor an adapter ships can be exempted
+by an app that never edits the adapter — see
+[Context Decorators](./context-decorators.md#skipping-a-contributor-per-route-skipwhen-onlywhen).
+| `devtoolsTabs()` | DevTools panel discovery | the `/_debug` dashboard |
 
 Two are worth calling out because nothing else surfaces them:
 

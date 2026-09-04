@@ -16,7 +16,47 @@ interface SwaggerAdapterOptions extends SwaggerOptions {
   adapters?: any[] // peer adapters to discover (e.g. WsAdapter)
   disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
 }
+
+interface SwaggerOptions {
+  bearerAuth?: boolean
+  /** Route flag(s) naming a public endpoint — those routes get `security: []`. */
+  publicFlag?: string | readonly string[]
+  /** Full control: return `null` for public, `undefined` to fall through. */
+  securityResolver?: (ctx: { controllerClass: any; handlerName: string }) => any
+  // …title, version, description, servers, tags
+}
 ```
+
+### Marking endpoints public from route flags
+
+`publicFlag` names the [route flag](../guide/route-flags.md) your app already uses
+for open endpoints, so the spec reads the same declaration the runtime does
+instead of a second annotation that can drift from it:
+
+```ts
+SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+SwaggerAdapter({ bearerAuth: true, publicFlag: ['auth.public', 'health.probe'] })
+```
+
+Resolution order per route: `@ApiPublic` → `securityResolver()` → `publicFlag` →
+`bearerAuth`. The name is configuration because the framework names no flags.
+
+For anything richer than a name — a flag's value, two flags combined — use
+`securityResolver` with `getRouteFlags`, which resolves method, class **and**
+mount declarations:
+
+```ts
+import { getRouteFlags } from '@forinda/kickjs'
+
+SwaggerAdapter({
+  bearerAuth: true,
+  securityResolver: ({ controllerClass, handlerName }) =>
+    getRouteFlags(controllerClass, handlerName).has('auth.public') ? null : undefined,
+})
+```
+
+Because mount flags resolve here too, `bootstrap({ health: { flags: ['auth.public'] } })`
+marks both health probes public in the spec with no extra wiring.
 
 Built with `defineAdapter()` — call it as `SwaggerAdapter({ … })` and pass the result to `bootstrap({ adapters: [...] })`. The factory wires `onRouteMount` (route metadata collection) and `beforeMount` (mount the docs UI) internally.
 
