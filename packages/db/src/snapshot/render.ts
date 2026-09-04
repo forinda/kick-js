@@ -49,6 +49,17 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
 function renderTable(table: TableSnapshot, helpers: Set<string>): string {
   const ident = jsIdent(table.name)
   const columns: string[] = []
+
+  // Grouped so a column with more than one foreign key is visible as such.
+  const singleColumnFks = new Map<string, ForeignKeySnapshot[]>()
+  for (const f of table.foreignKeys) {
+    if (f.columns.length !== 1) continue
+    const list = singleColumnFks.get(f.columns[0]) ?? []
+    list.push(f)
+    singleColumnFks.set(f.columns[0], list)
+  }
+  /** The ones actually rendered on a column; everything else is deferred. */
+  const inlined = new Set<ForeignKeySnapshot>()
   for (const col of Object.values(table.columns)) {
     // Match on SHAPE — one column, this column — not on the constraint's name.
     //
@@ -58,7 +69,13 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
     // anything at all. So introspecting a live schema matched nothing and every
     // foreign key fell through to a TODO comment — 1,330 of them on a
     // 242-table schema (#643). The name is preserved separately below.
-    const fk = table.foreignKeys.find((f) => f.columns.length === 1 && f.columns[0] === col.name)
+    // Exactly one, or none: `.references()` says "this column points at X", and a
+    // column carrying two constraints cannot say both. Inlining the first would
+    // make the file look complete while the second lived only in a comment, so
+    // neither is inlined and both are reported below.
+    const candidates = singleColumnFks.get(col.name) ?? []
+    const fk = candidates.length === 1 ? candidates[0] : undefined
+    if (fk) inlined.add(fk)
     const inlineUnique =
       table.indexes.find(
         (i) =>
@@ -74,12 +91,12 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
 
   // Constraints that don't fit on a column chain.
   const explicitIndexes = table.indexes.filter((i) => !isAutoUniqueName(table.name, i))
-  // Only composite keys are left over now: a single-column FK always renders
-  // on its column, whatever it is called.
-  const compositeFks = table.foreignKeys.filter((f) => f.columns.length !== 1)
+  // Whatever did not render on a column: composite keys, which have no
+  // column-level form, and the members of any column carrying more than one.
+  const deferredFks = table.foreignKeys.filter((f) => !inlined.has(f))
 
   const hasThirdArg = explicitIndexes.length > 0
-  const tableArgs: string[] = [`'${table.name}'`, `{\n${columns.join('\n')}\n}`]
+  const tableArgs: string[] = [strLit(table.name), `{\n${columns.join('\n')}\n}`]
 
   if (hasThirdArg) {
     const callbacks = explicitIndexes
@@ -90,12 +107,13 @@ function renderTable(table: TableSnapshot, helpers: Set<string>): string {
 
   let src = `export const ${ident} = table(${tableArgs.join(', ')})`
 
-  // Composite foreign keys have no column-level form in the DSL, so they are
-  // still logged as TODO comments for the adopter to handle. M3 may upgrade
-  // this to emit a separate ALTER snippet.
-  if (compositeFks.length > 0) {
-    src += '\n// TODO: kick db introspect — composite foreign keys not auto-rendered:\n'
-    for (const f of compositeFks) {
+  // Foreign keys with no column-level form in the DSL are logged as TODO
+  // comments for the adopter to handle. M3 may upgrade this to emit a separate
+  // ALTER snippet.
+  if (deferredFks.length > 0) {
+    src +=
+      '\n// TODO: kick db introspect — composite foreign keys, and columns with more than one, not auto-rendered:\n'
+    for (const f of deferredFks) {
       src += `// ${f.name}: (${f.columns.join(', ')}) → ${f.refTable}(${f.refColumns.join(', ')})\n`
     }
   }
@@ -128,7 +146,7 @@ function renderColumn(
     // Carry the real constraint name whenever it isn't the one the DSL would
     // derive, so re-extracting this file reproduces the database rather than
     // proposing a rename of every key.
-    if (fk.name !== `${tableName}_${col.name}_fk`) opts.push(`name: '${fk.name}'`)
+    if (fk.name !== `${tableName}_${col.name}_fk`) opts.push(`name: ${strLit(fk.name)}`)
     const optArg = opts.length > 0 ? `, { ${opts.join(', ')} }` : ''
     chain += `.references(() => ${ref}${optArg})`
   }
@@ -177,13 +195,29 @@ function extractParens(t: string): string {
 function renderIndexCall(idx: IndexSnapshot): string {
   const helper = idx.unique ? 'unique' : 'index'
   const cols = idx.columns.map((c) => `t.${jsIdent(c)}`).join(', ')
-  return `${helper}('${idx.name}').on(${cols})`
+  return `${helper}(${strLit(idx.name)}).on(${cols})`
 }
 
 function isAutoUniqueName(tableName: string, idx: IndexSnapshot): boolean {
   return (
     idx.unique && idx.columns.length === 1 && idx.name === `${tableName}_${idx.columns[0]}_unique`
   )
+}
+
+/**
+ * Render a database-supplied string as a JS literal.
+ *
+ * Table, index and constraint names come from the database, and a quoted
+ * Postgres identifier may legally contain a quote or a backslash —
+ * `"customer'fk"` is a valid constraint name. Interpolating one straight into a
+ * single-quoted literal produced a schema file that did not parse.
+ *
+ * Single quotes are kept for everything that can hold them verbatim, so
+ * ordinary names render exactly as they always have; anything else falls back
+ * to JSON, which escapes quotes, backslashes and line terminators alike.
+ */
+function strLit(value: string): string {
+  return /^[^'\\\r\n\u2028\u2029]*$/.test(value) ? `'${value}'` : JSON.stringify(value)
 }
 
 /** Make a JS-safe identifier from a snake_case column/table name. */

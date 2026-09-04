@@ -83,7 +83,16 @@ const snapshot = (fkName: string): SchemaSnapshot => ({
 describe('render → extract round-trip', () => {
   // Postgres' own default naming, which is what introspecting a real database
   // produces — and what used to match nothing.
-  for (const fkName of ['orders_user_id_fkey', 'fk_orders_user', 'orders_user_id_fk']) {
+  for (const fkName of [
+    'orders_user_id_fkey',
+    'fk_orders_user',
+    'orders_user_id_fk',
+    // A quoted Postgres identifier may legally contain a quote. Rendering it
+    // into a single-quoted literal produced a file that did not parse, so this
+    // case only holds if the emitted source is escaped.
+    "orders_user'id_fkey",
+    'orders_user\\id_fkey',
+  ]) {
     it(`preserves a foreign key named ${fkName}`, () => {
       const original = snapshot(fkName)
       const source = renderSchemaSource(original)

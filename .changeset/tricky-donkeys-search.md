@@ -13,5 +13,9 @@ key fell through to a TODO comment — 1,330 of them on a 242-table schema.
 Foreign keys are now matched on shape (one column, this column) rather than by
 name, and `.references()` takes a `name` option so the real constraint name
 survives the round-trip instead of the next diff proposing a rename of every
-key. Composite keys still render as TODO comments — the column DSL has no form
-for them.
+key. Foreign keys the column DSL cannot express — composite ones, and every key
+on a column that carries more than one — still render as TODO comments.
+
+Database-supplied names (table, index, constraint) are also escaped when
+rendered, so a legal quoted identifier such as `customer'fk` no longer produces
+a schema file that does not parse.
