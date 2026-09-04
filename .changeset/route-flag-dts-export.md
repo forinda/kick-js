@@ -12,7 +12,7 @@ export const Public = defineRouteFlag('auth.public')
 
 failed to emit declarations:
 
-```
+```text
 error TS4023: Exported variable 'Public' has or is using name 'BareRouteFlag'
 from external module ".../dist/route-flag-GzEeUmws" but cannot be named.
 ```
