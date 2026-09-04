@@ -31,7 +31,15 @@
 
 import { describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,7 +50,7 @@ const DTS_ENTRY = join(PKG_ROOT, 'dist', 'index.d.mts')
 
 /** Mirrors what `kick g contributor` emits, including the `export`. */
 const CONSUMER = `
-import { defineContextDecorator } from '@forinda/kickjs'
+import { defineContextDecorator, defineRouteFlag } from '@forinda/kickjs'
 
 export const Tenant = defineContextDecorator({
   key: 'tenant',
@@ -63,6 +71,13 @@ export const Audit = defineContextDecorator.withParams<{ actorId: string }>()({
   key: 'audit',
   resolve: (_ctx, _deps, params) => ({ actor: params.actorId }),
 })
+
+// Route flags are shared across controllers, so \`export const\` in a small
+// module is the documented shape. \`RouteFlag<V>\` is a conditional over two
+// interfaces, and BOTH must be nameable through the entry — issue #641 shipped
+// because only the alias was exported.
+export const Public = defineRouteFlag('auth.public')
+export const RateLimit = defineRouteFlag<{ rpm: number }>('rate.limit')
 `
 
 // The documented \`src/middleware/index.ts\` layout: export the array and let
@@ -82,6 +97,20 @@ describe('a consumer can emit declarations for an exported contributor', () => {
     const dir = mkdtempSync(join(tmpdir(), 'kick-dts-'))
     try {
       writeFileSync(join(dir, 'consumer.ts'), CONSUMER)
+
+      // Install the built package into a real node_modules layout rather than
+      // pointing `paths` at dist/index.d.mts. That distinction is load-bearing:
+      // with `paths`, TypeScript can name a hashed chunk by RELATIVE path
+      // (`import("../dist/route-flag-XXXX")`) and emits happily — so the test
+      // passed against a package whose entry did not re-export the type, while
+      // a real dependant failed. Through node_modules the `exports` map has no
+      // subpath for the chunk, so the entry's re-exports are genuinely the only
+      // way to name anything. That is what consumers get.
+      const installed = join(dir, 'node_modules', '@forinda', 'kickjs')
+      mkdirSync(installed, { recursive: true })
+      cpSync(join(PKG_ROOT, 'dist'), join(installed, 'dist'), { recursive: true })
+      cpSync(join(PKG_ROOT, 'package.json'), join(installed, 'package.json'))
+
       writeFileSync(
         join(dir, 'tsconfig.json'),
         JSON.stringify(
@@ -99,9 +128,6 @@ describe('a consumer can emit declarations for an exported contributor', () => {
               target: 'es2022',
               skipLibCheck: true,
               experimentalDecorators: true,
-              // Resolve by NAME, the way a real dependant does, so the
-              // entry's re-exports are the only path to a type.
-              paths: { '@forinda/kickjs': [DTS_ENTRY] },
             },
             files: ['consumer.ts'],
           },
@@ -131,6 +157,9 @@ describe('a consumer can emit declarations for an exported contributor', () => {
       // Both union branches must be present, or this guard only covers one.
       expect(declaration).toContain('ContextDecoratorWithDefaults')
       expect(declaration).toContain('ContextDecoratorRequiringParams')
+      // Both branches of the RouteFlag conditional (issue #641).
+      expect(declaration).toContain('BareRouteFlag')
+      expect(declaration).toContain('ValuedRouteFlag')
 
       // Assert on TS4023 specifically rather than a clean exit: unrelated
       // config noise in a throwaway project should not fail this, but a
