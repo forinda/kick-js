@@ -359,3 +359,47 @@ describe('renderSchemaSource() — names that are not safe in a literal', () => 
     expect(renderSchemaSource(named({ fk: 'plain_fkey' }))).toContain("name: 'plain_fkey'")
   })
 })
+
+describe('renderSchemaSource() — array columns (#648)', () => {
+  const withColumn = (type: string, nullable = false): SchemaSnapshot => ({
+    version: 1,
+    dialect: 'postgres',
+    tables: {
+      docs: {
+        name: 'docs',
+        columns: {
+          id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+          value: { name: 'value', type, nullable, default: null, primaryKey: false },
+        },
+        indexes: [],
+        foreignKeys: [],
+        checks: [],
+      },
+    },
+  })
+
+  it('renders the element helper plus .array() instead of a TODO', () => {
+    const src = renderSchemaSource(withColumn('integer[]'))
+    expect(src).toContain('value: integer().array().notNull()')
+    expect(src).not.toContain('TODO')
+  })
+
+  it('imports the element helper, not text', () => {
+    const src = renderSchemaSource(withColumn('text[]'))
+    expect(src.split('\n')[0]).toContain('text')
+    expect(src).toContain('value: text().array().notNull()')
+  })
+
+  it('keeps parameterised element types', () => {
+    expect(renderSchemaSource(withColumn('varchar(255)[]'))).toContain('varchar(255).array()')
+  })
+
+  it('puts .array() before the nullability chain', () => {
+    expect(renderSchemaSource(withColumn('integer[]', true))).toContain('value: integer().array(),')
+  })
+
+  it('keeps array-ness even when the element type is unmapped', () => {
+    const src = renderSchemaSource(withColumn('citext[]'))
+    expect(src).toContain('text(/* TODO: citext */).array()')
+  })
+})
