@@ -190,6 +190,7 @@ describe('emitPg() — defaults are rendered from the column type (#646)', () =>
       {
         kind: 'alterColumn',
         table: 'users',
+        column: 'status',
         before: { ...col('varchar(20)', 'DRAFT'), default: null },
         after: col('varchar(20)', 'DRAFT'),
       },
