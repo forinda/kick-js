@@ -1,5 +1,22 @@
 # @forinda/kickjs-swagger
 
+## 7.2.1
+
+### Patch Changes
+
+- [#656](https://github.com/forinda/kick-js/pull/656) [`40bc8e3`](https://github.com/forinda/kick-js/commit/40bc8e3bcd2f46127bc9f8118c613b99dd437506) Thanks [@forinda](https://github.com/forinda)! - Fix public routes still requiring auth in the spec when `bearerAuth: true` is set.
+  
+  `bearerAuth: true` installs a security requirement at the **root** of the
+  OpenAPI document, and OpenAPI applies a root requirement to every operation
+  that does not override it. `@ApiPublic`, a `securityResolver` returning `null`,
+  and `publicFlag` all emitted no `security` key on the operation — which means
+  "inherit the root requirement", so the spec documented those routes as needing
+  a bearer token anyway.
+  
+  They now emit `security: []`, the only spelling OpenAPI has for an open
+  operation. Specs built without a global requirement are unchanged: an empty
+  array there would be noise, so `security` stays unset.
+
 ## 7.2.0
 
 ### Minor Changes
