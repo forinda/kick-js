@@ -105,10 +105,12 @@ function renderColumn(
   fk: ForeignKeySnapshot | undefined,
   inlineUnique: boolean,
 ): string {
-  const { helperName, args } = pickColumnHelper(col)
+  const { helperName, args, isArray } = pickColumnHelper(col)
   helpers.add(helperName)
 
-  let chain = `${helperName}(${args})`
+  // `.array()` goes first in the chain: it rewrites the column's type, and
+  // reads as part of the type rather than as a constraint on it.
+  let chain = `${helperName}(${args})${isArray ? '.array()' : ''}`
   if (col.primaryKey) chain += '.primaryKey()'
   if (!col.primaryKey && !col.nullable) chain += '.notNull()'
   if (col.default !== null) chain += `.default(${JSON.stringify(col.default)})`
@@ -121,38 +123,47 @@ function renderColumn(
   return chain
 }
 
-function pickColumnHelper(col: ColumnSnapshot): { helperName: string; args: string } {
-  // Strip array suffix; render as base type + .array() chain in renderColumn
-  // (M2 — for now arrays land as a literal `<T>[]` type which the DSL doesn't
-  // round-trip). For M1, just pick the closest helper.
-  const t = col.type
+function pickColumnHelper(col: ColumnSnapshot): {
+  helperName: string
+  args: string
+  isArray: boolean
+} {
+  // An array type is its element type plus `.array()`. Introspect already
+  // reports `integer[]`, but every such column used to miss every branch below
+  // and land on the `text(/* TODO */)` fallback, losing the element type and
+  // the array-ness together (#648).
+  const isArray = col.type.endsWith('[]')
+  const t = isArray ? col.type.slice(0, -2) : col.type
 
-  if (t === 'serial') return { helperName: 'serial', args: '' }
-  if (t === 'bigserial') return { helperName: 'bigSerial', args: '' }
-  if (t === 'smallserial') return { helperName: 'serial', args: '' }
-  if (t === 'integer') return { helperName: 'integer', args: '' }
-  if (t === 'bigint') return { helperName: 'bigint', args: '' }
-  if (t === 'smallint') return { helperName: 'smallint', args: '' }
-  if (t === 'real') return { helperName: 'real', args: '' }
-  if (t === 'double precision') return { helperName: 'doublePrecision', args: '' }
-  if (/^numeric(\(.+\))?$/.test(t)) return { helperName: 'numeric', args: extractParens(t) }
-  if (/^varchar(\(\d+\))?$/.test(t)) return { helperName: 'varchar', args: extractParens(t) }
-  if (/^char(\(\d+\))?$/.test(t)) return { helperName: 'char', args: extractParens(t) }
-  if (t === 'text') return { helperName: 'text', args: '' }
-  if (t === 'boolean') return { helperName: 'boolean', args: '' }
-  if (t === 'timestamp') return { helperName: 'timestamp', args: '' }
-  if (t === 'timestamptz') return { helperName: 'timestamptz', args: '' }
-  if (t === 'date') return { helperName: 'date', args: '' }
-  if (t === 'time') return { helperName: 'time', args: '' }
-  if (t === 'interval') return { helperName: 'interval', args: '' }
-  if (t === 'uuid') return { helperName: 'uuid', args: '' }
-  if (t === 'jsonb') return { helperName: 'jsonb', args: '' }
-  if (t === 'json') return { helperName: 'json', args: '' }
-  if (t === 'bytea') return { helperName: 'bytea', args: '' }
+  if (t === 'serial') return { helperName: 'serial', args: '', isArray }
+  if (t === 'bigserial') return { helperName: 'bigSerial', args: '', isArray }
+  if (t === 'smallserial') return { helperName: 'serial', args: '', isArray }
+  if (t === 'integer') return { helperName: 'integer', args: '', isArray }
+  if (t === 'bigint') return { helperName: 'bigint', args: '', isArray }
+  if (t === 'smallint') return { helperName: 'smallint', args: '', isArray }
+  if (t === 'real') return { helperName: 'real', args: '', isArray }
+  if (t === 'double precision') return { helperName: 'doublePrecision', args: '', isArray }
+  if (/^numeric(\(.+\))?$/.test(t))
+    return { helperName: 'numeric', args: extractParens(t), isArray }
+  if (/^varchar(\(\d+\))?$/.test(t))
+    return { helperName: 'varchar', args: extractParens(t), isArray }
+  if (/^char(\(\d+\))?$/.test(t)) return { helperName: 'char', args: extractParens(t), isArray }
+  if (t === 'text') return { helperName: 'text', args: '', isArray }
+  if (t === 'boolean') return { helperName: 'boolean', args: '', isArray }
+  if (t === 'timestamp') return { helperName: 'timestamp', args: '', isArray }
+  if (t === 'timestamptz') return { helperName: 'timestamptz', args: '', isArray }
+  if (t === 'date') return { helperName: 'date', args: '', isArray }
+  if (t === 'time') return { helperName: 'time', args: '', isArray }
+  if (t === 'interval') return { helperName: 'interval', args: '', isArray }
+  if (t === 'uuid') return { helperName: 'uuid', args: '', isArray }
+  if (t === 'jsonb') return { helperName: 'jsonb', args: '', isArray }
+  if (t === 'json') return { helperName: 'json', args: '', isArray }
+  if (t === 'bytea') return { helperName: 'bytea', args: '', isArray }
 
   // Fallback: emit as a comment + placeholder text() so the file still
-  // parses. Adopter edits to the right helper.
-  return { helperName: 'text', args: `/* TODO: ${t} */` }
+  // parses. Adopter edits to the right helper. `isArray` still rides along, so
+  // an array of an unmapped element type keeps at least its array-ness.
+  return { helperName: 'text', args: `/* TODO: ${t} */`, isArray }
 }
 
 function extractParens(t: string): string {
