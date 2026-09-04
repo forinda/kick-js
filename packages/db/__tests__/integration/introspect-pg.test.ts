@@ -142,6 +142,56 @@ describe('enum types against a real database (#644)', () => {
 })
 
 describe('emitPg() defaults execute against a real database (#646)', () => {
+  it('creates an enum column whose label reads as SQL', async () => {
+    // An enum label is always a literal. `ACTIVE` reads as a keyword and `1` as
+    // a number to any value-shaped heuristic, so both used to be emitted bare
+    // and rejected by Postgres.
+    await client.query(`
+      CREATE TYPE "order_status" AS ENUM ('ACTIVE', 'CLOSED');
+      CREATE TYPE "term_order" AS ENUM ('1', '2', '3');
+    `)
+
+    const cs: ChangeSet = [
+      {
+        kind: 'createTable',
+        table: {
+          name: 'orders',
+          columns: {
+            id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+            status: {
+              name: 'status',
+              type: 'order_status',
+              nullable: false,
+              default: 'ACTIVE',
+              primaryKey: false,
+            },
+            term: {
+              name: 'term',
+              type: 'term_order',
+              nullable: false,
+              default: '1',
+              primaryKey: false,
+            },
+          },
+          indexes: [],
+          foreignKeys: [],
+          checks: [],
+        },
+      },
+    ]
+
+    await client.query(emitPg(cs))
+    await client.query(`INSERT INTO "orders" DEFAULT VALUES;`)
+
+    const row = (await client.query(`SELECT * FROM "orders"`)).rows[0]
+    expect({ status: row.status, term: row.term }).toEqual({ status: 'ACTIVE', term: '1' })
+
+    // And the defaults survive the round-trip, so the next diff is empty.
+    const cols = (await introspectPg(client)).tables.orders.columns
+    expect(cols.status.default).toBe('ACTIVE')
+    expect(cols.term.default).toBe('1')
+  })
+
   it('creates a table whose text defaults survive a round-trip', async () => {
     // Every one of these values reads as SQL by shape — a keyword, a number, a
     // boolean, a function call — and every one is text the author typed. The

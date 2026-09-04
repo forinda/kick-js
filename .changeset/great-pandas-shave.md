@@ -14,8 +14,14 @@ This is not hypothetical for round-trips: introspect strips the quotes and cast
 off `'ACTIVE'::text`, so the snapshot legitimately holds the bare word and only
 the column type says how to put it back.
 
-Defaults on text-shaped columns (`text`, `varchar`, `char`, `json`, `jsonb`, and
-arrays of them) are now always quoted; expression defaults still pass through on
-the types that actually have them — `CURRENT_TIMESTAMP` on a timestamp,
-`gen_random_uuid()` on a uuid. A value already carrying an explicit cast
-(`'active'::"status"`, composed by the enum recreate path) is untouched.
+A default is now quoted unless the column's type is one where a bare expression
+is legitimate — the integer family (`nextval(...)`), numeric, boolean, the
+temporal types (`CURRENT_TIMESTAMP`) and uuid (`gen_random_uuid()`). Stating it
+as an allow-list rather than its complement matters, because the complement is
+open-ended: every enum, domain and extension type an adopter declares falls
+outside it. Enum labels are the sharpest case — a label is always a literal, and
+one spelled `ACTIVE` or `1` reads as a keyword or a number to any value-shaped
+heuristic.
+
+A value already carrying an explicit cast (`'active'::"status"`, composed by the
+enum recreate path) is untouched.
