@@ -169,6 +169,8 @@ class InternalController {
 
 Use when the controller is mostly secured but exposes a health-check / login / public-stats endpoint that shouldn't carry the inherited security requirement in the OpenAPI spec.
 
+Under `bearerAuth: true` the operation emits `security: []` rather than omitting the key — see [Resolution order](#resolution-order).
+
 ### @ApiExclude
 
 Hide a controller or method from the spec.
@@ -266,13 +268,30 @@ The resolver runs **after** `@ApiPublic()` (which short-circuits to public) but 
 
 When the spec builder picks security for a route, the first match wins:
 
-1. `@ApiPublic()` on the method → no security emitted.
+1. `@ApiPublic()` on the method → public.
 2. `securityResolver({ controllerClass, handlerName })` returns a value (or `null` for public).
-3. `publicFlag` — the route carries one of the named flags → no security emitted.
+3. `publicFlag` — the route carries one of the named flags → public.
 4. `@ApiSecurity` on the method.
 5. `@ApiBearerAuth` on the method.
 6. `@ApiSecurity` on the class.
 7. `@ApiBearerAuth` on the class.
+
+::: tip What "public" emits
+It depends on whether the spec carries a **global** requirement.
+
+`bearerAuth: true` sets `security` at the root of the document, and OpenAPI
+applies a root requirement to every operation that does not override it — so
+omitting the key there would document the route as _requiring_ a token. A public
+operation therefore emits `security: []`, which is the only way OpenAPI spells
+"this one is open":
+
+```json
+{ "paths": { "/health/live": { "get": { "security": [] } } } }
+```
+
+With no global requirement there is nothing to override, so `security` is left
+off entirely rather than adding an empty array to every operation.
+:::
 
 ## Schema-Driven Documentation
 
