@@ -448,7 +448,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick g scaffold <n> <f..> CRUD module from field definitions')
   log('  kick g controller <name>  Standalone controller')
   log('  kick g service <name>     @Service() class')
-  log('  kick g middleware <name>   Express middleware')
+  log('  kick g middleware <name>   Global connect-style middleware')
   log('  kick g guard <name>       Route guard (auth, roles, etc.)')
   log('  kick g adapter <name>     AppAdapter with lifecycle hooks')
   log('  kick g dto <name>         Zod DTO schema')

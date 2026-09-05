@@ -1003,7 +1003,7 @@ plugins: [
 
 **Red flags**:
 - Any \`new SomeAdapter()\` / \`SomePlugin()\` literal inside \`bootstrap({ ... })\` instead of imported from a category folder.
-- Mixing middleware signatures: \`bootstrap({ middlewares })\` is **raw Express** \`(req, res, next)\`; \`@Middleware()\` decorators are \`(ctx, next)\`; adapter middleware is raw Express again. Wrong shape in the wrong slot throws "Cannot read properties of undefined".
+- Mixing middleware signatures: \`bootstrap({ middlewares })\` is **raw Express** \`(req, res, next)\`; \`@Middleware()\` decorators are \`(ctx, next)\`; adapter middleware is connect-style too (mounted through the runtime seam, so it is not Express-only). Wrong shape in the wrong slot throws "Cannot read properties of undefined".
 - \`bootstrap({ register: ... })\` — that option doesn't exist. Use an inline plugin.`,
     },
     {
