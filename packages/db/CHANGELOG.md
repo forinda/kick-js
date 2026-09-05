@@ -1,5 +1,110 @@
 # @forinda/kickjs-db
 
+## 7.3.0
+
+### Minor Changes
+
+- [#660](https://github.com/forinda/kick-js/pull/660) [`0c4124b`](https://github.com/forinda/kick-js/commit/0c4124bd04eebfc04b4407d1abe22158139cbd88) Thanks [@forinda](https://github.com/forinda)! - `kick db introspect` now reads Postgres enum types ([#644](https://github.com/forinda/kick-js/issues/644)).
+  
+  Enum columns were introspected as their type name and then rendered as
+  `text(/* TODO: enum_x */)`, and the types themselves were never read at all — so
+  a schema regenerated from a database with 36 enum types had 37 columns of the
+  wrong type and none of the types. The information was read and discarded.
+  
+  `introspectPg` now returns the enum types in `SchemaSnapshot.enums`, preserving
+  value order (which for an enum is part of the type — comparisons and `ORDER BY`
+  follow it), and the renderer emits a `pgEnum(...)` declaration per type and
+  calls the factory for each column. `enums` is omitted entirely when the database
+  declares none, so existing snapshots are byte-identical.
+  
+  The `pgEnum` builder and the `CREATE TYPE` emit path already shipped; this
+  connects introspect to them.
+  
+  Also fixes the enum default in the schema guide: `.default('todo')`, not
+  `.default("'todo'")` — the emitter quotes the value, and pre-quoting produced
+  `DEFAULT '''todo'''`.
+
+### Patch Changes
+
+- [#661](https://github.com/forinda/kick-js/pull/661) [`8aa7c69`](https://github.com/forinda/kick-js/commit/8aa7c697270157def4e354497e89a03a2c553870) Thanks [@forinda](https://github.com/forinda)! - Fix `kick db generate` emitting invalid SQL for text-column defaults ([#646](https://github.com/forinda/kick-js/issues/646)).
+  
+  `formatDefault` decided how to render a default from the **value's** shape
+  rather than the **column's** type, so anything that looked like SQL was passed
+  through bare. A `varchar` column defaulting to `ACTIVE` produced
+  `DEFAULT ACTIVE` — a syntax error — and the same applied to a text default that
+  reads as a number (`0800`), a boolean (`true`), or a function call.
+  
+  This is not hypothetical for round-trips: introspect strips the quotes and cast
+  off `'ACTIVE'::text`, so the snapshot legitimately holds the bare word and only
+  the column type says how to put it back.
+  
+  A default is now quoted unless the column's type is one where a bare expression
+  is legitimate — the integer family (`nextval(...)`), numeric, boolean, the
+  temporal types (`CURRENT_TIMESTAMP`) and uuid (`gen_random_uuid()`). Stating it
+  as an allow-list rather than its complement matters, because the complement is
+  open-ended: every enum, domain and extension type an adopter declares falls
+  outside it. Enum labels are the sharpest case — a label is always a literal, and
+  one spelled `ACTIVE` or `1` reads as a keyword or a number to any value-shaped
+  heuristic.
+  
+  A value already carrying an explicit cast (`'active'::"status"`, composed by the
+  enum recreate path) is untouched.
+
+- [#660](https://github.com/forinda/kick-js/pull/660) [`9afaee8`](https://github.com/forinda/kick-js/commit/9afaee889ff30c4dac8e4779d1c94f0f4fe7f9f2) Thanks [@forinda](https://github.com/forinda)! - Fix derived constraint names colliding past Postgres' 63-character limit ([#647](https://github.com/forinda/kick-js/issues/647)).
+  
+  `<table>_<column>_fk` and `<table>_<column>_unique` were emitted at whatever
+  length they came out. Postgres does not reject an over-long identifier — it
+  truncates silently — so two derived names sharing a long prefix became the same
+  name and the migration failed part-way through with `constraint … already
+  exists`, leaving every statement after it unapplied. A 242-table schema had 38
+  names over the limit and two colliding pairs.
+  
+  Derived names that would exceed the limit are now shortened deterministically:
+  truncated, with a short hash of the **full** name inserted before the `_fk` /
+  `_unique` marker, so the result is stable across regenerations and two names
+  that differ anywhere still differ. The limit is counted in bytes and a
+  multi-byte character is never split. Names within the limit are untouched, so
+  existing schemas keep every constraint name they have.
+  
+  `fitIdentifier()` is exported for anyone deriving names on the same rule.
+
+- [#660](https://github.com/forinda/kick-js/pull/660) [`8426228`](https://github.com/forinda/kick-js/commit/8426228e7efb2b250d0899b4c8ac54aa491760dc) Thanks [@forinda](https://github.com/forinda)! - Fix two ways `kick db introspect` changed a column's meaning.
+  
+  **A column defaulting off a standalone sequence was rendered `serial()` ([#649](https://github.com/forinda/kick-js/issues/649)).**
+  Detection keyed on the `nextval(...)` default alone, so an ordinary integer
+  whose default came from a separately declared sequence was reported as a serial.
+  That dropped the sequence link (a serial's default is collapsed to null) and,
+  for a nullable column, silently made it NOT NULL. A column is now a serial only
+  if it OWNS the sequence its default actually draws from, and is NOT NULL — a serial
+  whose NOT NULL has been dropped comes back as a plain integer keeping its
+  default, since re-imposing the constraint would reject the rows that caused it
+  to be dropped.
+  
+  **Array columns lost their element type ([#648](https://github.com/forinda/kick-js/issues/648)).** Two causes: introspect
+  reported PG's internal element name (`int4[]`, `bool[]`, `bpchar[]`) rather than
+  the DSL's, and the renderer had no array branch at all, so every array fell
+  through to `text(/* TODO */)`. Element names are now mapped to the DSL surface
+  and arrays render as the element helper plus `.array()`. An unmapped element
+  type still keeps its array-ness.
+
+- [#659](https://github.com/forinda/kick-js/pull/659) [`c0b3760`](https://github.com/forinda/kick-js/commit/c0b3760b62c3f661d0ea7f7f07cc4b296e973f1b) Thanks [@forinda](https://github.com/forinda)! - Fix `kick db introspect` dropping every foreign key from a real database ([#643](https://github.com/forinda/kick-js/issues/643)).
+  
+  The renderer inlined a foreign key onto its column only when the constraint's
+  name matched `<table>_<column>_fk` — the name this DSL derives. A database names
+  its own constraints: Postgres' default is `<table>_<column>_fkey`, and a DBA may
+  have chosen anything. So introspecting a live schema matched nothing and every
+  key fell through to a TODO comment — 1,330 of them on a 242-table schema.
+  
+  Foreign keys are now matched on shape (one column, this column) rather than by
+  name, and `.references()` takes a `name` option so the real constraint name
+  survives the round-trip instead of the next diff proposing a rename of every
+  key. Foreign keys the column DSL cannot express — composite ones, and every key
+  on a column that carries more than one — still render as TODO comments.
+  
+  Database-supplied names (table, index, constraint) are also escaped when
+  rendered, so a legal quoted identifier such as `customer'fk` no longer produces
+  a schema file that does not parse.
+
 ## 7.2.1
 
 ### Patch Changes
