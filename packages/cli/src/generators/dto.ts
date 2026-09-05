@@ -2,7 +2,8 @@ import { join } from 'node:path'
 import { writeFileSafe } from '../utils/fs'
 import { toPascalCase, toKebabCase, toCamelCase } from '../utils/naming'
 import { resolveOutDir } from '../utils/resolve-out-dir'
-import type { ProjectPattern } from '../config'
+import { SCHEMA_SHAPES, objectSchema } from './templates/dtos'
+import type { ProjectPattern, SchemaLib } from '../config'
 
 interface GenerateDtoOptions {
   name: string
@@ -11,6 +12,13 @@ interface GenerateDtoOptions {
   modulesDir?: string
   pattern?: ProjectPattern
   pluralize?: boolean
+  /**
+   * Validation library to write the schema against. Defaults to `'zod'`.
+   * The command resolves it from the project's dependencies — a scaffold
+   * created with `--schema valibot` never installs zod, so emitting a zod
+   * import there produces a file that cannot resolve.
+   */
+  schemaLib?: SchemaLib
 }
 
 export async function generateDto(options: GenerateDtoOptions): Promise<string[]> {
@@ -27,19 +35,18 @@ export async function generateDto(options: GenerateDtoOptions): Promise<string[]
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
   const camel = toCamelCase(name)
+  const lib = options.schemaLib ?? 'zod'
+  const shape = SCHEMA_SHAPES[lib]
   const files: string[] = []
 
   const filePath = join(outDir, `${kebab}.dto.ts`)
   await writeFileSafe(
     filePath,
-    `import { z } from 'zod'
+    `${shape.import}
 
-export const ${camel}Schema = z.object({
-  // Define your schema fields here
-  name: z.string().min(1).max(200),
-})
+export const ${camel}Schema = ${objectSchema(lib, `// Define your schema fields here\n  name: ${shape.required}`)}
 
-export type ${pascal}DTO = z.infer<typeof ${camel}Schema>
+export type ${pascal}DTO = ${shape.infer(`${camel}Schema`)}
 `,
   )
   files.push(filePath)

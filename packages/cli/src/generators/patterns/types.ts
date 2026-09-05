@@ -1,3 +1,4 @@
+import type { SchemaLib } from '../../config'
 import type { RepoType } from '../module'
 import type { ModuleStyle } from '../templates/types'
 
@@ -27,6 +28,8 @@ export interface ModuleContext {
   files: string[]
   /** Project depends on @forinda/kickjs-swagger — gates @ApiTags. */
   swagger?: boolean
+  /** Validation library the emitted DTO schemas import. Default `'zod'`. */
+  schemaLib?: SchemaLib
   /** Project has kickjs-testing + supertest — gates the real controller test. */
   testHarness?: boolean
 }

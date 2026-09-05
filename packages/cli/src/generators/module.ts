@@ -5,7 +5,7 @@ import { colors } from '../utils/colors'
 import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
 import { escapeRegex } from '../utils/regex'
 import { readFile, writeFile } from 'node:fs/promises'
-import type { ProjectPattern, RepoTypeConfig } from '../config'
+import type { ProjectPattern, RepoTypeConfig, SchemaLib } from '../config'
 import type { ModuleStyle } from './templates/types'
 import { generateMinimalFiles, generateRestFiles } from './patterns'
 import type { ModuleContext } from './patterns'
@@ -42,6 +42,8 @@ interface GenerateModuleOptions {
   tokenScope?: string
   /** Project depends on @forinda/kickjs-swagger — gates @ApiTags emission. */
   swagger?: boolean
+  /** Validation library the emitted DTO schemas import. Default `'zod'`. */
+  schemaLib?: SchemaLib
   /**
    * Project has `@forinda/kickjs-testing` and `supertest` — gates the
    * generated controller test booting the module for real. Without them the
@@ -110,6 +112,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     noTests: noTests ?? false,
     tokenScope: options.tokenScope ?? 'app',
     swagger: options.swagger ?? false,
+    schemaLib: options.schemaLib ?? 'zod',
     testHarness: options.testHarness ?? false,
     style: options.style ?? 'define',
     write,

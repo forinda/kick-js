@@ -638,6 +638,34 @@ export function hasSwagger(cwd: string): boolean {
   return hasDependency(cwd, '@forinda/kickjs-swagger', 'runtime')
 }
 
+/** Schema library a generated schema file is written against. */
+export type SchemaLib = 'zod' | 'valibot' | 'yup'
+
+/**
+ * Which validation library the project actually depends on, so generated
+ * schema files import something that is installed.
+ *
+ * `kick new --schema valibot|yup` installs exactly one of these — the chosen
+ * library and no other — so an emitted `import { z } from 'zod'` is a file that
+ * cannot resolve. Read from package.json rather than `kick.config.ts` because
+ * the dependency IS the fact; nothing has to be declared twice, and projects
+ * scaffolded before this existed are covered without a config migration.
+ *
+ * Valibot and Yup are checked first: `kick new` installs one deliberately,
+ * whereas `zod` is common enough to appear alongside it for unrelated reasons.
+ * A project that genuinely needs to override the pick can gain a config field
+ * when someone hits that; until then the dependency answers it.
+ *
+ * Runtime scope, same reasoning as {@link hasSwagger}: a DTO schema is
+ * evaluated when the module loads, so a devDependency-only install would break
+ * in production.
+ */
+export function resolveSchemaLib(cwd: string): SchemaLib {
+  if (hasDependency(cwd, 'valibot', 'runtime')) return 'valibot'
+  if (hasDependency(cwd, 'yup', 'runtime')) return 'yup'
+  return 'zod'
+}
+
 export function resolveTokenScope(config: KickConfig | null, cwd: string): string {
   if (config?.tokenScope && typeof config.tokenScope === 'string' && config.tokenScope.length > 0) {
     const sanitised = sanitizeScope(config.tokenScope)
