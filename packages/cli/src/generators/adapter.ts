@@ -97,7 +97,8 @@ export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
        * \`phase\` controls where each handler sits in the pipeline:
        *   'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'.
        *
-       * \`path\` (optional) scopes the entry to a path prefix.
+       * \`path\` (optional) scopes the entry — a string prefix, a RegExp,
+       * or an array mixing both. See \`MiddlewarePath\`.
        *
        * Delete this hook entirely if you don't add middleware.
        */
@@ -129,8 +130,13 @@ export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
        * Delete this hook if you have no early routes.
        */
       beforeMount(_ctx: AdapterContext): void {
-        // Example:
-        // _ctx.app.get('/${kebab}/status', (_req, res) => res.json({ status: 'ok' }))
+        // Example — \`ctx.http\` is the engine-neutral seam, so this route
+        // works under Express, Fastify and h3 alike:
+        // _ctx.http.route('GET', '/${kebab}/status', (ctx) => ctx.json({ status: 'ok' }))
+        //
+        // \`ctx.app\` is the engine-native instance (an Express app only under
+        // the default runtime). Reach for it when what you're wiring is
+        // genuinely engine-specific, and accept the lock-in.
       },
 
       /**

@@ -24,6 +24,7 @@ import { join } from 'node:path'
 
 import { generateGuard } from '../src/generators/guard'
 import { generateMiddleware } from '../src/generators/middleware'
+import { generateAdapter } from '../src/generators/adapter'
 
 const dirs: string[] = []
 function tempDir(): string {
@@ -120,5 +121,19 @@ describe('kick g guard', () => {
     const dir = tempDir()
     await generateGuard({ name: 'adminOnly', outDir: dir })
     expect(readOnly(dir)).toMatch(/ENGINE-NATIVE/)
+  })
+})
+
+describe('kick g adapter', () => {
+  it('shows the engine-neutral http seam, not the Express-native app', async () => {
+    // The template's own middleware() docblock promises the adapter works on
+    // every runtime, so its beforeMount example must not reach for
+    // `ctx.app.get(...)` + `res.json(...)` — both Express-only. `ctx.http` is
+    // the seam the Application builds over whichever runtime is active.
+    const dir = tempDir()
+    await generateAdapter({ name: 'metrics', outDir: dir })
+    const src = readOnly(dir)
+    expect(src).toContain('_ctx.http.route(')
+    expect(codeOf(src)).not.toMatch(/_ctx\.app\.get\(/)
   })
 })
