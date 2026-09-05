@@ -137,8 +137,12 @@ export interface KickPlugin {
   adapters?(): AppAdapter[]
 
   /**
-   * Return Express middleware to be added to the global pipeline.
-   * Plugin middleware runs before user-defined middleware.
+   * Return connect-style handlers — `(req, res, next)` — for the global
+   * pipeline. Each is mounted through the runtime's `useConnect` seam, so
+   * these work on Express, Fastify and h3 alike; only the `req` / `res`
+   * shapes differ per engine. Plugin middleware runs before user-defined
+   * middleware, and carries no `phase` / `path` — use an adapter's
+   * {@link AppAdapter.middleware} for scoped or phased entries.
    */
   middleware?(): any[]
 

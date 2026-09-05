@@ -95,8 +95,12 @@ export interface ${toPascalCase(name)}Options {
  *     }]
  *   }
  *
- * Usage with @Middleware decorator:
- *   @Middleware(${camel}())
+ * NOT for \`@Middleware()\`. That decorator takes a ctx-style handler —
+ * \`(ctx, next)\`, see \`MiddlewareHandler\` — and the runtime calls it with
+ * exactly two arguments. Passing this connect-style factory there binds
+ * \`next\` to the response slot and passes no third argument at all, so the
+ * first \`next()\` throws \`TypeError: next is not a function\`. Generate a
+ * guard instead (\`kick g guard\`) for the per-route, ctx-style shape.
  */
 export function ${camel}(options: ${toPascalCase(name)}Options = {}) {
 ${
