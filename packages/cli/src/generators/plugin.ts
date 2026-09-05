@@ -54,17 +54,26 @@ export interface ${pascal}PluginConfig {
  * A plugin bundles DI bindings, modules, adapters, and middleware
  * into one object that can be added to \`bootstrap({ plugins })\`.
  *
- * Lifecycle order (each hook is optional — delete the ones you don't
- * need and keep only the surface your plugin actually uses):
+ * Call order (each hook is optional — delete the ones you don't need and
+ * keep only the surface your plugin actually uses). This is the order the
+ * hooks are INVOKED in, which is not the order they read in below:
  *
- *   1. \`register(container)\` — runs before user modules load. Use
- *      it to bind services that modules depend on.
- *   2. \`modules()\`            — plugin modules load before user modules.
- *   3. \`adapters()\`           — plugin adapters mount before user adapters.
- *   4. \`middleware()\`         — plugin middleware runs before user middleware.
+ *   1. \`adapters()\`           — read first, while the app is still being
+ *      constructed; the returned adapters mount before user adapters.
+ *   2. \`register(container)\`  — runs before user modules load. Use it to
+ *      bind services that modules depend on.
+ *   3. \`middleware()\`         — mounts BEFORE \`modules()\` is read, so a
+ *      handler here cannot resolve anything a plugin module registers.
+ *   4. \`modules()\` / \`setup(registry)\` — plugin modules load before user
+ *      modules.
  *   5. \`contributors()\`       — Context Contributors merged into every route.
  *   6. \`onReady(container)\`   — runs after the app has fully bootstrapped.
  *   7. \`shutdown()\`           — on shutdown AND every HMR reload.
+ *
+ * \`.async()\` resolves its config inside \`onReady\`, which is past every
+ * contribution point above: only \`register()\`, \`onReady()\` and
+ * \`shutdown()\` still run. Use the bare or \`.scoped()\` form when the plugin
+ * ships modules, adapters, middleware, or contributors.
  *
  * @example
  * \`\`\`ts
@@ -119,8 +128,11 @@ export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
     },
 
     /**
-     * Return Express middleware entries to be added to the global
-     * pipeline. Plugin middleware runs before user-defined middleware.
+     * Return connect-style handlers — \`(req, res, next)\` — for the global
+     * pipeline. Every runtime accepts them: each one is mounted through the
+     * engine's \`useConnect\` seam, so this is NOT Express-only. Plugin
+     * middleware runs before user-defined middleware, and takes no
+     * \`phase\` / \`path\` — use an adapter's \`middleware()\` for those.
      */
     middleware(): unknown[] {
       return [

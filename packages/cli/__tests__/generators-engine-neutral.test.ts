@@ -89,6 +89,19 @@ describe('kick g middleware', () => {
     expect(src).toContain('next: NextFunction')
     expect(src).not.toContain("from 'node:http'")
   })
+
+  it('does not tell the reader to pass the factory to @Middleware()', async () => {
+    // The template emits a connect-style `(req, res, next)` factory, but
+    // `@Middleware()` calls its handler as `(ctx, next)` — two arguments. The
+    // factory's `next` binds to the response slot, its third parameter stays
+    // undefined, and the first `next()` throws `next is not a function`. The
+    // docblock used to recommend exactly that.
+    const dir = tempDir()
+    await generateMiddleware({ name: 'audit', outDir: dir, runtime: 'express' })
+    const src = readOnly(dir)
+    expect(src).not.toMatch(/@Middleware\(\w+\(\)\)/)
+    expect(src).toMatch(/guard/i)
+  })
 })
 
 describe('kick g guard', () => {
