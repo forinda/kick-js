@@ -1,13 +1,10 @@
 type ProjectTemplate = 'rest' | 'minimal'
 
-/**
- * Supported schema libraries — passed through to `fromZod` /
- * `fromValibot` / `fromYup` in the generated env file. `zod` is the
- * default for `--yes` because it has the deepest ecosystem
- * compatibility (OpenAPI generation, Standard Schema brand for
- * `kick typegen`).
- */
-export type SchemaLib = 'zod' | 'valibot' | 'yup'
+// `SchemaLib` is defined next to `resolveSchemaLib` in ../../config, so the
+// scaffold that installs the library and the generators that import from it
+// read the same list. Re-exported here for existing importers.
+export type { SchemaLib } from '../../config'
+import type { SchemaLib } from '../../config'
 
 /** Map of optional package names to their npm package identifiers */
 const PACKAGE_DEPS: Record<string, string> = {
@@ -17,7 +14,14 @@ const PACKAGE_DEPS: Record<string, string> = {
   devtools: '@forinda/kickjs-devtools',
 }
 
-/** Schema-lib runtime dependency ranges. Pinned to a recent release. */
+/**
+ * Schema-lib runtime dependency ranges. Pinned to a recent release.
+ *
+ * Exactly one of these is installed, chosen by `--schema`; `zod` is the `--yes`
+ * default for its ecosystem reach (OpenAPI generation, the Standard Schema
+ * brand `kick typegen` reads). Whichever lands here is what `resolveSchemaLib`
+ * later detects when generating DTO schemas.
+ */
 const SCHEMA_LIB_DEPS: Record<SchemaLib, { name: string; range: string }> = {
   zod: { name: 'zod', range: '^4.3.6' },
   valibot: { name: 'valibot', range: '^1.4.1' },

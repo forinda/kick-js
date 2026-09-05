@@ -451,7 +451,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick g middleware <name>   Global connect-style middleware')
   log('  kick g guard <name>       Route guard (auth, roles, etc.)')
   log('  kick g adapter <name>     AppAdapter with lifecycle hooks')
-  log('  kick g dto <name>         Zod DTO schema')
+  log('  kick g dto <name>         DTO schema (Zod / Valibot / Yup)')
   log('  kick g config             Generate kick.config.ts')
   log('')
   log('Add packages:')

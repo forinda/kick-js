@@ -37,7 +37,7 @@ cd packages/cli && pnpm link --global
 | `kick generate guard <name>`                | `kick g guard`                                 | Generate a route guard                                            |
 | `kick generate service <name>`              | `kick g service`                               | Generate a `@Service()` class                                     |
 | `kick generate controller <name>`           | `kick g controller`                            | Generate a `@Controller()` class with routes                      |
-| `kick generate dto <name>`                  | `kick g dto`                                   | Generate a Zod DTO schema                                         |
+| `kick generate dto <name>`                  | `kick g dto`                                   | Generate a DTO schema for the project's validation library        |
 | `kick generate test <name>`                 | `kick g test`                                  | Generate a Vitest test scaffold                                   |
 | `kick generate config`                      | `kick g config`                                | Generate `kick.config.ts`                                         |
 | `kick generate agents`                      | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `.agents/*` + root `CLAUDE.md` from upstream templates |

@@ -17,7 +17,7 @@ import { generateContributor, type ContributorType } from '../generators/contrib
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
-import { hasDependency, hasSwagger } from '../config'
+import { hasDependency, hasSwagger, resolveSchemaLib } from '../config'
 import { findProjectRoot } from '../utils/project-root'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
@@ -241,6 +241,9 @@ async function runModuleGeneration(
   // so a project that HAS swagger silently generates controllers without it.
   // The extension guide warns generator authors about exactly this trap.
   const swagger = hasSwagger(findProjectRoot())
+  // Same findProjectRoot reasoning: a DTO schema importing a validation library
+  // the project never installed is a file that cannot resolve.
+  const schemaLib = resolveSchemaLib(findProjectRoot())
   // Both are devDependencies — a test harness is not needed in a production
   // install — so this asks for 'any' rather than 'runtime'.
   const projectRoot = findProjectRoot()
@@ -307,6 +310,7 @@ async function runModuleGeneration(
       pluralize: shouldPluralize,
       tokenScope,
       swagger,
+      schemaLib,
       style: mc.style,
     })
     allFiles.push(...files)
@@ -607,7 +611,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
   gen
     .command('dto <name>')
     .description(
-      'Generate a Zod DTO schema\n' +
+      'Generate a DTO schema for the project\u2019s validation library\n' +
         '  Use -m to scope it to a module: kick g dto create-user -m users',
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
@@ -625,6 +629,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         modulesDir,
         pattern: config?.pattern,
         pluralize: mc.pluralize ?? true,
+        schemaLib: resolveSchemaLib(findProjectRoot()),
       })
       printGenerated(files, dryRun)
     })

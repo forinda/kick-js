@@ -7,7 +7,7 @@ Under the hood the validate middleware calls `detectSchema(schema).safeParse(pay
 :::
 
 ::: tip Scaffold one
-`kick g dto <name>` writes a Zod schema plus its inferred type, in the shape the route decorators below expect.
+`kick g dto <name>` writes a schema plus its inferred type, in the shape the route decorators below expect — in whichever of the three libraries the project depends on.
 
 <PmCommand exec="kick g dto create-user" />
 

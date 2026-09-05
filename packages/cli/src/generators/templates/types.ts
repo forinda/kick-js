@@ -1,3 +1,5 @@
+import type { SchemaLib } from '../../config'
+
 /**
  * Module declaration style emitted by the module-index templates.
  *
@@ -58,6 +60,14 @@ export interface TemplateContext {
    * test with every case as `it.todo` and no extra imports.
    */
   testHarness?: boolean
+  /**
+   * Validation library the emitted DTO schemas are written against.
+   * Defaults to `'zod'`. Resolved from the project's dependencies by the
+   * orchestrating generator (`resolveSchemaLib`) — same rule as
+   * {@link TemplateContext.swagger}: importing a package the project does not
+   * install produces a file that cannot compile.
+   */
+  schemaLib?: SchemaLib
   /**
    * Module declaration style emitted for the module-index file.
    * Defaults to `'define'`. Resolved from `kick.config.ts > modules.style`

@@ -493,7 +493,9 @@ Plugins are the canonical place to wire DI bindings, contribute modules or adapt
 
 <PmCommand exec="kick g dto create-user" />
 
-Generates a Zod schema with inferred TypeScript type. Default output: `src/dtos/`.
+Generates a schema with its inferred TypeScript type. Default output: `src/dtos/`.
+
+The schema is written against whichever validation library the project depends on — Zod, Valibot, or Yup — so a scaffold created with `--schema valibot` gets a Valibot schema rather than an import it cannot resolve. Same for the DTOs `kick g module` emits.
 
 ### kick g test
 

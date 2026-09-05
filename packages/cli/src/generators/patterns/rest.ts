@@ -26,6 +26,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
     write,
   } = ctx
   const swagger = ctx.swagger ?? false
+  const schemaLib = ctx.schemaLib ?? 'zod'
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
   await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo, style }))
@@ -43,8 +44,8 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   await write(`${kebab}.service.ts`, generateRestService({ pascal, kebab }))
 
   // DTOs
-  await write(`dtos/create-${kebab}.dto.ts`, generateCreateDTO({ pascal, kebab }))
-  await write(`dtos/update-${kebab}.dto.ts`, generateUpdateDTO({ pascal, kebab }))
+  await write(`dtos/create-${kebab}.dto.ts`, generateCreateDTO({ pascal, kebab, schemaLib }))
+  await write(`dtos/update-${kebab}.dto.ts`, generateUpdateDTO({ pascal, kebab, schemaLib }))
   await write(`dtos/${kebab}-response.dto.ts`, generateResponseDTO({ pascal, kebab }))
 
   // ONE repository file: factory, contract, token. The factory's return type
