@@ -1,5 +1,42 @@
 # @forinda/kickjs-cli
 
+## 8.1.5
+
+### Patch Changes
+
+- [#669](https://github.com/forinda/kick-js/pull/669) [`4b11c13`](https://github.com/forinda/kick-js/commit/4b11c137b969386d56c26ae0276912f5d2177182) Thanks [@forinda](https://github.com/forinda)! - Correct three more generator claims that name Express on engine-neutral surfaces.
+  
+  `kick g adapter`'s `beforeMount` example used `ctx.app.get(…)` with
+  `res.json(…)` — both Express-only — directly below a docblock promising the
+  adapter "works on every runtime". It now uses `ctx.http.route(…)`, the seam the
+  Application builds over whichever runtime is active, and says when reaching for
+  the engine-native `ctx.app` is the right call. The same hook's `path` option
+  accepts a string prefix, a RegExp, or an array of either; the docblock described
+  only the prefix.
+  
+  `kick --help` described `kick g middleware` as "Express middleware", and the
+  generated AGENTS.md called adapter middleware "raw Express". Both are
+  connect-style handlers mounted through the runtime seam, and work under Express,
+  Fastify and h3 alike.
+
+- [#670](https://github.com/forinda/kick-js/pull/670) [`d65e58a`](https://github.com/forinda/kick-js/commit/d65e58a9bf3c8ccc79e8419ea8ceba1684226a1a) Thanks [@forinda](https://github.com/forinda)! - Generate DTO schemas against the validation library the project actually installed.
+  
+  `kick new --schema valibot` (or `yup`) installs exactly one validation library —
+  the chosen one and no other. But `kick g dto` and the DTOs `kick g module` emits
+  both hardcoded `import { z } from 'zod'`, so every generated schema on such a
+  project imported a package that was never installed.
+  
+  Both now resolve the library from the project's dependencies and emit the
+  matching source: `v.pipe(v.string(), …)` with `v.InferOutput` for Valibot,
+  `yup.string().required()` with `yup.InferType` for Yup, unchanged Zod otherwise.
+  Reading it from the dependency rather than a new config field means projects
+  scaffolded before this fix are covered without a config migration; a project
+  with none declared still gets Zod, as before.
+  
+  The schemas stay unwrapped — no `fromZod` / `fromValibot` — because
+  `detectSchema()` sniffs the library at runtime and `InferSchemaOutput` reads all
+  three for typegen.
+
 ## 8.1.4
 
 ### Patch Changes
