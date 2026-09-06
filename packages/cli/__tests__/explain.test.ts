@@ -165,6 +165,57 @@ describe('known-issues registry', () => {
     expect(m?.diagnosis.id).not.toBe('test-env-leaked-from-dotenv')
   })
 
+  it('matches di-request-scope-into-singleton on the container error verbatim', () => {
+    const m = findBestMatch(
+      'Cannot inject REQUEST-scoped "TenantContext" into SINGLETON "ReceptionController". ' +
+        'Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.',
+    )
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('di-request-scope-into-singleton')
+    expect(m!.confidence).toBe(100)
+  })
+
+  it('points a controller at @Autowired, since @Controller() takes no scope', () => {
+    // The framework's own message says "use TRANSIENT or REQUEST scope for the
+    // parent" — advice that does not exist for a controller. The diagnosis has
+    // to say so or it sends people looking for an option that isn't there.
+    const m = findBestMatch('Cannot inject REQUEST-scoped "X" into SINGLETON "YController"')
+    expect(m!.diagnosis.fix).toContain('@Autowired')
+    expect(m!.diagnosis.fix).toContain('@Controller() does NOT')
+  })
+
+  it('matches di-circular-dependency with the resolution chain', () => {
+    const m = findBestMatch(
+      'Error: Circular dependency detected: OrderService -> PaymentService -> OrderService',
+    )
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('di-circular-dependency')
+    expect(m!.confidence).toBe(100)
+  })
+
+  it('matches di-no-provider-for-token by message and by KICK001 code', () => {
+    const byMessage = findBestMatch('No provider for USER_REPOSITORY')
+    expect(byMessage!.diagnosis.id).toBe('di-no-provider-for-token')
+
+    const byCode = findBestMatch('KICK001 while resolving the container')
+    expect(byCode!.diagnosis.id).toBe('di-no-provider-for-token')
+    expect(byCode!.confidence).toBe(100)
+  })
+
+  it('matches vite-dev-app-not-exported ahead of module-not-registered', () => {
+    // Both matchers see this 404. The dev-server one has to win, or the fix
+    // sends someone to audit a modules array that is already correct.
+    const m = findBestMatch('kick dev: every route returns 404, src/index.ts has no app export')
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('vite-dev-app-not-exported')
+  })
+
+  it('leaves a 404 with no dev-server signal to module-not-registered', () => {
+    const m = findBestMatch('GET /tasks returns 404 in production')
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('module-not-registered')
+  })
+
   it('returns null for completely unrelated errors', () => {
     const m = findBestMatch('the rocket motor failed to ignite at T-minus 3')
     expect(m).toBeNull()

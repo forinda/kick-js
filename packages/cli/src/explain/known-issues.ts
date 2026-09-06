@@ -490,6 +490,220 @@ const testEnvLeakedFromDotenv: KnownIssue = {
   },
 }
 
+// ── Issue 9: REQUEST-scoped dependency injected into a SINGLETON ─────────
+
+const requestScopeIntoSingleton: KnownIssue = {
+  match(input, _ctx) {
+    // The framework's own wording (container.ts) is the certain signal.
+    const exact = includesAll(input, ['cannot inject', 'request-scoped', 'singleton'])
+    // A paraphrase still routes here — the pairing of both scope names in one
+    // error is specific enough to KickJS's DI that nothing else produces it.
+    const paraphrase = includesAll(input, ['request-scoped', 'singleton'])
+    if (!exact && !paraphrase) return null
+
+    return {
+      confidence: exact ? 100 : 70,
+      diagnosis: {
+        id: 'di-request-scope-into-singleton',
+        title: 'A SINGLETON cannot hold a REQUEST-scoped dependency',
+        explanation:
+          'Controllers are SINGLETON by default: one instance for the process, built\n' +
+          'the first time the container resolves it. A REQUEST-scoped binding is the\n' +
+          'opposite — one instance per request, discarded when the response ends.\n' +
+          '\n' +
+          'Injecting the second into the first would capture whichever request\n' +
+          'happened to build the singleton and hand that same instance to every\n' +
+          'later request, so the container refuses at resolve time instead.\n' +
+          '\n' +
+          'This surfaces on the first request that reaches the controller, not at\n' +
+          'boot, because the container builds lazily. The route mounts fine and then\n' +
+          'answers 500.',
+        fix:
+          'The error says "use TRANSIENT or REQUEST scope for the parent", and that\n' +
+          'is the fix when the parent is a @Service / @Repository / @Component —\n' +
+          'each takes `{ scope }`.\n' +
+          '\n' +
+          '@Controller() does NOT. It takes no options and always registers as a\n' +
+          'SINGLETON, so for a controller the advice in the message is not\n' +
+          'available. Switch that one dependency to @Autowired instead: property\n' +
+          'injection re-resolves per access, so each request reads its own instance\n' +
+          'and the singleton never captures one.\n' +
+          '\n' +
+          'If the dependency did not need request scope in the first place, the\n' +
+          'other direction also works — make it SINGLETON and pass the per-request\n' +
+          'values in as method arguments.',
+        docs: 'https://kickjs.app/guide/dependency-injection.html#scopes',
+      },
+    }
+  },
+}
+
+// ── Issue 10: circular dependency in the DI graph ────────────────────────
+
+const circularDependency: KnownIssue = {
+  match(input, _ctx) {
+    const exact = input.toLowerCase().includes('circular dependency detected')
+    const loose = includesAll(input, ['circular', 'dependency'])
+    if (!exact && !loose) return null
+
+    return {
+      confidence: exact ? 100 : 65,
+      diagnosis: {
+        id: 'di-circular-dependency',
+        title: 'Two services depend on each other, directly or through a chain',
+        explanation:
+          'The container resolves constructor dependencies depth-first. When a token\n' +
+          'is requested while it is already being resolved further up the stack, the\n' +
+          'graph has a cycle and there is no order that satisfies both ends.\n' +
+          '\n' +
+          'The error prints the whole chain, arrow-separated — read it as "A needed\n' +
+          'B, which needed C, which needed A again". The repeated name at both ends\n' +
+          'is where the cycle closes, and it is usually the pair in the middle that\n' +
+          'is worth splitting, not the class you were resolving.\n' +
+          '\n' +
+          'Constructor injection is what forces the ordering. Property injection\n' +
+          '(@Autowired) resolves after construction, so it tolerates a cycle the\n' +
+          'constructor form cannot.',
+        fix:
+          'Preferred: pull the shared behaviour into a third service both sides\n' +
+          'depend on. A cycle is usually a missing collaborator, and breaking it\n' +
+          'this way leaves both classes independently testable.\n' +
+          '\n' +
+          'If the cycle is genuine and the design is settled, switch ONE side from\n' +
+          'constructor injection to @Autowired so it resolves lazily.',
+        codeBefore:
+          '@Service()\n' +
+          'export class OrderService {\n' +
+          '  constructor(private readonly billing: BillingService) {}\n' +
+          '}\n\n' +
+          '@Service()\n' +
+          'export class BillingService {\n' +
+          '  constructor(private readonly orders: OrderService) {}  // ← closes the cycle\n' +
+          '}',
+        codeAfter:
+          '@Service()\n' +
+          'export class OrderService {\n' +
+          '  constructor(private readonly billing: BillingService) {}\n' +
+          '}\n\n' +
+          '@Service()\n' +
+          'export class BillingService {\n' +
+          '  @Autowired() private readonly orders!: OrderService  // ← resolved after construction\n' +
+          '}',
+        docs: 'https://kickjs.app/guide/dependency-injection.html#circular-dependency-detection',
+      },
+    }
+  },
+}
+
+// ── Issue 11: no provider registered for a token (KICK001) ───────────────
+
+const noProviderForToken: KnownIssue = {
+  match(input, _ctx) {
+    const hasCode = input.includes('KICK001')
+    const hasMessage = includesAny(input, [
+      'no provider for',
+      'no provider found for',
+      'no binding is registered',
+    ])
+    if (!hasCode && !hasMessage) return null
+
+    return {
+      confidence: hasCode ? 100 : 85,
+      diagnosis: {
+        id: 'di-no-provider-for-token',
+        title: 'A token was requested but nothing registers it',
+        explanation:
+          'Decorators register bindings as a side effect of the class being LOADED —\n' +
+          'and a class is only loaded if something imports it. A module that is not\n' +
+          'in the bootstrap array is never imported, so none of its @Service /\n' +
+          '@Repository / @Controller classes ever register, and the first thing that\n' +
+          'asks for one gets this error.\n' +
+          '\n' +
+          'That makes the failure almost always about the MODULE, not the class the\n' +
+          'error names — which is why the token in the message usually looks\n' +
+          'correctly decorated when you open it.\n' +
+          '\n' +
+          'The other two causes: a class with no decorator at all, or a\n' +
+          'createToken() handle that nothing binds. Tokens are inert values — they\n' +
+          'carry a type, never an implementation.',
+        fix:
+          'Check, in this order:\n' +
+          '  1. Is the enclosing module in `bootstrap({ modules })` (or in the array\n' +
+          '     exported from src/modules/index.ts)?\n' +
+          '  2. Does the class carry @Service() / @Repository() / @Controller()?\n' +
+          '  3. For a createToken() token — does some module bind it in `register()`?',
+        codeAfter:
+          "const TENANT_REPO = createToken<TenantRepo>('TENANT_REPO')\n\n" +
+          'export const TenantModule = defineModule({\n' +
+          "  name: 'TenantModule',\n" +
+          '  build: () => ({\n' +
+          '    register(container) {\n' +
+          '      container.register(TENANT_REPO, { useClass: PrismaTenantRepo })  // ← the binding\n' +
+          '    },\n' +
+          '    routes: () => null,\n' +
+          '  }),\n' +
+          '})',
+        docs: 'https://kickjs.app/guide/dependency-injection.html#registering-services',
+      },
+    }
+  },
+}
+
+// ── Issue 12: dev server 404s because the entry exports no `app` ─────────
+
+const viteDevAppNotExported: KnownIssue = {
+  match(input, _ctx) {
+    // Only fires with a dev-server signal present. Without one this is an
+    // ordinary 404 and `module-not-registered` is the better diagnosis.
+    const inDevServer = includesAny(input, [
+      'vite',
+      'kick dev',
+      'dev server',
+      'localhost:5173',
+      ':5173',
+    ])
+    if (!inDevServer) return null
+
+    const has404 = includesAny(input, ['404', 'not found', 'cannot get', 'cannot post', 'no route'])
+    const mentionsApp = includesAll(input, ['app', 'export'])
+    if (!has404 && !mentionsApp) return null
+
+    return {
+      // Above `module-not-registered` (50), which matches the same 404 text
+      // and would otherwise send people to inspect a modules array that is fine.
+      confidence: has404 && mentionsApp ? 80 : 70,
+      diagnosis: {
+        id: 'vite-dev-app-not-exported',
+        title: 'Every route 404s in dev because the entry file exports no `app`',
+        explanation:
+          'The Vite plugin does not start your server. It imports the entry module\n' +
+          'and reads `app` off it, then hands each request to that instance.\n' +
+          '\n' +
+          'When the entry runs `await bootstrap(...)` without assigning the result to\n' +
+          'an exported `app`, the plugin finds nothing to delegate to and falls\n' +
+          "through to Vite's own 404 handler. Your app booted; nothing is routing to\n" +
+          'it.\n' +
+          '\n' +
+          'The giveaway is that EVERY route 404s, including ones that clearly exist,\n' +
+          'and the failure is dev-only — `kick start` runs the entry directly and\n' +
+          'never needs the export.',
+        fix:
+          'Export the bootstrap result as `app` from your entry file. The name is\n' +
+          'load-bearing — the plugin looks up exactly that export.',
+        codeBefore:
+          "import './env'\n" +
+          "import { bootstrap } from '@forinda/kickjs'\n\n" +
+          'await bootstrap({ modules })  // ← nothing for the dev server to read',
+        codeAfter:
+          "import './env'\n" +
+          "import { bootstrap } from '@forinda/kickjs'\n\n" +
+          'export const app = await bootstrap({ modules })',
+        docs: 'https://kickjs.app/guide/project-structure.html',
+      },
+    }
+  },
+}
+
 // ── Registry ──────────────────────────────────────────────────────────────
 
 export const KNOWN_ISSUES: KnownIssue[] = [
@@ -501,6 +715,10 @@ export const KNOWN_ISSUES: KnownIssue[] = [
   reflectMetadataMissing,
   moduleNotRegistered,
   testEnvLeakedFromDotenv,
+  requestScopeIntoSingleton,
+  circularDependency,
+  noProviderForToken,
+  viteDevAppNotExported,
 ]
 
 /**
