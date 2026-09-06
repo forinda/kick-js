@@ -194,7 +194,7 @@ rather than the body, so the typed client has no payload to offer.
 | `ctx.badRequest(message)`               | 400    | **Deprecated** — use `ctx.problem.badRequest()` |
 | `ctx.html(content, status?)`            | 200    | HTML response                                   |
 | `ctx.redirect(url, status?)`            | 302    | Redirect (works on every runtime)               |
-| `ctx.download(buffer, filename, type?)` | --     | File download                                   |
+| `ctx.download(buffer, filename, type?)` | --     | [File download](#returning-a-generated-file)    |
 | `ctx.render(template, data?)`           | 200    | Render a template (requires ViewAdapter)        |
 
 #### Returning a generated file
