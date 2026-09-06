@@ -341,3 +341,25 @@ Uploaded files are available on the `RequestContext`:
 - **`ctx.files`** — an array of uploaded files (when using `array` mode)
 
 Each file object follows the standard Multer file shape: `originalname`, `mimetype`, `size`, `buffer` (memory storage), or `path` and `filename` (disk storage).
+
+## Sending a file back out
+
+The other direction is [`ctx.download(buffer, filename, type?)`](./controllers.md#returning-a-generated-file)
+— the mirror of `@FileUpload`, and runtime-neutral for the same reason: it
+writes through the response driver rather than the engine's own response
+object.
+
+```ts
+@Get('/students.xlsx')
+async export(ctx: RequestContext) {
+  const file = await this.reports.buildStudentsWorkbook()
+  return ctx.download(
+    file,
+    'students.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+}
+```
+
+Setting the headers by hand on `ctx.res` works on Express and breaks on the
+others — `FastifyReply` has no `setHeader`, and h3's event has no `end`.
