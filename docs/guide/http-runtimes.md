@@ -107,17 +107,18 @@ runtime or Express for Vite-integrated dev.
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                | Express     | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                        |
-| ------------------------- | ----------- | ----------------------- | ----------------------- | --------------------------------------- |
-| Routing + `ctx.json`      | ✅          | ✅                      | ✅                      | ✅                                      |
-| Connect middleware        | ✅          | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ (fromNodeHandler)                    |
-| Context decorators        | ✅          | ✅                      | ✅                      | ✅                                      |
-| Errors / 404              | ✅          | ✅                      | ✅                      | ✅                                      |
-| Server-Sent Events        | ✅          | ✅                      | ✅                      | ✅ (web streams)                        |
-| Validation                | ✅          | ✅                      | ✅                      | ✅                                      |
-| `ctx.render` (views)      | ✅          | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                     |
-| File uploads (`ctx.file`) | ✅ (multer) | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                     |
-| Edge / Bun / Deno deploy  | ❌          | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md)) |
+| Capability                     | Express     | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                        |
+| ------------------------------ | ----------- | ----------------------- | ----------------------- | --------------------------------------- |
+| Routing + `ctx.json`           | ✅          | ✅                      | ✅                      | ✅                                      |
+| Connect middleware             | ✅          | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ (fromNodeHandler)                    |
+| Context decorators             | ✅          | ✅                      | ✅                      | ✅                                      |
+| Errors / 404                   | ✅          | ✅                      | ✅                      | ✅                                      |
+| Server-Sent Events             | ✅          | ✅                      | ✅                      | ✅ (web streams)                        |
+| Validation                     | ✅          | ✅                      | ✅                      | ✅                                      |
+| `ctx.render` (views)           | ✅          | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                     |
+| File uploads (`ctx.file`)      | ✅ (multer) | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                     |
+| File download (`ctx.download`) | ✅          | ✅                      | ✅                      | ✅                                      |
+| Edge / Bun / Deno deploy       | ❌          | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md)) |
 
 ## The engine-native escape hatch
 
@@ -126,6 +127,12 @@ reachable:
 
 - `AdapterContext.app` / `app.getRuntimeApp()` — the engine-native app instance.
 - `ctx.req` / `ctx.res` — the engine-native request / response.
+
+Check the helper list first. Sending a generated file is the usual reason people
+reach past `ctx.*`, and it has a helper —
+[`ctx.download(buffer, filename, type?)`](./controllers.md#returning-a-generated-file)
+— which works on every runtime. `ctx.res.setHeader()` + `ctx.res.end()` compiles
+on Express and breaks on the other two.
 
 Under the default Express runtime these are typed as Express's `Application`,
 `Request`, and `Response`. The types follow the active runtime via the

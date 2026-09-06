@@ -47,6 +47,10 @@ consumed (handlers just call the helper and return), so this rarely matters. If
 you stored it — `const r: Response = ctx.json(...)` — drop the annotation or use
 `ctx.res` for the raw engine response.
 
+Do not use `ctx.res` to _send_ anything a helper already covers — a file
+download is the one that bites, and `ctx.download(buffer, filename, type?)`
+handles it on all three engines.
+
 ### `getExpressApp()` → `getRuntimeApp()`
 
 `app.getExpressApp()` still works but is **deprecated**. Prefer
