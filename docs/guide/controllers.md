@@ -197,6 +197,28 @@ rather than the body, so the typed client has no payload to offer.
 | `ctx.download(buffer, filename, type?)` | --     | File download                                   |
 | `ctx.render(template, data?)`           | 200    | Render a template (requires ViewAdapter)        |
 
+#### Returning a generated file
+
+`ctx.download()` sets `Content-Disposition` and `Content-Type` and sends the
+buffer. It goes through the same runtime driver as every other helper here, so
+it works unchanged on Express, Fastify and h3:
+
+```ts
+@Get('/students.xlsx')
+async export(ctx: RequestContext) {
+  const file = await this.reports.buildStudentsWorkbook()
+  return ctx.download(
+    file,
+    'students.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+}
+```
+
+Reaching for `ctx.res.setHeader()` + `ctx.res.end()` instead is the common way
+to end up runtime-locked: `FastifyReply` has no `setHeader`, and h3's event has
+no `end`. See [HTTP runtimes](./http-runtimes.md#the-engine-native-escape-hatch).
+
 ### Pagination
 
 `ctx.paginate()` parses query params, calls your fetcher, and returns a standardized paginated response.
