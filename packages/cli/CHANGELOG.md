@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 8.1.6
+
+### Patch Changes
+
+- [#673](https://github.com/forinda/kick-js/pull/673) [`fa6b6b1`](https://github.com/forinda/kick-js/commit/fa6b6b10e56695a2753d8385e397b968a5a1da37) Thanks [@forinda](https://github.com/forinda)! - `kick explain` now recognizes the framework's own DI errors: the REQUEST-into-SINGLETON scope violation, `Circular dependency detected`, `No provider for <token>` (KICK001), and the dev-server 404 that means the entry file exports no `app`.
+  
+  The scope entry notes what the runtime error cannot: `@Controller()` takes no `scope` option, so "use TRANSIENT or REQUEST scope for the parent" has no controller-shaped answer — `@Autowired` is the fix there.
+
 ## 8.1.5
 
 ### Patch Changes
