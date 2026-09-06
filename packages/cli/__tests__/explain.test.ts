@@ -210,6 +210,21 @@ describe('known-issues registry', () => {
     expect(m!.diagnosis.id).toBe('vite-dev-app-not-exported')
   })
 
+  it('matches vite-dev-app-not-exported when all routes fail, without the word export', () => {
+    // The shape someone actually types before they know the cause.
+    const m = findBestMatch('kick dev: every route 404s, even ones that definitely exist')
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('vite-dev-app-not-exported')
+  })
+
+  it('leaves an ordinary dev-server 404 to module-not-registered', () => {
+    // One route missing under Vite is a routing problem, not a missing export
+    // — diagnosing it as the latter sends people to an entry file that is fine.
+    const m = findBestMatch('vite dev: GET /typo returns 404')
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('module-not-registered')
+  })
+
   it('leaves a 404 with no dev-server signal to module-not-registered', () => {
     const m = findBestMatch('GET /tasks returns 404 in production')
     expect(m).not.toBeNull()

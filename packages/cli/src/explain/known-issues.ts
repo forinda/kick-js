@@ -665,13 +665,28 @@ const viteDevAppNotExported: KnownIssue = {
     if (!inDevServer) return null
 
     const has404 = includesAny(input, ['404', 'not found', 'cannot get', 'cannot post', 'no route'])
+    if (!has404) return null
+
+    // A dev-server 404 on its own is usually an ordinary missing route, so one
+    // of these has to corroborate before this diagnosis outranks
+    // `module-not-registered`: the user naming the export, or the giveaway
+    // that it is not one route failing but all of them.
     const mentionsApp = includesAll(input, ['app', 'export'])
-    if (!has404 && !mentionsApp) return null
+    // Deliberately not 'no routes' — 'no route' is already a `has404` signal,
+    // so it would make every single-route 404 look like a total failure.
+    const everyRoute = includesAny(input, [
+      'every route',
+      'all routes',
+      'every endpoint',
+      'all endpoints',
+      'none of the routes',
+    ])
+    if (!mentionsApp && !everyRoute) return null
 
     return {
       // Above `module-not-registered` (50), which matches the same 404 text
       // and would otherwise send people to inspect a modules array that is fine.
-      confidence: has404 && mentionsApp ? 80 : 70,
+      confidence: mentionsApp && everyRoute ? 85 : mentionsApp ? 80 : 70,
       diagnosis: {
         id: 'vite-dev-app-not-exported',
         title: 'Every route 404s in dev because the entry file exports no `app`',
