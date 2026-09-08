@@ -48,17 +48,17 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "zod": "^4.5.1",
+    "zod": "^4.5.4",
     "@forinda/kickjs": ">=5.18.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@swc/core": "^1.16.1",
-    "@types/node": "^26.4.0",
+    "@types/node": "^26.4.1",
     "typescript": "^7.0.2",
     "unplugin-swc": "^1.5.11",
     "vitest": "^4.1.11",
-    "zod": "^4.5.1"
+    "zod": "^4.5.4"
   },
   "publishConfig": {
     "access": "public"
