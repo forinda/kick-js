@@ -224,6 +224,29 @@ export default defineConfig({
   sitemap: {
     hostname,
   },
+
+  /**
+   * Per-page canonical URL and `og:url`.
+   *
+   * The site is reachable on more than one host — `kickjs.netlify.app` serves
+   * the same build, and `www` resolves before it redirects — so without an
+   * explicit canonical a crawler picks its own winner and the chosen one may
+   * not be `kickjs.app`. `og:url` moved here for the same reason it was wrong
+   * in `head`: declared site-wide, every page claimed the homepage's URL.
+   *
+   * Paths mirror what `sitemap` emits (no `cleanUrls`, so `.html` stays, and a
+   * directory index collapses to its trailing slash) — a canonical that
+   * disagrees with the sitemap is worse than none.
+   */
+  transformPageData(pageData) {
+    const path = pageData.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '.html')
+    const url = `${hostname}${path}`
+    pageData.frontmatter.head ??= []
+    pageData.frontmatter.head.push(
+      ['link', { rel: 'canonical', href: url }],
+      ['meta', { property: 'og:url', content: url }],
+    )
+  },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
     // Google Search Console site verification.
@@ -242,7 +265,6 @@ export default defineConfig({
           'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.',
       },
     ],
-    ['meta', { property: 'og:url', content: hostname }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
   ],
 

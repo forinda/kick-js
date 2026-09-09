@@ -13,3 +13,20 @@
 
 [build.environment]
   NODE_VERSION = "20"
+
+# The site answers on kickjs.netlify.app as well as kickjs.app, and an
+# identical copy of every page on a second host is a duplicate a crawler has to
+# pick between — one it can resolve in favour of the netlify.app subdomain,
+# which predates the custom domain and may have been indexed first. 301 it to
+# the canonical host so there is nothing to choose.
+#
+# `force = true` because the subdomain serves real files: without it the static
+# asset wins and the redirect never fires. Deploy previews and branch deploys
+# live on their own subdomains (deploy-preview-N--kickjs.netlify.app), so this
+# rule does not match them — and Netlify already sends `x-robots-tag: noindex`
+# there.
+[[redirects]]
+  from = "https://kickjs.netlify.app/*"
+  to = "https://kickjs.app/:splat"
+  status = 301
+  force = true
