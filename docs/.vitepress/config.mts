@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitepress'
+import { defineConfig, type HeadConfig } from 'vitepress'
 // Docs track the latest release only — older versions are not snapshotted.
 
 const guideSidebar = [
@@ -205,6 +205,20 @@ const hostname = process.env.DOCS_HOSTNAME ?? DEFAULT_HOSTNAME
 
 // A subpath base without a matching hostname would emit a wrong sitemap/og:url
 // (pointing at kickjs.app). Fail loud so the deploy is fixed, not shipped.
+// Google Analytics. Only wired when DOCS_GA_ID is set at build time, so no
+// measurement ID lives in the repo and local/preview builds stay untracked.
+const gaId = process.env.DOCS_GA_ID
+const gaHead: HeadConfig[] = gaId
+  ? [
+      ['script', { async: '', src: `https://www.googletagmanager.com/gtag/js?id=${gaId}` }],
+      [
+        'script',
+        {},
+        `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${gaId}')`,
+      ],
+    ]
+  : []
+
 if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
   throw new Error(
     `DOCS_BASE is overridden (${base}) but DOCS_HOSTNAME is unset — ` +
@@ -244,6 +258,7 @@ export default defineConfig({
     ],
     ['meta', { property: 'og:url', content: hostname }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ...gaHead,
   ],
 
   themeConfig: {
