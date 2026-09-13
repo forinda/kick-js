@@ -26,6 +26,10 @@
     "./redis": {
       "import": "./dist/redis.mjs",
       "types": "./dist/redis.d.mts"
+    },
+    "./centrifugo": {
+      "import": "./dist/centrifugo.mjs",
+      "types": "./dist/centrifugo.d.mts"
     }
   },
   "files": [
