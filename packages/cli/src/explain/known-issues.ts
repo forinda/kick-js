@@ -519,13 +519,12 @@ const requestScopeIntoSingleton: KnownIssue = {
           'boot, because the container builds lazily. The route mounts fine and then\n' +
           'answers 500.',
         fix:
-          'The error says "use TRANSIENT or REQUEST scope for the parent", and that\n' +
-          'is the fix when the parent is a @Service / @Repository / @Component —\n' +
-          'each takes `{ scope }`.\n' +
+          'When the parent is a @Service / @Repository / @Component, give it\n' +
+          'TRANSIENT or REQUEST scope — each takes `{ scope }`.\n' +
           '\n' +
           '@Controller() does NOT. It takes no options and always registers as a\n' +
-          'SINGLETON, so for a controller the advice in the message is not\n' +
-          'available. Switch that one dependency to @Autowired instead: property\n' +
+          'SINGLETON (older versions of the error still advised changing its scope,\n' +
+          'which is not available). Switch that one dependency to @Autowired instead: property\n' +
           'injection re-resolves per access, so each request reads its own instance\n' +
           'and the singleton never captures one.\n' +
           '\n' +

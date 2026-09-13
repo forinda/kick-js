@@ -175,8 +175,18 @@ describe('known-issues registry', () => {
     expect(m!.confidence).toBe(100)
   })
 
+  it('matches the kind-specific wording the container throws today', () => {
+    const m = findBestMatch(
+      'Cannot inject REQUEST-scoped "TenantContext" into SINGLETON "ReceptionController". ' +
+        'Singletons outlive requests. @Controller() is always SINGLETON, so inject ' +
+        '"TenantContext" with @Autowired() instead of the constructor.',
+    )
+    expect(m!.diagnosis.id).toBe('di-request-scope-into-singleton')
+    expect(m!.confidence).toBe(100)
+  })
+
   it('points a controller at @Autowired, since @Controller() takes no scope', () => {
-    // The framework's own message says "use TRANSIENT or REQUEST scope for the
+    // Older framework versions said "use TRANSIENT or REQUEST scope for the
     // parent" — advice that does not exist for a controller. The diagnosis has
     // to say so or it sends people looking for an option that isn't there.
     const m = findBestMatch('Cannot inject REQUEST-scoped "X" into SINGLETON "YController"')

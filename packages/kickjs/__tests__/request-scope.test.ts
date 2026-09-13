@@ -41,6 +41,61 @@ function runInRequestContext<T>(fn: () => T, reqId = 'test-req-1'): T {
   return requestStore.run(store, fn)
 }
 
+// ── Scope mismatch message ──────────────────────────────────────────────
+
+describe('REQUEST into SINGLETON — the error names a fix the parent can use', () => {
+  const TENANT = createToken<{ id: string }>('test/tenant')
+
+  beforeEach(() => {
+    Container.reset()
+    wireRequestStoreProvider()
+  })
+
+  afterEach(() => {
+    Container._requestStoreProvider = null
+  })
+
+  // @Controller() takes no options, so "change the parent's scope" is advice a
+  // controller cannot follow.
+  it('tells a controller to use @Autowired, not to change its scope', () => {
+    @Controller()
+    class ReceptionController {
+      constructor(@Inject(TENANT) readonly tenant: { id: string }) {}
+    }
+
+    const container = Container.getInstance()
+    container.register(ReceptionController, ReceptionController)
+    container.registerFactory(TENANT, () => ({ id: 't1' }), Scope.REQUEST)
+
+    const message = (() => {
+      try {
+        runInRequestContext(() => container.resolve(ReceptionController))
+      } catch (err) {
+        return (err as Error).message
+      }
+      return ''
+    })()
+    expect(message).toContain('Cannot inject REQUEST-scoped')
+    expect(message).toContain('@Autowired()')
+    expect(message).not.toContain('scope for the parent')
+  })
+
+  it('tells a service it can change its scope or use @Autowired', () => {
+    @Service()
+    class ReceptionService {
+      constructor(@Inject(TENANT) readonly tenant: { id: string }) {}
+    }
+
+    const container = Container.getInstance()
+    container.register(ReceptionService, ReceptionService)
+    container.registerFactory(TENANT, () => ({ id: 't1' }), Scope.REQUEST)
+
+    expect(() => runInRequestContext(() => container.resolve(ReceptionService))).toThrow(
+      /TRANSIENT or REQUEST scope.*@Autowired\(\)/,
+    )
+  })
+})
+
 // ── Unit-level Container tests ──────────────────────────────────────────
 
 describe('REQUEST scope — Container unit tests', () => {
