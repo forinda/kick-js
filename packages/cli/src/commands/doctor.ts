@@ -763,7 +763,8 @@ export function checkTestEnvIsolation(ctx: DoctorContext): DoctorResult | null {
       'those files, every var your test config does not pin resolves from your\n' +
       'development env — including DATABASE_URL and any third-party credentials.\n' +
       '\n' +
-      'Create .env.test holding the whole environment the suite should run against\n' +
+      'Create .env.test (cp .env.test.example .env.test, if the project has one)\n' +
+      'holding the whole environment the suite should run against\n' +
       '(a var you leave out is then missing, not inherited), or set KICKJS_ENV_FILE=off\n' +
       'and supply env from the test runner.',
   }

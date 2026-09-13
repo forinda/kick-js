@@ -15,6 +15,7 @@ import {
   generateEnv,
   generateEnvExample,
   generateEnvTest,
+  generateEnvTestExample,
   generateVitestConfig,
 } from './templates/project-config'
 import {
@@ -327,8 +328,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // it is what makes a new project isolated by default. Without it the
   // generated app ships the exact shape `kick doctor` warns about — a
   // `.env` plus a test runner — and its first test run prints the backfill
-  // warning rather than being isolated.
+  // warning rather than being isolated. It is gitignored like `.env` —
+  // values differ per machine — so the committed template is the example.
   await writeFileSafe(join(dir, '.env.test'), generateEnvTest())
+  await writeFileSafe(join(dir, '.env.test.example'), generateEnvTestExample())
 
   // ── src/config/index.ts — typed env schema (read by `kick typegen`) ─
   // Lives under `src/config/` so the framework's "config" concept has a
