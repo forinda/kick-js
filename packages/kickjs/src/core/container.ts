@@ -728,9 +728,21 @@ export class Container {
       if (reg.scope === Scope.SINGLETON) {
         const depReg = this.registrations.get(token)
         if (depReg && depReg.scope === Scope.REQUEST) {
+          // The fix depends on the parent: @Controller() takes no options and
+          // is always SINGLETON, so "change the parent's scope" is advice a
+          // controller cannot follow. @Autowired works for every parent — its
+          // getter re-resolves REQUEST deps per access (injectProperties).
+          const parent = tokenName(reg.target)
+          const dep = tokenName(token)
+          const kind = getClassMetaOrUndefined<ClassKind>(METADATA.CLASS_KIND, reg.target)
+          const fix =
+            kind === 'controller'
+              ? `@Controller() is always SINGLETON, so inject "${dep}" with @Autowired() instead of the constructor.`
+              : `Give "${parent}" TRANSIENT or REQUEST scope (e.g. @Service({ scope: Scope.REQUEST })), ` +
+                `or inject "${dep}" with @Autowired() instead of the constructor.`
           throw new Error(
-            `Cannot inject REQUEST-scoped "${tokenName(token)}" into SINGLETON "${tokenName(reg.target)}". ` +
-              `Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.`,
+            `Cannot inject REQUEST-scoped "${dep}" into SINGLETON "${parent}". ` +
+              `Singletons outlive requests. ${fix}`,
           )
         }
       }
