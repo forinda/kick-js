@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import type { Command } from 'commander'
+import { findScopeMismatches } from './check-di'
 import { colors, severityColor } from '../utils/colors'
 import { intro, outro, spinner as createSpinner, log } from '../utils/prompts'
 
@@ -216,6 +217,22 @@ function runDeployChecks(cwd: string): CheckResult[] {
   return results
 }
 
+/** REQUEST-scoped dependencies in singleton constructors — see check-di.ts. */
+function runDiChecks(cwd: string): CheckResult[] {
+  const files = collectTsFiles(join(cwd, 'src'))
+    // Tests register scopes however they need to; they would only add ambiguity.
+    .filter((f) => !/\.(test|spec)\.tsx?$/.test(f))
+    .map((f) => ({ path: relative(cwd, f).split('\\').join('/'), source: safeRead(f) }))
+  const findings = findScopeMismatches(files)
+  if (findings.length === 0) {
+    return [{ severity: 'INFO', message: 'No REQUEST-scoped dependency injected into a singleton' }]
+  }
+  return findings.map((f) => ({
+    severity: 'CRITICAL',
+    message: `${f.file}:${f.line} ${f.message}`,
+  }))
+}
+
 /* ── Command registration ─────────────────────────────────────────── */
 
 export function registerCheckCommand(program: Command): void {
@@ -223,23 +240,28 @@ export function registerCheckCommand(program: Command): void {
     .command('check')
     .description('Audit project for common issues')
     .option('--deploy', 'Run production readiness checks')
+    .option('--di', 'Find REQUEST-scoped dependencies injected into singletons')
     .action((opts: any) => {
-      if (!opts.deploy) {
+      if (!opts.deploy && !opts.di) {
         console.log(
-          '\n  Usage: kick check --deploy\n\n' +
+          '\n  Usage: kick check [--deploy] [--di]\n\n' +
             '  Available checks:\n' +
-            '    --deploy    Audit for production readiness (security, config, best practices)\n',
+            '    --deploy    Audit for production readiness (security, config, best practices)\n' +
+            '    --di        Find REQUEST-scoped dependencies injected into singleton constructors\n',
         )
         return
       }
 
       const cwd = process.cwd()
 
-      intro('KickJS Deploy Check')
+      intro(opts.deploy ? 'KickJS Deploy Check' : 'KickJS DI Check')
 
       const s = createSpinner()
       s.start('Scanning project...')
-      const results = runDeployChecks(cwd)
+      const results = [
+        ...(opts.deploy ? runDeployChecks(cwd) : []),
+        ...(opts.di ? runDiChecks(cwd) : []),
+      ]
       s.stop('Scan complete')
 
       // Sort: CRITICAL first, then WARNING, then INFO

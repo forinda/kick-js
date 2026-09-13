@@ -943,3 +943,17 @@ function collectMounts(fn: Node, out: ModuleMount[]): void {
  * scanner keeps its own). This export exists for tests only.
  */
 export const __testing = { joinMountPath, extractPathParams }
+
+/** Structural AST helpers, shared with other source scanners (`kick check --di`). */
+export {
+  walk,
+  isNode,
+  identifierName,
+  stringValue,
+  calleeName,
+  getProp,
+  firstObjectArg,
+  decoratorsOf,
+  decoratorCall,
+  type Node as AstNode,
+}
