@@ -236,7 +236,7 @@ No other code changes are needed — use cases inject via the `TODO_REPOSITORY` 
 
 ## Sharing services between modules
 
-The container is global, so a module can inject any registered token — including one another module registers. That works until the other module is not mounted: nothing fails at boot, and the first request that resolves the missing token answers 500. Modules deliberately have no `dependsOn`; which modules an app mounts is the app's decision.
+The container is global, so a module can inject any registered token — including one that another module registers. That works until the other module is not mounted: nothing fails at boot, and the first request that resolves the missing token answers 500. Modules deliberately have no `dependsOn`; which modules an app mounts is the app's decision.
 
 Adapters and plugins are the layer built for this. Both register into the same container, both declare `dependsOn`, and a missing dependency fails **boot** with `MissingMountDepError`, not a request.
 
