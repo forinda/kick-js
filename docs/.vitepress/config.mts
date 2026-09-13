@@ -52,6 +52,7 @@ const guideSidebar = [
       { text: 'Configuration', link: '/guide/configuration' },
       { text: 'WebSockets', link: '/guide/websockets' },
       { text: 'Socket.IO', link: '/guide/socketio' },
+      { text: 'Centrifugo', link: '/guide/centrifugo' },
       { text: 'Server-Sent Events', link: '/guide/sse' },
       { text: 'GraphQL (BYO adapter)', link: '/guide/graphql' },
       { text: 'gRPC / Connect RPC', link: '/guide/grpc' },

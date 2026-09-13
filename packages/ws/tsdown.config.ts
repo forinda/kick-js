@@ -7,6 +7,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     redis: 'src/redis.ts',
+    centrifugo: 'src/centrifugo.ts',
   },
   format: ['esm'],
   platform: 'node',

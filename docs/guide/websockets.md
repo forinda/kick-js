@@ -293,6 +293,8 @@ Things to know:
 
 See [Benchmarks → WebSockets](./benchmarks.md#websockets) for measured numbers with and without a broker.
 
+To take connections out of Node entirely, see [Centrifugo](./centrifugo.md): clients connect to Centrifugo, and your app issues tokens and publishes through its API. `WS_USER_BROADCASTER` keeps working; `@WsController` handlers do not apply.
+
 ## Limits
 
 Know these before you design around the adapter:
