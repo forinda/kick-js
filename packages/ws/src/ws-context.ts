@@ -43,6 +43,13 @@ export class WsContext {
     request: IncomingMessage,
     /** Called with the number of frames each send wrote — feeds `messagesSent`. */
     private readonly onSend?: (count: number) => void,
+    /** Relays namespace broadcasts to other instances when the adapter has a broker. */
+    private readonly onBroadcast?: (
+      namespace: string,
+      event: string,
+      data: any,
+      excludeId?: string,
+    ) => void,
   ) {
     this.id = id
     this.namespace = namespace
@@ -95,6 +102,7 @@ export class WsContext {
       }
     }
     if (sent) this.onSend?.(sent)
+    this.onBroadcast?.(this.namespace, event, data, this.id)
   }
 
   /** Send to all sockets in the same namespace including this one */
@@ -108,6 +116,7 @@ export class WsContext {
       }
     }
     if (sent) this.onSend?.(sent)
+    this.onBroadcast?.(this.namespace, event, data)
   }
 
   /** Join a room. Names are global across namespaces — see {@link RoomManager}. */

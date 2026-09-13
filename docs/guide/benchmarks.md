@@ -72,15 +72,16 @@ CONNS=10000 WORKERS=8 ECHO_RATE=0 FAN_RATE=5 pnpm bench
 INSTANCES=2 CONNS=10000 WORKERS=8 pnpm bench
 ```
 
-| Variable    | Default | Meaning                                         |
-| ----------- | ------- | ----------------------------------------------- |
-| `INSTANCES` | `1`     | Server processes; connections are spread evenly |
-| `CONNS`     | `2000`  | Total connections                               |
-| `WORKERS`   | `4`     | Client processes                                |
-| `SECONDS`   | `10`    | Length of the measured phase                    |
-| `ECHO_RATE` | `1`     | Messages per second, per connection             |
-| `FAN_RATE`  | `20`    | Broadcasts per second from the single sender    |
-| `BASE_PORT` | `4600`  | First server port                               |
+| Variable    | Default | Meaning                                              |
+| ----------- | ------- | ---------------------------------------------------- |
+| `INSTANCES` | `1`     | Server processes; connections are spread evenly      |
+| `CONNS`     | `2000`  | Total connections                                    |
+| `WORKERS`   | `4`     | Client processes                                     |
+| `SECONDS`   | `10`    | Length of the measured phase                         |
+| `ECHO_RATE` | `1`     | Messages per second, per connection                  |
+| `FAN_RATE`  | `20`    | Broadcasts per second from the single sender         |
+| `BASE_PORT` | `4600`  | First server port                                    |
+| `REDIS_URL` | unset   | When set, instances share rooms via the Redis broker |
 
 The output includes client CPU. If it approaches 100%, the clients are the bottleneck — raise `WORKERS` before reading the server numbers.
 
@@ -100,9 +101,24 @@ No run lost a message; overloaded runs delivered late. Once a process is past it
 
 ### Running more than one instance
 
-| Scenario                             | Reach | p50   | p99   |
-| ------------------------------------ | ----- | ----- | ----- |
-| 1 instance, 10,000-member room, 5/s  | 1.0   | 142ms | 255ms |
-| 2 instances, 10,000-member room, 5/s | 0.5   | 44ms  | 97ms  |
+Set `REDIS_URL` to run the instances with the [Redis broker](./websockets.md#scaling-across-instances):
 
-A second instance halves the per-process load, but rooms are process-local: a broadcast reaches only the sockets connected to the instance that sent it. Until a cross-instance broker exists, run one instance per realtime workload, or put connections behind a service that owns them — see [WebSockets](./websockets.md).
+```bash
+docker run -d --rm -p 6379:6379 redis
+REDIS_URL=redis://127.0.0.1:6379 INSTANCES=2 CONNS=10000 WORKERS=8 ECHO_RATE=0 FAN_RATE=5 pnpm bench
+```
+
+One 10,000-member room, spread evenly across instances, local Redis. These rows were measured in one session, so they compare with each other rather than with the table above.
+
+| Scenario                | Frames/s | Reach   | p50   | p99   |
+| ----------------------- | -------- | ------- | ----- | ----- |
+| 1 instance              | 50,000   | 1.0     | 125ms | 178ms |
+| 1 instance + Redis      | 50,000   | 1.0     | 141ms | 184ms |
+| 2 instances, no broker  | 50,000   | **0.5** | 44ms  | 92ms  |
+| 2 instances + Redis     | 50,000   | 1.0     | 85ms  | 201ms |
+| 1 instance (overloaded) | 100,000  | 1.0     | 1.8s  | 2.7s  |
+| 4 instances + Redis     | 100,000  | 1.0     | 58ms  | 203ms |
+
+- Without a broker, each instance reaches only its own sockets, so half the room never gets the message.
+- The broker costs one Redis round trip per broadcast, not per recipient — ~16ms p50 in the single-instance runs here.
+- A load that swamps one process is handled by four with room to spare: server CPU stayed under 70% per instance.

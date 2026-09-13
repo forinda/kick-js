@@ -18,6 +18,7 @@ import {
   WS_USER_BROADCASTER,
   wsControllerRegistry,
   type WsAdapterOptions,
+  type WsBrokerMessage,
   type WsHandlerDefinition,
   type WsUserBroadcaster,
 } from './interfaces'
@@ -119,7 +120,48 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     const countSent = (n: number): void => {
       messagesSent.value += n
     }
-    const roomManager = new RoomManager(countSent)
+
+    // Cross-instance fan-out. Every broadcast is delivered to this instance's
+    // sockets first, then published under this instance's id; other instances
+    // deliver it to theirs and every instance skips its own, so no socket gets
+    // a frame twice. Publishing is deferred and its failures logged: a broker
+    // outage must not throw out of a handler that only wanted to broadcast.
+    const broker = options.broker
+    const origin = randomUUID()
+    const relay = (message: Omit<WsBrokerMessage, 'origin'>): void => {
+      Promise.resolve()
+        .then(() => broker!.publish({ ...message, origin }))
+        .catch((err) => log.error({ err }, 'WS broker publish failed'))
+    }
+    const relayRoom = broker
+      ? (room: string, event: string, data: unknown, exclude?: string) =>
+          relay({ room, event, data, exclude })
+      : undefined
+    const relayNamespace = broker
+      ? (namespace: string, event: string, data: unknown, exclude?: string) =>
+          relay({ namespace, event, data, exclude })
+      : undefined
+
+    const roomManager = new RoomManager(countSent, relayRoom)
+
+    const onRelayed = (message: WsBrokerMessage): void => {
+      if (message.origin === origin) return
+      const { room, namespace, event, data, exclude } = message
+      if (room !== undefined) return roomManager.deliver(room, event, data, exclude)
+      if (namespace === undefined) return
+      const frame = JSON.stringify({ event, data })
+      let sent = 0
+      for (const entry of namespaces.values()) {
+        if (entry.namespace !== namespace) continue
+        for (const [id, socket] of entry.sockets) {
+          if (id !== exclude && socket.readyState === socket.OPEN) {
+            socket.send(frame)
+            sent++
+          }
+        }
+      }
+      if (sent) countSent(sent)
+    }
 
     const userRoom = (userId: string): string => userRoomPrefix + userId
 
@@ -228,6 +270,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         entry.namespace,
         request,
         countSent,
+        relayNamespace,
       )
       entry.contexts.set(socketId, ctx)
 
@@ -337,7 +380,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       messagesSent,
       wsErrors,
 
-      beforeStart({ container: containerArg }) {
+      async beforeStart({ container: containerArg }) {
         container = containerArg
 
         // The factory's mutate-name pattern means `this` inside lifecycle
@@ -385,6 +428,10 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
 
           log.info(`Registered WS namespace: ${fullPath} (${controllerClass.name})`)
         }
+
+        // Subscribed before the server takes connections, so no relayed
+        // broadcast is missed between listen and subscribe.
+        if (broker) await broker.subscribe(onRelayed)
       },
 
       afterStart({ server }) {
@@ -441,7 +488,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         log.info(`WebSocket ready — ${namespaces.size} namespace(s), ${totalHandlers} handler(s)`)
       },
 
-      shutdown() {
+      async shutdown() {
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer)
         }
@@ -456,6 +503,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         }
 
         wss?.close()
+        await broker?.close?.()
       },
     }
   },
