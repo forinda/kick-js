@@ -221,7 +221,8 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
       let pendingBytes = 0
       socket.onAny((event: string, data: unknown) => {
         if (ready) return dispatch(event, data)
-        const size = Buffer.byteLength(JSON.stringify(data) ?? '')
+        // The event name is client-controlled and held too, so it counts.
+        const size = Buffer.byteLength(JSON.stringify([event, data]))
         if (
           pending.length >= MAX_PENDING_BEFORE_CONNECT ||
           pendingBytes + size > MAX_PENDING_BYTES_BEFORE_CONNECT
@@ -254,6 +255,14 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
           ready = true
           pendingBytes = 0
           for (const [event, data] of pending.splice(0)) dispatch(event, data)
+        })
+        // A rejected join would otherwise leave the socket connected with its
+        // events held forever. Handlers never reject (errors are logged).
+        .catch((err) => {
+          log.error({ err }, 'Socket.IO user-room join failed; disconnecting')
+          pending.length = 0
+          pendingBytes = 0
+          socket.disconnect(true)
         })
     }
 

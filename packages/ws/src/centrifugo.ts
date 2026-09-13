@@ -33,6 +33,12 @@ export interface CentrifugoClientOptions {
   apiKey: string
   /** Defaults to the global `fetch`. */
   fetch?: typeof fetch
+  /**
+   * Abort a call not finished after this many milliseconds (default 10 000);
+   * it rejects with a `TimeoutError`. Without it a stalled Centrifugo keeps
+   * callers — and fire-and-forget user broadcasts — pending.
+   */
+  timeoutMs?: number
 }
 
 /** Centrifugo server API — the subset KickJS services need. */
@@ -63,6 +69,7 @@ export function centrifugoClient({
   url,
   apiKey,
   fetch: fetchImpl = globalThis.fetch,
+  timeoutMs = 10_000,
 }: CentrifugoClientOptions): CentrifugoClient {
   const base = url.replace(/\/+$/, '')
 
@@ -71,6 +78,8 @@ export function centrifugoClient({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
       body: JSON.stringify(body),
+      // Covers the response body too: reading it below aborts on the same signal.
+      signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) throw new CentrifugoApiError(method, res.status, res.statusText || 'HTTP error')
     // By default Centrifugo reports API errors with HTTP 200 and an `error`

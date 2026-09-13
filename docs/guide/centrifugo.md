@@ -39,7 +39,8 @@ Keys as Centrifugo v6 reads them (`config.json`, or `CENTRIFUGO_`-prefixed envir
     }
   },
   "channel": {
-    "without_namespace": { "allow_subscribe_for_client": true }
+    "without_namespace": { "allow_subscribe_for_client": true },
+    "namespaces": [{ "name": "orders" }]
   }
 }
 ```
@@ -48,6 +49,12 @@ Keys as Centrifugo v6 reads them (`config.json`, or `CENTRIFUGO_`-prefixed envir
 - `client.token.hmac_secret_key` — what `connectionToken` signs with. Needed only for the token flow.
 - `client.proxy.connect` — needed only for the proxy flow. Centrifugo forwards **only** the headers listed in `http_headers`; without `Cookie` your resolver sees no session.
 - `client.subscribe_to_user_personal_channel` — subscribes each user to `#<user>` on connect, which is where `WS_USER_BROADCASTER` publishes.
+- `channel.without_namespace.allow_subscribe_for_client` — lets any connected client subscribe to a channel without a `:` namespace, such as `news`, with no further authorization. Treat those channels as public to every signed-in user and never publish restricted data on them. Personal `#<user>` channels are unaffected.
+- `channel.namespaces` — a channel such as `orders:42` needs its namespace declared, or Centrifugo answers `102: unknown channel`. `orders` does not allow client subscriptions, so only users the server subscribes receive it — see [Publishing from services](#publishing-from-services).
+
+::: warning Keep service traffic on a trusted network
+`http://api:3000` and `http://centrifugo:8000` stand for addresses on a private service network. The connect proxy forwards the user's `Cookie` header, and the adapter sends the API key on every call. When the two services talk across a network you do not control, use HTTPS or another authenticated, encrypted link.
+:::
 
 ## Register the adapter
 
@@ -60,7 +67,7 @@ bootstrap({
   adapters: [
     CentrifugoAdapter({
       // Declared in your env schema (src/config/index.ts)
-      url: getEnv('CENTRIFUGO_URL'), // e.g. http://centrifugo:8000
+      url: getEnv('CENTRIFUGO_URL'), // e.g. http://centrifugo:8000 on the service network
       apiKey: getEnv('CENTRIFUGO_API_KEY'),
     }),
   ],
@@ -150,6 +157,13 @@ export class OrderEvents {
     @Inject(WS_USER_BROADCASTER) private readonly users: WsUserBroadcaster,
   ) {}
 
+  async placed(order: { id: string; userId: string }) {
+    // Server-side subscription: only the order's owner receives orders:<id>.
+    // It applies to the user's current connections — list the channel in the
+    // connection token's `channels` to have it on every reconnect.
+    await this.centrifugo.subscribe(order.userId, `orders:${order.id}`)
+  }
+
   async shipped(order: { id: string; userId: string }) {
     await this.centrifugo.publish(`orders:${order.id}`, { status: 'shipped' })
     this.users.toUser(order.userId).send('order:shipped', { id: order.id })
@@ -174,12 +188,13 @@ const centrifuge = new Centrifuge('wss://realtime.example.com/connection/websock
   getToken: async () => (await fetch('/token').then((r) => r.json())).token,
 })
 
-// Server-side subscriptions, including the personal channel
+// Server-side subscriptions: the personal channel, and orders:<id> the server subscribed this user to
 centrifuge.on('publication', (ctx) => console.log(ctx.channel, ctx.data))
 
-const orders = centrifuge.newSubscription('orders:42')
-orders.on('publication', (ctx) => console.log(ctx.data))
-orders.subscribe()
+// Client-side subscription to a public channel (no namespace)
+const news = centrifuge.newSubscription('news')
+news.on('publication', (ctx) => console.log(ctx.data))
+news.subscribe()
 
 centrifuge.connect()
 ```

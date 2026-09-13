@@ -91,6 +91,20 @@ describe('centrifugoClient', () => {
     expect(err.message).toContain('unknown channel')
   })
 
+  it('aborts a call that outlives timeoutMs', async () => {
+    const stalled = http.createServer(() => {}) // accepts, never answers
+    await new Promise<void>((resolve) => stalled.listen(0, resolve))
+    cleanups.push(() => {
+      stalled.closeAllConnections()
+      stalled.close()
+    })
+    const url = `http://127.0.0.1:${(stalled.address() as AddressInfo).port}`
+    const err = await centrifugoClient({ url, apiKey: 'k', timeoutMs: 50 })
+      .publish('news', 1)
+      .catch((e) => e)
+    expect(err.name).toBe('TimeoutError')
+  })
+
   it('throws on a non-2xx reply', async () => {
     const { url } = await fakeCentrifugo()
     await expect(centrifugoClient({ url, apiKey: 'k' }).publish('boom', 1)).rejects.toMatchObject({
@@ -170,7 +184,10 @@ describe('CentrifugoAdapter', () => {
     const users = container.resolve(WS_USER_BROADCASTER)
     expect(users.roomFor('alice')).toBe('#alice')
     users.toUser('alice').send('ping', 1)
-    await new Promise((r) => setTimeout(r, 50))
+    // Fire-and-forget publish: wait for the fake server to record it.
+    for (let i = 0; i < 200 && calls.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 10))
+    }
     expect(calls).toEqual([
       {
         path: '/api/publish',

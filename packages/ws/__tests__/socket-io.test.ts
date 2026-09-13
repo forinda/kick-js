@@ -262,6 +262,39 @@ describe('SocketIoAdapter per-event state and limits', () => {
     s.socket.emit('ping', big)
     s.socket.emit('ping', big)
     expect(await reason).toBe('io server disconnect')
+    // @OnConnect is still running; let it finish here rather than log into the next test.
+    await waitFor(() => seen.includes('slow:connect:end'))
+  })
+
+  it('counts event names toward the 1 MiB hold', async () => {
+    const { origin } = await boot()
+    const s = await client(`${origin}/slow`)
+    const reason = new Promise<string>((resolve) => s.socket.once('disconnect', resolve))
+    const name = 'e'.repeat(600_000)
+    s.socket.emit(name)
+    s.socket.emit(name)
+    expect(await reason).toBe('io server disconnect')
+    // @OnConnect is still running; let it finish here rather than log into the next test.
+    await waitFor(() => seen.includes('slow:connect:end'))
+  })
+
+  it('disconnects instead of hanging when the user-room join rejects', async () => {
+    const { origin } = await boot({ auth: userFromQuery })
+    const adapter: any = Container.getInstance().resolve(SOCKET_IO).of('/probe').adapter
+    const addAll = adapter.addAll.bind(adapter)
+    adapter.addAll = (id: string, rooms: Set<string>) =>
+      rooms.has('user:u1') ? Promise.reject(new Error('adapter down')) : addAll(id, rooms)
+
+    const socket = connectClient(`${origin}/probe`, {
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false,
+      query: { user: 'u1' },
+    })
+    cleanups.push(() => socket.disconnect())
+    const reason = await new Promise<string>((resolve) => socket.once('disconnect', resolve))
+    expect(reason).toBe('io server disconnect')
+    expect(seen).toEqual([])
   })
 })
 
