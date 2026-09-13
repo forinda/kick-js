@@ -1,5 +1,56 @@
 # @forinda/kickjs-cli
 
+## 8.2.0
+
+### Minor Changes
+
+- [#698](https://github.com/forinda/kick-js/pull/698) [`7b53aad`](https://github.com/forinda/kick-js/commit/7b53aadc1c97b2170d1464632c64dd10431f1043) Thanks [@forinda](https://github.com/forinda)! - `kick check --di` finds REQUEST-scoped dependencies injected through the
+  constructor of a SINGLETON — including every controller — before anything runs
+  ([#676](https://github.com/forinda/kick-js/issues/676)).
+  
+  The container rejects that pairing only when it first builds the parent, which
+  for a controller is the first request that reaches it: the route mounts, boots,
+  and answers 500. Both scopes are in the source, so the check reports the
+  constructor parameter's file and line, with the same advice the container gives
+  (`@Autowired()` for a controller; a different scope or `@Autowired()` for
+  anything else), and exits non-zero.
+  
+  Scopes are read from `@Service` / `@Repository` / `@Component` /
+  `@Injectable({ scope })` and `container.register` / `registerFactory` calls;
+  parameters resolve through `@Inject(token)` or their class type. The scan
+  reports nothing it cannot pin down — a scope in a variable, a name declared in
+  two files, a token registered under two scopes — so a finding is a real failure.
+  `--deploy` and `--di` can be combined.
+
+### Patch Changes
+
+- [#697](https://github.com/forinda/kick-js/pull/697) [`0bd62fb`](https://github.com/forinda/kick-js/commit/0bd62fbafcbe336973ccb984af784dfb151b1beb) Thanks [@forinda](https://github.com/forinda)! - The REQUEST-into-SINGLETON error now gives advice the parent can follow.
+  
+  It said "Use TRANSIENT or REQUEST scope for the parent" for every parent. A
+  `@Controller()` takes no options and is always SINGLETON, so for the most
+  common case — a controller constructor injecting a request-scoped repository —
+  the suggested fix did not exist ([#676](https://github.com/forinda/kick-js/issues/676)). A controller parent is now told to
+  inject the dependency with `@Autowired()`, which re-resolves REQUEST-scoped
+  dependencies per access; any other parent is told it can change its scope or
+  use `@Autowired()`. The message still starts with `Cannot inject REQUEST-scoped
+  "…" into SINGLETON "…"`, so `kick explain` matches it as before, and its
+  diagnosis no longer quotes the old wording as current.
+
+- [#696](https://github.com/forinda/kick-js/pull/696) [`32cede4`](https://github.com/forinda/kick-js/commit/32cede40a55ca0fa238250f347c7e9b1305299fb) Thanks [@forinda](https://github.com/forinda)! - Remove the last traces of the `ddd` and `cqrs` patterns, which were dropped
+  from the generator earlier.
+  
+  - `KickConfig.pattern`'s JSDoc — what editors show on hover in
+    `kick.config.ts` — still listed `'ddd'` and `'cqrs'` while the type only
+    accepts `'rest' | 'minimal'`.
+  - `kick new` printed "Full DDD module (controller, DTOs, use-cases, repo)" for
+    `kick g module` in its next steps; it now describes the REST module it
+    actually generates. The unreachable `ddd` / `cqrs` hints are gone.
+  - The DDD `generateController` and `generateModuleIndex` templates, unused by
+    any generator since the patterns were removed, are deleted.
+- Updated dependencies [[`0bd62fb`](https://github.com/forinda/kick-js/commit/0bd62fbafcbe336973ccb984af784dfb151b1beb), [`b97d6e3`](https://github.com/forinda/kick-js/commit/b97d6e3312df24d3c6d80e40761aec259867b603)]:
+  - @forinda/kickjs@8.4.0
+  - @forinda/kickjs-db@7.3.0
+
 ## 8.1.7
 
 ### Patch Changes
