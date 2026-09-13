@@ -60,7 +60,7 @@ features:
     linkText: Feel the HMR
   - icon: 🛠
     title: CLI That Scaffolds Everything
-    details: 'kick new, kick g module (minimal, REST, DDD, CQRS), kick add, kick doctor — scaffold an entire feature in seconds.'
+    details: 'kick new, kick g module (REST or minimal), kick add, kick doctor — scaffold an entire feature in seconds.'
     link: /guide/cli-commands
     linkText: Use the CLI
   - icon: 🧩

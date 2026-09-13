@@ -176,7 +176,7 @@ async get(ctx: RequestContext) {
 
 **Edge-ready web standards** — the same app runs as a `fetch(Request) → Response` handler on Cloudflare Workers, Bun, and Deno via [`@forinda/kickjs/web`](https://kickjs.app/guide/edge-deployment.html) (h3 v2 engine); a bundle-purity test keeps the entry free of node-only imports.
 
-**DDD generators** — full hook surface emitted so you delete what you don't need.
+**Generators** — REST or minimal modules, and adapters and plugins with the full hook surface emitted so you delete what you don't need.
 
 ```bash
 kick g module users  # complete module scaffold
@@ -216,7 +216,7 @@ Three packages ship with every project — `kick new` always installs them, and 
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@forinda/kickjs`](packages/kickjs/)    | Core framework — DI, decorators, pluggable HTTP runtimes (Express / Fastify / h3), routing, middleware, contributors, request store, `processHooks` |
 | [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log                                                                                |
-| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, DDD generators, custom commands, `kick g agents`, jiti-powered TS config loading, walk-up project root                                 |
+| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, module generators, custom commands, `kick g agents`, jiti-powered TS config loading, walk-up project root                              |
 
 ### Optional packages
 

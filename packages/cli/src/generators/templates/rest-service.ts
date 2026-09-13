@@ -1,6 +1,6 @@
 import type { TemplateContext } from './types'
 
-/** REST service — wraps repository with CRUD methods, replaces use-cases for flat pattern */
+/** REST service — wraps the repository with CRUD methods */
 export function generateRestService(ctx: TemplateContext): string {
   const { pascal, kebab } = ctx
   return `import { Service, Inject, HttpException } from '@forinda/kickjs'

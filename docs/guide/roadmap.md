@@ -136,7 +136,7 @@ Things that don't make headlines but determine whether adopters stick around.
 **Status:** `proposed`
 **Effort:** 3–6 weeks
 
-**Why it matters.** Today the CLI scaffolder is template-functions-that-return-strings (`packages/cli/src/generators/templates/`). Powerful, type-safe, but a contributor can't see "what a scaffolded DDD-Prisma project looks like" without running `kick new`. Adding a new combination requires writing TS code. The combinatorial space (pattern × repo × features) keeps growing.
+**Why it matters.** Today the CLI scaffolder is template-functions-that-return-strings (`packages/cli/src/generators/templates/`). Powerful, type-safe, but a contributor can't see "what a scaffolded REST project with a Postgres repository stub looks like" without running `kick new`. Adding a new combination requires writing TS code. The combinatorial space (pattern × repo × features) keeps growing.
 
 **What it looks like.** Adopt the `create-vue` pattern — a feature-overlay file system where each "feature" is a directory:
 
@@ -144,13 +144,9 @@ Things that don't make headlines but determine whether adopters stick around.
 packages/cli/templates/
   base/                  # always rendered
   pattern-rest/
-  pattern-ddd/
-  pattern-cqrs/
   pattern-minimal/
-  repo-prisma/
-  repo-drizzle/
   repo-inmemory/
-  repo-custom/
+  repo-stub/
   feature-swagger/
   feature-ws/
   feature-queue/

@@ -434,8 +434,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   const genHint: Record<string, string> = {
     rest: 'kick g module user',
-    ddd: 'kick g module user --repo drizzle',
-    cqrs: 'kick g module user --pattern cqrs',
     minimal: '# add your routes to src/index.ts',
   }
   log(`  ${genHint[template] ?? genHint.rest}`)
@@ -447,7 +445,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick start                Run production build')
   log('')
   log('Generators:')
-  log('  kick g module <name>      Full DDD module (controller, DTOs, use-cases, repo)')
+  log('  kick g module <name>      REST module (controller, service, DTOs, repository)')
   log('  kick g scaffold <n> <f..> CRUD module from field definitions')
   log('  kick g controller <name>  Standalone controller')
   log('  kick g service <name>     @Service() class')

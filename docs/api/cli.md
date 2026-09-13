@@ -30,7 +30,7 @@ cd packages/cli && pnpm link --global
 | `kick list`                                 | `kick ls`                                      | List all available KickJS packages                                |
 | `kick add <packages...>`                    |                                                | Install KickJS packages with peer deps                            |
 | `kick generate --list`                      | `kick g --list`                                | List all available generators                                     |
-| `kick generate module <name>`               | `kick g module`                                | Generate a full DDD module with all layers                        |
+| `kick generate module <name>`               | `kick g module`                                | Generate a REST module (controller, service, DTOs, repository)    |
 | `kick generate scaffold <name> <fields...>` | `kick g scaffold`                              | CRUD module from field definitions (`name:type:optional`)         |
 | `kick generate adapter <name>`              | `kick g adapter`                               | Generate an AppAdapter scaffold                                   |
 | `kick generate middleware <name>`           | `kick g middleware`                            | Generate an Express middleware function                           |

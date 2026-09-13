@@ -1,5 +1,5 @@
 /**
- * E2E test for `kick g module` — generates a DDD module with the
+ * E2E test for `kick g module` — generates a REST module with the
  * default placeholder entity and verifies the result compiles.
  *
  * @module @forinda/kickjs-cli/__tests__/module.test

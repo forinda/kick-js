@@ -16,7 +16,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { generateController, generateRestController } from '../src/generators/templates/controller'
+import { generateRestController } from '../src/generators/templates/controller'
 import { hasDependency, hasSwagger } from '../src/config'
 import { findProjectRoot } from '../src/utils/project-root'
 
@@ -37,30 +37,25 @@ function projectWith(pkg: Record<string, unknown>): string {
 
 describe('swagger gate', () => {
   it('emits no ApiTags when the project does not depend on swagger', () => {
-    for (const out of [generateController(ctx), generateRestController(ctx)]) {
-      expect(out).not.toContain('@forinda/kickjs-swagger')
-      expect(out).not.toContain('ApiTags')
-    }
+    const out = generateRestController(ctx)
+    expect(out).not.toContain('@forinda/kickjs-swagger')
+    expect(out).not.toContain('ApiTags')
   })
 
   it('emits ApiTags and its import when it does', () => {
-    for (const out of [
-      generateController({ ...ctx, swagger: true }),
-      generateRestController({ ...ctx, swagger: true }),
-    ]) {
-      expect(out).toContain("import { ApiTags } from '@forinda/kickjs-swagger'")
-      expect(out).toContain("@ApiTags('Product')")
-    }
+    const out = generateRestController({ ...ctx, swagger: true })
+    expect(out).toContain("import { ApiTags } from '@forinda/kickjs-swagger'")
+    expect(out).toContain("@ApiTags('Product')")
   })
 
   it('leaves the decorator stack well-formed either way', () => {
     // Dropping a decorator line must not leave a gap between `@Get` and the
     // decorator under it, or a dangling blank line before the method.
-    const without = generateController(ctx)
+    const without = generateRestController(ctx)
     expect(without).toContain("@Get('/')\n  @ApiQueryParams(")
     expect(without).not.toMatch(/@Get\('\/'\)\n\n/)
 
-    const with_ = generateController({ ...ctx, swagger: true })
+    const with_ = generateRestController({ ...ctx, swagger: true })
     expect(with_).toContain("@Get('/')\n  @ApiTags('Product')\n  @ApiQueryParams(")
   })
 

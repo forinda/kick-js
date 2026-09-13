@@ -20,4 +20,4 @@ npx @forinda/kickjs-cli new my-api
 cd my-api && pnpm dev
 ```
 
-The CLI scaffolds `tsconfig.json`, `vite.config.ts`, `kick.config.ts`, modules, and env wiring for your chosen template (`rest` / `ddd` / `cqrs` / `minimal`) and repo type (`prisma` / `drizzle` / `inmemory` / `custom`).
+The CLI scaffolds `tsconfig.json`, `vite.config.ts`, `kick.config.ts`, modules, and env wiring for your chosen template (`rest` / `minimal` / `fullstack`) and repository (`inmemory`, or any name for an unimplemented stub such as `postgres`).

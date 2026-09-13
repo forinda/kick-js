@@ -349,11 +349,10 @@ export interface ModuleConfig {
 /** Configuration for the kick.config.ts file */
 export interface KickConfig {
   /**
-   * Project pattern — controls default generator behavior.
-   * - 'rest' — Express + Swagger (default)
-   * - 'ddd' — Full DDD modules with use cases, entities, value objects
-   * - 'cqrs' — CQRS with commands, queries, events, WebSocket + queue
-   * - 'minimal' — Bare Express with no scaffolding
+   * Project pattern — the module shape `kick g module` produces by default.
+   * `--pattern` overrides it per call.
+   * - 'rest' — flat module: controller, service, DTOs, repository (default)
+   * - 'minimal' — controller + module only
    */
   pattern?: ProjectPattern
   /**

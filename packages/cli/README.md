@@ -1,6 +1,6 @@
 # @forinda/kickjs-cli
 
-CLI for KickJS — project scaffolding, DDD module generators, dev/build/start commands.
+CLI for KickJS — project scaffolding, REST and minimal module generators, dev/build/start commands.
 
 ## Install
 

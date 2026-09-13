@@ -37,7 +37,7 @@ export interface ResolveOutDirOptions {
  *
  * Priority:
  *   1. Explicit --out flag (always wins)
- *   2. --module flag → maps into module's folder (DDD or flat based on pattern)
+ *   2. --module flag → maps into module's folder (layout depends on the pattern)
  *   3. Standalone default directory
  */
 export function resolveOutDir(options: ResolveOutDirOptions): string {
