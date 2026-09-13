@@ -1130,8 +1130,13 @@ error handler takes over).
 **Write responses with \`ctx.*\`, never \`ctx.res\`.** \`ctx.res\` is the ENGINE-NATIVE
 response object, so \`ctx.res.status(401).json(...)\` only works on Express —
 \`FastifyReply\` has no \`.json()\` and h3's event has no \`.status()\`. Use
-\`ctx.problem.unauthorized({ detail })\` (RFC 9457) or \`ctx.json(body, status)\`;
-those work on all four runtimes.
+\`ctx.problem.unauthorized({ detail })\` (RFC 9457) or \`ctx.json(body, status)\`,
+and the helper for anything else you would reach \`ctx.res\` for:
+\`ctx.download(buffer, filename, contentType?)\` for a generated file,
+\`ctx.html(content)\`, \`ctx.redirect(url, status?)\`, \`ctx.sse()\` for a stream.
+All of them work on all four runtimes. Never hand \`ctx.redirect\` a destination
+taken from the request unchecked — allow-list it, or accept only a same-site path
+(one leading \`/\`, not \`//\`) — or the route is an open redirect.
 
 **Guard shape**:
 

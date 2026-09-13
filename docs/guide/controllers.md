@@ -197,6 +197,12 @@ rather than the body, so the typed client has no payload to offer.
 | `ctx.download(buffer, filename, type?)` | --     | [File download](#returning-a-generated-file)    |
 | `ctx.render(template, data?)`           | 200    | Render a template (requires ViewAdapter)        |
 
+::: warning Redirect destinations
+`ctx.redirect(url)` writes `url` into the `Location` header unchanged. A destination taken
+from the request (`?next=…`, a form field) must be allow-listed or limited to a same-site
+path — one leading `/`, not `//` — or the route becomes an open redirect.
+:::
+
 #### Returning a generated file
 
 `ctx.download()` sets `Content-Disposition` and `Content-Type` and sends the
