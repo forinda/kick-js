@@ -42,7 +42,9 @@ export interface WsAuthConfig {
    * handshake's status to script, so a close code is what a client can act on.
    *
    * Messages the client sends before this settles are held and delivered after
-   * `@OnConnect`, up to 64; beyond that the socket is closed with `1008`.
+   * `@OnConnect`, up to 64 messages or 1 MiB; beyond either the socket is
+   * closed with `1008`. A socket that closes while this runs never reaches
+   * `@OnConnect` or its user room.
    */
   resolveUser: (
     request: IncomingMessage,

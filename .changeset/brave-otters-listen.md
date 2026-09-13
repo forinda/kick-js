@@ -20,9 +20,11 @@ to other listeners, and answers `404` only when it is the sole listener.
 typically sends as soon as the socket opens, which is before an async resolver
 returns; the code comment said those messages were buffered, and they were
 discarded. They are now held and delivered after `@OnConnect`, in order. The
-hold is capped at 64 — the sender is not authenticated yet, so an unbounded
-queue would let anyone buffer memory on the server — and a socket that exceeds
-it is closed with `1008`.
+hold is capped at 64 messages and 1 MiB — the sender is not authenticated yet,
+so an unbounded queue would let anyone buffer memory on the server — and a
+socket that exceeds either is closed with `1008`. A socket that closes while
+the resolver runs no longer reaches `@OnConnect` or re-joins its user room after
+the close handler cleaned it up.
 
 **`messagesSent` was always 0.** Declared, exposed through `getStats()` and
 shown in devtools, never incremented. `WsContext` and `RoomManager` now report

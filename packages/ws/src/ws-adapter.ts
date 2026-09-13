@@ -28,6 +28,8 @@ const log = createLogger('WsAdapter')
 
 /** Messages held from a socket whose `auth.resolveUser` has not settled yet. */
 const MAX_PENDING_BEFORE_AUTH = 64
+/** Total bytes held before auth. `maxPayload` bounds one message, not the queue. */
+const MAX_PENDING_BYTES_BEFORE_AUTH = 1024 * 1024
 
 interface NamespaceEntry {
   namespace: string
@@ -188,6 +190,9 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       if (!auth) return true
       try {
         const user = await auth.resolveUser(ctx.request)
+        // Joining the user room after close would re-add a socket the close
+        // handler already removed from every room.
+        if (ctx.socket.readyState !== ctx.socket.OPEN) return false
         if (!user || !user.id) {
           ctx.socket.close(4401, 'Unauthorized')
           return false
@@ -274,21 +279,34 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       // buffer memory on the server before being rejected.
       let authed = auth === undefined
       const pending: Array<Buffer | string> = []
+      let pendingBytes = 0
+      const dropPending = (): void => {
+        pending.length = 0
+        pendingBytes = 0
+      }
 
       ws.on('message', (raw: Buffer | string) => {
         if (authed) return handleMessage(raw)
-        if (pending.length >= MAX_PENDING_BEFORE_AUTH) {
-          pending.length = 0
+        const size = typeof raw === 'string' ? Buffer.byteLength(raw) : raw.length
+        if (
+          pending.length >= MAX_PENDING_BEFORE_AUTH ||
+          pendingBytes + size > MAX_PENDING_BYTES_BEFORE_AUTH
+        ) {
+          dropPending()
           ws.close(1008, 'Too many messages before authentication')
           return
         }
         pending.push(raw)
+        pendingBytes += size
       })
 
       const authPromise = auth ? authenticate(ctx) : Promise.resolve(true)
       authPromise.then((ok) => {
-        if (!ok) {
-          pending.length = 0
+        // Closed while resolveUser ran (client left, or the overflow above):
+        // running @OnConnect or replaying now would act on a dead socket after
+        // the close handler already cleaned it up.
+        if (!ok || ws.readyState !== ws.OPEN) {
+          dropPending()
           return
         }
         authed = true
@@ -297,6 +315,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       })
 
       ws.on('close', () => {
+        dropPending()
         activeConnections.value--
         invokeHandlers(controller, entry.handlers, 'disconnect', ctx)
         roomManager.leaveAll(socketId)

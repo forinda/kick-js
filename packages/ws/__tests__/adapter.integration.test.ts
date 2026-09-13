@@ -149,6 +149,31 @@ describe('WsAdapter authentication', () => {
     for (let i = 0; i < 65; i++) ws.send(JSON.stringify({ event: 'ping' }))
     expect(await closed).toBe(1008)
   })
+
+  // A message count alone lets 64 large frames hold 64 × maxPayload.
+  it('closes with 1008 when held messages exceed the byte cap', async () => {
+    const { url } = await boot({
+      auth: { resolveUser: () => new Promise((r) => setTimeout(() => r({ id: 'u1' }), 500)) },
+    })
+    const ws = await connect(url('/ws/a'))
+    const closed = new Promise<number>((resolve) => ws.once('close', resolve))
+    const big = JSON.stringify({ event: 'ping', data: 'x'.repeat(600_000) })
+    ws.send(big)
+    ws.send(big)
+    expect(await closed).toBe(1008)
+  })
+
+  it('does not run @OnConnect or join the user room when the client leaves mid-auth', async () => {
+    const { url, adapter } = await boot({
+      auth: { resolveUser: () => new Promise((r) => setTimeout(() => r({ id: 'u1' }), 50)) },
+    })
+    const ws = await connect(url('/ws/a'))
+    ws.send(JSON.stringify({ event: 'ping' }))
+    ws.close()
+    await new Promise((r) => setTimeout(r, 150))
+    expect(seen).toEqual([])
+    expect(adapter.getStats().rooms).toEqual({})
+  })
 })
 
 describe('WsAdapter stats and rooms', () => {
