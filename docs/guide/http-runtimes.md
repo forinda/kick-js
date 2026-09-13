@@ -36,8 +36,9 @@ class UsersController {
 
 KickJS turns decorators into an engine-neutral **route table**, and each runtime
 materializes that table onto its own router (real Express routes, real Fastify
-routes). `ctx.json` / `ctx.html` / `ctx.sse` / `ctx.problem` write through a
-small response driver, so the same handler code runs unchanged on every engine.
+routes). `ctx.json` / `ctx.html` / `ctx.download` / `ctx.redirect` / `ctx.sse` /
+`ctx.problem` write through a small response driver, so the same handler code
+runs unchanged on every engine.
 
 ## Fastify
 
