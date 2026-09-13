@@ -302,8 +302,9 @@ export function generateGitIgnore(): string {
   return `node_modules/
 dist/
 .env
-# Personal machine overrides. \`.env.test\` itself is COMMITTED — it is the
-# suite's shared, reviewable environment — but \`*.local\` never is.
+# Machine-specific: each developer's test env differs (database names, ports).
+# The shared template is the committed \`.env.test.example\`.
+.env.test
 *.local
 coverage/
 .DS_Store
@@ -363,19 +364,29 @@ NODE_ENV=development
  *
  * `PORT=0` asks the OS for a free port, so a test run cannot collide with
  * a dev server already on 3000.
+ *
+ * Gitignored, like `.env`: values differ per machine, and a committed copy
+ * turns every local tweak into a diff for the whole team. The shared
+ * template is {@link generateEnvTestExample}.
  */
 export function generateEnvTest(): string {
   return `# Read INSTEAD of .env when NODE_ENV=test (or under vitest).
 # No fallback to .env — declare here everything the suite needs, so a
 # missing var fails the run instead of silently resolving to your dev value.
 #
-# Keep real endpoints and credentials OUT of this file. Point at test
-# doubles or throwaway containers; anything committed here is shared with
-# everyone who clones the repo.
+# Not committed. Add new keys to .env.test.example too, with placeholder
+# values — never real endpoints or credentials.
 NODE_ENV=test
 PORT=0
 LOG_LEVEL=silent
 `
+}
+
+/** Generate `.env.test.example` — the committed template a fresh clone copies to `.env.test`. */
+export function generateEnvTestExample(): string {
+  return `# Template for .env.test. Copy it and fill in your machine's values:
+#   cp .env.test.example .env.test
+${generateEnvTest()}`
 }
 
 /** Generate vitest.config.ts for test configuration */

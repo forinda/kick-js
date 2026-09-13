@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest'
 import {
   generateEnv,
   generateEnvTest,
+  generateEnvTestExample,
   generateGitIgnore,
   generateVitestConfig,
 } from '../src/generators/templates/project-config'
@@ -35,8 +36,9 @@ describe('scaffolded .env.test', () => {
     expect(generateEnv()).toContain('NODE_ENV=development')
   })
 
-  it('warns against committing real credentials', () => {
-    // It is a committed file, so the guidance has to be in the file.
+  it('warns against putting real credentials in the committed template', () => {
+    // Its keys are mirrored into the committed .env.test.example, so the
+    // guidance has to be in the file.
     expect(generateEnvTest().toLowerCase()).toContain('credentials')
   })
 
@@ -47,11 +49,18 @@ describe('scaffolded .env.test', () => {
     expect(generateVitestConfig()).not.toContain('env:')
   })
 
-  it('gitignores *.local but keeps .env.test committed', () => {
-    const ignore = generateGitIgnore()
+  it('gitignores .env.test and *.local; the committed template is .env.test.example', () => {
+    // Values differ per machine; a tracked .env.test turns every local
+    // tweak into a diff (and a conflict) for the whole team.
+    const ignore = generateGitIgnore().split('\n')
+    expect(ignore).toContain('.env.test')
     expect(ignore).toContain('*.local')
-    // A bare `.env.test` line would defeat the point — the suite's
-    // environment is meant to be shared and reviewable.
-    expect(ignore.split('\n')).not.toContain('.env.test')
+    expect(ignore).not.toContain('.env.test.example')
+  })
+
+  it('ships a .env.test.example with the same keys and copy instructions', () => {
+    const example = generateEnvTestExample()
+    expect(example).toContain('cp .env.test.example .env.test')
+    expect(example).toContain(generateEnvTest())
   })
 })

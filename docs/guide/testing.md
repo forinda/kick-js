@@ -444,7 +444,7 @@ plus per-mode overrides) and there is no dev-resource-in-a-test failure mode to
 guard against, so those cascade normally.
 
 ```bash
-# .env.test — checked in; the whole environment your suite runs against
+# .env.test — gitignored; the whole environment your suite runs against
 NODE_ENV=test
 DATABASE_URL=postgresql://test@localhost/myapp_test
 LOG_LEVEL=silent
@@ -453,18 +453,27 @@ LOG_LEVEL=silent
 With no `.env.test` present, `.env` is read as before and KickJS prints a
 one-time warning naming what it backfilled.
 
-**Commit `.env.test`.** Unlike `.env`, it belongs in version control — that is
-the difference between _everyone_ on the team being isolated and only whoever
-wrote the file locally. It is shared, reviewable test configuration, so a
-teammate's fresh clone and CI get the same isolation you do. `kick new`
-gitignores `.env` and `*.local` and leaves `.env.test` tracked.
+**Don't commit `.env.test`; commit `.env.test.example`.** Test values differ per
+machine — one developer's database is `myapp_test`, another's runs on a
+different port — so a tracked `.env.test` turns every local tweak into a diff,
+and a merge conflict, for the whole team. `kick new` treats it like `.env`: it
+writes `.env.test` for you, gitignores it along with `.env` and `*.local`, and
+commits `.env.test.example` as the shared list of keys.
 
-The corollary is that it must not hold real credentials or live endpoints —
-point it at test doubles or throwaway containers. A shared database URL sitting
-in a committed `.env.test` rebuilds the trap: a whole team, and CI, quietly
-aimed at one box. Compute per-run values (a container's port, a worker-scoped
-database name) in your test config or setup file instead, where they stay out
-of the repo and `process.env` still outranks the file.
+```bash
+cp .env.test.example .env.test   # after cloning, next to cp .env.example .env
+```
+
+A fresh clone has neither `.env` nor `.env.test`, so nothing leaks. The one
+exposed shape is a machine with a `.env` but no `.env.test` — the one-time
+warning above and `kick doctor` both name it.
+
+When you add a key to `.env.test`, add it to `.env.test.example` with a
+placeholder value. Keep real credentials and live endpoints out of the example.
+In CI, set test env in the job (or with `KICKJS_ENV_FILE=off`) rather than
+relying on a file; `process.env` outranks every file. Compute per-run values (a
+container's port, a worker-scoped database name) in your test config or setup
+file, where they stay out of the repo.
 
 ### `KICKJS_ENV_FILE` — taking manual control
 

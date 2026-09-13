@@ -22,7 +22,8 @@ my-api/                           # Default layout — adopters can rearrange
 │   ├── GEMINI.md
 │   └── skills/<slug>/SKILL.md    # One folder per skill, auto-discovered by agents
 ├── .kickjs/types/                # kick typegen output (KickRoutes, KickEnv, …)
-├── .env / .env.example / .env.test
+├── .env / .env.example            # .env gitignored, .env.example committed
+├── .env.test / .env.test.example  # same split, for the test suite
 ├── .editorconfig
 ├── .gitattributes / .gitignore
 ├── .oxfmtrc.json                 # Formatter config

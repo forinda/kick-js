@@ -289,7 +289,8 @@ unknown keys become type errors — that's the whole reason the file
 `dotenv` is loaded for you (it ships as a dependency of a scaffolded app). Keep
 your existing `.env`; add `.env.test` when you have a suite, because under a test
 run KickJS reads `.env.test` **instead of** `.env` — no layering, no fallback —
-so a test can't reach a live service through a var it forgot to override.
+so a test can't reach a live service through a var it forgot to override. Like
+`.env`, keep `.env.test` out of git and commit a `.env.test.example` template.
 
 See [Configuration](./configuration.md) for the full precedence rules and the
 `ConfigService` API.
