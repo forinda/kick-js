@@ -55,13 +55,16 @@ export function redisBroker({
     async subscribe(onMessage) {
       listener = (from, raw) => {
         if (from !== channel) return
-        let message: WsBrokerMessage
+        let message: unknown
         try {
           message = JSON.parse(raw)
         } catch {
           return // not ours — another publisher on the same channel
         }
-        onMessage(message)
+        // Valid JSON is not a valid message (`null`, `42`, a foreign object).
+        // WsAdapter checks the shape before using it, for every broker, so this
+        // only passes it on.
+        onMessage(message as WsBrokerMessage)
       }
       subscriber.on('message', listener)
       await subscriber.subscribe(channel)

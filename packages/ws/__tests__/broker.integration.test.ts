@@ -273,6 +273,35 @@ describe('redisBroker', () => {
     await broker.publish(message)
     expect(seen).toHaveLength(1)
   })
+
+  it('an adapter on redisBroker survives "null" and malformed JSON on the channel', async () => {
+    const { publisher, subscriber } = fakeRedis()
+    const broker = redisBroker({ publisher: publisher as any, subscriber: subscriber as any })
+    const { adapter, url } = await instance({ broker })
+    const a = await client(url('/ws/chat'))
+    await waitFor(() => adapter.getStats().rooms.lobby === 1)
+
+    for (const raw of [
+      'null',
+      '42',
+      '"text"',
+      '[]',
+      '{}',
+      JSON.stringify({ origin: 'other', event: 'e', room: 'lobby', namespace: '/chat' }),
+      JSON.stringify({ origin: 'other', event: 'e', room: 42 }),
+    ]) {
+      expect(() => subscriber.emit('message', 'kickjs:ws', raw)).not.toThrow()
+    }
+
+    subscriber.emit(
+      'message',
+      'kickjs:ws',
+      JSON.stringify({ origin: 'other', event: 'ok', data: 1, room: 'lobby' }),
+    )
+    await waitFor(() => a.got.length === 1)
+    await settle()
+    expect(a.got).toEqual(['ok:1'])
+  })
 })
 
 const REDIS_URL = process.env.REDIS_URL
