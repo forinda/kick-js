@@ -72,16 +72,16 @@ CONNS=10000 WORKERS=8 ECHO_RATE=0 FAN_RATE=5 pnpm bench
 INSTANCES=2 CONNS=10000 WORKERS=8 pnpm bench
 ```
 
-| Variable    | Default | Meaning                                              |
-| ----------- | ------- | ---------------------------------------------------- |
-| `INSTANCES` | `1`     | Server processes; connections are spread evenly      |
-| `CONNS`     | `2000`  | Total connections                                    |
-| `WORKERS`   | `4`     | Client processes                                     |
-| `SECONDS`   | `10`    | Length of the measured phase                         |
-| `ECHO_RATE` | `1`     | Messages per second, per connection                  |
-| `FAN_RATE`  | `20`    | Broadcasts per second from the single sender         |
-| `BASE_PORT` | `4600`  | First server port                                    |
-| `REDIS_URL` | unset   | When set, instances share rooms via the Redis broker |
+| Variable    | Default | Meaning                                                            |
+| ----------- | ------- | ------------------------------------------------------------------ |
+| `INSTANCES` | `1`     | Server processes; connections are spread evenly                    |
+| `CONNS`     | `2000`  | Total connections                                                  |
+| `WORKERS`   | `4`     | Client processes                                                   |
+| `SECONDS`   | `10`    | Length of the measured phase                                       |
+| `ECHO_RATE` | `1`     | Messages per second, per connection                                |
+| `FAN_RATE`  | `20`    | Broadcasts per second from the single sender                       |
+| `BASE_PORT` | `4600`  | First server port                                                  |
+| `REDIS_URL` | unset   | When set, instances relay room broadcasts through the Redis broker |
 
 The output includes client CPU. If it approaches 100%, the clients are the bottleneck — raise `WORKERS` before reading the server numbers.
 

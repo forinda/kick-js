@@ -49,7 +49,11 @@ Runs under Node `bootstrap()`, not the `@forinda/kickjs/web` edge entry
 you pass a `broker`:
 
 ```ts
+import Redis from 'ioredis'
+import { WsAdapter } from '@forinda/kickjs-ws'
 import { redisBroker } from '@forinda/kickjs-ws/redis'
+
+const redis = new Redis(process.env.REDIS_URL!)
 
 WsAdapter({ broker: redisBroker({ publisher: redis, subscriber: redis.duplicate() }) })
 ```
