@@ -54,6 +54,19 @@ import { redisBroker } from '@forinda/kickjs-ws/redis'
 WsAdapter({ broker: redisBroker({ publisher: redis, subscriber: redis.duplicate() }) })
 ```
 
+## Socket.IO
+
+The same controllers run on Socket.IO (install `socket.io`):
+
+```ts
+import { SocketIoAdapter } from '@forinda/kickjs-ws/socket.io'
+
+bootstrap({ modules, adapters: [SocketIoAdapter({ cors: { origin: 'https://app.example.com' } })] })
+```
+
+Rooms are per namespace there, and `WS_ROOM_MANAGER` is replaced by the `SOCKET_IO` token.
+See [kickjs.app/guide/socketio](https://kickjs.app/guide/socketio).
+
 ## Documentation
 
 [kickjs.app/guide/websockets](https://kickjs.app/guide/websockets)
