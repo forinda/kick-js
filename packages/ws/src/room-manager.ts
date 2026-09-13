@@ -3,8 +3,19 @@ import type { WebSocket } from 'ws'
 /**
  * Manages WebSocket room membership and broadcasting.
  * Standalone from ws/socket.io — can be swapped for socket.io's built-in rooms.
+ *
+ * Room names are GLOBAL, not per namespace: a room joined from `/ws/chat` and
+ * one joined from `/ws/admin` with the same name are the same room. That is
+ * what lets a service broadcast through `WS_ROOM_MANAGER` and lets `user:<id>`
+ * reach a user's sockets in every namespace — prefix names (`chat:lobby`) when
+ * namespaces must not overlap.
+ *
+ * Membership lives in this process only. A second instance has its own rooms.
  */
 export class RoomManager {
+  /** @param onSend Called with the number of frames each broadcast wrote. */
+  constructor(private readonly onSend?: (count: number) => void) {}
+
   /** socketId → set of room names */
   private socketRooms = new Map<string, Set<string>>()
   /** room name → set of { socketId, socket } */
@@ -69,10 +80,13 @@ export class RoomManager {
     if (!sockets) return
 
     const message = JSON.stringify({ event, data })
+    let sent = 0
     for (const [id, socket] of sockets) {
       if (id !== excludeId && socket.readyState === socket.OPEN) {
         socket.send(message)
+        sent++
       }
     }
+    if (sent) this.onSend?.(sent)
   }
 }

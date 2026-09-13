@@ -41,6 +41,8 @@ export class WsContext {
     id: string,
     namespace: string,
     request: IncomingMessage,
+    /** Called with the number of frames each send wrote — feeds `messagesSent`. */
+    private readonly onSend?: (count: number) => void,
   ) {
     this.id = id
     this.namespace = namespace
@@ -78,30 +80,37 @@ export class WsContext {
   send(event: string, data: any): void {
     if (this.socket.readyState === this.socket.OPEN) {
       this.socket.send(JSON.stringify({ event, data }))
+      this.onSend?.(1)
     }
   }
 
   /** Send to all sockets in the same namespace except this one */
   broadcast(event: string, data: any): void {
     const message = JSON.stringify({ event, data })
+    let sent = 0
     for (const [id, socket] of this.namespaceSockets) {
       if (id !== this.id && socket.readyState === socket.OPEN) {
         socket.send(message)
+        sent++
       }
     }
+    if (sent) this.onSend?.(sent)
   }
 
   /** Send to all sockets in the same namespace including this one */
   broadcastAll(event: string, data: any): void {
     const message = JSON.stringify({ event, data })
+    let sent = 0
     for (const [, socket] of this.namespaceSockets) {
       if (socket.readyState === socket.OPEN) {
         socket.send(message)
+        sent++
       }
     }
+    if (sent) this.onSend?.(sent)
   }
 
-  /** Join a room */
+  /** Join a room. Names are global across namespaces — see {@link RoomManager}. */
   join(room: string): void {
     this.roomManager.join(this.id, this.socket, room)
   }

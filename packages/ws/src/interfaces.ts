@@ -24,8 +24,8 @@ export interface WsHandlerDefinition {
 
 /**
  * Resolved principal returned from {@link WsAuthConfig.resolveUser}. Only `id`
- * is required — everything else is free-form metadata stashed on the
- * `WsContext` under `user:<field>` keys for handler access.
+ * is required. The whole object is stored on the `WsContext` as `user`, and
+ * `id` alone as `userId` — read them with `ctx.get('user')` / `ctx.get('userId')`.
  */
 export interface WsAuthenticatedUser {
   id: string
@@ -34,16 +34,23 @@ export interface WsAuthenticatedUser {
 
 export interface WsAuthConfig {
   /**
-   * Resolve a user from the upgrade request. Called once per socket during
-   * handshake, before any `@OnConnect` handler fires. Return `null` or throw
-   * to reject the socket with HTTP 401.
+   * Resolve a user from the upgrade request. Called once per socket, before
+   * any `@OnConnect` handler fires. Return `null` or throw to reject.
+   *
+   * A rejected socket is accepted and then closed with code `4401` — a
+   * WebSocket close code, not an HTTP status. Browsers do not expose a failed
+   * handshake's status to script, so a close code is what a client can act on.
+   *
+   * Messages the client sends before this settles are held and delivered after
+   * `@OnConnect`, up to 64; beyond that the socket is closed with `1008`.
    */
   resolveUser: (
     request: IncomingMessage,
   ) => Promise<WsAuthenticatedUser | null> | WsAuthenticatedUser | null
   /**
-   * When true, each authenticated socket auto-joins `user:<id>` immediately
-   * after `resolveUser` resolves. Pairs with {@link WsUserBroadcaster}.
+   * Join each authenticated socket to `user:<id>` as soon as `resolveUser`
+   * resolves (default: `true` — pass `false` to opt out). Pairs with
+   * {@link WsUserBroadcaster}.
    */
   autoJoinUserRoom?: boolean
   /**
@@ -65,10 +72,12 @@ export interface WsAdapterOptions {
 }
 
 /**
- * Per-user broadcasting across all WS namespaces. Registered on the DI
- * container when {@link WsAdapterOptions.auth} is configured, but the
- * underlying room (`user:<id>`) can also be joined manually by any
- * controller — the helper works either way.
+ * Per-user broadcasting across all WS namespaces. Always registered on the DI
+ * container. With {@link WsAdapterOptions.auth} sockets join `user:<id>`
+ * automatically; without it a controller can join the room manually and the
+ * helper works the same.
+ *
+ * Reaches sockets in THIS process only.
  */
 export interface WsUserBroadcaster {
   /** Send a single event to every socket bound to this user. */

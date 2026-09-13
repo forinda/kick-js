@@ -26,6 +26,9 @@ import { RoomManager } from './room-manager'
 
 const log = createLogger('WsAdapter')
 
+/** Messages held from a socket whose `auth.resolveUser` has not settled yet. */
+const MAX_PENDING_BEFORE_AUTH = 64
+
 interface NamespaceEntry {
   namespace: string
   controllerClass: any
@@ -101,7 +104,6 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     let wss: WebSocketServer | null = null
     let container: Container | null = null
     const namespaces = new Map<string, NamespaceEntry>()
-    const roomManager = new RoomManager()
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
     const totalConnections = ref(0)
@@ -109,6 +111,13 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     const messagesReceived = ref(0)
     const messagesSent = ref(0)
     const wsErrors = ref(0)
+
+    // Every frame written through a context or a room lands here. The counter
+    // was declared and exposed (devtools reads it) but never incremented.
+    const countSent = (n: number): void => {
+      messagesSent.value += n
+    }
+    const roomManager = new RoomManager(countSent)
 
     const userRoom = (userId: string): string => userRoomPrefix + userId
 
@@ -216,6 +225,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         socketId,
         entry.namespace,
         request,
+        countSent,
       )
       entry.contexts.set(socketId, ctx)
 
@@ -225,19 +235,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         ;(ws as any).__alive = true
       })
 
-      // Authenticated handshake (optional). Messages received before auth
-      // resolves are buffered on the socket; we gate dispatch on `authed`.
-      let authed = auth === undefined
-      const authPromise = auth ? authenticate(ctx) : Promise.resolve(true)
-
-      authPromise.then((ok) => {
-        if (!ok) return
-        authed = true
-        invokeHandlers(controller, entry.handlers, 'connect', ctx)
-      })
-
-      ws.on('message', (raw: Buffer | string) => {
-        if (!authed) return
+      const handleMessage = (raw: Buffer | string): void => {
         messagesReceived.value++
         try {
           const parsed = JSON.parse(raw.toString())
@@ -266,6 +264,36 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
           ctx.data = { message: 'Invalid JSON' }
           invokeHandlers(controller, entry.handlers, 'error', ctx)
         }
+      }
+
+      // Authenticated handshake (optional). A client usually sends as soon as
+      // the socket opens, which is before an async `resolveUser` settles —
+      // those messages were silently dropped. They are held and replayed after
+      // `@OnConnect`, so handlers see them in order. The hold is capped: the
+      // sender is not yet authenticated, so an unbounded queue would let anyone
+      // buffer memory on the server before being rejected.
+      let authed = auth === undefined
+      const pending: Array<Buffer | string> = []
+
+      ws.on('message', (raw: Buffer | string) => {
+        if (authed) return handleMessage(raw)
+        if (pending.length >= MAX_PENDING_BEFORE_AUTH) {
+          pending.length = 0
+          ws.close(1008, 'Too many messages before authentication')
+          return
+        }
+        pending.push(raw)
+      })
+
+      const authPromise = auth ? authenticate(ctx) : Promise.resolve(true)
+      authPromise.then((ok) => {
+        if (!ok) {
+          pending.length = 0
+          return
+        }
+        authed = true
+        invokeHandlers(controller, entry.handlers, 'connect', ctx)
+        for (const raw of pending.splice(0)) handleMessage(raw)
       })
 
       ws.on('close', () => {
@@ -359,6 +387,11 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
 
           const entry = namespaces.get(pathname)
           if (!entry) {
+            // Node calls EVERY 'upgrade' listener. Answering 404 here destroyed
+            // sockets owned by other listeners on the same server — the
+            // devtools bus, a GraphQL subscription server, Vite's HMR socket in
+            // dev. Only close the socket when nothing else could be handling it.
+            if (server.listenerCount('upgrade') > 1) return
             socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
             socket.destroy()
             return

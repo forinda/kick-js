@@ -87,7 +87,7 @@ That's the whole minimum surface. The rest of this guide covers DI deps, depende
 ::: tip Two factories, same pipeline
 
 - **`defineHttpContextDecorator`** — recommended for HTTP work. `Ctx` is `RequestContext`, so the resolver can read `ctx.req` / `ctx.headers` / `ctx.params` / `ctx.body` directly.
-- **`defineContextDecorator`** — transport-agnostic. `Ctx` defaults to the smaller `ExecutionContext` surface (`get` / `set` / `requestId`). Use this when authoring a contributor that needs to run across HTTP, WebSocket, queue, and cron transports.
+- **`defineContextDecorator`** — transport-agnostic. `Ctx` defaults to the smaller `ExecutionContext` surface (`get` / `set` / `requestId`). Use this when authoring a contributor that isn't tied to HTTP. WebSocket handlers from `@forinda/kickjs-ws` don't run contributors — a socket isn't a request, so there is no per-request chain to run them in.
 
 Both produce the same `ContributorRegistration` and run through the same pipeline. The wrapper exists purely to remove the third-generic ceremony for the common HTTP case.
 :::

@@ -18,7 +18,7 @@ import { WsController, OnConnect, OnMessage, WsContext } from '@forinda/kickjs-w
 export class ChatController {
   @OnConnect()
   onConnect(ctx: WsContext) {
-    ctx.send('welcome', { id: ctx.socketId })
+    ctx.send('welcome', { id: ctx.id })
   }
 
   @OnMessage('say')
@@ -41,6 +41,12 @@ export const app = await bootstrap({
 ```
 
 Clients connect to `ws://localhost:3000/ws/chat`.
+
+## Limits
+
+Runs in **one Node process** under `bootstrap()`. Rooms and per-user broadcasts
+reach sockets in that process only, so a second instance is a second island. It
+does not run on the `@forinda/kickjs/web` edge entry (Workers, Bun, Deno).
 
 ## Documentation
 
