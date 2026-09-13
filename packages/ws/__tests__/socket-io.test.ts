@@ -85,11 +85,22 @@ class ProbeController {
     seen.push(ctx.rooms().join(','))
   }
 }
+/** Released by the test: holds @OnConnect open for as long as the test needs, regardless of machine speed. */
+let releaseHold = (): void => {}
+
+@WsController('/hold')
+class HoldController {
+  @OnConnect()
+  async connect() {
+    await new Promise<void>((resolve) => (releaseHold = resolve))
+  }
+}
 void ChatController
 void AlertsController
 void SlowController
 void RaceController
 void ProbeController
+void HoldController
 
 const cleanups: Array<() => unknown> = []
 beforeEach(() => {
@@ -254,28 +265,29 @@ describe('SocketIoAdapter per-event state and limits', () => {
     expect(seen[0].split(',')).toContain('user:u1')
   })
 
+  // Both use /hold, whose @OnConnect stays pending until released: a timed
+  // connect handler (50 ms) finished before the events arrived on a slow CI
+  // runner, so nothing was held and the disconnect never came.
   it('disconnects when events held before @OnConnect settles exceed 1 MiB', async () => {
     const { origin } = await boot()
-    const s = await client(`${origin}/slow`)
+    const s = await client(`${origin}/hold`)
+    cleanups.push(() => releaseHold())
     const reason = new Promise<string>((resolve) => s.socket.once('disconnect', resolve))
     const big = 'x'.repeat(600_000)
     s.socket.emit('ping', big)
     s.socket.emit('ping', big)
     expect(await reason).toBe('io server disconnect')
-    // @OnConnect is still running; let it finish here rather than log into the next test.
-    await waitFor(() => seen.includes('slow:connect:end'))
   })
 
   it('counts event names toward the 1 MiB hold', async () => {
     const { origin } = await boot()
-    const s = await client(`${origin}/slow`)
+    const s = await client(`${origin}/hold`)
+    cleanups.push(() => releaseHold())
     const reason = new Promise<string>((resolve) => s.socket.once('disconnect', resolve))
     const name = 'e'.repeat(600_000)
     s.socket.emit(name)
     s.socket.emit(name)
     expect(await reason).toBe('io server disconnect')
-    // @OnConnect is still running; let it finish here rather than log into the next test.
-    await waitFor(() => seen.includes('slow:connect:end'))
   })
 
   it('disconnects instead of hanging when the user-room join rejects', async () => {
