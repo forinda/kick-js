@@ -40,6 +40,12 @@ routes). `ctx.json` / `ctx.html` / `ctx.download` / `ctx.redirect` / `ctx.sse` /
 `ctx.problem` write through a small response driver, so the same handler code
 runs unchanged on every engine.
 
+::: warning `ctx.redirect` takes the URL as given
+It goes straight into the `Location` header. Never pass it a destination read from the
+request unchecked: allow-list it, or accept only a same-site path (one leading `/`,
+not `//`). Otherwise the route is an open redirect.
+:::
+
 ## Fastify
 
 Fastify ships as a **subpath** of the core package — there's no separate npm

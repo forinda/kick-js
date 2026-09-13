@@ -1134,7 +1134,9 @@ response object, so \`ctx.res.status(401).json(...)\` only works on Express —
 and the helper for anything else you would reach \`ctx.res\` for:
 \`ctx.download(buffer, filename, contentType?)\` for a generated file,
 \`ctx.html(content)\`, \`ctx.redirect(url, status?)\`, \`ctx.sse()\` for a stream.
-All of them work on all four runtimes.
+All of them work on all four runtimes. Never hand \`ctx.redirect\` a destination
+taken from the request unchecked — allow-list it, or accept only a same-site path
+(one leading \`/\`, not \`//\`) — or the route is an open redirect.
 
 **Guard shape**:
 
