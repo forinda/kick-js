@@ -1,5 +1,83 @@
 # @forinda/kickjs-ws
 
+## 7.1.0
+
+### Minor Changes
+
+- [#693](https://github.com/forinda/kick-js/pull/693) [`faf5cd9`](https://github.com/forinda/kick-js/commit/faf5cd9ccae9a892ebf9677c44755116cee06ff9) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs-ws/socket.io` serves the same `@WsController` classes over
+  Socket.IO, so choosing a transport no longer means rewriting controllers.
+  
+  ```ts
+  import { SocketIoAdapter } from '@forinda/kickjs-ws/socket.io'
+  
+  bootstrap({ modules, adapters: [SocketIoAdapter({ cors: { origin: 'https://app.example.com' } })] })
+  ```
+  
+  Namespaces map to `io.of(namespace)`, `@OnMessage('x')` handles the client's
+  `socket.emit('x', data)`, and `SocketIoContext` mirrors `WsContext` (`send`,
+  `broadcast`, `broadcastAll`, `join`, `to(room).send`, `get`/`set`, `cookies`).
+  `auth.resolveUser` runs as namespace middleware and rejects with a
+  `connect_error` of `Unauthorized`; authenticated sockets join `user:<id>`, and
+  `WS_USER_BROADCASTER` reaches a user in every namespace. An async `@OnConnect`
+  is awaited before events are delivered, as with `WsAdapter`.
+  
+  Every Socket.IO server option passes through, including `adapter` — with
+  `@socket.io/redis-adapter`, emits and per-user sends cross instances. Shutdown
+  disconnects sockets and closes the engine but leaves the HTTP server to KickJS,
+  where `io.close()` would close it too.
+  
+  `socket.io` is an optional peer dependency, needed only for this subpath.
+  Differences from `WsAdapter`: rooms are per namespace, `WS_ROOM_MANAGER` is not
+  registered (inject `SOCKET_IO`), and acknowledgements go through `ctx.socket`.
+
+- [#694](https://github.com/forinda/kick-js/pull/694) [`705a211`](https://github.com/forinda/kick-js/commit/705a21171725985a3f583ff3fc3d86e054068b1f) Thanks [@forinda](https://github.com/forinda)! - Add `@forinda/kickjs-ws/centrifugo` for apps that hand client connections to
+  [Centrifugo](https://centrifugal.dev) instead of holding them in Node.
+  
+  - `centrifugoClient({ url, apiKey })` — `publish`, `broadcast`, `subscribe`,
+    `disconnect` over Centrifugo's server API. Throws `CentrifugoApiError` on a
+    non-2xx reply or on the `error` object Centrifugo returns with HTTP 200.
+  - `connectionToken({ secret, sub, expiresInSeconds, info, channels })` — an
+    HS256 connection JWT signed with `node:crypto`; no JWT dependency.
+  - `centrifugoConnect(request, resolveUser)` — the reply body for Centrifugo's
+    connect proxy, from the same `resolveUser` a `WsAdapter` uses: a user
+    connects, `null` disconnects with `4401`, a throwing resolver answers
+    internal error `100`.
+  - `CentrifugoAdapter({ url, apiKey, personalChannelNamespace? })` — registers
+    the `CENTRIFUGO` client and a `WS_USER_BROADCASTER` that publishes to the
+    user's personal channel (`#<user>`), so services written against
+    `WsAdapter`'s broadcaster keep working unchanged.
+  
+  `@WsController` / `@OnMessage` do not apply: Centrifugo owns the sockets.
+
+- [#692](https://github.com/forinda/kick-js/pull/692) [`4bc95ca`](https://github.com/forinda/kick-js/commit/4bc95cae20b473d291eac5c14be417a577a83ec5) Thanks [@forinda](https://github.com/forinda)! - Broadcasts can now reach sockets on every instance, not only the one that sent
+  them. Pass a `broker` to `WsAdapter`; `@forinda/kickjs-ws/redis` ships one over
+  Redis pub/sub.
+  
+  ```ts
+  import Redis from 'ioredis'
+  import { getEnv } from '@forinda/kickjs'
+  import { WsAdapter } from '@forinda/kickjs-ws'
+  import { redisBroker } from '@forinda/kickjs-ws/redis'
+  
+  const redis = new Redis(getEnv('REDIS_URL'))
+  
+  WsAdapter({ broker: redisBroker({ publisher: redis, subscriber: redis.duplicate() }) })
+  ```
+  
+  Room broadcasts (`ctx.to()`, `WS_ROOM_MANAGER.broadcast`), per-user sends
+  (`WS_USER_BROADCASTER`, `broadcastToUser`) and namespace broadcasts
+  (`ctx.broadcast`, `ctx.broadcastAll`) are delivered to local sockets straight
+  away, then published; other instances deliver them to theirs, and each
+  instance skips its own messages so no socket gets a frame twice. A failed
+  publish is logged and never thrown into the handler. Membership queries
+  (`getStats().rooms`, `getSockets`, `getAllRooms`) still describe the local
+  instance.
+  
+  The Redis subpath types the client by shape, so `ioredis` is not a dependency
+  of the package — any client with `publish` / `subscribe` / `unsubscribe` /
+  `on('message')` works, and `WsBroker` can be implemented over another pub/sub. Without a
+  `broker` nothing changes.
+
 ## 7.0.2
 
 ### Patch Changes

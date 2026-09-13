@@ -1,5 +1,50 @@
 # @forinda/kickjs
 
+## 8.4.0
+
+### Minor Changes
+
+- [#699](https://github.com/forinda/kick-js/pull/699) [`b97d6e3`](https://github.com/forinda/kick-js/commit/b97d6e3312df24d3c6d80e40761aec259867b603) Thanks [@forinda](https://github.com/forinda)! - Contributors can run before request validation with `beforeValidation: true`.
+  
+  Validation runs ahead of the contributor pipeline, so with authentication as a
+  contributor, a request with no credentials and a malformed body answered 422
+  instead of 401 — telling an anonymous caller what the schema expects, and
+  forcing every "rejects without a token" test to send a valid body.
+  
+  ```ts
+  const Authenticate = defineHttpContextDecorator({
+    key: 'user',
+    beforeValidation: true,
+    resolve: (ctx) => verify(ctx.headers.authorization) ?? throwUnauthorized(),
+  })
+  ```
+  
+  A `beforeValidation` contributor runs right after the route is matched — before
+  validation, file upload and `@Middleware()` handlers — on Express, Fastify, h3
+  and the web entry. So `@Middleware()` guards can read its value (a role check
+  after authentication), while other contributors keep their place after
+  middleware. The default order is unchanged for every contributor that does not
+  set it.
+  
+  `ctx.body`, `ctx.query` and `ctx.params` are unvalidated at that point, and an
+  upload may not be parsed yet: read credentials, not the payload. A
+  `beforeValidation` contributor may only `dependsOn` others that also set it;
+  anything else fails boot with an error naming both keys.
+
+### Patch Changes
+
+- [#697](https://github.com/forinda/kick-js/pull/697) [`0bd62fb`](https://github.com/forinda/kick-js/commit/0bd62fbafcbe336973ccb984af784dfb151b1beb) Thanks [@forinda](https://github.com/forinda)! - The REQUEST-into-SINGLETON error now gives advice the parent can follow.
+  
+  It said "Use TRANSIENT or REQUEST scope for the parent" for every parent. A
+  `@Controller()` takes no options and is always SINGLETON, so for the most
+  common case — a controller constructor injecting a request-scoped repository —
+  the suggested fix did not exist ([#676](https://github.com/forinda/kick-js/issues/676)). A controller parent is now told to
+  inject the dependency with `@Autowired()`, which re-resolves REQUEST-scoped
+  dependencies per access; any other parent is told it can change its scope or
+  use `@Autowired()`. The message still starts with `Cannot inject REQUEST-scoped
+  "…" into SINGLETON "…"`, so `kick explain` matches it as before, and its
+  diagnosis no longer quotes the old wording as current.
+
 ## 8.3.2
 
 ### Patch Changes
