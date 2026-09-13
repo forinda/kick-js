@@ -245,6 +245,35 @@ kick start -p 8080
 
 Sets `NODE_ENV=production` automatically.
 
+## kick check
+
+Source scans that exit non-zero when they find something that will fail in production, so they fit a CI step.
+
+<PmCommand exec="kick check --deploy
+kick check --di" />
+
+| Flag       | What it scans                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| `--deploy` | Production readiness — weak `JWT_SECRET`, `cors` origin `'*'`, missing rate limiting and helmet    |
+| `--di`     | A REQUEST-scoped dependency injected through the constructor of a SINGLETON (controllers included) |
+
+Both can be passed together.
+
+### `--di` — scope mismatches before the first request
+
+A controller is always a SINGLETON. If its constructor injects something registered with `Scope.REQUEST`, the container refuses when it first builds the controller — which happens on the first request that reaches it, as a 500. Both scopes are written in your source, so `--di` reports the mismatch with its file and line instead:
+
+```text
+src/modules/reception/reception.controller.ts:6 ReceptionController (SINGLETON) injects
+REQUEST-scoped RECEPTION_REPOSITORY through its constructor — the first request that resolves
+it answers 500. @Controller() is always SINGLETON, so inject RECEPTION_REPOSITORY with
+@Autowired() instead of the constructor.
+```
+
+It reads scopes from `@Service` / `@Repository` / `@Component` / `@Injectable({ scope })` and from `container.register(token, …, scope)` / `registerFactory(token, …, scope)`. Constructor parameters resolve through `@Inject(token)`, or through the parameter's class type when there is no `@Inject`.
+
+The scan is conservative. It reports nothing it cannot pin down: a scope held in a variable, a name declared in more than one file, or a token registered under two different scopes. A finding is a request that will fail; a clean run is not proof that none will. Test files are skipped.
+
 ## kick doctor
 
 Pre-flight checks for your KickJS project's dev environment. Catches the common "doesn't work on my machine" misconfigs before they bite — missing decorator flags, env-wiring footguns, stale typegen, wrong Node version.
