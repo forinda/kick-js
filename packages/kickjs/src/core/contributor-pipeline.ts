@@ -140,6 +140,46 @@ export function buildPipeline(
 }
 
 /**
+ * Split a built pipeline into the contributors that run before request
+ * validation (`beforeValidation: true`) and the rest, which keep their place
+ * after `@Middleware()`. Both halves stay in topo order.
+ *
+ * An early contributor can only depend on other early ones — its dependency
+ * would not have run yet otherwise — so that fails here, at boot.
+ */
+export function splitBeforeValidation(
+  pipeline: ContributorPipeline,
+  route?: string,
+): { early: ContributorPipeline | null; late: ContributorPipeline | null } {
+  const early = pipeline.contributors.filter((reg) => reg.beforeValidation)
+  if (early.length === 0) return { early: null, late: pipeline }
+
+  const earlyKeys = new Set(early.map((reg) => reg.key))
+  for (const reg of early) {
+    const lateDep = reg.dependsOn.find((dep) => !earlyKeys.has(dep))
+    if (lateDep !== undefined) {
+      throw new Error(
+        `Contributor '${reg.key}'${route ? ` on ${route}` : ''} sets beforeValidation but ` +
+          `depends on '${lateDep}', which runs after validation. Set beforeValidation on ` +
+          `'${lateDep}' too, or remove it from '${reg.key}'.`,
+      )
+    }
+  }
+
+  const late = pipeline.contributors.filter((reg) => !reg.beforeValidation)
+  return {
+    early: Object.freeze({ contributors: Object.freeze(early), keys: earlyKeys }),
+    late:
+      late.length === 0
+        ? null
+        : Object.freeze({
+            contributors: Object.freeze(late),
+            keys: new Set(late.map((reg) => reg.key)),
+          }),
+  }
+}
+
+/**
  * Kahn's algorithm with deterministic ordering on ties.
  *
  * Nodes with no remaining incoming edges enter the queue in input

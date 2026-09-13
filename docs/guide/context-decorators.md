@@ -446,6 +446,37 @@ bootstrap({
 
 The `.registration` property on the returned function is the immutable `ContributorRegistration` the runner consumes. Decorator usage hides this; non-decorator usage exposes it.
 
+## Running before validation: `beforeValidation`
+
+On HTTP routes the pipeline runs after request validation and `@Middleware()`. For authentication that order is wrong: a request with no credentials **and** a malformed body is rejected by validation (422) before your auth contributor can reject it (401). An anonymous caller learns what the schema expects, and every "rejects without a token" test has to send a valid body.
+
+Mark the contributor `beforeValidation` and it runs as soon as the route is matched:
+
+```ts
+const Authenticate = defineHttpContextDecorator({
+  key: 'user',
+  beforeValidation: true,
+  deps: { sessions: SESSION_SERVICE },
+  resolve: async (ctx, { sessions }) => {
+    const user = await sessions.fromToken(ctx.headers.authorization)
+    if (!user) throw HttpException.unauthorized()
+    return user
+  },
+})
+```
+
+The route's steps become:
+
+```text
+beforeValidation contributors → validation → upload → @Middleware() → other contributors → handler
+```
+
+- **The payload is not validated yet.** `ctx.body`, `ctx.query` and `ctx.params` are whatever the client sent, and a file upload may not be parsed. Read credentials — headers, cookies — not the payload.
+- **Guards see the value.** `@Middleware()` runs after it, so a role guard can read `ctx.get('user')` — 401 from the contributor, then 403 from the guard, then 422 from validation.
+- **Dependencies must also run early.** A `beforeValidation` contributor may only `dependsOn` contributors that set it too; otherwise boot fails naming both keys. The reverse is fine: a normal contributor can depend on an early one.
+- **Everything else keeps its place.** Contributors without the option still run after middleware, so existing apps see no change. Registration sites and precedence work as usual; the winning registration for a key decides.
+- HTTP only — outside HTTP routes there is no validation step to run ahead of, and the option has no effect.
+
 ## Skipping a contributor per route: `skipWhen` / `onlyWhen`
 
 Precedence answers "which contributor wins for this key". It does not answer

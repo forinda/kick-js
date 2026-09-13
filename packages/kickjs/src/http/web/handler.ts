@@ -173,6 +173,12 @@ export function compileWebRoute(
         driver as RuntimeResponse,
       )
 
+      // `beforeValidation` contributors (#677) — ahead of validation and middleware.
+      if (entry.earlyContributorRunner) {
+        await entry.earlyContributorRunner(ctx)
+        if (driver.settled) return
+      }
+
       if (validator) {
         await new Promise<void>((resolve, reject) => {
           validator(req as never, undefined as never, (err?: unknown) =>

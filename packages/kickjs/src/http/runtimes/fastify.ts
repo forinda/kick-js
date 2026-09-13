@@ -255,6 +255,12 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
       publishMatchedRoute(raw, entry)
       const ctx = new RequestContext(raw as never, reply as never, NOOP_NEXT, replyDriver(reply))
 
+      // `beforeValidation` contributors (#677) — ahead of validation and middleware.
+      if (entry.earlyContributorRunner) {
+        await entry.earlyContributorRunner(ctx)
+        if (reply.sent) return
+      }
+
       // Validation (from @Get(path, schema) / route.validation). `validator` is a
       // connect-style middleware built once at route registration; it mutates
       // req.body/query/params to the parsed value and calls next(err) on failure

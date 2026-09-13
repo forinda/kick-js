@@ -1,7 +1,11 @@
 // Concrete-module imports (NOT the `../core` barrel): the barrel re-exports
 // the asset manager, whose eager `node:fs` import would poison the edge-safe
 // `@forinda/kickjs/web` entry graph that flows through this file.
-import { buildPipeline, type SourcedRegistration } from '../core/contributor-pipeline'
+import {
+  buildPipeline,
+  splitBeforeValidation,
+  type SourcedRegistration,
+} from '../core/contributor-pipeline'
 import { runContributors } from '../core/contributor-runner'
 import { Container } from '../core/container'
 import { METADATA } from '../core/interfaces'
@@ -180,6 +184,7 @@ export function buildRouteTable(
     )
 
     let contributorRunner: CtxHandler | null = null
+    let earlyContributorRunner: CtxHandler | null = null
     if (
       classContributors.length > 0 ||
       methodContributors.length > 0 ||
@@ -202,10 +207,18 @@ export function buildRouteTable(
         })),
         ...externalSources,
       ]
-      const pipeline = buildPipeline(sources, {
-        route: `${method} ${fullPath}`,
-      })
-      contributorRunner = (ctx) => runContributors({ pipeline, ctx, container, flags })
+      const routeLabel = `${method} ${fullPath}`
+      const { early, late } = splitBeforeValidation(
+        buildPipeline(sources, { route: routeLabel }),
+        routeLabel,
+      )
+      if (early) {
+        earlyContributorRunner = (ctx) =>
+          runContributors({ pipeline: early, ctx, container, flags })
+      }
+      if (late) {
+        contributorRunner = (ctx) => runContributors({ pipeline: late, ctx, container, flags })
+      }
     }
 
     // Terminal handler — resolve controller per-request to respect DI scoping.
@@ -216,6 +229,7 @@ export function buildRouteTable(
       path: fullPath,
       middlewares: [...classMiddlewares, ...methodMiddlewares],
       contributorRunner,
+      earlyContributorRunner,
       handler,
       meta: {
         controller: controllerClass,

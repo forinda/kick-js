@@ -452,6 +452,7 @@ interface ContextDecoratorSpec<K, D, Ctx> {
   deps?: D // typed DI map
   dependsOn?: readonly string[] // topo-sorted at boot
   optional?: boolean // skip on resolve throw
+  beforeValidation?: boolean // HTTP: run before validation + @Middleware (auth → 401 before 422)
   onError?: (err, ctx) => MaybePromise<Value | undefined> // async-permitted
   resolve: (ctx, deps) => MaybePromise<Value>
 }

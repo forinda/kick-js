@@ -147,6 +147,21 @@ export interface ContextDecoratorSpec<
    */
   optional?: boolean
   /**
+   * HTTP routes only: run this contributor before request validation and
+   * `@Middleware()` handlers, instead of after them.
+   *
+   * For contributors that must answer before a request's shape is checked —
+   * authentication above all. Without it, a request with no credentials and a
+   * malformed body is rejected by validation (422) before the auth contributor
+   * can reject it (401), telling an anonymous caller what the schema expects.
+   *
+   * `ctx.body` / `ctx.query` / `ctx.params` are **unvalidated** at this point,
+   * and file uploads may not be parsed yet — read credentials (headers,
+   * cookies), not the payload. It may only `dependsOn` contributors that also
+   * set `beforeValidation`; anything else fails boot.
+   */
+  beforeValidation?: boolean
+  /**
    * Default per-call params merged with the call-site params; call-site
    * wins. When omitted, params default to `{}` and the resolver
    * receives an empty object — back-compat with today's zero-arg
@@ -258,6 +273,8 @@ export interface ContributorRegistration<
    * the first non-framework frame for display.
    */
   readonly definedAt?: string
+  /** Runs before request validation on HTTP routes — see {@link ContextDecoratorSpec.beforeValidation}. */
+  readonly beforeValidation?: boolean
   /**
    * Skip this contributor on routes carrying the named route flag.
    *
@@ -717,6 +734,7 @@ function defineContextDecoratorImpl<
       optional: sharedOptional,
       skipWhen: spec.skipWhen,
       onlyWhen: spec.onlyWhen,
+      beforeValidation: spec.beforeValidation === true,
       onError,
       resolve,
       definedAt,
