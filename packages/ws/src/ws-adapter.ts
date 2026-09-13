@@ -124,31 +124,51 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     // Cross-instance fan-out. Every broadcast is delivered to this instance's
     // sockets first, then published under this instance's id; other instances
     // deliver it to theirs and every instance skips its own, so no socket gets
-    // a frame twice. Publishing is deferred and its failures logged: a broker
-    // outage must not throw out of a handler that only wanted to broadcast.
+    // a frame twice. Failures are logged, sync or async: a broker outage must
+    // not throw out of a handler that only wanted to broadcast.
+    //
+    // Published synchronously, not deferred: local sockets got `data` as it
+    // was at broadcast time, and a deferred publish would serialise whatever
+    // the handler mutated it into afterwards.
     const broker = options.broker
     const origin = randomUUID()
-    const relay = (message: Omit<WsBrokerMessage, 'origin'>): void => {
-      Promise.resolve()
-        .then(() => broker!.publish({ ...message, origin }))
-        .catch((err) => log.error({ err }, 'WS broker publish failed'))
+    const relay = (message: WsBrokerMessage): void => {
+      try {
+        Promise.resolve(broker!.publish(message)).catch((err) =>
+          log.error({ err }, 'WS broker publish failed'),
+        )
+      } catch (err) {
+        log.error({ err }, 'WS broker publish failed')
+      }
     }
     const relayRoom = broker
       ? (room: string, event: string, data: unknown, exclude?: string) =>
-          relay({ room, event, data, exclude })
+          relay({ origin, room, event, data, exclude })
       : undefined
     const relayNamespace = broker
       ? (namespace: string, event: string, data: unknown, exclude?: string) =>
-          relay({ namespace, event, data, exclude })
+          relay({ origin, namespace, event, data, exclude })
       : undefined
 
     const roomManager = new RoomManager(countSent, relayRoom)
 
-    const onRelayed = (message: WsBrokerMessage): void => {
-      if (message.origin === origin) return
+    // Whatever arrives on the channel is untrusted in shape — another
+    // publisher, a stale version, a `null`. Anything that is not exactly one
+    // destination plus string origin/event is dropped rather than thrown on.
+    const isBrokerMessage = (m: any): m is WsBrokerMessage =>
+      m !== null &&
+      typeof m === 'object' &&
+      typeof m.origin === 'string' &&
+      typeof m.event === 'string' &&
+      (m.exclude === undefined || typeof m.exclude === 'string') &&
+      (typeof m.room === 'string') !== (typeof m.namespace === 'string') &&
+      (m.room === undefined || typeof m.room === 'string') &&
+      (m.namespace === undefined || typeof m.namespace === 'string')
+
+    const onRelayed = (message: unknown): void => {
+      if (!isBrokerMessage(message) || message.origin === origin) return
       const { room, namespace, event, data, exclude } = message
       if (room !== undefined) return roomManager.deliver(room, event, data, exclude)
-      if (namespace === undefined) return
       const frame = JSON.stringify({ event, data })
       let sent = 0
       for (const entry of namespaces.values()) {

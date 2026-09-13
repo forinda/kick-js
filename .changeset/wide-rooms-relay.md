@@ -26,6 +26,6 @@ publish is logged and never thrown into the handler. Membership queries
 instance.
 
 The Redis subpath types the client by shape, so `ioredis` is not a dependency
-of the package — any client with `publish` / `subscribe` / `on('message')`
-works, and `WsBroker` can be implemented over another pub/sub. Without a
+of the package — any client with `publish` / `subscribe` / `unsubscribe` /
+`on('message')` works, and `WsBroker` can be implemented over another pub/sub. Without a
 `broker` nothing changes.

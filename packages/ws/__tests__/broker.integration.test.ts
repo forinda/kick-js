@@ -45,6 +45,13 @@ class ChatController {
   all(ctx: WsContext) {
     ctx.broadcastAll('all', ctx.data)
   }
+
+  @OnMessage('mutate')
+  mutate(ctx: WsContext) {
+    const payload = { text: ctx.data }
+    ctx.to('lobby').send('mutated', payload)
+    payload.text = 'changed after broadcast'
+  }
 }
 void ChatController
 
@@ -89,7 +96,7 @@ async function client(url: string) {
   const got: string[] = []
   ws.on('message', (raw) => {
     const { event, data } = JSON.parse(String(raw))
-    got.push(`${event}:${data}`)
+    got.push(`${event}:${typeof data === 'object' ? JSON.stringify(data) : data}`)
   })
   cleanups.push(() => ws.terminate())
   await new Promise((resolve, reject) => {
@@ -168,10 +175,59 @@ function crossInstanceSuite(name: string, brokerFor: () => () => WsBroker) {
 
 crossInstanceSuite('WsAdapter broker (in-memory hub)', () => memoryHub())
 
+describe('WsAdapter broker payloads', () => {
+  // Local sockets get the frame serialised at broadcast time; a deferred
+  // publish used to send remote sockets whatever the handler mutated it into.
+  it('relays data as it was at broadcast time, not after the handler mutates it', async () => {
+    const { a, c } = await cluster(memoryHub())
+    a.send('mutate', 'original')
+    await waitFor(() => c.got.length === 1)
+    expect(c.got).toEqual(a.got)
+    expect(c.got).toEqual(['mutated:{"text":"original"}'])
+  })
+
+  it('drops relayed messages without a valid shape instead of throwing', async () => {
+    let deliver!: (message: unknown) => void
+    const capturing: WsBroker = {
+      publish: () => {},
+      subscribe: (onMessage) => {
+        deliver = onMessage as (message: unknown) => void
+      },
+    }
+    const { adapter, url } = await instance({ broker: capturing })
+    const a = await client(url('/ws/chat'))
+    await waitFor(() => adapter.getStats().rooms.lobby === 1)
+
+    const malformed = [
+      null,
+      'text',
+      {},
+      { origin: 'other', event: 'e' },
+      { origin: 'other', event: 'e', room: 'lobby', namespace: '/chat' },
+      { origin: 1, event: 'e', room: 'lobby' },
+      { origin: 'other', event: 'e', room: 42 },
+    ]
+    for (const message of malformed) expect(() => deliver(message)).not.toThrow()
+
+    deliver({ origin: 'other', event: 'ok', data: 1, room: 'lobby' })
+    await waitFor(() => a.got.length === 1)
+    await settle()
+    expect(a.got).toEqual(['ok:1'])
+  })
+})
+
 describe('WsAdapter broker failures', () => {
-  it('logs a failed publish instead of throwing out of the handler', async () => {
+  it.each([
+    ['rejects', () => Promise.reject(new Error('redis down'))],
+    [
+      'throws synchronously',
+      () => {
+        throw new Error('redis down')
+      },
+    ],
+  ])('keeps local delivery when publish %s', async (_, publish) => {
     const failing: WsBroker = {
-      publish: () => Promise.reject(new Error('redis down')),
+      publish,
       subscribe: () => {},
     }
     const { url } = await instance({ broker: failing })

@@ -81,18 +81,25 @@ export interface WsAdapterOptions {
 }
 
 /** A broadcast relayed between instances. Exactly one of `room` / `namespace` is set. */
-export interface WsBrokerMessage {
+export type WsBrokerMessage = {
   /** Id of the publishing instance — each instance skips its own messages. */
   origin: string
-  /** Room broadcast: `ctx.to(room)`, `WS_ROOM_MANAGER`, per-user sends. */
-  room?: string
-  /** Namespace broadcast: `ctx.broadcast()` / `ctx.broadcastAll()`. */
-  namespace?: string
   event: string
   data: unknown
   /** Socket id that must not receive it (the sender of `ctx.broadcast`). */
   exclude?: string
-}
+} & (
+  | {
+      /** Room broadcast: `ctx.to(room)`, `WS_ROOM_MANAGER`, per-user sends. */
+      room: string
+      namespace?: never
+    }
+  | {
+      /** Namespace broadcast: `ctx.broadcast()` / `ctx.broadcastAll()`. */
+      namespace: string
+      room?: never
+    }
+)
 
 /**
  * Cross-instance pub/sub for {@link WsAdapter}. The adapter delivers every
@@ -101,6 +108,11 @@ export interface WsBrokerMessage {
  * already is, since it is sent to clients as JSON.
  */
 export interface WsBroker {
+  /**
+   * Called synchronously from the broadcasting handler. Serialise `message`
+   * before the first `await`: the handler may mutate `data` afterwards, and
+   * local sockets already received the value as it was.
+   */
   publish(message: WsBrokerMessage): void | Promise<void>
   /** Called once from the adapter's `beforeStart`; startup waits for it. */
   subscribe(onMessage: (message: WsBrokerMessage) => void): void | Promise<void>

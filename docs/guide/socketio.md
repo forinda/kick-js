@@ -1,245 +1,179 @@
 # Socket.IO Integration
 
-KickJS ships with a `ws`-based WebSocket adapter (`@forinda/kickjs-ws`), but you can integrate **Socket.IO** for features like automatic reconnection, rooms, acknowledgements, and binary support.
+`SocketIoAdapter` serves your `@WsController` classes over [Socket.IO](https://socket.io) instead of raw WebSockets. The decorators are the same; the transport brings client reconnection, a long-polling fallback, and Socket.IO's own adapters for running more than one instance.
 
 ## Setup
 
-<PmCommand add="socket.io" />
-
-## Create a Socket.IO Adapter
-
-```ts
-// src/adapters/socketio.adapter.ts
-import { Server, type Socket } from 'socket.io'
-import {
-  createToken,
-  defineAdapter,
-  Logger,
-  type AdapterContext,
-  type Container,
-} from '@forinda/kickjs'
-
-const log = Logger.for('SocketIOAdapter')
-
-export interface SocketIOAdapterOptions {
-  /** CORS configuration */
-  cors?: {
-    origin: string | string[]
-    methods?: string[]
-    credentials?: boolean
-  }
-  /** Path for the Socket.IO endpoint (default: '/socket.io') */
-  path?: string
-  /** Custom namespaces to register */
-  namespaces?: SocketIONamespace[]
-}
-
-export interface SocketIONamespace {
-  /** Namespace path (e.g. '/chat', '/notifications') */
-  namespace: string
-  /** Handler setup function — receives the namespace and DI container */
-  setup: (nsp: any, container: Container) => void
-}
-
-/**
- * Typed DI token for injecting the Socket.IO server.
- * `container.resolve(SOCKET_IO)` returns `Server` without a manual generic.
- */
-export const SOCKET_IO = createToken<Server>('kick/socketio/server')
-
-export const SocketIOAdapter = defineAdapter<SocketIOAdapterOptions>({
-  name: 'SocketIOAdapter',
-  defaults: { path: '/socket.io' },
-  build: (options) => {
-    let io: Server | undefined
-
-    return {
-      afterStart({ server, container }: AdapterContext): void {
-        io = new Server(server, {
-          cors: options.cors ?? { origin: '*' },
-          path: options.path,
-        })
-
-        // Default namespace
-        io.on('connection', (socket: Socket) => {
-          log.info(`Connected: ${socket.id}`)
-          socket.on('disconnect', (reason) => {
-            log.info(`Disconnected: ${socket.id} (${reason})`)
-          })
-        })
-
-        // Custom namespaces
-        for (const ns of options.namespaces ?? []) {
-          const nsp = io.of(ns.namespace)
-          ns.setup(nsp, container)
-          log.info(`Namespace registered: ${ns.namespace}`)
-        }
-
-        // Register io instance in DI for injection
-        container.registerInstance(SOCKET_IO, io)
-        log.info(`Socket.IO listening at ${options.path}`)
-      },
-
-      async shutdown(): Promise<void> {
-        if (io) {
-          await new Promise<void>((resolve) => io!.close(() => resolve()))
-          log.info('Socket.IO server closed')
-        }
-      },
-    }
-  },
-})
-```
-
-## Register in Bootstrap
+<PmCommand add="@forinda/kickjs-ws socket.io" />
 
 ```ts
 import { bootstrap } from '@forinda/kickjs'
-import { SocketIOAdapter } from './adapters/socketio.adapter'
+import { SocketIoAdapter } from '@forinda/kickjs-ws/socket.io'
 import { modules } from './modules'
 
 bootstrap({
   modules,
   adapters: [
-    SocketIOAdapter({
+    SocketIoAdapter({
+      // Any Socket.IO server option: cors, path, pingInterval, adapter, …
       cors: { origin: 'http://localhost:5173', credentials: true },
-      namespaces: [
-        {
-          namespace: '/chat',
-          setup: (nsp, container) => {
-            nsp.on('connection', (socket) => {
-              console.log(`Chat connected: ${socket.id}`)
-
-              socket.on('message', (data) => {
-                // Broadcast to room or all
-                nsp.emit('message', {
-                  from: socket.id,
-                  ...data,
-                  timestamp: new Date().toISOString(),
-                })
-              })
-
-              socket.on('join-room', (room) => {
-                socket.join(room)
-                socket.to(room).emit('user-joined', { userId: socket.id })
-              })
-
-              socket.on('leave-room', (room) => {
-                socket.leave(room)
-                socket.to(room).emit('user-left', { userId: socket.id })
-              })
-            })
-          },
-        },
-        {
-          namespace: '/notifications',
-          setup: (nsp, container) => {
-            nsp.on('connection', (socket) => {
-              // Join user-specific room for targeted notifications
-              const userId = socket.handshake.auth?.userId
-              if (userId) socket.join(`user:${userId}`)
-            })
-          },
-        },
-      ],
     }),
   ],
 })
 ```
 
-## Inject Socket.IO in Services
+Use `SocketIoAdapter` **instead of** `WsAdapter`, not alongside it — both would serve the same controllers.
 
-Use the `SOCKET_IO` token to inject the io server anywhere:
+## Controllers
+
+```ts
+import { WsController, OnConnect, OnDisconnect, OnMessage } from '@forinda/kickjs-ws'
+import type { SocketIoContext } from '@forinda/kickjs-ws/socket.io'
+
+@WsController('/chat')
+export class ChatController {
+  @OnConnect()
+  connect(ctx: SocketIoContext) {
+    ctx.join('general')
+  }
+
+  @OnMessage('message')
+  message(ctx: SocketIoContext) {
+    ctx.to('general').send('message', { from: ctx.id, text: ctx.data.text })
+  }
+
+  @OnMessage('*')
+  unknown(ctx: SocketIoContext) {
+    ctx.send('error', { message: `Unknown event: ${ctx.event}` })
+  }
+
+  @OnDisconnect()
+  disconnect(ctx: SocketIoContext) {}
+}
+```
+
+How the pieces map:
+
+| KickJS                                   | Socket.IO                                                      |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| `@WsController('/chat')`                 | `io.of('/chat')` — `@WsController()` is the main namespace `/` |
+| `@OnMessage('message')`                  | the client's `socket.emit('message', data)`                    |
+| `@OnMessage('*')`                        | any event no other handler claims                              |
+| `ctx.send(event, data)`                  | `socket.emit`                                                  |
+| `ctx.broadcast(event, data)`             | `socket.broadcast.emit` — the namespace, sender excluded       |
+| `ctx.broadcastAll(event, data)`          | `socket.nsp.emit` — the namespace, sender included             |
+| `ctx.join(room)` / `ctx.to(room).send()` | `socket.join` / `socket.nsp.to(room).emit` — sender included   |
+| `ctx.socket` / `ctx.server`              | the Socket.IO `Socket` / `Server`, for anything not mapped     |
+
+`SocketIoContext` mirrors `WsContext` (`id`, `data`, `event`, `namespace`, `request`, `cookies`, `get`/`set`, `rooms()`), so a controller written for one runs on the other — with the differences below.
+
+::: warning Differences from `WsAdapter`
+
+- **Rooms belong to a namespace.** With `ws`, `lobby` joined from `/chat` and from `/admin` is one room; with Socket.IO they are two.
+- **No `WS_ROOM_MANAGER`.** Socket.IO keeps its own rooms — inject `SOCKET_IO` to reach them from a service.
+- **Acknowledgements are not mapped.** A client callback arrives as an extra argument the handler does not see; use `ctx.socket.on(...)` for events that need one.
+
+:::
+
+As with `WsAdapter`, an `async` `@OnConnect` is awaited: events that arrive meanwhile are held (up to 64, then the socket is disconnected) and delivered once it settles.
+
+## Authentication
+
+`auth` takes the same `resolveUser` hook as `WsAdapter`, run as namespace middleware before the connection is accepted:
+
+```ts
+SocketIoAdapter({
+  auth: {
+    resolveUser: async (request) => {
+      const token = parseCookie(request.headers.cookie).sid
+      return token ? await sessions.verify(token) : null
+    },
+  },
+})
+```
+
+- Returning `null` or throwing rejects the connection; the client gets `connect_error` with `err.message === 'Unauthorized'`.
+- The user is available as `ctx.get('user')` and `ctx.get('userId')`.
+- Each authenticated socket joins `user:<id>` in its namespace (`autoJoinUserRoom: false` to opt out, `userRoomPrefix` to rename).
+
+`resolveUser` receives the handshake request, so it reads cookies, headers and the query string. A token sent through the client's `auth` option is on `ctx.socket.handshake.auth`, not the request.
+
+## Services
 
 ```ts
 import { Service, Inject } from '@forinda/kickjs'
-import { SOCKET_IO } from '../adapters/socketio.adapter'
+import { WS_USER_BROADCASTER, type WsUserBroadcaster } from '@forinda/kickjs-ws'
+import { SOCKET_IO } from '@forinda/kickjs-ws/socket.io'
 import type { Server } from 'socket.io'
 
 @Service()
-export class NotificationPushService {
-  constructor(@Inject(SOCKET_IO) private io: Server) {}
+export class NotificationService {
+  constructor(
+    @Inject(WS_USER_BROADCASTER) private users: WsUserBroadcaster,
+    @Inject(SOCKET_IO) private io: Server,
+  ) {}
 
-  /** Send a notification to a specific user */
-  notifyUser(userId: string, event: string, data: any) {
-    this.io.of('/notifications').to(`user:${userId}`).emit(event, data)
+  notify(userId: string, data: unknown) {
+    // Every namespace the user is connected to.
+    this.users.broadcastToUser(userId, 'notification', data)
   }
 
-  /** Broadcast to all connected clients */
-  broadcast(event: string, data: any) {
-    this.io.emit(event, data)
-  }
-
-  /** Send to a specific room */
-  toRoom(room: string, event: string, data: any) {
-    this.io.to(room).emit(event, data)
+  announce(data: unknown) {
+    this.io.of('/chat').to('general').emit('announcement', data)
   }
 }
 ```
 
-## Client-Side
+`WS_USER_BROADCASTER` is the same token `WsAdapter` registers, so code written against it does not change when you switch transports.
+
+## Running more than one instance
+
+Pass a Socket.IO adapter. With [`@socket.io/redis-adapter`](https://socket.io/docs/v4/redis-adapter/), room emits, namespace broadcasts and `WS_USER_BROADCASTER` reach sockets on every instance:
+
+<PmCommand add="@socket.io/redis-adapter ioredis" />
+
+```ts
+import Redis from 'ioredis'
+import { createAdapter } from '@socket.io/redis-adapter'
+import { SocketIoAdapter } from '@forinda/kickjs-ws/socket.io'
+
+const pub = new Redis(process.env.REDIS_URL!)
+
+SocketIoAdapter({ adapter: createAdapter(pub, pub.duplicate()) })
+```
+
+Unlike `WsAdapter`, Socket.IO's long-polling fallback needs **sticky sessions** at the load balancer — or `transports: ['websocket']` on the client to skip polling.
+
+## Client
 
 ```ts
 import { io } from 'socket.io-client'
 
-// Connect to default namespace
-const socket = io('http://localhost:3000')
+const chat = io('http://localhost:3000/chat', { withCredentials: true })
 
-// Connect to a specific namespace
-const chat = io('http://localhost:3000/chat')
-const notifications = io('http://localhost:3000/notifications', {
-  auth: { userId: 'user-123' },
+chat.on('connect_error', (err) => {
+  if (err.message === 'Unauthorized') redirectToLogin()
 })
-
-// Listen for events
-chat.on('message', (msg) => console.log('New message:', msg))
-notifications.on('alert', (alert) => console.log('Alert:', alert))
-
-// Send events
+chat.on('message', (msg) => console.log(msg))
 chat.emit('message', { text: 'Hello everyone!' })
-chat.emit('join-room', 'general')
 ```
 
-## Socket.IO vs ws
+## Socket.IO or ws?
 
-|                      | `@forinda/kickjs-ws`           | Socket.IO                              |
-| -------------------- | ------------------------------ | -------------------------------------- |
-| **Protocol**         | Raw WebSocket                  | Custom protocol over WebSocket/polling |
-| **Reconnection**     | Manual                         | Automatic                              |
-| **Rooms**            | Via `RoomManager`              | Built-in                               |
-| **Acknowledgements** | Manual                         | Built-in callbacks                     |
-| **Binary**           | Manual                         | Automatic                              |
-| **Fallback**         | WebSocket only                 | Long-polling fallback                  |
-| **Bundle size**      | ~50KB                          | ~300KB (client + server)               |
-| **Decorators**       | `@WsController`, `@OnMessage`  | Use adapter pattern above              |
-| **Best for**         | Lightweight, low-level control | Full-featured real-time apps           |
-
-## With Authentication
-
-```ts
-// Middleware for Socket.IO authentication
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token
-  if (!token) return next(new Error('Authentication required'))
-
-  try {
-    const user = jwt.verify(token, JWT_SECRET)
-    socket.data.user = user
-    next()
-  } catch {
-    next(new Error('Invalid token'))
-  }
-})
-
-// Access user in handlers
-io.on('connection', (socket) => {
-  console.log(`Authenticated user: ${socket.data.user.email}`)
-})
-```
+|                       | `WsAdapter` (`ws`)                                           | `SocketIoAdapter`                              |
+| --------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| **Client**            | Any WebSocket client, `{ event, data }` JSON                 | `socket.io-client` only                        |
+| **Reconnection**      | Yours to write                                               | Built in                                       |
+| **Fallback**          | WebSocket only                                               | Long-polling                                   |
+| **Rooms**             | Shared across namespaces                                     | Per namespace                                  |
+| **Acknowledgements**  | —                                                            | Via `ctx.socket`                               |
+| **Several instances** | `broker` ([Redis](./websockets.md#scaling-across-instances)) | Socket.IO adapter (`@socket.io/redis-adapter`) |
+| **Sticky sessions**   | Not needed                                                   | Needed for polling                             |
+| **Decorators**        | `@WsController`, `@OnMessage`, …                             | The same                                       |
 
 ## Sharing auth with your HTTP routes
 
-Auth is [bring-your-own](./byo-recipes.md#auth), so the piece to share is a plain function you own — not a framework strategy. Keep token verification separate from the transport, and both sides call it:
+Auth is [bring-your-own](./byo-recipes.md#auth), so the piece to share is a plain function you own. Keep token verification separate from the transport, and both sides call it:
 
 ```ts
 // src/auth/verify-token.ts — no HTTP, no socket, just the token
@@ -256,16 +190,13 @@ export function verifyToken(token: string | undefined): AuthUser | null {
 }
 ```
 
-The HTTP side calls it from the `user` contributor ([Step 3 of the recipe](./byo-recipes.md#auth)); the socket side calls it from `io.use`:
+The HTTP side calls it from the `user` contributor ([Step 3 of the recipe](./byo-recipes.md#auth)); the socket side calls it from `resolveUser`:
 
 ```ts
-import { verifyToken } from './auth/verify-token'
-
-io.use((socket, next) => {
-  const user = verifyToken(socket.handshake.auth?.token)
-  if (!user) return next(new Error('Unauthorized'))
-  socket.data.user = user
-  next()
+SocketIoAdapter({
+  auth: {
+    resolveUser: (request) => verifyToken(parseCookie(request.headers.cookie).token),
+  },
 })
 ```
 
