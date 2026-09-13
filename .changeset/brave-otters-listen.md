@@ -24,7 +24,9 @@ hold is capped at 64 messages and 1 MiB — the sender is not authenticated yet,
 so an unbounded queue would let anyone buffer memory on the server — and a
 socket that exceeds either is closed with `1008`. A socket that closes while
 the resolver runs no longer reaches `@OnConnect` or re-joins its user room after
-the close handler cleaned it up.
+the close handler cleaned it up. An `async` `@OnConnect` is now awaited before
+any message reaches `@OnMessage`, with or without `auth`; messages that arrive
+meanwhile are held under the same limits.
 
 **`messagesSent` was always 0.** Declared, exposed through `getStats()` and
 shown in devtools, never incremented. `WsContext` and `RoomManager` now report

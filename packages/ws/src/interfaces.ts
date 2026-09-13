@@ -41,8 +41,8 @@ export interface WsAuthConfig {
    * WebSocket close code, not an HTTP status. Browsers do not expose a failed
    * handshake's status to script, so a close code is what a client can act on.
    *
-   * Messages the client sends before this settles are held and delivered after
-   * `@OnConnect`, up to 64 messages or 1 MiB; beyond either the socket is
+   * Messages the client sends before this settles are held and delivered once
+   * `@OnConnect` has settled, up to 64 messages or 1 MiB; beyond either the socket is
    * closed with `1008`. A socket that closes while this runs never reaches
    * `@OnConnect` or its user room.
    */

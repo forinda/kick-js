@@ -179,7 +179,7 @@ Pass an `auth` block to authenticate sockets at upgrade time using cookies, head
 
 Clients usually send as soon as the socket opens, which can be before `resolveUser` settles. Those messages are held and delivered after `@OnConnect`, in order — up to 64 messages or 1 MiB; beyond either the socket closes with `1008`, since the sender is not yet authenticated. A client that disconnects while `resolveUser` runs never reaches `@OnConnect`.
 
-`@OnConnect` is not awaited, with or without `auth`: if it is `async`, a message can reach `@OnMessage` before it finishes. Keep setup that message handlers depend on synchronous, or have them await the same promise.
+An `async` `@OnConnect` is awaited the same way, with or without `auth`: messages that arrive while it runs are held (under the same limits) and delivered once it settles, so `@OnMessage` never sees a socket whose connect setup is unfinished.
 
 ```ts
 import { WsAdapter } from '@forinda/kickjs-ws'

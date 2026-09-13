@@ -154,30 +154,27 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       }
     }
 
-    const safeInvoke = (controller: any, method: string, ctx: WsContext): void => {
+    /** Never rejects: errors are logged. Resolves once an async handler settles. */
+    const safeInvoke = async (controller: any, method: string, ctx: WsContext): Promise<void> => {
       try {
-        const result = controller[method](ctx)
-        if (result instanceof Promise) {
-          result.catch((err: Error) => {
-            log.error({ err }, `WS handler error in ${method}`)
-          })
-        }
+        await controller[method](ctx)
       } catch (err) {
         log.error({ err }, `WS handler error in ${method}`)
       }
     }
 
-    const invokeHandlers = (
+    /** Starts every handler of `type` in order; resolves when all have settled. */
+    const invokeHandlers = async (
       controller: any,
       handlers: WsHandlerDefinition[],
       type: WsHandlerDefinition['type'],
       ctx: WsContext,
-    ): void => {
-      for (const handler of handlers) {
-        if (handler.type === type) {
-          safeInvoke(controller, handler.handlerName, ctx)
-        }
-      }
+    ): Promise<void> => {
+      await Promise.all(
+        handlers
+          .filter((handler) => handler.type === type)
+          .map((handler) => safeInvoke(controller, handler.handlerName, ctx)),
+      )
     }
 
     /**
@@ -271,13 +268,14 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         }
       }
 
-      // Authenticated handshake (optional). A client usually sends as soon as
-      // the socket opens, which is before an async `resolveUser` settles —
-      // those messages were silently dropped. They are held and replayed after
-      // `@OnConnect`, so handlers see them in order. The hold is capped: the
-      // sender is not yet authenticated, so an unbounded queue would let anyone
-      // buffer memory on the server before being rejected.
-      let authed = auth === undefined
+      // A client usually sends as soon as the socket opens, which is before an
+      // async `resolveUser` or `@OnConnect` settles — those messages were
+      // silently dropped, or reached `@OnMessage` before connect setup ran.
+      // They are held and replayed once every `@OnConnect` has settled, so
+      // handlers see them in order. The hold is capped: the sender may not be
+      // authenticated yet, so an unbounded queue would let anyone buffer memory
+      // on the server before being rejected.
+      let ready = false
       const pending: Array<Buffer | string> = []
       let pendingBytes = 0
       const dropPending = (): void => {
@@ -286,14 +284,14 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       }
 
       ws.on('message', (raw: Buffer | string) => {
-        if (authed) return handleMessage(raw)
+        if (ready) return handleMessage(raw)
         const size = typeof raw === 'string' ? Buffer.byteLength(raw) : raw.length
         if (
           pending.length >= MAX_PENDING_BEFORE_AUTH ||
           pendingBytes + size > MAX_PENDING_BYTES_BEFORE_AUTH
         ) {
           dropPending()
-          ws.close(1008, 'Too many messages before authentication')
+          ws.close(1008, 'Too many messages before connect')
           return
         }
         pending.push(raw)
@@ -301,17 +299,16 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       })
 
       const authPromise = auth ? authenticate(ctx) : Promise.resolve(true)
-      authPromise.then((ok) => {
-        // Closed while resolveUser ran (client left, or the overflow above):
-        // running @OnConnect or replaying now would act on a dead socket after
-        // the close handler already cleaned it up.
-        if (!ok || ws.readyState !== ws.OPEN) {
-          dropPending()
-          return
-        }
-        authed = true
-        invokeHandlers(controller, entry.handlers, 'connect', ctx)
+      authPromise.then(async (ok) => {
+        // Closed while resolveUser or @OnConnect ran (client left, or the
+        // overflow above): going on would act on a dead socket after the close
+        // handler already cleaned it up.
+        if (!ok || ws.readyState !== ws.OPEN) return dropPending()
+        await invokeHandlers(controller, entry.handlers, 'connect', ctx)
+        if (ws.readyState !== ws.OPEN) return dropPending()
+        ready = true
         for (const raw of pending.splice(0)) handleMessage(raw)
+        pendingBytes = 0
       })
 
       ws.on('close', () => {

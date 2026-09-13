@@ -44,8 +44,23 @@ class BController {
     ctx.join('lobby')
   }
 }
+@WsController('/slow')
+class SlowController {
+  @OnConnect()
+  async connect() {
+    seen.push('slow:connect:start')
+    await new Promise((r) => setTimeout(r, 50))
+    seen.push('slow:connect:end')
+  }
+
+  @OnMessage('ping')
+  ping() {
+    seen.push('slow:ping')
+  }
+}
 void AController
 void BController
+void SlowController
 
 const cleanups: Array<() => void> = []
 beforeEach(() => {
@@ -127,6 +142,20 @@ describe('WsAdapter authentication', () => {
 
     await waitFor(() => seen.includes('a:ping'))
     expect(seen.indexOf('a:connect')).toBeLessThan(seen.indexOf('a:ping'))
+  })
+
+  // Without auth too: an async @OnConnect finishing its setup after the first
+  // @OnMessage ran was the same race, just without the hold.
+  it.each([
+    ['without auth', {}],
+    ['with auth', { auth: { resolveUser: () => ({ id: 'u1' }) } }],
+  ])('delivers messages only after an async @OnConnect settles (%s)', async (_, options) => {
+    const { url } = await boot(options)
+    const ws = await connect(url('/ws/slow'))
+    ws.send(JSON.stringify({ event: 'ping' }))
+
+    await waitFor(() => seen.includes('slow:ping'))
+    expect(seen).toEqual(['slow:connect:start', 'slow:connect:end', 'slow:ping'])
   })
 
   it('closes a rejected socket with 4401 and never runs @OnConnect', async () => {
