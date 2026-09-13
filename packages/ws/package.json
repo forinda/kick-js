@@ -33,6 +33,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "bench": "node bench/run.mjs",
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
