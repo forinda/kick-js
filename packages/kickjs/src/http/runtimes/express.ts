@@ -33,7 +33,8 @@ import type {
 /**
  * Materialize a controller's {@link RouteEntry}[] onto a fresh `express.Router`.
  * Reproduces the legacy handler ordering precisely: validation → upload →
- * `(ctx, next)` middleware → contributor runner → terminal handler. Each step
+ * `(ctx, next)` middleware → contributor runner → terminal handler, with
+ * `beforeValidation` contributors ahead of validation. Each step
  * constructs its own `RequestContext` over the same `req`/`res` — request-scoped
  * state lives in the AsyncLocalStorage store, not on the ctx instance, so the
  * per-step instances share state exactly as before.
@@ -51,6 +52,26 @@ export function materializeRouter(entries: RouteEntry[]): Router {
       publishMatchedRoute(req, entry)
       next()
     })
+
+    // Context Contributor pipeline (#107) — runs, then advances the chain
+    // unless a contributor already answered.
+    const contributorStep =
+      (run: NonNullable<RouteEntry['contributorRunner']>): RequestHandler =>
+      async (req: Request, res: Response, next: NextFunction) => {
+        const ctx = new RequestContext(req, res, next)
+        try {
+          await run(ctx)
+          if (!res.headersSent) next()
+        } catch (err) {
+          next(err)
+        }
+      }
+
+    // `beforeValidation` contributors (#677) — an auth rejection answers 401
+    // before a malformed body could answer 422.
+    if (entry.earlyContributorRunner) {
+      handlers.push(contributorStep(entry.earlyContributorRunner))
+    }
 
     // Validation middleware (shared with the standalone validate() export).
     if (entry.meta.validation) {
@@ -70,18 +91,8 @@ export function materializeRouter(entries: RouteEntry[]): Router {
       })
     }
 
-    // Context Contributor pipeline (#107) — runs, then advances the chain.
     if (entry.contributorRunner) {
-      const run = entry.contributorRunner
-      handlers.push(async (req: Request, res: Response, next: NextFunction) => {
-        const ctx = new RequestContext(req, res, next)
-        try {
-          await run(ctx)
-          next()
-        } catch (err) {
-          next(err)
-        }
-      })
+      handlers.push(contributorStep(entry.contributorRunner))
     }
 
     // Terminal handler.

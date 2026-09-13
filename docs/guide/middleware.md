@@ -79,6 +79,7 @@ export class TodoController {
 
 For a given route, middleware executes in this order:
 
+0. Contributors marked [`beforeValidation`](./context-decorators.md#running-before-validation-beforevalidation) — opt-in, for authentication
 1. Validation middleware (from route decorator `{ body, query, params }`)
 2. File-upload middleware (from `@FileUpload`)
 3. Class-level `@Middleware()` handlers (in declaration order)
@@ -86,7 +87,7 @@ For a given route, middleware executes in this order:
 5. **Context Contributor pipeline** ([context decorators](./context-decorators.md)) — runs after middleware, before the handler. Class + method + module + adapter + global contributors merge into one pipeline, topo-sorted by `dependsOn`.
 6. The route handler
 
-Steps 1-4 use the `@Middleware()` mechanism described above. Step 5 is the typed `defineContextDecorator()` primitive — use it when the only job of a middleware is to compute a value and stash it on `ctx`.
+Steps 1-4 use the `@Middleware()` mechanism described above. Step 5 is the typed `defineContextDecorator()` primitive — use it when the only job of a middleware is to compute a value and stash it on `ctx`. Step 0 is the same pipeline, moved ahead for the contributors that ask for it — which is also what lets a guard in step 3-4 read the authenticated user.
 
 ## Guards
 

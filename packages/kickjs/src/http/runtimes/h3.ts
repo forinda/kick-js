@@ -252,6 +252,12 @@ function makeEventHandler(
       publishMatchedRoute(req, entry)
       const ctx = new RequestContext(req as never, res as never, NOOP_NEXT, resDriver(res))
 
+      // `beforeValidation` contributors (#677) — ahead of validation and middleware.
+      if (entry.earlyContributorRunner) {
+        await entry.earlyContributorRunner(ctx)
+        if (res.writableEnded) return
+      }
+
       if (validator) {
         await new Promise<void>((resolve, reject) => {
           validator(req as never, undefined as never, (err?: unknown) =>

@@ -73,6 +73,13 @@ export interface RouteEntry {
    * chain (Express: call `next()`) once it resolves.
    */
   contributorRunner: CtxHandler | null
+  /**
+   * Contributors registered with `beforeValidation: true`. Runtimes run this
+   * right after publishing the matched route — before validation, upload and
+   * middleware — so a rejection (401) lands before a malformed body's 422.
+   * Absent or `null` when no contributor asks for it.
+   */
+  earlyContributorRunner?: CtxHandler | null
   /** Terminal handler: resolves the controller per-request and invokes it. */
   handler: CtxHandler
   /** Introspection + runtime-materialized concerns (swagger/typegen read this). */

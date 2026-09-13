@@ -58,11 +58,13 @@ Request In
   │   │
   │   ├─ Publish the matched route → `ctx.route` is now readable
   │   │   └─ method, path, controller, handlerName, and flags resolved at boot
+  │   ├─ ▸ `beforeValidation` contributors (opt-in, e.g. authentication)
+  │   │   └─ body/query/params are NOT validated yet — read credentials only
   │   ├─ Validation middleware (schema on the route decorator)
   │   ├─ File-upload middleware (@FileUpload)
   │   ├─ @Middleware() handlers — class first, then method
   │   │   └─ guards live here: read `ctx.route.flags`, answer with ctx.problem.*
-  │   ├─ ▸ Context Contributor pipeline
+  │   ├─ ▸ Context Contributor pipeline (everything not `beforeValidation`)
   │   │   ├─ topo-sorted at boot — method > class > module > adapter > global
   │   │   ├─ `skipWhen` / `onlyWhen` consult the route's flags first
   │   │   ├─ each contributor's resolve() runs sequentially (await)
