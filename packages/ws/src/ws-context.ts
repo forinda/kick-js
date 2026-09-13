@@ -11,7 +11,12 @@ export function parseCookies(header: string | undefined): Record<string, string>
     if (idx === -1) continue
     const k = part.slice(0, idx).trim()
     const v = part.slice(idx + 1).trim()
-    if (k) out[k] = decodeURIComponent(v)
+    if (!k) continue
+    try {
+      out[k] = decodeURIComponent(v)
+    } catch {
+      out[k] = v // malformed %-encoding: keep it raw rather than fail the handler
+    }
   }
   return out
 }

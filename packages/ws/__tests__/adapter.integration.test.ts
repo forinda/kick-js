@@ -14,6 +14,7 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import { WebSocket, WebSocketServer } from 'ws'
 import { Container } from '@forinda/kickjs'
 import { WsAdapter, WsController, OnConnect, OnMessage, type WsContext } from '@forinda/kickjs-ws'
+import { parseCookies } from '../src/ws-context'
 
 const seen: string[] = []
 
@@ -58,9 +59,19 @@ class SlowController {
     seen.push('slow:ping')
   }
 }
+@WsController('/race')
+class RaceController {
+  @OnMessage('slow')
+  async slow(ctx: WsContext) {
+    const before = ctx.data
+    await new Promise((r) => setTimeout(r, 30))
+    seen.push(`${before}->${ctx.data}`)
+  }
+}
 void AController
 void BController
 void SlowController
+void RaceController
 
 const cleanups: Array<() => void> = []
 beforeEach(() => {
@@ -229,5 +240,22 @@ describe('WsAdapter stats and rooms', () => {
     await new Promise((r) => setTimeout(r, 30))
     a.send(JSON.stringify({ event: 'shout' }))
     await waitFor(() => reached)
+  })
+})
+
+describe('WsAdapter per-message context', () => {
+  it('gives each message its own ctx.data, even while an earlier handler awaits', async () => {
+    const { url } = await boot()
+    const ws = await connect(url('/ws/race'))
+    ws.send(JSON.stringify({ event: 'slow', data: 'a' }))
+    ws.send(JSON.stringify({ event: 'slow', data: 'b' }))
+    await waitFor(() => seen.length === 2)
+    expect(seen.toSorted()).toEqual(['a->a', 'b->b'])
+  })
+})
+
+describe('parseCookies', () => {
+  it('keeps a malformed %-encoded value raw instead of throwing', () => {
+    expect(parseCookies('ok=a%20b; bad=%; x=1')).toEqual({ ok: 'a b', bad: '%', x: '1' })
   })
 })

@@ -75,7 +75,7 @@ How the pieces map:
 
 :::
 
-As with `WsAdapter`, an `async` `@OnConnect` is awaited: events that arrive meanwhile are held (up to 64, then the socket is disconnected) and delivered once it settles.
+As with `WsAdapter`, an `async` `@OnConnect` is awaited: events that arrive meanwhile are held (up to 64 events or 1 MiB, then the socket is disconnected) and delivered once it settles.
 
 ## Authentication
 
@@ -96,7 +96,19 @@ SocketIoAdapter({
 - The user is available as `ctx.get('user')` and `ctx.get('userId')`.
 - Each authenticated socket joins `user:<id>` in its namespace (`autoJoinUserRoom: false` to opt out, `userRoomPrefix` to rename).
 
-`resolveUser` receives the handshake request, so it reads cookies, headers and the query string. A token sent through the client's `auth` option is on `ctx.socket.handshake.auth`, not the request.
+`resolveUser(request, handshakeAuth)` gets the handshake request — cookies, headers, query string — and, as its second argument, the payload of the client's `auth` option. That is the usual place for a token, since a browser cannot set headers on a WebSocket:
+
+```ts
+// client
+const chat = io('https://api.example.com/chat', { auth: { token } })
+
+// server
+SocketIoAdapter({
+  auth: {
+    resolveUser: (_request, handshakeAuth) => verifyToken(handshakeAuth?.token as string),
+  },
+})
+```
 
 ## Services
 

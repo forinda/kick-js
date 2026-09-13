@@ -35,6 +35,8 @@ const log = createLogger('SocketIoAdapter')
 
 /** Events held from a socket whose async `@OnConnect` has not settled. */
 const MAX_PENDING_BEFORE_CONNECT = 64
+/** Total payload held meanwhile, measured as JSON. */
+const MAX_PENDING_BYTES_BEFORE_CONNECT = 1024 * 1024
 
 /** DI token for the Socket.IO `Server`. */
 export const SOCKET_IO = createToken<Server>('kick/ws/SocketIo')
@@ -106,13 +108,13 @@ export class SocketIoContext {
     this.socket.nsp.emit(event, data)
   }
 
-  /** Join a room in this namespace. */
-  join(room: string): void {
-    void this.socket.join(room)
+  /** Join a room in this namespace. Returns the adapter's promise when its join is async. */
+  join(room: string): void | Promise<void> {
+    return this.socket.join(room)
   }
 
-  leave(room: string): void {
-    void this.socket.leave(room)
+  leave(room: string): void | Promise<void> {
+    return this.socket.leave(room)
   }
 
   /** Rooms this socket joined, without Socket.IO's own per-socket room. */
@@ -185,10 +187,21 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
     ): void => {
       const ctx = new SocketIoContext(socket, io, namespace)
       const user = socket.data.user
+      let userRoomJoined: void | Promise<void> = undefined
       if (user) {
         ctx.set('user', user)
         ctx.set('userId', user.id)
-        if (auth?.autoJoinUserRoom !== false) ctx.join(userRoom(user.id))
+        if (auth?.autoJoinUserRoom !== false) userRoomJoined = ctx.join(userRoom(user.id))
+      }
+
+      // One context per event, inheriting the socket's (methods, get/set
+      // store): a handler suspended on an await must not read the next event's
+      // data off a shared object.
+      const forEvent = (event: string, data: unknown): SocketIoContext => {
+        const eventCtx: SocketIoContext = Object.create(ctx)
+        eventCtx.event = event
+        eventCtx.data = data
+        return eventCtx
       }
 
       const dispatch = (event: string, data: unknown): void => {
@@ -196,40 +209,52 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
           handlers.find((h) => h.type === 'message' && h.event === event) ??
           handlers.find((h) => h.type === 'message' && h.event === '*')
         if (!handler) return
-        ctx.event = event
-        ctx.data = data
-        void invoke(controller, handler.handlerName, ctx)
+        void invoke(controller, handler.handlerName, forEvent(event, data))
       }
 
       // Listeners go on now — Socket.IO drops events nobody listens for — but
       // events are held until every @OnConnect settles, so handlers never see a
-      // socket whose connect setup is unfinished. Same rule as WsAdapter.
+      // socket whose connect setup is unfinished. Same limits as WsAdapter;
+      // payloads arrive parsed, so their size is measured as JSON.
       let ready = false
       const pending: Array<[string, unknown]> = []
+      let pendingBytes = 0
       socket.onAny((event: string, data: unknown) => {
         if (ready) return dispatch(event, data)
-        if (pending.length >= MAX_PENDING_BEFORE_CONNECT) {
+        const size = Buffer.byteLength(JSON.stringify(data) ?? '')
+        if (
+          pending.length >= MAX_PENDING_BEFORE_CONNECT ||
+          pendingBytes + size > MAX_PENDING_BYTES_BEFORE_CONNECT
+        ) {
           pending.length = 0
+          pendingBytes = 0
           socket.disconnect(true)
           return
         }
         pending.push([event, data])
+        pendingBytes += size
       })
 
       socket.on('disconnect', () => {
         pending.length = 0
+        pendingBytes = 0
         void invokeAll(controller, handlers, 'disconnect', ctx)
       })
       socket.on('error', (err: Error) => {
-        ctx.data = { message: err.message, name: err.name }
-        void invokeAll(controller, handlers, 'error', ctx)
+        const errorCtx = forEvent(ctx.event, { message: err.message, name: err.name })
+        void invokeAll(controller, handlers, 'error', errorCtx)
       })
 
-      void invokeAll(controller, handlers, 'connect', ctx).then(() => {
-        if (!socket.connected) return
-        ready = true
-        for (const [event, data] of pending.splice(0)) dispatch(event, data)
-      })
+      // The user-room join can be async with some Socket.IO adapters; @OnConnect
+      // must not emit to `user:<id>` before this socket is in it.
+      void Promise.resolve(userRoomJoined)
+        .then(() => invokeAll(controller, handlers, 'connect', ctx))
+        .then(() => {
+          if (!socket.connected) return
+          ready = true
+          pendingBytes = 0
+          for (const [event, data] of pending.splice(0)) dispatch(event, data)
+        })
     }
 
     return {
@@ -255,7 +280,7 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
           if (auth) {
             nsp.use(async (socket, next) => {
               try {
-                const resolved = await auth.resolveUser(socket.request)
+                const resolved = await auth.resolveUser(socket.request, socket.handshake.auth)
                 if (!resolved?.id) return next(new Error('Unauthorized'))
                 socket.data.user = resolved
                 next()

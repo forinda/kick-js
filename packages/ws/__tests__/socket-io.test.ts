@@ -68,9 +68,28 @@ class SlowController {
     seen.push('slow:ping')
   }
 }
+@WsController('/race')
+class RaceController {
+  @OnMessage('slow')
+  async slow(ctx: SocketIoContext) {
+    const before = ctx.data
+    await new Promise((r) => setTimeout(r, 30))
+    seen.push(`${before}->${ctx.data}`)
+  }
+}
+
+@WsController('/probe')
+class ProbeController {
+  @OnConnect()
+  connect(ctx: SocketIoContext) {
+    seen.push(ctx.rooms().join(','))
+  }
+}
 void ChatController
 void AlertsController
 void SlowController
+void RaceController
+void ProbeController
 
 const cleanups: Array<() => unknown> = []
 beforeEach(() => {
@@ -96,12 +115,17 @@ async function boot(options: Record<string, unknown> = {}) {
 }
 
 /** A client that records every `event:data` it receives. */
-async function client(url: string, query: Record<string, string> = {}) {
+async function client(
+  url: string,
+  query: Record<string, string> = {},
+  auth: Record<string, unknown> = {},
+) {
   const socket: ClientSocket = connectClient(url, {
     transports: ['websocket'],
     forceNew: true,
     reconnection: false,
     query,
+    auth,
   })
   const got: string[] = []
   socket.onAny((event, data) => got.push(`${event}:${data}`))
@@ -189,6 +213,55 @@ describe('SocketIoAdapter auth', () => {
     await waitFor(() => chat.got.length === 1 && alerts.got.length === 1)
     await settle()
     expect([chat.got, alerts.got, bob.got]).toEqual([['ping:1'], ['ping:1'], []])
+  })
+})
+
+describe('SocketIoAdapter per-event state and limits', () => {
+  it('gives each event its own ctx.data, even while an earlier handler awaits', async () => {
+    const { origin } = await boot()
+    const r = await client(`${origin}/race`)
+    r.socket.emit('slow', 'a')
+    r.socket.emit('slow', 'b')
+    await waitFor(() => seen.length === 2)
+    expect(seen.toSorted()).toEqual(['a->a', 'b->b'])
+  })
+
+  it('passes the client auth payload to resolveUser', async () => {
+    const { origin } = await boot({
+      auth: {
+        resolveUser: (_req: http.IncomingMessage, handshakeAuth?: Record<string, unknown>) =>
+          handshakeAuth?.token === 'secret' ? { id: 't1' } : null,
+      },
+    })
+    await expect(client(`${origin}/chat`, {}, { token: 'secret' })).resolves.toBeDefined()
+    await expect(client(`${origin}/chat`, {}, { token: 'wrong' })).rejects.toThrow('Unauthorized')
+  })
+
+  it('awaits an async user-room join before running @OnConnect', async () => {
+    const { origin } = await boot({ auth: userFromQuery })
+    // Stand-in for a Socket.IO adapter whose join is async.
+    const adapter: any = Container.getInstance().resolve(SOCKET_IO).of('/probe').adapter
+    const addAll = adapter.addAll.bind(adapter)
+    adapter.addAll = (id: string, rooms: Set<string>) =>
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          addAll(id, rooms)
+          resolve()
+        }, 30),
+      )
+    await client(`${origin}/probe`, { user: 'u1' })
+    await waitFor(() => seen.length === 1)
+    expect(seen[0].split(',')).toContain('user:u1')
+  })
+
+  it('disconnects when events held before @OnConnect settles exceed 1 MiB', async () => {
+    const { origin } = await boot()
+    const s = await client(`${origin}/slow`)
+    const reason = new Promise<string>((resolve) => s.socket.once('disconnect', resolve))
+    const big = 'x'.repeat(600_000)
+    s.socket.emit('ping', big)
+    s.socket.emit('ping', big)
+    expect(await reason).toBe('io server disconnect')
   })
 })
 

@@ -45,9 +45,14 @@ export interface WsAuthConfig {
    * `@OnConnect` has settled, up to 64 messages or 1 MiB; beyond either the socket is
    * closed with `1008`. A socket that closes while this runs never reaches
    * `@OnConnect` or its user room.
+   *
+   * `handshakeAuth` is Socket.IO only: the payload of the client's `auth`
+   * option (`io(url, { auth: { token } })`) — the usual place for a token,
+   * since a browser cannot set headers on a WebSocket. `WsAdapter` omits it.
    */
   resolveUser: (
     request: IncomingMessage,
+    handshakeAuth?: Record<string, unknown>,
   ) => Promise<WsAuthenticatedUser | null> | WsAuthenticatedUser | null
   /**
    * Join each authenticated socket to `user:<id>` as soon as `resolveUser`

@@ -312,22 +312,27 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
             return
           }
 
-          ctx.event = event
-          ctx.data = data
+          // One context per message, inheriting the socket's (methods, get/set
+          // store): a handler suspended on an await must not read the next
+          // message's data off a shared object.
+          const messageCtx: WsContext = Object.create(ctx)
+          messageCtx.event = event
+          messageCtx.data = data
 
           const handler = entry.handlers.find((h) => h.type === 'message' && h.event === event)
 
           if (handler) {
-            safeInvoke(controller, handler.handlerName, ctx)
+            safeInvoke(controller, handler.handlerName, messageCtx)
           } else {
             const catchAll = entry.handlers.find((h) => h.type === 'message' && h.event === '*')
             if (catchAll) {
-              safeInvoke(controller, catchAll.handlerName, ctx)
+              safeInvoke(controller, catchAll.handlerName, messageCtx)
             }
           }
         } catch {
-          ctx.data = { message: 'Invalid JSON' }
-          invokeHandlers(controller, entry.handlers, 'error', ctx)
+          const errorCtx: WsContext = Object.create(ctx)
+          errorCtx.data = { message: 'Invalid JSON' }
+          invokeHandlers(controller, entry.handlers, 'error', errorCtx)
         }
       }
 
@@ -385,8 +390,9 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
 
       ws.on('error', (err: Error) => {
         wsErrors.value++
-        ctx.data = { message: err.message, name: err.name }
-        invokeHandlers(controller, entry.handlers, 'error', ctx)
+        const errorCtx: WsContext = Object.create(ctx)
+        errorCtx.data = { message: err.message, name: err.name }
+        invokeHandlers(controller, entry.handlers, 'error', errorCtx)
       })
     }
 
