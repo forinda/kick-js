@@ -21,9 +21,18 @@ OnMessage('echo')(BenchController.prototype, 'echo')
 OnMessage('fan')(BenchController.prototype, 'fan')
 WsController('/bench')(BenchController)
 
+// REDIS_URL set: instances share rooms through the Redis broker.
+let broker
+if (process.env.REDIS_URL) {
+  const { default: Redis } = await import('ioredis')
+  const { redisBroker } = await import('@forinda/kickjs-ws/redis')
+  const publisher = new Redis(process.env.REDIS_URL)
+  broker = redisBroker({ publisher, subscriber: publisher.duplicate() })
+}
+
 const port = Number(process.argv[2])
 const server = http.createServer()
-const adapter = WsAdapter({ heartbeatInterval: 0 })
+const adapter = WsAdapter({ heartbeatInterval: 0, broker })
 await adapter.beforeStart({ container: Container.getInstance() })
 await adapter.afterStart({ server })
 await new Promise((resolve) => server.listen(port, resolve))

@@ -44,9 +44,15 @@ Clients connect to `ws://localhost:3000/ws/chat`.
 
 ## Limits
 
-Runs in **one Node process** under `bootstrap()`. Rooms and per-user broadcasts
-reach sockets in that process only, so a second instance is a second island. It
-does not run on the `@forinda/kickjs/web` edge entry (Workers, Bun, Deno).
+Runs under Node `bootstrap()`, not the `@forinda/kickjs/web` edge entry
+(Workers, Bun, Deno). Rooms and broadcasts reach sockets in one process unless
+you pass a `broker`:
+
+```ts
+import { redisBroker } from '@forinda/kickjs-ws/redis'
+
+WsAdapter({ broker: redisBroker({ publisher: redis, subscriber: redis.duplicate() }) })
+```
 
 ## Documentation
 
