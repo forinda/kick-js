@@ -4,11 +4,14 @@
  * through its server API.
  *
  * ```ts
+ * import { bootstrap, getEnv } from '@forinda/kickjs'
  * import { CentrifugoAdapter } from '@forinda/kickjs-ws/centrifugo'
  *
  * bootstrap({
  *   modules,
- *   adapters: [CentrifugoAdapter({ url: 'http://centrifugo:8000', apiKey: process.env.CENTRIFUGO_API_KEY! })],
+ *   adapters: [
+ *     CentrifugoAdapter({ url: getEnv('CENTRIFUGO_URL'), apiKey: getEnv('CENTRIFUGO_API_KEY') }),
+ *   ],
  * })
  * ```
  *

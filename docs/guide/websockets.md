@@ -262,10 +262,12 @@ Without a broker, a broadcast reaches only the sockets connected to the instance
 
 ```ts
 import Redis from 'ioredis'
+import { bootstrap, getEnv } from '@forinda/kickjs'
 import { WsAdapter } from '@forinda/kickjs-ws'
 import { redisBroker } from '@forinda/kickjs-ws/redis'
 
-const redis = new Redis(process.env.REDIS_URL!)
+// REDIS_URL declared in your env schema (src/config/index.ts)
+const redis = new Redis(getEnv('REDIS_URL'))
 
 bootstrap({
   modules,

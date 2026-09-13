@@ -134,10 +134,11 @@ Pass a Socket.IO adapter. With [`@socket.io/redis-adapter`](https://socket.io/do
 
 ```ts
 import Redis from 'ioredis'
+import { getEnv } from '@forinda/kickjs'
 import { createAdapter } from '@socket.io/redis-adapter'
 import { SocketIoAdapter } from '@forinda/kickjs-ws/socket.io'
 
-const pub = new Redis(process.env.REDIS_URL!)
+const pub = new Redis(getEnv('REDIS_URL'))
 
 SocketIoAdapter({ adapter: createAdapter(pub, pub.duplicate()) })
 ```

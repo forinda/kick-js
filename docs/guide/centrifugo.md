@@ -52,15 +52,16 @@ Keys as Centrifugo v6 reads them (`config.json`, or `CENTRIFUGO_`-prefixed envir
 ## Register the adapter
 
 ```ts
-import { bootstrap } from '@forinda/kickjs'
+import { bootstrap, getEnv } from '@forinda/kickjs'
 import { CentrifugoAdapter } from '@forinda/kickjs-ws/centrifugo'
 
 bootstrap({
   modules,
   adapters: [
     CentrifugoAdapter({
-      url: process.env.CENTRIFUGO_URL!, // e.g. http://centrifugo:8000
-      apiKey: process.env.CENTRIFUGO_API_KEY!,
+      // Declared in your env schema (src/config/index.ts)
+      url: getEnv('CENTRIFUGO_URL'), // e.g. http://centrifugo:8000
+      apiKey: getEnv('CENTRIFUGO_API_KEY'),
     }),
   ],
 })
@@ -77,7 +78,7 @@ Pick one of two flows.
 Your app signs a short-lived JWT; the client passes it to Centrifugo.
 
 ```ts
-import { Controller, Get, type RequestContext } from '@forinda/kickjs'
+import { Controller, Get, getEnv, type RequestContext } from '@forinda/kickjs'
 import { connectionToken } from '@forinda/kickjs-ws/centrifugo'
 
 @Controller()
@@ -89,7 +90,7 @@ export class RealtimeController {
 
     ctx.json({
       token: connectionToken({
-        secret: process.env.CENTRIFUGO_HMAC_SECRET!,
+        secret: getEnv('CENTRIFUGO_HMAC_SECRET'),
         sub: user.id,
         expiresInSeconds: 15 * 60,
         info: { name: user.name }, // visible to others in presence

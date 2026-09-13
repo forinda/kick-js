@@ -8,10 +8,11 @@ Redis pub/sub.
 
 ```ts
 import Redis from 'ioredis'
+import { getEnv } from '@forinda/kickjs'
 import { WsAdapter } from '@forinda/kickjs-ws'
 import { redisBroker } from '@forinda/kickjs-ws/redis'
 
-const redis = new Redis(process.env.REDIS_URL!)
+const redis = new Redis(getEnv('REDIS_URL'))
 
 WsAdapter({ broker: redisBroker({ publisher: redis, subscriber: redis.duplicate() }) })
 ```
