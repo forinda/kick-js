@@ -1,5 +1,16 @@
 # @forinda/kickjs-cli
 
+## 8.2.1
+
+### Patch Changes
+
+- [#701](https://github.com/forinda/kick-js/pull/701) [`901d424`](https://github.com/forinda/kick-js/commit/901d424f80136ec20337d1cd589ea3816b1c4d66) Thanks [@forinda](https://github.com/forinda)! - The generated agent docs (`kick g agents`, `kick new`) now name every
+  runtime-neutral response helper where they say "write responses with `ctx.*`,
+  never `ctx.res`". The rule listed only `ctx.problem` and `ctx.json`, so someone
+  returning a generated file reached for `ctx.res.setHeader()` + `ctx.res.end()` —
+  Express-only — without finding `ctx.download()` ([#672](https://github.com/forinda/kick-js/issues/672)). It now also names
+  `ctx.download`, `ctx.html`, `ctx.redirect` and `ctx.sse`.
+
 ## 8.2.0
 
 ### Minor Changes
