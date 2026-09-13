@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-ws",
   "version": "7.0.1",
-  "description": "WebSocket support with decorators, namespaces, rooms, and DI integration for KickJS",
+  "description": "Realtime for KickJS: decorator-driven WebSocket controllers on ws or Socket.IO, a Redis broker for multiple instances, and a Centrifugo integration",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -9,6 +9,10 @@
     "decorator-driven",
     "websocket",
     "ws",
+    "socket.io",
+    "centrifugo",
+    "redis",
+    "pubsub",
     "realtime",
     "rooms",
     "namespaces",
