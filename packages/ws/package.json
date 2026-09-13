@@ -30,6 +30,10 @@
     "./socket.io": {
       "import": "./dist/socket-io.mjs",
       "types": "./dist/socket-io.d.mts"
+    },
+    "./centrifugo": {
+      "import": "./dist/centrifugo.mjs",
+      "types": "./dist/centrifugo.d.mts"
     }
   },
   "files": [
