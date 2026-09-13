@@ -234,6 +234,51 @@ build: () => ({
 
 No other code changes are needed — use cases inject via the `TODO_REPOSITORY` symbol token.
 
+## Sharing services between modules
+
+The container is global, so a module can inject any registered token — including one that another module registers. That works until the other module is not mounted: nothing fails at boot, and the first request that resolves the missing token answers 500. Modules deliberately have no `dependsOn`; which modules an app mounts is the app's decision.
+
+Adapters and plugins are the layer built for this. Both register into the same container, both declare `dependsOn`, and a missing dependency fails **boot** with `MissingMountDepError`, not a request.
+
+**Move what is shared out of the module that happens to use it first.** Register it from a plugin (or adapter), and let every module that needs it inject the token:
+
+```ts
+// src/finance/finance.plugin.ts
+export const FinancePlugin = definePlugin({
+  name: 'FinancePlugin',
+  build: () => ({
+    register(container) {
+      container.registerFactory(POSTING_ENGINE, () => container.resolve(PostingEngine))
+    },
+    modules: () => [FinanceModule()],
+  }),
+})
+```
+
+**Declare the requirement where it can be checked.** A group of modules that needs finance becomes a plugin that depends on it:
+
+```ts
+// src/procurement/procurement.plugin.ts
+export const ProcurementPlugin = definePlugin({
+  name: 'ProcurementPlugin',
+  build: () => ({
+    dependsOn: ['FinancePlugin'],
+    modules: () => [ProcurementModule()],
+  }),
+})
+
+bootstrap({ plugins: [FinancePlugin(), ProcurementPlugin()] })
+```
+
+Drop `FinancePlugin()` from that list and boot stops with `Missing plugin dependency 'FinancePlugin' required by 'ProcurementPlugin'`, instead of `POST /procurement/payment-vouchers/:id/pay` failing in production.
+
+Ordering, for when a `register()` reads another binding:
+
+- plugin `register()` hooks run, in `dependsOn` order, **before** any module's `register()`;
+- adapter `beforeMount` also runs before modules register; adapter `beforeStart` runs after, which is fine for anything injected lazily but too late for a module's `register()` to read.
+
+Use an adapter instead of a plugin when the shared piece also owns a lifecycle — a connection opened in `beforeStart` and closed in `shutdown()`. See [Plugins → Ordering](./plugins.md#plugin-ordering-dependson) and [Adapters → Ordering](./adapters.md#ordering-with-dependson).
+
 ## Module config
 
 `defineModule` supports typed config + defaults — same shape as `defineAdapter`. Adopters call the factory with overrides at the registration site:
