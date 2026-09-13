@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { RoomManager } from '@forinda/kickjs-ws'
 
-// Note: WebSocket integration tests require a real server and don't work
-// in vitest's worker_threads environment. Use one of the task-* example
-// apps for end-to-end WebSocket testing.
+// Adapter-level tests against a real server live in adapter.integration.test.ts.
 
 describe('RoomManager', () => {
   it('should join and leave rooms', () => {

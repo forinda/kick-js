@@ -140,6 +140,10 @@ handleLeave(ctx: WsContext) {
 
 Rooms are automatically cleaned up when a client disconnects.
 
+::: tip Room names are shared across namespaces
+A room called `lobby` joined from `/ws/chat` and one joined from `/ws/admin` are the **same room**. That is deliberate — it is what lets a service broadcast through `WS_ROOM_MANAGER`, and lets `user:<id>` reach a user's sockets in every namespace. When two namespaces must not overlap, prefix the names: `chat:lobby`, `admin:lobby`.
+:::
+
 ## Multiple Namespaces
 
 Each `@WsController` creates a separate namespace:
@@ -172,6 +176,10 @@ WsAdapter({
 ## Authenticated Handshake
 
 Pass an `auth` block to authenticate sockets at upgrade time using cookies, headers, or query string. The hook runs once per socket before any `@OnConnect` handler fires. Return `null` (or throw) to reject — the socket closes with code `4401`.
+
+Clients usually send as soon as the socket opens, which can be before `resolveUser` settles. Those messages are held and delivered after `@OnConnect`, in order — up to 64 messages or 1 MiB; beyond either the socket closes with `1008`, since the sender is not yet authenticated. A client that disconnects while `resolveUser` runs never reaches `@OnConnect`.
+
+An `async` `@OnConnect` is awaited the same way, with or without `auth`: messages that arrive while it runs are held (under the same limits) and delivered once it settles, so `@OnMessage` never sees a socket whose connect setup is unfinished.
 
 ```ts
 import { WsAdapter } from '@forinda/kickjs-ws'
@@ -241,6 +249,15 @@ handleConnect(ctx: WsContext) {
   if (userId) ctx.join(`user:${userId}`)
 }
 ```
+
+## Limits
+
+Know these before you design around the adapter:
+
+- **One process.** Rooms, `WS_ROOM_MANAGER` and `WS_USER_BROADCASTER` reach sockets in the process that holds them. With `bootstrap({ cluster })` or a second instance behind a load balancer, users on different nodes stop seeing each other — not gradually, but the moment the second node takes traffic. If you expect to scale out, put your own transport interface in front of the adapter so a broker-backed implementation can replace it without touching callers.
+- **Node `bootstrap()` only.** Adapters do not run on the `@forinda/kickjs/web` entry, so there is no WebSocket support on Workers, Bun or Deno through it.
+- **Coexists with other upgrade handlers.** Devtools, a GraphQL subscription server or Vite's HMR socket can share the port; the adapter ignores upgrade paths it does not own. It answers `404` only when it is the sole upgrade listener.
+- **No context contributors.** A socket is not a request, so the per-request contributor chain does not run for WebSocket handlers. Resolve what a handler needs in `@OnConnect` and store it with `ctx.set()`.
 
 ## Heartbeat
 

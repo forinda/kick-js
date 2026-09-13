@@ -26,6 +26,11 @@ import { RoomManager } from './room-manager'
 
 const log = createLogger('WsAdapter')
 
+/** Messages held from a socket whose `auth.resolveUser` has not settled yet. */
+const MAX_PENDING_BEFORE_AUTH = 64
+/** Total bytes held before auth. `maxPayload` bounds one message, not the queue. */
+const MAX_PENDING_BYTES_BEFORE_AUTH = 1024 * 1024
+
 interface NamespaceEntry {
   namespace: string
   controllerClass: any
@@ -101,7 +106,6 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     let wss: WebSocketServer | null = null
     let container: Container | null = null
     const namespaces = new Map<string, NamespaceEntry>()
-    const roomManager = new RoomManager()
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
     const totalConnections = ref(0)
@@ -109,6 +113,13 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     const messagesReceived = ref(0)
     const messagesSent = ref(0)
     const wsErrors = ref(0)
+
+    // Every frame written through a context or a room lands here. The counter
+    // was declared and exposed (devtools reads it) but never incremented.
+    const countSent = (n: number): void => {
+      messagesSent.value += n
+    }
+    const roomManager = new RoomManager(countSent)
 
     const userRoom = (userId: string): string => userRoomPrefix + userId
 
@@ -143,30 +154,27 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       }
     }
 
-    const safeInvoke = (controller: any, method: string, ctx: WsContext): void => {
+    /** Never rejects: errors are logged. Resolves once an async handler settles. */
+    const safeInvoke = async (controller: any, method: string, ctx: WsContext): Promise<void> => {
       try {
-        const result = controller[method](ctx)
-        if (result instanceof Promise) {
-          result.catch((err: Error) => {
-            log.error({ err }, `WS handler error in ${method}`)
-          })
-        }
+        await controller[method](ctx)
       } catch (err) {
         log.error({ err }, `WS handler error in ${method}`)
       }
     }
 
-    const invokeHandlers = (
+    /** Starts every handler of `type` in order; resolves when all have settled. */
+    const invokeHandlers = async (
       controller: any,
       handlers: WsHandlerDefinition[],
       type: WsHandlerDefinition['type'],
       ctx: WsContext,
-    ): void => {
-      for (const handler of handlers) {
-        if (handler.type === type) {
-          safeInvoke(controller, handler.handlerName, ctx)
-        }
-      }
+    ): Promise<void> => {
+      await Promise.all(
+        handlers
+          .filter((handler) => handler.type === type)
+          .map((handler) => safeInvoke(controller, handler.handlerName, ctx)),
+      )
     }
 
     /**
@@ -179,6 +187,9 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       if (!auth) return true
       try {
         const user = await auth.resolveUser(ctx.request)
+        // Joining the user room after close would re-add a socket the close
+        // handler already removed from every room.
+        if (ctx.socket.readyState !== ctx.socket.OPEN) return false
         if (!user || !user.id) {
           ctx.socket.close(4401, 'Unauthorized')
           return false
@@ -216,6 +227,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         socketId,
         entry.namespace,
         request,
+        countSent,
       )
       entry.contexts.set(socketId, ctx)
 
@@ -225,19 +237,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         ;(ws as any).__alive = true
       })
 
-      // Authenticated handshake (optional). Messages received before auth
-      // resolves are buffered on the socket; we gate dispatch on `authed`.
-      let authed = auth === undefined
-      const authPromise = auth ? authenticate(ctx) : Promise.resolve(true)
-
-      authPromise.then((ok) => {
-        if (!ok) return
-        authed = true
-        invokeHandlers(controller, entry.handlers, 'connect', ctx)
-      })
-
-      ws.on('message', (raw: Buffer | string) => {
-        if (!authed) return
+      const handleMessage = (raw: Buffer | string): void => {
         messagesReceived.value++
         try {
           const parsed = JSON.parse(raw.toString())
@@ -266,9 +266,53 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
           ctx.data = { message: 'Invalid JSON' }
           invokeHandlers(controller, entry.handlers, 'error', ctx)
         }
+      }
+
+      // A client usually sends as soon as the socket opens, which is before an
+      // async `resolveUser` or `@OnConnect` settles — those messages were
+      // silently dropped, or reached `@OnMessage` before connect setup ran.
+      // They are held and replayed once every `@OnConnect` has settled, so
+      // handlers see them in order. The hold is capped: the sender may not be
+      // authenticated yet, so an unbounded queue would let anyone buffer memory
+      // on the server before being rejected.
+      let ready = false
+      const pending: Array<Buffer | string> = []
+      let pendingBytes = 0
+      const dropPending = (): void => {
+        pending.length = 0
+        pendingBytes = 0
+      }
+
+      ws.on('message', (raw: Buffer | string) => {
+        if (ready) return handleMessage(raw)
+        const size = typeof raw === 'string' ? Buffer.byteLength(raw) : raw.length
+        if (
+          pending.length >= MAX_PENDING_BEFORE_AUTH ||
+          pendingBytes + size > MAX_PENDING_BYTES_BEFORE_AUTH
+        ) {
+          dropPending()
+          ws.close(1008, 'Too many messages before connect')
+          return
+        }
+        pending.push(raw)
+        pendingBytes += size
+      })
+
+      const authPromise = auth ? authenticate(ctx) : Promise.resolve(true)
+      authPromise.then(async (ok) => {
+        // Closed while resolveUser or @OnConnect ran (client left, or the
+        // overflow above): going on would act on a dead socket after the close
+        // handler already cleaned it up.
+        if (!ok || ws.readyState !== ws.OPEN) return dropPending()
+        await invokeHandlers(controller, entry.handlers, 'connect', ctx)
+        if (ws.readyState !== ws.OPEN) return dropPending()
+        ready = true
+        for (const raw of pending.splice(0)) handleMessage(raw)
+        pendingBytes = 0
       })
 
       ws.on('close', () => {
+        dropPending()
         activeConnections.value--
         invokeHandlers(controller, entry.handlers, 'disconnect', ctx)
         roomManager.leaveAll(socketId)
@@ -359,6 +403,11 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
 
           const entry = namespaces.get(pathname)
           if (!entry) {
+            // Node calls EVERY 'upgrade' listener. Answering 404 here destroyed
+            // sockets owned by other listeners on the same server — the
+            // devtools bus, a GraphQL subscription server, Vite's HMR socket in
+            // dev. Only close the socket when nothing else could be handling it.
+            if (server.listenerCount('upgrade') > 1) return
             socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
             socket.destroy()
             return
