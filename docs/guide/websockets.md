@@ -16,6 +16,10 @@ bootstrap({
 
 Clients connect to: `ws://localhost:3000/ws/chat`
 
+::: tip Prefer Socket.IO?
+The same `@WsController` classes run on Socket.IO through `SocketIoAdapter` from `@forinda/kickjs-ws/socket.io` — see [Socket.IO Integration](./socketio.md).
+:::
+
 ## Decorators
 
 ### @WsController
