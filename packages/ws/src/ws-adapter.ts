@@ -18,6 +18,7 @@ import {
   WS_USER_BROADCASTER,
   wsControllerRegistry,
   type WsAdapterOptions,
+  type WsBrokerMessage,
   type WsHandlerDefinition,
   type WsUserBroadcaster,
 } from './interfaces'
@@ -119,7 +120,68 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     const countSent = (n: number): void => {
       messagesSent.value += n
     }
-    const roomManager = new RoomManager(countSent)
+
+    // Cross-instance fan-out. Every broadcast is delivered to this instance's
+    // sockets first, then published under this instance's id; other instances
+    // deliver it to theirs and every instance skips its own, so no socket gets
+    // a frame twice. Failures are logged, sync or async: a broker outage must
+    // not throw out of a handler that only wanted to broadcast.
+    //
+    // Published synchronously, not deferred: local sockets got `data` as it
+    // was at broadcast time, and a deferred publish would serialise whatever
+    // the handler mutated it into afterwards.
+    const broker = options.broker
+    const origin = randomUUID()
+    const relay = (message: WsBrokerMessage): void => {
+      try {
+        Promise.resolve(broker!.publish(message)).catch((err) =>
+          log.error({ err }, 'WS broker publish failed'),
+        )
+      } catch (err) {
+        log.error({ err }, 'WS broker publish failed')
+      }
+    }
+    const relayRoom = broker
+      ? (room: string, event: string, data: unknown, exclude?: string) =>
+          relay({ origin, room, event, data, exclude })
+      : undefined
+    const relayNamespace = broker
+      ? (namespace: string, event: string, data: unknown, exclude?: string) =>
+          relay({ origin, namespace, event, data, exclude })
+      : undefined
+
+    const roomManager = new RoomManager(countSent, relayRoom)
+
+    // Whatever arrives on the channel is untrusted in shape — another
+    // publisher, a stale version, a `null`. Anything that is not exactly one
+    // destination plus string origin/event is dropped rather than thrown on.
+    const isBrokerMessage = (m: any): m is WsBrokerMessage =>
+      m !== null &&
+      typeof m === 'object' &&
+      typeof m.origin === 'string' &&
+      typeof m.event === 'string' &&
+      (m.exclude === undefined || typeof m.exclude === 'string') &&
+      (typeof m.room === 'string') !== (typeof m.namespace === 'string') &&
+      (m.room === undefined || typeof m.room === 'string') &&
+      (m.namespace === undefined || typeof m.namespace === 'string')
+
+    const onRelayed = (message: unknown): void => {
+      if (!isBrokerMessage(message) || message.origin === origin) return
+      const { room, namespace, event, data, exclude } = message
+      if (room !== undefined) return roomManager.deliver(room, event, data, exclude)
+      const frame = JSON.stringify({ event, data })
+      let sent = 0
+      for (const entry of namespaces.values()) {
+        if (entry.namespace !== namespace) continue
+        for (const [id, socket] of entry.sockets) {
+          if (id !== exclude && socket.readyState === socket.OPEN) {
+            socket.send(frame)
+            sent++
+          }
+        }
+      }
+      if (sent) countSent(sent)
+    }
 
     const userRoom = (userId: string): string => userRoomPrefix + userId
 
@@ -228,6 +290,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         entry.namespace,
         request,
         countSent,
+        relayNamespace,
       )
       entry.contexts.set(socketId, ctx)
 
@@ -249,22 +312,27 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
             return
           }
 
-          ctx.event = event
-          ctx.data = data
+          // One context per message, inheriting the socket's (methods, get/set
+          // store): a handler suspended on an await must not read the next
+          // message's data off a shared object.
+          const messageCtx: WsContext = Object.create(ctx)
+          messageCtx.event = event
+          messageCtx.data = data
 
           const handler = entry.handlers.find((h) => h.type === 'message' && h.event === event)
 
           if (handler) {
-            safeInvoke(controller, handler.handlerName, ctx)
+            safeInvoke(controller, handler.handlerName, messageCtx)
           } else {
             const catchAll = entry.handlers.find((h) => h.type === 'message' && h.event === '*')
             if (catchAll) {
-              safeInvoke(controller, catchAll.handlerName, ctx)
+              safeInvoke(controller, catchAll.handlerName, messageCtx)
             }
           }
         } catch {
-          ctx.data = { message: 'Invalid JSON' }
-          invokeHandlers(controller, entry.handlers, 'error', ctx)
+          const errorCtx: WsContext = Object.create(ctx)
+          errorCtx.data = { message: 'Invalid JSON' }
+          invokeHandlers(controller, entry.handlers, 'error', errorCtx)
         }
       }
 
@@ -322,8 +390,9 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
 
       ws.on('error', (err: Error) => {
         wsErrors.value++
-        ctx.data = { message: err.message, name: err.name }
-        invokeHandlers(controller, entry.handlers, 'error', ctx)
+        const errorCtx: WsContext = Object.create(ctx)
+        errorCtx.data = { message: err.message, name: err.name }
+        invokeHandlers(controller, entry.handlers, 'error', errorCtx)
       })
     }
 
@@ -337,7 +406,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
       messagesSent,
       wsErrors,
 
-      beforeStart({ container: containerArg }) {
+      async beforeStart({ container: containerArg }) {
         container = containerArg
 
         // The factory's mutate-name pattern means `this` inside lifecycle
@@ -385,6 +454,10 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
 
           log.info(`Registered WS namespace: ${fullPath} (${controllerClass.name})`)
         }
+
+        // Subscribed before the server takes connections, so no relayed
+        // broadcast is missed between listen and subscribe.
+        if (broker) await broker.subscribe(onRelayed)
       },
 
       afterStart({ server }) {
@@ -441,7 +514,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         log.info(`WebSocket ready — ${namespaces.size} namespace(s), ${totalHandlers} handler(s)`)
       },
 
-      shutdown() {
+      async shutdown() {
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer)
         }
@@ -456,6 +529,7 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
         }
 
         wss?.close()
+        await broker?.close?.()
       },
     }
   },

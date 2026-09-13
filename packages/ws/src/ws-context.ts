@@ -2,6 +2,25 @@ import type { IncomingMessage } from 'node:http'
 import type { WebSocket, WebSocketServer } from 'ws'
 import type { RoomManager } from './room-manager'
 
+/** Raw `Cookie` header parse, shared by the ws and Socket.IO contexts. */
+export function parseCookies(header: string | undefined): Record<string, string> {
+  if (!header) return {}
+  const out: Record<string, string> = {}
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx === -1) continue
+    const k = part.slice(0, idx).trim()
+    const v = part.slice(idx + 1).trim()
+    if (!k) continue
+    try {
+      out[k] = decodeURIComponent(v)
+    } catch {
+      out[k] = v // malformed %-encoding: keep it raw rather than fail the handler
+    }
+  }
+  return out
+}
+
 /**
  * Context object passed to WebSocket handler methods.
  * Analogous to RequestContext for HTTP controllers.
@@ -43,6 +62,13 @@ export class WsContext {
     request: IncomingMessage,
     /** Called with the number of frames each send wrote — feeds `messagesSent`. */
     private readonly onSend?: (count: number) => void,
+    /** Relays namespace broadcasts to other instances when the adapter has a broker. */
+    private readonly onBroadcast?: (
+      namespace: string,
+      event: string,
+      data: any,
+      excludeId?: string,
+    ) => void,
   ) {
     this.id = id
     this.namespace = namespace
@@ -53,17 +79,7 @@ export class WsContext {
 
   /** Parsed cookies from the upgrade request (raw `Cookie` header parse). */
   get cookies(): Record<string, string> {
-    const header = this.request.headers.cookie
-    if (!header) return {}
-    const out: Record<string, string> = {}
-    for (const part of header.split(';')) {
-      const idx = part.indexOf('=')
-      if (idx === -1) continue
-      const k = part.slice(0, idx).trim()
-      const v = part.slice(idx + 1).trim()
-      if (k) out[k] = decodeURIComponent(v)
-    }
-    return out
+    return parseCookies(this.request.headers.cookie)
   }
 
   /** Get a metadata value */
@@ -95,6 +111,7 @@ export class WsContext {
       }
     }
     if (sent) this.onSend?.(sent)
+    this.onBroadcast?.(this.namespace, event, data, this.id)
   }
 
   /** Send to all sockets in the same namespace including this one */
@@ -108,6 +125,7 @@ export class WsContext {
       }
     }
     if (sent) this.onSend?.(sent)
+    this.onBroadcast?.(this.namespace, event, data)
   }
 
   /** Join a room. Names are global across namespaces — see {@link RoomManager}. */

@@ -19,6 +19,8 @@ export {
   type WsAdapterOptions,
   type WsAuthConfig,
   type WsAuthenticatedUser,
+  type WsBroker,
+  type WsBrokerMessage,
   type WsHandlerDefinition,
   type WsHandlerType,
   type WsUserBroadcaster,

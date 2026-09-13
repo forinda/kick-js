@@ -10,11 +10,24 @@ import type { WebSocket } from 'ws'
  * reach a user's sockets in every namespace — prefix names (`chat:lobby`) when
  * namespaces must not overlap.
  *
- * Membership lives in this process only. A second instance has its own rooms.
+ * Membership lives in this process only: `getSockets` and `getAllRooms`
+ * describe this instance. `broadcast` reaches other instances when the adapter
+ * has a broker.
  */
 export class RoomManager {
-  /** @param onSend Called with the number of frames each broadcast wrote. */
-  constructor(private readonly onSend?: (count: number) => void) {}
+  /**
+   * @param onSend Called with the number of frames each broadcast wrote.
+   * @param onBroadcast Relays each broadcast to other instances.
+   */
+  constructor(
+    private readonly onSend?: (count: number) => void,
+    private readonly onBroadcast?: (
+      room: string,
+      event: string,
+      data: any,
+      excludeId?: string,
+    ) => void,
+  ) {}
 
   /** socketId → set of room names */
   private socketRooms = new Map<string, Set<string>>()
@@ -74,8 +87,14 @@ export class RoomManager {
     return result
   }
 
-  /** Broadcast to all sockets in a room, optionally excluding one */
+  /** Broadcast to all sockets in a room, optionally excluding one — on every instance when a broker is set. */
   broadcast(room: string, event: string, data: any, excludeId?: string): void {
+    this.deliver(room, event, data, excludeId)
+    this.onBroadcast?.(room, event, data, excludeId)
+  }
+
+  /** Send to this instance's members of a room only. Relayed broadcasts land here. */
+  deliver(room: string, event: string, data: any, excludeId?: string): void {
     const sockets = this.roomSockets.get(room)
     if (!sockets) return
 

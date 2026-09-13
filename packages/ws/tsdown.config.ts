@@ -6,6 +6,9 @@ const pkg = readPkg(import.meta.dirname)
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    redis: 'src/redis.ts',
+    'socket-io': 'src/socket-io.ts',
+    centrifugo: 'src/centrifugo.ts',
   },
   format: ['esm'],
   platform: 'node',
@@ -15,6 +18,7 @@ export default defineConfig({
     '@forinda/kickjs',
     'reflect-metadata',
     'ws',
+    'socket.io',
     /^node:/,
   ],
   banner: { js: createBanner(pkg.name, pkg.version) },

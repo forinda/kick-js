@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-ws",
   "version": "7.0.2",
-  "description": "WebSocket support with decorators, namespaces, rooms, and DI integration for KickJS",
+  "description": "Realtime for KickJS: decorator-driven WebSocket controllers on ws or Socket.IO, a Redis broker for multiple instances, and a Centrifugo integration",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -9,6 +9,10 @@
     "decorator-driven",
     "websocket",
     "ws",
+    "socket.io",
+    "centrifugo",
+    "redis",
+    "pubsub",
     "realtime",
     "rooms",
     "namespaces",
@@ -22,6 +26,18 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./redis": {
+      "import": "./dist/redis.mjs",
+      "types": "./dist/redis.d.mts"
+    },
+    "./socket.io": {
+      "import": "./dist/socket-io.mjs",
+      "types": "./dist/socket-io.d.mts"
+    },
+    "./centrifugo": {
+      "import": "./dist/centrifugo.mjs",
+      "types": "./dist/centrifugo.d.mts"
     }
   },
   "files": [
@@ -41,9 +57,13 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@swc/core": "^1.16.1",
     "@types/node": "^26.4.1",
     "@types/ws": "^8.18.0",
+    "ioredis": "^5.10.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0",
     "ws": "^8.21.3"
@@ -67,7 +87,12 @@
   },
   "peerDependencies": {
     "@forinda/kickjs": ">=5.18.0",
+    "socket.io": "^4.0.0",
     "ws": "^8.0.0"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {
+    "socket.io": {
+      "optional": true
+    }
+  }
 }

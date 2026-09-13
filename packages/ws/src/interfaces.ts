@@ -45,9 +45,14 @@ export interface WsAuthConfig {
    * `@OnConnect` has settled, up to 64 messages or 1 MiB; beyond either the socket is
    * closed with `1008`. A socket that closes while this runs never reaches
    * `@OnConnect` or its user room.
+   *
+   * `handshakeAuth` is Socket.IO only: the payload of the client's `auth`
+   * option (`io(url, { auth: { token } })`) — the usual place for a token,
+   * since a browser cannot set headers on a WebSocket. `WsAdapter` omits it.
    */
   resolveUser: (
     request: IncomingMessage,
+    handshakeAuth?: Record<string, unknown>,
   ) => Promise<WsAuthenticatedUser | null> | WsAuthenticatedUser | null
   /**
    * Join each authenticated socket to `user:<id>` as soon as `resolveUser`
@@ -71,6 +76,53 @@ export interface WsAdapterOptions {
   maxPayload?: number
   /** Optional authenticated-handshake configuration. */
   auth?: WsAuthConfig
+  /**
+   * Relays broadcasts between instances. Without one, rooms, namespace
+   * broadcasts and per-user sends reach sockets in this process only.
+   * Use `redisBroker` from `@forinda/kickjs-ws/redis`, or implement
+   * {@link WsBroker} over any pub/sub.
+   */
+  broker?: WsBroker
+}
+
+/** A broadcast relayed between instances. Exactly one of `room` / `namespace` is set. */
+export type WsBrokerMessage = {
+  /** Id of the publishing instance — each instance skips its own messages. */
+  origin: string
+  event: string
+  data: unknown
+  /** Socket id that must not receive it (the sender of `ctx.broadcast`). */
+  exclude?: string
+} & (
+  | {
+      /** Room broadcast: `ctx.to(room)`, `WS_ROOM_MANAGER`, per-user sends. */
+      room: string
+      namespace?: never
+    }
+  | {
+      /** Namespace broadcast: `ctx.broadcast()` / `ctx.broadcastAll()`. */
+      namespace: string
+      room?: never
+    }
+)
+
+/**
+ * Cross-instance pub/sub for {@link WsAdapter}. The adapter delivers every
+ * broadcast to its own sockets immediately, then publishes it; other
+ * instances deliver it to theirs. `data` must be JSON-serialisable — it
+ * already is, since it is sent to clients as JSON.
+ */
+export interface WsBroker {
+  /**
+   * Called synchronously from the broadcasting handler. Serialise `message`
+   * before the first `await`: the handler may mutate `data` afterwards, and
+   * local sockets already received the value as it was.
+   */
+  publish(message: WsBrokerMessage): void | Promise<void>
+  /** Called once from the adapter's `beforeStart`; startup waits for it. */
+  subscribe(onMessage: (message: WsBrokerMessage) => void): void | Promise<void>
+  /** Called from the adapter's `shutdown`. Connections the caller passed in stay theirs to close. */
+  close?(): void | Promise<void>
 }
 
 /**
@@ -79,7 +131,8 @@ export interface WsAdapterOptions {
  * automatically; without it a controller can join the room manually and the
  * helper works the same.
  *
- * Reaches sockets in THIS process only.
+ * Reaches sockets in this process only, unless the adapter has a
+ * {@link WsAdapterOptions.broker}.
  */
 export interface WsUserBroadcaster {
   /** Send a single event to every socket bound to this user. */
