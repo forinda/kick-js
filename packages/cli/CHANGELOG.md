@@ -1,5 +1,30 @@
 # @forinda/kickjs-cli
 
+## 8.1.7
+
+### Patch Changes
+
+- [#691](https://github.com/forinda/kick-js/pull/691) [`b8623db`](https://github.com/forinda/kick-js/commit/b8623db832dadb1c92f675ecce8b9139aef8dc36) Thanks [@forinda](https://github.com/forinda)! - `kick new` no longer commits `.env.test`. It is gitignored like `.env`, and a
+  committed `.env.test.example` carries the shared keys.
+  
+  Test values differ per machine — database names, ports — so a tracked
+  `.env.test` turned each developer's local tweak into a diff and a merge
+  conflict for everyone else. Isolation is unchanged: under a test run KickJS
+  still reads `.env.test` instead of `.env`, a fresh clone has neither file, and
+  a machine with `.env` but no `.env.test` still gets the backfill warning and a
+  `kick doctor` warning, which now suggests `cp .env.test.example .env.test`.
+  
+  Existing projects that want the same split:
+  
+  ```bash
+  git mv .env.test .env.test.example   # keep the shared keys as the template
+  cp .env.test.example .env.test
+  echo .env.test >> .gitignore
+  ```
+- Updated dependencies [[`86edaad`](https://github.com/forinda/kick-js/commit/86edaadc37c1256fe04ec322ec1e3f896b054bcf)]:
+  - @forinda/kickjs@8.3.2
+  - @forinda/kickjs-db@7.3.0
+
 ## 8.1.6
 
 ### Patch Changes
