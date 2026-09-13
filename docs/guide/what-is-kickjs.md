@@ -8,7 +8,7 @@ KickJS is a production-grade, decorator-driven Node.js framework for TypeScript.
 | ----------------------- | ---------------------- | ---------------- | ------- |
 | DI container            | Built-in (lightweight) | Built-in (heavy) | None    |
 | TypeScript decorators   | Full                   | Full             | None    |
-| DDD code generators     | First-class            | Partial          | None    |
+| Module code generators  | First-class            | Partial          | None    |
 | Zod validation          | Native                 | Via pipes        | None    |
 | OpenAPI from decorators | Automatic              | Automatic        | None    |
 | Vite HMR (backend)      | Native                 | None             | None    |
@@ -46,7 +46,7 @@ db  swagger  ws  devtools  ...
 - **@forinda/kickjs-devtools** — Debug dashboard at /\_debug
 - **@forinda/kickjs-ai** — AI/LLM integration adapter
 - **@forinda/kickjs-mcp** — Model Context Protocol adapter
-- **@forinda/kickjs-cli** — Project scaffolding, DDD code generators, custom commands
+- **@forinda/kickjs-cli** — Project scaffolding, module and adapter generators, custom commands
 - **@forinda/kickjs-vite** — Vite HMR plugin, envWatchPlugin, dev tooling
 - **@forinda/kickjs-testing** — Test utilities for integration testing
 - **@forinda/kickjs-client** — Typed fetch client for the frontend: response types inferred from your handlers, end to end ([guide](./typed-client.md))
