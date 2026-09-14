@@ -1086,6 +1086,33 @@ export class Application {
   }
 
   /**
+   * Make the app ready to serve requests handed to it, with no server of its
+   * own — the serverless path behind {@link createHandler}.
+   *
+   * Runs the same `setup()` as {@link start} and the plugins' `onReady`, but
+   * nothing that needs a listening server: there is no port, no `afterStart`
+   * (it receives the `http.Server`), and no process signal handlers.
+   */
+  async startWithoutServer(): Promise<void> {
+    await this.setup()
+
+    const needServer = this.adapters.filter((adapter) => adapter.afterStart)
+    if (needServer.length > 0) {
+      log.warn(
+        `No HTTP server in handler mode, so afterStart does not run for: ${needServer
+          .map((adapter) => adapter.name)
+          .join(
+            ', ',
+          )}. Anything they attach to the server (WebSockets, upgrade handlers) is unavailable.`,
+      )
+    }
+
+    for (const plugin of this.plugins) {
+      await plugin.onReady?.(this.container)
+    }
+  }
+
+  /**
    * Start the HTTP server.
    *
    * In **dev mode** (Vite plugin active): reuses `globalThis.__kickjs_httpServer`
