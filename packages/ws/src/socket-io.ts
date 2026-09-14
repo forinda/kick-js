@@ -145,6 +145,8 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
   name: 'SocketIoAdapter',
   build: ({ auth, ...serverOptions }) => {
     const io = new Server(serverOptions)
+    /** Undoes what `io.attach()` did to the HTTP server — see afterStart. */
+    let detachFromServer: (() => void) | null = null
     const namespaces: Namespace[] = []
     const userRoomPrefix = auth?.userRoomPrefix ?? 'user:'
     const userRoom = (userId: string): string => userRoomPrefix + userId
@@ -307,7 +309,29 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
       },
 
       afterStart({ server }) {
-        if (server) io.attach(server)
+        if (!server) return
+        // engine.io's attach() adds upgrade / close / listening listeners and
+        // swaps the server's own request listeners for a wrapper around them.
+        // On a dev reload the server outlives this adapter, so shutdown undoes
+        // exactly that — otherwise the next adapter shares the server with a
+        // dead engine, and the app's request handler (Vite's, in dev) stays
+        // wrapped by it.
+        const events = ['request', 'upgrade', 'close', 'listening'] as const
+        const before = new Map(events.map((event) => [event, server.listeners(event)]))
+        io.attach(server)
+        detachFromServer = () => {
+          for (const event of events) {
+            const prior = before.get(event)!
+            for (const listener of server.listeners(event)) {
+              if (!prior.includes(listener)) server.off(event, listener as (...args: any[]) => void)
+            }
+            for (const listener of prior) {
+              if (!server.listeners(event).includes(listener)) {
+                server.on(event, listener as (...args: any[]) => void)
+              }
+            }
+          }
+        }
       },
 
       async shutdown() {
@@ -319,6 +343,8 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
           }),
         )
         io.engine?.close()
+        detachFromServer?.()
+        detachFromServer = null
       },
     }
   },

@@ -108,6 +108,8 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     let container: Container | null = null
     const namespaces = new Map<string, NamespaceEntry>()
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+    /** Removes this adapter's `'upgrade'` listener from the server it attached to. */
+    let detachUpgrade: (() => void) | null = null
 
     const totalConnections = ref(0)
     const activeConnections = ref(0)
@@ -468,8 +470,12 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
           maxPayload,
         })
 
-        // Handle upgrade requests — route to correct namespace
-        server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+        // Handle upgrade requests — route to correct namespace. Held by
+        // reference so shutdown can remove it: on a dev reload the server
+        // outlives this adapter, and a listener left behind ran before the
+        // next adapter's and handed its upgrades to this closed
+        // WebSocketServer, which answers 503.
+        const onUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
           const url = request.url || '/'
           // Parse pathname without relying on host header
           const pathname = url.split('?')[0]
@@ -489,7 +495,9 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
           wss!.handleUpgrade(request, socket, head, (ws) => {
             handleConnection(ws, entry, request)
           })
-        })
+        }
+        server.on('upgrade', onUpgrade)
+        detachUpgrade = () => server.off('upgrade', onUpgrade)
 
         // Heartbeat ping/pong
         if (heartbeatInterval > 0) {
@@ -528,6 +536,8 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
           entry.contexts.clear()
         }
 
+        detachUpgrade?.()
+        detachUpgrade = null
         wss?.close()
         await broker?.close?.()
       },

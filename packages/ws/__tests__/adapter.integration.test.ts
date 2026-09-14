@@ -259,3 +259,33 @@ describe('parseCookies', () => {
     expect(parseCookies('ok=a%20b; bad=%; x=1')).toEqual({ ok: 'a b', bad: '%', x: '1' })
   })
 })
+
+describe('WsAdapter reload on a shared server (dev HMR)', () => {
+  // bootstrap() reloads by calling shutdown({ closeServer: false }) on the old
+  // app and starting a fresh one on the SAME server. A listener the old adapter
+  // left behind ran first and handed the upgrade to its closed
+  // WebSocketServer, which answers 503 — until the dev server restarted.
+  it('a fresh adapter serves upgrades after the previous one shut down', async () => {
+    const server = http.createServer()
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    cleanups.push(() => server.close())
+    const url = `ws://127.0.0.1:${(server.address() as AddressInfo).port}/ws/a`
+    const baseline = server.listenerCount('upgrade')
+
+    Container.reset()
+    const first = WsAdapter({ heartbeatInterval: 0 }) as any
+    await first.beforeStart({ container: Container.getInstance() })
+    await first.afterStart({ server })
+    await first.shutdown()
+    expect(server.listenerCount('upgrade')).toBe(baseline)
+
+    Container.reset()
+    const second = WsAdapter({ heartbeatInterval: 0 }) as any
+    await second.beforeStart({ container: Container.getInstance() })
+    await second.afterStart({ server })
+    cleanups.push(() => second.shutdown())
+
+    const ws = await connect(url)
+    expect(ws.readyState).toBe(WebSocket.OPEN)
+  })
+})

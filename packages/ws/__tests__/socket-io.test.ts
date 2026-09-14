@@ -345,3 +345,42 @@ describe.skipIf(!REDIS_URL)('SocketIoAdapter across instances (@socket.io/redis-
     await waitFor(() => alice.got.includes('dm:hi'))
   })
 })
+
+describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
+  // Same reload path as WsAdapter: shutdown on the old app, a fresh adapter on
+  // the SAME server. engine.io's attach() adds upgrade / request / close /
+  // listening listeners — and swaps out the server's own request listeners for
+  // a wrapper — none of which shutdown undid.
+  it('removes what attach() added, hands back the request listener, and a fresh adapter serves clients', async () => {
+    const server = http.createServer((_req, res) => res.end('app'))
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    cleanups.push(() => {
+      server.closeAllConnections()
+      server.close()
+    })
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const counts = () =>
+      Object.fromEntries(
+        ['request', 'upgrade', 'close', 'listening'].map((e) => [e, server.listenerCount(e)]),
+      )
+    const baseline = counts()
+
+    const first = SocketIoAdapter({}) as any
+    await first.beforeStart({ container: Container.getInstance() })
+    await first.afterStart({ server })
+    await first.shutdown()
+    expect(counts()).toEqual(baseline)
+    // The server's own request handler — Vite's, in dev — still answers.
+    expect(await (await fetch(`${origin}/anything`)).text()).toBe('app')
+
+    Container.reset()
+    const second = SocketIoAdapter({}) as any
+    await second.beforeStart({ container: Container.getInstance() })
+    await second.afterStart({ server })
+    cleanups.push(() => second.shutdown())
+
+    const c = await client(`${origin}/chat`)
+    c.socket.emit('echo', 'after-reload')
+    await waitFor(() => c.got.includes('echo:after-reload'))
+  })
+})
