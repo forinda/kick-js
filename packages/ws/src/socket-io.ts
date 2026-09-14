@@ -319,13 +319,22 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
         const events = ['request', 'upgrade', 'close', 'listening'] as const
         const before = new Map(events.map((event) => [event, server.listeners(event)]))
         io.attach(server)
+        // The delta is taken now, not at shutdown: a listener the app or another
+        // adapter adds later is not attach()'s, and removing it would take a
+        // live handler off the shared server.
+        const changes = events.map((event) => {
+          const prior = before.get(event)!
+          const after = server.listeners(event)
+          return {
+            event,
+            added: after.filter((listener) => !prior.includes(listener)),
+            displaced: prior.filter((listener) => !after.includes(listener)),
+          }
+        })
         detachFromServer = () => {
-          for (const event of events) {
-            const prior = before.get(event)!
-            for (const listener of server.listeners(event)) {
-              if (!prior.includes(listener)) server.off(event, listener as (...args: any[]) => void)
-            }
-            for (const listener of prior) {
+          for (const { event, added, displaced } of changes) {
+            for (const listener of added) server.off(event, listener as (...args: any[]) => void)
+            for (const listener of displaced) {
               if (!server.listeners(event).includes(listener)) {
                 server.on(event, listener as (...args: any[]) => void)
               }

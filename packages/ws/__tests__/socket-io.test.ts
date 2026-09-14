@@ -383,4 +383,22 @@ describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
     c.socket.emit('echo', 'after-reload')
     await waitFor(() => c.got.includes('echo:after-reload'))
   })
+
+  it('leaves listeners added after attach() — by the app or another adapter — on the server', async () => {
+    const server = http.createServer()
+    cleanups.push(() => server.close())
+
+    const adapter = SocketIoAdapter({}) as any
+    await adapter.beforeStart({ container: Container.getInstance() })
+    await adapter.afterStart({ server })
+
+    const laterUpgrade = () => {}
+    const laterRequest = () => {}
+    server.on('upgrade', laterUpgrade)
+    server.on('request', laterRequest)
+
+    await adapter.shutdown()
+    expect(server.listeners('upgrade')).toContain(laterUpgrade)
+    expect(server.listeners('request')).toContain(laterRequest)
+  })
 })
