@@ -145,6 +145,8 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
   name: 'SocketIoAdapter',
   build: ({ auth, ...serverOptions }) => {
     const io = new Server(serverOptions)
+    /** Undoes what `io.attach()` did to the HTTP server — see afterStart. */
+    let detachFromServer: (() => void) | null = null
     const namespaces: Namespace[] = []
     const userRoomPrefix = auth?.userRoomPrefix ?? 'user:'
     const userRoom = (userId: string): string => userRoomPrefix + userId
@@ -307,7 +309,38 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
       },
 
       afterStart({ server }) {
-        if (server) io.attach(server)
+        if (!server) return
+        // engine.io's attach() adds upgrade / close / listening listeners and
+        // swaps the server's own request listeners for a wrapper around them.
+        // On a dev reload the server outlives this adapter, so shutdown undoes
+        // exactly that — otherwise the next adapter shares the server with a
+        // dead engine, and the app's request handler (Vite's, in dev) stays
+        // wrapped by it.
+        const events = ['request', 'upgrade', 'close', 'listening'] as const
+        const before = new Map(events.map((event) => [event, server.listeners(event)]))
+        io.attach(server)
+        // The delta is taken now, not at shutdown: a listener the app or another
+        // adapter adds later is not attach()'s, and removing it would take a
+        // live handler off the shared server.
+        const changes = events.map((event) => {
+          const prior = before.get(event)!
+          const after = server.listeners(event)
+          return {
+            event,
+            added: after.filter((listener) => !prior.includes(listener)),
+            displaced: prior.filter((listener) => !after.includes(listener)),
+          }
+        })
+        detachFromServer = () => {
+          for (const { event, added, displaced } of changes) {
+            for (const listener of added) server.off(event, listener as (...args: any[]) => void)
+            for (const listener of displaced) {
+              if (!server.listeners(event).includes(listener)) {
+                server.on(event, listener as (...args: any[]) => void)
+              }
+            }
+          }
+        }
       },
 
       async shutdown() {
@@ -319,6 +352,8 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
           }),
         )
         io.engine?.close()
+        detachFromServer?.()
+        detachFromServer = null
       },
     }
   },
