@@ -58,8 +58,8 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
-    "@swc/core": "^1.16.1",
-    "@types/node": "^26.4.1",
+    "@swc/core": "^1.16.2",
+    "@types/node": "^26.5.1",
     "@types/ws": "^8.18.0",
     "ioredis": "^5.10.1",
     "socket.io": "^4.8.3",

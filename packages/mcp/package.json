@@ -44,7 +44,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "zod": "^4.5.4",
+    "zod": "^4.6.2",
     "@forinda/kickjs": ">=5.18.0"
   },
   "peerDependenciesMeta": {
@@ -55,16 +55,16 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@swc/core": "^1.16.1",
+    "@swc/core": "^1.16.2",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.5.1",
     "@types/supertest": "^7.2.1",
     "express": "^5.1.0",
     "supertest": "^7.2.2",
     "typescript": "^7.0.2",
-    "unplugin-swc": "^1.5.11",
+    "unplugin-swc": "^1.6.0",
     "vitest": "^5.0.0",
-    "zod": "^4.5.4"
+    "zod": "^4.6.2"
   },
   "publishConfig": {
     "access": "public"
