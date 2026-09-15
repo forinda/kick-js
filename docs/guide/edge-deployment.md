@@ -78,6 +78,12 @@ import { h3WebRuntime } from '@forinda/kickjs/h3-web'
 await bootstrap({ modules, runtime: h3WebRuntime() })
 ```
 
+A full `Application` on `h3WebRuntime()` can also be driven through `fetch`
+with no node server — `await app.setup()`, then
+`app.getRuntimeApp().fetch(request)`. Global connect middleware runs there
+against a web-backed `req` / `res`; see
+[what that covers](./http-runtimes.md#calling-the-app-through-fetch).
+
 ## Deno
 
 ```ts
