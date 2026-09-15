@@ -39,7 +39,7 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
-    "@babel/core": "^8.0.1"
+    "@babel/core": "^8.0.5"
   },
   "peerDependencies": {
     "vite": ">=6.0.0",

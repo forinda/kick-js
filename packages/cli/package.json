@@ -40,15 +40,15 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
-    "@clack/prompts": "^1.7.0",
+    "@clack/prompts": "^1.8.0",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-cli-kit": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "commander": "^15.0.0",
     "glob": "^13.0.6",
     "jiti": "^2.7.0",
-    "oxc-parser": "^0.148.0",
-    "oxfmt": "^0.66.0",
+    "oxc-parser": "^0.149.0",
+    "oxfmt": "^0.67.0",
     "picocolors": "^1.1.1",
     "pluralize": "^8.0.0"
   },
