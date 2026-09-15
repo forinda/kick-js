@@ -15,6 +15,10 @@ Two pieces make this work:
 Both need **h3 v2** (the web-standards line — `npm i h3@latest`). The
 [v1 h3 runtime](./http-runtimes.md#h3) is unaffected and keeps working.
 
+Deploying to **Netlify or Vercel Functions** (Node, not edge)? Use
+[`createHandler()`](./serverless.md) — it keeps adapters and works with the
+default Express runtime.
+
 ## The fetch entry
 
 ```ts

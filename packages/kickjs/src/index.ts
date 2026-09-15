@@ -20,6 +20,7 @@ export {
 } from './http/health-module'
 
 export { bootstrap } from './http/bootstrap'
+export { createHandler, type KickHandler } from './http/handler'
 
 // Cluster
 export { isClusterPrimary, type ClusterOptions } from './http/cluster'
