@@ -1,3 +1,7 @@
+---
+description: Create a KickJS project with kick new, run it with kick dev, generate your first module and controller, and ship a production build.
+---
+
 # Getting Started
 
 > 📖 **Reading this on GitHub?** The full rendered docs live at <https://kickjs.app/> — every `./*.md` link in this page resolves there too.
