@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Source for og-image.png (link previews). Re-render after editing:
+       node -e "require('sharp')('docs/public/og-image.svg').png().toFile('docs/public/og-image.png')" -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FACC15"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Bolt mark -->
+  <rect x="80" y="80" width="112" height="112" rx="26" fill="#FFFFFF" fill-opacity="0.08"/>
+  <path d="M143 94L112 143h21l-7 35 31-49h-21l7-35z" fill="url(#bolt)"/>
+
+  <!-- Name and tagline -->
+  <text x="80" y="310" font-family="DejaVu Sans, sans-serif" font-size="104" font-weight="700" fill="#FFFFFF" letter-spacing="-3">KickJS</text>
+  <text x="80" y="372" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">The Adaptive Node.js Framework</text>
+
+  <!-- Decorator code card -->
+  <rect x="660" y="96" width="460" height="196" rx="18" fill="#0F0D2E" fill-opacity="0.55" stroke="#A5B4FC" stroke-opacity="0.25"/>
+  <g font-family="DejaVu Sans Mono, monospace" font-size="22">
+    <text x="690" y="148" fill="#FACC15">@Controller<tspan fill="#E0E7FF">(</tspan><tspan fill="#86EFAC">'/tasks'</tspan><tspan fill="#E0E7FF">)</tspan></text>
+    <text x="690" y="184" fill="#A5B4FC">class <tspan fill="#FFFFFF">TasksController</tspan> <tspan fill="#E0E7FF">{</tspan></text>
+    <text x="718" y="220" fill="#FACC15">@Get<tspan fill="#E0E7FF">(</tspan><tspan fill="#86EFAC">'/:id'</tspan><tspan fill="#E0E7FF">) find(ctx)</tspan></text>
+    <text x="690" y="256" fill="#E0E7FF">}</text>
+  </g>
+
+  <!-- Engines and domain -->
+  <line x1="80" y1="470" x2="1120" y2="470" stroke="#A5B4FC" stroke-opacity="0.2"/>
+  <text x="80" y="540" font-family="DejaVu Sans, sans-serif" font-size="30" fill="#E0E7FF">Express <tspan fill="#FACC15">·</tspan> Fastify <tspan fill="#FACC15">·</tspan> h3 <tspan fill="#A5B4FC">— one decorator API</tspan></text>
+  <text x="1120" y="540" font-family="DejaVu Sans Mono, monospace" font-size="28" fill="#A5B4FC" text-anchor="end">kickjs.app</text>
+</svg>
