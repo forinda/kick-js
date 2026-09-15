@@ -75,10 +75,13 @@ Hand the platform **compiled JavaScript**, never the TypeScript source. Netlify 
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
 import swc from 'unplugin-swc'
+import { devtoolsFlagPlugin, devtoolsStripPlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
-  plugins: [swc.vite()],
+  // The devtools plugins do what kickjsVitePlugin does in `kick build`:
+  // devtools code stays out of the production bundle.
+  plugins: [swc.vite(), devtoolsFlagPlugin(), devtoolsStripPlugin()],
   ssr: { noExternal: true, target: 'node' },
   build: {
     ssr: true,
@@ -101,6 +104,8 @@ vite build --config vite.serverless.config.ts   # → dist/serverless/server.mjs
 ```
 
 `dist/` is already git-ignored, so the bundle needs no new ignore entry. Run this build **after** `kick build`: `kick build` empties `dist/`, including `dist/serverless`.
+
+This config is separate from `vite.config.ts`, so changing its entry does not affect `kick build`, which keeps building `src/index.ts`. The build entry is `rollupOptions.input`; the `entry` passed to `kickjsVitePlugin` is only used by the dev server. Do not point `input` at `src/index.ts`: that entry calls `bootstrap()`, which listens on a port and registers signal handlers inside the function.
 
 ## Netlify
 
