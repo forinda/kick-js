@@ -354,6 +354,20 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#3b82f6' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    // Link previews need an absolute URL to a raster image (SVG is not
+    // supported). Source: docs/public/og-image.svg.
+    ['meta', { property: 'og:image', content: `${hostname}og-image.png` }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    [
+      'meta',
+      {
+        property: 'og:image:alt',
+        content:
+          'KickJS — The Adaptive Node.js Framework. Express, Fastify, h3: one decorator API.',
+      },
+    ],
+    ['meta', { name: 'twitter:image', content: `${hostname}og-image.png` }],
     ...gaHead,
   ],
 
