@@ -21,6 +21,26 @@ export const handler = createHandler({ modules })
 | `handler.ready()`        | `Promise<Application>`        | Warm the app up before the first request   |
 | `handler.close()`        | `Promise<void>`               | Shut adapters down (tests, graceful exit)  |
 
+## Which project layout
+
+`createHandler()` is the same in every KickJS app. The layout decides where the files go and whether the platform also serves a frontend.
+
+|                  | API only (`kick new --template rest` or `minimal`) | Fullstack (`kick new --template fullstack`) |
+| ---------------- | -------------------------------------------------- | ------------------------------------------- |
+| Serverless entry | `src/serverless.ts`                                | `server/src/serverless.ts`                  |
+| Bundle config    | `vite.serverless.config.ts`                        | `server/vite.serverless.config.ts`          |
+| Bundle output    | `dist/serverless/server.mjs`                       | `server/dist/serverless/server.mjs`         |
+| Static files     | None                                               | `web/dist`, served by the platform          |
+| `SpaAdapter`     | Not used                                           | Left out of the serverless entry (below)    |
+
+The examples on this page use the fullstack layout. Each platform section says what changes for an API-only project.
+
+### Fullstack: leave `SpaAdapter` out
+
+The fullstack server's `src/index.ts` registers `SpaAdapter({ clientDir: '../web/dist' })`, so one process serves both the API and the built web app. On Netlify and Vercel the platform serves `web/dist` itself, so the serverless entry passes the modules and any other adapters, without `SpaAdapter`. Keep `src/index.ts` as it is for `kick dev` and `kick start`.
+
+The web app's client calls `/api/v1` on its own origin (`baseUrl: '/api/v1'` in `web/src/api.ts`). That works unchanged when the API and web app deploy as one site, which is what the examples below do. For [two separate deploys](#two-deploys), proxy `/api/*` from the web site to the API site so the client URL still works.
+
 ## What differs from `bootstrap()`
 
 - **Setup runs once per function instance**, on the first request, and is reused while the instance stays warm. If setup throws, the next request tries again.
@@ -63,7 +83,7 @@ export default defineConfig({
   build: {
     ssr: true,
     target: 'node20',
-    outDir: 'dist-serverless',
+    outDir: 'dist/serverless',
     minify: false,
     rollupOptions: {
       input: fileURLToPath(new URL('./src/serverless.ts', import.meta.url)),
@@ -77,16 +97,26 @@ export default defineConfig({
 ```
 
 ```bash
-vite build --config vite.serverless.config.ts   # → dist-serverless/server.mjs
+vite build --config vite.serverless.config.ts   # → dist/serverless/server.mjs
 ```
+
+`dist/` is already git-ignored, so the bundle needs no new ignore entry. Run this build **after** `kick build`: `kick build` empties `dist/`, including `dist/serverless`.
 
 ## Netlify
 
-The function file has to be **written by the build command** — Netlify clears `.netlify/` before building. A small script run after the bundle build does it:
+The function file has to be **written by the build command** — Netlify clears `.netlify/` before building. Add a small script that the build command runs after the bundle build:
 
 ```js
-// .netlify/v1/functions/api.mjs (written during the build)
-import { handler } from '../../../server/dist-serverless/server.mjs'
+// scripts/write-netlify-function.mjs
+import { mkdirSync, writeFileSync } from 'node:fs'
+
+// Relative to .netlify/v1/functions/. API only: '../../../dist/serverless/server.mjs'
+const bundle = '../../../server/dist/serverless/server.mjs'
+
+mkdirSync('.netlify/v1/functions', { recursive: true })
+writeFileSync(
+  '.netlify/v1/functions/api.mjs',
+  `import { handler } from '${bundle}'
 
 export default (request) => handler.fetch(request)
 
@@ -94,7 +124,11 @@ export const config = {
   path: '/api/*',
   preferStatic: true,
 }
+`,
+)
 ```
+
+Run it from the project root; it writes `.netlify/v1/functions/api.mjs`.
 
 `config` must be a literal — Netlify reads it without running the file. With `path: '/api/*'` the app sees the original URL, so routes stay under `/api/v1/…`.
 
@@ -112,7 +146,7 @@ For a web app in the same repo, publish its build and let the function take `/ap
   status = 200
 ```
 
-To deploy the API as its own site instead, proxy from the web site: `from = "/api/*"`, `to = "https://your-api.netlify.app/api/:splat"`, `status = 200`.
+**API only:** set `bundle` in the script to `'../../../dist/serverless/server.mjs'`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
 
 ## Vercel
 
@@ -134,6 +168,32 @@ Write the [Build Output API](https://vercel.com/docs/build-output-api) tree and 
 ```
 
 The function receives the original path, so routes stay under `/api/v1/…`.
+
+**API only:** skip `static/` and keep only the `/api/(.*)` route in `config.json`.
+
+## Two deploys
+
+A fullstack workspace can also deploy as two projects: the API (API-only setup above, from `server/`) and the web app as a static site (`web/dist`). Keep the client's relative `baseUrl` by proxying `/api/*` from the web site to the API:
+
+```toml
+# web site netlify.toml, before the SPA redirect
+[[redirects]]
+  from = "/api/*"
+  to = "https://your-api.netlify.app/api/:splat"
+  status = 200
+```
+
+```json
+// web project vercel.json
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://your-api.vercel.app/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+Without a proxy, set the client's `baseUrl` to the API's full URL and enable [`cors()`](./middleware.md) on the API for the web site's origin.
 
 ## Limits to design around
 
