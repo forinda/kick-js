@@ -104,11 +104,19 @@ vite build --config vite.serverless.config.ts   # → dist/serverless/server.mjs
 
 ## Netlify
 
-The function file has to be **written by the build command** — Netlify clears `.netlify/` before building. A small script run after the bundle build does it:
+The function file has to be **written by the build command** — Netlify clears `.netlify/` before building. Add a small script that the build command runs after the bundle build:
 
 ```js
-// .netlify/v1/functions/api.mjs (written during the build)
-import { handler } from '../../../server/dist/serverless/server.mjs'
+// scripts/write-netlify-function.mjs
+import { mkdirSync, writeFileSync } from 'node:fs'
+
+// Relative to .netlify/v1/functions/. API only: '../../../dist/serverless/server.mjs'
+const bundle = '../../../server/dist/serverless/server.mjs'
+
+mkdirSync('.netlify/v1/functions', { recursive: true })
+writeFileSync(
+  '.netlify/v1/functions/api.mjs',
+  `import { handler } from '${bundle}'
 
 export default (request) => handler.fetch(request)
 
@@ -116,7 +124,11 @@ export const config = {
   path: '/api/*',
   preferStatic: true,
 }
+`,
+)
 ```
+
+Run it from the project root; it writes `.netlify/v1/functions/api.mjs`.
 
 `config` must be a literal — Netlify reads it without running the file. With `path: '/api/*'` the app sees the original URL, so routes stay under `/api/v1/…`.
 
@@ -134,7 +146,7 @@ For a web app in the same repo, publish its build and let the function take `/ap
   status = 200
 ```
 
-**API only:** import the bundle from `../../../dist/serverless/server.mjs`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
+**API only:** set `bundle` in the script to `'../../../dist/serverless/server.mjs'`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
 
 ## Vercel
 
