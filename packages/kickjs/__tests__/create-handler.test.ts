@@ -116,6 +116,14 @@ describe('createHandler — fetch on a Node-based runtime (Express)', () => {
     expect(res.headers.get('x-kick')).toBe('yes')
   })
 
+  it('drops the loopback hop’s connection headers from the response', async () => {
+    const handler = handlerFor({ modules: [itemsModule()] })
+    const res = await handler.fetch(new Request('https://site.example/api/v1/items'))
+    expect(res.headers.get('connection')).toBeNull()
+    expect(res.headers.get('keep-alive')).toBeNull()
+    expect(res.headers.get('content-type')).toContain('application/json')
+  })
+
   it('tells the app which host the platform received, since the hop is 127.0.0.1', async () => {
     const handler = handlerFor({ modules: [itemsModule()] })
     const res = await handler.fetch(new Request('https://site.example/api/v1/items/host'))
@@ -197,6 +205,30 @@ describe('createHandler — lifecycle', () => {
       'database briefly down',
     )
     // No Container.reset(): in a deployed bundle the decorators ran once, at import.
+    const res = await handler.fetch(new Request('https://site.example/api/v1/items'))
+    expect(res.status).toBe(200)
+  })
+
+  it('shuts a failed setup down before the retry builds a new app', async () => {
+    const shutdown = vi.fn()
+    let failOnce = true
+    const handler = handlerFor({
+      modules: [itemsModule()],
+      adapters: [{ name: 'Resource', shutdown }],
+      plugins: [
+        {
+          name: 'FlakyReady',
+          onReady() {
+            if (failOnce) {
+              failOnce = false
+              throw new Error('warm-up failed')
+            }
+          },
+        },
+      ],
+    })
+    await expect(handler.ready()).rejects.toThrow('warm-up failed')
+    expect(shutdown).toHaveBeenCalledTimes(1)
     const res = await handler.fetch(new Request('https://site.example/api/v1/items'))
     expect(res.status).toBe(200)
   })

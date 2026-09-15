@@ -32,7 +32,7 @@ export const handler = createHandler({ modules })
 
 Express has no `fetch` of its own. `handler.fetch()` starts a server bound to `127.0.0.1` on a random port inside the same process, the first time it is needed, and forwards each `Request` to it:
 
-- request bodies are buffered (both platforms buffer them before your function runs anyway);
+- request bodies are buffered in memory before the app's body parser sees them. Netlify and Vercel cap request bodies before your function runs; on a host without that cap, limit body size in front of the handler;
 - hop-by-hop headers are dropped; `x-forwarded-host` and `x-forwarded-proto` are set to what the platform received;
 - response bodies stream back, with every `Set-Cookie` kept.
 
@@ -41,6 +41,8 @@ The forwarded request comes from `127.0.0.1`. If you read the client IP, pass `t
 ```ts
 export const handler = createHandler({ modules, trustProxy: 'loopback' })
 ```
+
+With `trustProxy: 'loopback'` the app believes whatever `X-Forwarded-*` headers the `Request` carries. Netlify sets them itself, so that is safe there. Leave it off if `handler.fetch()` can receive requests that did not come through a platform that sets these headers.
 
 A runtime whose app already has `fetch` — the [h3 v2 runtime](./edge-deployment.md) — is called directly, with no forwarding.
 
@@ -135,10 +137,11 @@ The function receives the original path, so routes stay under `/api/v1/…`.
 
 ## Limits to design around
 
-|                         | Netlify Functions        | Vercel (Hobby, Fluid)        |
-| ----------------------- | ------------------------ | ---------------------------- |
-| Max duration            | 60 s (15 min background) | 300 s                        |
-| Request / response body | 6 MB buffered            | 4.5 MB                       |
-| WebSockets              | Not supported            | Beta; closes at max duration |
+|               | Netlify Functions             | Vercel (Hobby, Fluid)        |
+| ------------- | ----------------------------- | ---------------------------- |
+| Max duration  | 60 s (15 min background)      | 300 s                        |
+| Request body  | 6 MB                          | 4.5 MB                       |
+| Response body | 6 MB buffered, 20 MB streamed | 4.5 MB                       |
+| WebSockets    | Not supported                 | Beta; closes at max duration |
 
 In-memory state does not survive between instances: use a hosted database instead of in-memory repositories, and a shared store (Redis, KV) for rate limiting and sessions. Cron and queue adapters need the platform's scheduled or background functions.

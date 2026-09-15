@@ -41,6 +41,17 @@ const HOP_BY_HOP_REQUEST = [
   'content-length',
 ]
 
+const HOP_BY_HOP_RESPONSE = [
+  'connection',
+  'keep-alive',
+  'proxy-connection',
+  'transfer-encoding',
+  'upgrade',
+  'trailer',
+  'content-encoding',
+  'content-length',
+]
+
 /**
  * Build a KickJS app as request handlers instead of a listening server.
  *
@@ -81,19 +92,23 @@ export function createHandler(options: ApplicationOptions): KickHandler {
   const ready = (): Promise<Application> => {
     app ??= (async () => {
       const instance = new Application(options)
-      await instance.startWithoutServer()
+      try {
+        await instance.startWithoutServer()
+      } catch (err) {
+        // A failed setup (a database that was briefly down, say) is retried on
+        // the next request. Shut this attempt down first so its adapters don't
+        // stay live next to the retry's.
+        app = undefined
+        await instance.shutdown().catch(() => {})
+        throw err
+      }
       return instance
-    })().catch((err) => {
-      // A failed setup (a database that was briefly down, say) is retried on
-      // the next request instead of pinning the instance to a rejected promise.
-      app = undefined
-      throw err
-    })
+    })()
     return app
   }
 
   const forwardingServer = (instance: Application) => {
-    forwarding ??= new Promise((resolve, reject) => {
+    forwarding ??= new Promise<{ origin: string; server: http.Server }>((resolve, reject) => {
       const server = http.createServer((req, res) => instance.handle(req, res))
       server.once('error', reject)
       server.listen(0, '127.0.0.1', () => {
@@ -101,6 +116,9 @@ export function createHandler(options: ApplicationOptions): KickHandler {
         server.unref()
         resolve({ origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, server })
       })
+    }).catch((err) => {
+      forwarding = undefined
+      throw err
     })
     return forwarding
   }
@@ -131,10 +149,11 @@ export function createHandler(options: ApplicationOptions): KickHandler {
     })
 
     // Node's fetch has already decoded a compressed body, so the encoding and
-    // length headers no longer describe what is being returned.
+    // length headers no longer describe what is being returned. Connection
+    // headers describe the loopback hop.
     const responseHeaders = new Headers(upstream.headers)
-    responseHeaders.delete('content-encoding')
-    responseHeaders.delete('content-length')
+    const named = responseHeaders.get('connection')?.split(',') ?? []
+    for (const name of [...HOP_BY_HOP_RESPONSE, ...named]) responseHeaders.delete(name.trim())
     return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,
@@ -160,12 +179,9 @@ export function createHandler(options: ApplicationOptions): KickHandler {
     },
 
     async close() {
-      const started = forwarding
+      const started = await forwarding?.catch(() => undefined)
       forwarding = undefined
-      if (started) {
-        const { server } = await started
-        await new Promise<void>((resolve) => server.close(() => resolve()))
-      }
+      if (started) await new Promise<void>((resolve) => started.server.close(() => resolve()))
       const current = app
       app = undefined
       if (current) await (await current).shutdown()
