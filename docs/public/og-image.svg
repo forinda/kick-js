@@ -25,7 +25,7 @@
   <!-- Decorator code card -->
   <rect x="660" y="96" width="460" height="196" rx="18" fill="#0F0D2E" fill-opacity="0.55" stroke="#A5B4FC" stroke-opacity="0.25"/>
   <g font-family="DejaVu Sans Mono, monospace" font-size="22">
-    <text x="690" y="148" fill="#FACC15">@Controller<tspan fill="#E0E7FF">(</tspan><tspan fill="#86EFAC">'/tasks'</tspan><tspan fill="#E0E7FF">)</tspan></text>
+    <text x="690" y="148" fill="#FACC15">@Controller<tspan fill="#E0E7FF">()</tspan></text>
     <text x="690" y="184" fill="#A5B4FC">class <tspan fill="#FFFFFF">TasksController</tspan> <tspan fill="#E0E7FF">{</tspan></text>
     <text x="718" y="220" fill="#FACC15">@Get<tspan fill="#E0E7FF">(</tspan><tspan fill="#86EFAC">'/:id'</tspan><tspan fill="#E0E7FF">) find(ctx)</tspan></text>
     <text x="690" y="256" fill="#E0E7FF">}</text>
