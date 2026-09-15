@@ -1,5 +1,48 @@
 # @forinda/kickjs
 
+## 8.5.0
+
+### Minor Changes
+
+- [#708](https://github.com/forinda/kick-js/pull/708) [`4a3755d`](https://github.com/forinda/kick-js/commit/4a3755d0d4946e4818a33859d1e1918babbfce0e) Thanks [@forinda](https://github.com/forinda)! - `createHandler(options)` serves a KickJS app as request handlers instead of a
+  listening server — the entry for Netlify Functions, Vercel Functions and other
+  hosts that hand you requests rather than a port.
+  
+  ```ts
+  import { createHandler } from '@forinda/kickjs'
+  import { modules } from './modules'
+  
+  export const handler = createHandler({ modules })
+  
+  // Netlify: export default (request) => handler.fetch(request)
+  // Vercel (Node): export default handler.node
+  ```
+  
+  It takes the same options as `bootstrap()`. The app is set up once per process,
+  lazily on the first request (or eagerly via `handler.ready()`), with the same
+  `setup()` and plugin `onReady` as `bootstrap()` — but no port, no `afterStart`
+  (a warning names adapters that rely on it) and no process signal or error
+  handlers. A failed setup is retried on the next request. `handler.close()` shuts
+  adapters down.
+  
+  `handler.fetch(request)` uses the runtime app's own `fetch` when it has one (the
+  h3 v2 runtime). For Node-based runtimes such as the default Express, the request
+  is forwarded to an in-process server bound to `127.0.0.1` on a random port,
+  started on first use: request bodies are buffered, hop-by-hop headers dropped,
+  `x-forwarded-host` / `x-forwarded-proto` set, and the response streamed back with
+  every `Set-Cookie` intact. A direct Request→`res` bridge was tried and rejected —
+  Express 5 replaces the response prototype, which breaks it.
+  
+  New `Application.startWithoutServer()` is the lifecycle `createHandler` runs.
+
+### Patch Changes
+
+- [#709](https://github.com/forinda/kick-js/pull/709) [`37ce0d0`](https://github.com/forinda/kick-js/commit/37ce0d00d97838d7f0c0cb2266505e308cf84a26) Thanks [@forinda](https://github.com/forinda)! - fix(h3-web): an `Application` on `h3WebRuntime()` called through `app.getRuntimeApp().fetch(request)` answered every request with 500 (`[h3] Executing Node.js middleware is not supported in this server!`)
+  
+  Every connect middleware the Application mounts — request tracking, request scope, helmet, request id, plus plugin, adapter and user middleware — went through h3's `fromNodeHandler`, which throws when the event has no node response. On the fetch path those middleware now run against a web-backed `req` / `res` (headers, `statusCode`, `end`, `next(err)`, `finish` / `close`), and their headers are merged into the final response for every status. Behind a node server nothing changes: `fromNodeHandler` still runs them with the real node objects.
+  
+  A fetch-only app also got h3's bare 404 instead of kick's 404 / 405, because the catch-all route was assembled only in `nodeHandler()`. It is now assembled when the not-found handler is set.
+
 ## 8.4.0
 
 ### Minor Changes
