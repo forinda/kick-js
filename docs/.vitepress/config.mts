@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { defineConfig, type HeadConfig } from 'vitepress'
 // Docs track the latest release only — older versions are not snapshotted.
 
@@ -229,6 +231,57 @@ if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
   )
 }
 
+const SITE_OG_TITLE = 'KickJS — The Adaptive Node.js Framework'
+const SITE_OG_DESCRIPTION =
+  'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.'
+
+/**
+ * A page's first prose paragraph as plain text, for its meta description when
+ * the frontmatter has none. Skips headings, callouts, lists, tables, HTML,
+ * code, italic bylines ("_Part 3 of …_"), lead-ins to a list ("…:") and
+ * fragments too short to describe the page. Cuts at a word boundary near 160
+ * characters (what search results show).
+ */
+function firstParagraph(markdown: string): string | undefined {
+  const lines = markdown.replace(/^---\n[\s\S]*?\n---\n/, '').split('\n')
+  let fence = false
+  let paragraph: string[] = []
+  for (const line of [...lines, '']) {
+    const text = line.trim()
+    if (/^(```|~~~)/.test(text)) {
+      fence = !fence
+      paragraph = []
+      continue
+    }
+    if (fence) continue
+    if (text !== '') {
+      if (paragraph.length === 0 && /^([#>|<:*+-]|\d+\.|\[\[)/.test(text)) continue
+      paragraph.push(text)
+      continue
+    }
+    if (paragraph.length === 0) continue
+    const plain = toPlainText(paragraph.join(' '))
+    const byline = /^_[^_]+_$/.test(paragraph.join(' '))
+    if (!byline && !plain.endsWith(':') && plain.length >= 40) return truncate(plain)
+    paragraph = []
+  }
+  return undefined
+}
+
+function toPlainText(markdown: string): string {
+  return markdown
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function truncate(text: string): string {
+  if (text.length <= 160) return text
+  return `${text.slice(0, 157).replace(/\s+\S*$/, '')}…`
+}
+
 export default defineConfig({
   title: 'KickJS',
   description:
@@ -254,13 +307,41 @@ export default defineConfig({
    * directory index collapses to its trailing slash) — a canonical that
    * disagrees with the sitemap is worse than none.
    */
-  transformPageData(pageData) {
+  //
+  // Title and description are per page for the same reason: declared in `head`,
+  // every page shared the homepage's og:title/og:description, and pages without
+  // frontmatter `description` fell back to the site description.
+  transformPageData(pageData, { siteConfig }) {
     const path = pageData.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '.html')
     const url = `${hostname}${path}`
+
+    if (!pageData.frontmatter.description) {
+      const source = readFileSync(join(siteConfig.srcDir, pageData.relativePath), 'utf8')
+      const derived = firstParagraph(source)
+      // VitePress reads `pageData.description` for <meta name="description">,
+      // copied from frontmatter before this hook runs — set both.
+      if (derived) pageData.frontmatter.description = pageData.description = derived
+    }
+    // VitePress writes <meta name="description"> without escaping, so a
+    // straight double quote ends the attribute. Curly quotes are safe there and
+    // when the client updates the tag on navigation.
+    if (pageData.frontmatter.description?.includes('"')) {
+      pageData.frontmatter.description = pageData.description = pageData.frontmatter.description
+        .replace(/"([^"]*)"/g, '“$1”')
+        .replace(/"/g, '”')
+    }
+    const isHome = pageData.frontmatter.layout === 'home'
+    const ogTitle = isHome || !pageData.title ? SITE_OG_TITLE : `${pageData.title} | KickJS`
+    const ogDescription = isHome
+      ? SITE_OG_DESCRIPTION
+      : (pageData.frontmatter.description ?? SITE_OG_DESCRIPTION)
+
     pageData.frontmatter.head ??= []
     pageData.frontmatter.head.push(
       ['link', { rel: 'canonical', href: url }],
       ['meta', { property: 'og:url', content: url }],
+      ['meta', { property: 'og:title', content: ogTitle }],
+      ['meta', { property: 'og:description', content: ogDescription }],
     )
   },
   head: [
@@ -272,15 +353,6 @@ export default defineConfig({
     ],
     ['meta', { name: 'theme-color', content: '#3b82f6' }],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'KickJS — The Adaptive Node.js Framework' }],
-    [
-      'meta',
-      {
-        property: 'og:description',
-        content:
-          'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.',
-      },
-    ],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ...gaHead,
   ],
