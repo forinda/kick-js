@@ -109,23 +109,44 @@ same app deploys to Cloudflare Workers, Bun, and Deno. One caveat vs v1: no
 Vite dev-server fall-through (h3 v2 owns the full request) — use the v1 h3
 runtime or Express for Vite-integrated dev.
 
+### Calling the app through `fetch`
+
+After `app.setup()`, `app.getRuntimeApp()` is the h3 v2 app, and
+`h3.fetch(new Request(...))` runs the full application — routes, 404 / 405, body
+parsing, validation, the error handler, and every middleware `Application`
+installs (request scope, helmet, request id, plugin and adapter middleware).
+That is the shape a serverless function, Bun, or Deno uses.
+
+Connect-style `(req, res, next)` middleware runs on both paths:
+
+- **Behind a node server** (`bootstrap()`, `app.handle`) it gets the real node
+  `req` / `res` through h3's `fromNodeHandler`, exactly as before.
+- **Through `fetch`** there is no node request, so it gets a web-backed pair
+  instead. `res.setHeader` / `getHeader` / `removeHeader`, `res.statusCode`,
+  `res.status().json()`, `res.end()`, `writeHead` / `write`, `next()` /
+  `next(err)` and the `finish` / `close` events all work; headers set before
+  `next()` land on the final response whatever its status. What does not exist
+  there: the socket (`req.socket`, `req.ip`), the raw request body stream, and
+  Express-only additions (`req.cookies`, `req.path`, `res.cookie`). Middleware
+  that needs those should read `req.headers` or move to a context decorator.
+
 ## Capability matrix
 
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                     | Express     | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                        |
-| ------------------------------ | ----------- | ----------------------- | ----------------------- | --------------------------------------- |
-| Routing + `ctx.json`           | ✅          | ✅                      | ✅                      | ✅                                      |
-| Connect middleware             | ✅          | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ (fromNodeHandler)                    |
-| Context decorators             | ✅          | ✅                      | ✅                      | ✅                                      |
-| Errors / 404                   | ✅          | ✅                      | ✅                      | ✅                                      |
-| Server-Sent Events             | ✅          | ✅                      | ✅                      | ✅ (web streams)                        |
-| Validation                     | ✅          | ✅                      | ✅                      | ✅                                      |
-| `ctx.render` (views)           | ✅          | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                     |
-| File uploads (`ctx.file`)      | ✅ (multer) | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                     |
-| File download (`ctx.download`) | ✅          | ✅                      | ✅                      | ✅                                      |
-| Edge / Bun / Deno deploy       | ❌          | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md)) |
+| Capability                     | Express     | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                                    |
+| ------------------------------ | ----------- | ----------------------- | ----------------------- | --------------------------------------------------- |
+| Routing + `ctx.json`           | ✅          | ✅                      | ✅                      | ✅                                                  |
+| Connect middleware             | ✅          | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
+| Context decorators             | ✅          | ✅                      | ✅                      | ✅                                                  |
+| Errors / 404                   | ✅          | ✅                      | ✅                      | ✅                                                  |
+| Server-Sent Events             | ✅          | ✅                      | ✅                      | ✅ (web streams)                                    |
+| Validation                     | ✅          | ✅                      | ✅                      | ✅                                                  |
+| `ctx.render` (views)           | ✅          | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                                 |
+| File uploads (`ctx.file`)      | ✅ (multer) | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                                 |
+| File download (`ctx.download`) | ✅          | ✅                      | ✅                      | ✅                                                  |
+| Edge / Bun / Deno deploy       | ❌          | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
 
 ## The engine-native escape hatch
 
