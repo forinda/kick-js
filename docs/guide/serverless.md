@@ -29,7 +29,7 @@ export const handler = createHandler({ modules })
 | ---------------- | -------------------------------------------------- | ------------------------------------------- |
 | Serverless entry | `src/serverless.ts`                                | `server/src/serverless.ts`                  |
 | Bundle config    | `vite.serverless.config.ts`                        | `server/vite.serverless.config.ts`          |
-| Bundle output    | `dist-serverless/server.mjs`                       | `server/dist-serverless/server.mjs`         |
+| Bundle output    | `dist/serverless/server.mjs`                       | `server/dist/serverless/server.mjs`         |
 | Static files     | None                                               | `web/dist`, served by the platform          |
 | `SpaAdapter`     | Not used                                           | Left out of the serverless entry (below)    |
 
@@ -83,7 +83,7 @@ export default defineConfig({
   build: {
     ssr: true,
     target: 'node20',
-    outDir: 'dist-serverless',
+    outDir: 'dist/serverless',
     minify: false,
     rollupOptions: {
       input: fileURLToPath(new URL('./src/serverless.ts', import.meta.url)),
@@ -97,8 +97,10 @@ export default defineConfig({
 ```
 
 ```bash
-vite build --config vite.serverless.config.ts   # → dist-serverless/server.mjs
+vite build --config vite.serverless.config.ts   # → dist/serverless/server.mjs
 ```
+
+`dist/` is already git-ignored, so the bundle needs no new ignore entry. Run this build **after** `kick build`: `kick build` empties `dist/`, including `dist/serverless`.
 
 ## Netlify
 
@@ -106,7 +108,7 @@ The function file has to be **written by the build command** — Netlify clears 
 
 ```js
 // .netlify/v1/functions/api.mjs (written during the build)
-import { handler } from '../../../server/dist-serverless/server.mjs'
+import { handler } from '../../../server/dist/serverless/server.mjs'
 
 export default (request) => handler.fetch(request)
 
@@ -132,7 +134,7 @@ For a web app in the same repo, publish its build and let the function take `/ap
   status = 200
 ```
 
-**API only:** import the bundle from `../../../dist-serverless/server.mjs`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
+**API only:** import the bundle from `../../../dist/serverless/server.mjs`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
 
 ## Vercel
 
