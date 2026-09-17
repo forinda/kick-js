@@ -1,5 +1,90 @@
 # @forinda/kickjs-mcp
 
+## 8.0.0
+
+### Major Changes
+
+- [#717](https://github.com/forinda/kick-js/pull/717) [`67afd95`](https://github.com/forinda/kick-js/commit/67afd9585383fedb114c237f288eca81f38b6e9f) Thanks [@forinda](https://github.com/forinda)! - Breaking changes in the AI and MCP packages, and how to migrate.
+  
+  **`@forinda/kickjs-ai`**
+  
+  - **`AnthropicProvider` needs `@anthropic-ai/sdk`.** Install it (`pnpm add @anthropic-ai/sdk`); the provider loads it on first use and throws a clear error without it. `OpenAIProvider` is unaffected.
+  - **`AnthropicProviderOptions.apiVersion` is removed** — the SDK sets the API version. `apiKey` is optional (the SDK resolves credentials). The default model is `claude-opus-5` and `max_tokens` 64000; set `defaultChatModel` / `defaultMaxTokens` to keep the old values.
+  - **Default tool names are `Controller_method`** (was `Controller.method`, which OpenAI and Anthropic reject). A custom provider, allowlist or prompt that relied on dotted default names must use the new names, or set `@AiTool({ name })` explicitly.
+  - **Requires `@forinda/kickjs` 8.6.0** (for `AdapterContext.fetch` and `matchesFlagTest`), released in the same version run; the peer range is `<9.0.0`.
+  - **Pinecone** stores document text under `_kick_content` (was `content`); records written before still read. Code reading the index's metadata directly should look for the new key.
+  - `runAgentWithMemory` no longer saves tool calls whose results aren't persisted, and `SlidingWindowChatMemory` may keep slightly fewer than `maxMessages` so history starts at a user message.
+  
+  **`@forinda/kickjs-mcp`**
+  
+  - **Browser clients need `allowedOrigins`.** A request carrying an `Origin` header not in the list gets `403`. MCP clients that send no `Origin` (Claude Code, Cursor, the SDK) are unaffected. Add e.g. `allowedOrigins: ['http://localhost:6274']` for the Inspector web UI.
+  - **`auth` is enforced** on every MCP request; it was accepted but ignored. Clients must send the credential `validate` expects.
+  - **`McpToolDefinition.zodInputSchema` is removed**; `inputSchema` holds the JSON Schema.
+  - **Default `transport` is `'http'`** (was `'sse'`, which behaved the same); `'sse'` still works.
+  - **`exclude` matches the full route path**, so `'/admin/*'` now excludes `/api/v1/admin/...` — routes that were exposed by mistake no longer are.
+  - **Peers:** `@forinda/kickjs` 8.6.0 or later below 9 (released in the same version run), `@modelcontextprotocol/sdk ^1.30.0`.
+
+### Minor Changes
+
+- [#723](https://github.com/forinda/kick-js/pull/723) [`0910a54`](https://github.com/forinda/kick-js/commit/0910a542758e180934b9bbf9df105f6a60d4bacd) Thanks [@forinda](https://github.com/forinda)! - Package hygiene for the AI and MCP packages.
+  
+  - **MCP default transport is now `'http'`** (Streamable HTTP), matching the docs. It was `'sse'`, which behaved the same but logged a deprecation warning on every boot; `'sse'` is still accepted as a deprecated alias.
+  - `@forinda/kickjs` peer range is `>=8.5.0 <9.0.0` for both packages (it had no upper bound; the new features need the 8.6.0 released alongside). The MCP SDK peer is `^1.30.0`, the version the adapter is built and tested against (was `^1.0.0`).
+  - `reflect-metadata` is no longer a dependency of either package; neither imports it.
+  - `@forinda/kickjs-ai` no longer lists providers it doesn't ship (Gemini) in its keywords or docs.
+
+- [#717](https://github.com/forinda/kick-js/pull/717) [`6032d65`](https://github.com/forinda/kick-js/commit/6032d653e91f3bbf2332e1fd3eb1d87d11cd4d08) Thanks [@forinda](https://github.com/forinda)! - Review fixes across the MCP / AI work.
+  
+  - **MCP sessions are bounded.** New `maxSessions` (default 1000; a new client beyond it gets `503`) and `sessionIdleTimeoutMs` (default 30 minutes with no request in progress; a client holding its notification stream open is not idle). Without them, repeated `initialize` requests could accumulate sessions without limit.
+  - **`Application.fetch` forwarding:** the request body is streamed to the app instead of buffered in full, so body-size limits apply as it arrives; `x-forwarded-host` / `x-forwarded-proto` always come from the Request URL, never from caller headers; shutdown force-closes the forwarding server's connections.
+  - **`ctx.sendResponse`** waits for the socket to drain when a write reports backpressure, so a slow client can't make a long stream buffer without bound.
+  - **`assertFlagTest`** is exported; `McpAdapter` and `AiAdapter` use it to validate `exposeWhen` / `hideWhen` without running predicates at construction.
+  - **AI:** every failed tool call is marked `isError` (including a missing path parameter); `defaults.signal` applies when a call passes none; `{{user.constructor.name}}`-style placeholders only read own properties; `PineconeVectorStore` rejects the reserved `_kick_content` metadata key.
+  - Docs: `AdapterContext.fetch` is available from `beforeStart` on (routes aren't mounted in `beforeMount`); MCP Inspector steps no longer describe a single session.
+
+- [#724](https://github.com/forinda/kick-js/pull/724) [`d87ad83`](https://github.com/forinda/kick-js/commit/d87ad839b60791f5a8bec9a56c90d948b99053f8) Thanks [@forinda](https://github.com/forinda)! - Mount custom AI providers and MCP tool providers at any time.
+  
+  - **AI:** `ai.registerProvider(name, provider)` and `unregisterProvider(name)` mount more `AiProvider`s next to the default (the provider `AiAdapter` was created with). `runAgent` / `runAgentWithMemory` take `provider` — a registered name or an instance — and `getProvider(name?)` returns one. Registering an existing name replaces it; the default's name is reserved.
+  - **MCP:** `mcp.registerProvider({ name, tools })` and `unregisterProvider(name)` mount tools that aren't controller routes. The new `McpToolProvider`, `McpCustomTool` and `McpToolContext` interfaces define them: a handler with arguments validated against `inputSchema` (any schema library) and a context carrying the MCP request's headers, the cancellation signal, and `fetch` into the app. Connected clients get `tools/list_changed` when providers change. The adapter is registered under the new `MCP_ADAPTER` token (`McpAdapterInstance` type) so plugins and modules can reach it.
+  - **`ctx.sendResponse`** flushes headers as soon as a streamed body starts, so SSE streams open for the client before their first event.
+  - The AI and MCP guides document both, with local example providers that also run as tests.
+
+- [#720](https://github.com/forinda/kick-js/pull/720) [`9bb9620`](https://github.com/forinda/kick-js/commit/9bb96203c5d5db06163ea76fe42daa67de861ebd) Thanks [@forinda](https://github.com/forinda)! - Tool calls run through the app without a listening server, on every runtime.
+  
+  - **`Application.fetch(request)` and `AdapterContext.fetch`** run a web `Request` through the app's full pipeline and return the `Response`, with no listening server: the runtime's native fetch on h3 v2, otherwise an in-process server bound to `127.0.0.1`, started on first use and closed by `shutdown()`. `createHandler()` now uses the same code.
+  - **`ctx.sendResponse(response)`** sends a web `Response` — status, headers with every `Set-Cookie`, a streamed body — on Express, Fastify, h3 and h3 v2.
+  - **MCP:** the endpoint uses the SDK's web-standard transport through `ctx.sendResponse`, so it works on Fastify (previously a 500) and h3 v2. Tool calls use `AdapterContext.fetch`, so they work under `createHandler()` (previously "HTTP server address not yet captured"). New `forwardHeaders` option copies headers from the MCP request onto tool calls (default `authorization`, `cookie`, `x-request-id`, `traceparent`, `tracestate`; previously only `authorization`); client cancellation aborts the call.
+  - **AI:** tool calls use `AdapterContext.fetch`, so agents work under `createHandler()` and `createTestApp`. New `headers` option on `runAgent` / `runAgentWithMemory` sends the caller's credentials to tool routes; `signal` aborts in-flight tool calls. `setServerBaseUrl` still sends calls to a URL when set.
+
+- [#717](https://github.com/forinda/kick-js/pull/717) [`8c50638`](https://github.com/forinda/kick-js/commit/8c50638619b6fe6a38cba0de971b73fcb6644461) Thanks [@forinda](https://github.com/forinda)! - Security and session fixes for the HTTP transport.
+  
+  - **`auth` is now enforced.** It was accepted but never checked, so the MCP endpoint was open. Every request to `/_mcp/messages` (initialize, `tools/list`, tool calls) is checked; failures get `401`, with `WWW-Authenticate: Bearer` for bearer auth. `bearer` passes the token to `validate`; `custom` passes the raw `Authorization` header.
+  - **`Origin` is validated.** Requests that carry an `Origin` header must match the new `allowedOrigins` option, otherwise `403`. The default `[]` allows no browser origin; MCP clients that send no `Origin` (Claude Code, Cursor, the MCP SDK) are unaffected. If a browser-based client calls your MCP endpoint, add its origin.
+  - **Several clients can connect.** Each client gets its own session; previously a second client got "Server already initialized" until the process restarted.
+  - **`exclude` matches full route paths.** `'/admin/*'` now excludes `/api/v1/admin/...`; before, patterns were compared with the module mount path only and documented globs never matched.
+  - Restarting the same adapter instance no longer registers every tool twice.
+
+- [#718](https://github.com/forinda/kick-js/pull/718) [`2f2a9de`](https://github.com/forinda/kick-js/commit/2f2a9de51b5529a58e1a1c8825fb4c9fad1312be) Thanks [@forinda](https://github.com/forinda)! - Route tools take path parameters and any schema library.
+  
+  - **`buildRouteTool()` in `@forinda/kickjs-schema`** builds one tool input schema from a route's path parameters and its `params`, `query` and `body` schemas (Zod, Valibot, Yup, Standard Schema), and maps tool arguments back to a URL and body. Both adapters use it.
+  - **Path parameters work.** They were missing from tool schemas, so a call to `PUT /tasks/:id` reached the route with `params.id === ':id'`. They are now required fields; a call without one returns a tool error instead of hitting the route.
+  - **Non-Zod schemas work.** MCP tools with a Valibot, Yup or Standard Schema body made the whole MCP endpoint return 404; AI tools got an empty schema. `inputSchema` on `@McpTool` / `@AiTool` now accepts any supported schema, and `zod` is an optional peer.
+  - **AI tool names are valid for providers.** The default was `Controller.method`, which OpenAI and Anthropic reject. It is now `Controller_method`; names outside `[A-Za-z0-9_-]{1,64}` are cleaned with a warning. MCP names keep `Controller.method`, which MCP allows.
+  - **Duplicate tool names are skipped with an error log**, instead of (MCP) disabling every tool.
+  - `McpToolDefinition.zodInputSchema` is removed. AI tools are rediscovered after `shutdown()` instead of listed twice.
+
+- [#719](https://github.com/forinda/kick-js/pull/719) [`2e36473`](https://github.com/forinda/kick-js/commit/2e36473830435208ab6c383753a56b1d1fbf2d12) Thanks [@forinda](https://github.com/forinda)! - Route flags decide which routes become MCP and AI tools.
+  
+  - `McpAdapter` and `AiAdapter` take `exposeWhen` and `hideWhen`, in the same forms as `skipWhen` (a name, `'!name'`, a list, or a predicate). A route carrying an `exposeWhen` flag becomes a tool without `@McpTool` / `@AiTool` — on a method, a controller, or a module mount. `hideWhen` wins over the decorators, `exposeWhen` and MCP's `mode: 'auto'`, so a module can hide a controller it mounts but does not own.
+  - A flag whose value is an object supplies tool options (`description`, `name`, and for MCP `hidden`), e.g. `defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')`. The decorator on the method takes precedence.
+  - A mixed-polarity flag list throws when the adapter is created.
+  - `matchesFlagTest` is now exported from `@forinda/kickjs`, so packages evaluate flag tests the same way the framework does.
+
+### Patch Changes
+
+- Updated dependencies [[`2f2a9de`](https://github.com/forinda/kick-js/commit/2f2a9de51b5529a58e1a1c8825fb4c9fad1312be)]:
+  - @forinda/kickjs-schema@0.2.0
+
 ## 7.0.2
 
 ### Patch Changes
