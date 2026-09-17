@@ -17,6 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSafe } from '../utils/fs'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
+import { TEMPLATE_BUILDS, approveInstallScripts } from '../commands/add'
 
 export interface InitFullstackOptions {
   name: string
@@ -60,6 +61,11 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     // web/ reads the resolved route map from the ambient KickClientApi
     // namespace, which needs the TS 7 compiler API to produce.
     withClientMap: true,
+    // web/vite.config.ts proxies /api to the server's port; if kick dev moved
+    // to another port the proxy would silently reach the wrong process.
+    strictPort: true,
+    // server/ is a workspace member; the root records the approvals.
+    approveInstallScripts: false,
     // Root owns install + git so the lockfile/commit cover the workspace.
     initGit: false,
     installDeps: false,
@@ -91,20 +97,10 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   // Only pnpm reads this file. npm / yarn / bun declare workspaces via the
   // `workspaces` field in the root package.json instead — see rootPackageJson.
   if (packageManager === 'pnpm') {
-    // `allowBuilds` is answered here, not left to pnpm. This scaffold installs
-    // non-interactively, so pnpm cannot prompt — it writes
-    // `'@swc/core': set this to true or false` and then refuses to run ANY
-    // script with ERR_PNPM_IGNORED_BUILDS, leaving a fresh project unable to
-    // run `pnpm typecheck` or `pnpm dev` until someone edits this file.
-    //
-    // Both are build tools this template chose: swc compiles the decorators,
-    // esbuild is Vite's. Approving their install scripts is the same decision
-    // as depending on them.
-    await writeFileSafe(
-      join(dir, 'pnpm-workspace.yaml'),
-      `packages:\n  - server\n  - web\n\nallowBuilds:\n  '@swc/core': true\n  esbuild: true\n`,
-    )
+    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - server\n  - web\n')
   }
+  // Before install, at the root every package manager reads them from.
+  approveInstallScripts(packageManager, dir, TEMPLATE_BUILDS)
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
 

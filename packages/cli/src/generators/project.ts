@@ -28,7 +28,12 @@ import {
   generateHelloModule,
 } from './templates/project-app'
 import { generateReadme } from './templates/project-docs'
-import { AVAILABLE_ADD_PACKAGES } from '../commands/add'
+import {
+  AVAILABLE_ADD_PACKAGES,
+  TEMPLATE_BUILDS,
+  approveInstallScripts,
+  buildsFor,
+} from '../commands/add'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -202,6 +207,14 @@ interface InitProjectOptions {
   spaClientDir?: string
   /** Pin the compiler API + generate the client route map (fullstack). */
   withClientMap?: boolean
+  /** Fail `kick dev` when its port is taken instead of moving (fullstack's /api proxy needs the port). */
+  strictPort?: boolean
+  /**
+   * Record install-script approvals for the package manager (pnpm-workspace.yaml,
+   * or package.json for npm/bun). Default true; false when the project is a
+   * member of a workspace whose root records them.
+   */
+  approveInstallScripts?: boolean
 }
 
 /** Scaffold a new KickJS project */
@@ -302,7 +315,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
-  await writeFileSafe(join(dir, 'vite.config.ts'), generateViteConfig())
+  await writeFileSafe(
+    join(dir, 'vite.config.ts'),
+    generateViteConfig({ strictPort: options.strictPort }),
+  )
 
   // ── tsconfig.json ───────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'tsconfig.json'), generateTsConfig())
@@ -382,6 +398,12 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     only: 'all',
     force: true,
   })
+
+  // ── Install-script approvals ─────────────────────────────────────────
+  // Before install; see approveInstallScripts.
+  if (options.approveInstallScripts !== false) {
+    approveInstallScripts(packageManager, dir, { ...TEMPLATE_BUILDS, ...buildsFor(packages) })
+  }
 
   // ── Install Dependencies ────────────────────────────────────────────
   // Install BEFORE git init so the lockfile is included in the first commit.
