@@ -25,9 +25,22 @@ import {
   ListToolsRequestSchema,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
-import { buildRouteTool, detectSchema, type RouteTool } from '@forinda/kickjs-schema'
+import {
+  buildRouteTool,
+  detectSchema,
+  type KickSchema,
+  type RouteTool,
+} from '@forinda/kickjs-schema'
+import { MCP_ADAPTER } from './constants'
 import { getMcpToolMeta } from './decorators'
-import type { McpAdapterOptions, McpToolDefinition, McpToolOptions, McpTransport } from './types'
+import type {
+  McpAdapterOptions,
+  McpCustomTool,
+  McpToolDefinition,
+  McpToolOptions,
+  McpToolProvider,
+  McpTransport,
+} from './types'
 
 const log = Logger.for('McpAdapter')
 
@@ -144,6 +157,18 @@ export interface McpAdapterExtensions {
     args: unknown,
     extra?: unknown,
   ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }>
+
+  /**
+   * Mount a set of custom tools that are not controller routes — at any
+   * time, including after clients are connected; they are notified with
+   * `tools/list_changed`. A provider with the same name is replaced. Throws
+   * when a tool name is invalid or already used by a route or another
+   * provider.
+   */
+  registerProvider(provider: McpToolProvider): void
+
+  /** Unmount a provider's tools. Returns false when no such provider is mounted. */
+  unregisterProvider(name: string): boolean
 }
 
 /**
@@ -174,7 +199,7 @@ export interface McpAdapterExtensions {
  *       version: '1.0.0',
  *       description: 'Task management MCP server',
  *       mode: 'explicit',
- *       transport: 'sse',
+ *       transport: 'http',
  *     }),
  *   ],
  * })
@@ -184,7 +209,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
   name: 'McpAdapter',
   defaults: {
     mode: 'explicit',
-    transport: 'sse',
+    transport: 'http',
     basePath: '/_mcp',
     version: '0.0.0',
   },
@@ -202,6 +227,20 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     /** Input schema + argument-to-request mapping per tool name. */
     const routeTools = new Map<string, RouteTool>()
+
+    /** Custom tools by provider name, with their validated schemas. */
+    const providers = new Map<
+      string,
+      Array<{ tool: McpCustomTool; schema?: KickSchema; inputSchema: Record<string, unknown> }>
+    >()
+
+    const providerToolNamed = (name: string) => {
+      for (const tools of providers.values()) {
+        const found = tools.find((entry) => entry.tool.name === name)
+        if (found) return found
+      }
+      return undefined
+    }
 
     /** Stdio MCP server instance, created in `afterStart`. */
     let mcpServer: Server | null = null
@@ -318,7 +357,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         log.error(err as Error, `McpAdapter: cannot build a tool for ${handler}; not exposed`)
         return null
       }
-      if (routeTools.has(name)) {
+      if (routeTools.has(name) || providerToolNamed(name)) {
         log.error(
           `McpAdapter: duplicate tool name "${name}" (${handler}); not exposed. ` +
             `Give one of them @McpTool({ name }).`,
@@ -432,6 +471,107 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
     }
 
+    /** Run a custom tool: validate arguments, call the handler, shape the result. */
+    const callCustomTool = async (
+      entry: { tool: McpCustomTool; schema?: KickSchema },
+      args: unknown,
+      extra: unknown,
+    ): Promise<Record<string, unknown>> => {
+      const errorResult = (text: string) => ({
+        isError: true,
+        content: [{ type: 'text' as const, text }],
+      })
+
+      let input = args
+      if (entry.schema) {
+        const parsed = entry.schema.safeParse(args)
+        if (!parsed.success) {
+          return errorResult(JSON.stringify({ error: 'Invalid arguments', issues: parsed.issues }))
+        }
+        input = parsed.data
+      }
+
+      const requestHeaders = (extra as { requestInfo?: { headers?: Record<string, string> } })
+        ?.requestInfo?.headers
+      const headers = new Headers()
+      for (const [name, value] of Object.entries(requestHeaders ?? {})) {
+        if (typeof value === 'string') headers.set(name, value)
+      }
+      const context = {
+        headers,
+        signal: (extra as { signal?: AbortSignal })?.signal ?? new AbortController().signal,
+        fetch: (request: Request) => {
+          if (!appFetch) throw new Error('McpAdapter: the app is not started yet')
+          return appFetch(request)
+        },
+      }
+
+      try {
+        const result = await entry.tool.handler(input, context)
+        if (
+          result &&
+          typeof result === 'object' &&
+          Array.isArray((result as { content?: unknown }).content)
+        ) {
+          return result as Record<string, unknown>
+        }
+        const text = typeof result === 'string' ? result : JSON.stringify(result ?? null)
+        return { content: [{ type: 'text' as const, text }] }
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: custom tool ${entry.tool.name} failed`)
+        return errorResult(err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    /** Tell every connected client the tool list changed. */
+    const notifyToolsChanged = () => {
+      const servers = [
+        ...[...sessions.values()].map((s) => s.server),
+        ...(mcpServer ? [mcpServer] : []),
+      ]
+      for (const server of servers) {
+        server.sendToolListChanged().catch(() => {
+          // A client that disconnected mid-notification is cleaned up by its transport.
+        })
+      }
+    }
+
+    const registerProvider = (provider: McpToolProvider): void => {
+      const entries = provider.tools.map((tool) => {
+        if (!MCP_TOOL_NAME.test(tool.name)) {
+          throw new Error(
+            `McpAdapter: tool name "${tool.name}" (provider ${provider.name}) must match [A-Za-z0-9_.-]{1,128}`,
+          )
+        }
+        const owner = routeTools.has(tool.name)
+          ? 'a route'
+          : [...providers.entries()].find(
+              ([name, list]) =>
+                name !== provider.name && list.some((e) => e.tool.name === tool.name),
+            )?.[0]
+        if (owner) {
+          throw new Error(
+            `McpAdapter: tool "${tool.name}" (provider ${provider.name}) is already defined by ${owner}`,
+          )
+        }
+        const schema = tool.inputSchema === undefined ? undefined : detectSchema(tool.inputSchema)
+        const inputSchema = schema?.toJsonSchema() ?? { type: 'object', properties: {} }
+        return { tool, schema, inputSchema }
+      })
+      const names = entries.map((e) => e.tool.name)
+      if (new Set(names).size !== names.length) {
+        throw new Error(`McpAdapter: provider ${provider.name} defines the same tool name twice`)
+      }
+      providers.set(provider.name, entries)
+      notifyToolsChanged()
+    }
+
+    const unregisterProvider = (name: string): boolean => {
+      const removed = providers.delete(name)
+      if (removed) notifyToolsChanged()
+      return removed
+    }
+
     /**
      * Construct an MCP server that lists every discovered tool and
      * dispatches calls through the HTTP pipeline, where the route's own
@@ -449,26 +589,34 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           version: options.version!,
           ...(options.description ? { description: options.description } : {}),
         },
-        { capabilities: { tools: {} } },
+        { capabilities: { tools: { listChanged: true } } },
       )
 
       server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema as { type: 'object' },
-        })),
+        tools: [
+          ...tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema as { type: 'object' },
+          })),
+          ...[...providers.values()].flat().map((entry) => ({
+            name: entry.tool.name,
+            description: entry.tool.description,
+            inputSchema: entry.inputSchema as { type: 'object' },
+          })),
+        ],
       }))
 
       server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+        const args = request.params.arguments ?? {}
         const tool = tools.find((t) => t.name === request.params.name)
-        if (!tool) {
-          return {
-            isError: true,
-            content: [{ type: 'text' as const, text: `Unknown tool: ${request.params.name}` }],
-          }
+        if (tool) return dispatchTool(tool, args, extra)
+        const custom = providerToolNamed(request.params.name)
+        if (custom) return callCustomTool(custom, args, extra)
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: `Unknown tool: ${request.params.name}` }],
         }
-        return dispatchTool(tool, request.params.arguments ?? {}, extra)
       })
 
       return server
@@ -617,12 +765,15 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       )
     }
 
-    return {
-      getTools(): readonly McpToolDefinition[] {
-        return tools
-      },
-
+    const publicSurface: McpAdapterExtensions = {
+      getTools: () => tools,
       dispatchTool,
+      registerProvider,
+      unregisterProvider,
+    }
+
+    return {
+      ...publicSurface,
 
       /**
        * Called by the framework each time a module mounts a controller.
@@ -650,6 +801,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
        */
       async beforeStart(ctx) {
         appFetch = ctx.fetch ?? null
+        // Optional call: hooks driven by hand in tests may pass a partial container.
+        ctx.container?.registerInstance?.(MCP_ADAPTER, publicSurface)
         for (const { controller, mountPath } of mountedControllers) {
           const routes = getClassMeta<RouteDefinition[]>(METADATA.ROUTES, controller, [])
           for (const route of routes) {
@@ -668,7 +821,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
         if (effectiveTransport === 'sse') {
           log.warn(
-            'sse transport is deprecated upstream; using StreamableHTTP transport, which supports the same SSE wire format under the hood',
+            "McpAdapter: transport 'sse' is deprecated and behaves like 'http' (Streamable HTTP). Set transport: 'http'.",
           )
         }
 

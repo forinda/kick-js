@@ -33,8 +33,8 @@ export interface ChatMessage {
  * the registry of `@AiTool`-decorated controller methods.
  *
  * Providers translate this into their native tool-calling format
- * (OpenAI's `tools`, Anthropic's `tools`, Google's function declarations,
- * etc.). The shape is deliberately minimal — anything provider-specific
+ * (OpenAI's `tools`, Anthropic's `tools`, or a custom provider's
+ * equivalent). The shape is deliberately minimal — anything provider-specific
  * lives in the provider implementation, not on this type.
  */
 export interface ChatToolDefinition {
@@ -180,8 +180,8 @@ export interface ToolCallResponse {
 }
 
 /**
- * Provider abstraction. All built-in providers (OpenAI, Anthropic,
- * Google, Ollama) implement this interface. Users can also implement
+ * Provider abstraction. The built-in providers (OpenAI, Anthropic)
+ * implement this interface. Users can also implement
  * it for custom/internal providers.
  */
 export interface AiProvider {
@@ -294,6 +294,11 @@ export interface RunAgentOptions extends ChatOptions {
    */
   maxSteps?: number
   /**
+   * Provider for this call: a registered name (see `registerProvider`) or a
+   * provider instance. Defaults to the adapter's default provider.
+   */
+  provider?: string | AiProvider
+  /**
    * Headers sent with every tool call, so the tool's route sees the caller's
    * credentials and context — typically copied from the request that started
    * the agent: `{ authorization: ctx.headers.authorization }`. `signal`
@@ -330,8 +335,20 @@ export interface RunAgentResult {
  * `@Inject(AI_ADAPTER)` get the full API on the resolved instance.
  */
 export interface AiAdapterExtensions {
-  /** Return the active provider. Useful for services that want the raw API. */
-  getProvider(): AiProvider
+  /**
+   * A registered provider: the named one, or the default (the provider the
+   * adapter was created with) when `name` is omitted. Throws for an unknown name.
+   */
+  getProvider(name?: string): AiProvider
+  /**
+   * Mount another provider under `name`, at any time — from a plugin or
+   * module after startup, for example. Select it per call with
+   * `runAgent({ provider: name })`. Registering an existing name replaces
+   * that provider; the default provider's name can't be replaced.
+   */
+  registerProvider(name: string, provider: AiProvider): void
+  /** Unmount a provider. Returns false when none is registered under `name`; the default can't be removed. */
+  unregisterProvider(name: string): boolean
   /** Return the discovered tool registry. Primarily for tests and debug UIs. */
   getTools(): readonly AiToolDefinition[]
   /**

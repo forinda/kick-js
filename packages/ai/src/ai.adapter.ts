@@ -19,6 +19,7 @@ import { buildRouteTool, type RouteTool } from '@forinda/kickjs-schema'
 import type {
   AiAdapterExtensions,
   AiAdapterOptions,
+  AiProvider,
   AiToolDefinition,
   AiToolOptions,
   ChatMessage,
@@ -117,6 +118,20 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
 
     const provider = options.provider
+    /** Registered providers by name; the adapter's provider is the default. */
+    const providers = new Map<string, AiProvider>([[provider.name, provider]])
+
+    const resolveProvider = (spec?: string | AiProvider): AiProvider => {
+      if (spec === undefined) return provider
+      if (typeof spec !== 'string') return spec
+      const found = providers.get(spec)
+      if (!found) {
+        throw new Error(
+          `AiAdapter: no provider registered as "${spec}". Registered: ${[...providers.keys()].join(', ')}`,
+        )
+      }
+      return found
+    }
     // `defaults` apply to every runAgent call; per-call values win.
     const { model: defaultModel, ...defaultChatOptions } = options.defaults ?? {}
 
@@ -319,6 +334,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
     /** Public: Run a tool-calling agent loop. */
     const runAgent = async (agentOptions: RunAgentOptions): Promise<RunAgentResult> => {
+      const chatProvider = resolveProvider(agentOptions.provider)
       const maxSteps = agentOptions.maxSteps ?? 8
       const resolvedTools = resolveTools(agentOptions.tools ?? 'auto')
 
@@ -329,7 +345,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       for (let i = 0; i < maxSteps; i++) {
         steps++
 
-        const response = await provider.chat(
+        const response = await chatProvider.chat(
           {
             messages,
             model: agentOptions.model ?? defaultModel,
@@ -432,6 +448,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
       const result = await runAgent({
         messages,
+        provider: memoryOptions.provider,
         model: memoryOptions.model,
         tools: memoryOptions.tools,
         maxSteps: memoryOptions.maxSteps,
@@ -469,7 +486,16 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     // hooks don't have a stable `this` reference to the returned
     // adapter object.
     const publicSurface: AiAdapterExtensions = {
-      getProvider: () => provider,
+      getProvider: (name) => resolveProvider(name),
+      registerProvider: (name, next) => {
+        if (name === provider.name && next !== provider) {
+          throw new Error(
+            `AiAdapter: "${name}" is the default provider's name; register the new provider under another name`,
+          )
+        }
+        providers.set(name, next)
+      },
+      unregisterProvider: (name) => (name === provider.name ? false : providers.delete(name)),
       getTools: () => tools,
       setServerBaseUrl: (url) => {
         serverBaseUrl = url
