@@ -24,6 +24,7 @@ const fakeCtx = (container: Container) => ({
   container,
   env: 'test',
   isProduction: false,
+  fetch: async () => new Response(null, { status: 404 }),
 })
 
 describe('kickDbAdapter()', () => {
