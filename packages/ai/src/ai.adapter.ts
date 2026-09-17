@@ -29,6 +29,13 @@ import type {
 
 const log = Logger.for('AiAdapter')
 
+/** The entries of an object whose values are not undefined. */
+function definedOnly<T extends Record<string, unknown>>(values: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined),
+  ) as Partial<T>
+}
+
 /**
  * Tool options carried by a flag named in `exposeWhen`: the value of the
  * first such flag the route carries that is an object, e.g.
@@ -110,6 +117,8 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
 
     const provider = options.provider
+    // `defaults` apply to every runAgent call; per-call values win.
+    const { model: defaultModel, ...defaultChatOptions } = options.defaults ?? {}
 
     /** Controllers collected during the mount phase, in insertion order. */
     const mountedControllers: Array<{ controller: Constructor; mountPath: string }> = []
@@ -323,14 +332,18 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         const response = await provider.chat(
           {
             messages,
-            model: agentOptions.model,
+            model: agentOptions.model ?? defaultModel,
             tools: resolvedTools.length > 0 ? resolvedTools : undefined,
           },
           {
-            temperature: agentOptions.temperature,
-            maxTokens: agentOptions.maxTokens,
-            topP: agentOptions.topP,
-            stopSequences: agentOptions.stopSequences,
+            ...defaultChatOptions,
+            ...definedOnly({
+              temperature: agentOptions.temperature,
+              maxTokens: agentOptions.maxTokens,
+              topP: agentOptions.topP,
+              stopSequences: agentOptions.stopSequences,
+              effort: agentOptions.effort,
+            }),
             signal: agentOptions.signal,
           },
         )
@@ -431,9 +444,18 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       })
 
       const newMessages = result.messages.slice(messages.length)
+      // Without tool results, a saved tool call would leave the history in a
+      // state providers reject on the next turn (a call with no result). Keep
+      // the assistant's text, drop the calls and the native content that
+      // carries them, and skip turns left empty.
       const toPersist = memoryOptions.persistToolResults
         ? newMessages
-        : newMessages.filter((m) => m.role !== 'tool')
+        : newMessages
+            .filter((m) => m.role !== 'tool')
+            .map((m): ChatMessage =>
+              m.toolCalls?.length ? { role: m.role, content: m.content } : m,
+            )
+            .filter((m) => m.role !== 'assistant' || m.content !== '' || m.providerContent)
       if (toPersist.length > 0) {
         await memoryOptions.memory.add(toPersist)
       }

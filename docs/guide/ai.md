@@ -307,11 +307,15 @@ const result = await this.ai.runAgentWithMemory({
   model sees a single stable persona.
 - After each turn: appends the assistant reply. Tool results are
   dropped from memory by default (they're usually large API
-  responses) — set `persistToolResults: true` for full-transcript
-  replay.
-- `SlidingWindowChatMemory` evicts the oldest non-system messages
-  when the cap is hit. The pinned system message stays put so the
-  model never loses its persona.
+  responses), and so are the tool calls that led to them — a call
+  saved without its result is a history providers reject. The
+  assistant's text is kept. Set `persistToolResults: true` for
+  full-transcript replay.
+- `SlidingWindowChatMemory` keeps the most recent `maxMessages`
+  messages. A pinned first system message stays put so the model
+  never loses its persona. The kept history always starts at a user
+  message, so it never opens on a tool result whose call was evicted —
+  the window can hold slightly fewer messages than the cap.
 
 For multi-tenant apps, construct one memory instance per session —
 typically in a request-scoped factory or keyed by a `sessionId`
@@ -366,6 +370,19 @@ import {
 Every backend implements the same `VectorStore<M>` interface:
 `upsert`, `query`, `delete`, `deleteAll`, optional `count`. Services
 that consume `VECTOR_STORE` never need to know which one is wired in.
+
+Backend notes:
+
+- **Qdrant** point ids must be UUIDs or integers, so any other document
+  id (`'doc-1'`) is stored under a deterministic UUIDv5 and kept in the
+  payload; searches return your original id. The collection is created
+  on first use only if it doesn't exist, and `deleteAll` removes points
+  but keeps the collection.
+- **Pinecone** metadata is flat, so the document text is stored under the
+  reserved `_kick_content` key next to your metadata; a metadata field
+  named `content` is yours. Records written before this layout, with the
+  text under `content`, still read correctly.
+- **pgvector** retries its schema setup on the next call if it fails.
 
 ```ts
 import { bootstrap, getEnv } from '@forinda/kickjs'

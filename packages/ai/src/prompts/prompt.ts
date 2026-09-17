@@ -1,4 +1,7 @@
+import { Logger } from '@forinda/kickjs'
 import type { ChatMessage } from '../types'
+
+const log = Logger.for('Prompt')
 
 /**
  * Options for `createPrompt`.
@@ -102,10 +105,16 @@ export class Prompt<TVars extends Record<string, unknown> = Record<string, unkno
     return this.template.replace(
       /\{\{\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*\}\}/g,
       (_match, key: string) => {
-        if (!(key in vars)) {
-          return this.handleMissing(key, _match)
-        }
-        const value = (vars as Record<string, unknown>)[key]
+        // `{{user.name}}` reads vars.user.name.
+        const value = key
+          .split('.')
+          .reduce<unknown>(
+            (current, part) =>
+              current !== null && typeof current === 'object'
+                ? (current as Record<string, unknown>)[part]
+                : undefined,
+            vars,
+          )
         if (value === undefined || value === null) {
           return this.handleMissing(key, _match)
         }
@@ -143,8 +152,7 @@ export class Prompt<TVars extends Record<string, unknown> = Record<string, unkno
       throw new Error(`Prompt(${this.name}): variable "${key}" is missing from the render call`)
     }
     if (this.onMissing === 'warn') {
-      // eslint-disable-next-line no-console
-      console.warn(
+      log.warn(
         `Prompt(${this.name}): variable "${key}" is missing from the render call; leaving placeholder`,
       )
     }
