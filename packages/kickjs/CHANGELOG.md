@@ -1,5 +1,43 @@
 # @forinda/kickjs
 
+## 8.6.0
+
+### Minor Changes
+
+- [#720](https://github.com/forinda/kick-js/pull/720) [`9bb9620`](https://github.com/forinda/kick-js/commit/9bb96203c5d5db06163ea76fe42daa67de861ebd) Thanks [@forinda](https://github.com/forinda)! - Tool calls run through the app without a listening server, on every runtime.
+  
+  - **`Application.fetch(request)` and `AdapterContext.fetch`** run a web `Request` through the app's full pipeline and return the `Response`, with no listening server: the runtime's native fetch on h3 v2, otherwise an in-process server bound to `127.0.0.1`, started on first use and closed by `shutdown()`. `createHandler()` now uses the same code.
+  - **`ctx.sendResponse(response)`** sends a web `Response` — status, headers with every `Set-Cookie`, a streamed body — on Express, Fastify, h3 and h3 v2.
+  - **MCP:** the endpoint uses the SDK's web-standard transport through `ctx.sendResponse`, so it works on Fastify (previously a 500) and h3 v2. Tool calls use `AdapterContext.fetch`, so they work under `createHandler()` (previously "HTTP server address not yet captured"). New `forwardHeaders` option copies headers from the MCP request onto tool calls (default `authorization`, `cookie`, `x-request-id`, `traceparent`, `tracestate`; previously only `authorization`); client cancellation aborts the call.
+  - **AI:** tool calls use `AdapterContext.fetch`, so agents work under `createHandler()` and `createTestApp`. New `headers` option on `runAgent` / `runAgentWithMemory` sends the caller's credentials to tool routes; `signal` aborts in-flight tool calls. `setServerBaseUrl` still sends calls to a URL when set.
+
+- [#719](https://github.com/forinda/kick-js/pull/719) [`2e36473`](https://github.com/forinda/kick-js/commit/2e36473830435208ab6c383753a56b1d1fbf2d12) Thanks [@forinda](https://github.com/forinda)! - Route flags decide which routes become MCP and AI tools.
+  
+  - `McpAdapter` and `AiAdapter` take `exposeWhen` and `hideWhen`, in the same forms as `skipWhen` (a name, `'!name'`, a list, or a predicate). A route carrying an `exposeWhen` flag becomes a tool without `@McpTool` / `@AiTool` — on a method, a controller, or a module mount. `hideWhen` wins over the decorators, `exposeWhen` and MCP's `mode: 'auto'`, so a module can hide a controller it mounts but does not own.
+  - A flag whose value is an object supplies tool options (`description`, `name`, and for MCP `hidden`), e.g. `defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')`. The decorator on the method takes precedence.
+  - A mixed-polarity flag list throws when the adapter is created.
+  - `matchesFlagTest` is now exported from `@forinda/kickjs`, so packages evaluate flag tests the same way the framework does.
+
+### Patch Changes
+
+- [#717](https://github.com/forinda/kick-js/pull/717) [`6032d65`](https://github.com/forinda/kick-js/commit/6032d653e91f3bbf2332e1fd3eb1d87d11cd4d08) Thanks [@forinda](https://github.com/forinda)! - Review fixes across the MCP / AI work.
+  
+  - **MCP sessions are bounded.** New `maxSessions` (default 1000; a new client beyond it gets `503`) and `sessionIdleTimeoutMs` (default 30 minutes with no request in progress; a client holding its notification stream open is not idle). Without them, repeated `initialize` requests could accumulate sessions without limit.
+  - **`Application.fetch` forwarding:** the request body is streamed to the app instead of buffered in full, so body-size limits apply as it arrives; `x-forwarded-host` / `x-forwarded-proto` always come from the Request URL, never from caller headers; shutdown force-closes the forwarding server's connections.
+  - **`ctx.sendResponse`** waits for the socket to drain when a write reports backpressure, so a slow client can't make a long stream buffer without bound.
+  - **`assertFlagTest`** is exported; `McpAdapter` and `AiAdapter` use it to validate `exposeWhen` / `hideWhen` without running predicates at construction.
+  - **AI:** every failed tool call is marked `isError` (including a missing path parameter); `defaults.signal` applies when a call passes none; `{{user.constructor.name}}`-style placeholders only read own properties; `PineconeVectorStore` rejects the reserved `_kick_content` metadata key.
+  - Docs: `AdapterContext.fetch` is available from `beforeStart` on (routes aren't mounted in `beforeMount`); MCP Inspector steps no longer describe a single session.
+
+- [#724](https://github.com/forinda/kick-js/pull/724) [`d87ad83`](https://github.com/forinda/kick-js/commit/d87ad839b60791f5a8bec9a56c90d948b99053f8) Thanks [@forinda](https://github.com/forinda)! - Mount custom AI providers and MCP tool providers at any time.
+  
+  - **AI:** `ai.registerProvider(name, provider)` and `unregisterProvider(name)` mount more `AiProvider`s next to the default (the provider `AiAdapter` was created with). `runAgent` / `runAgentWithMemory` take `provider` — a registered name or an instance — and `getProvider(name?)` returns one. Registering an existing name replaces it; the default's name is reserved.
+  - **MCP:** `mcp.registerProvider({ name, tools })` and `unregisterProvider(name)` mount tools that aren't controller routes. The new `McpToolProvider`, `McpCustomTool` and `McpToolContext` interfaces define them: a handler with arguments validated against `inputSchema` (any schema library) and a context carrying the MCP request's headers, the cancellation signal, and `fetch` into the app. Connected clients get `tools/list_changed` when providers change. The adapter is registered under the new `MCP_ADAPTER` token (`McpAdapterInstance` type) so plugins and modules can reach it.
+  - **`ctx.sendResponse`** flushes headers as soon as a streamed body starts, so SSE streams open for the client before their first event.
+  - The AI and MCP guides document both, with local example providers that also run as tests.
+- Updated dependencies [[`2f2a9de`](https://github.com/forinda/kick-js/commit/2f2a9de51b5529a58e1a1c8825fb4c9fad1312be)]:
+  - @forinda/kickjs-schema@0.2.0
+
 ## 8.5.0
 
 ### Minor Changes
