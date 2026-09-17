@@ -40,6 +40,13 @@ describe('setAllowBuilds', () => {
     )
   })
 
+  it('finds entries after a blank line inside the block', () => {
+    const yaml = "allowBuilds:\n  esbuild: true\n\n  '@swc/core': false\npackages:\n  - web\n"
+    expect(setAllowBuilds(yaml, { '@swc/core': true, '@scarf/scarf': true })).toBe(
+      "allowBuilds:\n  esbuild: true\n\n  '@swc/core': false\n  '@scarf/scarf': true\npackages:\n  - web\n",
+    )
+  })
+
   it('adds an allowBuilds block to a file without one, or to an empty file', () => {
     expect(setAllowBuilds('packages:\n  - web\n', { '@scarf/scarf': true })).toBe(
       "packages:\n  - web\n\nallowBuilds:\n  '@scarf/scarf': true\n",

@@ -131,8 +131,9 @@ export default defineConfig({
     minify: false,
     rollupOptions: {
       input: fileURLToPath(new URL('./src/serverless.ts', import.meta.url)),
-      // Optional peers you don't install must stay external: inlined, a missing
-      // one becomes a stub that throws on load.
+      // Optional peers you have NOT installed: inlined, a missing one becomes a
+      // stub that throws on load. Remove any you install — left external, it
+      // stays a bare import the Vercel function can't resolve.
       external: ['valibot', 'yup'],
       output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
     },
@@ -248,7 +249,11 @@ export interface DeployPluginOptions {
   siteRoot?: string
   /** URL prefix routed to the function. Default `/api`. */
   apiPath?: string
-  /** Optional peers you don't install stay external. Default `['valibot', 'yup']`. */
+  /**
+   * Optional peers to leave out of the bundle when they are not installed.
+   * Installed ones are always bundled: a Vercel function can't see node_modules.
+   * Default `['valibot', 'yup']`.
+   */
   external?: string[]
   /** Vercel Node runtime. Default `nodejs22.x`. */
   vercelRuntime?: string
@@ -301,7 +306,11 @@ export const deployPlugin = (options: DeployPluginOptions = {}) =>
             minify: false,
             rollupOptions: {
               input: resolve(root, opts.entry),
-              external: opts.external,
+              // Inlined, a missing optional peer becomes a stub that throws on load;
+              // left external, an installed one is unreachable from api.func.
+              external: opts.external.filter(
+                (name) => !existsSync(resolve(root, 'node_modules', name)),
+              ),
               output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
             },
           },

@@ -242,8 +242,11 @@ export function setAllowBuilds(yaml: string, builds: Record<string, boolean>): s
     lines.push('allowBuilds:')
     start = lines.length - 1
   }
+  // The block runs to the next unindented line; blank lines inside it don't end it.
   let end = start + 1
-  while (end < lines.length && /^\s+\S/.test(lines[end])) end++
+  for (let i = start + 1; i < lines.length && /^(\s|$)/.test(lines[i]); i++) {
+    if (lines[i].trim() !== '') end = i + 1
+  }
 
   for (const [name, allow] of entries) {
     const entry = `  ${/^[\w-]+$/.test(name) ? name : `'${name}'`}: ${allow}`

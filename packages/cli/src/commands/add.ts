@@ -30,9 +30,9 @@ interface PackageEntry {
    */
   deprecated?: string
   /**
-   * pnpm `allowBuilds` answers for install scripts this package pulls in.
-   * pnpm 10+ blocks unanswered scripts and every later `pnpm exec` fails with
-   * ERR_PNPM_IGNORED_BUILDS, so `kick add` and `kick new` answer them.
+   * Install-script answers for dependencies this package pulls in.
+   * Package managers block or skip unanswered scripts (see approveInstallScripts),
+   * so `kick add` and `kick new` record these answers before installing.
    */
   builds?: Record<string, boolean>
 }
@@ -485,7 +485,7 @@ export const TEMPLATE_BUILDS: Record<string, boolean> = { '@swc/core': true, esb
 /**
  * Record install-script answers where `pm` reads them, in `dir`:
  *
- * - pnpm 10+: `allowBuilds` in pnpm-workspace.yaml. Unanswered scripts fail the
+ * - pnpm 10.26+ (when `allowBuilds` arrived): `allowBuilds` in pnpm-workspace.yaml. Unanswered scripts fail the
  *   install non-interactively and every later `pnpm exec` with ERR_PNPM_IGNORED_BUILDS.
  * - npm 11.19+: `allowScripts` in package.json. Unanswered scripts are skipped
  *   with a warning.
