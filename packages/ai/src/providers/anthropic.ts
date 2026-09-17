@@ -1,3 +1,5 @@
+import type Anthropic from '@anthropic-ai/sdk'
+import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import type {
   AiProvider,
   ChatChunk,
@@ -5,232 +7,185 @@ import type {
   ChatMessage,
   ChatOptions,
   ChatResponse,
+  ChatUsage,
   EmbedInput,
 } from '../types'
-import { postJson, postJsonStream } from './base'
+import { ProviderError } from './base'
+
+type BetaMessage = Anthropic.Beta.Messages.BetaMessage
+type BetaMessageParam = Anthropic.Beta.Messages.BetaMessageParam
+type BetaContentBlockParam = Anthropic.Beta.Messages.BetaContentBlockParam
+type BetaToolResultBlockParam = Anthropic.Beta.Messages.BetaToolResultBlockParam
+type StreamParams = BetaMessageStreamParams
+
+/** Effort levels accepted by `output_config.effort`. */
+export type AnthropicEffort = NonNullable<ChatOptions['effort']>
 
 /**
  * Configuration for the Anthropic provider.
  *
- * The base URL is configurable so the same class can target an
- * Anthropic-compatible proxy, an internal gateway that adds auth
- * headers, or an air-gapped deployment. The provider only assumes
- * Anthropic's Messages API wire shape, not the hostname.
+ * Uses the official `@anthropic-ai/sdk` (an optional peer dependency —
+ * install it alongside `@forinda/kickjs-ai`). The SDK is loaded on first use,
+ * so importing this package never requires it.
  */
 export interface AnthropicProviderOptions {
-  /** API key sent as `x-api-key`. Required. */
-  apiKey: string
-  /** Override base URL. Defaults to `https://api.anthropic.com/v1`. */
-  baseURL?: string
-  /** Default chat model used when `ChatInput.model` is not set. */
-  defaultChatModel?: string
-  /** Anthropic API version header. Defaults to `'2023-06-01'`. */
-  apiVersion?: string
   /**
-   * Default `max_tokens` for responses. Anthropic requires an explicit
-   * max_tokens on every request; the framework's ChatOptions.maxTokens
-   * takes precedence when set, but this supplies a fallback so callers
-   * don't have to set it every time.
+   * API key. When omitted, the SDK resolves credentials itself:
+   * `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, or an `ant auth login` profile.
+   */
+  apiKey?: string
+  /** Override base URL (a proxy or gateway). Defaults to the SDK's. */
+  baseURL?: string
+  /**
+   * A pre-configured SDK client, used instead of constructing one — for
+   * custom retries or timeouts, or a platform client such as Bedrock or
+   * Vertex (set `fallbacks: false` there; they don't support it).
+   */
+  client?: Anthropic
+  /** Default model when `ChatInput.model` is not set. Defaults to `'claude-opus-5'`. */
+  defaultChatModel?: string
+  /**
+   * Default `max_tokens` — a cap on thinking plus response text. Requests
+   * always stream, so a large value is safe. Defaults to 64000.
    */
   defaultMaxTokens?: number
+  /** Default effort for every call; `ChatOptions.effort` overrides it. */
+  effort?: AnthropicEffort
+  /**
+   * Return a readable summary of the model's thinking (`'summarized'`) or
+   * nothing (`'omitted'`, the API default on current models). Thinking
+   * happens and is billed either way.
+   */
+  thinkingDisplay?: 'summarized' | 'omitted'
+  /**
+   * Automatic prompt caching (`cache_control` on the request): the tools,
+   * system prompt and history of an agent loop are read from cache on the
+   * next step. Defaults to `true`.
+   */
+  cache?: boolean
+  /**
+   * Server-side fallback when the model declines a request: `'default'`
+   * re-runs it on Anthropic's recommended fallback model for the refusal's
+   * category, inside the same call. Applied to Claude Opus 5 and Fable/Mythos
+   * 5 models, where it defaults to `'default'`; `false` turns it off. Not
+   * available on Bedrock, Vertex or Foundry.
+   */
+  fallbacks?: 'default' | false
   /** Provider name override. Defaults to `'anthropic'`. */
   name?: string
 }
 
+/** Models whose safety classifiers can decline a request, and that support `fallbacks`. */
+const FALLBACK_MODELS = /^claude-(opus-5|fable-5|mythos-5)/
+/** Models that reject `temperature` / `top_p` with a 400. */
+const NO_SAMPLING_MODELS = /^claude-(opus-5|opus-4-7|opus-4-8|sonnet-5|fable|mythos)/
+
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01'
+
 /**
- * Built-in Anthropic provider.
+ * Built-in Anthropic provider, on the official SDK.
  *
- * Implements the framework's `AiProvider` interface using Anthropic's
- * Messages API (`/v1/messages`). Translates the normalized
- * `ChatInput` shape to and from Anthropic's content-block format,
- * including tool calling and streaming.
+ * Translates the framework's `ChatInput` to Claude's Messages API and back:
  *
- * ### Differences from OpenAI
+ * - **System messages** go to the top-level `system` field, joined in order.
+ * - **Tool results** from consecutive `tool` messages go back in one user
+ *   message, failed calls marked `is_error`, so the model keeps making
+ *   parallel calls.
+ * - **Thinking blocks** are returned on `ChatResponse.providerContent` and
+ *   sent back verbatim with the assistant turn that carries them — tool loops
+ *   on thinking models need them. `AiAdapter.runAgent` does this for you.
+ * - **Stop reasons** are normalized (`end_turn` → `stop`, `max_tokens` →
+ *   `length`, `tool_use` → `tool_call`, `refusal` → `content_filter` with
+ *   `ChatResponse.refusal`).
+ * - **Sampling parameters** are dropped, with a warning, for models that
+ *   reject them.
  *
- * Anthropic's API has a few quirks the provider translates away:
+ * Every request streams (`chat()` collects the final message), so large
+ * `max_tokens` values don't hit HTTP timeouts. API errors are rethrown as
+ * `ProviderError` with the HTTP status, including errors that arrive mid-stream.
  *
- * - **System prompt is separated.** The framework puts system
- *   messages in the `messages` array; Anthropic wants them in a
- *   top-level `system` field. The provider extracts the first system
- *   message and filters out any others.
- * - **Content is always a block array.** Even simple text replies
- *   are wrapped in `[{ type: 'text', text: '...' }]`. The provider
- *   flattens text blocks to a single string on the response.
- * - **Tool calls use `tool_use` content blocks, not a separate
- *   `tool_calls` field.** Normalization pulls them out of the
- *   response content and into `ChatResponse.toolCalls`.
- * - **Tool results are `user` messages with `tool_result` content
- *   blocks**, not a `'tool'` role. The provider handles the
- *   translation both ways.
- * - **`max_tokens` is required on every request.** Framework
- *   `ChatOptions.maxTokens` wins; otherwise falls back to
- *   `defaultMaxTokens` (default 4096).
- *
- * ### Embeddings
- *
- * Anthropic does not ship an embeddings API. Calling `embed()` on
- * this provider throws a descriptive error — users who need
- * embeddings should construct a separate provider (OpenAI's
- * `text-embedding-3-small` is a good default) and bind it
- * alongside the Anthropic chat provider.
+ * Anthropic has no embeddings API; `embed()` throws.
  *
  * @example
  * ```ts
- * import { bootstrap, getEnv } from '@forinda/kickjs'
+ * import { bootstrap } from '@forinda/kickjs'
  * import { AiAdapter, AnthropicProvider } from '@forinda/kickjs-ai'
  *
  * export const app = await bootstrap({
  *   modules,
- *   adapters: [
- *     AiAdapter({
- *       provider: new AnthropicProvider({
- *         apiKey: getEnv('ANTHROPIC_API_KEY'),
- *         defaultChatModel: 'claude-opus-4-6',
- *       }),
- *     }),
- *   ],
+ *   adapters: [AiAdapter({ provider: new AnthropicProvider({ effort: 'medium' }) })],
  * })
  * ```
  */
 export class AnthropicProvider implements AiProvider {
   readonly name: string
 
-  private readonly baseURL: string
   private readonly defaultChatModel: string
   private readonly defaultMaxTokens: number
-  private readonly headers: Record<string, string>
+  private clientPromise?: Promise<Anthropic>
+  private readonly warned = new Set<string>()
 
-  constructor(options: AnthropicProviderOptions) {
-    if (!options.apiKey) {
-      throw new Error('AnthropicProvider: apiKey is required')
-    }
-    this.baseURL = (options.baseURL ?? 'https://api.anthropic.com/v1').replace(/\/$/, '')
-    this.defaultChatModel = options.defaultChatModel ?? 'claude-opus-4-6'
-    this.defaultMaxTokens = options.defaultMaxTokens ?? 4096
+  constructor(private readonly options: AnthropicProviderOptions = {}) {
+    this.defaultChatModel = options.defaultChatModel ?? 'claude-opus-5'
+    this.defaultMaxTokens = options.defaultMaxTokens ?? 64000
     this.name = options.name ?? 'anthropic'
-    this.headers = {
-      'x-api-key': options.apiKey,
-      'anthropic-version': options.apiVersion ?? '2023-06-01',
+  }
+
+  async chat(input: ChatInput, options: ChatOptions = {}): Promise<ChatResponse> {
+    const client = await this.client()
+    try {
+      const stream = client.beta.messages.stream(this.buildParams(input, options, false), {
+        signal: options.signal,
+      })
+      return this.normalize(await stream.finalMessage())
+    } catch (err) {
+      throw toProviderError(err)
     }
   }
 
-  /**
-   * Non-streaming chat completion.
-   *
-   * Builds the Anthropic Messages payload, posts it, and normalizes
-   * the response back to the framework's `ChatResponse` shape.
-   */
-  async chat(input: ChatInput, options: ChatOptions = {}): Promise<ChatResponse> {
-    const payload = this.buildMessagesPayload(input, options, /* stream */ false)
-    const data = await postJson<AnthropicMessagesResponse>(`${this.baseURL}/messages`, payload, {
-      headers: this.headers,
-      signal: options.signal,
-    })
-    return this.normalizeResponse(data)
-  }
-
-  /**
-   * Streaming chat completion. Yields `ChatChunk`s as Anthropic
-   * events arrive and emits a final chunk with `done: true` after
-   * the `message_stop` event.
-   *
-   * Anthropic's SSE stream uses distinct event types instead of the
-   * single-channel deltas OpenAI sends:
-   *
-   *   - `message_start` — session init, carries model + id
-   *   - `content_block_start` — new text or tool_use block begins
-   *   - `content_block_delta` — incremental text or partial tool JSON
-   *   - `content_block_stop` — block complete
-   *   - `message_delta` — stop_reason + final usage
-   *   - `message_stop` — end of stream
-   *
-   * The provider cares about text deltas (for streaming content) and
-   * input_json deltas (for tool call argument streaming). Everything
-   * else is noise for our purposes and gets filtered.
-   */
   async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
-    const payload = this.buildMessagesPayload(input, options, /* stream */ true)
-    const events = postJsonStream(`${this.baseURL}/messages`, payload, {
-      headers: this.headers,
-      signal: options.signal,
-    })
-
-    // Track the current tool block index + id so tool argument
-    // deltas can be routed to the right `toolCallDelta` payload.
-    let currentToolBlock: { id: string; name: string } | null = null
-    let sawAnyChunk = false
-
-    for await (const raw of events) {
-      let parsed: AnthropicStreamEvent
-      try {
-        parsed = JSON.parse(raw) as AnthropicStreamEvent
-      } catch {
-        // Malformed chunk — skip rather than crashing the stream.
-        continue
-      }
-
-      if (parsed.type === 'content_block_start') {
-        const block = parsed.content_block
-        if (block?.type === 'tool_use') {
-          currentToolBlock = { id: block.id ?? '', name: block.name ?? '' }
-          sawAnyChunk = true
-          yield {
-            content: '',
-            done: false,
-            toolCallDelta: { id: currentToolBlock.id, name: currentToolBlock.name },
-          }
-        }
-        continue
-      }
-
-      if (parsed.type === 'content_block_delta') {
-        const delta = parsed.delta
-        if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
-          sawAnyChunk = true
-          yield { content: delta.text, done: false }
-          continue
-        }
-        if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-          if (!currentToolBlock) continue
-          sawAnyChunk = true
+    const client = await this.client()
+    const toolIds = new Map<number, string>()
+    try {
+      const stream = client.beta.messages.stream(this.buildParams(input, options, true), {
+        signal: options.signal,
+      })
+      for await (const event of stream) {
+        if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+          toolIds.set(event.index, event.content_block.id)
           yield {
             content: '',
             done: false,
             toolCallDelta: {
-              id: currentToolBlock.id,
-              argumentsDelta: delta.partial_json,
+              id: event.content_block.id,
+              index: event.index,
+              name: event.content_block.name,
             },
           }
-          continue
+        } else if (event.type === 'content_block_delta') {
+          if (event.delta.type === 'text_delta') {
+            yield { content: event.delta.text, done: false }
+          } else if (event.delta.type === 'input_json_delta') {
+            yield {
+              content: '',
+              done: false,
+              toolCallDelta: {
+                id: toolIds.get(event.index) ?? '',
+                index: event.index,
+                argumentsDelta: event.delta.partial_json,
+              },
+            }
+          }
         }
-        continue
       }
-
-      if (parsed.type === 'content_block_stop') {
-        currentToolBlock = null
-        continue
-      }
-
-      if (parsed.type === 'message_stop') {
-        yield { content: '', done: true }
-        return
-      }
-    }
-
-    // Stream closed without an explicit message_stop — still emit a
-    // terminating chunk so consumers know to stop reading.
-    if (sawAnyChunk) {
-      yield { content: '', done: true }
+      // An `error` event mid-stream rejects here, instead of ending quietly.
+      const final = this.normalize(await stream.finalMessage())
+      yield { content: '', done: true, finishReason: final.finishReason, usage: final.usage }
+    } catch (err) {
+      throw toProviderError(err)
     }
   }
 
-  /**
-   * Anthropic does not ship an embeddings API. Throws a descriptive
-   * error rather than silently returning an empty vector — embedding
-   * workflows should use a dedicated provider (OpenAI text-embedding-3-*
-   * is the common pick) and bind it alongside this one in the
-   * `AI_PROVIDER` token registry if needed.
-   */
   async embed(_input: EmbedInput): Promise<number[][]> {
     throw new Error(
       'AnthropicProvider.embed is not available — Anthropic does not provide an embeddings API. ' +
@@ -239,125 +194,95 @@ export class AnthropicProvider implements AiProvider {
     )
   }
 
-  // ── Internal: payload construction ──────────────────────────────────
+  // ── Internal ──────────────────────────────────────────────────────────
 
-  private buildMessagesPayload(
+  private client(): Promise<Anthropic> {
+    if (this.options.client) return Promise.resolve(this.options.client)
+    this.clientPromise ??= import('@anthropic-ai/sdk').then(
+      (mod) =>
+        new mod.default({
+          ...(this.options.apiKey ? { apiKey: this.options.apiKey } : {}),
+          ...(this.options.baseURL ? { baseURL: this.options.baseURL } : {}),
+        }),
+      (err) => {
+        this.clientPromise = undefined
+        throw new Error(
+          'AnthropicProvider needs the @anthropic-ai/sdk package. Install it: pnpm add @anthropic-ai/sdk',
+          { cause: err },
+        )
+      },
+    )
+    return this.clientPromise
+  }
+
+  private buildParams(
     input: ChatInput,
     options: ChatOptions,
-    stream: boolean,
-  ): AnthropicMessagesRequest {
-    const { systemPrompt, messages } = this.splitSystemMessage(input.messages)
+    eagerToolInput: boolean,
+  ): StreamParams {
+    const model = input.model ?? this.defaultChatModel
+    const system = input.messages
+      .filter((m) => m.role === 'system')
+      .map((m) => m.content)
+      .join('\n\n')
 
-    const payload: AnthropicMessagesRequest = {
-      model: input.model ?? this.defaultChatModel,
+    const params: StreamParams = {
+      model,
       max_tokens: options.maxTokens ?? this.defaultMaxTokens,
-      messages: messages.map((m) => this.toAnthropicMessage(m)),
+      messages: toAnthropicMessages(input.messages),
     }
-    if (systemPrompt) payload.system = systemPrompt
-    if (options.temperature !== undefined) payload.temperature = options.temperature
-    if (options.topP !== undefined) payload.top_p = options.topP
-    if (options.stopSequences && options.stopSequences.length > 0) {
-      payload.stop_sequences = options.stopSequences
+    if (system) params.system = system
+    if (options.stopSequences?.length) params.stop_sequences = options.stopSequences
+    if (this.options.cache !== false) params.cache_control = { type: 'ephemeral' }
+
+    const effort = options.effort ?? this.options.effort
+    if (effort) params.output_config = { effort }
+    if (this.options.thinkingDisplay) {
+      params.thinking = { type: 'adaptive', display: this.options.thinkingDisplay }
     }
-    if (stream) payload.stream = true
+
+    if (NO_SAMPLING_MODELS.test(model)) {
+      if (options.temperature !== undefined || options.topP !== undefined) {
+        this.warnOnce(
+          `sampling:${model}`,
+          `AnthropicProvider: ${model} does not accept temperature/topP; they were not sent. Use effort instead.`,
+        )
+      }
+    } else if (options.temperature !== undefined) {
+      // Claude 4.x accepts one of temperature / top_p, not both.
+      params.temperature = options.temperature
+    } else if (options.topP !== undefined) {
+      params.top_p = options.topP
+    }
 
     if (Array.isArray(input.tools) && input.tools.length > 0) {
-      payload.tools = input.tools.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.inputSchema,
+      params.tools = input.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
+        // Streamed callers see tool arguments as they are generated. The
+        // arguments are not validated server-side then; AiAdapter's tool
+        // routes validate them, and truncated calls are caught by the
+        // `length` finish reason.
+        ...(eagerToolInput ? { eager_input_streaming: true } : {}),
       }))
     }
 
-    return payload
+    if (FALLBACK_MODELS.test(model) && this.options.fallbacks !== false) {
+      params.fallbacks = 'default'
+      params.betas = [FALLBACK_BETA]
+    }
+    return params
   }
 
-  /**
-   * Extract the first system message from the framework's messages
-   * array and return it separately — Anthropic puts system prompts
-   * in a top-level `system` field, not in `messages`. Any additional
-   * system messages are dropped on the grounds that models handle
-   * one persona prompt per call and concatenating them silently
-   * would produce confusing behavior.
-   */
-  private splitSystemMessage(messages: ChatMessage[]): {
-    systemPrompt: string | null
-    messages: ChatMessage[]
-  } {
-    let systemPrompt: string | null = null
-    const rest: ChatMessage[] = []
-    for (const m of messages) {
-      if (m.role === 'system') {
-        systemPrompt ??= m.content
-        continue
-      }
-      rest.push(m)
-    }
-    return { systemPrompt, messages: rest }
-  }
-
-  /**
-   * Translate a framework `ChatMessage` to Anthropic's wire format.
-   *
-   * User and plain assistant messages become content blocks with a
-   * single `text` entry. Assistant messages with tool calls become
-   * a block list mixing `text` and `tool_use` entries. Framework
-   * `'tool'` role messages become Anthropic `'user'` messages with
-   * a `tool_result` block — that's how Anthropic represents tool
-   * call responses.
-   */
-  private toAnthropicMessage(m: ChatMessage): AnthropicMessage {
-    if (m.role === 'tool') {
-      return {
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: m.toolCallId ?? '',
-            content: m.content,
-          },
-        ],
-      }
-    }
-
-    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-      const blocks: AnthropicContentBlock[] = []
-      if (m.content) {
-        blocks.push({ type: 'text', text: m.content })
-      }
-      for (const tc of m.toolCalls) {
-        blocks.push({
-          type: 'tool_use',
-          id: tc.id,
-          name: tc.name,
-          input: tc.arguments,
-        })
-      }
-      return { role: 'assistant', content: blocks }
-    }
-
-    // user or plain assistant
-    return {
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: [{ type: 'text', text: m.content }],
-    }
-  }
-
-  /**
-   * Normalize an Anthropic response back to the framework's
-   * `ChatResponse`. Flattens text content blocks into a single
-   * string and pulls `tool_use` blocks out into `toolCalls`.
-   */
-  private normalizeResponse(data: AnthropicMessagesResponse): ChatResponse {
-    const blocks = data.content ?? []
-    const textParts: string[] = []
+  private normalize(message: BetaMessage): ChatResponse {
+    const text: string[] = []
     const toolCalls: NonNullable<ChatResponse['toolCalls']> = []
+    let needsReplay = false
 
-    for (const block of blocks) {
-      if (block.type === 'text' && typeof block.text === 'string') {
-        textParts.push(block.text)
-      }
-      if (block.type === 'tool_use' && block.name && block.id) {
+    for (const block of message.content) {
+      if (block.type === 'text') text.push(block.text)
+      else if (block.type === 'tool_use') {
         toolCalls.push({
           id: block.id,
           name: block.name,
@@ -366,119 +291,120 @@ export class AnthropicProvider implements AiProvider {
               ? (block.input as Record<string, unknown>)
               : {},
         })
+      } else {
+        // thinking, fallback and other blocks must go back with this turn.
+        needsReplay = true
       }
     }
 
-    const result: ChatResponse = { content: textParts.join('') }
+    const result: ChatResponse = { content: text.join('') }
     if (toolCalls.length > 0) result.toolCalls = toolCalls
-    if (data.usage) {
-      result.usage = {
-        promptTokens: data.usage.input_tokens,
-        completionTokens: data.usage.output_tokens,
-        totalTokens: data.usage.input_tokens + data.usage.output_tokens,
-      }
+    if (needsReplay) result.providerContent = message.content
+
+    const usage = message.usage
+    const cacheRead = usage.cache_read_input_tokens ?? 0
+    const cacheWrite = usage.cache_creation_input_tokens ?? 0
+    const promptTokens = usage.input_tokens + cacheRead + cacheWrite
+    const chatUsage: ChatUsage = {
+      promptTokens,
+      completionTokens: usage.output_tokens,
+      totalTokens: promptTokens + usage.output_tokens,
     }
-    if (data.stop_reason) result.finishReason = data.stop_reason
+    if (cacheRead) chatUsage.cacheReadTokens = cacheRead
+    if (cacheWrite) chatUsage.cacheWriteTokens = cacheWrite
+    result.usage = chatUsage
+
+    switch (message.stop_reason) {
+      case 'end_turn':
+      case 'stop_sequence':
+        result.finishReason = 'stop'
+        break
+      case 'max_tokens':
+      case 'model_context_window_exceeded':
+        result.finishReason = 'length'
+        break
+      case 'tool_use':
+        result.finishReason = 'tool_call'
+        break
+      case 'refusal':
+        result.finishReason = 'content_filter'
+        result.refusal = {
+          category: message.stop_details?.category ?? null,
+          explanation: message.stop_details?.explanation ?? null,
+        }
+        break
+      default:
+        if (message.stop_reason) result.finishReason = message.stop_reason
+    }
     return result
   }
-}
 
-// ── Anthropic wire types ──────────────────────────────────────────────────
-//
-// Narrowed to the fields we actually consume. Anthropic's full API
-// surface is richer — vision, document inputs, extended thinking,
-// prompt caching — but the provider only commits to what it uses.
-
-interface AnthropicMessagesRequest {
-  model: string
-  max_tokens: number
-  messages: AnthropicMessage[]
-  system?: string
-  temperature?: number
-  top_p?: number
-  stop_sequences?: string[]
-  stream?: boolean
-  tools?: Array<{
-    name: string
-    description: string
-    input_schema: Record<string, unknown>
-  }>
-}
-
-interface AnthropicMessage {
-  role: 'user' | 'assistant'
-  content: AnthropicContentBlock[]
-}
-
-type AnthropicContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: string }
-
-interface AnthropicMessagesResponse {
-  id?: string
-  type?: string
-  role?: string
-  content?: Array<{
-    type: 'text' | 'tool_use'
-    text?: string
-    id?: string
-    name?: string
-    input?: unknown
-  }>
-  stop_reason?: string
-  usage?: {
-    input_tokens: number
-    output_tokens: number
+  private warnOnce(key: string, text: string): void {
+    if (this.warned.has(key)) return
+    this.warned.add(key)
+    console.warn(text)
   }
 }
 
 /**
- * Anthropic streaming event shapes. Each event arrives as a JSON
- * object on its own `data: ` line. We only care about a handful:
- * start / delta / stop for content blocks, and the final message_stop.
+ * Framework messages → Messages API messages. System messages are handled by
+ * the caller; consecutive tool results become one user message.
  */
-type AnthropicStreamEvent =
-  | {
-      type: 'message_start'
-      message?: unknown
-    }
-  | {
-      type: 'content_block_start'
-      index?: number
-      content_block?: {
-        type: 'text' | 'tool_use'
-        text?: string
-        id?: string
-        name?: string
+function toAnthropicMessages(messages: ChatMessage[]): BetaMessageParam[] {
+  const out: BetaMessageParam[] = []
+  for (const m of messages) {
+    if (m.role === 'system') continue
+
+    if (m.role === 'tool') {
+      const result: BetaToolResultBlockParam = {
+        type: 'tool_result',
+        tool_use_id: m.toolCallId ?? '',
+        content: m.content,
+        ...(m.isError ? { is_error: true } : {}),
       }
-    }
-  | {
-      type: 'content_block_delta'
-      index?: number
-      delta?: {
-        type: 'text_delta' | 'input_json_delta'
-        text?: string
-        partial_json?: string
+      const previous = out.at(-1)
+      if (
+        previous?.role === 'user' &&
+        Array.isArray(previous.content) &&
+        previous.content.every((block) => block.type === 'tool_result')
+      ) {
+        previous.content.push(result)
+      } else {
+        out.push({ role: 'user', content: [result] })
       }
+      continue
     }
-  | {
-      type: 'content_block_stop'
-      index?: number
-    }
-  | {
-      type: 'message_delta'
-      delta?: {
-        stop_reason?: string
+
+    if (m.role === 'assistant') {
+      if (Array.isArray(m.providerContent)) {
+        out.push({ role: 'assistant', content: m.providerContent as BetaContentBlockParam[] })
+        continue
       }
-      usage?: {
-        input_tokens?: number
-        output_tokens?: number
+      const blocks: BetaContentBlockParam[] = []
+      if (m.content) blocks.push({ type: 'text', text: m.content })
+      for (const call of m.toolCalls ?? []) {
+        blocks.push({ type: 'tool_use', id: call.id, name: call.name, input: call.arguments })
       }
+      out.push({ role: 'assistant', content: blocks })
+      continue
     }
-  | {
-      type: 'message_stop'
-    }
-  | {
-      type: 'ping'
-    }
+
+    out.push({ role: 'user', content: [{ type: 'text', text: m.content }] })
+  }
+  return out
+}
+
+/** SDK API errors → ProviderError (status + body); anything else unchanged. */
+function toProviderError(err: unknown): unknown {
+  if (err instanceof ProviderError) return err
+  const status = (err as { status?: unknown })?.status
+  if (typeof status === 'number') {
+    const body = (err as { error?: unknown }).error
+    return new ProviderError(
+      status,
+      body === undefined ? '' : JSON.stringify(body),
+      (err as Error).message,
+    )
+  }
+  return err
+}

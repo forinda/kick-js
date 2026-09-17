@@ -4,8 +4,8 @@
 [MCP](https://modelcontextprotocol.io/) server. Once installed, any
 LLM client that speaks MCP — Claude Desktop, Claude Code, Cursor,
 Zed, and others — can discover your controllers as callable tools,
-read their Zod schemas, and invoke them safely through the normal
-Express pipeline.
+read their input schemas, and invoke them safely through the normal
+request pipeline.
 
 The adapter was built on the same `onRouteMount` → `beforeStart` →
 `afterStart` lifecycle as every other adapter, so plugging it into an
@@ -40,7 +40,7 @@ export const app = await bootstrap({
 
 That's it. On startup the adapter walks every registered controller,
 builds an `McpToolDefinition[]` from the route metadata, and attaches
-an MCP server to your Express pipeline at `/_mcp` (configurable via
+an MCP endpoint to your app at `/_mcp` (configurable via
 `basePath`).
 
 ## How it works
@@ -65,8 +65,8 @@ bootstrap({ modules, adapters: [McpAdapter(...)] })
   |
   +-- 4. Adapter beforeStart
   |       - Scan @McpTool decorators on collected controllers
-  |       - Build MCP server (registerTool for each)
   |       - Mount /_mcp/messages on Express (StreamableHTTP transport)
+  |       - Each client's initialize creates its own MCP server session
   |
   +-- 5. Error handlers registered
   |       app.use(notFoundHandler())
@@ -74,8 +74,8 @@ bootstrap({ modules, adapters: [McpAdapter(...)] })
   |
   +-- 6. Server.listen(port)
   |
-  +-- 7. Adapter afterStart
-          - Capture serverBaseUrl for internal dispatch
+  +-- 7. Adapter afterStart (stdio transport only)
+          - Connect the MCP server to stdin/stdout
 ```
 
 The adapter mounts its routes in `beforeStart` (step 4) so they
@@ -84,11 +84,14 @@ land in the Express stack **before** the catch-all error handlers
 
 ### Tool call dispatch
 
-When an MCP client calls a tool, the adapter builds an internal
-HTTP request that flows through the **full Express pipeline** — your
-middleware, context decorators, auth guards, Zod validation, and
-request logging all apply. Tool calls are indistinguishable from
-direct HTTP calls as far as your handler code is concerned.
+When an MCP client calls a tool, the adapter builds a request to the
+tool's route and runs it through the **app's full pipeline** with
+`AdapterContext.fetch` — your middleware, context decorators, auth
+guards, validation, and request logging all apply. Tool calls are
+indistinguishable from direct HTTP calls as far as your handler code is
+concerned. No listening server is needed, so tools work under
+`createHandler()` too, and the endpoint works on every runtime
+(Express, Fastify, h3, h3 v2).
 
 ```text
 MCP Client                    McpAdapter                   Express Pipeline
@@ -144,11 +147,14 @@ MCP Client                    McpAdapter                   Express Pipeline
 
 Key points:
 
-- The `Authorization` header from the MCP POST is extracted from the
-  SDK's `extra.requestInfo.headers` and forwarded into the internal
-  fetch
-- Path parameters (`:id`) are substituted from tool arguments
-- GET/DELETE routes send remaining args as query string
+- Headers listed in `forwardHeaders` are copied from the MCP request
+  onto the tool call — by default `authorization`, `cookie`,
+  `x-request-id`, `traceparent` and `tracestate`. Add your own, such as
+  a tenant header, by passing the full list.
+- Cancelling the call in the MCP client aborts the request to the route.
+- Path parameters (`:id`) are filled from tool arguments
+- GET/DELETE routes send remaining args as query string; values arrive
+  as strings, so number fields in a query schema need `z.coerce.number()`
 - POST/PUT/PATCH routes send remaining args as JSON body
 
 ## Exposure modes
@@ -179,6 +185,50 @@ McpAdapter({
 @McpTool({ hidden: true })           ->  NOT exposed (excluded even in auto mode)
 No @McpTool decorator                ->  NOT exposed (in explicit mode)
 ```
+
+### Exposing with route flags
+
+[Route flags](./route-flags.md) can expose or hide tools without a
+decorator on every method, including on controllers you don't own:
+
+```ts
+import { defineRouteFlag } from '@forinda/kickjs'
+import { McpAdapter, type McpToolOptions } from '@forinda/kickjs-mcp'
+
+export const Tool = defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')
+export const Hidden = defineRouteFlag('mcp.hidden')
+
+McpAdapter({
+  name: 'api',
+  exposeWhen: 'mcp.tool', // routes carrying it become tools
+  hideWhen: 'mcp.hidden', // routes carrying it never do
+})
+```
+
+```ts
+@Tool({ description: 'Manage webhooks' }) // every route in the controller
+@Controller()
+export class WebhooksController {
+  @Get('/')
+  list(ctx: RequestContext) {}
+
+  @Tool.off // not this one
+  @Delete('/:id')
+  remove(ctx: RequestContext) {}
+}
+
+// On a module mount — for a controller from a plugin:
+routes: () => ({ path: '/billing', controller: BillingController, flags: ['mcp.hidden'] })
+```
+
+- `exposeWhen` and `hideWhen` take the same forms as `skipWhen`: a name,
+  `'!name'`, a list, or a predicate such as
+  `({ route }) => route?.method === 'GET'`.
+- A flag whose value is an object supplies tool options (`description`,
+  `name`, `hidden`). `@McpTool` on the method takes precedence. Set
+  `name` only on method-level flags; the same name on several routes is
+  a duplicate, and the extra tools are skipped.
+- `hideWhen` wins over `@McpTool`, `exposeWhen` and `mode: 'auto'`.
 
 ## Marking routes with `@McpTool`
 
@@ -221,6 +271,123 @@ export class TaskController {
   few-shot guidance). Keep them small and representative.
 - Tool names default to the route's `name` option, falling back to
   `ControllerName.methodName`.
+
+## Custom tool providers
+
+Tools don't have to be routes. A **tool provider** is a named set of tools
+with their own handlers, mounted on the adapter at any time — before
+startup, or later from a plugin or module:
+
+```ts
+interface McpToolProvider {
+  name: string
+  tools: McpCustomTool[]
+}
+
+interface McpCustomTool<TArgs = any> {
+  name: string // unique across the server, [A-Za-z0-9_.-]{1,128}
+  description: string
+  inputSchema?: unknown // any schema library; validated before the handler runs
+  handler(args: TArgs, ctx: McpToolContext): unknown
+}
+
+interface McpToolContext {
+  headers: Headers // the MCP request's headers (credentials, tracing)
+  signal: AbortSignal // aborted when the client cancels the call
+  fetch(request: Request): Promise<Response> // call the app's own routes
+}
+```
+
+This local provider keeps team notes in memory and reports the app's
+health through its built-in readiness probe:
+
+```ts
+import { z } from 'zod'
+import type { McpToolProvider } from '@forinda/kickjs-mcp'
+
+/** Team notes kept in memory: add, search, and check the app's health. */
+function notesProvider(): McpToolProvider {
+  const notes = new Map<string, { title: string; body: string }>()
+
+  return {
+    name: 'notes',
+    tools: [
+      {
+        name: 'notes.add',
+        description: 'Save a note with a title and a body. Returns the note id.',
+        inputSchema: z.object({ title: z.string().min(1), body: z.string() }),
+        handler: ({ title, body }: { title: string; body: string }) => {
+          const id = crypto.randomUUID()
+          notes.set(id, { title, body })
+          return { id }
+        },
+      },
+      {
+        name: 'notes.search',
+        description: 'Find notes whose title or body contains the query.',
+        inputSchema: z.object({ query: z.string().min(1) }),
+        handler: ({ query }: { query: string }) => {
+          const needle = query.toLowerCase()
+          return [...notes.entries()]
+            .filter(([, n]) => `${n.title} ${n.body}`.toLowerCase().includes(needle))
+            .map(([id, n]) => ({ id, title: n.title }))
+        },
+      },
+      {
+        name: 'app.health',
+        description: "Report whether the app's dependencies are ready.",
+        // ctx.fetch runs a request through the app's own pipeline — here the
+        // built-in readiness probe — with the caller's cancellation.
+        handler: async (_args: unknown, ctx) => {
+          const res = await ctx.fetch(
+            new Request('http://localhost/health/ready', { signal: ctx.signal }),
+          )
+          // Returning an MCP result sends it as is.
+          return {
+            content: [{ type: 'text', text: res.ok ? 'ready' : `not ready (${res.status})` }],
+            isError: !res.ok,
+          }
+        },
+      },
+    ],
+  }
+}
+```
+
+Mount it from a plugin — the adapter is registered under `MCP_ADAPTER`:
+
+```ts
+import { MCP_ADAPTER } from '@forinda/kickjs-mcp'
+
+export const NotesPlugin = {
+  name: 'NotesPlugin',
+  onReady(container) {
+    container.resolve(MCP_ADAPTER).registerProvider(notesProvider())
+  },
+}
+```
+
+How provider tools behave:
+
+- **Validation.** Arguments are checked against `inputSchema` before the
+  handler runs; invalid arguments return an error result listing the
+  issues. There is no route, so this is the only validation.
+- **Results.** A string is sent as text, anything else as JSON text, and an
+  object that is already an MCP result (`{ content: [...] }`) is sent as
+  is. A thrown error becomes an error result with its message.
+- **Security.** The endpoint's `auth` and `Origin` checks apply. Route
+  middleware and guards don't — check `ctx.headers` in the handler, or
+  call a guarded route with `ctx.fetch`.
+- **Names** must be unique across routes and providers;
+  `registerProvider` throws on a clash. Registering a provider with the
+  same name replaces it.
+- **Change notifications.** Mounting or unmounting
+  (`unregisterProvider(name)`) sends `tools/list_changed` to connected
+  clients, which re-read the tool list.
+- Route flags, `mode`, `include` and `exclude` apply to route tools only.
+
+The example is exercised as a test in
+`packages/mcp/__tests__/example-local-tool-provider.test.ts`.
 
 ## Auth with context decorators
 
@@ -316,7 +483,7 @@ working for your API, it works for MCP automatically.
 If you prefer not to use context decorators, you can use the standard
 `@Middleware()` decorator with a regular Express auth guard. This
 works identically for MCP since tool calls dispatch through the full
-Express pipeline.
+request pipeline.
 
 ```ts
 import {
@@ -383,7 +550,7 @@ without any changes.
 
 ## Authentication patterns
 
-MCP tool calls flow through the same Express pipeline as regular
+MCP tool calls flow through the same request pipeline as regular
 HTTP, so your existing auth works. The question is how the agent
 **gets** the token in the first place. Three patterns, from simplest
 to most powerful:
@@ -509,7 +676,7 @@ deployment:
 | `stdio`   | Local CLI clients (Claude Code, Cursor, Zed) | Inherits parent process env    |
 | `sse`     | Legacy (aliases to HTTP internally)          | Same as HTTP                   |
 
-Both transports dispatch through the same Express pipeline — same
+Both transports dispatch through the same request pipeline — same
 middleware, same context decorators, same auth flow.
 
 ```text
@@ -536,7 +703,7 @@ middleware, same context decorators, same auth flow.
             +-------------+-------------+
                           |
                           v
-              Same Express pipeline
+              Same request pipeline
               Same middleware
               Same context decorators
               Same auth flow
@@ -658,7 +825,8 @@ dispatch and resolves the user as normal.
 | Symptom                                                | Cause                                                            | Fix                                                                                                                                   |
 | ------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                             | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                            |
-| "Server already initialized"                           | Stale session from a previous connection                         | Restart your KickJS server to reset the MCP session                                                                                   |
+| `403` "origin … is not allowed"                        | A browser-based client sent an `Origin` header                   | Add that origin to `allowedOrigins`, e.g. `allowedOrigins: ['http://localhost:6274']` for the Inspector UI                            |
+| `401` on connect                                       | `auth` is set and the request has no valid credential            | Send the `Authorization` header your `auth.validate` expects                                                                          |
 | "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                   |
 | CORS errors in browser console                         | Connecting from a different origin without CORS configured       | Add `cors()` middleware in your bootstrap: `middlewares: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]` |
 | Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                      | Expand Authentication, enable the Authorization header, set the value                                                                 |
@@ -667,48 +835,32 @@ dispatch and resolves the user as normal.
 
 ### Important caveats
 
-#### One MCP session at a time
+#### Sessions
 
-The MCP SDK's `StreamableHTTPServerTransport` allows **one active
-session per server instance**. The first client to send `initialize`
-locks the session. Any second client gets rejected.
+Each client that sends `initialize` gets its own session, identified by
+the `mcp-session-id` response header. Several clients (the Inspector,
+Claude Code, a script) can be connected at the same time.
 
-```text
-Client A: POST /_mcp/messages { "initialize" }  →  OK (session created)
-Client B: POST /_mcp/messages { "initialize" }  →  "Server already initialized"
-```
+A session ends when the client disconnects (`DELETE /_mcp/messages`),
+when its connection closes, after `sessionIdleTimeoutMs` (default 30
+minutes) with no request in progress, or when the app shuts down. A
+client holding its notification stream open is not idle. A request with
+an unknown session id gets `404`, and the client starts a new session.
 
-This affects **only the MCP endpoint** (`/_mcp/messages`). Your
-regular API routes work normally regardless:
+At most `maxSessions` (default 1000) are open at once; a new client
+beyond that gets `503` until a session ends. `initialize` needs no
+session, so the limit applies whether or not `auth` is set.
 
-```text
-/_mcp/messages    ← locked to one MCP session at a time
-/api/v1/hello     ← always works, unlimited clients
-/api/v1/tasks     ← always works, unlimited clients
-```
-
-**What triggers a stale session:**
-
-- Running `curl` against `/_mcp/messages` before opening the Inspector
-- A previous Inspector connection that wasn't disconnected cleanly
-- Any MCP client that initialized but didn't disconnect
-
-**How to reset:**
-
-- **`kick dev`** — save any source file to trigger HMR, which resets
-  the MCP session automatically
-- **Production** — restart the server process
-- **Inspector** — click **Disconnect** before closing the tab, so the
-  next connection can initialize cleanly
-
-**Rule of thumb:** use one MCP client at a time. If switching from
-curl to the Inspector (or vice versa), restart the server first.
+Sessions live in the server's memory. Behind a load balancer with
+several instances, route each client to the same instance (sticky
+sessions), or a request can land on an instance that doesn't know its
+session.
 
 #### Inspector quick-start checklist
 
 Follow this exact sequence to avoid the common pitfalls:
 
-1. **Start your server** (fresh — no prior MCP connections):
+1. **Start your server**:
 
    ```bash
    kick dev
@@ -740,15 +892,17 @@ Follow this exact sequence to avoid the common pitfalls:
    The `/_mcp/messages` suffix is required. Without it, the
    Inspector connects to your server root and gets a 404.
 
-5. **Do NOT `curl` the MCP endpoint** between starting the server
-   and clicking Connect. Any `initialize` call consumes the session.
+5. **If you sent a raw `initialize` request** (with `curl`, say), it
+   created its own session — it doesn't block the Inspector. The session
+   ends when that client sends `DELETE`, after the idle timeout, or when
+   the app shuts down.
 
 6. **Click Connect** — green dot + server name should appear.
 
 7. **Click List Tools** — your `@McpTool`-decorated methods appear.
 
-8. **If something goes wrong** — restart the server (`kick dev` will
-   HMR on file save), then click **Connect** again in the Inspector.
+8. **If something goes wrong** — click **Disconnect**, then **Connect**
+   again; the Inspector starts a new session.
 
 #### CORS for HTTP transport
 
@@ -847,26 +1001,31 @@ McpAdapter({
   transport: 'http', // 'http' (default) | 'stdio' | 'sse'
   basePath: '/_mcp', // HTTP mount path (default: '/_mcp')
   include: ['GET', 'POST'], // Auto mode only: HTTP methods to expose
-  exclude: ['/admin/*'], // Auto mode only: path prefixes to skip
+  exclude: ['/admin/*'], // Auto mode only: route paths to skip
   auth: {
-    // Transport-level auth (HTTP/SSE only)
+    // Checked on every MCP request (HTTP/SSE only)
     type: 'bearer',
     validate: (token) => isValid(token),
   },
+  allowedOrigins: ['https://inspector.example.com'], // Browser origins allowed to connect
 })
 ```
 
-| Option        | Type                         | Default      | Description                               |
-| ------------- | ---------------------------- | ------------ | ----------------------------------------- |
-| `name`        | `string`                     | required     | MCP server name advertised to clients     |
-| `version`     | `string`                     | `'0.0.0'`    | Server version advertised to clients      |
-| `description` | `string`                     | —            | Human-readable description for client UIs |
-| `mode`        | `'explicit' \| 'auto'`       | `'explicit'` | How routes are selected as tools          |
-| `transport`   | `'http' \| 'stdio' \| 'sse'` | `'http'`     | Which MCP transport to use                |
-| `basePath`    | `string`                     | `'/_mcp'`    | HTTP mount path for the MCP endpoint      |
-| `include`     | `string[]`                   | —            | Auto mode: HTTP methods to include        |
-| `exclude`     | `string[]`                   | —            | Auto mode: path prefixes to exclude       |
-| `auth`        | `McpAuthOptions`             | —            | Transport-level bearer auth               |
+| Option           | Type                         | Default                                                                    | Description                                                                                                                                           |
+| ---------------- | ---------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`           | `string`                     | required                                                                   | MCP server name advertised to clients                                                                                                                 |
+| `version`        | `string`                     | `'0.0.0'`                                                                  | Server version advertised to clients                                                                                                                  |
+| `description`    | `string`                     | —                                                                          | Human-readable description for client UIs                                                                                                             |
+| `mode`           | `'explicit' \| 'auto'`       | `'explicit'`                                                               | How routes are selected as tools                                                                                                                      |
+| `transport`      | `'http' \| 'stdio' \| 'sse'` | `'http'`                                                                   | Which MCP transport to use                                                                                                                            |
+| `basePath`       | `string`                     | `'/_mcp'`                                                                  | HTTP mount path for the MCP endpoint                                                                                                                  |
+| `include`        | `string[]`                   | —                                                                          | Auto mode: HTTP methods to include                                                                                                                    |
+| `exclude`        | `string[]`                   | —                                                                          | Auto mode: route paths to skip. Matched against the full path and each trailing part, so `'/admin/*'` skips `/api/v1/admin/users` and `/api/v1/admin` |
+| `auth`           | `McpAuthOptions`             | —                                                                          | Checked on every MCP request; `401` when `validate` returns false. `bearer` passes the token, `custom` the raw `Authorization` header                 |
+| `allowedOrigins` | `string[]`                   | `[]`                                                                       | Browser origins allowed to call the endpoint (`'*'` for any). Requests with another `Origin` get `403`; clients that send no `Origin` are unaffected  |
+| `forwardHeaders` | `string[]`                   | `['authorization', 'cookie', 'x-request-id', 'traceparent', 'tracestate']` | Headers copied from the MCP request onto each tool call                                                                                               |
+| `exposeWhen`     | `RouteFlagTest`              | —                                                                          | Routes carrying these [route flags](./route-flags.md) become tools without `@McpTool`; an object flag value supplies tool options                     |
+| `hideWhen`       | `RouteFlagTest`              | —                                                                          | Routes carrying these route flags are never tools — wins over `@McpTool`, `exposeWhen` and `mode: 'auto'`                                             |
 
 ### @McpTool options
 
@@ -888,14 +1047,14 @@ McpAdapter({
 })
 ```
 
-| Option         | Type               | Default               | Description                                              |
-| -------------- | ------------------ | --------------------- | -------------------------------------------------------- |
-| `description`  | `string`           | required              | Shown to the LLM when deciding whether to call this tool |
-| `name`         | `string`           | `Controller.method`   | Unique tool name across the server                       |
-| `inputSchema`  | `ZodType`          | route's `body` schema | Override the auto-derived input schema                   |
-| `outputSchema` | `ZodType`          | —                     | Output schema for documentation (not validated)          |
-| `hidden`       | `boolean`          | `false`               | Exclude from auto mode exposure                          |
-| `examples`     | `McpToolExample[]` | —                     | Input/output examples shown in client UIs                |
+| Option         | Type               | Default                              | Description                                                   |
+| -------------- | ------------------ | ------------------------------------ | ------------------------------------------------------------- |
+| `description`  | `string`           | required                             | Shown to the LLM when deciding whether to call this tool      |
+| `name`         | `string`           | `Controller.method`                  | Unique tool name across the server                            |
+| `inputSchema`  | any schema         | route's `params`, `query` and `body` | Replace the query/body input; path parameters are still added |
+| `outputSchema` | `ZodType`          | —                                    | Output schema for documentation (not validated)               |
+| `hidden`       | `boolean`          | `false`                              | Exclude from auto mode exposure                               |
+| `examples`     | `McpToolExample[]` | —                                    | Input/output examples shown in client UIs                     |
 
 ### Exported types
 
@@ -957,7 +1116,7 @@ it('exposes create but not internal routes', () => {
 - **Explicit mode** (default) — only `@McpTool`-decorated routes are
   exposed. No code path allows a route into the tool surface without
   the decorator.
-- **Full Express pipeline** — tool calls dispatch through the same
+- **Full request pipeline** — tool calls dispatch through the same
   middleware chain as regular HTTP. Guards, role checks, context
   decorators, rate limits, Zod validation, and request logging all
   apply.
@@ -1018,7 +1177,7 @@ async create(ctx: Ctx<KickRoutes.TaskController['create']>) {
 
 The in-process `AiAdapter` calls it via internal HTTP dispatch for
 your own agents. The `McpAdapter` exposes the same method to external
-MCP clients. Both paths flow through the normal Express pipeline, so
+MCP clients. Both paths flow through the normal request pipeline, so
 middleware, auth, validation, and logging apply identically.
 
 ## Next steps

@@ -477,3 +477,25 @@ describe('buildWhereClause', () => {
     expect(result.whereParams).toEqual([['2023', '2024']])
   })
 })
+
+describe('PgVectorStore — setup failure', () => {
+  it('retries the schema setup on the next call after it fails', async () => {
+    let failNext = true
+    const client = new FakeExecutor()
+    const flaky: SqlExecutor = {
+      query: async (text, params) => {
+        if (failNext && text.includes('CREATE EXTENSION')) {
+          failNext = false
+          throw new Error('connection refused')
+        }
+        return client.query(text, params)
+      },
+    }
+    const store = new PgVectorStore({ client: flaky, dimensions: 3 })
+
+    await expect(store.count()).rejects.toThrow('connection refused')
+    client.script([{ count: '0' }])
+    await expect(store.count()).resolves.toBeTypeOf('number')
+    expect(client.callsMatching('CREATE EXTENSION')).toHaveLength(1)
+  })
+})

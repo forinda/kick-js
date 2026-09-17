@@ -42,6 +42,7 @@ import {
 } from './router-builder'
 import { HEALTH_PROBE, healthModule, type HealthModuleConfig } from './health-module'
 import { expressRuntime } from './runtimes/express'
+import { createLoopback, type Loopback } from './loopback'
 import type {
   ActiveRuntime,
   AdapterHttp,
@@ -498,6 +499,8 @@ export class Application {
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: http.Server | null = null
+  /** Forwarding server behind {@link fetch} on Node-based runtimes. */
+  private loopback?: Loopback
   private readonly adapters: AppAdapter[]
   /**
    * Flags of every mounted route, for middleware that runs before routing and
@@ -603,6 +606,28 @@ export class Application {
    * http.createServer(app.handle.bind(app))
    * ```
    */
+  /**
+   * Run a web `Request` through the app — routing, middleware, validation,
+   * contributors, error handling — and return its `Response`, with no
+   * listening server required.
+   *
+   * Runtimes with a native fetch (the h3 v2 runtime) are called directly.
+   * Node-based runtimes (Express, Fastify, h3 v1) are served by forwarding to
+   * a server bound to `127.0.0.1` inside this process, started on first use
+   * and closed by {@link shutdown}; request bodies are buffered on that path.
+   *
+   * Used by `createHandler()` and by adapters (`AdapterContext.fetch`) that
+   * call the app's own routes, such as MCP and AI tool dispatch.
+   */
+  fetch(request: Request): Promise<Response> {
+    const runtimeApp = this.app as { fetch?: (request: Request) => unknown }
+    if (typeof runtimeApp?.fetch === 'function') {
+      return Promise.resolve(runtimeApp.fetch(request) as Response | Promise<Response>)
+    }
+    this.loopback ??= createLoopback((req, res) => this.handle(req, res))
+    return this.loopback.fetch(request)
+  }
+
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
     const handler = this.runtime.nodeHandler(this.app)
     if (next) {
@@ -632,6 +657,7 @@ export class Application {
     return {
       http: this.adapterHttp(),
       app: this.app,
+      fetch: (request) => this.fetch(request),
       container: this.container,
       server,
       env,
@@ -1381,6 +1407,8 @@ export class Application {
       // doesn't outlive the app.
       await disposeAll()
       this.container.flushChanges()
+      await this.loopback?.close()
+      this.loopback = undefined
     } finally {
       if (timer) clearTimeout(timer)
     }

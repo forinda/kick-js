@@ -171,7 +171,7 @@ export interface RuntimeResponse {
   flushHeaders(): unknown
   write(chunk: string | Buffer): boolean
   end(data?: unknown): unknown
-  once(event: 'close', listener: () => void): unknown
+  once(event: 'close' | 'drain', listener: () => void): unknown
   readonly headersSent: boolean
 }
 

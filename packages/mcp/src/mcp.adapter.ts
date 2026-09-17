@@ -4,23 +4,130 @@ import {
   METADATA,
   defineAdapter,
   getClassMeta,
+  assertFlagTest,
+  getRouteFlags,
+  matchesFlagTest,
   type AdapterContext,
   type AdapterHttp,
   type Constructor,
   type RequestContext,
   type RouteDefinition,
+  type RouteFlagTest,
+  type RouteFlags,
   type RouteEntry,
   type RouteMethod,
 } from '@forinda/kickjs'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { detectSchema } from '@forinda/kickjs-schema'
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  isInitializeRequest,
+} from '@modelcontextprotocol/sdk/types.js'
+import {
+  buildRouteTool,
+  detectSchema,
+  type KickSchema,
+  type RouteTool,
+} from '@forinda/kickjs-schema'
+import { MCP_ADAPTER } from './constants'
 import { getMcpToolMeta } from './decorators'
-import type { McpAdapterOptions, McpToolDefinition, McpTransport } from './types'
+import type {
+  McpAdapterOptions,
+  McpCustomTool,
+  McpToolDefinition,
+  McpToolOptions,
+  McpToolProvider,
+  McpTransport,
+} from './types'
 
 const log = Logger.for('McpAdapter')
+
+/** Characters and length the MCP spec allows in a tool name. */
+const MCP_TOOL_NAME = /^[A-Za-z0-9_.-]{1,128}$/
+
+/** A valid MCP tool name, replacing any other character with `_`. */
+function toolNameFor(name: string, handler: string): string {
+  if (MCP_TOOL_NAME.test(name)) return name
+  const cleaned = name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 128) || '_'
+  log.warn(`McpAdapter: tool name "${name}" (${handler}) is not valid for MCP; using "${cleaned}"`)
+  return cleaned
+}
+
+/**
+ * Tool options carried by a flag named in `exposeWhen`: the value of the
+ * first such flag the route carries that is an object, e.g.
+ * `@Tool({ description: '…' })` for `defineRouteFlag<McpToolOptions>('…')`.
+ * Predicates and negated names name no flag, so they carry no options.
+ */
+function flagToolOptions(test: RouteFlagTest, flags: RouteFlags): Partial<McpToolOptions> {
+  const names = (typeof test === 'string' ? [test] : Array.isArray(test) ? test : []).filter(
+    (name: string) => !name.startsWith('!'),
+  )
+  for (const name of names) {
+    const value = flags.get(name)
+    if (value && typeof value === 'object') return value as Partial<McpToolOptions>
+  }
+  return {}
+}
+
+/** First value of a node header that may repeat. */
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
+/** Send a JSON-RPC error on any runtime. */
+function sendJsonRpcError(
+  ctx: RequestContext,
+  status: number,
+  message: string,
+  headers: Record<string, string> = {},
+): Promise<void> {
+  return ctx.sendResponse(
+    new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }), {
+      status,
+      headers: { 'content-type': 'application/json', ...headers },
+    }),
+  )
+}
+
+/** Headers copied from the MCP request onto tool calls by default. */
+const DEFAULT_FORWARD_HEADERS = [
+  'authorization',
+  'cookie',
+  'x-request-id',
+  'traceparent',
+  'tracestate',
+]
+
+/**
+ * Whether an `exclude` pattern matches a route path. Patterns are compared
+ * against the full path and every trailing part of it that starts at a `/`,
+ * so `'/admin/*'` matches `/api/v1/admin/users` without knowing the api
+ * prefix. `*` matches anything; a trailing `/*` also matches the bare path;
+ * a pattern without `*` matches that path and everything under it. Errs
+ * toward excluding more, never less.
+ */
+export function matchesPathPattern(path: string, pattern: string): boolean {
+  const parts = path.split('/')
+  const candidates = parts.map((_, i) => `/${parts.slice(i + 1).join('/')}`)
+  let test: (candidate: string) => boolean
+  if (pattern.includes('*')) {
+    // A trailing `/*` also matches the bare path: '/admin/*' excludes '/admin'.
+    const trailing = pattern.endsWith('/*')
+    const body = trailing ? pattern.slice(0, -2) : pattern
+    const source =
+      body.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + (trailing ? '(?:/.*)?' : '')
+    const regex = new RegExp(`^${source}$`)
+    test = (candidate) => regex.test(candidate)
+  } else {
+    const base = pattern.endsWith('/') ? pattern.slice(0, -1) : pattern
+    test = (candidate) => candidate === base || candidate.startsWith(`${base}/`)
+  }
+  return candidates.some(test)
+}
 
 /**
  * Public extension surface exposed by an McpAdapter instance.
@@ -51,6 +158,18 @@ export interface McpAdapterExtensions {
     args: unknown,
     extra?: unknown,
   ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }>
+
+  /**
+   * Mount a set of custom tools that are not controller routes — at any
+   * time, including after clients are connected; they are notified with
+   * `tools/list_changed`. A provider with the same name is replaced. Throws
+   * when a tool name is invalid or already used by a route or another
+   * provider.
+   */
+  registerProvider(provider: McpToolProvider): void
+
+  /** Unmount a provider's tools. Returns false when no such provider is mounted. */
+  unregisterProvider(name: string): boolean
 }
 
 /**
@@ -63,10 +182,9 @@ export interface McpAdapterExtensions {
  * builds a `McpToolDefinition[]` that the MCP SDK will register as
  * callable tools.
  *
- * The input schema of each tool is the JSON Schema equivalent of the
- * route's Zod `body` schema, converted via the package's own
- * `zod-to-json-schema` helper. Tools with no body schema get an empty
- * object schema so the model can still call them with no arguments.
+ * Each tool's input schema combines the route's path parameters and its
+ * `query` and `body` schemas, from any library `@forinda/kickjs-schema`
+ * supports. Tools with no inputs get an empty object schema.
  *
  * @example
  * ```ts
@@ -82,7 +200,7 @@ export interface McpAdapterExtensions {
  *       version: '1.0.0',
  *       description: 'Task management MCP server',
  *       mode: 'explicit',
- *       transport: 'sse',
+ *       transport: 'http',
  *     }),
  *   ],
  * })
@@ -92,34 +210,89 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
   name: 'McpAdapter',
   defaults: {
     mode: 'explicit',
-    transport: 'sse',
+    transport: 'http',
     basePath: '/_mcp',
     version: '0.0.0',
   },
   build: (options) => {
+    // A mixed-polarity list fails here, where the adapter is configured,
+    // not later inside startup where the error would be swallowed.
+    if (options.exposeWhen) assertFlagTest(options.exposeWhen, 'McpAdapter.exposeWhen')
+    if (options.hideWhen) assertFlagTest(options.hideWhen, 'McpAdapter.hideWhen')
+
     /** Controllers collected during the mount phase, in insertion order. */
     const mountedControllers: Array<{ controller: Constructor; mountPath: string }> = []
 
     /** Discovered tool definitions, built during `beforeStart`. */
     const tools: McpToolDefinition[] = []
 
-    /** Active MCP server instance, created in `afterStart`. */
-    let mcpServer: McpServer | null = null
+    /** Input schema + argument-to-request mapping per tool name. */
+    const routeTools = new Map<string, RouteTool>()
+
+    /** Custom tools by provider name, with their validated schemas. */
+    const providers = new Map<
+      string,
+      Array<{ tool: McpCustomTool; schema?: KickSchema; inputSchema: Record<string, unknown> }>
+    >()
+
+    const providerToolNamed = (name: string) => {
+      for (const tools of providers.values()) {
+        const found = tools.find((entry) => entry.tool.name === name)
+        if (found) return found
+      }
+      return undefined
+    }
+
+    /** Stdio MCP server instance, created in `afterStart`. */
+    let mcpServer: Server | null = null
 
     /**
-     * Active MCP transport, created in `afterStart`. Can be either a
-     * `StreamableHTTPServerTransport` (the default for HTTP-based MCP)
-     * or a `StdioServerTransport` (when running via the `kick mcp` CLI
-     * or with `KICK_MCP_STDIO=1`).
+     * Stdio transport, created in `afterStart` when running via the
+     * `kick mcp` CLI or with `KICK_MCP_STDIO=1`. HTTP clients each get
+     * their own transport in `sessions`.
      */
     let transport: Transport | null = null
 
     /**
-     * Base URL of the running KickJS HTTP server, captured in `afterStart`
-     * once the server is listening. Tool dispatch makes internal HTTP
-     * requests against this base URL so calls flow through the normal
-     * Express pipeline (middleware, validation, auth, logging, error
-     * handling) rather than bypassing it.
+     * Open Streamable HTTP sessions, keyed by `mcp-session-id`. Each client
+     * gets its own MCP server + transport: one shared transport accepts a
+     * single `initialize` for the life of the process.
+     */
+    const sessions = new Map<
+      string,
+      {
+        server: Server
+        transport: WebStandardStreamableHTTPServerTransport
+        /** Requests in progress, including an open notification stream. */
+        active: number
+        /** Closes the session after `sessionIdleTimeoutMs` with nothing in progress. */
+        idleTimer?: ReturnType<typeof setTimeout>
+      }
+    >()
+    const maxSessions = options.maxSessions ?? 1000
+    const sessionIdleTimeoutMs = options.sessionIdleTimeoutMs ?? 30 * 60_000
+
+    /** Start the idle countdown for a session that has nothing in progress. */
+    const armIdleTimer = (id: string) => {
+      const session = sessions.get(id)
+      if (!session || session.active > 0) return
+      clearTimeout(session.idleTimer)
+      session.idleTimer = setTimeout(() => {
+        void session.transport.close()
+      }, sessionIdleTimeoutMs)
+      session.idleTimer.unref?.()
+    }
+
+    /**
+     * Runs a Request through this app's pipeline, from `AdapterContext.fetch`.
+     * Tool calls use it, so they work without a listening server.
+     */
+    let appFetch: ((request: Request) => Promise<Response>) | null = null
+
+    /**
+     * Base URL of a listening server, captured in `afterStart`. Only used
+     * when the adapter's hooks are driven by hand without
+     * `AdapterContext.fetch` (older setups, unit tests).
      */
     let serverBaseUrl: string | null = null
 
@@ -154,7 +327,21 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       mountPath: string,
       route: RouteDefinition,
     ): McpToolDefinition | null => {
-      const meta = getMcpToolMeta(controller.prototype, route.handlerName)
+      const decorated = getMcpToolMeta(controller.prototype, route.handlerName)
+      const flags = getRouteFlags(controller, route.handlerName)
+      const flagRoute = {
+        method: route.method.toUpperCase(),
+        path: joinMountPath(mountPath, route.path),
+        controller,
+        handlerName: route.handlerName,
+      }
+
+      // hideWhen wins over @McpTool, exposeWhen and auto mode.
+      if (options.hideWhen && matchesFlagTest(options.hideWhen, flags, flagRoute)) return null
+      const flagged =
+        options.exposeWhen !== undefined && matchesFlagTest(options.exposeWhen, flags, flagRoute)
+      const meta: Partial<McpToolOptions> | undefined =
+        decorated ?? (flagged ? flagToolOptions(options.exposeWhen!, flags) : undefined)
 
       if (options.mode === 'explicit' && !meta) return null
       if (meta?.hidden) return null
@@ -167,30 +354,38 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           | 'PATCH'
           | 'DELETE'
         if (options.include && !options.include.includes(methodUpper)) return null
-        if (options.exclude?.some((prefix) => mountPath.startsWith(prefix))) return null
+        const fullPath = joinMountPath(mountPath, route.path)
+        if (options.exclude?.some((pattern) => matchesPathPattern(fullPath, pattern))) return null
       }
 
       const description = meta?.description ?? deriveDescription(controller, route)
-      const name = meta?.name ?? `${controller.name}.${route.handlerName}`
+      const handler = `${controller.name}.${route.handlerName}`
+      const name = toolNameFor(meta?.name ?? handler, handler)
+      const fullPath = joinMountPath(mountPath, route.path)
 
-      // Prefer the body schema for POST/PUT/PATCH, query schema for GET/DELETE.
-      // In `auto` mode the decorator may be absent entirely, in which case we
-      // fall back to whatever schema the route decorator declared.
-      const candidateSchema = meta?.inputSchema ?? route.validation?.body ?? route.validation?.query
-
-      let inputSchema: Record<string, unknown>
-      let resolvedZodInput: unknown = candidateSchema
+      // Path params, query and body side by side, from any schema library.
+      let routeTool: RouteTool
       try {
-        const wrapped = candidateSchema ? detectSchema(candidateSchema) : undefined
-        inputSchema = wrapped?.toJsonSchema() ?? {
-          type: 'object',
-          properties: {},
-          additionalProperties: false,
-        }
-      } catch {
-        inputSchema = { type: 'object', properties: {}, additionalProperties: false }
-        resolvedZodInput = undefined
+        routeTool = buildRouteTool({
+          method: route.method,
+          path: fullPath,
+          params: route.validation?.params,
+          query: route.validation?.query,
+          body: route.validation?.body,
+          input: meta?.inputSchema,
+        })
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: cannot build a tool for ${handler}; not exposed`)
+        return null
       }
+      if (routeTools.has(name) || providerToolNamed(name)) {
+        log.error(
+          `McpAdapter: duplicate tool name "${name}" (${handler}); not exposed. ` +
+            `Give one of them @McpTool({ name }).`,
+        )
+        return null
+      }
+      routeTools.set(name, routeTool)
 
       let outputSchema: Record<string, unknown> | undefined
       if (meta?.outputSchema) {
@@ -204,11 +399,10 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return {
         name,
         description,
-        inputSchema,
-        zodInputSchema: resolvedZodInput,
+        inputSchema: routeTool.inputSchema,
         outputSchema: outputSchema ?? undefined,
         httpMethod: route.method.toUpperCase(),
-        mountPath: joinMountPath(mountPath, route.path),
+        mountPath: fullPath,
         examples: meta?.examples,
       }
     }
@@ -224,96 +418,68 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return `http://${host}:${address.port}`
     }
 
-    /** Substitute Express-style path parameters with values from args. */
-    const substitutePathParams = (
-      mountPath: string,
-      args: Record<string, unknown>,
-    ): { path: string; remainingArgs: Record<string, unknown> } => {
-      const remaining: Record<string, unknown> = { ...args }
-      const path = mountPath.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, (_match, param: string) => {
-        if (param in remaining) {
-          const value = remaining[param]
-          delete remaining[param]
-          return encodeURIComponent(String(value))
-        }
-        return `:${param}`
-      })
-      return { path, remainingArgs: remaining }
-    }
-
-    /** Extract the Authorization header from MCP SDK extra context. */
-    const extractAuthToken = (extra: unknown): string | null => {
-      if (!extra || typeof extra !== 'object') return null
-      const info = (extra as Record<string, unknown>).requestInfo
-      if (!info || typeof info !== 'object') return null
-      const headers = (info as Record<string, unknown>).headers
-      if (!headers || typeof headers !== 'object') return null
-      if (headers instanceof Map) return headers.get('authorization') ?? null
-      if (typeof (headers as Record<string, unknown>).get === 'function') {
-        return (headers as { get: (k: string) => string | null }).get('authorization')
+    /** A header from the MCP request that carried a tool call. */
+    const requestHeader = (extra: unknown, name: string): string | undefined => {
+      const headers = (extra as { requestInfo?: { headers?: unknown } } | undefined)?.requestInfo
+        ?.headers
+      if (!headers || typeof headers !== 'object') return undefined
+      if (typeof (headers as Headers).get === 'function') {
+        return (headers as Headers).get(name) ?? undefined
       }
-      return (headers as Record<string, string>).authorization ?? null
+      const value = (headers as Record<string, string | string[] | undefined>)[name]
+      return Array.isArray(value) ? value.join(', ') : value
     }
 
     /**
-     * Dispatch a tool call through the Express pipeline. Builds an HTTP
-     * request matching the tool's underlying route and sends it to the
-     * captured serverBaseUrl. Auth headers from the MCP transport
-     * request flow through to the internal dispatch so MCP tool calls
-     * respect the same auth middleware as direct HTTP.
+     * Dispatch a tool call through the app's own pipeline — middleware,
+     * validation, contributors, guards, error handling — as a request to the
+     * tool's route. Headers in `forwardHeaders` are copied from the MCP
+     * request, and the client's cancellation aborts the call.
      */
     const dispatchTool = async (
       tool: McpToolDefinition,
       rawArgs: unknown,
       extra?: unknown,
     ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> => {
-      if (!serverBaseUrl) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text' as const,
-              text: `Cannot dispatch ${tool.name}: HTTP server address not yet captured`,
-            },
-          ],
-        }
+      const errorResult = (text: string) => ({
+        isError: true,
+        content: [{ type: 'text' as const, text }],
+      })
+      if (!appFetch && !serverBaseUrl) {
+        return errorResult(`Cannot dispatch ${tool.name}: the adapter has not started`)
       }
 
-      const args = (rawArgs ?? {}) as Record<string, unknown>
-      const { path, remainingArgs } = substitutePathParams(tool.mountPath, args)
-      const method = tool.httpMethod.toUpperCase()
-      const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH'
-
-      const forwardedHeaders: Record<string, string> = {
-        accept: 'application/json',
-        'x-mcp-tool': tool.name,
-      }
-      const authToken = extractAuthToken(extra)
-      if (authToken) {
-        forwardedHeaders.authorization = authToken
+      // Tools built during discovery carry their schemas; a hand-built
+      // definition gets the path-parameter mapping only.
+      const routeTool =
+        routeTools.get(tool.name) ??
+        buildRouteTool({ method: tool.httpMethod, path: tool.mountPath })
+      let target: ReturnType<RouteTool['toRequest']>
+      try {
+        target = routeTool.toRequest((rawArgs ?? {}) as Record<string, unknown>)
+      } catch (err) {
+        return errorResult((err as Error).message)
       }
 
-      let url = `${serverBaseUrl}${path}`
+      const headers = new Headers({ accept: 'application/json', 'x-mcp-tool': tool.name })
+      for (const name of options.forwardHeaders ?? DEFAULT_FORWARD_HEADERS) {
+        const value = requestHeader(extra, name.toLowerCase())
+        if (value !== undefined) headers.set(name, value)
+      }
       const init: RequestInit = {
-        method,
-        headers: forwardedHeaders,
+        method: tool.httpMethod.toUpperCase(),
+        headers,
+        signal: (extra as { signal?: AbortSignal } | undefined)?.signal,
       }
-
-      if (hasBody) {
-        ;(init.headers as Record<string, string>)['content-type'] = 'application/json'
-        init.body = JSON.stringify(remainingArgs)
-      } else if (Object.keys(remainingArgs).length > 0) {
-        const qs = new URLSearchParams()
-        for (const [key, value] of Object.entries(remainingArgs)) {
-          if (value === undefined || value === null) continue
-          qs.append(key, typeof value === 'string' ? value : JSON.stringify(value))
-        }
-        const sep = url.includes('?') ? '&' : '?'
-        url = `${url}${sep}${qs.toString()}`
+      if (target.body !== undefined) {
+        headers.set('content-type', 'application/json')
+        init.body = JSON.stringify(target.body)
       }
 
       try {
-        const res = await fetch(url, init)
+        const res = appFetch
+          ? await appFetch(new Request(new URL(target.url, 'http://localhost'), init))
+          : await fetch(`${serverBaseUrl}${target.url}`, init)
         const text = await res.text()
         return {
           isError: res.status >= 400,
@@ -322,78 +488,289 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         log.error(err as Error, `McpAdapter: dispatch failed for ${tool.name}`)
-        return {
-          isError: true,
-          content: [{ type: 'text' as const, text: `Tool dispatch error: ${message}` }],
-        }
+        return errorResult(`Tool dispatch error: ${message}`)
       }
     }
 
-    /**
-     * Construct the underlying McpServer and register every discovered
-     * tool against it. The SDK accepts Zod schemas natively, so we pass
-     * `zodInputSchema` straight through. Tool calls dispatch through
-     * the Express pipeline via internal HTTP requests against the
-     * running server's address.
-     */
-    const buildMcpServer = (): McpServer => {
-      const server = new McpServer({
-        name: options.name,
-        version: options.version!,
-        ...(options.description ? { description: options.description } : {}),
+    /** Run a custom tool: validate arguments, call the handler, shape the result. */
+    const callCustomTool = async (
+      entry: { tool: McpCustomTool; schema?: KickSchema },
+      args: unknown,
+      extra: unknown,
+    ): Promise<Record<string, unknown>> => {
+      const errorResult = (text: string) => ({
+        isError: true,
+        content: [{ type: 'text' as const, text }],
       })
 
-      // The SDK's `registerTool` is heavily overloaded with deep generic
-      // inference over Zod input/output shapes. Cast through `any` once
-      // here so the call sites stay clean.
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const registerTool = server.registerTool.bind(server) as (
-        name: string,
-        config: { description: string; inputSchema?: unknown },
-        cb: (args: unknown, extra: unknown) => any,
-      ) => unknown
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-
-      for (const tool of tools) {
-        const config: { description: string; inputSchema?: unknown } = {
-          description: tool.description,
+      let input = args
+      if (entry.schema) {
+        const parsed = entry.schema.safeParse(args)
+        if (!parsed.success) {
+          return errorResult(JSON.stringify({ error: 'Invalid arguments', issues: parsed.issues }))
         }
-        if (tool.zodInputSchema) {
-          config.inputSchema = tool.zodInputSchema
-          registerTool(tool.name, config, async (args: unknown, extra: unknown) =>
-            dispatchTool(tool, args, extra),
-          )
-        } else {
-          registerTool(tool.name, config, async (extra: unknown) => dispatchTool(tool, {}, extra))
-        }
+        input = parsed.data
       }
+
+      const requestHeaders = (extra as { requestInfo?: { headers?: Record<string, string> } })
+        ?.requestInfo?.headers
+      const headers = new Headers()
+      for (const [name, value] of Object.entries(requestHeaders ?? {})) {
+        if (typeof value === 'string') headers.set(name, value)
+      }
+      const context = {
+        headers,
+        signal: (extra as { signal?: AbortSignal })?.signal ?? new AbortController().signal,
+        fetch: (request: Request) => {
+          if (!appFetch) throw new Error('McpAdapter: the app is not started yet')
+          return appFetch(request)
+        },
+      }
+
+      try {
+        const result = await entry.tool.handler(input, context)
+        if (
+          result &&
+          typeof result === 'object' &&
+          Array.isArray((result as { content?: unknown }).content)
+        ) {
+          return result as Record<string, unknown>
+        }
+        const text = typeof result === 'string' ? result : JSON.stringify(result ?? null)
+        return { content: [{ type: 'text' as const, text }] }
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: custom tool ${entry.tool.name} failed`)
+        return errorResult(err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    /** Tell every connected client the tool list changed. */
+    const notifyToolsChanged = () => {
+      const servers = [
+        ...[...sessions.values()].map((s) => s.server),
+        ...(mcpServer ? [mcpServer] : []),
+      ]
+      for (const server of servers) {
+        server.sendToolListChanged().catch(() => {
+          // A client that disconnected mid-notification is cleaned up by its transport.
+        })
+      }
+    }
+
+    const registerProvider = (provider: McpToolProvider): void => {
+      const entries = provider.tools.map((tool) => {
+        if (!MCP_TOOL_NAME.test(tool.name)) {
+          throw new Error(
+            `McpAdapter: tool name "${tool.name}" (provider ${provider.name}) must match [A-Za-z0-9_.-]{1,128}`,
+          )
+        }
+        const owner = routeTools.has(tool.name)
+          ? 'a route'
+          : [...providers.entries()].find(
+              ([name, list]) =>
+                name !== provider.name && list.some((e) => e.tool.name === tool.name),
+            )?.[0]
+        if (owner) {
+          throw new Error(
+            `McpAdapter: tool "${tool.name}" (provider ${provider.name}) is already defined by ${owner}`,
+          )
+        }
+        const schema = tool.inputSchema === undefined ? undefined : detectSchema(tool.inputSchema)
+        const inputSchema = schema?.toJsonSchema() ?? { type: 'object', properties: {} }
+        return { tool, schema, inputSchema }
+      })
+      const names = entries.map((e) => e.tool.name)
+      if (new Set(names).size !== names.length) {
+        throw new Error(`McpAdapter: provider ${provider.name} defines the same tool name twice`)
+      }
+      providers.set(provider.name, entries)
+      notifyToolsChanged()
+    }
+
+    const unregisterProvider = (name: string): boolean => {
+      const removed = providers.delete(name)
+      if (removed) notifyToolsChanged()
+      return removed
+    }
+
+    /**
+     * Construct an MCP server that lists every discovered tool and
+     * dispatches calls through the HTTP pipeline, where the route's own
+     * validation checks the arguments.
+     *
+     * Uses the SDK's low-level `Server` (marked deprecated only in favour of
+     * `McpServer` for simple cases): `McpServer.registerTool` accepts Zod
+     * schemas only, and tools here carry JSON Schema built from any schema
+     * library.
+     */
+    const buildMcpServer = (): Server => {
+      const server = new Server(
+        {
+          name: options.name,
+          version: options.version!,
+          ...(options.description ? { description: options.description } : {}),
+        },
+        { capabilities: { tools: { listChanged: true } } },
+      )
+
+      server.setRequestHandler(ListToolsRequestSchema, async () => ({
+        tools: [
+          ...tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema as { type: 'object' },
+          })),
+          ...[...providers.values()].flat().map((entry) => ({
+            name: entry.tool.name,
+            description: entry.tool.description,
+            inputSchema: entry.inputSchema as { type: 'object' },
+          })),
+        ],
+      }))
+
+      server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+        const args = request.params.arguments ?? {}
+        const tool = tools.find((t) => t.name === request.params.name)
+        if (tool) return dispatchTool(tool, args, extra)
+        const custom = providerToolNamed(request.params.name)
+        if (custom) return callCustomTool(custom, args, extra)
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: `Unknown tool: ${request.params.name}` }],
+        }
+      })
 
       return server
     }
 
-    /** Mount StreamableHTTP transport endpoints via the HTTP facade. */
-    const mountHttpRoutes = (
-      http: AdapterHttp,
-      httpTransport: StreamableHTTPServerTransport,
-    ): void => {
-      const path = `${options.basePath!}/messages`
+    /**
+     * Origin and auth checks for one HTTP request. Returns the rejection to
+     * send, or null to let the request through.
+     *
+     * Origin: browsers send it, MCP clients (Claude Code, Cursor, the SDK) do
+     * not. A request that carries one must match `allowedOrigins` — the MCP
+     * spec requires this to stop DNS-rebinding attacks from web pages.
+     */
+    const checkAccess = async (
+      headers: Record<string, string | string[] | undefined>,
+    ): Promise<{ status: number; message: string; headers?: Record<string, string> } | null> => {
+      const origin = firstHeader(headers.origin)
+      const allowedOrigins = options.allowedOrigins ?? []
+      if (origin && !allowedOrigins.includes('*') && !allowedOrigins.includes(origin)) {
+        return { status: 403, message: `Forbidden: origin ${origin} is not allowed` }
+      }
 
-      // The MCP transport reads/writes the raw node request/response directly,
-      // so reach through to `ctx.req` / `ctx.res` (engine-native under Express).
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const handleRequest = async (ctx: RequestContext): Promise<void> => {
-        const req = ctx.req as any
-        const res = ctx.res as any
+      if (!options.auth) return null
+      const authorization = firstHeader(headers.authorization) ?? ''
+      const credential =
+        options.auth.type === 'bearer'
+          ? (/^Bearer\s+(.+)$/i.exec(authorization)?.[1] ?? '')
+          : authorization
+      let allowed = false
+      if (options.auth.type === 'custom' || credential !== '') {
         try {
-          await httpTransport.handleRequest(req, res, req.body)
+          allowed = Boolean(await options.auth.validate(credential))
         } catch (err) {
-          log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
-          if (!res.headersSent) {
-            res.status(500).json({ error: 'MCP transport error' })
-          }
+          log.error(err as Error, 'McpAdapter: auth.validate threw; rejecting the request')
         }
       }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
+      if (allowed) return null
+      return {
+        status: 401,
+        message: 'Unauthorized',
+        ...(options.auth.type === 'bearer' ? { headers: { 'www-authenticate': 'Bearer' } } : {}),
+      }
+    }
+
+    /** Mount the Streamable HTTP endpoint via the engine-agnostic HTTP facade. */
+    const mountHttpRoutes = (http: AdapterHttp): void => {
+      const path = `${options.basePath!}/messages`
+
+      // The SDK's web-standard transport takes a Request and returns a
+      // Response. Building the Request from `ctx.req` (method, url, headers —
+      // present on every runtime) and sending the Response with
+      // `ctx.sendResponse` keeps the endpoint independent of the HTTP engine.
+      const handleRequest = async (ctx: RequestContext): Promise<void> => {
+        const req = ctx.req as {
+          method?: string
+          url?: string
+          headers: Record<string, string | string[] | undefined>
+        }
+        try {
+          const denied = await checkAccess(req.headers)
+          if (denied) {
+            await sendJsonRpcError(ctx, denied.status, denied.message, denied.headers)
+            return
+          }
+
+          const headers = new Headers()
+          for (const [name, value] of Object.entries(req.headers)) {
+            if (value !== undefined)
+              headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+          }
+          const webRequest = new Request(new URL(req.url ?? path, 'http://localhost'), {
+            method: req.method ?? 'POST',
+            headers,
+            signal: ctx.signal,
+          })
+          const parsedBody = webRequest.method === 'POST' ? ctx.body : undefined
+
+          const sessionId = firstHeader(req.headers['mcp-session-id'])
+          if (sessionId) {
+            const session = sessions.get(sessionId)
+            if (!session) {
+              await sendJsonRpcError(ctx, 404, 'Session not found')
+              return
+            }
+            session.active++
+            clearTimeout(session.idleTimer)
+            try {
+              await ctx.sendResponse(
+                await session.transport.handleRequest(webRequest, { parsedBody }),
+              )
+            } finally {
+              session.active--
+              armIdleTimer(sessionId)
+            }
+            return
+          }
+
+          if (webRequest.method !== 'POST' || !isInitializeRequest(parsedBody)) {
+            await sendJsonRpcError(ctx, 400, 'Bad Request: no valid session ID provided')
+            return
+          }
+
+          // Each session holds an MCP server and transport, and initialize needs
+          // no session — cap them so clients (authenticated or not) can't
+          // exhaust memory, and close abandoned ones after an idle timeout.
+          if (sessions.size >= maxSessions) {
+            await sendJsonRpcError(ctx, 503, 'Too many MCP sessions; try again later')
+            return
+          }
+          const server = buildMcpServer()
+          const sessionTransport = new WebStandardStreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (id) => {
+              sessions.set(id, { server, transport: sessionTransport, active: 0 })
+            },
+          })
+          // Set before connect(): the SDK wraps an existing onclose, but a
+          // handler assigned afterwards would replace its cleanup.
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- MCP SDK transports expose only an `onclose` property
+          sessionTransport.onclose = () => {
+            const id = sessionTransport.sessionId
+            if (!id) return
+            clearTimeout(sessions.get(id)?.idleTimer)
+            sessions.delete(id)
+          }
+          await server.connect(sessionTransport)
+          await ctx.sendResponse(await sessionTransport.handleRequest(webRequest, { parsedBody }))
+          if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
+        } catch (err) {
+          log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
+          if (!ctx.res.headersSent) await sendJsonRpcError(ctx, 500, 'MCP transport error')
+        }
+      }
 
       // Mount all three verbs in a single table so they share one router —
       // this is what lets the engine auto-answer the OPTIONS preflight with the
@@ -425,12 +802,15 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       )
     }
 
-    return {
-      getTools(): readonly McpToolDefinition[] {
-        return tools
-      },
-
+    const publicSurface: McpAdapterExtensions = {
+      getTools: () => tools,
       dispatchTool,
+      registerProvider,
+      unregisterProvider,
+    }
+
+    return {
+      ...publicSurface,
 
       /**
        * Called by the framework each time a module mounts a controller.
@@ -457,6 +837,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
        * the Express stack at all.
        */
       async beforeStart(ctx) {
+        appFetch = ctx.fetch ?? null
+        // Optional call: hooks driven by hand in tests may pass a partial container.
+        ctx.container?.registerInstance?.(MCP_ADAPTER, publicSurface)
         for (const { controller, mountPath } of mountedControllers) {
           const routes = getClassMeta<RouteDefinition[]>(METADATA.ROUTES, controller, [])
           for (const route of routes) {
@@ -475,7 +858,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
         if (effectiveTransport === 'sse') {
           log.warn(
-            'sse transport is deprecated upstream; using StreamableHTTP transport, which supports the same SSE wire format under the hood',
+            "McpAdapter: transport 'sse' is deprecated and behaves like 'http' (Streamable HTTP). Set transport: 'http'.",
           )
         }
 
@@ -484,14 +867,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           return
         }
 
-        mcpServer = buildMcpServer()
-        const httpTransport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-        })
-        transport = httpTransport
-
-        await mcpServer.connect(httpTransport)
-        mountHttpRoutes(ctx.http, httpTransport)
+        mountHttpRoutes(ctx.http)
       },
 
       /**
@@ -501,6 +877,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
        * in `beforeStart` so they land ahead of the catch-all 404.
        */
       async afterStart(ctx) {
+        appFetch ??= ctx.fetch ?? null
         serverBaseUrl = resolveServerBaseUrl(ctx.server)
 
         const effectiveTransport = resolveTransportMode()
@@ -515,21 +892,36 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         )
       },
 
-      /** Tear down the MCP server and any open transports. Idempotent. */
+      /**
+       * Tear down the MCP servers and every open transport. Idempotent.
+       * Also forgets discovered tools, so an instance started again (HMR,
+       * `Application.rebuild()`) rediscovers them instead of registering
+       * each one twice.
+       */
       async shutdown() {
+        const open = [...sessions.values()]
+        for (const session of open) clearTimeout(session.idleTimer)
+        sessions.clear()
+        const servers = [...open.map((s) => s.server), ...(mcpServer ? [mcpServer] : [])]
+        for (const server of servers) {
+          try {
+            await server.close()
+          } catch (err) {
+            log.error(err as Error, 'McpAdapter: failed to close server')
+          }
+        }
         try {
           await transport?.close()
         } catch (err) {
           log.error(err as Error, 'McpAdapter: failed to close transport')
         }
-        try {
-          await mcpServer?.close()
-        } catch (err) {
-          log.error(err as Error, 'McpAdapter: failed to close server')
-        }
         transport = null
         mcpServer = null
         serverBaseUrl = null
+        appFetch = null
+        tools.length = 0
+        routeTools.clear()
+        mountedControllers.length = 0
         log.debug('McpAdapter shutdown complete')
       },
     }

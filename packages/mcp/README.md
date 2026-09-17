@@ -1,6 +1,6 @@
 # @forinda/kickjs-mcp
 
-[Model Context Protocol](https://modelcontextprotocol.io) server adapter — exposes `@Controller` endpoints as callable MCP tools for Claude Code, Claude Desktop, Cursor, Zed, and any other MCP-aware client. Zero duplicated schemas (the route's Zod `body` becomes the tool input shape automatically).
+[Model Context Protocol](https://modelcontextprotocol.io) server adapter — exposes `@Controller` endpoints as callable MCP tools for Claude Code, Claude Desktop, Cursor, Zed, and any other MCP-aware client. Zero duplicated schemas: the route's path parameters and `query`/`body` schemas (Zod, Valibot, Yup or Standard Schema) become the tool input automatically.
 
 ## Why MCP?
 
@@ -122,12 +122,14 @@ McpAdapter({
   transport: 'http', // 'http' (default) | 'stdio' | 'sse'
   basePath: '/_mcp', // HTTP mount path (default: '/_mcp')
   include: ['GET', 'POST'], // Auto mode: which HTTP methods to expose
-  exclude: ['/admin/*'], // Auto mode: path prefixes to skip
+  exclude: ['/admin/*'], // Auto mode: route paths to skip (matches /api/v1/admin/... too)
   auth: {
-    // Transport-level auth (HTTP/SSE only)
+    // Checked on every MCP request (HTTP/SSE only); 401 when validate returns false
     type: 'bearer',
     validate: (token) => isValid(token),
   },
+  allowedOrigins: [], // Browser origins allowed to connect; requests with any other Origin get 403
+  forwardHeaders: ['authorization', 'x-tenant'], // Headers copied onto tool calls (default: authorization, cookie, x-request-id, traceparent, tracestate)
 })
 ```
 
@@ -137,7 +139,7 @@ McpAdapter({
 @McpTool({
   description: 'Create a task',          // Required. Shown to the LLM.
   name: 'create_task',                   // Override tool name (default: Controller.method)
-  inputSchema: z.object({ ... }),        // Override input schema (default: route's body schema)
+  inputSchema: z.object({ ... }),        // Override query/body input (default: route's params, query and body schemas)
   outputSchema: z.object({ ... }),       // Output schema for documentation
   hidden: true,                          // Exclude from auto mode
   examples: [{                           // Usage examples shown in client UIs
@@ -155,7 +157,7 @@ IN PLACE:
   [x] Explicit mode — only @McpTool-decorated routes exposed
   [x] Full HTTP pipeline — middleware, auth, RBAC, rate limits apply
   [x] Auth header forwarding — Authorization flows from MCP to internal dispatch
-  [x] Zod input validation — SDK validates against route's body schema
+  [x] Input validation — the route's own params/query/body validation checks tool arguments
   [x] getTools() — inspect the tool registry at runtime or in tests
 
 NOT YET IN PLACE:

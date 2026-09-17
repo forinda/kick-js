@@ -47,6 +47,7 @@ export type {
   ChatOptions,
   ChatResponse,
   ChatChunk,
+  ChatUsage,
   ChatMessage,
   ChatToolDefinition,
   EmbedInput,

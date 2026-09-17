@@ -132,12 +132,23 @@ export class OpenAIProvider implements AiProvider {
     })
 
     let sawAnyChunk = false
+    let finishReason: ChatChunk['finishReason']
+    let usage: ChatChunk['usage']
+    // OpenAI sends a tool call's id only on its first delta; later deltas
+    // carry just the index.
+    const toolIds = new Map<number, string>()
+    const finalChunk = (): ChatChunk => ({
+      content: '',
+      done: true,
+      ...(finishReason ? { finishReason } : {}),
+      ...(usage ? { usage } : {}),
+    })
 
     for await (const raw of events) {
       // OpenAI signals end-of-stream with a literal `[DONE]` payload
       // (not JSON). Translate to a final framework chunk.
       if (raw === '[DONE]') {
-        yield { content: '', done: true }
+        yield finalChunk()
         return
       }
 
@@ -149,25 +160,33 @@ export class OpenAIProvider implements AiProvider {
         continue
       }
 
+      // With include_usage, the last chunk carries usage and no choices.
+      if (parsed.usage) usage = normalizeUsage(parsed.usage)
       const choice = parsed.choices?.[0]
       if (!choice) continue
-
-      const deltaContent = choice.delta?.content ?? ''
-      const toolCallDelta = this.firstToolCallDelta(choice.delta?.tool_calls)
+      if (choice.finish_reason) finishReason = normalizeFinishReason(choice.finish_reason)
 
       sawAnyChunk = true
-      const chunk: ChatChunk = {
-        content: deltaContent,
-        done: false,
+      if (choice.delta?.content) yield { content: choice.delta.content, done: false }
+      for (const call of choice.delta?.tool_calls ?? []) {
+        const index = call.index ?? 0
+        if (call.id) toolIds.set(index, call.id)
+        const toolCallDelta: NonNullable<ChatChunk['toolCallDelta']> = {
+          id: toolIds.get(index) ?? '',
+          index,
+        }
+        if (call.function?.name) toolCallDelta.name = call.function.name
+        if (call.function?.arguments !== undefined) {
+          toolCallDelta.argumentsDelta = call.function.arguments
+        }
+        yield { content: '', done: false, toolCallDelta }
       }
-      if (toolCallDelta) chunk.toolCallDelta = toolCallDelta
-      yield chunk
     }
 
     // If the stream closed without a [DONE] sentinel, still emit a
     // terminating chunk so consumers know to stop reading.
     if (sawAnyChunk) {
-      yield { content: '', done: true }
+      yield finalChunk()
     }
   }
 
@@ -214,8 +233,10 @@ export class OpenAIProvider implements AiProvider {
       messages: input.messages.map((m) => this.toOpenAIMessage(m)),
       stream,
     }
+    if (stream) payload.stream_options = { include_usage: true }
     if (options.temperature !== undefined) payload.temperature = options.temperature
-    if (options.maxTokens !== undefined) payload.max_tokens = options.maxTokens
+    // max_tokens is deprecated and rejected by reasoning models.
+    if (options.maxTokens !== undefined) payload.max_completion_tokens = options.maxTokens
     if (options.topP !== undefined) payload.top_p = options.topP
     if (options.stopSequences && options.stopSequences.length > 0) {
       payload.stop = options.stopSequences
@@ -295,36 +316,8 @@ export class OpenAIProvider implements AiProvider {
 
     const result: ChatResponse = { content }
     if (toolCalls && toolCalls.length > 0) result.toolCalls = toolCalls
-    if (data.usage) {
-      result.usage = {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
-      }
-    }
-    if (choice?.finish_reason) result.finishReason = choice.finish_reason
-    return result
-  }
-
-  /**
-   * Extract the first tool-call delta from an OpenAI streaming chunk.
-   *
-   * The `tool_calls` array in a delta chunk can contain partial state
-   * for multiple parallel tool calls; this method picks the first one
-   * with a non-empty payload, which is enough for the v0 streaming
-   * surface. Multi-tool streaming is a follow-up.
-   */
-  private firstToolCallDelta(
-    toolCalls?: OpenAIStreamChunk['choices'][number]['delta']['tool_calls'],
-  ): ChatChunk['toolCallDelta'] {
-    if (!toolCalls || toolCalls.length === 0) return undefined
-    const first = toolCalls[0]
-    if (!first) return undefined
-    const result: NonNullable<ChatChunk['toolCallDelta']> = {
-      id: first.id ?? '',
-    }
-    if (first.function?.name) result.name = first.function.name
-    if (first.function?.arguments !== undefined) result.argumentsDelta = first.function.arguments
+    if (data.usage) result.usage = normalizeUsage(data.usage)
+    if (choice?.finish_reason) result.finishReason = normalizeFinishReason(choice.finish_reason)
     return result
   }
 }
@@ -341,8 +334,9 @@ interface OpenAIChatRequest {
   model: string
   messages: OpenAIMessage[]
   stream?: boolean
+  stream_options?: { include_usage: boolean }
   temperature?: number
-  max_tokens?: number
+  max_completion_tokens?: number
   top_p?: number
   stop?: string[]
   tools?: Array<{
@@ -398,6 +392,30 @@ interface OpenAIStreamChunk {
     }
     finish_reason?: string | null
   }>
+  usage?: OpenAIUsage | null
+}
+
+interface OpenAIUsage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  prompt_tokens_details?: { cached_tokens?: number }
+}
+
+function normalizeUsage(usage: OpenAIUsage): NonNullable<ChatResponse['usage']> {
+  const result: NonNullable<ChatResponse['usage']> = {
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    totalTokens: usage.total_tokens,
+  }
+  const cached = usage.prompt_tokens_details?.cached_tokens
+  if (cached) result.cacheReadTokens = cached
+  return result
+}
+
+/** OpenAI finish reasons → the framework's (`tool_calls` → `tool_call`). */
+function normalizeFinishReason(reason: string): NonNullable<ChatResponse['finishReason']> {
+  return reason === 'tool_calls' || reason === 'function_call' ? 'tool_call' : reason
 }
 
 interface OpenAIEmbeddingResponse {

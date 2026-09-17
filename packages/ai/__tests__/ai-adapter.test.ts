@@ -159,7 +159,7 @@ describe('AiAdapter — tool discovery', () => {
 
     const tools = adapter.getTools()
     const names = tools.map((t) => t.name).toSorted()
-    expect(names).toEqual(['TaskController.create', 'TaskController.list'])
+    expect(names).toEqual(['TaskController_create', 'TaskController_list'])
   })
 
   it('skips methods without @AiTool', () => {
@@ -168,7 +168,7 @@ describe('AiAdapter — tool discovery', () => {
     adapter.beforeStart({ container: new Container() } as never)
 
     const names = adapter.getTools().map((t) => t.name)
-    expect(names).not.toContain('TaskController.internal')
+    expect(names).not.toContain('TaskController_internal')
   })
 
   it('converts the Zod body schema to a JSON Schema input', () => {
@@ -176,7 +176,7 @@ describe('AiAdapter — tool discovery', () => {
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
-    const create = adapter.getTools().find((t) => t.name === 'TaskController.create')
+    const create = adapter.getTools().find((t) => t.name === 'TaskController_create')
     expect(create).toBeDefined()
     expect(create!.inputSchema).toMatchObject({
       type: 'object',
@@ -194,7 +194,7 @@ describe('AiAdapter — tool discovery', () => {
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
-    const list = adapter.getTools().find((t) => t.name === 'TaskController.list')
+    const list = adapter.getTools().find((t) => t.name === 'TaskController_list')
     expect(list).toBeDefined()
     expect(list!.inputSchema).toMatchObject({
       type: 'object',
@@ -241,8 +241,8 @@ describe('AiAdapter.runAgent — unit', () => {
     const toolsSent = provider.inputs[0].tools
     expect(Array.isArray(toolsSent)).toBe(true)
     expect((toolsSent as ReadonlyArray<{ name: string }>).map((t) => t.name).toSorted()).toEqual([
-      'TaskController.create',
-      'TaskController.list',
+      'TaskController_create',
+      'TaskController_list',
     ])
   })
 
@@ -264,7 +264,7 @@ describe('AiAdapter.runAgent — unit', () => {
     // Provider keeps requesting the same tool call forever
     const loopingResponse: ChatResponse = {
       content: '',
-      toolCalls: [{ id: 'call_1', name: 'TaskController.list', arguments: {} }],
+      toolCalls: [{ id: 'call_1', name: 'TaskController_list', arguments: {} }],
       finishReason: 'tool_calls',
     }
     const provider = new ScriptedProvider(Array.from({ length: 20 }, () => loopingResponse))
@@ -339,7 +339,7 @@ describe('AiAdapter.runAgent — e2e dispatch', () => {
         toolCalls: [
           {
             id: 'call_1',
-            name: 'TaskController.create',
+            name: 'TaskController_create',
             arguments: { title: 'Ship MCP', priority: 'high' },
           },
         ],
@@ -380,7 +380,7 @@ describe('AiAdapter.runAgent — e2e dispatch', () => {
         toolCalls: [
           {
             id: 'call_1',
-            name: 'TaskController.list',
+            name: 'TaskController_list',
             arguments: { status: 'todo', limit: 10 },
           },
         ],
@@ -405,7 +405,7 @@ describe('AiAdapter.runAgent — e2e dispatch', () => {
         toolCalls: [
           {
             id: 'call_1',
-            name: 'TaskController.create',
+            name: 'TaskController_create',
             arguments: { title: 'X', priority: 'low' },
           },
         ],

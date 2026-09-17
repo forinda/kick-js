@@ -96,6 +96,18 @@ export interface AdapterContext {
    * {@link http}.
    */
   app: ActiveRuntime['app']
+  /**
+   * Run a web `Request` through this app's pipeline and return the
+   * `Response` — routing, middleware, validation, contributors, errors —
+   * without a listening server (`createHandler()`, tests), so an adapter that
+   * calls the app's own routes (MCP and AI tool dispatch) never needs the
+   * server address. See `Application.fetch`.
+   *
+   * The full pipeline exists once setup completes: from `beforeStart` on,
+   * and in request handlers after that. In `beforeMount` module routes and
+   * error handlers are not mounted yet.
+   */
+  fetch(request: Request): Promise<Response>
   /** DI container */
   container: Container
   /** Node.js http.Server — only available in afterStart */

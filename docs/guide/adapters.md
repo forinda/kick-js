@@ -83,10 +83,24 @@ export const MyAdapter = defineAdapter<MyAdapterConfig>({
 interface AdapterContext {
   http: AdapterHttp // engine-agnostic HTTP surface — use this
   app: ActiveRuntime['app'] // engine-native instance — escape hatch
+  fetch(request: Request): Promise<Response> // run a Request through this app, no server needed
   container: Container // DI container
   server?: http.Server // populated only inside afterStart
   env: string // NODE_ENV (default 'development')
   isProduction: boolean // true when NODE_ENV === 'production'
+}
+```
+
+`fetch` sends a web `Request` through the app's pipeline — routing,
+middleware, validation, contributors, error handling — and returns the
+`Response`, without a listening server (`createHandler()`, tests), so an
+adapter that calls the app's own routes never needs the server address.
+The full pipeline exists once setup completes: from `beforeStart` on. In
+`beforeMount`, module routes and error handlers aren't mounted yet:
+
+```ts
+async beforeStart({ fetch }: AdapterContext) {
+  const res = await fetch(new Request('http://localhost/api/v1/health/ready'))
 }
 ```
 

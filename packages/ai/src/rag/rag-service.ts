@@ -155,7 +155,9 @@ export class RagService<M extends Record<string, unknown> = Record<string, unkno
     const documentBlock = hits
       .map((h, i) => `[Document ${i + 1} (id=${h.id}, score=${h.score.toFixed(3)})]\n${h.content}`)
       .join('\n\n')
-    const contextMessage = template.replace('{documents}', documentBlock)
+    // A function replacement inserts the text literally: `    const contextMessage = template.replace('{documents}', documentBlock)` or `$\`` in a
+    // retrieved document would otherwise be read as a replacement pattern.
+    const contextMessage = template.replace('{documents}', () => documentBlock)
 
     // Rebuild the messages array with the context injected. Never
     // mutate the caller's input — ChatInput can be reused across
