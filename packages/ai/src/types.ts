@@ -1,3 +1,5 @@
+import type { RouteFlagTest } from '@forinda/kickjs'
+
 /**
  * A chat message in the OpenAI/Anthropic-style conversation format.
  *
@@ -153,6 +155,24 @@ export interface AiAdapterOptions {
    * model.
    */
   defaults?: ChatOptions & { model?: string }
+  /**
+   * Expose routes carrying these [route flags](https://kickjs.app/guide/route-flags)
+   * as tools, without `@AiTool` — on a method, a controller, or a module
+   * mount (`routes: () => ({ …, flags: ['ai.tool'] })`). Takes the same
+   * forms as `skipWhen`: a name, `'!name'`, a list, or a predicate.
+   *
+   * When the matching flag carries an object value, it is read as tool
+   * options: `defineRouteFlag<Partial<AiToolOptions>>('ai.tool')`
+   * then `@Tool({ description: 'Manage webhooks' })`. `@AiTool` on the
+   * method takes precedence over the flag's options.
+   */
+  exposeWhen?: RouteFlagTest
+  /**
+   * Never expose routes carrying these route flags — wins over `@AiTool`
+   * and `exposeWhen`. Use it to hide a whole controller or module mount,
+   * including ones you don't own.
+   */
+  hideWhen?: RouteFlagTest
 }
 
 /**

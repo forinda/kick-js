@@ -4,11 +4,15 @@ import {
   METADATA,
   defineAdapter,
   getClassMeta,
+  getRouteFlags,
+  matchesFlagTest,
   type AdapterContext,
   type AdapterHttp,
   type Constructor,
   type RequestContext,
   type RouteDefinition,
+  type RouteFlagTest,
+  type RouteFlags,
   type RouteEntry,
   type RouteMethod,
 } from '@forinda/kickjs'
@@ -23,7 +27,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { buildRouteTool, detectSchema, type RouteTool } from '@forinda/kickjs-schema'
 import { getMcpToolMeta } from './decorators'
-import type { McpAdapterOptions, McpToolDefinition, McpTransport } from './types'
+import type { McpAdapterOptions, McpToolDefinition, McpToolOptions, McpTransport } from './types'
 
 const log = Logger.for('McpAdapter')
 
@@ -36,6 +40,23 @@ function toolNameFor(name: string, handler: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 128) || '_'
   log.warn(`McpAdapter: tool name "${name}" (${handler}) is not valid for MCP; using "${cleaned}"`)
   return cleaned
+}
+
+/**
+ * Tool options carried by a flag named in `exposeWhen`: the value of the
+ * first such flag the route carries that is an object, e.g.
+ * `@Tool({ description: '…' })` for `defineRouteFlag<McpToolOptions>('…')`.
+ * Predicates and negated names name no flag, so they carry no options.
+ */
+function flagToolOptions(test: RouteFlagTest, flags: RouteFlags): Partial<McpToolOptions> {
+  const names = (typeof test === 'string' ? [test] : Array.isArray(test) ? test : []).filter(
+    (name: string) => !name.startsWith('!'),
+  )
+  for (const name of names) {
+    const value = flags.get(name)
+    if (value && typeof value === 'object') return value as Partial<McpToolOptions>
+  }
+  return {}
 }
 
 /** First value of a node header that may repeat. */
@@ -158,6 +179,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     version: '0.0.0',
   },
   build: (options) => {
+    // A mixed-polarity list fails here, where the adapter is configured,
+    // not later inside startup where the error would be swallowed.
+    if (options.exposeWhen) matchesFlagTest(options.exposeWhen, undefined)
+    if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
+
     /** Controllers collected during the mount phase, in insertion order. */
     const mountedControllers: Array<{ controller: Constructor; mountPath: string }> = []
 
@@ -224,7 +250,21 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       mountPath: string,
       route: RouteDefinition,
     ): McpToolDefinition | null => {
-      const meta = getMcpToolMeta(controller.prototype, route.handlerName)
+      const decorated = getMcpToolMeta(controller.prototype, route.handlerName)
+      const flags = getRouteFlags(controller, route.handlerName)
+      const flagRoute = {
+        method: route.method.toUpperCase(),
+        path: joinMountPath(mountPath, route.path),
+        controller,
+        handlerName: route.handlerName,
+      }
+
+      // hideWhen wins over @McpTool, exposeWhen and auto mode.
+      if (options.hideWhen && matchesFlagTest(options.hideWhen, flags, flagRoute)) return null
+      const flagged =
+        options.exposeWhen !== undefined && matchesFlagTest(options.exposeWhen, flags, flagRoute)
+      const meta: Partial<McpToolOptions> | undefined =
+        decorated ?? (flagged ? flagToolOptions(options.exposeWhen!, flags) : undefined)
 
       if (options.mode === 'explicit' && !meta) return null
       if (meta?.hidden) return null

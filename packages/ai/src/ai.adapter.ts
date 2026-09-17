@@ -4,9 +4,13 @@ import {
   Scope,
   defineAdapter,
   getClassMeta,
+  getRouteFlags,
+  matchesFlagTest,
   type AdapterContext,
   type Constructor,
   type RouteDefinition,
+  type RouteFlagTest,
+  type RouteFlags,
 } from '@forinda/kickjs'
 import { AI_ADAPTER, AI_PROVIDER } from './constants'
 import { getAiToolMeta } from './decorators'
@@ -16,6 +20,7 @@ import type {
   AiAdapterExtensions,
   AiAdapterOptions,
   AiToolDefinition,
+  AiToolOptions,
   ChatMessage,
   ChatToolDefinition,
   RunAgentOptions,
@@ -23,6 +28,23 @@ import type {
 } from './types'
 
 const log = Logger.for('AiAdapter')
+
+/**
+ * Tool options carried by a flag named in `exposeWhen`: the value of the
+ * first such flag the route carries that is an object, e.g.
+ * `@Tool({ description: '…' })` for `defineRouteFlag<AiToolOptions>('…')`.
+ * Predicates and negated names name no flag, so they carry no options.
+ */
+function flagToolOptions(test: RouteFlagTest, flags: RouteFlags): Partial<AiToolOptions> {
+  const names = (typeof test === 'string' ? [test] : Array.isArray(test) ? test : []).filter(
+    (name: string) => !name.startsWith('!'),
+  )
+  for (const name of names) {
+    const value = flags.get(name)
+    if (value && typeof value === 'object') return value as Partial<AiToolOptions>
+  }
+  return {}
+}
 
 /** Tool names OpenAI and Anthropic accept. */
 const PROVIDER_TOOL_NAME = /^[A-Za-z0-9_-]{1,64}$/
@@ -82,6 +104,11 @@ function toolNameFor(name: string, handler: string): string {
 export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
   name: 'AiAdapter',
   build: (options) => {
+    // A mixed-polarity list fails here, where the adapter is configured,
+    // not later inside startup where the error would be swallowed.
+    if (options.exposeWhen) matchesFlagTest(options.exposeWhen, undefined)
+    if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
+
     const provider = options.provider
 
     /** Controllers collected during the mount phase, in insertion order. */
@@ -110,7 +137,21 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       mountPath: string,
       route: RouteDefinition,
     ): AiToolDefinition | null => {
-      const meta = getAiToolMeta(controller.prototype, route.handlerName)
+      const decorated = getAiToolMeta(controller.prototype, route.handlerName)
+      const flags = getRouteFlags(controller, route.handlerName)
+      const flagRoute = {
+        method: route.method.toUpperCase(),
+        path: joinMountPath(mountPath, route.path),
+        controller,
+        handlerName: route.handlerName,
+      }
+
+      // hideWhen wins over @AiTool and exposeWhen.
+      if (options.hideWhen && matchesFlagTest(options.hideWhen, flags, flagRoute)) return null
+      const flagged =
+        options.exposeWhen !== undefined && matchesFlagTest(options.exposeWhen, flags, flagRoute)
+      const meta: Partial<AiToolOptions> | undefined =
+        decorated ?? (flagged ? flagToolOptions(options.exposeWhen!, flags) : undefined)
       if (!meta) return null
 
       const handler = `${controller.name}.${route.handlerName}`
@@ -143,7 +184,9 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
       return {
         name,
-        description: meta.description,
+        description:
+          meta.description ??
+          `${route.method.toUpperCase()} ${fullPath} (${controller.name}.${route.handlerName})`,
         inputSchema: routeTool.inputSchema,
         httpMethod: route.method.toUpperCase(),
         mountPath: fullPath,

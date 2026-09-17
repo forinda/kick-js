@@ -202,6 +202,36 @@ Tool dispatch happens through internal HTTP requests against the
 running KickJS server, so middleware, validation, auth guards, and
 logging all run exactly the same way they do for external callers.
 
+### Exposing tools with route flags
+
+[Route flags](./route-flags.md) expose or hide tools without `@AiTool`
+on every method — on a controller, a method, or a module mount:
+
+```ts
+import { defineRouteFlag } from '@forinda/kickjs'
+import { AiAdapter, type AiToolOptions } from '@forinda/kickjs-ai'
+
+export const Tool = defineRouteFlag<Partial<AiToolOptions>>('ai.tool')
+
+AiAdapter({
+  provider,
+  exposeWhen: 'ai.tool', // routes carrying it become tools
+  hideWhen: 'ai.hidden', // routes carrying it never do
+})
+
+@Tool({ description: 'Look up orders' })
+@Controller()
+export class OrdersController {}
+
+// Hide a controller you don't own:
+routes: () => ({ path: '/admin', controller: AdminController, flags: ['ai.hidden'] })
+```
+
+Both options take the same forms as `skipWhen` (a name, `'!name'`, a
+list, or a predicate). An object flag value supplies `description` and
+`name`; `@AiTool` on the method takes precedence, and `hideWhen` wins
+over both.
+
 ## Memory
 
 `ChatMemory` is the contract for multi-turn conversation persistence.

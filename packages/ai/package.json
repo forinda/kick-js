@@ -50,7 +50,7 @@
   },
   "peerDependencies": {
     "zod": "^4.6.2",
-    "@forinda/kickjs": ">=5.18.0"
+    "@forinda/kickjs": ">=8.6.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",

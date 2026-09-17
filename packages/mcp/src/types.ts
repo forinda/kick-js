@@ -1,3 +1,5 @@
+import type { RouteFlagTest } from '@forinda/kickjs'
+
 /**
  * Transport modes supported by the MCP adapter.
  *
@@ -94,6 +96,24 @@ export interface McpAdapterOptions {
   allowedOrigins?: string[]
   /** Base path for the MCP endpoint (SSE/HTTP only). Defaults to `/_mcp`. */
   basePath?: string
+  /**
+   * Expose routes carrying these [route flags](https://kickjs.app/guide/route-flags)
+   * as tools, without `@McpTool` — on a method, a controller, or a module
+   * mount (`routes: () => ({ …, flags: ['mcp.tool'] })`). Takes the same
+   * forms as `skipWhen`: a name, `'!name'`, a list, or a predicate.
+   *
+   * When the matching flag carries an object value, it is read as tool
+   * options: `defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')`
+   * then `@Tool({ description: 'Manage webhooks' })`. `@McpTool` on the
+   * method takes precedence over the flag's options.
+   */
+  exposeWhen?: RouteFlagTest
+  /**
+   * Never expose routes carrying these route flags — wins over `@McpTool`,
+   * `exposeWhen` and `mode: 'auto'`. Use it to hide a whole controller or
+   * module mount, including ones you don't own.
+   */
+  hideWhen?: RouteFlagTest
 }
 
 /**

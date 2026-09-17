@@ -180,6 +180,50 @@ McpAdapter({
 No @McpTool decorator                ->  NOT exposed (in explicit mode)
 ```
 
+### Exposing with route flags
+
+[Route flags](./route-flags.md) can expose or hide tools without a
+decorator on every method, including on controllers you don't own:
+
+```ts
+import { defineRouteFlag } from '@forinda/kickjs'
+import { McpAdapter, type McpToolOptions } from '@forinda/kickjs-mcp'
+
+export const Tool = defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')
+export const Hidden = defineRouteFlag('mcp.hidden')
+
+McpAdapter({
+  name: 'api',
+  exposeWhen: 'mcp.tool', // routes carrying it become tools
+  hideWhen: 'mcp.hidden', // routes carrying it never do
+})
+```
+
+```ts
+@Tool({ description: 'Manage webhooks' }) // every route in the controller
+@Controller()
+export class WebhooksController {
+  @Get('/')
+  list(ctx: RequestContext) {}
+
+  @Tool.off // not this one
+  @Delete('/:id')
+  remove(ctx: RequestContext) {}
+}
+
+// On a module mount — for a controller from a plugin:
+routes: () => ({ path: '/billing', controller: BillingController, flags: ['mcp.hidden'] })
+```
+
+- `exposeWhen` and `hideWhen` take the same forms as `skipWhen`: a name,
+  `'!name'`, a list, or a predicate such as
+  `({ route }) => route?.method === 'GET'`.
+- A flag whose value is an object supplies tool options (`description`,
+  `name`, `hidden`). `@McpTool` on the method takes precedence. Set
+  `name` only on method-level flags; the same name on several routes is
+  a duplicate, and the extra tools are skipped.
+- `hideWhen` wins over `@McpTool`, `exposeWhen` and `mode: 'auto'`.
+
 ## Marking routes with `@McpTool`
 
 The decorator adds MCP-specific metadata (description, examples) on
@@ -848,6 +892,8 @@ McpAdapter({
 | `exclude`        | `string[]`                   | —            | Auto mode: route paths to skip. Matched against the full path and each trailing part, so `'/admin/*'` skips `/api/v1/admin/users` and `/api/v1/admin` |
 | `auth`           | `McpAuthOptions`             | —            | Checked on every MCP request; `401` when `validate` returns false. `bearer` passes the token, `custom` the raw `Authorization` header                 |
 | `allowedOrigins` | `string[]`                   | `[]`         | Browser origins allowed to call the endpoint (`'*'` for any). Requests with another `Origin` get `403`; clients that send no `Origin` are unaffected  |
+| `exposeWhen`     | `RouteFlagTest`              | —            | Routes carrying these [route flags](./route-flags.md) become tools without `@McpTool`; an object flag value supplies tool options                     |
+| `hideWhen`       | `RouteFlagTest`              | —            | Routes carrying these route flags are never tools — wins over `@McpTool`, `exposeWhen` and `mode: 'auto'`                                             |
 
 ### @McpTool options
 
