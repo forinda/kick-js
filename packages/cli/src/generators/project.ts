@@ -29,7 +29,7 @@ import {
   generateHelloModule,
 } from './templates/project-app'
 import { generateReadme } from './templates/project-docs'
-import { AVAILABLE_ADD_PACKAGES } from '../commands/add'
+import { AVAILABLE_ADD_PACKAGES, buildsFor } from '../commands/add'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -397,7 +397,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── pnpm-workspace.yaml ──────────────────────────────────────────────
   // Approves @swc/core and esbuild before install; see generatePnpmWorkspace.
   if (packageManager === 'pnpm' && options.pnpmWorkspace !== false) {
-    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), generatePnpmWorkspace())
+    await writeFileSafe(
+      join(dir, 'pnpm-workspace.yaml'),
+      generatePnpmWorkspace(undefined, buildsFor(packages)),
+    )
   }
 
   // ── Install Dependencies ────────────────────────────────────────────

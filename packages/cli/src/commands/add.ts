@@ -1,8 +1,9 @@
 import { execSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config'
+import { setAllowBuilds } from '../generators/templates/project-config'
 
 interface PackageEntry {
   pkg: string
@@ -28,6 +29,12 @@ interface PackageEntry {
    * `kick add --list --all` and as a warning when the package is added.
    */
   deprecated?: string
+  /**
+   * pnpm `allowBuilds` answers for install scripts this package pulls in.
+   * pnpm 10+ blocks unanswered scripts and every later `pnpm exec` fails with
+   * ERR_PNPM_IGNORED_BUILDS, so `kick add` and `kick new` answer them.
+   */
+  builds?: Record<string, boolean>
 }
 
 /** Registry of KickJS packages and their required peer dependencies */
@@ -91,6 +98,8 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     pkg: '@forinda/kickjs-swagger',
     peers: [],
     description: 'OpenAPI spec + Swagger UI + ReDoc',
+    // swagger-ui-dist depends on @scarf/scarf, which has a postinstall script.
+    builds: { '@scarf/scarf': true },
   },
   // Database — the dialect adapters now ship as subpaths of
   // `@forinda/kickjs-db` (`/pg`, `/sqlite`, `/mysql`), so each `kick add`
@@ -470,6 +479,11 @@ export function printPackageList(all = false, runtime?: 'express' | 'fastify' | 
   console.log()
 }
 
+/** Merged pnpm `allowBuilds` answers for catalog entries (unknown names skipped). */
+export function buildsFor(packages: string[]): Record<string, boolean> {
+  return Object.assign({}, ...packages.map((name) => PACKAGE_REGISTRY[name]?.builds ?? {}))
+}
+
 export interface AddPlan {
   prodDeps: string[]
   devDeps: string[]
@@ -610,6 +624,19 @@ export function registerAddCommand(program: Command): void {
         console.log(`\n  Unknown packages: ${unknown.join(', ')}`)
         console.log('  Run "kick add --list" to see available packages.\n')
         if (prodDeps.length === 0 && devDeps.length === 0) return
+      }
+
+      // Answer pnpm's build-script approvals before installing, in the
+      // workspace root's pnpm-workspace.yaml when there is one.
+      const builds = buildsFor(packages)
+      if (pm === 'pnpm' && Object.keys(builds).length > 0) {
+        const file = resolve(findUp('pnpm-workspace.yaml') ?? process.cwd(), 'pnpm-workspace.yaml')
+        const before = existsSync(file) ? readFileSync(file, 'utf-8') : ''
+        const after = setAllowBuilds(before, builds)
+        if (after !== before) {
+          writeFileSync(file, after)
+          console.log(`\n  Updated allowBuilds in ${file}`)
+        }
       }
 
       // Install production dependencies

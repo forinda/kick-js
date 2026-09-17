@@ -239,9 +239,48 @@ ${server}  resolve: {
  *
  * Pass `packages` for a workspace root (fullstack); omit it for a single project.
  */
-export function generatePnpmWorkspace(packages?: string[]): string {
+export function generatePnpmWorkspace(
+  packages?: string[],
+  builds: Record<string, boolean> = {},
+): string {
   const list = packages?.length ? `packages:\n${packages.map((p) => `  - ${p}\n`).join('')}\n` : ''
-  return `${list}allowBuilds:\n  '@swc/core': true\n  esbuild: true\n`
+  return setAllowBuilds(`${list}allowBuilds:\n  '@swc/core': true\n  esbuild: true\n`, builds)
+}
+
+/**
+ * Answer pnpm's `allowBuilds` for `builds` in pnpm-workspace.yaml text. A key
+ * already answered true/false is left alone — that was someone's decision; a
+ * missing key or pnpm's `set this to true or false` placeholder is filled in.
+ */
+export function setAllowBuilds(yaml: string, builds: Record<string, boolean>): string {
+  const entries = Object.entries(builds)
+  if (entries.length === 0) return yaml
+  const lines = yaml === '' ? [] : yaml.replace(/\n$/, '').split('\n')
+  let start = lines.findIndex((line) => /^allowBuilds:\s*$/.test(line))
+  if (start === -1) {
+    if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
+    lines.push('allowBuilds:')
+    start = lines.length - 1
+  }
+  let end = start + 1
+  while (end < lines.length && /^\s+\S/.test(lines[end])) end++
+
+  for (const [name, allow] of entries) {
+    const entry = `  ${/^[\w-]+$/.test(name) ? name : `'${name}'`}: ${allow}`
+    const index = lines.slice(start + 1, end).findIndex(
+      (line) =>
+        line
+          .split(':')[0]
+          .trim()
+          .replace(/^['"]|['"]$/g, '') === name,
+    )
+    if (index === -1) {
+      lines.splice(end++, 0, entry)
+    } else if (!/:\s*(true|false)\s*$/.test(lines[start + 1 + index])) {
+      lines[start + 1 + index] = entry
+    }
+  }
+  return `${lines.join('\n')}\n`
 }
 
 /** Generate tsconfig.json with decorator support */
