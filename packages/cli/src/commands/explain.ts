@@ -73,7 +73,7 @@ export function registerExplainCommand(program: Command): void {
           process.stdout.write(JSON.stringify({ matched: false }, null, 2) + '\n')
           process.exit(2)
         }
-        printNoMatch(input, false)
+        printNoMatch(input)
         process.exit(2)
       }
 
@@ -202,31 +202,22 @@ function printDiagnosis(input: string, d: Diagnosis, confidence: number, aiLabel
   process.stdout.write('\n')
 }
 
-function printNoMatch(input: string, aiRequested?: boolean): void {
+function printNoMatch(input: string): void {
   const snippet = truncate(input.trim(), 200)
   process.stdout.write(`\n  Explaining: ${snippet}\n\n`)
-  if (aiRequested) {
-    process.stdout.write(
-      '  No known-issue matched, and --ai fallback is not yet wired.\n' +
-        '  When @forinda/kickjs-ai ships its provider implementations,\n' +
-        '  this command will call the configured LLM with the error +\n' +
-        '  project context and return a structured fix.\n\n',
-    )
-  } else {
-    process.stdout.write(
-      '  No known-issue matched. Things you can try:\n' +
-        '\n' +
-        '    1. Check the framework docs for the error keywords:\n' +
-        '       https://kickjs.app/\n' +
-        '\n' +
-        '    2. Re-run with --ai to fall back to an LLM (requires\n' +
-        '       @forinda/kickjs-ai with a configured provider):\n' +
-        '       kick explain --ai "<your error>"\n' +
-        '\n' +
-        '    3. File an issue with the error text:\n' +
-        '       https://github.com/forinda/kick-js/issues/new\n\n',
-    )
-  }
+  process.stdout.write(
+    '  No known-issue matched. Things you can try:\n' +
+      '\n' +
+      '    1. Check the framework docs for the error keywords:\n' +
+      '       https://kickjs.app/\n' +
+      '\n' +
+      '    2. Re-run with --ai to fall back to an LLM (requires\n' +
+      '       @forinda/kickjs-ai with a configured provider):\n' +
+      '       kick explain --ai "<your error>"\n' +
+      '\n' +
+      '    3. File an issue with the error text:\n' +
+      '       https://github.com/forinda/kick-js/issues/new\n\n',
+  )
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────

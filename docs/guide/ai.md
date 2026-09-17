@@ -10,7 +10,7 @@ features. It brings four things to your KickJS app:
 2. **Tool calling + agents** — the `@AiTool` decorator promotes any
    controller method into a model-callable function. `AiAdapter.runAgent`
    runs the full chat → tool → dispatch → feedback loop, routing each
-   tool call through the normal Express pipeline so middleware, auth,
+   tool call through the normal request pipeline so middleware, auth,
    validation, and logging still apply.
 3. **Memory** — a `ChatMemory` interface for multi-turn conversations,
    with `InMemoryChatMemory` for prototypes and a `SlidingWindowChatMemory`
@@ -20,19 +20,20 @@ features. It brings four things to your KickJS app:
    `PineconeVectorStore`) and a `RagService` that ties them to the
    provider's embeddings for retrieval-augmented chat.
 
-The whole package is designed so services consume one DI token —
-`AiAdapter` — and swapping providers, memory backends, or vector
-stores is a configuration change, not a code change.
+The whole package is designed so services consume DI tokens —
+`AI_ADAPTER`, `AI_PROVIDER`, `VECTOR_STORE` — and swapping providers,
+memory backends, or vector stores is a configuration change, not a
+code change.
 
 ## Install
 
 <PmCommand add="@forinda/kickjs-ai" />
 
-The package declares `@forinda/kickjs` and `reflect-metadata` as
-dependencies and `zod` as a peer. `OpenAIProvider` talks to the upstream
-API over `fetch` and needs nothing else.
+The package depends on `@forinda/kickjs-schema` and peers on
+`@forinda/kickjs`. `OpenAIProvider` talks to the upstream API over
+`fetch` and needs nothing else.
 
-Optional peers, installed only if you use the matching backend:
+Optional peers, installed only if you use the matching feature:
 
 - `@anthropic-ai/sdk` — for `AnthropicProvider`
 - `pg` — for `PgVectorStore` when you pass `connectionString` instead
@@ -65,12 +66,12 @@ export const app = await bootstrap({
 Then inject the adapter wherever you need it:
 
 ```ts
-import { Service, Autowired } from '@forinda/kickjs'
-import { AiAdapter } from '@forinda/kickjs-ai'
+import { Inject, Service } from '@forinda/kickjs'
+import { AI_ADAPTER, type AiAdapterInstance } from '@forinda/kickjs-ai'
 
 @Service()
 export class AgentService {
-  @Autowired() private readonly ai!: AiAdapter
+  constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
 
   async summarize(text: string) {
     const res = await this.ai.getProvider().chat({
@@ -152,27 +153,32 @@ provider throws a descriptive error. For RAG workflows, pair it with
 ### Streaming
 
 Every provider implements `stream()` and yields `ChatChunk`s. Wire a
-streaming endpoint with Server-Sent Events:
+streaming endpoint with [Server-Sent Events](./sse.md) — `ctx.sse()`
+works on every HTTP runtime, and `ctx.signal` stops the model call when
+the client disconnects:
 
 ```ts
-import { Controller, Get, type RequestContext } from '@forinda/kickjs'
-import { Autowired } from '@forinda/kickjs'
-import { AiAdapter } from '@forinda/kickjs-ai'
+import { Controller, Get, Inject, type RequestContext } from '@forinda/kickjs'
+import { AI_ADAPTER, type AiAdapterInstance, type ChatChunk } from '@forinda/kickjs-ai'
 
 @Controller()
 export class ChatController {
-  @Autowired() private readonly ai!: AiAdapter
+  constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
 
   @Get('/stream')
   async stream(ctx: RequestContext) {
-    ctx.res.setHeader('content-type', 'text/event-stream')
-    for await (const chunk of this.ai.getProvider().stream({
-      messages: [{ role: 'user', content: String(ctx.query.q ?? '') }],
-    })) {
-      ctx.res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+    const sse = ctx.sse<ChatChunk>()
+    const chunks = this.ai
+      .getProvider()
+      .stream(
+        { messages: [{ role: 'user', content: String(ctx.query.q ?? '') }] },
+        { signal: ctx.signal },
+      )
+    for await (const chunk of chunks) {
+      sse.send(chunk)
       if (chunk.done) break
     }
-    ctx.res.end()
+    sse.close()
   }
 }
 ```
@@ -223,7 +229,8 @@ const result = await this.ai.runAgent({
 })
 
 console.log(result.content) // final assistant text
-console.log(result.toolCalls) // audit trail of what was called
+console.log(result.messages) // full transcript, including tool calls and results
+console.log(result.finishReason) // why the last turn stopped
 ```
 
 Tool calls run through the app's own pipeline (`AdapterContext.fetch`),
@@ -416,16 +423,21 @@ export const app = await bootstrap({
 ### Index and query with `RagService`
 
 ```ts
-import { Service, Autowired, Inject } from '@forinda/kickjs'
-import { RagService, VECTOR_STORE, type VectorStore } from '@forinda/kickjs-ai'
-import { AiAdapter } from '@forinda/kickjs-ai'
+import { Inject, Service } from '@forinda/kickjs'
+import {
+  AI_PROVIDER,
+  RagService,
+  VECTOR_STORE,
+  type AiProvider,
+  type VectorStore,
+} from '@forinda/kickjs-ai'
 
 @Service()
 export class KnowledgeService {
   private readonly rag: RagService
 
-  constructor(@Autowired() ai: AiAdapter, @Inject(VECTOR_STORE) store: VectorStore) {
-    this.rag = new RagService({ provider: ai.getProvider(), store })
+  constructor(@Inject(AI_PROVIDER) provider: AiProvider, @Inject(VECTOR_STORE) store: VectorStore) {
+    this.rag = new RagService(provider, store)
   }
 
   async index(docs: Array<{ id: string; content: string }>) {
@@ -540,8 +552,9 @@ state the provider actually saw.
 
 ## Next steps
 
-- [MCP adapter](./mcp) — expose the same `@AiTool` methods to external
-  Model Context Protocol clients
+- [MCP adapter](./mcp) — expose controller routes to external Model
+  Context Protocol clients with `@McpTool`; a route can carry both
+  decorators
 - [Dependency Injection](./dependency-injection) — how `AiAdapter`
   and `VECTOR_STORE` bindings flow through the container
 - [Plugins](./plugins) — the canonical place to wire DI bindings at

@@ -174,7 +174,7 @@ export interface McpAdapterExtensions {
  *       version: '1.0.0',
  *       description: 'Task management MCP server',
  *       mode: 'explicit',
- *       transport: 'sse',
+ *       transport: 'http',
  *     }),
  *   ],
  * })
@@ -184,7 +184,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
   name: 'McpAdapter',
   defaults: {
     mode: 'explicit',
-    transport: 'sse',
+    transport: 'http',
     basePath: '/_mcp',
     version: '0.0.0',
   },
@@ -668,7 +668,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
         if (effectiveTransport === 'sse') {
           log.warn(
-            'sse transport is deprecated upstream; using StreamableHTTP transport, which supports the same SSE wire format under the hood',
+            "McpAdapter: transport 'sse' is deprecated and behaves like 'http' (Streamable HTTP). Set transport: 'http'.",
           )
         }
 

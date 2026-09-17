@@ -11,13 +11,6 @@ export default defineConfig({
   platform: 'node',
   minify: { compress: true, mangle: false },
   dts: true,
-  external: [
-    '@anthropic-ai/sdk',
-    '@forinda/kickjs',
-    '@forinda/kickjs-schema',
-    'reflect-metadata',
-    'zod',
-    /^node:/,
-  ],
+  external: ['@anthropic-ai/sdk', '@forinda/kickjs', '@forinda/kickjs-schema', 'zod', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

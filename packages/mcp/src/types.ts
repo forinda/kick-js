@@ -3,13 +3,13 @@ import type { RouteFlagTest } from '@forinda/kickjs'
 /**
  * Transport modes supported by the MCP adapter.
  *
- * - `stdio` — standard MCP transport for CLI clients (Claude Code, Cursor).
- *   The MCP server owns stdin/stdout. Cannot be combined with a normal
- *   Express dev server in the same process without care.
- * - `sse` — Server-Sent Events over HTTP. Good fit when KickJS already
- *   exposes an HTTP server — the MCP endpoints mount on the same app.
- * - `http` — plain HTTP POST/GET streaming. Simpler than SSE for some
- *   clients but gives up live notifications.
+ * - `http` (default) — Streamable HTTP, the current MCP transport. The
+ *   endpoint mounts on the app at `basePath` and streams responses and
+ *   notifications over SSE when the client asks for it.
+ * - `stdio` — for clients that spawn the server (`kick mcp`, Claude Code,
+ *   Cursor). The MCP server owns stdin/stdout.
+ * - `sse` — deprecated alias of `http`, kept for existing configs. The old
+ *   standalone SSE protocol (`GET /sse` + `POST ?sessionId`) is not served.
  */
 export type McpTransport = 'stdio' | 'sse' | 'http'
 
@@ -57,7 +57,7 @@ export interface McpAuthOptions {
  *   version: '1.0.0',
  *   description: 'Task management MCP server',
  *   mode: 'explicit',
- *   transport: 'sse',
+ *   transport: 'http',
  * })
  * ```
  */
@@ -70,7 +70,7 @@ export interface McpAdapterOptions {
   description?: string
   /** Exposure mode. Defaults to `'explicit'`. */
   mode?: McpExposureMode
-  /** Transport mode. Defaults to `'sse'`. */
+  /** Transport mode. Defaults to `'http'`. */
   transport?: McpTransport
   /** HTTP methods to include when `mode === 'auto'`. */
   include?: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>

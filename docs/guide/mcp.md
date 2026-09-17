@@ -5,7 +5,7 @@
 LLM client that speaks MCP — Claude Desktop, Claude Code, Cursor,
 Zed, and others — can discover your controllers as callable tools,
 read their input schemas, and invoke them safely through the normal
-Express pipeline.
+request pipeline.
 
 The adapter was built on the same `onRouteMount` → `beforeStart` →
 `afterStart` lifecycle as every other adapter, so plugging it into an
@@ -40,7 +40,7 @@ export const app = await bootstrap({
 
 That's it. On startup the adapter walks every registered controller,
 builds an `McpToolDefinition[]` from the route metadata, and attaches
-an MCP server to your Express pipeline at `/_mcp` (configurable via
+an MCP endpoint to your app at `/_mcp` (configurable via
 `basePath`).
 
 ## How it works
@@ -74,8 +74,8 @@ bootstrap({ modules, adapters: [McpAdapter(...)] })
   |
   +-- 6. Server.listen(port)
   |
-  +-- 7. Adapter afterStart
-          - Capture serverBaseUrl for internal dispatch
+  +-- 7. Adapter afterStart (stdio transport only)
+          - Connect the MCP server to stdin/stdout
 ```
 
 The adapter mounts its routes in `beforeStart` (step 4) so they
@@ -366,7 +366,7 @@ working for your API, it works for MCP automatically.
 If you prefer not to use context decorators, you can use the standard
 `@Middleware()` decorator with a regular Express auth guard. This
 works identically for MCP since tool calls dispatch through the full
-Express pipeline.
+request pipeline.
 
 ```ts
 import {
@@ -433,7 +433,7 @@ without any changes.
 
 ## Authentication patterns
 
-MCP tool calls flow through the same Express pipeline as regular
+MCP tool calls flow through the same request pipeline as regular
 HTTP, so your existing auth works. The question is how the agent
 **gets** the token in the first place. Three patterns, from simplest
 to most powerful:
@@ -559,7 +559,7 @@ deployment:
 | `stdio`   | Local CLI clients (Claude Code, Cursor, Zed) | Inherits parent process env    |
 | `sse`     | Legacy (aliases to HTTP internally)          | Same as HTTP                   |
 
-Both transports dispatch through the same Express pipeline — same
+Both transports dispatch through the same request pipeline — same
 middleware, same context decorators, same auth flow.
 
 ```text
@@ -586,7 +586,7 @@ middleware, same context decorators, same auth flow.
             +-------------+-------------+
                           |
                           v
-              Same Express pipeline
+              Same request pipeline
               Same middleware
               Same context decorators
               Same auth flow
@@ -991,7 +991,7 @@ it('exposes create but not internal routes', () => {
 - **Explicit mode** (default) — only `@McpTool`-decorated routes are
   exposed. No code path allows a route into the tool surface without
   the decorator.
-- **Full Express pipeline** — tool calls dispatch through the same
+- **Full request pipeline** — tool calls dispatch through the same
   middleware chain as regular HTTP. Guards, role checks, context
   decorators, rate limits, Zod validation, and request logging all
   apply.
@@ -1052,7 +1052,7 @@ async create(ctx: Ctx<KickRoutes.TaskController['create']>) {
 
 The in-process `AiAdapter` calls it via internal HTTP dispatch for
 your own agents. The `McpAdapter` exposes the same method to external
-MCP clients. Both paths flow through the normal Express pipeline, so
+MCP clients. Both paths flow through the normal request pipeline, so
 middleware, auth, validation, and logging apply identically.
 
 ## Next steps
