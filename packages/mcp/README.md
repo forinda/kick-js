@@ -1,6 +1,6 @@
 # @forinda/kickjs-mcp
 
-[Model Context Protocol](https://modelcontextprotocol.io) server adapter — exposes `@Controller` endpoints as callable MCP tools for Claude Code, Claude Desktop, Cursor, Zed, and any other MCP-aware client. Zero duplicated schemas (the route's Zod `body` becomes the tool input shape automatically).
+[Model Context Protocol](https://modelcontextprotocol.io) server adapter — exposes `@Controller` endpoints as callable MCP tools for Claude Code, Claude Desktop, Cursor, Zed, and any other MCP-aware client. Zero duplicated schemas: the route's path parameters and `query`/`body` schemas (Zod, Valibot, Yup or Standard Schema) become the tool input automatically.
 
 ## Why MCP?
 
@@ -138,7 +138,7 @@ McpAdapter({
 @McpTool({
   description: 'Create a task',          // Required. Shown to the LLM.
   name: 'create_task',                   // Override tool name (default: Controller.method)
-  inputSchema: z.object({ ... }),        // Override input schema (default: route's body schema)
+  inputSchema: z.object({ ... }),        // Override query/body input (default: route's params, query and body schemas)
   outputSchema: z.object({ ... }),       // Output schema for documentation
   hidden: true,                          // Exclude from auto mode
   examples: [{                           // Usage examples shown in client UIs
@@ -156,7 +156,7 @@ IN PLACE:
   [x] Explicit mode — only @McpTool-decorated routes exposed
   [x] Full HTTP pipeline — middleware, auth, RBAC, rate limits apply
   [x] Auth header forwarding — Authorization flows from MCP to internal dispatch
-  [x] Zod input validation — SDK validates against route's body schema
+  [x] Input validation — the route's own params/query/body validation checks tool arguments
   [x] getTools() — inspect the tool registry at runtime or in tests
 
 NOT YET IN PLACE:

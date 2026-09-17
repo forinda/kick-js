@@ -50,6 +50,9 @@
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
       "optional": false
+    },
+    "zod": {
+      "optional": true
     }
   },
   "devDependencies": {

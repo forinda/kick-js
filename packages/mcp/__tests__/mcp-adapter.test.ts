@@ -123,7 +123,7 @@ describe('McpAdapter — tool discovery', () => {
     })
   })
 
-  it('falls back to an empty input schema when no Zod body is present', () => {
+  it('gives a route with no inputs an empty object schema', () => {
     @Controller()
     class NoBodyController {
       @Post('/', { name: 'NoBody' })
@@ -137,10 +137,6 @@ describe('McpAdapter — tool discovery', () => {
 
     const tool = adapter.getTools().find((t) => t.name === 'NoBodyController.action')
     expect(tool).toBeDefined()
-    expect(tool!.inputSchema).toMatchObject({
-      type: 'object',
-      properties: {},
-      additionalProperties: false,
-    })
+    expect(tool!.inputSchema).toEqual({ type: 'object', properties: {} })
   })
 })

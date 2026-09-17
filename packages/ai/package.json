@@ -45,6 +45,7 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
+    "@forinda/kickjs-schema": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
@@ -77,5 +78,9 @@
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  }
 }

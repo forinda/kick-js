@@ -4,7 +4,7 @@
 [MCP](https://modelcontextprotocol.io/) server. Once installed, any
 LLM client that speaks MCP — Claude Desktop, Claude Code, Cursor,
 Zed, and others — can discover your controllers as callable tools,
-read their Zod schemas, and invoke them safely through the normal
+read their input schemas, and invoke them safely through the normal
 Express pipeline.
 
 The adapter was built on the same `onRouteMount` → `beforeStart` →
@@ -869,14 +869,14 @@ McpAdapter({
 })
 ```
 
-| Option         | Type               | Default               | Description                                              |
-| -------------- | ------------------ | --------------------- | -------------------------------------------------------- |
-| `description`  | `string`           | required              | Shown to the LLM when deciding whether to call this tool |
-| `name`         | `string`           | `Controller.method`   | Unique tool name across the server                       |
-| `inputSchema`  | `ZodType`          | route's `body` schema | Override the auto-derived input schema                   |
-| `outputSchema` | `ZodType`          | —                     | Output schema for documentation (not validated)          |
-| `hidden`       | `boolean`          | `false`               | Exclude from auto mode exposure                          |
-| `examples`     | `McpToolExample[]` | —                     | Input/output examples shown in client UIs                |
+| Option         | Type               | Default                              | Description                                                   |
+| -------------- | ------------------ | ------------------------------------ | ------------------------------------------------------------- |
+| `description`  | `string`           | required                             | Shown to the LLM when deciding whether to call this tool      |
+| `name`         | `string`           | `Controller.method`                  | Unique tool name across the server                            |
+| `inputSchema`  | any schema         | route's `params`, `query` and `body` | Replace the query/body input; path parameters are still added |
+| `outputSchema` | `ZodType`          | —                                    | Output schema for documentation (not validated)               |
+| `hidden`       | `boolean`          | `false`                              | Exclude from auto mode exposure                               |
+| `examples`     | `McpToolExample[]` | —                                    | Input/output examples shown in client UIs                     |
 
 ### Exported types
 

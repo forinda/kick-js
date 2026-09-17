@@ -11,7 +11,7 @@ import {
 import { AI_ADAPTER, AI_PROVIDER } from './constants'
 import { getAiToolMeta } from './decorators'
 import type { RunAgentWithMemoryOptions } from './memory/types'
-import { zodToJsonSchema } from './zod-to-json-schema'
+import { buildRouteTool, type RouteTool } from '@forinda/kickjs-schema'
 import type {
   AiAdapterExtensions,
   AiAdapterOptions,
@@ -23,6 +23,19 @@ import type {
 } from './types'
 
 const log = Logger.for('AiAdapter')
+
+/** Tool names OpenAI and Anthropic accept. */
+const PROVIDER_TOOL_NAME = /^[A-Za-z0-9_-]{1,64}$/
+
+/** A tool name providers accept, replacing any other character with `_`. */
+function toolNameFor(name: string, handler: string): string {
+  if (PROVIDER_TOOL_NAME.test(name)) return name
+  const cleaned = name.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || '_'
+  log.warn(
+    `AiAdapter: tool name "${name}" (${handler}) is not accepted by providers; using "${cleaned}"`,
+  )
+  return cleaned
+}
 
 /**
  * Register an AI provider in the DI container, discover every
@@ -77,6 +90,9 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     /** Tool definitions built during `beforeStart` from `@AiTool` metadata. */
     const tools: AiToolDefinition[] = []
 
+    /** Argument-to-request mapping per tool name. */
+    const routeTools = new Map<string, RouteTool>()
+
     /** Base URL of the running KickJS HTTP server, captured in `afterStart`. */
     let serverBaseUrl: string | null = null
 
@@ -97,37 +113,41 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       const meta = getAiToolMeta(controller.prototype, route.handlerName)
       if (!meta) return null
 
-      const candidateSchema = meta.inputSchema ?? route.validation?.body ?? route.validation?.query
-      const inputSchema = zodToJsonSchema(candidateSchema) ?? {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
+      const handler = `${controller.name}.${route.handlerName}`
+      const name = toolNameFor(meta.name ?? `${controller.name}_${route.handlerName}`, handler)
+      const fullPath = joinMountPath(mountPath, route.path)
+
+      // Path params, query and body side by side, from any schema library.
+      let routeTool: RouteTool
+      try {
+        routeTool = buildRouteTool({
+          method: route.method,
+          path: fullPath,
+          params: route.validation?.params,
+          query: route.validation?.query,
+          body: route.validation?.body,
+          input: meta.inputSchema,
+        })
+      } catch (err) {
+        log.error(err as Error, `AiAdapter: cannot build a tool for ${handler}; not exposed`)
+        return null
       }
+      if (routeTools.has(name)) {
+        log.error(
+          `AiAdapter: duplicate tool name "${name}" (${handler}); not exposed. ` +
+            `Give one of them @AiTool({ name }).`,
+        )
+        return null
+      }
+      routeTools.set(name, routeTool)
 
       return {
-        name: meta.name ?? `${controller.name}.${route.handlerName}`,
+        name,
         description: meta.description,
-        inputSchema,
+        inputSchema: routeTool.inputSchema,
         httpMethod: route.method.toUpperCase(),
-        mountPath: joinMountPath(mountPath, route.path),
+        mountPath: fullPath,
       }
-    }
-
-    /** Substitute Express-style :param placeholders with values from args. */
-    const substitutePathParams = (
-      mountPath: string,
-      args: Record<string, unknown>,
-    ): { path: string; remainingArgs: Record<string, unknown> } => {
-      const remaining: Record<string, unknown> = { ...args }
-      const path = mountPath.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, (_match, param: string) => {
-        if (param in remaining) {
-          const value = remaining[param]
-          delete remaining[param]
-          return encodeURIComponent(String(value))
-        }
-        return `:${param}`
-      })
-      return { path, remainingArgs: remaining }
     }
 
     /** Resolve the running server's base URL from a Node http.Server instance. */
@@ -171,34 +191,32 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         }
       }
 
-      const args = call.arguments ?? {}
-      const { path, remainingArgs } = substitutePathParams(tool.mountPath, args)
-      const method = tool.httpMethod.toUpperCase()
-      const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH'
-
-      let url = `${serverBaseUrl}${path}`
-      const init: RequestInit = {
-        method,
-        headers: {
-          accept: 'application/json',
-          'x-ai-tool': tool.name,
-        },
-      }
-      if (hasBody) {
-        ;(init.headers as Record<string, string>)['content-type'] = 'application/json'
-        init.body = JSON.stringify(remainingArgs)
-      } else if (Object.keys(remainingArgs).length > 0) {
-        const qs = new URLSearchParams()
-        for (const [key, value] of Object.entries(remainingArgs)) {
-          if (value === undefined || value === null) continue
-          qs.append(key, typeof value === 'string' ? value : JSON.stringify(value))
+      const routeTool =
+        routeTools.get(tool.name) ??
+        buildRouteTool({ method: tool.httpMethod, path: tool.mountPath })
+      let request: ReturnType<RouteTool['toRequest']>
+      try {
+        request = routeTool.toRequest(call.arguments ?? {})
+      } catch (err) {
+        return {
+          role: 'tool',
+          toolCallId: call.id,
+          content: JSON.stringify({ error: (err as Error).message }),
         }
-        const sep = url.includes('?') ? '&' : '?'
-        url = `${url}${sep}${qs.toString()}`
+      }
+
+      const headers: Record<string, string> = {
+        accept: 'application/json',
+        'x-ai-tool': tool.name,
+      }
+      const init: RequestInit = { method: tool.httpMethod.toUpperCase(), headers }
+      if (request.body !== undefined) {
+        headers['content-type'] = 'application/json'
+        init.body = JSON.stringify(request.body)
       }
 
       try {
-        const res = await fetch(url, init)
+        const res = await fetch(`${serverBaseUrl}${request.url}`, init)
         const text = await res.text()
         const content = res.ok
           ? text || `(${res.status} ${res.statusText})`
@@ -369,8 +387,16 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         log.debug(`AiAdapter agent dispatch target: ${serverBaseUrl ?? '(unknown)'}`)
       },
 
+      /**
+       * Forgets discovered tools too, so an instance started again (HMR,
+       * `Application.rebuild()`) rediscovers them instead of listing each
+       * one twice.
+       */
       async shutdown() {
         serverBaseUrl = null
+        tools.length = 0
+        routeTools.clear()
+        mountedControllers.length = 0
         log.debug('AiAdapter shutdown complete')
       },
     }

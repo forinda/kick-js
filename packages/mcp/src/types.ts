@@ -1,5 +1,3 @@
-import type { ZodTypeAny } from 'zod'
-
 /**
  * Transport modes supported by the MCP adapter.
  *
@@ -107,7 +105,7 @@ export interface McpAdapterOptions {
 export interface McpToolExample {
   /** Natural-language description of what this example does. */
   description?: string
-  /** Arguments to pass to the tool. Must match the Zod input schema. */
+  /** Arguments to pass to the tool. Must match the tool's input schema. */
   args: Record<string, unknown>
   /** Expected result shape. Used in docs only — not validated. */
   result?: unknown
@@ -140,14 +138,16 @@ export interface McpToolOptions {
    */
   description: string
   /**
-   * Optional input schema override. If omitted, the adapter derives
-   * the input schema from the route's `body` Zod schema (if any).
+   * Replace the tool's query/body input schema. Any schema library
+   * `@forinda/kickjs-schema` supports (Zod, Valibot, Yup, Standard Schema).
+   * Path parameters are still added. If omitted, the input is built from
+   * the route's `params`, `query` and `body` schemas.
    */
-  inputSchema?: ZodTypeAny
+  inputSchema?: unknown
   /**
    * Optional output schema for documentation. Not validated at runtime.
    */
-  outputSchema?: ZodTypeAny
+  outputSchema?: unknown
   /** Optional usage examples shown in the tool description. */
   examples?: McpToolExample[]
   /**
@@ -161,30 +161,20 @@ export interface McpToolOptions {
 /**
  * Resolved tool definition after scanning decorators at startup.
  *
- * This is the shape the adapter hands to the MCP SDK when registering
- * tools. Users don't construct this directly — it's derived from
- * `@McpTool` metadata plus route metadata from `@Controller`.
- *
- * Both the raw Zod schema (`zodInputSchema`) and the converted JSON
- * Schema (`inputSchema`) are kept on the definition. The MCP SDK
- * accepts the Zod form directly, while the JSON Schema is exposed via
- * `getTools()` for inspection, the `kick mcp --list` command, and
- * documentation surfaces.
+ * Users don't construct this directly — it's derived from `@McpTool`
+ * metadata plus route metadata from `@Controller`, and exposed via
+ * `getTools()` for inspection and the `kick mcp --list` command.
  */
 export interface McpToolDefinition {
   /** Resolved tool name (either from options.name or derived). */
   name: string
   /** Human-readable description. */
   description: string
-  /** JSON Schema for tool inputs, derived from the Zod body schema. */
-  inputSchema: Record<string, unknown>
   /**
-   * Original Zod schema for the tool input, when one was attached to
-   * the route via `body` (or via `@McpTool({ inputSchema })`). The MCP
-   * SDK accepts this form directly via `registerTool`. May be undefined
-   * for routes without a body schema.
+   * JSON Schema for tool inputs: path parameters plus the route's query
+   * and body fields.
    */
-  zodInputSchema?: unknown
+  inputSchema: Record<string, unknown>
   /** Optional JSON Schema for tool outputs. */
   outputSchema?: Record<string, unknown>
   /** HTTP method of the underlying route. */

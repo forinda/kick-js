@@ -1,5 +1,3 @@
-import type { ZodTypeAny } from 'zod'
-
 /**
  * A chat message in the OpenAI/Anthropic-style conversation format.
  *
@@ -165,12 +163,21 @@ export interface AiAdapterOptions {
  * it here.
  */
 export interface AiToolOptions {
-  /** Tool name override. Defaults to `<ControllerName>.<methodName>`. */
+  /**
+   * Tool name override. Defaults to `<ControllerName>_<methodName>`. Names
+   * must match `[A-Za-z0-9_-]{1,64}` (the OpenAI and Anthropic rule); other
+   * characters are replaced with `_`.
+   */
   name?: string
   /** Human-readable description shown to the LLM at tool-call time. */
   description: string
-  /** Optional input schema override if the route has no Zod body. */
-  inputSchema?: ZodTypeAny
+  /**
+   * Replace the tool's query/body input schema. Any schema library
+   * `@forinda/kickjs-schema` supports (Zod, Valibot, Yup, Standard Schema).
+   * Path parameters are still added. If omitted, the input is built from
+   * the route's `params`, `query` and `body` schemas.
+   */
+  inputSchema?: unknown
 }
 
 /**

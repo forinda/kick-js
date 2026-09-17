@@ -12,16 +12,31 @@ import {
   type RouteEntry,
   type RouteMethod,
 } from '@forinda/kickjs'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
-import { detectSchema } from '@forinda/kickjs-schema'
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  isInitializeRequest,
+} from '@modelcontextprotocol/sdk/types.js'
+import { buildRouteTool, detectSchema, type RouteTool } from '@forinda/kickjs-schema'
 import { getMcpToolMeta } from './decorators'
 import type { McpAdapterOptions, McpToolDefinition, McpTransport } from './types'
 
 const log = Logger.for('McpAdapter')
+
+/** Characters and length the MCP spec allows in a tool name. */
+const MCP_TOOL_NAME = /^[A-Za-z0-9_.-]{1,128}$/
+
+/** A valid MCP tool name, replacing any other character with `_`. */
+function toolNameFor(name: string, handler: string): string {
+  if (MCP_TOOL_NAME.test(name)) return name
+  const cleaned = name.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 128) || '_'
+  log.warn(`McpAdapter: tool name "${name}" (${handler}) is not valid for MCP; using "${cleaned}"`)
+  return cleaned
+}
 
 /** First value of a node header that may repeat. */
 function firstHeader(value: string | string[] | undefined): string | undefined {
@@ -110,10 +125,9 @@ export interface McpAdapterExtensions {
  * builds a `McpToolDefinition[]` that the MCP SDK will register as
  * callable tools.
  *
- * The input schema of each tool is the JSON Schema equivalent of the
- * route's Zod `body` schema, converted via the package's own
- * `zod-to-json-schema` helper. Tools with no body schema get an empty
- * object schema so the model can still call them with no arguments.
+ * Each tool's input schema combines the route's path parameters and its
+ * `query` and `body` schemas, from any library `@forinda/kickjs-schema`
+ * supports. Tools with no inputs get an empty object schema.
  *
  * @example
  * ```ts
@@ -150,8 +164,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     /** Discovered tool definitions, built during `beforeStart`. */
     const tools: McpToolDefinition[] = []
 
-    /** Active MCP server instance, created in `afterStart`. */
-    let mcpServer: McpServer | null = null
+    /** Input schema + argument-to-request mapping per tool name. */
+    const routeTools = new Map<string, RouteTool>()
+
+    /** Stdio MCP server instance, created in `afterStart`. */
+    let mcpServer: Server | null = null
 
     /**
      * Stdio transport, created in `afterStart` when running via the
@@ -162,13 +179,10 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     /**
      * Open Streamable HTTP sessions, keyed by `mcp-session-id`. Each client
-     * gets its own McpServer + transport: one shared transport accepts a
+     * gets its own MCP server + transport: one shared transport accepts a
      * single `initialize` for the life of the process.
      */
-    const sessions = new Map<
-      string,
-      { server: McpServer; transport: StreamableHTTPServerTransport }
-    >()
+    const sessions = new Map<string, { server: Server; transport: StreamableHTTPServerTransport }>()
 
     /**
      * Base URL of the running KickJS HTTP server, captured in `afterStart`
@@ -228,26 +242,33 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
 
       const description = meta?.description ?? deriveDescription(controller, route)
-      const name = meta?.name ?? `${controller.name}.${route.handlerName}`
+      const handler = `${controller.name}.${route.handlerName}`
+      const name = toolNameFor(meta?.name ?? handler, handler)
+      const fullPath = joinMountPath(mountPath, route.path)
 
-      // Prefer the body schema for POST/PUT/PATCH, query schema for GET/DELETE.
-      // In `auto` mode the decorator may be absent entirely, in which case we
-      // fall back to whatever schema the route decorator declared.
-      const candidateSchema = meta?.inputSchema ?? route.validation?.body ?? route.validation?.query
-
-      let inputSchema: Record<string, unknown>
-      let resolvedZodInput: unknown = candidateSchema
+      // Path params, query and body side by side, from any schema library.
+      let routeTool: RouteTool
       try {
-        const wrapped = candidateSchema ? detectSchema(candidateSchema) : undefined
-        inputSchema = wrapped?.toJsonSchema() ?? {
-          type: 'object',
-          properties: {},
-          additionalProperties: false,
-        }
-      } catch {
-        inputSchema = { type: 'object', properties: {}, additionalProperties: false }
-        resolvedZodInput = undefined
+        routeTool = buildRouteTool({
+          method: route.method,
+          path: fullPath,
+          params: route.validation?.params,
+          query: route.validation?.query,
+          body: route.validation?.body,
+          input: meta?.inputSchema,
+        })
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: cannot build a tool for ${handler}; not exposed`)
+        return null
       }
+      if (routeTools.has(name)) {
+        log.error(
+          `McpAdapter: duplicate tool name "${name}" (${handler}); not exposed. ` +
+            `Give one of them @McpTool({ name }).`,
+        )
+        return null
+      }
+      routeTools.set(name, routeTool)
 
       let outputSchema: Record<string, unknown> | undefined
       if (meta?.outputSchema) {
@@ -261,11 +282,10 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return {
         name,
         description,
-        inputSchema,
-        zodInputSchema: resolvedZodInput,
+        inputSchema: routeTool.inputSchema,
         outputSchema: outputSchema ?? undefined,
         httpMethod: route.method.toUpperCase(),
-        mountPath: joinMountPath(mountPath, route.path),
+        mountPath: fullPath,
         examples: meta?.examples,
       }
     }
@@ -279,23 +299,6 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       if (host === '::' || host === '0.0.0.0' || host === '') host = '127.0.0.1'
       if (host.includes(':') && !host.startsWith('[')) host = `[${host}]`
       return `http://${host}:${address.port}`
-    }
-
-    /** Substitute Express-style path parameters with values from args. */
-    const substitutePathParams = (
-      mountPath: string,
-      args: Record<string, unknown>,
-    ): { path: string; remainingArgs: Record<string, unknown> } => {
-      const remaining: Record<string, unknown> = { ...args }
-      const path = mountPath.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, (_match, param: string) => {
-        if (param in remaining) {
-          const value = remaining[param]
-          delete remaining[param]
-          return encodeURIComponent(String(value))
-        }
-        return `:${param}`
-      })
-      return { path, remainingArgs: remaining }
     }
 
     /** Extract the Authorization header from MCP SDK extra context. */
@@ -336,41 +339,36 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         }
       }
 
-      const args = (rawArgs ?? {}) as Record<string, unknown>
-      const { path, remainingArgs } = substitutePathParams(tool.mountPath, args)
-      const method = tool.httpMethod.toUpperCase()
-      const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH'
+      // Tools built during discovery carry their schemas; a hand-built
+      // definition gets the path-parameter mapping only.
+      const routeTool =
+        routeTools.get(tool.name) ??
+        buildRouteTool({ method: tool.httpMethod, path: tool.mountPath })
+      let request: ReturnType<RouteTool['toRequest']>
+      try {
+        request = routeTool.toRequest((rawArgs ?? {}) as Record<string, unknown>)
+      } catch (err) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: (err as Error).message }],
+        }
+      }
 
-      const forwardedHeaders: Record<string, string> = {
+      const headers: Record<string, string> = {
         accept: 'application/json',
         'x-mcp-tool': tool.name,
       }
       const authToken = extractAuthToken(extra)
-      if (authToken) {
-        forwardedHeaders.authorization = authToken
-      }
+      if (authToken) headers.authorization = authToken
 
-      let url = `${serverBaseUrl}${path}`
-      const init: RequestInit = {
-        method,
-        headers: forwardedHeaders,
-      }
-
-      if (hasBody) {
-        ;(init.headers as Record<string, string>)['content-type'] = 'application/json'
-        init.body = JSON.stringify(remainingArgs)
-      } else if (Object.keys(remainingArgs).length > 0) {
-        const qs = new URLSearchParams()
-        for (const [key, value] of Object.entries(remainingArgs)) {
-          if (value === undefined || value === null) continue
-          qs.append(key, typeof value === 'string' ? value : JSON.stringify(value))
-        }
-        const sep = url.includes('?') ? '&' : '?'
-        url = `${url}${sep}${qs.toString()}`
+      const init: RequestInit = { method: tool.httpMethod.toUpperCase(), headers }
+      if (request.body !== undefined) {
+        headers['content-type'] = 'application/json'
+        init.body = JSON.stringify(request.body)
       }
 
       try {
-        const res = await fetch(url, init)
+        const res = await fetch(`${serverBaseUrl}${request.url}`, init)
         const text = await res.text()
         return {
           isError: res.status >= 400,
@@ -387,43 +385,43 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     }
 
     /**
-     * Construct the underlying McpServer and register every discovered
-     * tool against it. The SDK accepts Zod schemas natively, so we pass
-     * `zodInputSchema` straight through. Tool calls dispatch through
-     * the Express pipeline via internal HTTP requests against the
-     * running server's address.
+     * Construct an MCP server that lists every discovered tool and
+     * dispatches calls through the HTTP pipeline, where the route's own
+     * validation checks the arguments.
+     *
+     * Uses the SDK's low-level `Server` (marked deprecated only in favour of
+     * `McpServer` for simple cases): `McpServer.registerTool` accepts Zod
+     * schemas only, and tools here carry JSON Schema built from any schema
+     * library.
      */
-    const buildMcpServer = (): McpServer => {
-      const server = new McpServer({
-        name: options.name,
-        version: options.version!,
-        ...(options.description ? { description: options.description } : {}),
-      })
+    const buildMcpServer = (): Server => {
+      const server = new Server(
+        {
+          name: options.name,
+          version: options.version!,
+          ...(options.description ? { description: options.description } : {}),
+        },
+        { capabilities: { tools: {} } },
+      )
 
-      // The SDK's `registerTool` is heavily overloaded with deep generic
-      // inference over Zod input/output shapes. Cast through `any` once
-      // here so the call sites stay clean.
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const registerTool = server.registerTool.bind(server) as (
-        name: string,
-        config: { description: string; inputSchema?: unknown },
-        cb: (args: unknown, extra: unknown) => any,
-      ) => unknown
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-
-      for (const tool of tools) {
-        const config: { description: string; inputSchema?: unknown } = {
+      server.setRequestHandler(ListToolsRequestSchema, async () => ({
+        tools: tools.map((tool) => ({
+          name: tool.name,
           description: tool.description,
+          inputSchema: tool.inputSchema as { type: 'object' },
+        })),
+      }))
+
+      server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+        const tool = tools.find((t) => t.name === request.params.name)
+        if (!tool) {
+          return {
+            isError: true,
+            content: [{ type: 'text' as const, text: `Unknown tool: ${request.params.name}` }],
+          }
         }
-        if (tool.zodInputSchema) {
-          config.inputSchema = tool.zodInputSchema
-          registerTool(tool.name, config, async (args: unknown, extra: unknown) =>
-            dispatchTool(tool, args, extra),
-          )
-        } else {
-          registerTool(tool.name, config, async (extra: unknown) => dispatchTool(tool, {}, extra))
-        }
-      }
+        return dispatchTool(tool, request.params.arguments ?? {}, extra)
+      })
 
       return server
     }
@@ -665,6 +663,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         mcpServer = null
         serverBaseUrl = null
         tools.length = 0
+        routeTools.clear()
         mountedControllers.length = 0
         log.debug('McpAdapter shutdown complete')
       },
