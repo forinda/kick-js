@@ -41,6 +41,47 @@ The fullstack server's `src/index.ts` registers `SpaAdapter({ clientDir: '../web
 
 The web app's client calls `/api/v1` on its own origin (`baseUrl: '/api/v1'` in `web/src/api.ts`). That works unchanged when the API and web app deploy as one site, which is what the examples below do. For [two separate deploys](#two-deploys), proxy `/api/*` from the web site to the API site so the client URL still works.
 
+### Keep both entries: share the options
+
+`src/index.ts` (`bootstrap()`, for `kick dev` / `kick start`) and `src/serverless.ts` (`createHandler()`) both take `ApplicationOptions`. To keep them from drifting apart, move the side-effect imports and the shared options into one file, and have each entry import it and add only what differs:
+
+```ts
+// src/options/app-options.ts
+// Side effects every entry needs, in order: decorator metadata, then the env schema.
+import 'reflect-metadata'
+import '../config'
+import { expressRuntime, type ApplicationOptions } from '@forinda/kickjs'
+import { modules } from '../modules'
+
+export const appOptions: ApplicationOptions = {
+  modules,
+  runtime: expressRuntime(),
+  // middlewares, contributors, adapters every deploy uses...
+}
+```
+
+```ts
+// src/index.ts — long-running server
+import { appOptions } from './options/app-options'
+import { bootstrap } from '@forinda/kickjs'
+import { SpaAdapter } from '@forinda/kickjs/spa'
+
+export const app = await bootstrap({
+  ...appOptions,
+  adapters: [...(appOptions.adapters ?? []), SpaAdapter({ clientDir: '../web/dist' })],
+})
+```
+
+```ts
+// src/serverless.ts — Netlify / Vercel
+import { appOptions } from './options/app-options'
+import { createHandler } from '@forinda/kickjs'
+
+export const handler = createHandler(appOptions)
+```
+
+Import `app-options` first in each entry, so its side effects run before anything else loads. A new module, middleware or adapter then goes in `app-options.ts` once; the entries keep only their own differences (`SpaAdapter` in the server, `trustProxy` in the handler, and so on). API-only projects use the same split without `SpaAdapter`.
+
 ## What differs from `bootstrap()`
 
 - **Setup runs once per function instance**, on the first request, and is reused while the instance stays warm. If setup throws, the next request tries again.
