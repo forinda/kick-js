@@ -25,17 +25,26 @@ export type McpTransport = 'stdio' | 'sse' | 'http'
 export type McpExposureMode = 'explicit' | 'auto'
 
 /**
- * Authentication configuration for the MCP transport.
+ * Authentication for the HTTP transports (`sse` and `http`).
  *
- * For `stdio`, auth is usually not needed (client and server share a
- * process). For `sse` and `http`, set this so the adapter refuses
- * unauthenticated tool calls.
+ * Checked on every request to the MCP endpoint — `initialize`, `tools/list`
+ * and every tool call — so a revoked token stops working mid-session.
+ * Rejected requests get `401` (with `WWW-Authenticate: Bearer` for
+ * `bearer`). Not used for `stdio`, where client and server share a process.
+ *
+ * Tool calls still run through each route's own middleware and guards on
+ * top of this check.
  */
 export interface McpAuthOptions {
-  /** Strategy to use. `bearer` reads `Authorization: Bearer <token>`. */
+  /**
+   * - `bearer`: `validate` receives the token from `Authorization: Bearer <token>`.
+   *   A missing or malformed header is rejected without calling `validate`.
+   * - `custom`: `validate` receives the raw `Authorization` header value
+   *   (`''` when absent).
+   */
   type: 'bearer' | 'custom'
-  /** Called on every tool invocation. Return true (or truthy data) to allow. */
-  validate: (token: string) => boolean | Promise<boolean>
+  /** Return true to allow the request. A throw counts as a rejection. */
+  validate: (credential: string) => boolean | Promise<boolean>
 }
 
 /**
@@ -65,10 +74,26 @@ export interface McpAdapterOptions {
   transport?: McpTransport
   /** HTTP methods to include when `mode === 'auto'`. */
   include?: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>
-  /** Glob-style path prefixes to exclude when `mode === 'auto'`. */
+  /**
+   * Route paths to exclude when `mode === 'auto'`. Matched against the full
+   * route path and every trailing part of it, so `'/admin/*'` excludes
+   * `/api/v1/admin/users` as well as `/admin`. `*` matches anything; a
+   * pattern without `*` excludes that path and everything under it.
+   */
   exclude?: string[]
   /** Auth config for `sse` and `http` transports. */
   auth?: McpAuthOptions
+  /**
+   * Browser origins allowed to call the MCP endpoint (`sse`/`http`), e.g.
+   * `['https://inspector.example.com']`, or `['*']` for any.
+   *
+   * Requests without an `Origin` header — MCP clients such as Claude Code,
+   * Cursor and the MCP SDK — are always accepted. A request that carries an
+   * `Origin` not in this list gets `403`, which stops web pages from reaching
+   * a local MCP server through DNS rebinding. Defaults to `[]`: no browser
+   * origin is allowed.
+   */
+  allowedOrigins?: string[]
   /** Base path for the MCP endpoint (SSE/HTTP only). Defaults to `/_mcp`. */
   basePath?: string
 }

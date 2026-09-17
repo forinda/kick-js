@@ -16,11 +16,58 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { detectSchema } from '@forinda/kickjs-schema'
 import { getMcpToolMeta } from './decorators'
 import type { McpAdapterOptions, McpToolDefinition, McpTransport } from './types'
 
 const log = Logger.for('McpAdapter')
+
+/** First value of a node header that may repeat. */
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
+/** Write a JSON-RPC error straight to the node response. */
+function sendJsonRpcError(
+  res: {
+    writeHead(status: number, headers: Record<string, string>): unknown
+    end(body: string): unknown
+  },
+  status: number,
+  message: string,
+  headers: Record<string, string> = {},
+): void {
+  res.writeHead(status, { 'content-type': 'application/json', ...headers })
+  res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }))
+}
+
+/**
+ * Whether an `exclude` pattern matches a route path. Patterns are compared
+ * against the full path and every trailing part of it that starts at a `/`,
+ * so `'/admin/*'` matches `/api/v1/admin/users` without knowing the api
+ * prefix. `*` matches anything; a trailing `/*` also matches the bare path;
+ * a pattern without `*` matches that path and everything under it. Errs
+ * toward excluding more, never less.
+ */
+export function matchesPathPattern(path: string, pattern: string): boolean {
+  const parts = path.split('/')
+  const candidates = parts.map((_, i) => `/${parts.slice(i + 1).join('/')}`)
+  let test: (candidate: string) => boolean
+  if (pattern.includes('*')) {
+    // A trailing `/*` also matches the bare path: '/admin/*' excludes '/admin'.
+    const trailing = pattern.endsWith('/*')
+    const body = trailing ? pattern.slice(0, -2) : pattern
+    const source =
+      body.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + (trailing ? '(?:/.*)?' : '')
+    const regex = new RegExp(`^${source}$`)
+    test = (candidate) => regex.test(candidate)
+  } else {
+    const base = pattern.endsWith('/') ? pattern.slice(0, -1) : pattern
+    test = (candidate) => candidate === base || candidate.startsWith(`${base}/`)
+  }
+  return candidates.some(test)
+}
 
 /**
  * Public extension surface exposed by an McpAdapter instance.
@@ -107,12 +154,21 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     let mcpServer: McpServer | null = null
 
     /**
-     * Active MCP transport, created in `afterStart`. Can be either a
-     * `StreamableHTTPServerTransport` (the default for HTTP-based MCP)
-     * or a `StdioServerTransport` (when running via the `kick mcp` CLI
-     * or with `KICK_MCP_STDIO=1`).
+     * Stdio transport, created in `afterStart` when running via the
+     * `kick mcp` CLI or with `KICK_MCP_STDIO=1`. HTTP clients each get
+     * their own transport in `sessions`.
      */
     let transport: Transport | null = null
+
+    /**
+     * Open Streamable HTTP sessions, keyed by `mcp-session-id`. Each client
+     * gets its own McpServer + transport: one shared transport accepts a
+     * single `initialize` for the life of the process.
+     */
+    const sessions = new Map<
+      string,
+      { server: McpServer; transport: StreamableHTTPServerTransport }
+    >()
 
     /**
      * Base URL of the running KickJS HTTP server, captured in `afterStart`
@@ -167,7 +223,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           | 'PATCH'
           | 'DELETE'
         if (options.include && !options.include.includes(methodUpper)) return null
-        if (options.exclude?.some((prefix) => mountPath.startsWith(prefix))) return null
+        const fullPath = joinMountPath(mountPath, route.path)
+        if (options.exclude?.some((pattern) => matchesPathPattern(fullPath, pattern))) return null
       }
 
       const description = meta?.description ?? deriveDescription(controller, route)
@@ -371,11 +428,47 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return server
     }
 
+    /**
+     * Origin and auth checks for one HTTP request. Returns the rejection to
+     * send, or null to let the request through.
+     *
+     * Origin: browsers send it, MCP clients (Claude Code, Cursor, the SDK) do
+     * not. A request that carries one must match `allowedOrigins` — the MCP
+     * spec requires this to stop DNS-rebinding attacks from web pages.
+     */
+    const checkAccess = async (
+      headers: Record<string, string | string[] | undefined>,
+    ): Promise<{ status: number; message: string; headers?: Record<string, string> } | null> => {
+      const origin = firstHeader(headers.origin)
+      const allowedOrigins = options.allowedOrigins ?? []
+      if (origin && !allowedOrigins.includes('*') && !allowedOrigins.includes(origin)) {
+        return { status: 403, message: `Forbidden: origin ${origin} is not allowed` }
+      }
+
+      if (!options.auth) return null
+      const authorization = firstHeader(headers.authorization) ?? ''
+      const credential =
+        options.auth.type === 'bearer'
+          ? (/^Bearer\s+(.+)$/i.exec(authorization)?.[1] ?? '')
+          : authorization
+      let allowed = false
+      if (options.auth.type === 'custom' || credential !== '') {
+        try {
+          allowed = Boolean(await options.auth.validate(credential))
+        } catch (err) {
+          log.error(err as Error, 'McpAdapter: auth.validate threw; rejecting the request')
+        }
+      }
+      if (allowed) return null
+      return {
+        status: 401,
+        message: 'Unauthorized',
+        ...(options.auth.type === 'bearer' ? { headers: { 'www-authenticate': 'Bearer' } } : {}),
+      }
+    }
+
     /** Mount StreamableHTTP transport endpoints via the HTTP facade. */
-    const mountHttpRoutes = (
-      http: AdapterHttp,
-      httpTransport: StreamableHTTPServerTransport,
-    ): void => {
+    const mountHttpRoutes = (http: AdapterHttp): void => {
       const path = `${options.basePath!}/messages`
 
       // The MCP transport reads/writes the raw node request/response directly,
@@ -385,7 +478,45 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         const req = ctx.req as any
         const res = ctx.res as any
         try {
-          await httpTransport.handleRequest(req, res, req.body)
+          const denied = await checkAccess(req.headers)
+          if (denied) {
+            sendJsonRpcError(res, denied.status, denied.message, denied.headers)
+            return
+          }
+
+          const sessionId = firstHeader(req.headers['mcp-session-id'])
+          if (sessionId) {
+            const session = sessions.get(sessionId)
+            if (!session) {
+              sendJsonRpcError(res, 404, 'Session not found')
+              return
+            }
+            await session.transport.handleRequest(req, res, req.body)
+            return
+          }
+
+          if (req.method !== 'POST' || !isInitializeRequest(req.body)) {
+            sendJsonRpcError(res, 400, 'Bad Request: no valid session ID provided')
+            return
+          }
+
+          // ponytail: sessions live until the client sends DELETE, disconnects,
+          // or the app shuts down; add an idle timeout if abandoned sessions pile up.
+          const server = buildMcpServer()
+          const sessionTransport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (id) => {
+              sessions.set(id, { server, transport: sessionTransport })
+            },
+          })
+          // Set before connect(): the SDK wraps an existing onclose, but a
+          // handler assigned afterwards would replace its cleanup.
+          // oxlint-disable-next-line unicorn/prefer-add-event-listener -- MCP SDK transports expose only an `onclose` property
+          sessionTransport.onclose = () => {
+            if (sessionTransport.sessionId) sessions.delete(sessionTransport.sessionId)
+          }
+          await server.connect(sessionTransport)
+          await sessionTransport.handleRequest(req, res, req.body)
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
           if (!res.headersSent) {
@@ -484,14 +615,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           return
         }
 
-        mcpServer = buildMcpServer()
-        const httpTransport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-        })
-        transport = httpTransport
-
-        await mcpServer.connect(httpTransport)
-        mountHttpRoutes(ctx.http, httpTransport)
+        mountHttpRoutes(ctx.http)
       },
 
       /**
@@ -515,21 +639,33 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         )
       },
 
-      /** Tear down the MCP server and any open transports. Idempotent. */
+      /**
+       * Tear down the MCP servers and every open transport. Idempotent.
+       * Also forgets discovered tools, so an instance started again (HMR,
+       * `Application.rebuild()`) rediscovers them instead of registering
+       * each one twice.
+       */
       async shutdown() {
+        const open = [...sessions.values()]
+        sessions.clear()
+        const servers = [...open.map((s) => s.server), ...(mcpServer ? [mcpServer] : [])]
+        for (const server of servers) {
+          try {
+            await server.close()
+          } catch (err) {
+            log.error(err as Error, 'McpAdapter: failed to close server')
+          }
+        }
         try {
           await transport?.close()
         } catch (err) {
           log.error(err as Error, 'McpAdapter: failed to close transport')
         }
-        try {
-          await mcpServer?.close()
-        } catch (err) {
-          log.error(err as Error, 'McpAdapter: failed to close server')
-        }
         transport = null
         mcpServer = null
         serverBaseUrl = null
+        tools.length = 0
+        mountedControllers.length = 0
         log.debug('McpAdapter shutdown complete')
       },
     }

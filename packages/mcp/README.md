@@ -122,12 +122,13 @@ McpAdapter({
   transport: 'http', // 'http' (default) | 'stdio' | 'sse'
   basePath: '/_mcp', // HTTP mount path (default: '/_mcp')
   include: ['GET', 'POST'], // Auto mode: which HTTP methods to expose
-  exclude: ['/admin/*'], // Auto mode: path prefixes to skip
+  exclude: ['/admin/*'], // Auto mode: route paths to skip (matches /api/v1/admin/... too)
   auth: {
-    // Transport-level auth (HTTP/SSE only)
+    // Checked on every MCP request (HTTP/SSE only); 401 when validate returns false
     type: 'bearer',
     validate: (token) => isValid(token),
   },
+  allowedOrigins: [], // Browser origins allowed to connect; requests with any other Origin get 403
 })
 ```
 

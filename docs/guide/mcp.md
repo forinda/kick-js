@@ -65,8 +65,8 @@ bootstrap({ modules, adapters: [McpAdapter(...)] })
   |
   +-- 4. Adapter beforeStart
   |       - Scan @McpTool decorators on collected controllers
-  |       - Build MCP server (registerTool for each)
   |       - Mount /_mcp/messages on Express (StreamableHTTP transport)
+  |       - Each client's initialize creates its own MCP server session
   |
   +-- 5. Error handlers registered
   |       app.use(notFoundHandler())
@@ -658,7 +658,8 @@ dispatch and resolves the user as normal.
 | Symptom                                                | Cause                                                            | Fix                                                                                                                                   |
 | ------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                             | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                            |
-| "Server already initialized"                           | Stale session from a previous connection                         | Restart your KickJS server to reset the MCP session                                                                                   |
+| `403` "origin … is not allowed"                        | A browser-based client sent an `Origin` header                   | Add that origin to `allowedOrigins`, e.g. `allowedOrigins: ['http://localhost:6274']` for the Inspector UI                            |
+| `401` on connect                                       | `auth` is set and the request has no valid credential            | Send the `Authorization` header your `auth.validate` expects                                                                          |
 | "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                   |
 | CORS errors in browser console                         | Connecting from a different origin without CORS configured       | Add `cors()` middleware in your bootstrap: `middlewares: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]` |
 | Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                      | Expand Authentication, enable the Authorization header, set the value                                                                 |
@@ -667,48 +668,26 @@ dispatch and resolves the user as normal.
 
 ### Important caveats
 
-#### One MCP session at a time
+#### Sessions
 
-The MCP SDK's `StreamableHTTPServerTransport` allows **one active
-session per server instance**. The first client to send `initialize`
-locks the session. Any second client gets rejected.
+Each client that sends `initialize` gets its own session, identified by
+the `mcp-session-id` response header. Several clients (the Inspector,
+Claude Code, a script) can be connected at the same time.
 
-```text
-Client A: POST /_mcp/messages { "initialize" }  →  OK (session created)
-Client B: POST /_mcp/messages { "initialize" }  →  "Server already initialized"
-```
+A session ends when the client disconnects (`DELETE /_mcp/messages`),
+when its connection closes, or when the app shuts down. A request with
+an unknown session id gets `404`, and the client starts a new session.
 
-This affects **only the MCP endpoint** (`/_mcp/messages`). Your
-regular API routes work normally regardless:
-
-```text
-/_mcp/messages    ← locked to one MCP session at a time
-/api/v1/hello     ← always works, unlimited clients
-/api/v1/tasks     ← always works, unlimited clients
-```
-
-**What triggers a stale session:**
-
-- Running `curl` against `/_mcp/messages` before opening the Inspector
-- A previous Inspector connection that wasn't disconnected cleanly
-- Any MCP client that initialized but didn't disconnect
-
-**How to reset:**
-
-- **`kick dev`** — save any source file to trigger HMR, which resets
-  the MCP session automatically
-- **Production** — restart the server process
-- **Inspector** — click **Disconnect** before closing the tab, so the
-  next connection can initialize cleanly
-
-**Rule of thumb:** use one MCP client at a time. If switching from
-curl to the Inspector (or vice versa), restart the server first.
+Sessions live in the server's memory. Behind a load balancer with
+several instances, route each client to the same instance (sticky
+sessions), or a request can land on an instance that doesn't know its
+session.
 
 #### Inspector quick-start checklist
 
 Follow this exact sequence to avoid the common pitfalls:
 
-1. **Start your server** (fresh — no prior MCP connections):
+1. **Start your server**:
 
    ```bash
    kick dev
@@ -847,26 +826,28 @@ McpAdapter({
   transport: 'http', // 'http' (default) | 'stdio' | 'sse'
   basePath: '/_mcp', // HTTP mount path (default: '/_mcp')
   include: ['GET', 'POST'], // Auto mode only: HTTP methods to expose
-  exclude: ['/admin/*'], // Auto mode only: path prefixes to skip
+  exclude: ['/admin/*'], // Auto mode only: route paths to skip
   auth: {
-    // Transport-level auth (HTTP/SSE only)
+    // Checked on every MCP request (HTTP/SSE only)
     type: 'bearer',
     validate: (token) => isValid(token),
   },
+  allowedOrigins: ['https://inspector.example.com'], // Browser origins allowed to connect
 })
 ```
 
-| Option        | Type                         | Default      | Description                               |
-| ------------- | ---------------------------- | ------------ | ----------------------------------------- |
-| `name`        | `string`                     | required     | MCP server name advertised to clients     |
-| `version`     | `string`                     | `'0.0.0'`    | Server version advertised to clients      |
-| `description` | `string`                     | —            | Human-readable description for client UIs |
-| `mode`        | `'explicit' \| 'auto'`       | `'explicit'` | How routes are selected as tools          |
-| `transport`   | `'http' \| 'stdio' \| 'sse'` | `'http'`     | Which MCP transport to use                |
-| `basePath`    | `string`                     | `'/_mcp'`    | HTTP mount path for the MCP endpoint      |
-| `include`     | `string[]`                   | —            | Auto mode: HTTP methods to include        |
-| `exclude`     | `string[]`                   | —            | Auto mode: path prefixes to exclude       |
-| `auth`        | `McpAuthOptions`             | —            | Transport-level bearer auth               |
+| Option           | Type                         | Default      | Description                                                                                                                                           |
+| ---------------- | ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`           | `string`                     | required     | MCP server name advertised to clients                                                                                                                 |
+| `version`        | `string`                     | `'0.0.0'`    | Server version advertised to clients                                                                                                                  |
+| `description`    | `string`                     | —            | Human-readable description for client UIs                                                                                                             |
+| `mode`           | `'explicit' \| 'auto'`       | `'explicit'` | How routes are selected as tools                                                                                                                      |
+| `transport`      | `'http' \| 'stdio' \| 'sse'` | `'http'`     | Which MCP transport to use                                                                                                                            |
+| `basePath`       | `string`                     | `'/_mcp'`    | HTTP mount path for the MCP endpoint                                                                                                                  |
+| `include`        | `string[]`                   | —            | Auto mode: HTTP methods to include                                                                                                                    |
+| `exclude`        | `string[]`                   | —            | Auto mode: route paths to skip. Matched against the full path and each trailing part, so `'/admin/*'` skips `/api/v1/admin/users` and `/api/v1/admin` |
+| `auth`           | `McpAuthOptions`             | —            | Checked on every MCP request; `401` when `validate` returns false. `bearer` passes the token, `custom` the raw `Authorization` header                 |
+| `allowedOrigins` | `string[]`                   | `[]`         | Browser origins allowed to call the endpoint (`'*'` for any). Requests with another `Origin` get `403`; clients that send no `Origin` are unaffected  |
 
 ### @McpTool options
 
