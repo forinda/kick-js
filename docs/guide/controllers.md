@@ -196,6 +196,7 @@ rather than the body, so the typed client has no payload to offer.
 | `ctx.redirect(url, status?)`            | 302    | Redirect (works on every runtime)               |
 | `ctx.download(buffer, filename, type?)` | --     | [File download](#returning-a-generated-file)    |
 | `ctx.render(template, data?)`           | 200    | Render a template (requires ViewAdapter)        |
+| `await ctx.sendResponse(response)`      | --     | Send a web `Response`, body streamed            |
 
 ::: warning Redirect destinations
 `ctx.redirect(url)` writes `url` into the `Location` header unchanged. A destination taken

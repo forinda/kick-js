@@ -210,8 +210,8 @@ describe('McpAdapter — tool dispatch via internal HTTP', () => {
     expect(result.content[0].text).toContain('task not found')
   })
 
-  it('returns a transport error when serverBaseUrl was never captured', async () => {
-    // No server passed in — adapter cannot resolve the base URL
+  it('returns a tool error when the adapter has no way to reach the app', async () => {
+    // Neither AdapterContext.fetch nor a listening server: nothing to dispatch to
     const app = express()
     const adapter = McpAdapter({
       name: 'no-server',
@@ -229,7 +229,7 @@ describe('McpAdapter — tool dispatch via internal HTTP', () => {
     })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toMatch(/server address not yet captured/i)
+    expect(result.content[0].text).toMatch(/has not started/i)
 
     await adapter.shutdown()
   })

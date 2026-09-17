@@ -152,7 +152,8 @@ describe('OpenAIProvider.chat()', () => {
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string)
     expect(body.temperature).toBe(0.2)
-    expect(body.max_tokens).toBe(256)
+    expect(body.max_completion_tokens).toBe(256)
+    expect(body.max_tokens).toBeUndefined()
     expect(body.top_p).toBe(0.9)
     expect(body.stop).toEqual(['END'])
   })
@@ -186,7 +187,7 @@ describe('OpenAIProvider.chat()', () => {
     expect(res.toolCalls).toEqual([
       { id: 'call_1', name: 'create_task', arguments: { title: 'Ship', priority: 'high' } },
     ])
-    expect(res.finishReason).toBe('tool_calls')
+    expect(res.finishReason).toBe('tool_call')
   })
 
   it('passes through tool messages and assistant tool_calls in requests', async () => {
@@ -320,9 +321,56 @@ describe('OpenAIProvider.stream()', () => {
     const withTool = chunks.find((c) => c.toolCallDelta)
     expect(withTool?.toolCallDelta).toEqual({
       id: 'call_1',
+      index: 0,
       name: 'create_task',
       argumentsDelta: '{"title":"X"}',
     })
+  })
+
+  it('streams parallel tool calls by index, carrying each id to later deltas', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'sk-test' })
+    fetchSpy.mockResolvedValueOnce(
+      mockStreamResponse([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'call_a', function: { name: 'a', arguments: '' } },
+                  { index: 1, id: 'call_b', function: { name: 'b', arguments: '' } },
+                ],
+              },
+            },
+          ],
+        },
+        { choices: [{ delta: { tool_calls: [{ index: 1, function: { arguments: '{"x":' } }] } }] },
+        {
+          choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{}' } }] } }],
+        },
+        { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+        { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } },
+      ]),
+    )
+
+    const chunks = []
+    for await (const chunk of provider.stream({ messages: [{ role: 'user', content: 'go' }] })) {
+      chunks.push(chunk)
+    }
+    const deltas = chunks.filter((c) => c.toolCallDelta).map((c) => c.toolCallDelta)
+    expect(deltas).toEqual([
+      { id: 'call_a', index: 0, name: 'a', argumentsDelta: '' },
+      { id: 'call_b', index: 1, name: 'b', argumentsDelta: '' },
+      { id: 'call_b', index: 1, argumentsDelta: '{"x":' },
+      { id: 'call_a', index: 0, argumentsDelta: '{}' },
+    ])
+    expect(chunks.at(-1)).toEqual({
+      content: '',
+      done: true,
+      finishReason: 'tool_call',
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    })
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string)
+    expect(body.stream_options).toEqual({ include_usage: true })
   })
 
   it('throws ProviderError on streaming endpoint errors', async () => {

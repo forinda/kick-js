@@ -88,6 +88,8 @@ export interface RunAgentWithMemoryOptions {
    * the model sees a single, stable system prompt for the session.
    */
   systemPrompt?: string
+  /** Provider for this turn: a registered name or an instance. See `RunAgentOptions.provider`. */
+  provider?: string | import('../types').AiProvider
   /** Model override. Defaults to the provider's configured default. */
   model?: string
   /**
@@ -103,6 +105,8 @@ export interface RunAgentWithMemoryOptions {
   topP?: number
   stopSequences?: string[]
   signal?: AbortSignal
+  /** Headers sent with every tool call. See `RunAgentOptions.headers`. */
+  headers?: Headers | Record<string, string>
   /**
    * When true, tool call results written to memory preserve their
    * full content. When false (the default), tool results are

@@ -1,13 +1,15 @@
+import type { RouteFlagTest } from '@forinda/kickjs'
+
 /**
  * Transport modes supported by the MCP adapter.
  *
- * - `stdio` — standard MCP transport for CLI clients (Claude Code, Cursor).
- *   The MCP server owns stdin/stdout. Cannot be combined with a normal
- *   Express dev server in the same process without care.
- * - `sse` — Server-Sent Events over HTTP. Good fit when KickJS already
- *   exposes an HTTP server — the MCP endpoints mount on the same app.
- * - `http` — plain HTTP POST/GET streaming. Simpler than SSE for some
- *   clients but gives up live notifications.
+ * - `http` (default) — Streamable HTTP, the current MCP transport. The
+ *   endpoint mounts on the app at `basePath` and streams responses and
+ *   notifications over SSE when the client asks for it.
+ * - `stdio` — for clients that spawn the server (`kick mcp`, Claude Code,
+ *   Cursor). The MCP server owns stdin/stdout.
+ * - `sse` — deprecated alias of `http`, kept for existing configs. The old
+ *   standalone SSE protocol (`GET /sse` + `POST ?sessionId`) is not served.
  */
 export type McpTransport = 'stdio' | 'sse' | 'http'
 
@@ -55,7 +57,7 @@ export interface McpAuthOptions {
  *   version: '1.0.0',
  *   description: 'Task management MCP server',
  *   mode: 'explicit',
- *   transport: 'sse',
+ *   transport: 'http',
  * })
  * ```
  */
@@ -68,7 +70,7 @@ export interface McpAdapterOptions {
   description?: string
   /** Exposure mode. Defaults to `'explicit'`. */
   mode?: McpExposureMode
-  /** Transport mode. Defaults to `'sse'`. */
+  /** Transport mode. Defaults to `'http'`. */
   transport?: McpTransport
   /** HTTP methods to include when `mode === 'auto'`. */
   include?: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>
@@ -92,8 +94,33 @@ export interface McpAdapterOptions {
    * origin is allowed.
    */
   allowedOrigins?: string[]
+  /**
+   * Request headers copied from the MCP request onto each tool call, so the
+   * route sees the caller's credentials and tracing context. Defaults to
+   * `['authorization', 'cookie', 'x-request-id', 'traceparent', 'tracestate']`.
+   * Replace the list to add your own, e.g. a tenant header.
+   */
+  forwardHeaders?: string[]
   /** Base path for the MCP endpoint (SSE/HTTP only). Defaults to `/_mcp`. */
   basePath?: string
+  /**
+   * Expose routes carrying these [route flags](https://kickjs.app/guide/route-flags)
+   * as tools, without `@McpTool` — on a method, a controller, or a module
+   * mount (`routes: () => ({ …, flags: ['mcp.tool'] })`). Takes the same
+   * forms as `skipWhen`: a name, `'!name'`, a list, or a predicate.
+   *
+   * When the matching flag carries an object value, it is read as tool
+   * options: `defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')`
+   * then `@Tool({ description: 'Manage webhooks' })`. `@McpTool` on the
+   * method takes precedence over the flag's options.
+   */
+  exposeWhen?: RouteFlagTest
+  /**
+   * Never expose routes carrying these route flags — wins over `@McpTool`,
+   * `exposeWhen` and `mode: 'auto'`. Use it to hide a whole controller or
+   * module mount, including ones you don't own.
+   */
+  hideWhen?: RouteFlagTest
 }
 
 /**
@@ -183,4 +210,68 @@ export interface McpToolDefinition {
   mountPath: string
   /** Examples for documentation. */
   examples?: McpToolExample[]
+}
+
+/**
+ * What a custom tool's handler receives besides its arguments.
+ */
+export interface McpToolContext {
+  /** Headers of the MCP request that carried the call (credentials, tracing). */
+  headers: Headers
+  /** Aborted when the client cancels the call. */
+  signal: AbortSignal
+  /**
+   * Run a `Request` through this app's pipeline — to call one of the app's
+   * own routes with the caller's credentials. See `AdapterContext.fetch`.
+   */
+  fetch(request: Request): Promise<Response>
+}
+
+/**
+ * A tool that is not a controller route, mounted with
+ * `McpAdapter.registerProvider()`.
+ *
+ * The handler's return value becomes the tool result: a string is sent as
+ * text, anything else as JSON text, and an object that is already an MCP
+ * result (`{ content: [...] }`) is sent as is. A thrown error becomes an
+ * error result with its message.
+ */
+export interface McpCustomTool<TArgs = any> {
+  /** Unique across every tool on the server. `[A-Za-z0-9_.-]{1,128}`. */
+  name: string
+  /** What the tool does, for the model. */
+  description: string
+  /**
+   * Input schema, from any library `@forinda/kickjs-schema` supports. The
+   * arguments are validated against it before the handler runs; invalid
+   * arguments return an error result. Omit for a tool without arguments.
+   */
+  inputSchema?: unknown
+  handler(args: TArgs, ctx: McpToolContext): unknown
+}
+
+/**
+ * A named set of custom tools, mounted with `McpAdapter.registerProvider()`
+ * at any time — before startup, or later from a plugin or module. Registering
+ * a provider with the name of one already mounted replaces it.
+ *
+ * @example
+ * ```ts
+ * const reports: McpToolProvider = {
+ *   name: 'reports',
+ *   tools: [
+ *     {
+ *       name: 'monthly_report',
+ *       description: 'Build the monthly revenue report',
+ *       inputSchema: z.object({ month: z.string() }),
+ *       handler: ({ month }, ctx) => buildReport(month, ctx.signal),
+ *     },
+ *   ],
+ * }
+ * container.resolve(MCP_ADAPTER).registerProvider(reports)
+ * ```
+ */
+export interface McpToolProvider {
+  name: string
+  tools: McpCustomTool[]
 }

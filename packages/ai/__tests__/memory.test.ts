@@ -207,8 +207,34 @@ describe('SlidingWindowChatMemory — eviction', () => {
       { role: 'user', content: 'c' },
       { role: 'assistant', content: 'd' },
     ])
+    // The last 3 would open on assistant 'b'; the window starts at the next user message.
     const visible = await wrapped.get()
-    expect(visible.map((m) => m.content)).toEqual(['b', 'c', 'd'])
+    expect(visible.map((m) => m.content)).toEqual(['c', 'd'])
+  })
+
+  it('never opens the window on a tool result whose call was evicted', async () => {
+    const wrapped = new SlidingWindowChatMemory({ inner, maxMessages: 3, pinSystemPrompt: false })
+    await wrapped.add([
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 't1', name: 'x', arguments: {} }] },
+      { role: 'tool', toolCallId: 't1', content: 'r1' },
+      { role: 'assistant', content: 'a1' },
+      { role: 'user', content: 'q2' },
+      { role: 'assistant', content: 'a2' },
+    ])
+    expect((await wrapped.get()).map((m) => m.content)).toEqual(['q2', 'a2'])
+  })
+
+  it('keeps only the pinned system prompt when maxMessages is 1, without growing', async () => {
+    const wrapped = new SlidingWindowChatMemory({ inner, maxMessages: 1 })
+    await wrapped.add([
+      { role: 'system', content: 'PERSONA' },
+      { role: 'user', content: 'a' },
+      { role: 'assistant', content: 'b' },
+    ])
+    await wrapped.add({ role: 'user', content: 'c' })
+    expect((await wrapped.get()).map((m) => m.content)).toEqual(['PERSONA'])
+    expect(await inner.size()).toBe(1)
   })
 
   it('clear wipes the inner store', async () => {
@@ -336,10 +362,11 @@ describe('AiAdapter.runAgentWithMemory', () => {
       tools: 'auto',
     })
 
-    const roles = (await memory.get()).map((m) => m.role)
-    // Should have: user, assistant (with tool calls), assistant (final text)
-    // but NOT the tool result message
-    expect(roles).toEqual(['user', 'assistant', 'assistant'])
+    // No tool result, and no tool call left without one (providers reject
+    // that history): the empty tool-calling turn is dropped entirely.
+    const saved = await memory.get()
+    expect(saved.map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(saved.some((m) => m.toolCalls)).toBe(false)
   })
 
   it('persists tool messages when persistToolResults is true', async () => {

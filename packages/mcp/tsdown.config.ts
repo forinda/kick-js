@@ -15,8 +15,6 @@ export default defineConfig({
     '@forinda/kickjs',
     '@forinda/kickjs-schema',
     /^@modelcontextprotocol\/sdk/,
-    'express',
-    'reflect-metadata',
     'zod',
     /^node:/,
   ],
