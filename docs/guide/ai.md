@@ -29,11 +29,12 @@ stores is a configuration change, not a code change.
 <PmCommand add="@forinda/kickjs-ai" />
 
 The package declares `@forinda/kickjs` and `reflect-metadata` as
-dependencies and `zod` as a peer. No other runtime is required for
-the built-in providers — they talk to upstream APIs over `fetch`.
+dependencies and `zod` as a peer. `OpenAIProvider` talks to the upstream
+API over `fetch` and needs nothing else.
 
 Optional peers, installed only if you use the matching backend:
 
+- `@anthropic-ai/sdk` — for `AnthropicProvider`
 - `pg` — for `PgVectorStore` when you pass `connectionString` instead
   of a pre-made executor
 
@@ -102,20 +103,47 @@ new OpenAIProvider({
 
 ### Anthropic
 
-`AnthropicProvider` targets Anthropic's Messages API. It translates
-the framework's normalized chat shape into content blocks, extracts
-system messages into the top-level `system` field, and handles
-`tool_use` / `tool_result` wire formats transparently.
+`AnthropicProvider` calls Claude through the official SDK. Install it
+next to `@forinda/kickjs-ai` — it's an optional peer, only needed for
+this provider:
+
+<PmCommand add="@anthropic-ai/sdk" />
 
 ```ts
 import { AnthropicProvider } from '@forinda/kickjs-ai'
 
 new AnthropicProvider({
-  apiKey: getEnv('ANTHROPIC_API_KEY'),
-  defaultChatModel: 'claude-opus-4-6',
-  // defaultMaxTokens: 4096  (Anthropic requires max_tokens on every call)
+  // apiKey: omit to use ANTHROPIC_API_KEY or an `ant auth login` profile
+  // defaultChatModel: 'claude-opus-5',
+  effort: 'medium', // low | medium | high | xhigh | max
 })
 ```
+
+| Option             | Default           | Description                                                                                                                                                                    |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apiKey`           | SDK credentials   | API key; omitted, the SDK reads `ANTHROPIC_API_KEY` or an `ant auth login` profile                                                                                             |
+| `client`           | —                 | A pre-configured SDK client (custom retries, or a Bedrock/Vertex client)                                                                                                       |
+| `defaultChatModel` | `'claude-opus-5'` | Model when a call doesn't set one                                                                                                                                              |
+| `defaultMaxTokens` | `64000`           | Cap on thinking plus response text; requests always stream, so large values are safe                                                                                           |
+| `effort`           | model default     | Thinking depth and token spend; `ChatOptions.effort` overrides per call                                                                                                        |
+| `thinkingDisplay`  | model default     | `'summarized'` returns a summary of the model's thinking; `'omitted'` returns none                                                                                             |
+| `cache`            | `true`            | Automatic prompt caching, so agent loops re-read tools, system prompt and history from cache                                                                                   |
+| `fallbacks`        | `'default'`       | On Claude Opus 5 and Fable/Mythos 5 models, a declined request is re-run on Anthropic's recommended fallback model; `false` turns it off (and must, on Bedrock/Vertex/Foundry) |
+
+What the provider handles for you:
+
+- **Thinking blocks** come back on `ChatResponse.providerContent`, and
+  `runAgent` sends them back with the tool calls they led to — tool loops on
+  thinking models need them. If you drive `chat()` yourself, copy
+  `providerContent` onto the assistant message you append.
+- **Refusals** set `finishReason: 'content_filter'` and `refusal` (category
+  and explanation). `runAgent` stops there, and also on `'length'`, without
+  running that turn's tool calls, since they may be truncated.
+- **Sampling parameters** (`temperature`, `topP`) are rejected by Claude
+  Opus 4.7 and later, Sonnet 5 and Fable; the provider drops them with a
+  warning. Use `effort` instead.
+- **Tool results** are sent back together, failed calls marked as errors.
+- **Usage** includes `cacheReadTokens` and `cacheWriteTokens`.
 
 Anthropic does not ship an embeddings API — calling `embed()` on this
 provider throws a descriptive error. For RAG workflows, pair it with

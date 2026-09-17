@@ -280,19 +280,29 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           ? await fetch(`${serverBaseUrl}${request.url}`, init)
           : await appFetch!(new Request(new URL(request.url, 'http://localhost'), init))
         const text = await res.text()
-        const content = res.ok
-          ? text || `(${res.status} ${res.statusText})`
-          : JSON.stringify({
-              error: `Tool ${call.name} returned ${res.status}`,
-              body: text,
-            })
-        return { role: 'tool', toolCallId: call.id, content }
+        if (res.ok) {
+          return {
+            role: 'tool',
+            toolCallId: call.id,
+            content: text || `(${res.status} ${res.statusText})`,
+          }
+        }
+        return {
+          role: 'tool',
+          toolCallId: call.id,
+          isError: true,
+          content: JSON.stringify({
+            error: `Tool ${call.name} returned ${res.status}`,
+            body: text,
+          }),
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         log.error(err as Error, `AiAdapter: tool dispatch failed for ${call.name}`)
         return {
           role: 'tool',
           toolCallId: call.id,
+          isError: true,
           content: JSON.stringify({ error: `Dispatch error: ${message}` }),
         }
       }
@@ -331,13 +341,28 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           usage.totalTokens += response.usage.totalTokens
         }
 
-        if (!response.toolCalls || response.toolCalls.length === 0) {
-          messages.push({ role: 'assistant', content: response.content })
+        // A refused or token-truncated turn ends the loop: its tool calls may
+        // be cut off mid-arguments, so they are never run.
+        const final =
+          !response.toolCalls ||
+          response.toolCalls.length === 0 ||
+          response.finishReason === 'content_filter' ||
+          response.finishReason === 'length'
+        if (final) {
+          messages.push({
+            role: 'assistant',
+            content: response.content,
+            ...(response.providerContent !== undefined
+              ? { providerContent: response.providerContent }
+              : {}),
+          })
           return {
             content: response.content,
             messages,
             steps,
             usage: usage.totalTokens > 0 ? usage : undefined,
+            ...(response.finishReason ? { finishReason: response.finishReason } : {}),
+            ...(response.refusal ? { refusal: response.refusal } : {}),
           }
         }
 
@@ -345,10 +370,14 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           role: 'assistant',
           content: response.content,
           toolCalls: response.toolCalls,
+          // Thinking blocks go back with the tool calls they led to.
+          ...(response.providerContent !== undefined
+            ? { providerContent: response.providerContent }
+            : {}),
         })
 
         const results = await Promise.all(
-          response.toolCalls.map((call) =>
+          (response.toolCalls ?? []).map((call) =>
             dispatchToolCall(call, { headers: agentOptions.headers, signal: agentOptions.signal }),
           ),
         )

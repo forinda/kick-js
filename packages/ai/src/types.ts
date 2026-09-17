@@ -3,17 +3,27 @@ import type { RouteFlagTest } from '@forinda/kickjs'
 /**
  * A chat message in the OpenAI/Anthropic-style conversation format.
  *
- * All four built-in providers (OpenAI, Anthropic, Google, Ollama)
- * translate this shape into their native wire format. The `tool` and
- * `tool_calls` variants support function calling.
+ * The built-in providers (OpenAI, Anthropic) translate this shape into
+ * their native wire format. The `tool` role and `toolCalls` support
+ * function calling.
  */
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   /** Tool call ID if `role === 'tool'`. Set by the framework during tool loops. */
   toolCallId?: string
+  /** True on a `tool` message whose call failed. Providers that support it tell the model. */
+  isError?: boolean
   /** Tool calls made by the assistant. Set by the provider. */
   toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
+  /**
+   * Provider-native content of an assistant turn, copied from
+   * `ChatResponse.providerContent`. The provider that produced it sends it
+   * back verbatim — Anthropic needs its thinking blocks returned with the
+   * tool calls they led to. Opaque and JSON-serializable; keep it when
+   * storing history.
+   */
+  providerContent?: unknown
 }
 
 /**
@@ -52,7 +62,7 @@ export interface ChatInput {
   messages: ChatMessage[]
   /**
    * Optional model override. If omitted, the provider uses its default
-   * model. Accepts provider-specific model IDs (e.g. `gpt-4o`, `claude-opus-4-6`).
+   * model. Accepts provider-specific model IDs (e.g. `gpt-4o`, `claude-opus-5`).
    */
   model?: string
   /**
@@ -71,9 +81,20 @@ export interface ChatInput {
 
 /** Runtime options for a chat call. */
 export interface ChatOptions {
+  /**
+   * Sampling temperature. Models that reject sampling parameters (Claude
+   * Opus 4.7+, Sonnet 5, Fable) ignore it, with a warning.
+   */
   temperature?: number
   maxTokens?: number
+  /** Nucleus sampling. Ignored, with a warning, by models that reject it. */
   topP?: number
+  /**
+   * How much effort the model spends (thinking depth and overall tokens),
+   * where supported (Anthropic `output_config.effort`). Provider default
+   * when omitted.
+   */
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   stopSequences?: string[]
   /** Abort signal — cancel the request mid-flight. */
   signal?: AbortSignal
@@ -86,19 +107,50 @@ export interface ChatResponse {
   /** Any tool calls the model made. Usually executed by the agent loop. */
   toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
   /** Provider-reported token usage. */
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
-  /** Finish reason from the provider. */
+  usage?: ChatUsage
+  /**
+   * Why generation stopped, normalized: `'stop'`, `'length'` (token limit —
+   * tool calls may be truncated), `'tool_call'`, `'content_filter'` (the
+   * model declined; see `refusal`), or a provider-specific value.
+   */
   finishReason?: 'stop' | 'length' | 'tool_call' | 'content_filter' | string
+  /** Set when the model declined the request (`finishReason === 'content_filter'`). */
+  refusal?: { category: string | null; explanation: string | null }
+  /**
+   * Provider-native content of this turn. Copy it onto the assistant
+   * `ChatMessage` when continuing the conversation; see
+   * `ChatMessage.providerContent`.
+   */
+  providerContent?: unknown
+}
+
+/** Token usage for one call. */
+export interface ChatUsage {
+  /** All input tokens, including cache reads and writes. */
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  /** Input tokens served from the prompt cache, where reported. */
+  cacheReadTokens?: number
+  /** Input tokens written to the prompt cache, where reported. */
+  cacheWriteTokens?: number
 }
 
 /** A single chunk from a streaming chat call. */
 export interface ChatChunk {
   /** Incremental text delta. Empty for chunks that only carry tool deltas. */
   content: string
-  /** Partial tool call delta, if the model is building one. */
-  toolCallDelta?: { id: string; name?: string; argumentsDelta?: string }
+  /**
+   * Partial tool call delta, if the model is building one. `index`
+   * identifies the call when several stream in parallel.
+   */
+  toolCallDelta?: { id: string; index?: number; name?: string; argumentsDelta?: string }
   /** True on the final chunk. */
   done: boolean
+  /** On the final chunk: why generation stopped (see `ChatResponse.finishReason`). */
+  finishReason?: ChatResponse['finishReason']
+  /** On the final chunk, where the provider reports it. */
+  usage?: ChatUsage
 }
 
 /**
@@ -262,6 +314,13 @@ export interface RunAgentResult {
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
   /** True if the loop stopped because `maxSteps` was reached. */
   maxStepsReached?: boolean
+  /**
+   * Why the final turn stopped (see `ChatResponse.finishReason`). On
+   * `'content_filter'` or `'length'` any tool calls in that turn were not run.
+   */
+  finishReason?: ChatResponse['finishReason']
+  /** Set when the model declined the request. */
+  refusal?: ChatResponse['refusal']
 }
 
 /**
