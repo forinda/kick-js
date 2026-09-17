@@ -228,26 +228,6 @@ ${server}  resolve: {
 }
 
 /**
- * Generate pnpm-workspace.yaml with the template's build tools approved.
- *
- * `allowBuilds` is answered here, not left to pnpm. Scaffolds install
- * non-interactively, so pnpm cannot prompt — it writes
- * `'@swc/core': set this to true or false` and then refuses to run ANY script
- * with ERR_PNPM_IGNORED_BUILDS, leaving a fresh project unable to run
- * `pnpm dev` or `pnpm exec kick` until someone edits the file. Both are build
- * tools the templates chose: swc compiles the decorators, esbuild is Vite's.
- *
- * Pass `packages` for a workspace root (fullstack); omit it for a single project.
- */
-export function generatePnpmWorkspace(
-  packages?: string[],
-  builds: Record<string, boolean> = {},
-): string {
-  const list = packages?.length ? `packages:\n${packages.map((p) => `  - ${p}\n`).join('')}\n` : ''
-  return setAllowBuilds(`${list}allowBuilds:\n  '@swc/core': true\n  esbuild: true\n`, builds)
-}
-
-/**
  * Answer pnpm's `allowBuilds` for `builds` in pnpm-workspace.yaml text. A key
  * already answered true/false is left alone — that was someone's decision; a
  * missing key or pnpm's `set this to true or false` placeholder is filled in.

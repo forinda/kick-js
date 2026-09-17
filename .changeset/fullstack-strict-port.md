@@ -4,6 +4,11 @@
 
 `kick new --template fullstack` sets `server.strictPort: true` in `server/vite.config.ts`. `web/`'s dev proxy targets the API port, so `kick dev` now fails when that port is taken instead of moving to another one the proxy can't reach.
 
-Standalone pnpm projects (`--template rest|minimal`) now get a `pnpm-workspace.yaml` that approves the `@swc/core` and `esbuild` build scripts, like fullstack already did. Without it, pnpm's non-interactive install blocked every `pnpm exec` / script with `ERR_PNPM_IGNORED_BUILDS`.
+Scaffolds and `kick add` now record install-script approvals where each package manager reads them, so dependency scripts are not blocked or skipped:
 
-`kick add swagger` (and `kick new --packages swagger`) on pnpm answers `allowBuilds` for `@scarf/scarf`, the postinstall swagger-ui-dist pulls in, in the workspace root's `pnpm-workspace.yaml`. Keys already answered `true`/`false` are left as they are; pnpm's `set this to true or false` placeholder is filled in.
+- pnpm 10+: `allowBuilds` in `pnpm-workspace.yaml`. Standalone `rest`/`minimal` projects now get it, not only fullstack. Without it the non-interactive install blocked every `pnpm exec` / script with `ERR_PNPM_IGNORED_BUILDS`.
+- npm 11.19+: `allowScripts` in `package.json`.
+- bun: `trustedDependencies` in `package.json`.
+- yarn runs dependency scripts, so nothing is written.
+
+Every template approves `@swc/core` and `esbuild`. `kick add swagger` / `--packages swagger` also approves `@scarf/scarf` (a swagger-ui-dist dependency), at the workspace root when run from a workspace member. Answers already in the file are never overridden.

@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSafe } from '../utils/fs'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
-import { generatePnpmWorkspace } from './templates/project-config'
+import { TEMPLATE_BUILDS, approveInstallScripts } from '../commands/add'
 
 export interface InitFullstackOptions {
   name: string
@@ -64,8 +64,8 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     // web/vite.config.ts proxies /api to the server's port; if kick dev moved
     // to another port the proxy would silently reach the wrong process.
     strictPort: true,
-    // server/ is a member of the workspace root written below, not a root itself.
-    pnpmWorkspace: false,
+    // server/ is a workspace member; the root records the approvals.
+    approveInstallScripts: false,
     // Root owns install + git so the lockfile/commit cover the workspace.
     initGit: false,
     installDeps: false,
@@ -97,9 +97,10 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   // Only pnpm reads this file. npm / yarn / bun declare workspaces via the
   // `workspaces` field in the root package.json instead — see rootPackageJson.
   if (packageManager === 'pnpm') {
-    // Approves the build tools up front; see generatePnpmWorkspace for why.
-    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), generatePnpmWorkspace(['server', 'web']))
+    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - server\n  - web\n')
   }
+  // Before install, at the root every package manager reads them from.
+  approveInstallScripts(packageManager, dir, TEMPLATE_BUILDS)
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
 

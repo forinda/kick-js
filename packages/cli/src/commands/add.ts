@@ -479,7 +479,82 @@ export function printPackageList(all = false, runtime?: 'express' | 'fastify' | 
   console.log()
 }
 
-/** Merged pnpm `allowBuilds` answers for catalog entries (unknown names skipped). */
+/** Build tools every template installs: swc compiles the decorators, esbuild is Vite's. */
+export const TEMPLATE_BUILDS: Record<string, boolean> = { '@swc/core': true, esbuild: true }
+
+/**
+ * Record install-script answers where `pm` reads them, in `dir`:
+ *
+ * - pnpm 10+: `allowBuilds` in pnpm-workspace.yaml. Unanswered scripts fail the
+ *   install non-interactively and every later `pnpm exec` with ERR_PNPM_IGNORED_BUILDS.
+ * - npm 11.19+: `allowScripts` in package.json. Unanswered scripts are skipped
+ *   with a warning.
+ * - bun: `trustedDependencies` in package.json. Untrusted scripts are skipped.
+ *   Only approvals are written; bun has no deny entry.
+ * - yarn runs dependency scripts, so there is nothing to write.
+ *
+ * Existing answers win: a scaffold or `kick add` never overrides a decision
+ * already in the file. Returns the file it changed, if any.
+ */
+export function approveInstallScripts(
+  pm: PackageManager,
+  dir: string,
+  builds: Record<string, boolean>,
+): string | undefined {
+  if (pm === 'pnpm') {
+    const file = resolve(dir, 'pnpm-workspace.yaml')
+    const before = existsSync(file) ? readFileSync(file, 'utf-8') : ''
+    const after = setAllowBuilds(before, builds)
+    if (after === before) return undefined
+    writeFileSync(file, after)
+    return file
+  }
+  if (pm !== 'npm' && pm !== 'bun') return undefined
+
+  const file = resolve(dir, 'package.json')
+  if (!existsSync(file)) return undefined
+  const pkg = JSON.parse(readFileSync(file, 'utf-8'))
+  let changed = false
+  if (pm === 'npm') {
+    const allow: Record<string, boolean> = pkg.allowScripts ?? {}
+    for (const [name, value] of Object.entries(builds)) {
+      // npm also accepts version-pinned keys (`esbuild@0.28.2`).
+      if (Object.keys(allow).some((key) => key === name || key.startsWith(`${name}@`))) continue
+      allow[name] = value
+      changed = true
+    }
+    pkg.allowScripts = allow
+  } else {
+    const trusted: string[] = pkg.trustedDependencies ?? []
+    for (const [name, value] of Object.entries(builds)) {
+      if (!value || trusted.includes(name)) continue
+      trusted.push(name)
+      changed = true
+    }
+    pkg.trustedDependencies = trusted
+  }
+  if (!changed) return undefined
+  writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`)
+  return file
+}
+
+/**
+ * Where `pm` reads install-script answers from: the workspace root when the
+ * project is a workspace member (fullstack server/), else the current directory.
+ */
+function installRoot(pm: PackageManager): string {
+  if (pm === 'pnpm') return findUp('pnpm-workspace.yaml') ?? process.cwd()
+  for (let dir = process.cwd(); ; dir = dirname(dir)) {
+    try {
+      if (JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf-8')).workspaces) return dir
+    } catch {
+      // no package.json here, or not JSON — keep walking
+    }
+    if (dirname(dir) === dir) return process.cwd()
+  }
+}
+
+/** Merged install-script answers for catalog entries (unknown names skipped). */
 export function buildsFor(packages: string[]): Record<string, boolean> {
   return Object.assign({}, ...packages.map((name) => PACKAGE_REGISTRY[name]?.builds ?? {}))
 }
@@ -626,17 +701,12 @@ export function registerAddCommand(program: Command): void {
         if (prodDeps.length === 0 && devDeps.length === 0) return
       }
 
-      // Answer pnpm's build-script approvals before installing, in the
-      // workspace root's pnpm-workspace.yaml when there is one.
+      // Answer install-script approvals before installing, so the package
+      // manager doesn't block the scripts these packages bring in.
       const builds = buildsFor(packages)
-      if (pm === 'pnpm' && Object.keys(builds).length > 0) {
-        const file = resolve(findUp('pnpm-workspace.yaml') ?? process.cwd(), 'pnpm-workspace.yaml')
-        const before = existsSync(file) ? readFileSync(file, 'utf-8') : ''
-        const after = setAllowBuilds(before, builds)
-        if (after !== before) {
-          writeFileSync(file, after)
-          console.log(`\n  Updated allowBuilds in ${file}`)
-        }
+      if (Object.keys(builds).length > 0) {
+        const file = approveInstallScripts(pm, installRoot(pm), builds)
+        if (file) console.log(`\n  Approved install scripts in ${file}`)
       }
 
       // Install production dependencies

@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
 import {
-  generatePnpmWorkspace,
   generatePackageJson,
   generateViteConfig,
   generateTsConfig,
@@ -29,7 +28,12 @@ import {
   generateHelloModule,
 } from './templates/project-app'
 import { generateReadme } from './templates/project-docs'
-import { AVAILABLE_ADD_PACKAGES, buildsFor } from '../commands/add'
+import {
+  AVAILABLE_ADD_PACKAGES,
+  TEMPLATE_BUILDS,
+  approveInstallScripts,
+  buildsFor,
+} from '../commands/add'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -206,10 +210,11 @@ interface InitProjectOptions {
   /** Fail `kick dev` when its port is taken instead of moving (fullstack's /api proxy needs the port). */
   strictPort?: boolean
   /**
-   * Write pnpm-workspace.yaml approving the build tools (pnpm only). Default
-   * true; false when the project is a member of an enclosing workspace.
+   * Record install-script approvals for the package manager (pnpm-workspace.yaml,
+   * or package.json for npm/bun). Default true; false when the project is a
+   * member of a workspace whose root records them.
    */
-  pnpmWorkspace?: boolean
+  approveInstallScripts?: boolean
 }
 
 /** Scaffold a new KickJS project */
@@ -394,13 +399,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     force: true,
   })
 
-  // ── pnpm-workspace.yaml ──────────────────────────────────────────────
-  // Approves @swc/core and esbuild before install; see generatePnpmWorkspace.
-  if (packageManager === 'pnpm' && options.pnpmWorkspace !== false) {
-    await writeFileSafe(
-      join(dir, 'pnpm-workspace.yaml'),
-      generatePnpmWorkspace(undefined, buildsFor(packages)),
-    )
+  // ── Install-script approvals ─────────────────────────────────────────
+  // Before install; see approveInstallScripts.
+  if (options.approveInstallScripts !== false) {
+    approveInstallScripts(packageManager, dir, { ...TEMPLATE_BUILDS, ...buildsFor(packages) })
   }
 
   // ── Install Dependencies ────────────────────────────────────────────
