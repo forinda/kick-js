@@ -485,8 +485,9 @@ export const TEMPLATE_BUILDS: Record<string, boolean> = { '@swc/core': true, esb
 /**
  * Record install-script answers where `pm` reads them, in `dir`:
  *
- * - pnpm 10.26+ (when `allowBuilds` arrived): `allowBuilds` in pnpm-workspace.yaml. Unanswered scripts fail the
- *   install non-interactively and every later `pnpm exec` with ERR_PNPM_IGNORED_BUILDS.
+ * - pnpm 10+: pnpm-workspace.yaml, in both approval formats (see setAllowBuilds).
+ *   Unanswered scripts are skipped with a warning before pnpm 11; pnpm 11 fails
+ *   the install and every later `pnpm exec` with ERR_PNPM_IGNORED_BUILDS.
  * - npm 11.19+: `allowScripts` in package.json. Unanswered scripts are skipped
  *   with a warning.
  * - bun: `trustedDependencies` in package.json. Untrusted scripts are skipped.

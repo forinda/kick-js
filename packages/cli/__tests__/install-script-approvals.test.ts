@@ -36,23 +36,58 @@ describe('setAllowBuilds', () => {
         'minimumReleaseAgeExclude:',
         "  - '@forinda/kickjs@8.6.0'",
         '',
+        'onlyBuiltDependencies:',
+        "  - '@scarf/scarf'",
+        '  - esbuild',
+        '',
+        'ignoredBuiltDependencies:',
+        "  - '@swc/core'",
+        '',
       ].join('\n'),
     )
   })
 
-  it('finds entries after a blank line inside the block', () => {
-    const yaml = "allowBuilds:\n  esbuild: true\n\n  '@swc/core': false\npackages:\n  - web\n"
+  it('finds entries after a blank line inside a block', () => {
+    const yaml = [
+      'allowBuilds:',
+      '  esbuild: true',
+      '',
+      "  '@swc/core': false",
+      'onlyBuiltDependencies:',
+      '  - esbuild',
+      '',
+      "  - '@scarf/scarf'",
+      'packages:',
+      '  - web',
+      '',
+    ].join('\n')
     expect(setAllowBuilds(yaml, { '@swc/core': true, '@scarf/scarf': true })).toBe(
-      "allowBuilds:\n  esbuild: true\n\n  '@swc/core': false\n  '@scarf/scarf': true\npackages:\n  - web\n",
+      [
+        'allowBuilds:',
+        '  esbuild: true',
+        '',
+        "  '@swc/core': false",
+        "  '@scarf/scarf': true",
+        'onlyBuiltDependencies:',
+        '  - esbuild',
+        '',
+        "  - '@scarf/scarf'",
+        'packages:',
+        '  - web',
+        '',
+        'ignoredBuiltDependencies:',
+        "  - '@swc/core'",
+        '',
+      ].join('\n'),
     )
   })
 
-  it('adds an allowBuilds block to a file without one, or to an empty file', () => {
+  it('writes both formats to a file without them, or to an empty file', () => {
     expect(setAllowBuilds('packages:\n  - web\n', { '@scarf/scarf': true })).toBe(
-      "packages:\n  - web\n\nallowBuilds:\n  '@scarf/scarf': true\n",
+      "packages:\n  - web\n\nallowBuilds:\n  '@scarf/scarf': true\n\nonlyBuiltDependencies:\n  - '@scarf/scarf'\n",
     )
-    expect(setAllowBuilds('', { '@scarf/scarf': true })).toBe(
-      "allowBuilds:\n  '@scarf/scarf': true\n",
+    expect(setAllowBuilds('', { esbuild: true })).toBe(
+      'allowBuilds:\n  esbuild: true\n\nonlyBuiltDependencies:\n  - esbuild\n',
     )
   })
 })
@@ -76,11 +111,11 @@ describe('approveInstallScripts', () => {
   }
   const pkgOf = (dir: string) => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8'))
 
-  it('pnpm: writes allowBuilds to pnpm-workspace.yaml', () => {
+  it('pnpm: writes both approval formats to pnpm-workspace.yaml', () => {
     const dir = project()
     approveInstallScripts('pnpm', dir, TEMPLATE_BUILDS)
     expect(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf-8')).toBe(
-      "allowBuilds:\n  '@swc/core': true\n  esbuild: true\n",
+      "allowBuilds:\n  '@swc/core': true\n  esbuild: true\n\nonlyBuiltDependencies:\n  - '@swc/core'\n  - esbuild\n",
     )
   })
 

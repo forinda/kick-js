@@ -228,40 +228,72 @@ ${server}  resolve: {
 }
 
 /**
- * Answer pnpm's `allowBuilds` for `builds` in pnpm-workspace.yaml text. A key
- * already answered true/false is left alone — that was someone's decision; a
- * missing key or pnpm's `set this to true or false` placeholder is filled in.
+ * Answer pnpm's build-script approvals for `builds` in pnpm-workspace.yaml text,
+ * in both formats pnpm has used, so any pnpm 10+ reads them:
+ *
+ * - `allowBuilds` (pnpm 10.26+; pnpm 11 reads only this)
+ * - `onlyBuiltDependencies` / `ignoredBuiltDependencies` (pnpm before 10.26)
+ *
+ * Each version ignores the format it doesn't read. An existing answer wins: an
+ * `allowBuilds` key set to true/false, or a name already in either list, is left
+ * alone. A missing key or pnpm's `set this to true or false` placeholder is filled in.
  */
 export function setAllowBuilds(yaml: string, builds: Record<string, boolean>): string {
   const entries = Object.entries(builds)
   if (entries.length === 0) return yaml
   const lines = yaml === '' ? [] : yaml.replace(/\n$/, '').split('\n')
-  let start = lines.findIndex((line) => /^allowBuilds:\s*$/.test(line))
-  if (start === -1) {
-    if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
-    lines.push('allowBuilds:')
-    start = lines.length - 1
-  }
-  // The block runs to the next unindented line; blank lines inside it don't end it.
-  let end = start + 1
-  for (let i = start + 1; i < lines.length && /^(\s|$)/.test(lines[i]); i++) {
-    if (lines[i].trim() !== '') end = i + 1
+  const unquote = (text: string) => text.trim().replace(/^['"]|['"]$/g, '')
+  const quote = (name: string) => (/^[\w-]+$/.test(name) ? name : `'${name}'`)
+
+  /** Line range of a top-level block's indented entries; appended when missing and `create`. */
+  const block = (key: string, create: boolean): { start: number; end: number } | undefined => {
+    let start = lines.findIndex((line) => line.replace(/\s+$/, '') === `${key}:`)
+    if (start === -1) {
+      if (!create) return undefined
+      if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('')
+      lines.push(`${key}:`)
+      start = lines.length - 1
+    }
+    // The block runs to the next unindented line; blank lines inside it don't end it.
+    let end = start + 1
+    for (let i = start + 1; i < lines.length && /^(\s|$)/.test(lines[i]); i++) {
+      if (lines[i].trim() !== '') end = i + 1
+    }
+    return { start, end }
   }
 
+  const answers: Array<[string, boolean]> = []
   for (const [name, allow] of entries) {
-    const entry = `  ${/^[\w-]+$/.test(name) ? name : `'${name}'`}: ${allow}`
-    const index = lines.slice(start + 1, end).findIndex(
-      (line) =>
-        line
-          .split(':')[0]
-          .trim()
-          .replace(/^['"]|['"]$/g, '') === name,
-    )
-    if (index === -1) {
-      lines.splice(end++, 0, entry)
-    } else if (!/:\s*(true|false)\s*$/.test(lines[start + 1 + index])) {
-      lines[start + 1 + index] = entry
+    const { start, end } = block('allowBuilds', true)!
+    const index = lines
+      .slice(start + 1, end)
+      .findIndex((line) => unquote(line.split(':')[0]) === name)
+    const answered =
+      index === -1 ? undefined : /:\s*(true|false)\s*$/.exec(lines[start + 1 + index])
+    if (answered) {
+      answers.push([name, answered[1] === 'true'])
+      continue
     }
+    const entry = `  ${quote(name)}: ${allow}`
+    if (index === -1) lines.splice(end, 0, entry)
+    else lines[start + 1 + index] = entry
+    answers.push([name, allow])
+  }
+
+  const lists = ['onlyBuiltDependencies', 'ignoredBuiltDependencies']
+  for (const [name, allow] of answers) {
+    const listed = lists.some((key) => {
+      const range = block(key, false)
+      return (
+        range !== undefined &&
+        lines
+          .slice(range.start + 1, range.end)
+          .some((line) => unquote(line.replace(/^\s*-/, '')) === name)
+      )
+    })
+    if (listed) continue
+    const { end } = block(allow ? lists[0] : lists[1], true)!
+    lines.splice(end, 0, `  - ${quote(name)}`)
   }
   return `${lines.join('\n')}\n`
 }
