@@ -137,6 +137,16 @@ The Application hands the table to any middleware declaring that slot, once rout
 
 The connect-style `csrf()` has no table equivalent — a token check on an unmatched route is meaningless, so use `csrfGuard()` where you want flags.
 
+### Tool exposure: MCP and AI
+
+`McpAdapter` and `AiAdapter` take `exposeWhen` and `hideWhen`, read once at startup:
+
+```ts
+McpAdapter({ name: 'api', exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })
+```
+
+A route carrying a flag named in `exposeWhen` becomes a tool without `@McpTool` / `@AiTool`, and an object value on that flag is read as the tool's options. `hideWhen` removes a route regardless of decorators, which is how a module hides a controller it mounts but does not own. See [MCP](./mcp.md#exposing-with-route-flags) and [AI](./ai.md#exposing-tools-with-route-flags).
+
 ### Readers: OpenAPI and DevTools
 
 Two consumers read flags without running per request.

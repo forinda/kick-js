@@ -1,5 +1,8 @@
 import type { VectorDocument, VectorQueryOptions, VectorSearchHit, VectorStore } from './types'
 
+/** Metadata key holding the document text. */
+const CONTENT_KEY = '_kick_content'
+
 /**
  * Options for `PineconeVectorStore`.
  *
@@ -44,7 +47,7 @@ interface PineconeQueryResult {
   matches: Array<{
     id: string
     score: number
-    metadata?: Record<string, unknown> & { content?: string }
+    metadata?: Record<string, unknown>
   }>
 }
 
@@ -158,12 +161,12 @@ export class PineconeVectorStore<
       return {
         id: d.id,
         values: d.vector,
-        // Pinecone flattens `content` + user metadata into one record
-        // because Pinecone doesn't support nested objects in metadata.
-        // We unflatten on read — see `query` below.
+        // Pinecone metadata is flat, so the document text shares the record
+        // with user metadata — under a reserved key, so a user `content`
+        // field can't overwrite it. Unflattened on read; see `query`.
         metadata: {
-          content: d.content,
           ...docMetadata,
+          [CONTENT_KEY]: d.content,
         },
       }
     })
@@ -203,7 +206,12 @@ export class PineconeVectorStore<
     return data.matches
       .filter((m) => m.score >= minScore)
       .map((match) => {
-        const { content, ...metadata } = match.metadata ?? {}
+        const raw = { ...match.metadata }
+        // Records written before the reserved key kept the text under `content`.
+        const key = CONTENT_KEY in raw ? CONTENT_KEY : 'content'
+        const content = raw[key]
+        delete raw[key]
+        const metadata = raw
         return {
           id: match.id,
           content: typeof content === 'string' ? content : '',

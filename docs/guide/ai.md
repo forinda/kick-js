@@ -10,7 +10,7 @@ features. It brings four things to your KickJS app:
 2. **Tool calling + agents** — the `@AiTool` decorator promotes any
    controller method into a model-callable function. `AiAdapter.runAgent`
    runs the full chat → tool → dispatch → feedback loop, routing each
-   tool call through the normal Express pipeline so middleware, auth,
+   tool call through the normal request pipeline so middleware, auth,
    validation, and logging still apply.
 3. **Memory** — a `ChatMemory` interface for multi-turn conversations,
    with `InMemoryChatMemory` for prototypes and a `SlidingWindowChatMemory`
@@ -20,20 +20,22 @@ features. It brings four things to your KickJS app:
    `PineconeVectorStore`) and a `RagService` that ties them to the
    provider's embeddings for retrieval-augmented chat.
 
-The whole package is designed so services consume one DI token —
-`AiAdapter` — and swapping providers, memory backends, or vector
-stores is a configuration change, not a code change.
+The whole package is designed so services consume DI tokens —
+`AI_ADAPTER`, `AI_PROVIDER`, `VECTOR_STORE` — and swapping providers,
+memory backends, or vector stores is a configuration change, not a
+code change.
 
 ## Install
 
 <PmCommand add="@forinda/kickjs-ai" />
 
-The package declares `@forinda/kickjs` and `reflect-metadata` as
-dependencies and `zod` as a peer. No other runtime is required for
-the built-in providers — they talk to upstream APIs over `fetch`.
+The package depends on `@forinda/kickjs-schema` and peers on
+`@forinda/kickjs`. `OpenAIProvider` talks to the upstream API over
+`fetch` and needs nothing else.
 
-Optional peers, installed only if you use the matching backend:
+Optional peers, installed only if you use the matching feature:
 
+- `@anthropic-ai/sdk` — for `AnthropicProvider`
 - `pg` — for `PgVectorStore` when you pass `connectionString` instead
   of a pre-made executor
 
@@ -64,12 +66,12 @@ export const app = await bootstrap({
 Then inject the adapter wherever you need it:
 
 ```ts
-import { Service, Autowired } from '@forinda/kickjs'
-import { AiAdapter } from '@forinda/kickjs-ai'
+import { Inject, Service } from '@forinda/kickjs'
+import { AI_ADAPTER, type AiAdapterInstance } from '@forinda/kickjs-ai'
 
 @Service()
 export class AgentService {
-  @Autowired() private readonly ai!: AiAdapter
+  constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
 
   async summarize(text: string) {
     const res = await this.ai.getProvider().chat({
@@ -102,49 +104,233 @@ new OpenAIProvider({
 
 ### Anthropic
 
-`AnthropicProvider` targets Anthropic's Messages API. It translates
-the framework's normalized chat shape into content blocks, extracts
-system messages into the top-level `system` field, and handles
-`tool_use` / `tool_result` wire formats transparently.
+`AnthropicProvider` calls Claude through the official SDK. Install it
+next to `@forinda/kickjs-ai` — it's an optional peer, only needed for
+this provider:
+
+<PmCommand add="@anthropic-ai/sdk" />
 
 ```ts
 import { AnthropicProvider } from '@forinda/kickjs-ai'
 
 new AnthropicProvider({
-  apiKey: getEnv('ANTHROPIC_API_KEY'),
-  defaultChatModel: 'claude-opus-4-6',
-  // defaultMaxTokens: 4096  (Anthropic requires max_tokens on every call)
+  // apiKey: omit to use ANTHROPIC_API_KEY or an `ant auth login` profile
+  // defaultChatModel: 'claude-opus-5',
+  effort: 'medium', // low | medium | high | xhigh | max
 })
 ```
+
+| Option             | Default           | Description                                                                                                                                                                    |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apiKey`           | SDK credentials   | API key; omitted, the SDK reads `ANTHROPIC_API_KEY` or an `ant auth login` profile                                                                                             |
+| `client`           | —                 | A pre-configured SDK client (custom retries, or a Bedrock/Vertex client)                                                                                                       |
+| `defaultChatModel` | `'claude-opus-5'` | Model when a call doesn't set one                                                                                                                                              |
+| `defaultMaxTokens` | `64000`           | Cap on thinking plus response text; requests always stream, so large values are safe                                                                                           |
+| `effort`           | model default     | Thinking depth and token spend; `ChatOptions.effort` overrides per call                                                                                                        |
+| `thinkingDisplay`  | model default     | `'summarized'` returns a summary of the model's thinking; `'omitted'` returns none                                                                                             |
+| `cache`            | `true`            | Automatic prompt caching, so agent loops re-read tools, system prompt and history from cache                                                                                   |
+| `fallbacks`        | `'default'`       | On Claude Opus 5 and Fable/Mythos 5 models, a declined request is re-run on Anthropic's recommended fallback model; `false` turns it off (and must, on Bedrock/Vertex/Foundry) |
+
+What the provider handles for you:
+
+- **Thinking blocks** come back on `ChatResponse.providerContent`, and
+  `runAgent` sends them back with the tool calls they led to — tool loops on
+  thinking models need them. If you drive `chat()` yourself, copy
+  `providerContent` onto the assistant message you append.
+- **Refusals** set `finishReason: 'content_filter'` and `refusal` (category
+  and explanation). `runAgent` stops there, and also on `'length'`, without
+  running that turn's tool calls, since they may be truncated.
+- **Sampling parameters** (`temperature`, `topP`) are rejected by Claude
+  Opus 4.7 and later, Sonnet 5 and Fable; the provider drops them with a
+  warning. Use `effort` instead.
+- **Tool results** are sent back together, failed calls marked as errors.
+- **Usage** includes `cacheReadTokens` and `cacheWriteTokens`.
 
 Anthropic does not ship an embeddings API — calling `embed()` on this
 provider throws a descriptive error. For RAG workflows, pair it with
 `OpenAIProvider` for embeddings and keep Anthropic for chat.
 
+### Custom providers
+
+Any model can back the adapter: implement `AiProvider` and pass it to
+`AiAdapter`, or mount it next to the default with `registerProvider`.
+The contract is small:
+
+| Member                   | What to return                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                   | An identifier, e.g. `'in-house'`                                                                                                                                       |
+| `chat(input, options)`   | A `ChatResponse`: `content`, `toolCalls` when the model calls tools, and a normalized `finishReason` — `'stop'`, `'length'`, `'tool_call'` or `'content_filter'`       |
+| `stream(input, options)` | `ChatChunk`s: text in `content`, tool calls as `toolCallDelta` (`id`, `index`, `name`, then `argumentsDelta`), and a final chunk with `done: true` plus `finishReason` |
+| `embed(input)`           | One vector per input string, in input order — or throw if the model has no embeddings                                                                                  |
+
+- `input.tools` is always an array of `ChatToolDefinition` (`name`,
+  `description`, JSON Schema `inputSchema`) when tools are offered;
+  `runAgent` resolves `'auto'` before calling you.
+- Tool results arrive as `role: 'tool'` messages with `toolCallId`, and
+  `isError` when the call failed.
+- If your model needs its own content sent back on the next turn (thinking
+  or signed blocks), return it as `providerContent`; `runAgent` copies it
+  onto the assistant message you receive next time.
+- Honour `options.signal`, and throw `ProviderError(status, body)` for
+  failed HTTP calls so callers can read the status.
+
+This local provider uses only those primitives — no network, no model. It
+routes a message to a tool by keyword, answers with the tool's result, and
+embeds text with a hashed bag-of-words vector, so it also works for offline
+development, tests, and RAG:
+
+```ts
+import type {
+  AiProvider,
+  ChatChunk,
+  ChatInput,
+  ChatOptions,
+  ChatResponse,
+  EmbedInput,
+} from '@forinda/kickjs-ai'
+
+interface KeywordRule {
+  /** When the latest user message matches, call this tool. */
+  match: RegExp
+  tool: string
+  /** Build the tool arguments from the message. */
+  args?: (message: string) => Record<string, unknown>
+}
+
+/**
+ * A local, deterministic provider: routes a user message to a tool by
+ * keyword, answers with the tool result, and embeds text with a hashed
+ * bag-of-words vector. No network, no model — useful offline, in tests, or
+ * as the starting point for wrapping an in-house model.
+ */
+class KeywordProvider implements AiProvider {
+  readonly name = 'keywords'
+
+  constructor(
+    private readonly rules: KeywordRule[],
+    private readonly dimensions = 64,
+  ) {}
+
+  async chat(input: ChatInput, options: ChatOptions = {}): Promise<ChatResponse> {
+    options.signal?.throwIfAborted()
+    const last = input.messages.at(-1)
+
+    // A tool just ran: answer with its result and finish the loop.
+    if (last?.role === 'tool') {
+      return { content: `Here is what I found: ${last.content}`, finishReason: 'stop' }
+    }
+
+    const text = last?.content ?? ''
+    // Only offer tools the caller made available on this call.
+    const available = new Set((Array.isArray(input.tools) ? input.tools : []).map((t) => t.name))
+    const rule = this.rules.find((r) => available.has(r.tool) && r.match.test(text))
+    if (!rule) {
+      return { content: "I don't have a tool for that.", finishReason: 'stop' }
+    }
+    return {
+      content: '',
+      toolCalls: [
+        { id: `call_${crypto.randomUUID()}`, name: rule.tool, arguments: rule.args?.(text) ?? {} },
+      ],
+      finishReason: 'tool_call',
+    }
+  }
+
+  async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
+    const response = await this.chat(input, options)
+    if (response.content) yield { content: response.content, done: false }
+    // Each tool call streams as a start delta, then one arguments delta.
+    for (const [index, call] of (response.toolCalls ?? []).entries()) {
+      yield { content: '', done: false, toolCallDelta: { id: call.id, index, name: call.name } }
+      yield {
+        content: '',
+        done: false,
+        toolCallDelta: { id: call.id, index, argumentsDelta: JSON.stringify(call.arguments) },
+      }
+    }
+    yield { content: '', done: true, finishReason: response.finishReason }
+  }
+
+  async embed(input: EmbedInput): Promise<number[][]> {
+    const texts = Array.isArray(input) ? input : [input]
+    return texts.map((text) => {
+      const vector = Array.from({ length: this.dimensions }, () => 0)
+      for (const word of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
+        let hash = 0
+        for (const char of word) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+        vector[hash % this.dimensions] += 1
+      }
+      const length = Math.hypot(...vector) || 1
+      return vector.map((value) => value / length)
+    })
+  }
+}
+```
+
+Mount it later — from a plugin or module — and pick it per call:
+
+```ts
+const ai = container.resolve(AI_ADAPTER)
+
+ai.registerProvider(
+  'orders-bot',
+  new KeywordProvider([
+    {
+      match: /order\s+#?(\w+)/i,
+      tool: 'get_order',
+      args: (message) => ({ id: /order\s+#?(\w+)/i.exec(message)![1] }),
+    },
+  ]),
+)
+
+const result = await ai.runAgent({
+  provider: 'orders-bot', // a registered name, or a provider instance
+  messages: [{ role: 'user', content: 'Where is order #A42?' }],
+})
+// result.content → 'Here is what I found: {"id":"A42","status":"shipped"}'
+
+const rag = new RagService(ai.getProvider('orders-bot'), new InMemoryVectorStore())
+```
+
+- The provider the adapter was created with is the default, under its
+  `name`; `getProvider()` returns it and `AI_PROVIDER` resolves to it. Its
+  name can't be reused, and it can't be unregistered.
+- Registering an existing name replaces that provider, so a plugin can
+  register again after a hot reload. `unregisterProvider(name)` removes one.
+- `runAgentWithMemory` takes the same `provider` option.
+
+The example is exercised as a test in
+`packages/ai/__tests__/example-local-provider.test.ts`.
+
 ### Streaming
 
 Every provider implements `stream()` and yields `ChatChunk`s. Wire a
-streaming endpoint with Server-Sent Events:
+streaming endpoint with [Server-Sent Events](./sse.md) — `ctx.sse()`
+works on every HTTP runtime, and `ctx.signal` stops the model call when
+the client disconnects:
 
 ```ts
-import { Controller, Get, type RequestContext } from '@forinda/kickjs'
-import { Autowired } from '@forinda/kickjs'
-import { AiAdapter } from '@forinda/kickjs-ai'
+import { Controller, Get, Inject, type RequestContext } from '@forinda/kickjs'
+import { AI_ADAPTER, type AiAdapterInstance, type ChatChunk } from '@forinda/kickjs-ai'
 
 @Controller()
 export class ChatController {
-  @Autowired() private readonly ai!: AiAdapter
+  constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
 
   @Get('/stream')
   async stream(ctx: RequestContext) {
-    ctx.res.setHeader('content-type', 'text/event-stream')
-    for await (const chunk of this.ai.getProvider().stream({
-      messages: [{ role: 'user', content: String(ctx.query.q ?? '') }],
-    })) {
-      ctx.res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+    const sse = ctx.sse<ChatChunk>()
+    const chunks = this.ai
+      .getProvider()
+      .stream(
+        { messages: [{ role: 'user', content: String(ctx.query.q ?? '') }] },
+        { signal: ctx.signal },
+      )
+    for await (const chunk of chunks) {
+      sse.send(chunk)
       if (chunk.done) break
     }
-    ctx.res.end()
+    sse.close()
   }
 }
 ```
@@ -195,12 +381,60 @@ const result = await this.ai.runAgent({
 })
 
 console.log(result.content) // final assistant text
-console.log(result.toolCalls) // audit trail of what was called
+console.log(result.messages) // full transcript, including tool calls and results
+console.log(result.finishReason) // why the last turn stopped
 ```
 
-Tool dispatch happens through internal HTTP requests against the
-running KickJS server, so middleware, validation, auth guards, and
-logging all run exactly the same way they do for external callers.
+Tool calls run through the app's own pipeline (`AdapterContext.fetch`),
+so middleware, validation, auth guards, and logging all run exactly the
+same way they do for external callers — without a listening server, so
+agents also work under `createHandler()` and in tests.
+
+Tool routes see only the headers you pass. To call them as the user who
+started the agent, forward their credentials; `signal` also aborts
+in-flight tool calls:
+
+```ts
+@Post('/assistant')
+async ask(ctx: RequestContext) {
+  const result = await this.ai.runAgent({
+    messages: [{ role: 'user', content: ctx.body.question }],
+    headers: { authorization: ctx.headers.authorization ?? '' },
+    signal: ctx.signal,
+  })
+  ctx.json({ answer: result.content })
+}
+```
+
+### Exposing tools with route flags
+
+[Route flags](./route-flags.md) expose or hide tools without `@AiTool`
+on every method — on a controller, a method, or a module mount:
+
+```ts
+import { defineRouteFlag } from '@forinda/kickjs'
+import { AiAdapter, type AiToolOptions } from '@forinda/kickjs-ai'
+
+export const Tool = defineRouteFlag<Partial<AiToolOptions>>('ai.tool')
+
+AiAdapter({
+  provider,
+  exposeWhen: 'ai.tool', // routes carrying it become tools
+  hideWhen: 'ai.hidden', // routes carrying it never do
+})
+
+@Tool({ description: 'Look up orders' })
+@Controller()
+export class OrdersController {}
+
+// Hide a controller you don't own:
+routes: () => ({ path: '/admin', controller: AdminController, flags: ['ai.hidden'] })
+```
+
+Both options take the same forms as `skipWhen` (a name, `'!name'`, a
+list, or a predicate). An object flag value supplies `description` and
+`name`; `@AiTool` on the method takes precedence, and `hideWhen` wins
+over both.
 
 ## Memory
 
@@ -232,11 +466,15 @@ const result = await this.ai.runAgentWithMemory({
   model sees a single stable persona.
 - After each turn: appends the assistant reply. Tool results are
   dropped from memory by default (they're usually large API
-  responses) — set `persistToolResults: true` for full-transcript
-  replay.
-- `SlidingWindowChatMemory` evicts the oldest non-system messages
-  when the cap is hit. The pinned system message stays put so the
-  model never loses its persona.
+  responses), and so are the tool calls that led to them — a call
+  saved without its result is a history providers reject. The
+  assistant's text is kept. Set `persistToolResults: true` for
+  full-transcript replay.
+- `SlidingWindowChatMemory` keeps the most recent `maxMessages`
+  messages. A pinned first system message stays put so the model
+  never loses its persona. The kept history always starts at a user
+  message, so it never opens on a tool result whose call was evicted —
+  the window can hold slightly fewer messages than the cap.
 
 For multi-tenant apps, construct one memory instance per session —
 typically in a request-scoped factory or keyed by a `sessionId`
@@ -292,6 +530,19 @@ Every backend implements the same `VectorStore<M>` interface:
 `upsert`, `query`, `delete`, `deleteAll`, optional `count`. Services
 that consume `VECTOR_STORE` never need to know which one is wired in.
 
+Backend notes:
+
+- **Qdrant** point ids must be UUIDs or integers, so any other document
+  id (`'doc-1'`) is stored under a deterministic UUIDv5 and kept in the
+  payload; searches return your original id. The collection is created
+  on first use only if it doesn't exist, and `deleteAll` removes points
+  but keeps the collection.
+- **Pinecone** metadata is flat, so the document text is stored under the
+  reserved `_kick_content` key next to your metadata; a metadata field
+  named `content` is yours. Records written before this layout, with the
+  text under `content`, still read correctly.
+- **pgvector** retries its schema setup on the next call if it fails.
+
 ```ts
 import { bootstrap, getEnv } from '@forinda/kickjs'
 import { AiAdapter, OpenAIProvider, QdrantVectorStore, VECTOR_STORE } from '@forinda/kickjs-ai'
@@ -324,16 +575,21 @@ export const app = await bootstrap({
 ### Index and query with `RagService`
 
 ```ts
-import { Service, Autowired, Inject } from '@forinda/kickjs'
-import { RagService, VECTOR_STORE, type VectorStore } from '@forinda/kickjs-ai'
-import { AiAdapter } from '@forinda/kickjs-ai'
+import { Inject, Service } from '@forinda/kickjs'
+import {
+  AI_PROVIDER,
+  RagService,
+  VECTOR_STORE,
+  type AiProvider,
+  type VectorStore,
+} from '@forinda/kickjs-ai'
 
 @Service()
 export class KnowledgeService {
   private readonly rag: RagService
 
-  constructor(@Autowired() ai: AiAdapter, @Inject(VECTOR_STORE) store: VectorStore) {
-    this.rag = new RagService({ provider: ai.getProvider(), store })
+  constructor(@Inject(AI_PROVIDER) provider: AiProvider, @Inject(VECTOR_STORE) store: VectorStore) {
+    this.rag = new RagService(provider, store)
   }
 
   async index(docs: Array<{ id: string; content: string }>) {
@@ -448,8 +704,9 @@ state the provider actually saw.
 
 ## Next steps
 
-- [MCP adapter](./mcp) — expose the same `@AiTool` methods to external
-  Model Context Protocol clients
+- [MCP adapter](./mcp) — expose controller routes to external Model
+  Context Protocol clients with `@McpTool`; a route can carry both
+  decorators
 - [Dependency Injection](./dependency-injection) — how `AiAdapter`
   and `VECTOR_STORE` bindings flow through the container
 - [Plugins](./plugins) — the canonical place to wire DI bindings at
