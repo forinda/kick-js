@@ -58,11 +58,16 @@ export interface RetryOptions {
 function delay(ms: number, signal?: AbortSignal): Promise<boolean> {
   return new Promise((resolve) => {
     if (signal?.aborted) return resolve(false)
-    const timer = setTimeout(() => resolve(true), ms)
-    signal?.addEventListener('abort', () => {
+    const onAbort = () => {
       clearTimeout(timer)
       resolve(false)
-    })
+    }
+    const timer = setTimeout(() => {
+      // Remove the listener, or every retry adds one to a long-lived signal.
+      signal?.removeEventListener('abort', onAbort)
+      resolve(true)
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
   })
 }
 
@@ -125,7 +130,8 @@ export async function postJson<T>(
       const retryAfter = parseRetryAfter(res.headers.get('retry-after'))
       const waitMs = retryAfter ?? retryDelay(attempt, baseDelayMs, maxDelayMs)
       const ok = await delay(waitMs, options.signal)
-      if (!ok) throw new ProviderError(res.status, text) // Aborted
+      // Aborted while waiting: surface the abort, not the error being retried.
+      if (!ok) throw options.signal?.reason ?? new DOMException('Aborted', 'AbortError')
       continue
     }
 
@@ -239,12 +245,8 @@ export async function* postJsonStream(
       if (payload.length > 0) yield payload
     }
   } finally {
-    // Defensive: release the reader so the underlying socket can be
-    // closed even if the consumer broke out of its for-await loop early.
-    try {
-      reader.releaseLock()
-    } catch {
-      // Reader might already be released; ignore.
-    }
+    // Cancel rather than just release: a consumer that breaks out of its
+    // for-await loop early must close the upstream connection too.
+    await reader.cancel().catch(() => {})
   }
 }

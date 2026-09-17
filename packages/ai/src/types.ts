@@ -3,17 +3,27 @@ import type { RouteFlagTest } from '@forinda/kickjs'
 /**
  * A chat message in the OpenAI/Anthropic-style conversation format.
  *
- * All four built-in providers (OpenAI, Anthropic, Google, Ollama)
- * translate this shape into their native wire format. The `tool` and
- * `tool_calls` variants support function calling.
+ * The built-in providers (OpenAI, Anthropic) translate this shape into
+ * their native wire format. The `tool` role and `toolCalls` support
+ * function calling.
  */
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   /** Tool call ID if `role === 'tool'`. Set by the framework during tool loops. */
   toolCallId?: string
+  /** True on a `tool` message whose call failed. Providers that support it tell the model. */
+  isError?: boolean
   /** Tool calls made by the assistant. Set by the provider. */
   toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
+  /**
+   * Provider-native content of an assistant turn, copied from
+   * `ChatResponse.providerContent`. The provider that produced it sends it
+   * back verbatim — Anthropic needs its thinking blocks returned with the
+   * tool calls they led to. Opaque and JSON-serializable; keep it when
+   * storing history.
+   */
+  providerContent?: unknown
 }
 
 /**
@@ -23,8 +33,8 @@ export interface ChatMessage {
  * the registry of `@AiTool`-decorated controller methods.
  *
  * Providers translate this into their native tool-calling format
- * (OpenAI's `tools`, Anthropic's `tools`, Google's function declarations,
- * etc.). The shape is deliberately minimal — anything provider-specific
+ * (OpenAI's `tools`, Anthropic's `tools`, or a custom provider's
+ * equivalent). The shape is deliberately minimal — anything provider-specific
  * lives in the provider implementation, not on this type.
  */
 export interface ChatToolDefinition {
@@ -52,7 +62,7 @@ export interface ChatInput {
   messages: ChatMessage[]
   /**
    * Optional model override. If omitted, the provider uses its default
-   * model. Accepts provider-specific model IDs (e.g. `gpt-4o`, `claude-opus-4-6`).
+   * model. Accepts provider-specific model IDs (e.g. `gpt-4o`, `claude-opus-5`).
    */
   model?: string
   /**
@@ -71,9 +81,20 @@ export interface ChatInput {
 
 /** Runtime options for a chat call. */
 export interface ChatOptions {
+  /**
+   * Sampling temperature. Models that reject sampling parameters (Claude
+   * Opus 4.7+, Sonnet 5, Fable) ignore it, with a warning.
+   */
   temperature?: number
   maxTokens?: number
+  /** Nucleus sampling. Ignored, with a warning, by models that reject it. */
   topP?: number
+  /**
+   * How much effort the model spends (thinking depth and overall tokens),
+   * where supported (Anthropic `output_config.effort`). Provider default
+   * when omitted.
+   */
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   stopSequences?: string[]
   /** Abort signal — cancel the request mid-flight. */
   signal?: AbortSignal
@@ -86,19 +107,50 @@ export interface ChatResponse {
   /** Any tool calls the model made. Usually executed by the agent loop. */
   toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
   /** Provider-reported token usage. */
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
-  /** Finish reason from the provider. */
+  usage?: ChatUsage
+  /**
+   * Why generation stopped, normalized: `'stop'`, `'length'` (token limit —
+   * tool calls may be truncated), `'tool_call'`, `'content_filter'` (the
+   * model declined; see `refusal`), or a provider-specific value.
+   */
   finishReason?: 'stop' | 'length' | 'tool_call' | 'content_filter' | string
+  /** Set when the model declined the request (`finishReason === 'content_filter'`). */
+  refusal?: { category: string | null; explanation: string | null }
+  /**
+   * Provider-native content of this turn. Copy it onto the assistant
+   * `ChatMessage` when continuing the conversation; see
+   * `ChatMessage.providerContent`.
+   */
+  providerContent?: unknown
+}
+
+/** Token usage for one call. */
+export interface ChatUsage {
+  /** All input tokens, including cache reads and writes. */
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  /** Input tokens served from the prompt cache, where reported. */
+  cacheReadTokens?: number
+  /** Input tokens written to the prompt cache, where reported. */
+  cacheWriteTokens?: number
 }
 
 /** A single chunk from a streaming chat call. */
 export interface ChatChunk {
   /** Incremental text delta. Empty for chunks that only carry tool deltas. */
   content: string
-  /** Partial tool call delta, if the model is building one. */
-  toolCallDelta?: { id: string; name?: string; argumentsDelta?: string }
+  /**
+   * Partial tool call delta, if the model is building one. `index`
+   * identifies the call when several stream in parallel.
+   */
+  toolCallDelta?: { id: string; index?: number; name?: string; argumentsDelta?: string }
   /** True on the final chunk. */
   done: boolean
+  /** On the final chunk: why generation stopped (see `ChatResponse.finishReason`). */
+  finishReason?: ChatResponse['finishReason']
+  /** On the final chunk, where the provider reports it. */
+  usage?: ChatUsage
 }
 
 /**
@@ -128,8 +180,8 @@ export interface ToolCallResponse {
 }
 
 /**
- * Provider abstraction. All built-in providers (OpenAI, Anthropic,
- * Google, Ollama) implement this interface. Users can also implement
+ * Provider abstraction. The built-in providers (OpenAI, Anthropic)
+ * implement this interface. Users can also implement
  * it for custom/internal providers.
  */
 export interface AiProvider {
@@ -241,6 +293,18 @@ export interface RunAgentOptions extends ChatOptions {
    * call behavior. Defaults to 8.
    */
   maxSteps?: number
+  /**
+   * Provider for this call: a registered name (see `registerProvider`) or a
+   * provider instance. Defaults to the adapter's default provider.
+   */
+  provider?: string | AiProvider
+  /**
+   * Headers sent with every tool call, so the tool's route sees the caller's
+   * credentials and context — typically copied from the request that started
+   * the agent: `{ authorization: ctx.headers.authorization }`. `signal`
+   * also aborts in-flight tool calls.
+   */
+  headers?: Headers | Record<string, string>
 }
 
 /** Result of `AiAdapter.runAgent()` — the final assistant response. */
@@ -255,6 +319,13 @@ export interface RunAgentResult {
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
   /** True if the loop stopped because `maxSteps` was reached. */
   maxStepsReached?: boolean
+  /**
+   * Why the final turn stopped (see `ChatResponse.finishReason`). On
+   * `'content_filter'` or `'length'` any tool calls in that turn were not run.
+   */
+  finishReason?: ChatResponse['finishReason']
+  /** Set when the model declined the request. */
+  refusal?: ChatResponse['refusal']
 }
 
 /**
@@ -264,14 +335,26 @@ export interface RunAgentResult {
  * `@Inject(AI_ADAPTER)` get the full API on the resolved instance.
  */
 export interface AiAdapterExtensions {
-  /** Return the active provider. Useful for services that want the raw API. */
-  getProvider(): AiProvider
+  /**
+   * A registered provider: the named one, or the default (the provider the
+   * adapter was created with) when `name` is omitted. Throws for an unknown name.
+   */
+  getProvider(name?: string): AiProvider
+  /**
+   * Mount another provider under `name`, at any time — from a plugin or
+   * module after startup, for example. Select it per call with
+   * `runAgent({ provider: name })`. Registering an existing name replaces
+   * that provider; the default provider's name can't be replaced.
+   */
+  registerProvider(name: string, provider: AiProvider): void
+  /** Unmount a provider. Returns false when none is registered under `name`; the default can't be removed. */
+  unregisterProvider(name: string): boolean
   /** Return the discovered tool registry. Primarily for tests and debug UIs. */
   getTools(): readonly AiToolDefinition[]
   /**
-   * Override the server base URL. Used by tests that spin up an
-   * ephemeral http.Server and can't rely on the framework's `afterStart`
-   * hook to supply it.
+   * Send tool calls to this base URL over HTTP instead of through the app
+   * in-process. For tests that run the adapter's hooks by hand against their
+   * own http.Server; `null` restores in-process dispatch.
    */
   setServerBaseUrl(url: string | null): void
   /** Run a tool-calling agent loop. */

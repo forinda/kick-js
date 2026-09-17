@@ -494,3 +494,20 @@ describe('RagService.augmentChatInput', () => {
     expect(augmented.messages[0].content).toContain('[Document 1')
   })
 })
+
+describe('RagService.augmentChatInput — document text', () => {
+  it('inserts retrieved text literally, even with $ replacement patterns in it', async () => {
+    const store = new InMemoryVectorStore()
+    const rag = new RagService(new FakeProvider(), store)
+    await rag.index([{ id: 'prices', content: "price is $& and $` and $'" }])
+
+    const augmented = await rag.augmentChatInput(
+      { messages: [{ role: 'user', content: 'price?' }] },
+      'price',
+      { topK: 1, systemTemplate: 'CTX: {documents}' },
+    )
+
+    expect(augmented.messages[0].content).toContain("price is $& and $` and $'")
+    expect(augmented.messages[0].content.startsWith('CTX: ')).toBe(true)
+  })
+})

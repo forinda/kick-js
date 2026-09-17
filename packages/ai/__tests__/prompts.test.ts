@@ -168,3 +168,19 @@ describe('Prompt.getTemplate', () => {
     expect(p.getTemplate()).toBe(tpl)
   })
 })
+
+describe('Prompt — nested variables', () => {
+  it('resolves dotted placeholders against nested objects', () => {
+    const p = createPrompt<{ user: { name: string; team: { name: string } } }>(
+      'Hi {{user.name}} from {{ user.team.name }}',
+    )
+    expect(p.renderString({ user: { name: 'Ada', team: { name: 'Core' } } })).toBe(
+      'Hi Ada from Core',
+    )
+  })
+
+  it('treats a missing nested path as missing', () => {
+    const p = createPrompt<{ user?: { name?: string } }>('Hi {{user.name}}', { onMissing: 'throw' })
+    expect(() => p.renderString({ user: {} })).toThrow(/"user.name" is missing/)
+  })
+})

@@ -306,9 +306,12 @@ export class PgVectorStore<
       this.client = await this.createPoolFromConnectionString()
     }
     if (!this.skipSetup) {
-      if (!this.setupPromise) {
-        this.setupPromise = this.runSchemaSetup(this.client)
-      }
+      // A failed setup (database briefly down) is retried on the next call
+      // instead of failing every call for the life of the process.
+      this.setupPromise ??= this.runSchemaSetup(this.client).catch((err) => {
+        this.setupPromise = null
+        throw err
+      })
       await this.setupPromise
     }
     return this.client
