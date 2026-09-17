@@ -120,8 +120,18 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     /** Argument-to-request mapping per tool name. */
     const routeTools = new Map<string, RouteTool>()
 
-    /** Base URL of the running KickJS HTTP server, captured in `afterStart`. */
+    /**
+     * Runs a Request through this app's pipeline, from `AdapterContext.fetch`.
+     * Tool calls use it, so they work without a listening server.
+     */
+    let appFetch: ((request: Request) => Promise<Response>) | null = null
+
+    /**
+     * Base URL of a listening server. Used when `setServerBaseUrl` was called,
+     * or when the hooks are driven by hand without `AdapterContext.fetch`.
+     */
     let serverBaseUrl: string | null = null
+    let baseUrlOverride = false
 
     /** Join a module mount path with the route-level sub-path. */
     const joinMountPath = (mountPath: string, routePath: string): string => {
@@ -210,12 +220,15 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       return spec
     }
 
-    /** Dispatch a single tool call through the Express pipeline. */
-    const dispatchToolCall = async (call: {
-      id: string
-      name: string
-      arguments: Record<string, unknown>
-    }): Promise<ChatMessage> => {
+    /**
+     * Dispatch a single tool call through the app's own pipeline —
+     * middleware, validation, contributors, guards, error handling — as a
+     * request to the tool's route, with the caller's headers and signal.
+     */
+    const dispatchToolCall = async (
+      call: { id: string; name: string; arguments: Record<string, unknown> },
+      caller: { headers?: Headers | Record<string, string>; signal?: AbortSignal },
+    ): Promise<ChatMessage> => {
       const tool = tools.find((t) => t.name === call.name)
       if (!tool) {
         return {
@@ -224,12 +237,13 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           content: JSON.stringify({ error: `Tool not found: ${call.name}` }),
         }
       }
-      if (!serverBaseUrl) {
+      const useBaseUrl = baseUrlOverride || !appFetch
+      if (useBaseUrl && !serverBaseUrl) {
         return {
           role: 'tool',
           toolCallId: call.id,
           content: JSON.stringify({
-            error: `Cannot dispatch ${call.name}: HTTP server address not yet captured`,
+            error: `Cannot dispatch ${call.name}: the adapter has not started`,
           }),
         }
       }
@@ -248,18 +262,23 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         }
       }
 
-      const headers: Record<string, string> = {
-        accept: 'application/json',
-        'x-ai-tool': tool.name,
+      const headers = new Headers(caller.headers)
+      headers.set('accept', 'application/json')
+      headers.set('x-ai-tool', tool.name)
+      const init: RequestInit = {
+        method: tool.httpMethod.toUpperCase(),
+        headers,
+        signal: caller.signal,
       }
-      const init: RequestInit = { method: tool.httpMethod.toUpperCase(), headers }
       if (request.body !== undefined) {
-        headers['content-type'] = 'application/json'
+        headers.set('content-type', 'application/json')
         init.body = JSON.stringify(request.body)
       }
 
       try {
-        const res = await fetch(`${serverBaseUrl}${request.url}`, init)
+        const res = useBaseUrl
+          ? await fetch(`${serverBaseUrl}${request.url}`, init)
+          : await appFetch!(new Request(new URL(request.url, 'http://localhost'), init))
         const text = await res.text()
         const content = res.ok
           ? text || `(${res.status} ${res.statusText})`
@@ -328,7 +347,11 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           toolCalls: response.toolCalls,
         })
 
-        const results = await Promise.all(response.toolCalls.map((call) => dispatchToolCall(call)))
+        const results = await Promise.all(
+          response.toolCalls.map((call) =>
+            dispatchToolCall(call, { headers: agentOptions.headers, signal: agentOptions.signal }),
+          ),
+        )
         for (const result of results) {
           messages.push(result)
         }
@@ -375,6 +398,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         topP: memoryOptions.topP,
         stopSequences: memoryOptions.stopSequences,
         signal: memoryOptions.signal,
+        headers: memoryOptions.headers,
       })
 
       const newMessages = result.messages.slice(messages.length)
@@ -398,6 +422,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       getTools: () => tools,
       setServerBaseUrl: (url) => {
         serverBaseUrl = url
+        baseUrlOverride = url !== null
       },
       runAgent,
       runAgentWithMemory,
@@ -410,7 +435,8 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         mountedControllers.push({ controller, mountPath })
       },
 
-      beforeStart({ container }) {
+      beforeStart({ container, fetch: contextFetch }) {
+        appFetch = contextFetch ?? null
         container.registerFactory(AI_PROVIDER, () => provider, Scope.SINGLETON)
         container.registerInstance(AI_ADAPTER, publicSurface)
 
@@ -426,8 +452,8 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       },
 
       afterStart(ctx) {
-        serverBaseUrl = resolveServerBaseUrl(ctx.server)
-        log.debug(`AiAdapter agent dispatch target: ${serverBaseUrl ?? '(unknown)'}`)
+        appFetch ??= ctx.fetch ?? null
+        if (!baseUrlOverride) serverBaseUrl = resolveServerBaseUrl(ctx.server)
       },
 
       /**
@@ -437,6 +463,8 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
        */
       async shutdown() {
         serverBaseUrl = null
+        baseUrlOverride = false
+        appFetch = null
         tools.length = 0
         routeTools.clear()
         mountedControllers.length = 0

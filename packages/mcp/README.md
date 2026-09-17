@@ -129,6 +129,7 @@ McpAdapter({
     validate: (token) => isValid(token),
   },
   allowedOrigins: [], // Browser origins allowed to connect; requests with any other Origin get 403
+  forwardHeaders: ['authorization', 'x-tenant'], // Headers copied onto tool calls (default: authorization, cookie, x-request-id, traceparent, tracestate)
 })
 ```
 

@@ -981,6 +981,59 @@ export class RequestContext<
    * }
    * ```
    */
+  /**
+   * Send a web-standard `Response` — status, headers (every `Set-Cookie`
+   * kept) and body, streamed chunk by chunk — on any runtime. For handing off
+   * to libraries that speak `Request`/`Response`, such as the MCP SDK's
+   * web-standard transport.
+   *
+   * Resolves once the body is fully written. Stops reading the body when the
+   * client disconnects.
+   *
+   * @example
+   * ```ts
+   * @Post('/mcp')
+   * async mcp(ctx: RequestContext) {
+   *   await ctx.sendResponse(await transport.handleRequest(webRequest))
+   * }
+   * ```
+   */
+  async sendResponse(response: Response): Promise<void> {
+    const headers: Record<string, string | string[]> = {}
+    response.headers.forEach((value, name) => {
+      if (name !== 'set-cookie') headers[name] = value
+    })
+    const cookies = response.headers.getSetCookie()
+    if (cookies.length > 0) headers['set-cookie'] = cookies
+
+    if (!response.body) {
+      // Not writeHead() + end(): on the web driver writeHead switches to a
+      // streamed Response, which a 204/304 cannot be, and on Fastify end()
+      // bypasses the headers set on the reply. send() is each runtime's own
+      // buffered reply path.
+      this._response.status(response.status)
+      for (const [name, value] of Object.entries(headers)) this._response.setHeader(name, value)
+      this._response.send('')
+      return
+    }
+    this._response.writeHead(response.status, headers as Record<string, string>)
+    const reader = response.body.getReader()
+    const stop = () => {
+      reader.cancel().catch(() => {})
+    }
+    this.signal.addEventListener('abort', stop, { once: true })
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        this._response.write(Buffer.from(value))
+      }
+    } finally {
+      this.signal.removeEventListener('abort', stop)
+      this._response.end()
+    }
+  }
+
   sse<T = unknown>(): SseHandler<T> {
     this._response.writeHead(200, {
       'Content-Type': 'text/event-stream',

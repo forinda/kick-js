@@ -198,9 +198,26 @@ console.log(result.content) // final assistant text
 console.log(result.toolCalls) // audit trail of what was called
 ```
 
-Tool dispatch happens through internal HTTP requests against the
-running KickJS server, so middleware, validation, auth guards, and
-logging all run exactly the same way they do for external callers.
+Tool calls run through the app's own pipeline (`AdapterContext.fetch`),
+so middleware, validation, auth guards, and logging all run exactly the
+same way they do for external callers — without a listening server, so
+agents also work under `createHandler()` and in tests.
+
+Tool routes see only the headers you pass. To call them as the user who
+started the agent, forward their credentials; `signal` also aborts
+in-flight tool calls:
+
+```ts
+@Post('/assistant')
+async ask(ctx: RequestContext) {
+  const result = await this.ai.runAgent({
+    messages: [{ role: 'user', content: ctx.body.question }],
+    headers: { authorization: ctx.headers.authorization ?? '' },
+    signal: ctx.signal,
+  })
+  ctx.json({ answer: result.content })
+}
+```
 
 ### Exposing tools with route flags
 

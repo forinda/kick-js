@@ -103,6 +103,8 @@ export interface RunAgentWithMemoryOptions {
   topP?: number
   stopSequences?: string[]
   signal?: AbortSignal
+  /** Headers sent with every tool call. See `RunAgentOptions.headers`. */
+  headers?: Headers | Record<string, string>
   /**
    * When true, tool call results written to memory preserve their
    * full content. When false (the default), tool results are

@@ -17,7 +17,7 @@ import {
   type RouteMethod,
 } from '@forinda/kickjs'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import {
@@ -64,19 +64,29 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
-/** Write a JSON-RPC error straight to the node response. */
+/** Send a JSON-RPC error on any runtime. */
 function sendJsonRpcError(
-  res: {
-    writeHead(status: number, headers: Record<string, string>): unknown
-    end(body: string): unknown
-  },
+  ctx: RequestContext,
   status: number,
   message: string,
   headers: Record<string, string> = {},
-): void {
-  res.writeHead(status, { 'content-type': 'application/json', ...headers })
-  res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }))
+): Promise<void> {
+  return ctx.sendResponse(
+    new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }), {
+      status,
+      headers: { 'content-type': 'application/json', ...headers },
+    }),
+  )
 }
+
+/** Headers copied from the MCP request onto tool calls by default. */
+const DEFAULT_FORWARD_HEADERS = [
+  'authorization',
+  'cookie',
+  'x-request-id',
+  'traceparent',
+  'tracestate',
+]
 
 /**
  * Whether an `exclude` pattern matches a route path. Patterns are compared
@@ -208,14 +218,21 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
      * gets its own MCP server + transport: one shared transport accepts a
      * single `initialize` for the life of the process.
      */
-    const sessions = new Map<string, { server: Server; transport: StreamableHTTPServerTransport }>()
+    const sessions = new Map<
+      string,
+      { server: Server; transport: WebStandardStreamableHTTPServerTransport }
+    >()
 
     /**
-     * Base URL of the running KickJS HTTP server, captured in `afterStart`
-     * once the server is listening. Tool dispatch makes internal HTTP
-     * requests against this base URL so calls flow through the normal
-     * Express pipeline (middleware, validation, auth, logging, error
-     * handling) rather than bypassing it.
+     * Runs a Request through this app's pipeline, from `AdapterContext.fetch`.
+     * Tool calls use it, so they work without a listening server.
+     */
+    let appFetch: ((request: Request) => Promise<Response>) | null = null
+
+    /**
+     * Base URL of a listening server, captured in `afterStart`. Only used
+     * when the adapter's hooks are driven by hand without
+     * `AdapterContext.fetch` (older setups, unit tests).
      */
     let serverBaseUrl: string | null = null
 
@@ -341,42 +358,35 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return `http://${host}:${address.port}`
     }
 
-    /** Extract the Authorization header from MCP SDK extra context. */
-    const extractAuthToken = (extra: unknown): string | null => {
-      if (!extra || typeof extra !== 'object') return null
-      const info = (extra as Record<string, unknown>).requestInfo
-      if (!info || typeof info !== 'object') return null
-      const headers = (info as Record<string, unknown>).headers
-      if (!headers || typeof headers !== 'object') return null
-      if (headers instanceof Map) return headers.get('authorization') ?? null
-      if (typeof (headers as Record<string, unknown>).get === 'function') {
-        return (headers as { get: (k: string) => string | null }).get('authorization')
+    /** A header from the MCP request that carried a tool call. */
+    const requestHeader = (extra: unknown, name: string): string | undefined => {
+      const headers = (extra as { requestInfo?: { headers?: unknown } } | undefined)?.requestInfo
+        ?.headers
+      if (!headers || typeof headers !== 'object') return undefined
+      if (typeof (headers as Headers).get === 'function') {
+        return (headers as Headers).get(name) ?? undefined
       }
-      return (headers as Record<string, string>).authorization ?? null
+      const value = (headers as Record<string, string | string[] | undefined>)[name]
+      return Array.isArray(value) ? value.join(', ') : value
     }
 
     /**
-     * Dispatch a tool call through the Express pipeline. Builds an HTTP
-     * request matching the tool's underlying route and sends it to the
-     * captured serverBaseUrl. Auth headers from the MCP transport
-     * request flow through to the internal dispatch so MCP tool calls
-     * respect the same auth middleware as direct HTTP.
+     * Dispatch a tool call through the app's own pipeline — middleware,
+     * validation, contributors, guards, error handling — as a request to the
+     * tool's route. Headers in `forwardHeaders` are copied from the MCP
+     * request, and the client's cancellation aborts the call.
      */
     const dispatchTool = async (
       tool: McpToolDefinition,
       rawArgs: unknown,
       extra?: unknown,
     ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> => {
-      if (!serverBaseUrl) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: 'text' as const,
-              text: `Cannot dispatch ${tool.name}: HTTP server address not yet captured`,
-            },
-          ],
-        }
+      const errorResult = (text: string) => ({
+        isError: true,
+        content: [{ type: 'text' as const, text }],
+      })
+      if (!appFetch && !serverBaseUrl) {
+        return errorResult(`Cannot dispatch ${tool.name}: the adapter has not started`)
       }
 
       // Tools built during discovery carry their schemas; a hand-built
@@ -384,31 +394,32 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       const routeTool =
         routeTools.get(tool.name) ??
         buildRouteTool({ method: tool.httpMethod, path: tool.mountPath })
-      let request: ReturnType<RouteTool['toRequest']>
+      let target: ReturnType<RouteTool['toRequest']>
       try {
-        request = routeTool.toRequest((rawArgs ?? {}) as Record<string, unknown>)
+        target = routeTool.toRequest((rawArgs ?? {}) as Record<string, unknown>)
       } catch (err) {
-        return {
-          isError: true,
-          content: [{ type: 'text' as const, text: (err as Error).message }],
-        }
+        return errorResult((err as Error).message)
       }
 
-      const headers: Record<string, string> = {
-        accept: 'application/json',
-        'x-mcp-tool': tool.name,
+      const headers = new Headers({ accept: 'application/json', 'x-mcp-tool': tool.name })
+      for (const name of options.forwardHeaders ?? DEFAULT_FORWARD_HEADERS) {
+        const value = requestHeader(extra, name.toLowerCase())
+        if (value !== undefined) headers.set(name, value)
       }
-      const authToken = extractAuthToken(extra)
-      if (authToken) headers.authorization = authToken
-
-      const init: RequestInit = { method: tool.httpMethod.toUpperCase(), headers }
-      if (request.body !== undefined) {
-        headers['content-type'] = 'application/json'
-        init.body = JSON.stringify(request.body)
+      const init: RequestInit = {
+        method: tool.httpMethod.toUpperCase(),
+        headers,
+        signal: (extra as { signal?: AbortSignal } | undefined)?.signal,
+      }
+      if (target.body !== undefined) {
+        headers.set('content-type', 'application/json')
+        init.body = JSON.stringify(target.body)
       }
 
       try {
-        const res = await fetch(`${serverBaseUrl}${request.url}`, init)
+        const res = appFetch
+          ? await appFetch(new Request(new URL(target.url, 'http://localhost'), init))
+          : await fetch(`${serverBaseUrl}${target.url}`, init)
         const text = await res.text()
         return {
           isError: res.status >= 400,
@@ -417,10 +428,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         log.error(err as Error, `McpAdapter: dispatch failed for ${tool.name}`)
-        return {
-          isError: true,
-          content: [{ type: 'text' as const, text: `Tool dispatch error: ${message}` }],
-        }
+        return errorResult(`Tool dispatch error: ${message}`)
       }
     }
 
@@ -505,43 +513,61 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
     }
 
-    /** Mount StreamableHTTP transport endpoints via the HTTP facade. */
+    /** Mount the Streamable HTTP endpoint via the engine-agnostic HTTP facade. */
     const mountHttpRoutes = (http: AdapterHttp): void => {
       const path = `${options.basePath!}/messages`
 
-      // The MCP transport reads/writes the raw node request/response directly,
-      // so reach through to `ctx.req` / `ctx.res` (engine-native under Express).
-      /* eslint-disable @typescript-eslint/no-explicit-any */
+      // The SDK's web-standard transport takes a Request and returns a
+      // Response. Building the Request from `ctx.req` (method, url, headers —
+      // present on every runtime) and sending the Response with
+      // `ctx.sendResponse` keeps the endpoint independent of the HTTP engine.
       const handleRequest = async (ctx: RequestContext): Promise<void> => {
-        const req = ctx.req as any
-        const res = ctx.res as any
+        const req = ctx.req as {
+          method?: string
+          url?: string
+          headers: Record<string, string | string[] | undefined>
+        }
         try {
           const denied = await checkAccess(req.headers)
           if (denied) {
-            sendJsonRpcError(res, denied.status, denied.message, denied.headers)
+            await sendJsonRpcError(ctx, denied.status, denied.message, denied.headers)
             return
           }
+
+          const headers = new Headers()
+          for (const [name, value] of Object.entries(req.headers)) {
+            if (value !== undefined)
+              headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+          }
+          const webRequest = new Request(new URL(req.url ?? path, 'http://localhost'), {
+            method: req.method ?? 'POST',
+            headers,
+            signal: ctx.signal,
+          })
+          const parsedBody = webRequest.method === 'POST' ? ctx.body : undefined
 
           const sessionId = firstHeader(req.headers['mcp-session-id'])
           if (sessionId) {
             const session = sessions.get(sessionId)
             if (!session) {
-              sendJsonRpcError(res, 404, 'Session not found')
+              await sendJsonRpcError(ctx, 404, 'Session not found')
               return
             }
-            await session.transport.handleRequest(req, res, req.body)
+            await ctx.sendResponse(
+              await session.transport.handleRequest(webRequest, { parsedBody }),
+            )
             return
           }
 
-          if (req.method !== 'POST' || !isInitializeRequest(req.body)) {
-            sendJsonRpcError(res, 400, 'Bad Request: no valid session ID provided')
+          if (webRequest.method !== 'POST' || !isInitializeRequest(parsedBody)) {
+            await sendJsonRpcError(ctx, 400, 'Bad Request: no valid session ID provided')
             return
           }
 
           // ponytail: sessions live until the client sends DELETE, disconnects,
           // or the app shuts down; add an idle timeout if abandoned sessions pile up.
           const server = buildMcpServer()
-          const sessionTransport = new StreamableHTTPServerTransport({
+          const sessionTransport = new WebStandardStreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (id) => {
               sessions.set(id, { server, transport: sessionTransport })
@@ -554,15 +580,12 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             if (sessionTransport.sessionId) sessions.delete(sessionTransport.sessionId)
           }
           await server.connect(sessionTransport)
-          await sessionTransport.handleRequest(req, res, req.body)
+          await ctx.sendResponse(await sessionTransport.handleRequest(webRequest, { parsedBody }))
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
-          if (!res.headersSent) {
-            res.status(500).json({ error: 'MCP transport error' })
-          }
+          if (!ctx.res.headersSent) await sendJsonRpcError(ctx, 500, 'MCP transport error')
         }
       }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
 
       // Mount all three verbs in a single table so they share one router —
       // this is what lets the engine auto-answer the OPTIONS preflight with the
@@ -626,6 +649,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
        * the Express stack at all.
        */
       async beforeStart(ctx) {
+        appFetch = ctx.fetch ?? null
         for (const { controller, mountPath } of mountedControllers) {
           const routes = getClassMeta<RouteDefinition[]>(METADATA.ROUTES, controller, [])
           for (const route of routes) {
@@ -663,6 +687,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
        * in `beforeStart` so they land ahead of the catch-all 404.
        */
       async afterStart(ctx) {
+        appFetch ??= ctx.fetch ?? null
         serverBaseUrl = resolveServerBaseUrl(ctx.server)
 
         const effectiveTransport = resolveTransportMode()
@@ -702,6 +727,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         transport = null
         mcpServer = null
         serverBaseUrl = null
+        appFetch = null
         tools.length = 0
         routeTools.clear()
         mountedControllers.length = 0

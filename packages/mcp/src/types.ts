@@ -94,6 +94,13 @@ export interface McpAdapterOptions {
    * origin is allowed.
    */
   allowedOrigins?: string[]
+  /**
+   * Request headers copied from the MCP request onto each tool call, so the
+   * route sees the caller's credentials and tracing context. Defaults to
+   * `['authorization', 'cookie', 'x-request-id', 'traceparent', 'tracestate']`.
+   * Replace the list to add your own, e.g. a tenant header.
+   */
+  forwardHeaders?: string[]
   /** Base path for the MCP endpoint (SSE/HTTP only). Defaults to `/_mcp`. */
   basePath?: string
   /**

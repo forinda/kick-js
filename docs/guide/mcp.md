@@ -84,11 +84,14 @@ land in the Express stack **before** the catch-all error handlers
 
 ### Tool call dispatch
 
-When an MCP client calls a tool, the adapter builds an internal
-HTTP request that flows through the **full Express pipeline** — your
-middleware, context decorators, auth guards, Zod validation, and
-request logging all apply. Tool calls are indistinguishable from
-direct HTTP calls as far as your handler code is concerned.
+When an MCP client calls a tool, the adapter builds a request to the
+tool's route and runs it through the **app's full pipeline** with
+`AdapterContext.fetch` — your middleware, context decorators, auth
+guards, validation, and request logging all apply. Tool calls are
+indistinguishable from direct HTTP calls as far as your handler code is
+concerned. No listening server is needed, so tools work under
+`createHandler()` too, and the endpoint works on every runtime
+(Express, Fastify, h3, h3 v2).
 
 ```text
 MCP Client                    McpAdapter                   Express Pipeline
@@ -144,11 +147,14 @@ MCP Client                    McpAdapter                   Express Pipeline
 
 Key points:
 
-- The `Authorization` header from the MCP POST is extracted from the
-  SDK's `extra.requestInfo.headers` and forwarded into the internal
-  fetch
-- Path parameters (`:id`) are substituted from tool arguments
-- GET/DELETE routes send remaining args as query string
+- Headers listed in `forwardHeaders` are copied from the MCP request
+  onto the tool call — by default `authorization`, `cookie`,
+  `x-request-id`, `traceparent` and `tracestate`. Add your own, such as
+  a tenant header, by passing the full list.
+- Cancelling the call in the MCP client aborts the request to the route.
+- Path parameters (`:id`) are filled from tool arguments
+- GET/DELETE routes send remaining args as query string; values arrive
+  as strings, so number fields in a query schema need `z.coerce.number()`
 - POST/PUT/PATCH routes send remaining args as JSON body
 
 ## Exposure modes
@@ -880,20 +886,21 @@ McpAdapter({
 })
 ```
 
-| Option           | Type                         | Default      | Description                                                                                                                                           |
-| ---------------- | ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`           | `string`                     | required     | MCP server name advertised to clients                                                                                                                 |
-| `version`        | `string`                     | `'0.0.0'`    | Server version advertised to clients                                                                                                                  |
-| `description`    | `string`                     | —            | Human-readable description for client UIs                                                                                                             |
-| `mode`           | `'explicit' \| 'auto'`       | `'explicit'` | How routes are selected as tools                                                                                                                      |
-| `transport`      | `'http' \| 'stdio' \| 'sse'` | `'http'`     | Which MCP transport to use                                                                                                                            |
-| `basePath`       | `string`                     | `'/_mcp'`    | HTTP mount path for the MCP endpoint                                                                                                                  |
-| `include`        | `string[]`                   | —            | Auto mode: HTTP methods to include                                                                                                                    |
-| `exclude`        | `string[]`                   | —            | Auto mode: route paths to skip. Matched against the full path and each trailing part, so `'/admin/*'` skips `/api/v1/admin/users` and `/api/v1/admin` |
-| `auth`           | `McpAuthOptions`             | —            | Checked on every MCP request; `401` when `validate` returns false. `bearer` passes the token, `custom` the raw `Authorization` header                 |
-| `allowedOrigins` | `string[]`                   | `[]`         | Browser origins allowed to call the endpoint (`'*'` for any). Requests with another `Origin` get `403`; clients that send no `Origin` are unaffected  |
-| `exposeWhen`     | `RouteFlagTest`              | —            | Routes carrying these [route flags](./route-flags.md) become tools without `@McpTool`; an object flag value supplies tool options                     |
-| `hideWhen`       | `RouteFlagTest`              | —            | Routes carrying these route flags are never tools — wins over `@McpTool`, `exposeWhen` and `mode: 'auto'`                                             |
+| Option           | Type                         | Default                                                                    | Description                                                                                                                                           |
+| ---------------- | ---------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`           | `string`                     | required                                                                   | MCP server name advertised to clients                                                                                                                 |
+| `version`        | `string`                     | `'0.0.0'`                                                                  | Server version advertised to clients                                                                                                                  |
+| `description`    | `string`                     | —                                                                          | Human-readable description for client UIs                                                                                                             |
+| `mode`           | `'explicit' \| 'auto'`       | `'explicit'`                                                               | How routes are selected as tools                                                                                                                      |
+| `transport`      | `'http' \| 'stdio' \| 'sse'` | `'http'`                                                                   | Which MCP transport to use                                                                                                                            |
+| `basePath`       | `string`                     | `'/_mcp'`                                                                  | HTTP mount path for the MCP endpoint                                                                                                                  |
+| `include`        | `string[]`                   | —                                                                          | Auto mode: HTTP methods to include                                                                                                                    |
+| `exclude`        | `string[]`                   | —                                                                          | Auto mode: route paths to skip. Matched against the full path and each trailing part, so `'/admin/*'` skips `/api/v1/admin/users` and `/api/v1/admin` |
+| `auth`           | `McpAuthOptions`             | —                                                                          | Checked on every MCP request; `401` when `validate` returns false. `bearer` passes the token, `custom` the raw `Authorization` header                 |
+| `allowedOrigins` | `string[]`                   | `[]`                                                                       | Browser origins allowed to call the endpoint (`'*'` for any). Requests with another `Origin` get `403`; clients that send no `Origin` are unaffected  |
+| `forwardHeaders` | `string[]`                   | `['authorization', 'cookie', 'x-request-id', 'traceparent', 'tracestate']` | Headers copied from the MCP request onto each tool call                                                                                               |
+| `exposeWhen`     | `RouteFlagTest`              | —                                                                          | Routes carrying these [route flags](./route-flags.md) become tools without `@McpTool`; an object flag value supplies tool options                     |
+| `hideWhen`       | `RouteFlagTest`              | —                                                                          | Routes carrying these route flags are never tools — wins over `@McpTool`, `exposeWhen` and `mode: 'auto'`                                             |
 
 ### @McpTool options
 

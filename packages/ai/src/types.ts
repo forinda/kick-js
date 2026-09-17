@@ -241,6 +241,13 @@ export interface RunAgentOptions extends ChatOptions {
    * call behavior. Defaults to 8.
    */
   maxSteps?: number
+  /**
+   * Headers sent with every tool call, so the tool's route sees the caller's
+   * credentials and context — typically copied from the request that started
+   * the agent: `{ authorization: ctx.headers.authorization }`. `signal`
+   * also aborts in-flight tool calls.
+   */
+  headers?: Headers | Record<string, string>
 }
 
 /** Result of `AiAdapter.runAgent()` — the final assistant response. */
@@ -269,9 +276,9 @@ export interface AiAdapterExtensions {
   /** Return the discovered tool registry. Primarily for tests and debug UIs. */
   getTools(): readonly AiToolDefinition[]
   /**
-   * Override the server base URL. Used by tests that spin up an
-   * ephemeral http.Server and can't rely on the framework's `afterStart`
-   * hook to supply it.
+   * Send tool calls to this base URL over HTTP instead of through the app
+   * in-process. For tests that run the adapter's hooks by hand against their
+   * own http.Server; `null` restores in-process dispatch.
    */
   setServerBaseUrl(url: string | null): void
   /** Run a tool-calling agent loop. */
