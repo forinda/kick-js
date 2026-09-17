@@ -1029,7 +1029,18 @@ export class RequestContext<
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
-        this._response.write(Buffer.from(value))
+        // Honour backpressure: on a slow client, wait for the socket to drain
+        // (or the client to go away) before reading more of the body.
+        if (this._response.write(Buffer.from(value)) === false && !this.signal.aborted) {
+          await new Promise<void>((resolve) => {
+            const resume = () => {
+              this.signal.removeEventListener('abort', resume)
+              resolve()
+            }
+            this._response.once('drain', resume)
+            this.signal.addEventListener('abort', resume, { once: true })
+          })
+        }
       }
     } finally {
       this.signal.removeEventListener('abort', stop)

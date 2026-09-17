@@ -158,6 +158,7 @@ describe('AiAdapter — tool input', () => {
 
     expect(seen).toEqual([])
     const toolMessage = provider.inputs[1].messages.find((m) => m.role === 'tool')!
+    expect(toolMessage.isError).toBe(true)
     expect(JSON.parse(toolMessage.content)).toEqual({
       error: 'Missing path parameter "id" for PUT /api/v1/tasks/:id',
     })

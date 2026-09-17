@@ -106,15 +106,14 @@ export class Prompt<TVars extends Record<string, unknown> = Record<string, unkno
       /\{\{\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*\}\}/g,
       (_match, key: string) => {
         // `{{user.name}}` reads vars.user.name.
-        const value = key
-          .split('.')
-          .reduce<unknown>(
-            (current, part) =>
-              current !== null && typeof current === 'object'
-                ? (current as Record<string, unknown>)[part]
-                : undefined,
-            vars,
-          )
+        const value = key.split('.').reduce<unknown>(
+          // Own properties only: `{{user.constructor.name}}` must not reach Object.prototype.
+          (current, part) =>
+            current !== null && typeof current === 'object' && Object.hasOwn(current, part)
+              ? (current as Record<string, unknown>)[part]
+              : undefined,
+          vars,
+        )
         if (value === undefined || value === null) {
           return this.handleMissing(key, _match)
         }

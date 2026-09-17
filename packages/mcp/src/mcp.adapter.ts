@@ -4,6 +4,7 @@ import {
   METADATA,
   defineAdapter,
   getClassMeta,
+  assertFlagTest,
   getRouteFlags,
   matchesFlagTest,
   type AdapterContext,
@@ -216,8 +217,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
   build: (options) => {
     // A mixed-polarity list fails here, where the adapter is configured,
     // not later inside startup where the error would be swallowed.
-    if (options.exposeWhen) matchesFlagTest(options.exposeWhen, undefined)
-    if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
+    if (options.exposeWhen) assertFlagTest(options.exposeWhen, 'McpAdapter.exposeWhen')
+    if (options.hideWhen) assertFlagTest(options.hideWhen, 'McpAdapter.hideWhen')
 
     /** Controllers collected during the mount phase, in insertion order. */
     const mountedControllers: Array<{ controller: Constructor; mountPath: string }> = []
@@ -259,8 +260,28 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
      */
     const sessions = new Map<
       string,
-      { server: Server; transport: WebStandardStreamableHTTPServerTransport }
+      {
+        server: Server
+        transport: WebStandardStreamableHTTPServerTransport
+        /** Requests in progress, including an open notification stream. */
+        active: number
+        /** Closes the session after `sessionIdleTimeoutMs` with nothing in progress. */
+        idleTimer?: ReturnType<typeof setTimeout>
+      }
     >()
+    const maxSessions = options.maxSessions ?? 1000
+    const sessionIdleTimeoutMs = options.sessionIdleTimeoutMs ?? 30 * 60_000
+
+    /** Start the idle countdown for a session that has nothing in progress. */
+    const armIdleTimer = (id: string) => {
+      const session = sessions.get(id)
+      if (!session || session.active > 0) return
+      clearTimeout(session.idleTimer)
+      session.idleTimer = setTimeout(() => {
+        void session.transport.close()
+      }, sessionIdleTimeoutMs)
+      session.idleTimer.unref?.()
+    }
 
     /**
      * Runs a Request through this app's pipeline, from `AdapterContext.fetch`.
@@ -701,9 +722,16 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
               await sendJsonRpcError(ctx, 404, 'Session not found')
               return
             }
-            await ctx.sendResponse(
-              await session.transport.handleRequest(webRequest, { parsedBody }),
-            )
+            session.active++
+            clearTimeout(session.idleTimer)
+            try {
+              await ctx.sendResponse(
+                await session.transport.handleRequest(webRequest, { parsedBody }),
+              )
+            } finally {
+              session.active--
+              armIdleTimer(sessionId)
+            }
             return
           }
 
@@ -712,23 +740,32 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             return
           }
 
-          // ponytail: sessions live until the client sends DELETE, disconnects,
-          // or the app shuts down; add an idle timeout if abandoned sessions pile up.
+          // Each session holds an MCP server and transport, and initialize needs
+          // no session — cap them so clients (authenticated or not) can't
+          // exhaust memory, and close abandoned ones after an idle timeout.
+          if (sessions.size >= maxSessions) {
+            await sendJsonRpcError(ctx, 503, 'Too many MCP sessions; try again later')
+            return
+          }
           const server = buildMcpServer()
           const sessionTransport = new WebStandardStreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (id) => {
-              sessions.set(id, { server, transport: sessionTransport })
+              sessions.set(id, { server, transport: sessionTransport, active: 0 })
             },
           })
           // Set before connect(): the SDK wraps an existing onclose, but a
           // handler assigned afterwards would replace its cleanup.
           // oxlint-disable-next-line unicorn/prefer-add-event-listener -- MCP SDK transports expose only an `onclose` property
           sessionTransport.onclose = () => {
-            if (sessionTransport.sessionId) sessions.delete(sessionTransport.sessionId)
+            const id = sessionTransport.sessionId
+            if (!id) return
+            clearTimeout(sessions.get(id)?.idleTimer)
+            sessions.delete(id)
           }
           await server.connect(sessionTransport)
           await ctx.sendResponse(await sessionTransport.handleRequest(webRequest, { parsedBody }))
+          if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
           if (!ctx.res.headersSent) await sendJsonRpcError(ctx, 500, 'MCP transport error')
@@ -863,6 +900,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
        */
       async shutdown() {
         const open = [...sessions.values()]
+        for (const session of open) clearTimeout(session.idleTimer)
         sessions.clear()
         const servers = [...open.map((s) => s.server), ...(mcpServer ? [mcpServer] : [])]
         for (const server of servers) {

@@ -156,6 +156,14 @@ export class PineconeVectorStore<
       }
     }
 
+    for (const d of list) {
+      if (d.metadata && CONTENT_KEY in d.metadata) {
+        throw new Error(
+          `PineconeVectorStore.upsert: metadata key "${CONTENT_KEY}" is reserved for the document text (id=${d.id})`,
+        )
+      }
+    }
+
     const vectors = list.map((d) => {
       const { metadata: docMetadata = {} } = d
       return {

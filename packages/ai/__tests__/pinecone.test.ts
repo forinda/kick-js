@@ -220,6 +220,23 @@ describe('PineconeVectorStore.query()', () => {
     ])
   })
 
+  it('rejects the reserved _kick_content metadata key', async () => {
+    const store = new PineconeVectorStore({
+      apiKey: 'pc-test',
+      indexHost: 'x.pinecone.io',
+      dimensions: 3,
+    })
+    await expect(
+      store.upsert({
+        id: 'a',
+        content: 'text',
+        vector: [0.1, 0.2, 0.3],
+        metadata: { _kick_content: 'mine' },
+      }),
+    ).rejects.toThrow(/"_kick_content" is reserved/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it('keeps a user metadata field named content apart from the document text', async () => {
     const store = new PineconeVectorStore({
       apiKey: 'pc-test',

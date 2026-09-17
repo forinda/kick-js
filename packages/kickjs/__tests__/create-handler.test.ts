@@ -124,6 +124,25 @@ describe('createHandler — fetch on a Node-based runtime (Express)', () => {
     expect(res.headers.get('content-type')).toContain('application/json')
   })
 
+  it('ignores caller-supplied forwarding host and protocol', async () => {
+    const handler = handlerFor({ modules: [itemsModule()] })
+    const res = await handler.fetch(
+      new Request('https://site.example/api/v1/items/host', {
+        headers: { 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'http' },
+      }),
+    )
+    expect(await res.json()).toEqual({ forwardedHost: 'site.example' })
+  })
+
+  it('shuts down promptly after keep-alive requests through the forwarding server', async () => {
+    const handler = createHandler({ modules: [itemsModule()] })
+    await handler.fetch(new Request('https://site.example/api/v1/items'))
+    const started = Date.now()
+    await handler.close()
+    // A bound on shutdown: close() force-closes the forwarding server's connections.
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
+
   it('tells the app which host the platform received, since the hop is 127.0.0.1', async () => {
     const handler = handlerFor({ modules: [itemsModule()] })
     const res = await handler.fetch(new Request('https://site.example/api/v1/items/host'))

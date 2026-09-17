@@ -842,8 +842,14 @@ the `mcp-session-id` response header. Several clients (the Inspector,
 Claude Code, a script) can be connected at the same time.
 
 A session ends when the client disconnects (`DELETE /_mcp/messages`),
-when its connection closes, or when the app shuts down. A request with
+when its connection closes, after `sessionIdleTimeoutMs` (default 30
+minutes) with no request in progress, or when the app shuts down. A
+client holding its notification stream open is not idle. A request with
 an unknown session id gets `404`, and the client starts a new session.
+
+At most `maxSessions` (default 1000) are open at once; a new client
+beyond that gets `503` until a session ends. `initialize` needs no
+session, so the limit applies whether or not `auth` is set.
 
 Sessions live in the server's memory. Behind a load balancer with
 several instances, route each client to the same instance (sticky
@@ -886,15 +892,17 @@ Follow this exact sequence to avoid the common pitfalls:
    The `/_mcp/messages` suffix is required. Without it, the
    Inspector connects to your server root and gets a 404.
 
-5. **Do NOT `curl` the MCP endpoint** between starting the server
-   and clicking Connect. Any `initialize` call consumes the session.
+5. **If you sent a raw `initialize` request** (with `curl`, say), it
+   created its own session — it doesn't block the Inspector. The session
+   ends when that client sends `DELETE`, after the idle timeout, or when
+   the app shuts down.
 
 6. **Click Connect** — green dot + server name should appear.
 
 7. **Click List Tools** — your `@McpTool`-decorated methods appear.
 
-8. **If something goes wrong** — restart the server (`kick dev` will
-   HMR on file save), then click **Connect** again in the Inspector.
+8. **If something goes wrong** — click **Disconnect**, then **Connect**
+   again; the Inspector starts a new session.
 
 #### CORS for HTTP transport
 

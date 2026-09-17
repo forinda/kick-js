@@ -101,6 +101,16 @@ export interface McpAdapterOptions {
    * Replace the list to add your own, e.g. a tenant header.
    */
   forwardHeaders?: string[]
+  /**
+   * Most MCP sessions open at once (`sse`/`http`). A new client beyond the
+   * limit gets `503` until a session ends. Defaults to 1000.
+   */
+  maxSessions?: number
+  /**
+   * Close a session after this long with no request in progress. A client
+   * holding its notification stream open is not idle. Defaults to 30 minutes.
+   */
+  sessionIdleTimeoutMs?: number
   /** Base path for the MCP endpoint (SSE/HTTP only). Defaults to `/_mcp`. */
   basePath?: string
   /**

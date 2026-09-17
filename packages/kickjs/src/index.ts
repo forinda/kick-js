@@ -33,7 +33,7 @@ export {
   type SseHandler,
 } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
-export { defineRouteFlag, getRouteFlags, matchesFlagTest } from './core/route-flag'
+export { assertFlagTest, defineRouteFlag, getRouteFlags, matchesFlagTest } from './core/route-flag'
 export { bindRoutePolicy, type RoutePolicyTable } from './core/route-policy'
 export type {
   KickRouteFlags,

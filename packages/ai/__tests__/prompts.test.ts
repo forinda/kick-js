@@ -184,3 +184,12 @@ describe('Prompt — nested variables', () => {
     expect(() => p.renderString({ user: {} })).toThrow(/"user.name" is missing/)
   })
 })
+
+describe('Prompt — prototype properties', () => {
+  it('does not resolve dotted placeholders through the prototype chain', () => {
+    const p = createPrompt<{ user: Record<string, unknown> }>('{{user.constructor.name}}', {
+      onMissing: 'throw',
+    })
+    expect(() => p.renderString({ user: {} })).toThrow(/"user.constructor.name" is missing/)
+  })
+})

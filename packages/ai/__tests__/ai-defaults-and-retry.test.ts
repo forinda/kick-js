@@ -55,6 +55,18 @@ describe('AiAdapter — defaults', () => {
   })
 })
 
+describe('AiAdapter — default signal', () => {
+  it('uses defaults.signal when the call passes none', async () => {
+    const provider = new RecordingProvider()
+    const signal = new AbortController().signal
+    const adapter = AiAdapter({ provider, defaults: { signal } })
+    adapter.beforeStart({ container: { registerFactory() {}, registerInstance() {} } } as never)
+
+    await adapter.runAgent({ messages: [{ role: 'user', content: 'a' }] })
+    expect(provider.calls[0].options?.signal).toBe(signal)
+  })
+})
+
 describe('postJson — abort during retry backoff', () => {
   it('rejects with the abort, not the error being retried', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('slow down', { status: 429 }))

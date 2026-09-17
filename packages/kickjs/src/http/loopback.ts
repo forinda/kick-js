@@ -46,6 +46,31 @@ export interface Loopback {
   close(): Promise<void>
 }
 
+/**
+ * The request body as a stream, without buffering it — so the app's body
+ * parsers enforce their size limits as it arrives. A body that turns out to be
+ * empty becomes `undefined`: Node's fetch rejects an empty stream on POST.
+ */
+async function streamedBody(request: Request): Promise<ReadableStream<Uint8Array> | undefined> {
+  if (!request.body || request.method === 'GET' || request.method === 'HEAD') return undefined
+  const reader = request.body.getReader()
+  const first = await reader.read()
+  if (first.done) return undefined
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(first.value)
+    },
+    async pull(controller) {
+      const { done, value } = await reader.read()
+      if (done) controller.close()
+      else controller.enqueue(value)
+    },
+    cancel(reason) {
+      return reader.cancel(reason)
+    },
+  })
+}
+
 export function createLoopback(
   handle: (req: IncomingMessage, res: ServerResponse) => void,
 ): Loopback {
@@ -77,25 +102,22 @@ export function createLoopback(
 
       const headers = new Headers(request.headers)
       for (const name of HOP_BY_HOP_REQUEST) headers.delete(name)
-      // The forwarded request arrives from 127.0.0.1; keep what the caller saw.
-      if (!headers.has('x-forwarded-host')) headers.set('x-forwarded-host', url.host)
-      if (!headers.has('x-forwarded-proto'))
-        headers.set('x-forwarded-proto', url.protocol.slice(0, -1))
+      // The forwarded request arrives from 127.0.0.1. Host and protocol come
+      // from the Request's URL — never from caller-supplied forwarding
+      // headers, which a trusting runtime would otherwise believe.
+      headers.set('x-forwarded-host', url.host)
+      headers.set('x-forwarded-proto', url.protocol.slice(0, -1))
 
-      // Buffered: a body-less POST arrives as an empty stream, which Node's
-      // fetch rejects, and serverless platforms buffer request bodies anyway.
-      const body =
-        request.method === 'GET' || request.method === 'HEAD'
-          ? undefined
-          : await request.arrayBuffer()
-
+      const body = await streamedBody(request)
       const upstream = await fetch(origin + url.pathname + url.search, {
         method: request.method,
         headers,
-        body: body && body.byteLength > 0 ? body : undefined,
+        body,
+        // Required by Node's fetch for a streamed request body.
+        ...(body ? { duplex: 'half' } : {}),
         redirect: 'manual',
         signal: request.signal,
-      })
+      } as RequestInit)
 
       // Node's fetch has already decoded a compressed body, so the encoding and
       // length headers no longer describe what is being returned. Connection
@@ -113,7 +135,13 @@ export function createLoopback(
     async close() {
       const running = await started?.catch(() => undefined)
       started = undefined
-      if (running) await new Promise<void>((resolve) => running.server.close(() => resolve()))
+      if (!running) return
+      const closed = new Promise<void>((resolve) => running.server.close(() => resolve()))
+      // Application.shutdown has already drained in-flight requests; what is
+      // left is keep-alive sockets from fetch's pool, which would hold
+      // close() open past the shutdown timeout.
+      running.server.closeAllConnections()
+      await closed
     },
   }
 }

@@ -99,3 +99,15 @@ describe('AiAdapter — route flags', () => {
     )
   })
 })
+
+describe('AiAdapter — flag test validation', () => {
+  it('does not run predicates when the adapter is created', () => {
+    // A predicate may assume a route; creation must not call it without one.
+    expect(() =>
+      AiAdapter({ provider, exposeWhen: ({ route }) => route!.method === 'GET' }),
+    ).not.toThrow()
+    expect(() => AiAdapter({ provider, hideWhen: ['ai.hidden', '!ai.tool'] as never })).toThrow(
+      'mixes polarities',
+    )
+  })
+})

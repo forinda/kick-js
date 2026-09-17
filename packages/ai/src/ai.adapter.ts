@@ -4,6 +4,7 @@ import {
   Scope,
   defineAdapter,
   getClassMeta,
+  assertFlagTest,
   getRouteFlags,
   matchesFlagTest,
   type AdapterContext,
@@ -114,8 +115,8 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
   build: (options) => {
     // A mixed-polarity list fails here, where the adapter is configured,
     // not later inside startup where the error would be swallowed.
-    if (options.exposeWhen) matchesFlagTest(options.exposeWhen, undefined)
-    if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
+    if (options.exposeWhen) assertFlagTest(options.exposeWhen, 'AiAdapter.exposeWhen')
+    if (options.hideWhen) assertFlagTest(options.hideWhen, 'AiAdapter.hideWhen')
 
     const provider = options.provider
     /** Registered providers by name; the adapter's provider is the default. */
@@ -258,6 +259,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         return {
           role: 'tool',
           toolCallId: call.id,
+          isError: true,
           content: JSON.stringify({ error: `Tool not found: ${call.name}` }),
         }
       }
@@ -266,6 +268,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         return {
           role: 'tool',
           toolCallId: call.id,
+          isError: true,
           content: JSON.stringify({
             error: `Cannot dispatch ${call.name}: the adapter has not started`,
           }),
@@ -282,6 +285,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
         return {
           role: 'tool',
           toolCallId: call.id,
+          isError: true,
           content: JSON.stringify({ error: (err as Error).message }),
         }
       }
@@ -360,7 +364,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
               stopSequences: agentOptions.stopSequences,
               effort: agentOptions.effort,
             }),
-            signal: agentOptions.signal,
+            signal: agentOptions.signal ?? defaultChatOptions.signal,
           },
         )
 

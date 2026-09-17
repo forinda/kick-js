@@ -188,3 +188,11 @@ describe('McpAdapter — hideWhen', () => {
     )
   })
 })
+
+describe('McpAdapter — flag test validation', () => {
+  it('does not run predicates when the adapter is created', () => {
+    expect(() =>
+      McpAdapter({ name: 't', exposeWhen: ({ route }) => route!.method === 'GET' }),
+    ).not.toThrow()
+  })
+})

@@ -149,6 +149,40 @@ describe('McpAdapter — sessions', () => {
   })
 })
 
+describe('McpAdapter — session limits', () => {
+  it('answers 503 to a new client beyond maxSessions', async () => {
+    const { endpoint } = await start(McpAdapter({ name: 't', transport: 'http', maxSessions: 1 }))
+    expect((await post(endpoint)).status).toBe(200)
+    expect((await post(endpoint)).status).toBe(503)
+  })
+
+  it('closes a session left idle past sessionIdleTimeoutMs', async () => {
+    const { endpoint } = await start(
+      McpAdapter({ name: 't', transport: 'http', sessionIdleTimeoutMs: 50 }),
+    )
+    const init = await post(endpoint)
+    const sessionId = init.headers.get('mcp-session-id')!
+    await init.text()
+
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const later = await post(
+      endpoint,
+      { 'mcp-session-id': sessionId, 'mcp-protocol-version': '2025-06-18' },
+      JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+    )
+    expect(later.status).toBe(404)
+  })
+
+  it('keeps a connected client with an open notification stream past the idle timeout', async () => {
+    const { endpoint } = await start(
+      McpAdapter({ name: 't', transport: 'http', sessionIdleTimeoutMs: 300 }),
+    )
+    const client = await connect(endpoint)
+    await new Promise((resolve) => setTimeout(resolve, 700))
+    expect((await client.listTools()).tools).toHaveLength(2)
+  })
+})
+
 describe('McpAdapter — auth', () => {
   it('rejects requests without a valid bearer token, before a session exists', async () => {
     const validate = vi.fn((token: string) => token === 'secret')

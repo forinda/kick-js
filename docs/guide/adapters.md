@@ -91,11 +91,12 @@ interface AdapterContext {
 }
 ```
 
-`fetch` sends a web `Request` through the app's full pipeline — routing,
+`fetch` sends a web `Request` through the app's pipeline — routing,
 middleware, validation, contributors, error handling — and returns the
-`Response`. It works in every hook and without a listening server
-(`createHandler()`, tests), so an adapter that calls the app's own routes
-never needs the server address:
+`Response`, without a listening server (`createHandler()`, tests), so an
+adapter that calls the app's own routes never needs the server address.
+The full pipeline exists once setup completes: from `beforeStart` on. In
+`beforeMount`, module routes and error handlers aren't mounted yet:
 
 ```ts
 async beforeStart({ fetch }: AdapterContext) {
