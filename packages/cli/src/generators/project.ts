@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
 import {
+  generatePnpmWorkspace,
   generatePackageJson,
   generateViteConfig,
   generateTsConfig,
@@ -202,6 +203,13 @@ interface InitProjectOptions {
   spaClientDir?: string
   /** Pin the compiler API + generate the client route map (fullstack). */
   withClientMap?: boolean
+  /** Fail `kick dev` when its port is taken instead of moving (fullstack's /api proxy needs the port). */
+  strictPort?: boolean
+  /**
+   * Write pnpm-workspace.yaml approving the build tools (pnpm only). Default
+   * true; false when the project is a member of an enclosing workspace.
+   */
+  pnpmWorkspace?: boolean
 }
 
 /** Scaffold a new KickJS project */
@@ -302,7 +310,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
-  await writeFileSafe(join(dir, 'vite.config.ts'), generateViteConfig())
+  await writeFileSafe(
+    join(dir, 'vite.config.ts'),
+    generateViteConfig({ strictPort: options.strictPort }),
+  )
 
   // ── tsconfig.json ───────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'tsconfig.json'), generateTsConfig())
@@ -382,6 +393,12 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     only: 'all',
     force: true,
   })
+
+  // ── pnpm-workspace.yaml ──────────────────────────────────────────────
+  // Approves @swc/core and esbuild before install; see generatePnpmWorkspace.
+  if (packageManager === 'pnpm' && options.pnpmWorkspace !== false) {
+    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), generatePnpmWorkspace())
+  }
 
   // ── Install Dependencies ────────────────────────────────────────────
   // Install BEFORE git init so the lockfile is included in the first commit.

@@ -93,7 +93,7 @@ export default defineConfig({
       // Optional peers you don't install must stay external: inlined, a missing
       // one becomes a stub that throws on load.
       external: ['valibot', 'yup'],
-      output: { format: 'esm', entryFileNames: 'server.mjs', inlineDynamicImports: true },
+      output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
     },
   },
 })
@@ -175,6 +175,234 @@ Write the [Build Output API](https://vercel.com/docs/build-output-api) tree and 
 The function receives the original path, so routes stay under `/api/v1/…`.
 
 **API only:** skip `static/` and keep only the `/api/(.*)` route in `config.json`.
+
+## Build with a CLI plugin (optional)
+
+The steps above are the whole recipe, and they stay the reference. If you would rather run one command per platform, put them in a [CLI plugin](./cli-plugins.md): `kick build:netlify` and `kick build:vercel` bundle `src/serverless.ts` with the same Vite + SWC setup and write the platform output around it. The plugin replaces `vite.serverless.config.ts` and `scripts/write-netlify-function.mjs`; `src/serverless.ts` stays as it is.
+
+`kick build` has no `--target` flag: it always builds `vite.config.ts` into a long-running server. The plugin is how a project gets platform builds today.
+
+Copy the plugin into the server project. It only uses packages a generated project already has (`vite`, `unplugin-swc`, `@forinda/kickjs-vite`):
+
+```ts
+// server/kick-deploy.ts
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { relative, resolve, sep } from 'node:path'
+import { defineCliPlugin } from '@forinda/kickjs-cli'
+
+export interface DeployPluginOptions {
+  /** Serverless entry exporting `handler = createHandler(...)`. Default `src/serverless.ts`. */
+  entry?: string
+  /** Where the bundle is written, under the project. Default `dist/serverless`. */
+  outDir?: string
+  /**
+   * Built frontend to publish next to the API (fullstack: `../web/dist`).
+   * Omit for an API-only project.
+   */
+  staticDir?: string
+  /**
+   * Directory the platform deploys from, relative to the project — where
+   * `.netlify/` and `.vercel/` are written. Fullstack: `..` (the workspace root).
+   */
+  siteRoot?: string
+  /** URL prefix routed to the function. Default `/api`. */
+  apiPath?: string
+  /** Optional peers you don't install stay external. Default `['valibot', 'yup']`. */
+  external?: string[]
+  /** Vercel Node runtime. Default `nodejs22.x`. */
+  vercelRuntime?: string
+}
+
+/**
+ * `kick build:netlify` and `kick build:vercel`: bundle the serverless entry
+ * with the same Vite + SWC setup as `kick build`, then write the platform's
+ * build output around it.
+ */
+export const deployPlugin = (options: DeployPluginOptions = {}) =>
+  defineCliPlugin({
+    name: 'deploy',
+    register(program, ctx) {
+      const opts = {
+        entry: 'src/serverless.ts',
+        outDir: 'dist/serverless',
+        siteRoot: '.',
+        apiPath: '/api',
+        external: ['valibot', 'yup'],
+        vercelRuntime: 'nodejs22.x',
+        ...options,
+      }
+      const root = ctx.projectRoot
+      const siteRoot = resolve(root, opts.siteRoot)
+      const staticDir = opts.staticDir ? resolve(root, opts.staticDir) : undefined
+
+      /** Build dist/serverless/server.mjs: one self-contained ESM file. */
+      async function bundle(): Promise<string> {
+        // Loaded here, not at the top: only these commands need them.
+        const { build } = await import('vite')
+        const { default: swc } = await import('unplugin-swc')
+        const { devtoolsFlagPlugin, devtoolsStripPlugin } = await import('@forinda/kickjs-vite')
+
+        await build({
+          configFile: false,
+          root,
+          logLevel: 'warn',
+          oxc: false,
+          plugins: [swc.vite(), devtoolsFlagPlugin(), devtoolsStripPlugin()],
+          resolve: { alias: { '@': resolve(root, 'src') } },
+          // Inline every dependency: a Vercel function can't see node_modules
+          // outside it, and Netlify must not re-compile the TypeScript.
+          ssr: { noExternal: true, target: 'node' },
+          build: {
+            ssr: true,
+            target: 'node20',
+            outDir: resolve(root, opts.outDir),
+            emptyOutDir: true,
+            minify: false,
+            rollupOptions: {
+              input: resolve(root, opts.entry),
+              external: opts.external,
+              output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
+            },
+          },
+        })
+        const file = resolve(root, opts.outDir, 'server.mjs')
+        ctx.log(`bundled ${relative(process.cwd(), file)}`)
+        return file
+      }
+
+      program
+        .command('build:netlify')
+        .description('Bundle the API and write the Netlify function')
+        .action(async () => {
+          const server = await bundle()
+          const functions = resolve(siteRoot, '.netlify/v1/functions')
+          mkdirSync(functions, { recursive: true })
+          // The function imports the bundle; Netlify packages what it imports.
+          const from = relative(functions, server).split(sep).join('/')
+          writeFileSync(
+            resolve(functions, 'api.mjs'),
+            `import { handler } from '${from}'
+
+export default (request) => handler.fetch(request)
+
+export const config = {
+  path: '${opts.apiPath}/*',
+  preferStatic: true,
+}
+`,
+          )
+          ctx.log(`wrote ${relative(process.cwd(), resolve(functions, 'api.mjs'))}`)
+        })
+
+      program
+        .command('build:vercel')
+        .description('Bundle the API and write .vercel/output (Build Output API v3)')
+        .action(async () => {
+          const server = await bundle()
+          const output = resolve(siteRoot, '.vercel/output')
+          const fn = resolve(output, 'functions/api.func')
+          rmSync(output, { recursive: true, force: true })
+          mkdirSync(fn, { recursive: true })
+
+          // Nothing outside the .func directory is visible at runtime.
+          cpSync(server, resolve(fn, 'server.mjs'))
+          writeFileSync(
+            resolve(fn, 'index.mjs'),
+            `import { handler } from './server.mjs'\nexport default handler.node\n`,
+          )
+          writeFileSync(
+            resolve(fn, '.vc-config.json'),
+            JSON.stringify(
+              {
+                runtime: opts.vercelRuntime,
+                handler: 'index.mjs',
+                launcherType: 'Nodejs',
+                supportsResponseStreaming: true,
+              },
+              null,
+              2,
+            ),
+          )
+
+          const routes: Array<Record<string, string>> = [
+            { handle: 'filesystem' },
+            { src: `^${opts.apiPath}/(.*)$`, dest: '/api' },
+          ]
+          if (staticDir) {
+            if (!existsSync(staticDir)) {
+              throw new Error(
+                `build:vercel: ${staticDir} does not exist — build the frontend first`,
+              )
+            }
+            cpSync(staticDir, resolve(output, 'static'), { recursive: true })
+            // Client-side routes fall back to the SPA shell.
+            routes.push({ src: '^/(.*)$', dest: '/index.html' })
+          }
+          writeFileSync(
+            resolve(output, 'config.json'),
+            JSON.stringify({ version: 3, routes }, null, 2),
+          )
+          ctx.log(`wrote ${relative(process.cwd(), output)}`)
+        })
+    },
+  })
+```
+
+Register it in `kick.config.ts`:
+
+::: code-group
+
+```ts [Fullstack (server/kick.config.ts)]
+import { defineConfig } from '@forinda/kickjs-cli'
+import { deployPlugin } from './kick-deploy'
+
+export default defineConfig({
+  // web/dist is published next to the API; .netlify/ and .vercel/ go to the
+  // workspace root, where the platform builds.
+  plugins: [deployPlugin({ staticDir: '../web/dist', siteRoot: '..' })],
+  // ...
+})
+```
+
+```ts [API only (kick.config.ts)]
+import { defineConfig } from '@forinda/kickjs-cli'
+import { deployPlugin } from './kick-deploy'
+
+export default defineConfig({
+  plugins: [deployPlugin()],
+  // ...
+})
+```
+
+:::
+
+`kick --help` now lists both commands. Run them **after** `kick build` and, for fullstack, after the web build — `build:vercel` copies `web/dist` and fails if it is missing.
+
+**Netlify** — the build command writes the function, as Netlify requires:
+
+```toml
+# netlify.toml (fullstack, at the workspace root)
+[build]
+  command = "pnpm build && pnpm --filter ./server exec kick build:netlify"
+  publish = "web/dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+API only: `command = "pnpm build && pnpm exec kick build:netlify"`, no SPA redirect, and `publish` an empty folder as described in [Netlify](#netlify).
+
+**Vercel** — build locally or in CI, then upload the prebuilt output:
+
+```bash
+pnpm build
+pnpm --filter ./server exec kick build:vercel   # API only: pnpm exec kick build:vercel
+vercel deploy --prebuilt                         # from the directory holding .vercel/
+```
+
+Add `.netlify/` and `.vercel/` to `.gitignore`. Change the options — `apiPath`, `external`, `vercelRuntime` — instead of editing the output by hand; anything the plugin doesn't cover (extra functions, headers, edge config) is plain file writing in the same `register` function.
 
 ## Two deploys
 

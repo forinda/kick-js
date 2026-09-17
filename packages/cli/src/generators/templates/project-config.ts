@@ -182,7 +182,18 @@ export function generatePackageJson(
  * - Express mounting via configureServer() post-hook
  * - httpServer piping to adapters (WsAdapter, Socket.IO, etc.)
  */
-export function generateViteConfig(): string {
+export function generateViteConfig(options: { strictPort?: boolean } = {}): string {
+  // The fullstack web app proxies /api to a fixed port. Without strictPort,
+  // Vite moves to the next free port when that one is taken and the proxy
+  // silently talks to whatever else holds it; with it, `kick dev` fails loudly.
+  const server = options.strictPort
+    ? `  server: {
+    // web/vite.config.ts proxies /api to this port — fail instead of moving
+    // to another port when it's taken, or the proxy would reach the wrong process.
+    strictPort: true,
+  },
+`
+    : ''
   return `import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
 import swc from 'unplugin-swc'
@@ -197,7 +208,7 @@ export default defineConfig({
     // dev server picks up env tweaks without a manual restart.
     envWatchPlugin(),
   ],
-  resolve: {
+${server}  resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
@@ -214,6 +225,23 @@ export default defineConfig({
   },
 })
 `
+}
+
+/**
+ * Generate pnpm-workspace.yaml with the template's build tools approved.
+ *
+ * `allowBuilds` is answered here, not left to pnpm. Scaffolds install
+ * non-interactively, so pnpm cannot prompt — it writes
+ * `'@swc/core': set this to true or false` and then refuses to run ANY script
+ * with ERR_PNPM_IGNORED_BUILDS, leaving a fresh project unable to run
+ * `pnpm dev` or `pnpm exec kick` until someone edits the file. Both are build
+ * tools the templates chose: swc compiles the decorators, esbuild is Vite's.
+ *
+ * Pass `packages` for a workspace root (fullstack); omit it for a single project.
+ */
+export function generatePnpmWorkspace(packages?: string[]): string {
+  const list = packages?.length ? `packages:\n${packages.map((p) => `  - ${p}\n`).join('')}\n` : ''
+  return `${list}allowBuilds:\n  '@swc/core': true\n  esbuild: true\n`
 }
 
 /** Generate tsconfig.json with decorator support */
