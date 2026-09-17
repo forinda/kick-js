@@ -15,8 +15,19 @@ Expose controller routes as [Model Context Protocol](https://modelcontextprotoco
 | `getMcpToolMeta`    | Read `@McpTool` options for a method                         |
 | `isMcpTool`         | Whether a method carries `@McpTool`                          |
 | `MCP_TOOL_METADATA` | Metadata key `@McpTool` writes                               |
+| `MCP_ADAPTER`       | DI token for the adapter instance (`McpAdapterInstance`)     |
 
-Types: `McpAdapterOptions`, `McpTransport`, `McpExposureMode`, `McpAuthOptions`, `McpToolOptions`, `McpToolDefinition`, `McpToolExample`.
+Types: `McpAdapterInstance`, `McpAdapterOptions`, `McpTransport`, `McpExposureMode`, `McpAuthOptions`, `McpToolOptions`, `McpToolDefinition`, `McpToolExample`, `McpToolProvider`, `McpCustomTool`, `McpToolContext`.
+
+## McpAdapterInstance
+
+Resolve with `container.resolve(MCP_ADAPTER)`.
+
+| Method                     | Description                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| `registerProvider(p)`      | Mount a `McpToolProvider` — tools that aren't routes; clients get `tools/list_changed` |
+| `unregisterProvider(name)` | Unmount a provider; returns false when none has that name                              |
+| `getTools()`               | The route tools discovered at startup                                                  |
 
 ## McpAdapter options
 
@@ -54,7 +65,7 @@ Types: `McpAdapterOptions`, `McpTransport`, `McpExposureMode`, `McpAuthOptions`,
 - **Sessions:** each client gets its own session (`mcp-session-id`); unknown sessions get `404`.
 - **Runtimes:** the endpoint works on Express, Fastify, h3 and h3 v2.
 
-`McpAdapter` instances also expose `getTools()` — the discovered `McpToolDefinition[]`, used by `kick mcp --list` and tests.
+- **Custom tool providers:** see [the guide](../guide/mcp.md#custom-tool-providers) for the interfaces and a local example.
 
 ## Related
 

@@ -78,11 +78,13 @@ Inject with `@Inject(AI_ADAPTER)`.
 | ----------------------------- | ------------------------------------------------------------------------------------------- |
 | `runAgent(options)`           | Chat → tool calls → dispatch → feedback until the model answers or `maxSteps` (default 8)   |
 | `runAgentWithMemory(options)` | One agent turn with history loaded from and saved to a `ChatMemory`                         |
-| `getProvider()`               | The configured `AiProvider`                                                                 |
+| `getProvider(name?)`          | A registered provider, or the default when `name` is omitted                                |
+| `registerProvider(name, p)`   | Mount another provider under `name` (replaces an existing one with that name)               |
+| `unregisterProvider(name)`    | Unmount a provider; the default can't be removed                                            |
 | `getTools()`                  | Discovered tool definitions                                                                 |
 | `setServerBaseUrl(url)`       | Send tool calls to a URL over HTTP instead of through the app (tests driving hooks by hand) |
 
-`RunAgentOptions` adds `messages`, `model`, `tools` (`'auto'` or a list), `maxSteps`, `headers` (sent with every tool call) and `signal` to `ChatOptions`. `RunAgentResult` has `content`, `messages`, `steps`, `usage`, `maxStepsReached`, `finishReason` and `refusal`.
+`RunAgentOptions` adds `messages`, `provider` (a registered name or an instance), `model`, `tools` (`'auto'` or a list), `maxSteps`, `headers` (sent with every tool call) and `signal` to `ChatOptions`. `RunAgentResult` has `content`, `messages`, `steps`, `usage`, `maxStepsReached`, `finishReason` and `refusal`.
 
 ## Chat types
 
@@ -97,6 +99,6 @@ Inject with `@Inject(AI_ADAPTER)`.
 
 ## Related
 
-- [AI guide](../guide/ai.md)
+- [AI guide](../guide/ai.md) — including [custom providers](../guide/ai.md#custom-providers)
 - [MCP](./mcp.md) — expose routes to Model Context Protocol clients
 - [Route flags](../guide/route-flags.md)
