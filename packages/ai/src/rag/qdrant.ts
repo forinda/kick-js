@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { VectorDocument, VectorQueryOptions, VectorSearchHit, VectorStore } from './types'
 
 /**
@@ -46,6 +47,7 @@ interface QdrantSearchResult {
     id: string | number
     score: number
     payload?: {
+      id?: string
       content?: string
       metadata?: Record<string, unknown>
     }
@@ -122,6 +124,11 @@ export class QdrantVectorStore<
    */
   private setupPromise: Promise<void> | null = null
 
+  /** `/collections/{name}`, with the name URL-encoded. */
+  private get collectionPath(): string {
+    return `/collections/${encodeURIComponent(this.collection)}`
+  }
+
   constructor(options: QdrantVectorStoreOptions) {
     if (!options.collection) {
       throw new Error('QdrantVectorStore: collection is required')
@@ -158,15 +165,17 @@ export class QdrantVectorStore<
     await this.ensureCollection()
 
     const points = list.map((d) => ({
-      id: d.id,
+      id: toPointId(d.id),
       vector: d.vector,
       payload: {
+        // Qdrant ids are UUIDs or integers; the document's own id is kept here.
+        id: d.id,
         content: d.content,
         metadata: d.metadata ?? {},
       },
     }))
 
-    await this.request('PUT', `/collections/${this.collection}/points?wait=true`, {
+    await this.request('PUT', `${this.collectionPath}/points?wait=true`, {
       points,
     })
   }
@@ -201,12 +210,12 @@ export class QdrantVectorStore<
 
     const data = await this.request<QdrantSearchResult>(
       'POST',
-      `/collections/${this.collection}/points/search`,
+      `${this.collectionPath}/points/search`,
       body,
     )
 
     return data.result.map((hit) => ({
-      id: String(hit.id),
+      id: hit.payload?.id ?? String(hit.id),
       content: hit.payload?.content ?? '',
       score: hit.score,
       metadata: (hit.payload?.metadata ?? {}) as M,
@@ -219,29 +228,26 @@ export class QdrantVectorStore<
 
     await this.ensureCollection()
 
-    await this.request('POST', `/collections/${this.collection}/points/delete?wait=true`, {
-      points: ids,
+    await this.request('POST', `${this.collectionPath}/points/delete?wait=true`, {
+      points: ids.map(toPointId),
     })
   }
 
+  /**
+   * Delete every point, keeping the collection and its configuration — so
+   * it also works on a collection this store did not create (`skipSetup`).
+   */
   async deleteAll(): Promise<void> {
-    // Qdrant doesn't have a "truncate points" endpoint — the canonical
-    // way is to drop and recreate the collection. Recreating is cheap
-    // since the schema is declarative, and it's the same operation the
-    // Qdrant web UI performs on "clear collection".
-    await this.request('DELETE', `/collections/${this.collection}`, undefined)
-    // Force a fresh setup next call so the collection reappears.
-    this.setupPromise = null
-    if (!this.skipSetup) {
-      await this.ensureCollection()
-    }
+    await this.ensureCollection()
+    // An empty filter matches every point.
+    await this.request('POST', `${this.collectionPath}/points/delete?wait=true`, { filter: {} })
   }
 
   async count(): Promise<number> {
     await this.ensureCollection()
     const data = await this.request<{ result: { count: number } }>(
       'POST',
-      `/collections/${this.collection}/points/count`,
+      `${this.collectionPath}/points/count`,
       { exact: true },
     )
     return data.result.count
@@ -289,11 +295,9 @@ export class QdrantVectorStore<
   }
 
   /**
-   * Create the collection on first use. The `PUT /collections/{name}`
-   * endpoint is idempotent — calling it on an existing collection is a
-   * no-op with status 200. We cache the promise so concurrent callers
-   * share the same in-flight request and every subsequent call resolves
-   * immediately.
+   * Create the collection on first use if it doesn't exist yet. Creating an
+   * existing collection is an error in Qdrant, so a restarted process checks
+   * first. The promise is cached so concurrent callers share one check.
    */
   private ensureCollection(): Promise<void> {
     if (this.skipSetup) return Promise.resolve()
@@ -307,7 +311,15 @@ export class QdrantVectorStore<
   }
 
   private async runSetup(): Promise<void> {
-    await this.request('PUT', `/collections/${this.collection}`, {
+    const existing = await fetch(`${this.url}${this.collectionPath}`, { headers: this.headers })
+    if (existing.ok) return
+    if (existing.status !== 404) {
+      const text = await existing.text().catch(() => '')
+      throw new Error(
+        `QdrantVectorStore: GET ${this.collectionPath} failed with ${existing.status}: ${text}`,
+      )
+    }
+    await this.request('PUT', this.collectionPath, {
       vectors: {
         size: this.dimensions,
         distance: this.distance,
@@ -317,6 +329,24 @@ export class QdrantVectorStore<
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** Namespace for document ids that are not UUIDs (fixed, so ids map the same way every run). */
+const DOCUMENT_ID_NAMESPACE = Buffer.from('6f1c2d8e4b9a4c7e9f3a2b1d0c5e7a84', 'hex')
+
+/**
+ * A Qdrant point id for a document id. Qdrant accepts only UUIDs and
+ * unsigned integers, so any other id (`'doc-1'`) becomes a deterministic
+ * UUIDv5 — the same document id always maps to the same point.
+ */
+export function toPointId(id: string): string {
+  if (UUID.test(id)) return id
+  const hash = createHash('sha1').update(DOCUMENT_ID_NAMESPACE).update(id).digest()
+  hash[6] = (hash[6] & 0x0f) | 0x50
+  hash[8] = (hash[8] & 0x3f) | 0x80
+  const hex = hash.subarray(0, 16).toString('hex')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
 
 /**
  * Translate the framework's equality-map filter into Qdrant's

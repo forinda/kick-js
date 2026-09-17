@@ -155,12 +155,12 @@ describe('PineconeVectorStore.upsert()', () => {
       {
         id: 'a',
         values: [0.1, 0.2, 0.3],
-        metadata: { content: 'alpha', author: 'Ada' },
+        metadata: { author: 'Ada', _kick_content: 'alpha' },
       },
       {
         id: 'b',
         values: [0.4, 0.5, 0.6],
-        metadata: { content: 'beta' },
+        metadata: { _kick_content: 'beta' },
       },
     ])
   })
@@ -218,6 +218,30 @@ describe('PineconeVectorStore.query()', () => {
         metadata: { author: 'Ada' },
       },
     ])
+  })
+
+  it('keeps a user metadata field named content apart from the document text', async () => {
+    const store = new PineconeVectorStore({
+      apiKey: 'pc-test',
+      indexHost: 'x.pinecone.io',
+      dimensions: 3,
+    })
+    fetchSpy.mockResolvedValueOnce(jsonResponse({ upsertedCount: 1 }))
+    await store.upsert({
+      id: 'a',
+      content: 'the text',
+      vector: [0.1, 0.2, 0.3],
+      metadata: { content: 'a user field' },
+    })
+    const sent = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string).vectors[0].metadata
+    expect(sent).toEqual({ content: 'a user field', _kick_content: 'the text' })
+
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({ matches: [{ id: 'a', score: 0.9, metadata: sent }] }),
+    )
+    const [hit] = await store.query({ vector: [0.1, 0.2, 0.3] })
+    expect(hit.content).toBe('the text')
+    expect(hit.metadata).toEqual({ content: 'a user field' })
   })
 
   it('translates equality filter to Pinecone DSL', async () => {

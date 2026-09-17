@@ -19,7 +19,7 @@ export const AI_TOOL_METADATA = createToken<AiToolOptions>('kick/ai/tool')
  *
  * Injected via `@Inject(AI_PROVIDER)` in services or use-cases that
  * need to call an LLM. The adapter registers the concrete provider
- * (OpenAI, Anthropic, Google, Ollama) during `beforeStart`.
+ * (OpenAI, Anthropic, or a custom provider) during `beforeStart`.
  *
  * @example
  * ```ts

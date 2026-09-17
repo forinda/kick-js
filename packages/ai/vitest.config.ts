@@ -13,8 +13,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
-      '@forinda/kickjs-ai': path.resolve(__dirname, 'src/index.ts'),
+      '@forinda/kickjs': path.resolve(import.meta.dirname, '../kickjs/src/index.ts'),
+      '@forinda/kickjs-ai': path.resolve(import.meta.dirname, 'src/index.ts'),
     },
   },
   test: {

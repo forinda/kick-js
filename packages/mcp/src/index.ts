@@ -1,6 +1,7 @@
 export { McpAdapter } from './mcp.adapter'
+export type { McpAdapterExtensions as McpAdapterInstance } from './mcp.adapter'
 export { McpTool, getMcpToolMeta, isMcpTool } from './decorators'
-export { MCP_TOOL_METADATA } from './constants'
+export { MCP_ADAPTER, MCP_TOOL_METADATA } from './constants'
 export type {
   McpAdapterOptions,
   McpTransport,
@@ -9,4 +10,7 @@ export type {
   McpExposureMode,
   McpAuthOptions,
   McpToolExample,
+  McpCustomTool,
+  McpToolContext,
+  McpToolProvider,
 } from './types'

@@ -121,19 +121,24 @@ export class SlidingWindowChatMemory implements ChatMemory {
    * the same logic.
    *
    * When `pinSystemPrompt` is set and the first message is a system
-   * message, we keep it AND fill the remaining `maxMessages - 1`
-   * slots with the most recent messages after it. Otherwise we just
-   * take the tail of the array.
+   * message, it is kept and the remaining `maxMessages - 1` slots take
+   * the most recent messages after it.
+   *
+   * The kept tail always starts at a `user` message. Cutting elsewhere
+   * could open the history on a tool result whose call was evicted, or on
+   * an assistant turn — both rejected by providers — so the window may
+   * hold fewer than `maxMessages` messages.
    */
   private applyWindow(messages: ChatMessage[]): ChatMessage[] {
     if (messages.length <= this.maxMessages) return messages
 
-    if (this.pinSystemPrompt && messages[0]?.role === 'system') {
-      const head = messages[0]
-      const tail = messages.slice(-(this.maxMessages - 1))
-      return [head, ...tail]
-    }
+    const pinned = this.pinSystemPrompt && messages[0]?.role === 'system' ? messages[0] : undefined
+    const rest = pinned ? messages.slice(1) : messages
+    const room = pinned ? this.maxMessages - 1 : this.maxMessages
+    let tail = room > 0 ? rest.slice(-room) : []
+    const firstUser = tail.findIndex((m) => m.role === 'user')
+    tail = firstUser === -1 ? [] : tail.slice(firstUser)
 
-    return messages.slice(-this.maxMessages)
+    return pinned ? [pinned, ...tail] : tail
   }
 }
