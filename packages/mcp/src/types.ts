@@ -211,3 +211,67 @@ export interface McpToolDefinition {
   /** Examples for documentation. */
   examples?: McpToolExample[]
 }
+
+/**
+ * What a custom tool's handler receives besides its arguments.
+ */
+export interface McpToolContext {
+  /** Headers of the MCP request that carried the call (credentials, tracing). */
+  headers: Headers
+  /** Aborted when the client cancels the call. */
+  signal: AbortSignal
+  /**
+   * Run a `Request` through this app's pipeline — to call one of the app's
+   * own routes with the caller's credentials. See `AdapterContext.fetch`.
+   */
+  fetch(request: Request): Promise<Response>
+}
+
+/**
+ * A tool that is not a controller route, mounted with
+ * `McpAdapter.registerProvider()`.
+ *
+ * The handler's return value becomes the tool result: a string is sent as
+ * text, anything else as JSON text, and an object that is already an MCP
+ * result (`{ content: [...] }`) is sent as is. A thrown error becomes an
+ * error result with its message.
+ */
+export interface McpCustomTool<TArgs = any> {
+  /** Unique across every tool on the server. `[A-Za-z0-9_.-]{1,128}`. */
+  name: string
+  /** What the tool does, for the model. */
+  description: string
+  /**
+   * Input schema, from any library `@forinda/kickjs-schema` supports. The
+   * arguments are validated against it before the handler runs; invalid
+   * arguments return an error result. Omit for a tool without arguments.
+   */
+  inputSchema?: unknown
+  handler(args: TArgs, ctx: McpToolContext): unknown
+}
+
+/**
+ * A named set of custom tools, mounted with `McpAdapter.registerProvider()`
+ * at any time — before startup, or later from a plugin or module. Registering
+ * a provider with the name of one already mounted replaces it.
+ *
+ * @example
+ * ```ts
+ * const reports: McpToolProvider = {
+ *   name: 'reports',
+ *   tools: [
+ *     {
+ *       name: 'monthly_report',
+ *       description: 'Build the monthly revenue report',
+ *       inputSchema: z.object({ month: z.string() }),
+ *       handler: ({ month }, ctx) => buildReport(month, ctx.signal),
+ *     },
+ *   ],
+ * }
+ * container.resolve(MCP_ADAPTER).registerProvider(reports)
+ * ```
+ */
+export interface McpToolProvider {
+  name: string
+  tools: McpCustomTool[]
+}

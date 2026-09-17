@@ -88,6 +88,8 @@ export interface RunAgentWithMemoryOptions {
    * the model sees a single, stable system prompt for the session.
    */
   systemPrompt?: string
+  /** Provider for this turn: a registered name or an instance. See `RunAgentOptions.provider`. */
+  provider?: string | import('../types').AiProvider
   /** Model override. Defaults to the provider's configured default. */
   model?: string
   /**

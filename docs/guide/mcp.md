@@ -272,6 +272,123 @@ export class TaskController {
 - Tool names default to the route's `name` option, falling back to
   `ControllerName.methodName`.
 
+## Custom tool providers
+
+Tools don't have to be routes. A **tool provider** is a named set of tools
+with their own handlers, mounted on the adapter at any time — before
+startup, or later from a plugin or module:
+
+```ts
+interface McpToolProvider {
+  name: string
+  tools: McpCustomTool[]
+}
+
+interface McpCustomTool<TArgs = any> {
+  name: string // unique across the server, [A-Za-z0-9_.-]{1,128}
+  description: string
+  inputSchema?: unknown // any schema library; validated before the handler runs
+  handler(args: TArgs, ctx: McpToolContext): unknown
+}
+
+interface McpToolContext {
+  headers: Headers // the MCP request's headers (credentials, tracing)
+  signal: AbortSignal // aborted when the client cancels the call
+  fetch(request: Request): Promise<Response> // call the app's own routes
+}
+```
+
+This local provider keeps team notes in memory and reports the app's
+health through its built-in readiness probe:
+
+```ts
+import { z } from 'zod'
+import type { McpToolProvider } from '@forinda/kickjs-mcp'
+
+/** Team notes kept in memory: add, search, and check the app's health. */
+function notesProvider(): McpToolProvider {
+  const notes = new Map<string, { title: string; body: string }>()
+
+  return {
+    name: 'notes',
+    tools: [
+      {
+        name: 'notes.add',
+        description: 'Save a note with a title and a body. Returns the note id.',
+        inputSchema: z.object({ title: z.string().min(1), body: z.string() }),
+        handler: ({ title, body }: { title: string; body: string }) => {
+          const id = crypto.randomUUID()
+          notes.set(id, { title, body })
+          return { id }
+        },
+      },
+      {
+        name: 'notes.search',
+        description: 'Find notes whose title or body contains the query.',
+        inputSchema: z.object({ query: z.string().min(1) }),
+        handler: ({ query }: { query: string }) => {
+          const needle = query.toLowerCase()
+          return [...notes.entries()]
+            .filter(([, n]) => `${n.title} ${n.body}`.toLowerCase().includes(needle))
+            .map(([id, n]) => ({ id, title: n.title }))
+        },
+      },
+      {
+        name: 'app.health',
+        description: "Report whether the app's dependencies are ready.",
+        // ctx.fetch runs a request through the app's own pipeline — here the
+        // built-in readiness probe — with the caller's cancellation.
+        handler: async (_args: unknown, ctx) => {
+          const res = await ctx.fetch(
+            new Request('http://localhost/health/ready', { signal: ctx.signal }),
+          )
+          // Returning an MCP result sends it as is.
+          return {
+            content: [{ type: 'text', text: res.ok ? 'ready' : `not ready (${res.status})` }],
+            isError: !res.ok,
+          }
+        },
+      },
+    ],
+  }
+}
+```
+
+Mount it from a plugin — the adapter is registered under `MCP_ADAPTER`:
+
+```ts
+import { MCP_ADAPTER } from '@forinda/kickjs-mcp'
+
+export const NotesPlugin = {
+  name: 'NotesPlugin',
+  onReady(container) {
+    container.resolve(MCP_ADAPTER).registerProvider(notesProvider())
+  },
+}
+```
+
+How provider tools behave:
+
+- **Validation.** Arguments are checked against `inputSchema` before the
+  handler runs; invalid arguments return an error result listing the
+  issues. There is no route, so this is the only validation.
+- **Results.** A string is sent as text, anything else as JSON text, and an
+  object that is already an MCP result (`{ content: [...] }`) is sent as
+  is. A thrown error becomes an error result with its message.
+- **Security.** The endpoint's `auth` and `Origin` checks apply. Route
+  middleware and guards don't — check `ctx.headers` in the handler, or
+  call a guarded route with `ctx.fetch`.
+- **Names** must be unique across routes and providers;
+  `registerProvider` throws on a clash. Registering a provider with the
+  same name replaces it.
+- **Change notifications.** Mounting or unmounting
+  (`unregisterProvider(name)`) sends `tools/list_changed` to connected
+  clients, which re-read the tool list.
+- Route flags, `mode`, `include` and `exclude` apply to route tools only.
+
+The example is exercised as a test in
+`packages/mcp/__tests__/example-local-tool-provider.test.ts`.
+
 ## Auth with context decorators
 
 Context decorators (`defineHttpContextDecorator`) are the recommended
