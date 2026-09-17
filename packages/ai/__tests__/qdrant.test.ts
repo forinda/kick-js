@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { QdrantVectorStore, buildQdrantFilter } from '../src'
+import { toPointId } from '../src/rag/qdrant'
 
 let fetchSpy: ReturnType<typeof vi.spyOn>
 
@@ -40,6 +41,17 @@ function emptyOk(): Response {
  */
 function mockAlwaysJson(body: unknown, status = 200): void {
   fetchSpy.mockImplementation(() => Promise.resolve(jsonResponse(body, status)))
+}
+
+/** Collection GET → `collectionStatus`; every other call → a JSON result. */
+function mockCollection(collectionStatus: number): void {
+  fetchSpy.mockImplementation((url: string, init?: RequestInit) =>
+    Promise.resolve(
+      (init?.method ?? 'GET') === 'GET' && String(url).endsWith('/collections/docs')
+        ? jsonResponse({ status: { error: 'Not found' } }, collectionStatus)
+        : jsonResponse({ result: true }),
+    ),
+  )
 }
 
 function mockAlwaysEmpty(): void {
@@ -130,18 +142,47 @@ describe('QdrantVectorStore — lazy setup', () => {
       collection: 'docs',
       dimensions: 3,
     })
-    mockAlwaysJson({ result: true })
+    mockCollection(404)
 
     await store.upsert({ id: '1', content: 'hi', vector: [0.1, 0.2, 0.3] })
 
-    // First call = PUT /collections/docs
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    // GET /collections/docs (missing) then PUT /collections/docs
+    expect(fetchSpy.mock.calls[0][0]).toBe('http://localhost:6333/collections/docs')
+    const [url, init] = fetchSpy.mock.calls[1] as [string, RequestInit]
     expect(init.method).toBe('PUT')
     expect(url).toBe('http://localhost:6333/collections/docs')
     const body = JSON.parse(init.body as string)
     expect(body).toEqual({
       vectors: { size: 3, distance: 'Cosine' },
     })
+  })
+
+  it('leaves an existing collection alone — a restarted process does not re-create it', async () => {
+    const store = new QdrantVectorStore({ collection: 'docs', dimensions: 3 })
+    mockCollection(200)
+
+    await store.upsert({ id: '1', content: 'hi', vector: [0.1, 0.2, 0.3] })
+
+    const calls = fetchSpy.mock.calls.map(
+      (c) => `${(c[1] as RequestInit | undefined)?.method ?? 'GET'} ${c[0]}`,
+    )
+    expect(calls).toEqual([
+      'GET http://localhost:6333/collections/docs',
+      'PUT http://localhost:6333/collections/docs/points?wait=true',
+    ])
+  })
+
+  it('URL-encodes the collection name', async () => {
+    const store = new QdrantVectorStore({
+      collection: 'my docs/v2',
+      dimensions: 3,
+      skipSetup: true,
+    })
+    mockAlwaysJson({ result: true })
+    await store.upsert({ id: '1', content: 'hi', vector: [0.1, 0.2, 0.3] })
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      'http://localhost:6333/collections/my%20docs%2Fv2/points?wait=true',
+    )
   })
 
   it('caches setup — subsequent writes do not re-PUT the collection', async () => {
@@ -165,9 +206,9 @@ describe('QdrantVectorStore — lazy setup', () => {
       dimensions: 2,
       distance: 'Dot',
     })
-    mockAlwaysJson({ result: true })
+    mockCollection(404)
     await store.upsert({ id: '1', content: 'x', vector: [0.1, 0.2] })
-    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string)
+    const body = JSON.parse(fetchSpy.mock.calls[1][1]!.body as string)
     expect(body.vectors.distance).toBe('Dot')
   })
 
@@ -194,11 +235,13 @@ describe('QdrantVectorStore — lazy setup', () => {
     )
 
     // Next call should re-trigger setup (cache cleared on failure).
-    mockAlwaysJson({ result: true })
+    mockCollection(404)
     await store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2, 0.3] })
-    const methods = fetchSpy.mock.calls.map((c) => (c[1] as RequestInit).method)
-    // Expected calls: [PUT /collections (failed), PUT /collections (retry), PUT /points]
-    expect(methods).toEqual(['PUT', 'PUT', 'PUT'])
+    const methods = fetchSpy.mock.calls.map(
+      (c) => (c[1] as RequestInit | undefined)?.method ?? 'GET',
+    )
+    // [GET (failed), GET (retry, missing), PUT /collections, PUT /points]
+    expect(methods).toEqual(['GET', 'GET', 'PUT', 'PUT'])
   })
 })
 
@@ -252,14 +295,14 @@ describe('QdrantVectorStore.upsert()', () => {
     expect(body).toEqual({
       points: [
         {
-          id: 'a',
+          id: toPointId('a'),
           vector: [0.1, 0.2, 0.3],
-          payload: { content: 'alpha', metadata: { author: 'Ada' } },
+          payload: { id: 'a', content: 'alpha', metadata: { author: 'Ada' } },
         },
         {
-          id: 'b',
+          id: toPointId('b'),
           vector: [0.4, 0.5, 0.6],
-          payload: { content: 'beta', metadata: {} },
+          payload: { id: 'b', content: 'beta', metadata: {} },
         },
       ],
     })
@@ -368,23 +411,24 @@ describe('QdrantVectorStore — lifecycle operations', () => {
     expect(url).toBe('http://localhost:6333/collections/docs/points/delete?wait=true')
     expect(init.method).toBe('POST')
     const body = JSON.parse(init.body as string)
-    expect(body).toEqual({ points: ['a', 'b'] })
+    expect(body).toEqual({ points: [toPointId('a'), toPointId('b')] })
   })
 
-  it('deleteAll drops and recreates the collection', async () => {
+  it('deleteAll deletes every point and keeps the collection', async () => {
     const store = new QdrantVectorStore({
       collection: 'docs',
       dimensions: 3,
+      skipSetup: true,
     })
     mockAlwaysJson({ result: true })
 
     await store.deleteAll()
 
-    const methods = fetchSpy.mock.calls.map((c) => (c[1] as RequestInit).method)
-    const urls = fetchSpy.mock.calls.map((c) => c[0])
-    expect(methods).toEqual(['DELETE', 'PUT'])
-    expect(urls[0]).toBe('http://localhost:6333/collections/docs')
-    expect(urls[1]).toBe('http://localhost:6333/collections/docs')
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(fetchSpy.mock.calls).toHaveLength(1)
+    expect(init.method).toBe('POST')
+    expect(url).toBe('http://localhost:6333/collections/docs/points/delete?wait=true')
+    expect(JSON.parse(init.body as string)).toEqual({ filter: {} })
   })
 
   it('count posts exact: true and returns the result.count field', async () => {
@@ -419,5 +463,33 @@ describe('buildQdrantFilter', () => {
   it('combines multiple conditions in a single must array', () => {
     const out = buildQdrantFilter({ a: 1, b: [2, 3] })
     expect(out.must).toHaveLength(2)
+  })
+})
+
+describe('toPointId', () => {
+  it('keeps UUIDs and maps any other id to a stable UUIDv5', () => {
+    const uuid = '3f2b8c1e-9a4d-4e7f-8b2c-1d0e5f6a7b8c'
+    expect(toPointId(uuid)).toBe(uuid)
+    const mapped = toPointId('doc-1')
+    expect(mapped).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(toPointId('doc-1')).toBe(mapped)
+    expect(toPointId('doc-2')).not.toBe(mapped)
+  })
+
+  it('search results carry the original document id', async () => {
+    const store = new QdrantVectorStore({ collection: 'docs', dimensions: 3, skipSetup: true })
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        result: [
+          {
+            id: toPointId('doc-1'),
+            score: 0.9,
+            payload: { id: 'doc-1', content: 'a', metadata: {} },
+          },
+        ],
+      }),
+    )
+    const hits = await store.query({ vector: [0.1, 0.2, 0.3] })
+    expect(hits[0].id).toBe('doc-1')
   })
 })

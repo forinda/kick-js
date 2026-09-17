@@ -1017,6 +1017,9 @@ export class RequestContext<
       return
     }
     this._response.writeHead(response.status, headers as Record<string, string>)
+    // Send the headers now: a stream whose first chunk comes later (SSE)
+    // would otherwise leave the client waiting to see the response open.
+    this._response.flushHeaders()
     const reader = response.body.getReader()
     const stop = () => {
       reader.cancel().catch(() => {})

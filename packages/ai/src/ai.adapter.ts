@@ -19,6 +19,7 @@ import { buildRouteTool, type RouteTool } from '@forinda/kickjs-schema'
 import type {
   AiAdapterExtensions,
   AiAdapterOptions,
+  AiProvider,
   AiToolDefinition,
   AiToolOptions,
   ChatMessage,
@@ -28,6 +29,13 @@ import type {
 } from './types'
 
 const log = Logger.for('AiAdapter')
+
+/** The entries of an object whose values are not undefined. */
+function definedOnly<T extends Record<string, unknown>>(values: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined),
+  ) as Partial<T>
+}
 
 /**
  * Tool options carried by a flag named in `exposeWhen`: the value of the
@@ -110,6 +118,22 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     if (options.hideWhen) matchesFlagTest(options.hideWhen, undefined)
 
     const provider = options.provider
+    /** Registered providers by name; the adapter's provider is the default. */
+    const providers = new Map<string, AiProvider>([[provider.name, provider]])
+
+    const resolveProvider = (spec?: string | AiProvider): AiProvider => {
+      if (spec === undefined) return provider
+      if (typeof spec !== 'string') return spec
+      const found = providers.get(spec)
+      if (!found) {
+        throw new Error(
+          `AiAdapter: no provider registered as "${spec}". Registered: ${[...providers.keys()].join(', ')}`,
+        )
+      }
+      return found
+    }
+    // `defaults` apply to every runAgent call; per-call values win.
+    const { model: defaultModel, ...defaultChatOptions } = options.defaults ?? {}
 
     /** Controllers collected during the mount phase, in insertion order. */
     const mountedControllers: Array<{ controller: Constructor; mountPath: string }> = []
@@ -310,6 +334,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
     /** Public: Run a tool-calling agent loop. */
     const runAgent = async (agentOptions: RunAgentOptions): Promise<RunAgentResult> => {
+      const chatProvider = resolveProvider(agentOptions.provider)
       const maxSteps = agentOptions.maxSteps ?? 8
       const resolvedTools = resolveTools(agentOptions.tools ?? 'auto')
 
@@ -320,17 +345,21 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       for (let i = 0; i < maxSteps; i++) {
         steps++
 
-        const response = await provider.chat(
+        const response = await chatProvider.chat(
           {
             messages,
-            model: agentOptions.model,
+            model: agentOptions.model ?? defaultModel,
             tools: resolvedTools.length > 0 ? resolvedTools : undefined,
           },
           {
-            temperature: agentOptions.temperature,
-            maxTokens: agentOptions.maxTokens,
-            topP: agentOptions.topP,
-            stopSequences: agentOptions.stopSequences,
+            ...defaultChatOptions,
+            ...definedOnly({
+              temperature: agentOptions.temperature,
+              maxTokens: agentOptions.maxTokens,
+              topP: agentOptions.topP,
+              stopSequences: agentOptions.stopSequences,
+              effort: agentOptions.effort,
+            }),
             signal: agentOptions.signal,
           },
         )
@@ -419,6 +448,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
       const result = await runAgent({
         messages,
+        provider: memoryOptions.provider,
         model: memoryOptions.model,
         tools: memoryOptions.tools,
         maxSteps: memoryOptions.maxSteps,
@@ -431,9 +461,18 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
       })
 
       const newMessages = result.messages.slice(messages.length)
+      // Without tool results, a saved tool call would leave the history in a
+      // state providers reject on the next turn (a call with no result). Keep
+      // the assistant's text, drop the calls and the native content that
+      // carries them, and skip turns left empty.
       const toPersist = memoryOptions.persistToolResults
         ? newMessages
-        : newMessages.filter((m) => m.role !== 'tool')
+        : newMessages
+            .filter((m) => m.role !== 'tool')
+            .map((m): ChatMessage =>
+              m.toolCalls?.length ? { role: m.role, content: m.content } : m,
+            )
+            .filter((m) => m.role !== 'assistant' || m.content !== '' || m.providerContent)
       if (toPersist.length > 0) {
         await memoryOptions.memory.add(toPersist)
       }
@@ -447,7 +486,16 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     // hooks don't have a stable `this` reference to the returned
     // adapter object.
     const publicSurface: AiAdapterExtensions = {
-      getProvider: () => provider,
+      getProvider: (name) => resolveProvider(name),
+      registerProvider: (name, next) => {
+        if (name === provider.name && next !== provider) {
+          throw new Error(
+            `AiAdapter: "${name}" is the default provider's name; register the new provider under another name`,
+          )
+        }
+        providers.set(name, next)
+      },
+      unregisterProvider: (name) => (name === provider.name ? false : providers.delete(name)),
       getTools: () => tools,
       setServerBaseUrl: (url) => {
         serverBaseUrl = url

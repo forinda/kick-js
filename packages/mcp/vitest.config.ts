@@ -17,19 +17,25 @@ export default defineConfig({
       // rewrite '@forinda/kickjs/fastify' to a path under index.ts.
       {
         find: /^@forinda\/kickjs\/fastify$/,
-        replacement: path.resolve(__dirname, '../kickjs/src/http/runtimes/fastify.ts'),
+        replacement: path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/fastify.ts'),
       },
       {
         find: /^@forinda\/kickjs\/h3-web$/,
-        replacement: path.resolve(__dirname, '../kickjs/src/http/runtimes/h3-web.ts'),
+        replacement: path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/h3-web.ts'),
       },
       // h3 v2, installed for the kickjs runtime tests.
-      { find: /^h3-v2$/, replacement: path.resolve(__dirname, '../kickjs/node_modules/h3-v2') },
+      {
+        find: /^h3-v2$/,
+        replacement: path.resolve(import.meta.dirname, '../kickjs/node_modules/h3-v2'),
+      },
       {
         find: /^@forinda\/kickjs$/,
-        replacement: path.resolve(__dirname, '../kickjs/src/index.ts'),
+        replacement: path.resolve(import.meta.dirname, '../kickjs/src/index.ts'),
       },
-      { find: /^@forinda\/kickjs-mcp$/, replacement: path.resolve(__dirname, 'src/index.ts') },
+      {
+        find: /^@forinda\/kickjs-mcp$/,
+        replacement: path.resolve(import.meta.dirname, 'src/index.ts'),
+      },
     ],
   },
   test: {
