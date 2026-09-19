@@ -194,7 +194,6 @@ export default (request) => handler.fetch(request)
 
 export const config = {
   path: '/api/*',
-  preferStatic: true,
 }
 `,
 )
@@ -202,7 +201,7 @@ export const config = {
 
 Run it from the project root; it writes `.netlify/v1/functions/api.mjs`.
 
-`config` must be a literal — Netlify reads it without running the file. With `path: '/api/*'` the app sees the original URL, so routes stay under `/api/v1/…`.
+`config` must be a literal — Netlify reads it without running the file. With `path: '/api/*'` the app sees the original URL, so routes stay under `/api/v1/…`. Leave out `preferStatic`: with it, Netlify treats the SPA rewrite below (`/* → /index.html`) as a static match, and every `/api/*` request returns `index.html` instead of reaching the function.
 
 For a web app in the same repo, publish its build and let the function take `/api/*`:
 
@@ -376,7 +375,6 @@ export default (request) => handler.fetch(request)
 
 export const config = {
   path: '${opts.apiPath}/*',
-  preferStatic: true,
 }
 `,
           )
