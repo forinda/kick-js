@@ -149,6 +149,32 @@ vite build --config vite.serverless.config.ts   # → dist/serverless/server.mjs
 
 This config is separate from `vite.config.ts`, so changing its entry does not affect `kick build`, which keeps building `src/index.ts`. The build entry is `rollupOptions.input`; the `entry` passed to `kickjsVitePlugin` is only used by the dev server. Do not point `input` at `src/index.ts`: that entry calls `bootstrap()`, which listens on a port and registers signal handlers inside the function.
 
+## Before the platform builds
+
+**Build from the repo root.** In a fullstack workspace that is the folder holding `pnpm-workspace.yaml` and the lockfile, not `server/`. Only an install from there covers `server/` and `web/`, and the platform config files (`netlify.toml`, `vercel.json`) live there.
+
+**Netlify treats a fullstack workspace as a monorepo.** It detects the pnpm workspace and deploys one package of it, so set the site's **Package directory** to `web`. Netlify then looks for functions in `web/.netlify/v1/functions`, not at the repo root. A function written to the root `.netlify/` is ignored: every `/api/*` request falls through to the SPA redirect and returns `index.html`. Vercel has no such step and reads `.vercel/output` from the root.
+
+| Platform | Setting                           | Value                                       |
+| -------- | --------------------------------- | ------------------------------------------- |
+| Netlify  | Base directory                    | empty                                       |
+| Netlify  | Package directory                 | `web` (fullstack); empty (API only)         |
+| Netlify  | Build command, Publish directory  | from `netlify.toml`                         |
+| Vercel   | Root Directory                    | empty (`./`) — not `server`                 |
+| Vercel   | Framework Preset                  | Other                                       |
+| Vercel   | Build / Output / Install commands | leave default; `vercel.json` sets the build |
+
+**Fullstack: generate the client types first.** `web` builds with `tsc --noEmit && vite build`, and its types include `server/.kickjs/types`, which `kick typegen` writes and `server/.gitignore` excludes. Locally `kick dev` has already written them; a fresh clone on the platform has not, and the web build fails with `Cannot find type definition file for '../server/.kickjs/types/kick__client'`. Run typegen in the root `build` script, so every command below that starts with `pnpm build` gets it:
+
+```json
+// package.json (workspace root)
+{
+  "scripts": {
+    "build": "pnpm --filter ./server exec kick typegen && pnpm -r run build"
+  }
+}
+```
+
 ## Netlify
 
 The function file has to be **written by the build command** — Netlify clears `.netlify/` before building. Add a small script that the build command runs after the bundle build:
@@ -157,12 +183,15 @@ The function file has to be **written by the build command** — Netlify clears 
 // scripts/write-netlify-function.mjs
 import { mkdirSync, writeFileSync } from 'node:fs'
 
-// Relative to .netlify/v1/functions/. API only: '../../../dist/serverless/server.mjs'
-const bundle = '../../../server/dist/serverless/server.mjs'
+// Fullstack: Netlify reads functions from the package directory (web/).
+// API only: dir = '.netlify/v1/functions', bundle = '../../../dist/serverless/server.mjs'
+const dir = 'web/.netlify/v1/functions'
+// Relative to dir.
+const bundle = '../../../../server/dist/serverless/server.mjs'
 
-mkdirSync('.netlify/v1/functions', { recursive: true })
+mkdirSync(dir, { recursive: true })
 writeFileSync(
-  '.netlify/v1/functions/api.mjs',
+  `${dir}/api.mjs`,
   `import { handler } from '${bundle}'
 
 export default (request) => handler.fetch(request)
@@ -175,7 +204,7 @@ export const config = {
 )
 ```
 
-Run it from the project root; it writes `.netlify/v1/functions/api.mjs`.
+Run it from the project root; it writes `web/.netlify/v1/functions/api.mjs` (API only: `.netlify/v1/functions/api.mjs`).
 
 `config` must be a literal — Netlify reads it without running the file. With `path: '/api/*'` the app sees the original URL, so routes stay under `/api/v1/…`.
 
@@ -193,11 +222,25 @@ For a web app in the same repo, publish its build and let the function take `/ap
   status = 200
 ```
 
-**API only:** set `bundle` in the script to `'../../../dist/serverless/server.mjs'`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
+**API only:** set `dir` and `bundle` in the script as its comment says, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
 
 ## Vercel
 
-Write the [Build Output API](https://vercel.com/docs/build-output-api) tree and deploy it with `vercel deploy --prebuilt`:
+Write the [Build Output API](https://vercel.com/docs/build-output-api) tree. Vercel serves it either way you deploy:
+
+- **Git-connected project:** the build command writes the tree on Vercel, which then uses `.vercel/output` as the deployment. Set the command in `vercel.json` at the repo root, with `framework: null` so Vercel doesn't treat the repo as a plain Vite app. `build:vercel` is a root script that runs `pnpm build` and then writes the tree — the [CLI plugin](#build-with-a-cli-plugin-optional) ships the writer as `kick build:vercel`:
+
+  ```json
+  {
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": null,
+    "buildCommand": "pnpm build:vercel"
+  }
+  ```
+
+- **From your machine or CI:** write the tree locally, then `vercel deploy --prebuilt` from the directory holding `.vercel/`.
+
+The tree:
 
 ```text
 .vercel/output/
@@ -247,6 +290,12 @@ export interface DeployPluginOptions {
    * `.netlify/` and `.vercel/` are written. Fullstack: `..` (the workspace root).
    */
   siteRoot?: string
+  /**
+   * Where `.netlify/` goes, if not `siteRoot`. Netlify treats a pnpm workspace
+   * as a monorepo and reads functions from the site's package directory
+   * (fullstack: `../web`), not from the repo root.
+   */
+  netlifyRoot?: string
   /** URL prefix routed to the function. Default `/api`. */
   apiPath?: string
   /**
@@ -325,7 +374,10 @@ export const deployPlugin = (options: DeployPluginOptions = {}) =>
         .description('Bundle the API and write the Netlify function')
         .action(async () => {
           const server = await bundle()
-          const functions = resolve(siteRoot, '.netlify/v1/functions')
+          const functions = resolve(
+            opts.netlifyRoot ? resolve(root, opts.netlifyRoot) : siteRoot,
+            '.netlify/v1/functions',
+          )
           mkdirSync(functions, { recursive: true })
           // The function imports the bundle; Netlify packages what it imports.
           const from = relative(functions, server).split(sep).join('/')
@@ -407,9 +459,9 @@ import { defineConfig } from '@forinda/kickjs-cli'
 import { deployPlugin } from './kick-deploy'
 
 export default defineConfig({
-  // web/dist is published next to the API; .netlify/ and .vercel/ go to the
-  // workspace root, where the platform builds.
-  plugins: [deployPlugin({ staticDir: '../web/dist', siteRoot: '..' })],
+  // web/dist is published next to the API. .vercel/ goes to the workspace
+  // root; .netlify/ to web/, Netlify's package directory for this monorepo.
+  plugins: [deployPlugin({ staticDir: '../web/dist', siteRoot: '..', netlifyRoot: '../web' })],
   // ...
 })
 ```
@@ -426,14 +478,27 @@ export default defineConfig({
 
 :::
 
-`kick --help` now lists both commands. Run them **after** `kick build` and, for fullstack, after the web build — `build:vercel` copies `web/dist` and fails if it is missing.
+`kick --help` now lists both commands. Run them **after** `kick build` and, for fullstack, after the web build — `build:vercel` copies `web/dist` and fails if it is missing. One root script per platform keeps that order, and the platform config only has to name it:
+
+```json
+// package.json (workspace root) — `build` runs typegen, see "Before the platform builds"
+{
+  "scripts": {
+    "build": "pnpm --filter ./server exec kick typegen && pnpm -r run build",
+    "build:netlify": "pnpm build && pnpm --filter ./server exec kick build:netlify",
+    "build:vercel": "pnpm build && pnpm --filter ./server exec kick build:vercel"
+  }
+}
+```
+
+API only: `"build:netlify": "pnpm build && pnpm exec kick build:netlify"` and the same for `build:vercel`; the project's own `build` needs no typegen step.
 
 **Netlify** — the build command writes the function, as Netlify requires:
 
 ```toml
-# netlify.toml (fullstack, at the workspace root)
+# netlify.toml (at the repo root)
 [build]
-  command = "pnpm build && pnpm --filter ./server exec kick build:netlify"
+  command = "pnpm build:netlify"
   publish = "web/dist"
 
 [[redirects]]
@@ -442,15 +507,16 @@ export default defineConfig({
   status = 200
 ```
 
-API only: `command = "pnpm build && pnpm exec kick build:netlify"`, no SPA redirect, and `publish` an empty folder as described in [Netlify](#netlify).
+API only: no SPA redirect, and `publish` an empty folder as described in [Netlify](#netlify).
 
-**Vercel** — build locally or in CI, then upload the prebuilt output:
+**Vercel** — a Git-connected project builds with the `vercel.json` from [Vercel](#vercel) (`"buildCommand": "pnpm build:vercel"`). To deploy from your machine or CI instead:
 
 ```bash
-pnpm build
-pnpm --filter ./server exec kick build:vercel   # API only: pnpm exec kick build:vercel
-vercel deploy --prebuilt                         # from the directory holding .vercel/
+pnpm build:vercel
+vercel deploy --prebuilt   # from the repo root, which holds .vercel/
 ```
+
+Both platforms build from the repo root — see [the settings table](#before-the-platform-builds).
 
 Add `.netlify/` and `.vercel/` to `.gitignore`. Change the options — `apiPath`, `external`, `vercelRuntime` — instead of editing the output by hand; anything the plugin doesn't cover (extra functions, headers, edge config) is plain file writing in the same `register` function.
 
