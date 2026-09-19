@@ -151,11 +151,14 @@ This config is separate from `vite.config.ts`, so changing its entry does not af
 
 ## Before the platform builds
 
-**Build from the repo root.** In a fullstack workspace that is the folder holding `pnpm-workspace.yaml` and the lockfile, not `server/`. Only an install from there covers `server/` and `web/`, the platform config files (`netlify.toml`, `vercel.json`) live there, and `.netlify/` / `.vercel/` are written there.
+**Build from the repo root.** In a fullstack workspace that is the folder holding `pnpm-workspace.yaml` and the lockfile, not `server/`. Only an install from there covers `server/` and `web/`, and the platform config files (`netlify.toml`, `vercel.json`) live there.
+
+**Netlify treats a fullstack workspace as a monorepo.** It detects the pnpm workspace and deploys one package of it, so set the site's **Package directory** to `web`. Netlify then looks for functions in `web/.netlify/v1/functions`, not at the repo root. A function written to the root `.netlify/` is ignored: every `/api/*` request falls through to the SPA redirect and returns `index.html`. Vercel has no such step and reads `.vercel/output` from the root.
 
 | Platform | Setting                           | Value                                       |
 | -------- | --------------------------------- | ------------------------------------------- |
-| Netlify  | Base directory, Package directory | empty                                       |
+| Netlify  | Base directory                    | empty                                       |
+| Netlify  | Package directory                 | `web` (fullstack); empty (API only)         |
 | Netlify  | Build command, Publish directory  | from `netlify.toml`                         |
 | Vercel   | Root Directory                    | empty (`./`) — not `server`                 |
 | Vercel   | Framework Preset                  | Other                                       |
@@ -180,12 +183,15 @@ The function file has to be **written by the build command** — Netlify clears 
 // scripts/write-netlify-function.mjs
 import { mkdirSync, writeFileSync } from 'node:fs'
 
-// Relative to .netlify/v1/functions/. API only: '../../../dist/serverless/server.mjs'
-const bundle = '../../../server/dist/serverless/server.mjs'
+// Fullstack: Netlify reads functions from the package directory (web/).
+// API only: dir = '.netlify/v1/functions', bundle = '../../../dist/serverless/server.mjs'
+const dir = 'web/.netlify/v1/functions'
+// Relative to dir.
+const bundle = '../../../../server/dist/serverless/server.mjs'
 
-mkdirSync('.netlify/v1/functions', { recursive: true })
+mkdirSync(dir, { recursive: true })
 writeFileSync(
-  '.netlify/v1/functions/api.mjs',
+  `${dir}/api.mjs`,
   `import { handler } from '${bundle}'
 
 export default (request) => handler.fetch(request)
@@ -198,7 +204,7 @@ export const config = {
 )
 ```
 
-Run it from the project root; it writes `.netlify/v1/functions/api.mjs`.
+Run it from the project root; it writes `web/.netlify/v1/functions/api.mjs` (API only: `.netlify/v1/functions/api.mjs`).
 
 `config` must be a literal — Netlify reads it without running the file. With `path: '/api/*'` the app sees the original URL, so routes stay under `/api/v1/…`.
 
@@ -216,7 +222,7 @@ For a web app in the same repo, publish its build and let the function take `/ap
   status = 200
 ```
 
-**API only:** set `bundle` in the script to `'../../../dist/serverless/server.mjs'`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
+**API only:** set `dir` and `bundle` in the script as its comment says, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
 
 ## Vercel
 
@@ -284,6 +290,12 @@ export interface DeployPluginOptions {
    * `.netlify/` and `.vercel/` are written. Fullstack: `..` (the workspace root).
    */
   siteRoot?: string
+  /**
+   * Where `.netlify/` goes, if not `siteRoot`. Netlify treats a pnpm workspace
+   * as a monorepo and reads functions from the site's package directory
+   * (fullstack: `../web`), not from the repo root.
+   */
+  netlifyRoot?: string
   /** URL prefix routed to the function. Default `/api`. */
   apiPath?: string
   /**
@@ -362,7 +374,10 @@ export const deployPlugin = (options: DeployPluginOptions = {}) =>
         .description('Bundle the API and write the Netlify function')
         .action(async () => {
           const server = await bundle()
-          const functions = resolve(siteRoot, '.netlify/v1/functions')
+          const functions = resolve(
+            opts.netlifyRoot ? resolve(root, opts.netlifyRoot) : siteRoot,
+            '.netlify/v1/functions',
+          )
           mkdirSync(functions, { recursive: true })
           // The function imports the bundle; Netlify packages what it imports.
           const from = relative(functions, server).split(sep).join('/')
@@ -444,9 +459,9 @@ import { defineConfig } from '@forinda/kickjs-cli'
 import { deployPlugin } from './kick-deploy'
 
 export default defineConfig({
-  // web/dist is published next to the API; .netlify/ and .vercel/ go to the
-  // workspace root, where the platform builds.
-  plugins: [deployPlugin({ staticDir: '../web/dist', siteRoot: '..' })],
+  // web/dist is published next to the API. .vercel/ goes to the workspace
+  // root; .netlify/ to web/, Netlify's package directory for this monorepo.
+  plugins: [deployPlugin({ staticDir: '../web/dist', siteRoot: '..', netlifyRoot: '../web' })],
   // ...
 })
 ```
