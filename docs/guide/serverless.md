@@ -149,6 +149,29 @@ vite build --config vite.serverless.config.ts   # → dist/serverless/server.mjs
 
 This config is separate from `vite.config.ts`, so changing its entry does not affect `kick build`, which keeps building `src/index.ts`. The build entry is `rollupOptions.input`; the `entry` passed to `kickjsVitePlugin` is only used by the dev server. Do not point `input` at `src/index.ts`: that entry calls `bootstrap()`, which listens on a port and registers signal handlers inside the function.
 
+## Before the platform builds
+
+**Build from the repo root.** In a fullstack workspace that is the folder holding `pnpm-workspace.yaml` and the lockfile, not `server/`. Only an install from there covers `server/` and `web/`, the platform config files (`netlify.toml`, `vercel.json`) live there, and `.netlify/` / `.vercel/` are written there.
+
+| Platform | Setting                           | Value                                       |
+| -------- | --------------------------------- | ------------------------------------------- |
+| Netlify  | Base directory, Package directory | empty                                       |
+| Netlify  | Build command, Publish directory  | from `netlify.toml`                         |
+| Vercel   | Root Directory                    | empty (`./`) — not `server`                 |
+| Vercel   | Framework Preset                  | Other                                       |
+| Vercel   | Build / Output / Install commands | leave default; `vercel.json` sets the build |
+
+**Fullstack: generate the client types first.** `web` builds with `tsc --noEmit && vite build`, and its types include `server/.kickjs/types`, which `kick typegen` writes and `server/.gitignore` excludes. Locally `kick dev` has already written them; a fresh clone on the platform has not, and the web build fails with `Cannot find type definition file for '../server/.kickjs/types/kick__client'`. Run typegen in the root `build` script, so every command below that starts with `pnpm build` gets it:
+
+```json
+// package.json (workspace root)
+{
+  "scripts": {
+    "build": "pnpm --filter ./server exec kick typegen && pnpm -r run build"
+  }
+}
+```
+
 ## Netlify
 
 The function file has to be **written by the build command** — Netlify clears `.netlify/` before building. Add a small script that the build command runs after the bundle build:
@@ -197,7 +220,21 @@ For a web app in the same repo, publish its build and let the function take `/ap
 
 ## Vercel
 
-Write the [Build Output API](https://vercel.com/docs/build-output-api) tree and deploy it with `vercel deploy --prebuilt`:
+Write the [Build Output API](https://vercel.com/docs/build-output-api) tree. Vercel serves it either way you deploy:
+
+- **Git-connected project:** the build command writes the tree on Vercel, which then uses `.vercel/output` as the deployment. Set the command in `vercel.json` at the repo root, with `framework: null` so Vercel doesn't treat the repo as a plain Vite app. `build:vercel` is a root script that runs `pnpm build` and then writes the tree — the [CLI plugin](#build-with-a-cli-plugin-optional) ships the writer as `kick build:vercel`:
+
+  ```json
+  {
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": null,
+    "buildCommand": "pnpm build:vercel"
+  }
+  ```
+
+- **From your machine or CI:** write the tree locally, then `vercel deploy --prebuilt` from the directory holding `.vercel/`.
+
+The tree:
 
 ```text
 .vercel/output/
@@ -426,14 +463,27 @@ export default defineConfig({
 
 :::
 
-`kick --help` now lists both commands. Run them **after** `kick build` and, for fullstack, after the web build — `build:vercel` copies `web/dist` and fails if it is missing.
+`kick --help` now lists both commands. Run them **after** `kick build` and, for fullstack, after the web build — `build:vercel` copies `web/dist` and fails if it is missing. One root script per platform keeps that order, and the platform config only has to name it:
+
+```json
+// package.json (workspace root) — `build` runs typegen, see "Before the platform builds"
+{
+  "scripts": {
+    "build": "pnpm --filter ./server exec kick typegen && pnpm -r run build",
+    "build:netlify": "pnpm build && pnpm --filter ./server exec kick build:netlify",
+    "build:vercel": "pnpm build && pnpm --filter ./server exec kick build:vercel"
+  }
+}
+```
+
+API only: `"build:netlify": "pnpm build && pnpm exec kick build:netlify"` and the same for `build:vercel`; the project's own `build` needs no typegen step.
 
 **Netlify** — the build command writes the function, as Netlify requires:
 
 ```toml
-# netlify.toml (fullstack, at the workspace root)
+# netlify.toml (at the repo root)
 [build]
-  command = "pnpm build && pnpm --filter ./server exec kick build:netlify"
+  command = "pnpm build:netlify"
   publish = "web/dist"
 
 [[redirects]]
@@ -442,15 +492,16 @@ export default defineConfig({
   status = 200
 ```
 
-API only: `command = "pnpm build && pnpm exec kick build:netlify"`, no SPA redirect, and `publish` an empty folder as described in [Netlify](#netlify).
+API only: no SPA redirect, and `publish` an empty folder as described in [Netlify](#netlify).
 
-**Vercel** — build locally or in CI, then upload the prebuilt output:
+**Vercel** — a Git-connected project builds with the `vercel.json` from [Vercel](#vercel) (`"buildCommand": "pnpm build:vercel"`). To deploy from your machine or CI instead:
 
 ```bash
-pnpm build
-pnpm --filter ./server exec kick build:vercel   # API only: pnpm exec kick build:vercel
-vercel deploy --prebuilt                         # from the directory holding .vercel/
+pnpm build:vercel
+vercel deploy --prebuilt   # from the repo root, which holds .vercel/
 ```
+
+Both platforms build from the repo root — see [the settings table](#before-the-platform-builds).
 
 Add `.netlify/` and `.vercel/` to `.gitignore`. Change the options — `apiPath`, `external`, `vercelRuntime` — instead of editing the output by hand; anything the plugin doesn't cover (extra functions, headers, edge config) is plain file writing in the same `register` function.
 
