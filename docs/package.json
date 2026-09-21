@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "vitepress": "^1.6.4",
-    "vue": "^3.5.42"
+    "vue": "^3.5.43"
   },
   "engines": {
     "node": ">=20.0"
