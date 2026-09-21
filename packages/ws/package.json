@@ -59,13 +59,13 @@
     "@forinda/kickjs": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
     "@swc/core": "^1.16.2",
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.1",
     "@types/ws": "^8.18.0",
     "ioredis": "^6.0.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0",
+    "vitest": "^5.0.1",
     "ws": "^8.21.3"
   },
   "publishConfig": {
