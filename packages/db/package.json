@@ -64,7 +64,7 @@
     "@forinda/kickjs-cli-kit": "workspace:*",
     "commander": "^15.0.0",
     "jiti": "^2.4.2",
-    "kysely": "0.29.5"
+    "kysely": "0.29.6"
   },
   "peerDependencies": {
     "@forinda/kickjs": ">=5.18.0",
@@ -95,7 +95,7 @@
     "@types/node": "^26.6.1",
     "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
-    "kysely": "^0.29.5",
+    "kysely": "^0.29.6",
     "mysql2": "^3.24.4",
     "pg": "^8.23.0",
     "typescript": "^7.0.2"
