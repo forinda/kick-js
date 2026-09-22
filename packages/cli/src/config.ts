@@ -347,6 +347,49 @@ export interface ModuleConfig {
 }
 
 /** Configuration for the kick.config.ts file */
+/**
+ * `deploy` block — overrides for the detected serverless layout.
+ *
+ * @example
+ * ```ts
+ * defineConfig({
+ *   // API-only project that should keep its routes under /api
+ *   deploy: { apiPath: '/api' },
+ * })
+ * ```
+ */
+export interface DeployConfig {
+  /** Serverless entry exporting `handler = createHandler(...)`. Default `src/serverless.ts`. */
+  entry?: string
+  /** Where the bundle is written, under the project. Default `dist/serverless`. */
+  outDir?: string
+  /**
+   * Built frontend to publish next to the API. Detected as `../web/dist` in a
+   * fullstack workspace; `false` forces an API-only deploy.
+   */
+  staticDir?: string | false
+  /**
+   * Directory the platform deploys from, relative to the project — where
+   * `.netlify/` and `.vercel/` are written. Detected: `..` for a fullstack
+   * workspace member, `.` otherwise.
+   */
+  siteRoot?: string
+  /**
+   * Empty directory for Netlify's `publish` when there is no frontend; the
+   * build creates it. Default `dist/public`.
+   */
+  publishDir?: string
+  /**
+   * URL prefix routed to the function. Detected: `/api` alongside a frontend,
+   * `''` (every path) for an API-only project.
+   */
+  apiPath?: string
+  /** Optional peers to leave out of the bundle when not installed. Default `['valibot', 'yup']`. */
+  external?: string[]
+  /** Vercel Node runtime. Default `nodejs22.x`. */
+  vercelRuntime?: string
+}
+
 export interface KickConfig {
   /**
    * Project pattern — the module shape `kick g module` produces by default.
@@ -526,6 +569,13 @@ export interface KickConfig {
    * })
    */
   plugins?: KickCliPlugin[]
+  /**
+   * Serverless build targets for `kick build:netlify` / `kick build:vercel`.
+   * Every field is optional: the layout is detected from the project (a
+   * workspace member with a sibling `web` package is fullstack, anything
+   * else is API-only). See {@link DeployConfig}.
+   */
+  deploy?: DeployConfig
   /** Code style overrides (auto-detected from prettier when possible) */
   style?: {
     semicolons?: boolean

@@ -18,6 +18,7 @@ import { writeFileSafe } from '../utils/fs'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
 import { TEMPLATE_BUILDS, approveInstallScripts } from '../commands/add'
+import { generateNetlifyToml, generateVercelJson } from './templates/project-config'
 
 export interface InitFullstackOptions {
   name: string
@@ -66,6 +67,8 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     strictPort: true,
     // server/ is a workspace member; the root records the approvals.
     approveInstallScripts: false,
+    // netlify.toml / vercel.json live at the workspace root, written below.
+    platformConfig: false,
     // Root owns install + git so the lockfile/commit cover the workspace.
     initGit: false,
     installDeps: false,
@@ -102,6 +105,19 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   // Before install, at the root every package manager reads them from.
   approveInstallScripts(packageManager, dir, TEMPLATE_BUILDS)
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
+  // Platform deploy config, at the root both platforms build from.
+  await writeFileSafe(
+    join(dir, 'netlify.toml'),
+    generateNetlifyToml({
+      command: `${packageManager} run build:netlify`,
+      publish: 'web/dist',
+      spa: true,
+    }),
+  )
+  await writeFileSafe(
+    join(dir, 'vercel.json'),
+    generateVercelJson(`${packageManager} run build:vercel`),
+  )
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
 
   // Workspace-root agent docs (CLAUDE.md + .agents/) flavored for the
@@ -360,7 +376,12 @@ function rootPackageJson(name: string, pm: string, cliVersion: string): string {
           start: 'pnpm --filter ./server run start',
           'dev:server': 'pnpm --filter ./server dev',
           'dev:web': 'pnpm --filter ./web dev',
-          build: 'pnpm -r run build',
+          // Typegen first: web's `tsc` reads server/.kickjs/types, which is
+          // git-ignored, so a fresh clone (CI, Netlify, Vercel) has none and
+          // `pnpm -r run build` races the two packages anyway.
+          build: 'pnpm --filter ./server exec kick typegen && pnpm -r run build',
+          'build:netlify': 'pnpm build && pnpm --filter ./server exec kick build:netlify',
+          'build:vercel': 'pnpm build && pnpm --filter ./server exec kick build:vercel',
           // No `npx`: the binary is `kick` but the package is
           // `@forinda/kickjs-cli`, so npx cannot map one to the other and
           // falls back to the REGISTRY — where `kick` is an unrelated
@@ -379,7 +400,10 @@ function rootPackageJson(name: string, pm: string, cliVersion: string): string {
           start: `cd server && ${pm} run start`,
           'dev:server': `cd server && ${pm} run dev`,
           'dev:web': `cd web && ${pm} run dev`,
-          build: `${pm} run build:server && ${pm} run build:web`,
+          // Typegen first — see the pnpm branch above.
+          build: `cd server && ${pm} exec kick typegen && cd .. && ${pm} run build:server && ${pm} run build:web`,
+          'build:netlify': `${pm} run build && cd server && ${pm} exec kick build:netlify`,
+          'build:vercel': `${pm} run build && cd server && ${pm} exec kick build:vercel`,
           'build:server': `cd server && ${pm} run build`,
           'build:web': `cd web && ${pm} run build`,
           // No `npx`: the binary is `kick` but the package is
@@ -417,6 +441,9 @@ dist/
 .env
 *.log
 .DS_Store
+# Platform build output — written by \`kick build:netlify\` / \`kick build:vercel\`.
+.netlify/
+.vercel/
 `
 }
 
