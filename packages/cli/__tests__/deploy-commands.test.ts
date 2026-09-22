@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   detectLayout,
+  netlifyPublishDir,
   netlifyFunctionSource,
   resolveDeploy,
   vercelRoutes,
@@ -105,5 +106,21 @@ describe('vercelRoutes', () => {
       { handle: 'filesystem' },
       { src: '^/(.*)$', dest: '/api' },
     ])
+  })
+})
+
+describe('netlifyPublishDir', () => {
+  it("reads the toml's publish directory, normalised", () => {
+    expect(
+      netlifyPublishDir(
+        '[build]\n  command = "pnpm run build:netlify"\n  publish = "./web/dist/"\n',
+      ),
+    ).toBe('web/dist')
+    expect(netlifyPublishDir("[build]\n  publish = 'dist/public'\n")).toBe('dist/public')
+  })
+
+  it('returns nothing when the file declares no publish directory', () => {
+    // The build then leaves it alone: Netlify's UI may carry the setting.
+    expect(netlifyPublishDir('[build]\n  command = "pnpm run build:netlify"\n')).toBeUndefined()
   })
 })

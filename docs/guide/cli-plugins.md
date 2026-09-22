@@ -19,7 +19,8 @@ shape is for distributable packages.
 
 The CLI's own `kick/deploy` plugin is a worked example: it adds
 [`kick build:netlify` and `kick build:vercel`](./serverless.md#build-it-with-one-command).
-Ship a plugin with those command names and yours replaces it.
+Command names are exclusive, so pick your own — a plugin claiming a name a
+built-in already registers fails at startup (see Conflict handling below).
 
 ## The shape
 

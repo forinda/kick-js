@@ -317,7 +317,7 @@ export default defineConfig({
 })
 ```
 
-Both commands are a [CLI plugin](./cli-plugins.md) like any other (`kick/deploy`). To write the output differently — an extra function, edge config, a platform that isn't here — ship a plugin of your own with the same command names and it replaces the built-in one.
+Both commands are a [CLI plugin](./cli-plugins.md) like any other (`kick/deploy`), so the same contract covers a platform that isn't here: ship a plugin with your own command name (`kick build:fly`, say) and it sits beside these. The built-in owns `build:netlify` and `build:vercel` — a plugin claiming either name is a startup conflict, not an override — so to change what they write, take their output further in a command of your own.
 
 ## API only: the function owns every path
 

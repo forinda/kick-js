@@ -87,6 +87,12 @@ export const config = {
 `
 }
 
+/** The `publish` directory declared in a netlify.toml, if it declares one. */
+export function netlifyPublishDir(toml: string): string | undefined {
+  const match = /^\s*publish\s*=\s*["']([^"']+)["']/m.exec(toml)
+  return match?.[1]?.replace(/^\.\//, '').replace(/\/+$/, '')
+}
+
 /** Vercel Build Output API routes: files first, then the function, then the SPA shell. */
 export function vercelRoutes(apiPath: string, hasStatic: boolean): Array<Record<string, string>> {
   const routes: Array<Record<string, string>> = [
@@ -207,12 +213,28 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
       writeFileSync(resolve(functions, 'api.mjs'), netlifyFunctionSource(from, options.apiPath))
       ctx.log(`wrote ${relative(process.cwd(), resolve(functions, 'api.mjs'))}`)
 
+      // Netlify publishes *something*; with no frontend that has to be an
+      // empty directory, or it serves the project's own files — and those
+      // shadow the function.
+      const publish = options.staticDir ?? options.publishDir
       if (!options.staticDir) {
-        // Netlify publishes *something*; without an empty directory it serves
-        // the project's own files, which would shadow the function.
-        const publish = resolve(root, options.publishDir)
-        mkdirSync(publish, { recursive: true })
-        ctx.log(`publish directory ready at ${relative(process.cwd(), publish)}`)
+        mkdirSync(resolve(root, publish), { recursive: true })
+        ctx.log(`publish directory ready at ${relative(process.cwd(), resolve(root, publish))}`)
+      }
+
+      // netlify.toml is written once by `kick new` and edited by hand after;
+      // a `publish` that no longer matches these settings deploys the wrong
+      // directory, which is a broken site rather than a failed build.
+      const toml = resolve(siteRoot, 'netlify.toml')
+      if (existsSync(toml)) {
+        const declared = netlifyPublishDir(readFileSync(toml, 'utf-8'))
+        const expected = relative(siteRoot, resolve(root, publish)).split(sep).join('/')
+        if (declared !== undefined && declared !== expected) {
+          ctx.log(
+            `warning: netlify.toml publishes "${declared}", but this build fills "${expected}". ` +
+              `Update netlify.toml, or set \`deploy.publishDir\` / \`deploy.staticDir\` to match.`,
+          )
+        }
       }
     })
 
