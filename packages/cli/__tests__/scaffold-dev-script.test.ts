@@ -25,10 +25,19 @@ describe('scaffolded package.json scripts', () => {
     expect(pkg.scripts.build).toBe('kick build')
   })
 
-  it('ships four scripts, and no script it cannot run', () => {
+  it('ships the four everyday scripts plus the two deploy targets, and no script it cannot run', () => {
     const pkg = JSON.parse(generatePackageJson('demo-app', 'minimal', versions()))
 
-    expect(Object.keys(pkg.scripts).toSorted()).toEqual(['build', 'dev', 'start', 'test'])
+    // The deploy pair runs `kick build:netlify` / `kick build:vercel`, both
+    // built into the CLI that is already a devDependency.
+    expect(Object.keys(pkg.scripts).toSorted()).toEqual([
+      'build',
+      'build:netlify',
+      'build:vercel',
+      'dev',
+      'start',
+      'test',
+    ])
 
     // Every command a script invokes has to be installed. `lint: 'eslint src/'`
     // shipped for a long time with eslint in no dependency list, so `lint`

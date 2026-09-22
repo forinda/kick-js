@@ -17,6 +17,8 @@ import {
   generateEnvTest,
   generateEnvTestExample,
   generateVitestConfig,
+  generateNetlifyToml,
+  generateVercelJson,
 } from './templates/project-config'
 import {
   generateEntryFile,
@@ -215,6 +217,11 @@ interface InitProjectOptions {
    * member of a workspace whose root records them.
    */
   approveInstallScripts?: boolean
+  /**
+   * Write netlify.toml / vercel.json. Default true; false for a workspace
+   * member — the platforms build from the root, which owns those files.
+   */
+  platformConfig?: boolean
 }
 
 /** Scaffold a new KickJS project */
@@ -398,6 +405,26 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     only: 'all',
     force: true,
   })
+
+  // ── Platform deploy config ───────────────────────────────────────────
+  // Inert until you connect the project to a platform; `kick build:netlify`
+  // / `kick build:vercel` are what they run.
+  if (options.platformConfig !== false) {
+    await writeFileSafe(
+      join(dir, 'netlify.toml'),
+      generateNetlifyToml({
+        command: `${packageManager} run build:netlify`,
+        // No frontend here: the function serves every path, and this empty
+        // directory exists only so Netlify has something to publish.
+        publish: 'dist/public',
+        spa: false,
+      }),
+    )
+    await writeFileSafe(
+      join(dir, 'vercel.json'),
+      generateVercelJson(`${packageManager} run build:vercel`),
+    )
+  }
 
   // ── Install-script approvals ─────────────────────────────────────────
   // Before install; see approveInstallScripts.

@@ -17,9 +17,10 @@ If you only need a single shell-handler command (e.g. `kick seed`),
 adopter-level `commands` in `kick.config.ts` is simpler — the plugin
 shape is for distributable packages.
 
-A plugin can also live in the project itself. [Serverless → Build with a CLI
-plugin](./serverless.md#build-with-a-cli-plugin-optional) adds
-`kick build:netlify` and `kick build:vercel` from a local `kick-deploy.ts`.
+The CLI's own `kick/deploy` plugin is a worked example: it adds
+[`kick build:netlify` and `kick build:vercel`](./serverless.md#build-it-with-one-command).
+Command names are exclusive, so pick your own — a plugin claiming a name a
+built-in already registers fails at startup (see Conflict handling below).
 
 ## The shape
 

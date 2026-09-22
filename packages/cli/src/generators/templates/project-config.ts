@@ -135,6 +135,10 @@ export function generatePackageJson(
         build: 'kick build',
         start: 'kick start',
         test: 'vitest run',
+        // Serverless targets — see guide/serverless.md. Each bundles
+        // src/serverless.ts and writes the platform's build output.
+        'build:netlify': 'kick build && kick build:netlify',
+        'build:vercel': 'kick build && kick build:vercel',
       },
       dependencies: baseDeps,
       devDependencies: {
@@ -225,6 +229,55 @@ ${server}  resolve: {
   },
 })
 `
+}
+
+/**
+ * `netlify.toml` for `kick build:netlify`.
+ *
+ * Netlify publishes a directory whatever else happens: with a frontend that
+ * is its build, and without one it must be an empty directory the build
+ * creates — otherwise Netlify serves the project's own files as static
+ * content, and those shadow the function.
+ */
+export function generateNetlifyToml(options: {
+  command: string
+  publish: string
+  spa: boolean
+}): string {
+  const redirect = options.spa
+    ? `
+# Client-side routes fall back to the app shell. The function claims /api/*
+# through its own \`config.path\`, so this rule never sees those requests.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+`
+    : ''
+  return `[build]
+  command = "${options.command}"
+  publish = "${options.publish}"
+
+[build.environment]
+  NODE_VERSION = "22"
+${redirect}`
+}
+
+/**
+ * `vercel.json` for a Git-connected project. `framework: null` keeps Vercel
+ * from treating the repo as a plain Vite app; the build writes
+ * `.vercel/output`, which Vercel then deploys as-is.
+ */
+export function generateVercelJson(buildCommand: string): string {
+  return `${JSON.stringify(
+    {
+      $schema: 'https://openapi.vercel.sh/vercel.json',
+      framework: null,
+      buildCommand,
+    },
+    null,
+    2,
+  )}\n`
 }
 
 /**
@@ -392,6 +445,9 @@ coverage/
 .DS_Store
 *.tsbuildinfo
 .kickjs/
+# Platform build output — written by \`kick build:netlify\` / \`kick build:vercel\`.
+.netlify/
+.vercel/
 `
 }
 

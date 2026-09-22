@@ -22,6 +22,7 @@ import { registerTypegenCommand } from '../commands/typegen'
 import { registerCheckCommand } from '../commands/check'
 import { registerDoctorCommand } from '../commands/doctor'
 import { registerCodemodCommands } from '../commands/codemod'
+import { registerDeployCommands } from '../commands/deploy'
 import { kickAssetsTypegen } from '../typegen/builtin/assets'
 import { kickRoutesTypegen } from '../typegen/builtin/routes'
 import { kickClientTypegen } from '../typegen/builtin/client'
@@ -56,6 +57,7 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   // from `@forinda/kickjs-db/cli` as the opt-in `dbCliPlugin` — add it to
   // `kick.config.ts` `plugins: []`.
   defineCliPlugin({ name: 'kick/codemod', register: registerCodemodCommands }),
+  defineCliPlugin({ name: 'kick/deploy', register: registerDeployCommands }),
   // Typegen-only built-ins. Each owns one `.kickjs/types/kick__*` file
   // via the TypegenPlugin contract; together they replace the entire
   // legacy `typegen/generator.ts` monolith (now removed). The asset
