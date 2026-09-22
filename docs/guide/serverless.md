@@ -505,6 +505,55 @@ Both platforms build from the repo root — see [the settings table](#before-the
 
 Add `.netlify/` and `.vercel/` to `.gitignore`. Change the options — `apiPath`, `external`, `vercelRuntime` — instead of editing the output by hand; anything the plugin doesn't cover (extra functions, headers, edge config) is plain file writing in the same `register` function.
 
+## API only: the function owns every path
+
+An API-only project (`kick new --template rest` or `minimal`) has no frontend to share the domain with, so the differences from the fullstack setup are worth stating once:
+
+|                      | Fullstack                                      | API only           |
+| -------------------- | ---------------------------------------------- | ------------------ |
+| Project root         | workspace root (`server/`, `web/`)             | the project itself |
+| Plugin options       | `{ staticDir: '../web/dist', siteRoot: '..' }` | `{ apiPath: '' }`  |
+| Function path        | `/api/*`                                       | `/*`               |
+| Netlify `publish`    | `web/dist`                                     | an empty directory |
+| Typegen before build | yes (`web` reads the route map)                | no                 |
+
+`apiPath: ''` gives the function `path: '/*'` and leaves Vercel with one route, `^/(.*)$ → /api`. Every request reaches the app, so an unknown path gets the app's own [problem+json 404](./error-handling.md) rather than the platform's page. Keep `/api` only if you want paths outside it to 404 at the edge.
+
+Register it with no static directory and no `siteRoot` — `.netlify/` and `.vercel/` belong in the project root, which is the default:
+
+```ts
+// kick.config.ts
+export default defineConfig({
+  plugins: [deployPlugin({ apiPath: '' })],
+  // ...
+})
+```
+
+**Netlify** still needs something to publish. Point `publish` at a directory the build creates and leaves empty; without it Netlify publishes the project directory itself, serving your source tree as static files — and those files would then shadow the function:
+
+```toml
+# netlify.toml
+[build]
+  # Writes .netlify/v1/functions/api.mjs, which serves every path.
+  command = "pnpm build:netlify && mkdir -p dist/public"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "22"
+```
+
+```json
+// package.json
+{
+  "scripts": {
+    "build:netlify": "kick build && kick build:netlify",
+    "build:vercel": "kick build && kick build:vercel"
+  }
+}
+```
+
+**Vercel** reads `.vercel/output` from the project root, the same as fullstack: `vercel.json` with `"buildCommand": "pnpm build:vercel"` for a Git-connected project, or `pnpm build:vercel && vercel deploy --prebuilt` from your machine.
+
 ## Two deploys
 
 A fullstack workspace can also deploy as two projects: the API (API-only setup above, from `server/`) and the web app as a static site (`web/dist`). Keep the client's relative `baseUrl` by proxying `/api/*` from the web site to the API:
