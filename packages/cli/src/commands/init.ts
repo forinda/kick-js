@@ -35,6 +35,10 @@ export function registerInitCommand(program: Command): void {
       'Schema library for env / DTOs: zod | valibot | yup (default: zod)',
     )
     .option(
+      '--frontend <kind>',
+      "Fullstack web/ scaffold: 'kick' (wired React app) or 'vite' (create-vite, unwired)",
+    )
+    .option(
       '--packages <packages>',
       'Comma-separated packages to include (e.g. swagger,ws,queue,devtools)',
     )
@@ -262,6 +266,29 @@ export function registerInitCommand(program: Command): void {
         installDeps = opts.install
       }
 
+      // ── Frontend (fullstack only) ─────────────────────────────────
+      // Delegation is an interactive choice: create-vite runs its own prompts,
+      // so `--yes` (CI, offline) always takes the wired template.
+      let frontend: 'kick' | 'vite' =
+        opts.frontend === 'vite' || opts.frontend === 'kick' ? opts.frontend : 'kick'
+      if (template === 'fullstack' && !opts.frontend && !yes) {
+        frontend = (await select({
+          message: 'Frontend for web/',
+          options: [
+            {
+              value: 'kick',
+              label: 'KickJS React app',
+              hint: 'typed client, /api proxy, route types — wired',
+            },
+            {
+              value: 'vite',
+              label: 'Delegate to create-vite',
+              hint: 'pick any framework; wiring is manual (guide printed after)',
+            },
+          ],
+        })) as 'kick' | 'vite'
+      }
+
       // ── Scaffold ──────────────────────────────────────────────────
       if (template === 'fullstack') {
         const { initFullstackProject } = await import('../generators/fullstack')
@@ -273,6 +300,7 @@ export function registerInitCommand(program: Command): void {
           installDeps,
           schemaLib,
           runtime,
+          frontend,
         })
         outro(
           `Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager}${packageManager === 'pnpm' ? ' dev' : ' run dev:server'}`)}`,

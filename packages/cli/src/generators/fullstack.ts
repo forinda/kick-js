@@ -20,10 +20,32 @@ import { initProject, resolveSiblingVersions } from './project'
 import { TEMPLATE_BUILDS, approveInstallScripts } from '../commands/add'
 import { generateNetlifyToml, generateVercelJson } from './templates/project-config'
 
+/** Wiring a frontend we did not scaffold: typed client, proxy, route types. */
+export const FRONTEND_WIRING_URL = 'https://kickjs.app/guide/fullstack-frontend.html'
+
+/**
+ * How each package manager runs create-vite. `create` is the one form every
+ * manager shares; the target directory is the positional argument, and
+ * create-vite prompts for framework and variant through inherited stdio.
+ */
+export function createViteCommand(pm: 'pnpm' | 'npm' | 'yarn' | 'bun', dir: string): string[] {
+  // yarn and bun resolve `create vite` to create-vite themselves; npm and pnpm
+  // take the versioned package name.
+  if (pm === 'yarn' || pm === 'bun') return [pm, 'create', 'vite', dir]
+  return [pm, 'create', 'vite@latest', dir]
+}
+
 export interface InitFullstackOptions {
   name: string
   directory: string
   packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun'
+  /**
+   * Who scaffolds `web/`. `'kick'` writes the wired React app (typed client,
+   * dev proxy, route-map types). `'vite'` hands the directory to
+   * `create-vite` and wires nothing — you pick the framework, and the guide
+   * at {@link FRONTEND_WIRING_URL} covers connecting it.
+   */
+  frontend?: 'kick' | 'vite'
   initGit?: boolean
   installDeps?: boolean
   schemaLib?: 'zod' | 'valibot' | 'yup'
@@ -31,7 +53,7 @@ export interface InitFullstackOptions {
 }
 
 export async function initFullstackProject(options: InitFullstackOptions): Promise<void> {
-  const { name, directory, schemaLib = 'zod', runtime = 'express' } = options
+  const { name, directory, schemaLib = 'zod', runtime = 'express', frontend = 'kick' } = options
   // `--pm` arrives as a free CLI string — allowlist before it reaches a
   // process invocation (execFileSync takes an argv array, no shell, but a
   // bogus binary name is still a confusing failure).
@@ -80,16 +102,21 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     spaClientDir: '../web/dist',
   })
 
-  // ── web/ — Vite + React, typed client ──────────────────────────────
+  // Resolved once for both packages: the workspace shares a toolchain, so
+  // server/ and web/ must not end up on different vite or TypeScript majors.
   const versions = await resolveSiblingVersions()
 
-  await writeFileSafe(join(dir, 'web/package.json'), webPackageJson(name, versions))
-  await writeFileSafe(join(dir, 'web/vite.config.ts'), webViteConfig())
-  await writeFileSafe(join(dir, 'web/tsconfig.json'), webTsConfig())
-  await writeFileSafe(join(dir, 'web/index.html'), webIndexHtml(name))
-  await writeFileSafe(join(dir, 'web/src/main.tsx'), webMain())
-  await writeFileSafe(join(dir, 'web/src/App.tsx'), webApp())
-  await writeFileSafe(join(dir, 'web/src/api.ts'), webApi())
+  // ── web/ — either our wired React app, or whatever create-vite makes ──
+  if (frontend === 'vite') {
+    // create-vite runs its own prompts (framework, variant) through inherited
+    // stdio. Nothing is patched afterwards: a scaffold we didn't write is not
+    // ours to rewrite, and the wiring is four steps in the guide.
+    console.log(`\n  Handing web/ to create-vite...\n`)
+    const [file, ...args] = createViteCommand(packageManager, 'web')
+    runCommand(file!, args, { cwd: dir })
+  } else {
+    await writeWebTemplate(dir, name, versions)
+  }
 
   // ── workspace root ──────────────────────────────────────────────────
   await writeFileSafe(
@@ -179,12 +206,34 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     log(`  ${packageManager} run dev:web      # terminal 2`)
   }
   log('')
-  log('The web app calls the API through @forinda/kickjs-client —')
-  log("edit server/src/modules/hello and watch web/src/App.tsx's types follow.")
+  if (frontend === 'vite') {
+    // Nothing in web/ knows about the API yet — say so, and say where the
+    // four wiring steps live rather than half-wiring someone else's scaffold.
+    log('web/ is create-vite output, unwired. To type it against the API:')
+    log(`  ${FRONTEND_WIRING_URL}`)
+  } else {
+    log('The web app calls the API through @forinda/kickjs-client —')
+    log("edit server/src/modules/hello and watch web/src/App.tsx's types follow.")
+  }
   log('')
 }
 
 // ── web templates ─────────────────────────────────────────────────────
+
+/** The wired React app: typed client, dev proxy, route-map types. */
+async function writeWebTemplate(
+  dir: string,
+  name: string,
+  versions: Record<string, string>,
+): Promise<void> {
+  await writeFileSafe(join(dir, 'web/package.json'), webPackageJson(name, versions))
+  await writeFileSafe(join(dir, 'web/vite.config.ts'), webViteConfig())
+  await writeFileSafe(join(dir, 'web/tsconfig.json'), webTsConfig())
+  await writeFileSafe(join(dir, 'web/index.html'), webIndexHtml(name))
+  await writeFileSafe(join(dir, 'web/src/main.tsx'), webMain())
+  await writeFileSafe(join(dir, 'web/src/App.tsx'), webApp())
+  await writeFileSafe(join(dir, 'web/src/api.ts'), webApi())
+}
 
 function webPackageJson(name: string, versions: Record<string, string>): string {
   // Every range here is resolved at scaffold time — see THIRD_PARTY_PACKAGES.
