@@ -24,15 +24,46 @@ import { generateNetlifyToml, generateVercelJson } from './templates/project-con
 export const FRONTEND_WIRING_URL = 'https://kickjs.app/guide/fullstack-frontend.html'
 
 /**
- * How each package manager runs create-vite. `create` is the one form every
- * manager shares; the target directory is the positional argument, and
- * create-vite prompts for framework and variant through inherited stdio.
+ * create-vite's TypeScript templates, in the order it lists them. Only the
+ * `-ts` half: the wiring is typed — the route map is a `.d.ts` and the client
+ * is `createClient<KickClientApi.Api>` — so a JavaScript template would leave
+ * the reader following a guide that cannot apply.
  */
-export function createViteCommand(pm: 'pnpm' | 'npm' | 'yarn' | 'bun', dir: string): string[] {
+export const VITE_TEMPLATES = [
+  { value: 'react-ts', label: 'React' },
+  { value: 'react-compiler-ts', label: 'React + Compiler' },
+  { value: 'vue-ts', label: 'Vue' },
+  { value: 'svelte-ts', label: 'Svelte' },
+  { value: 'solid-ts', label: 'Solid' },
+  { value: 'preact-ts', label: 'Preact' },
+  { value: 'lit-ts', label: 'Lit' },
+  { value: 'qwik-ts', label: 'Qwik' },
+  { value: 'vanilla-ts', label: 'Vanilla' },
+] as const
+
+export const DEFAULT_VITE_TEMPLATE = 'react-ts'
+
+/**
+ * How each package manager runs create-vite, with the framework decided here
+ * rather than by its prompts:
+ *
+ * - `--template` picks a TypeScript template, so the wiring guide applies;
+ * - `--no-interactive` means it never waits for input (CI, `--yes`);
+ * - `--no-immediate` stops it installing and launching a dev server — the
+ *   workspace install happens once, at the root, after this returns.
+ */
+export function createViteCommand(
+  pm: 'pnpm' | 'npm' | 'yarn' | 'bun',
+  dir: string,
+  template: string = DEFAULT_VITE_TEMPLATE,
+): string[] {
+  const flags = ['--template', template, '--no-interactive', '--no-immediate']
   // yarn and bun resolve `create vite` to create-vite themselves; npm and pnpm
-  // take the versioned package name.
-  if (pm === 'yarn' || pm === 'bun') return [pm, 'create', 'vite', dir]
-  return [pm, 'create', 'vite@latest', dir]
+  // take the versioned package name, and npm needs `--` before the flags or it
+  // eats them itself.
+  if (pm === 'yarn' || pm === 'bun') return [pm, 'create', 'vite', dir, ...flags]
+  if (pm === 'npm') return [pm, 'create', 'vite@latest', dir, '--', ...flags]
+  return [pm, 'create', 'vite@latest', dir, ...flags]
 }
 
 export interface InitFullstackOptions {
@@ -46,6 +77,8 @@ export interface InitFullstackOptions {
    * at {@link FRONTEND_WIRING_URL} covers connecting it.
    */
   frontend?: 'kick' | 'vite'
+  /** create-vite template for `frontend: 'vite'`. Default `react-ts`. */
+  viteTemplate?: string
   initGit?: boolean
   installDeps?: boolean
   schemaLib?: 'zod' | 'valibot' | 'yup'
@@ -53,7 +86,14 @@ export interface InitFullstackOptions {
 }
 
 export async function initFullstackProject(options: InitFullstackOptions): Promise<void> {
-  const { name, directory, schemaLib = 'zod', runtime = 'express', frontend = 'kick' } = options
+  const {
+    name,
+    directory,
+    schemaLib = 'zod',
+    runtime = 'express',
+    frontend = 'kick',
+    viteTemplate = DEFAULT_VITE_TEMPLATE,
+  } = options
   // `--pm` arrives as a free CLI string — allowlist before it reaches a
   // process invocation (execFileSync takes an argv array, no shell, but a
   // bogus binary name is still a confusing failure).
@@ -110,11 +150,11 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
 
   // ── web/ — either our wired React app, or whatever create-vite makes ──
   if (frontend === 'vite') {
-    // create-vite runs its own prompts (framework, variant) through inherited
-    // stdio. Nothing is patched afterwards: a scaffold we didn't write is not
-    // ours to rewrite, and the wiring is four steps in the guide.
-    console.log(`\n  Handing web/ to create-vite...\n`)
-    const [file, ...args] = createViteCommand(packageManager, 'web')
+    // create-vite scaffolds it with the chosen TypeScript template. Nothing
+    // is patched afterwards: a scaffold we didn't write is not ours to
+    // rewrite, and the wiring is four steps in the guide.
+    console.log(`\n  Handing web/ to create-vite (${viteTemplate})...\n`)
+    const [file, ...args] = createViteCommand(packageManager, 'web', viteTemplate)
     runCommand(file!, args, { cwd: dir })
   } else {
     await writeWebTemplate(dir, name, versions)

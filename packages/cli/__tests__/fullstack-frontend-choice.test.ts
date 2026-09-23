@@ -5,24 +5,64 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { FRONTEND_WIRING_URL, createViteCommand, rootReadme } from '../src/generators/fullstack'
+import {
+  DEFAULT_VITE_TEMPLATE,
+  FRONTEND_WIRING_URL,
+  VITE_TEMPLATES,
+  createViteCommand,
+  rootReadme,
+} from '../src/generators/fullstack'
 
 describe('createViteCommand', () => {
-  it('passes the versioned package name where the manager needs one', () => {
-    expect(createViteCommand('pnpm', 'web')).toEqual(['pnpm', 'create', 'vite@latest', 'web'])
-    expect(createViteCommand('npm', 'web')).toEqual(['npm', 'create', 'vite@latest', 'web'])
+  it('names a TypeScript template so the wiring guide applies', () => {
+    expect(createViteCommand('pnpm', 'web')).toEqual([
+      'pnpm',
+      'create',
+      'vite@latest',
+      'web',
+      '--template',
+      'react-ts',
+      '--no-interactive',
+      '--no-immediate',
+    ])
+  })
+
+  it('passes npm the -- separator, or npm eats the flags itself', () => {
+    expect(createViteCommand('npm', 'web', 'vue-ts').slice(0, 6)).toEqual([
+      'npm',
+      'create',
+      'vite@latest',
+      'web',
+      '--',
+      '--template',
+    ])
   })
 
   it('lets yarn and bun resolve create-vite themselves', () => {
-    expect(createViteCommand('yarn', 'web')).toEqual(['yarn', 'create', 'vite', 'web'])
-    expect(createViteCommand('bun', 'web')).toEqual(['bun', 'create', 'vite', 'web'])
+    expect(createViteCommand('yarn', 'web', 'svelte-ts').slice(0, 4)).toEqual([
+      'yarn',
+      'create',
+      'vite',
+      'web',
+    ])
+    expect(createViteCommand('bun', 'web').slice(0, 4)).toEqual(['bun', 'create', 'vite', 'web'])
   })
 
-  it('names no framework: create-vite prompts for it', () => {
-    // Delegation means the framework is the user's choice, not ours.
+  it('never waits for input, and never starts a dev server', () => {
+    // --yes has to stay unattended, and the workspace install happens once at
+    // the root after this returns.
     for (const pm of ['pnpm', 'npm', 'yarn', 'bun'] as const) {
-      expect(createViteCommand(pm, 'web').join(' ')).not.toContain('--template')
+      const command = createViteCommand(pm, 'web').join(' ')
+      expect(command).toContain('--no-interactive')
+      expect(command).toContain('--no-immediate')
     }
+  })
+
+  it('offers only TypeScript templates', () => {
+    // A JavaScript template leaves the reader with a guide that cannot apply:
+    // the route map is a .d.ts and the client is createClient<...>.
+    for (const template of VITE_TEMPLATES) expect(template.value).toMatch(/-ts$/)
+    expect(VITE_TEMPLATES.some((t) => t.value === DEFAULT_VITE_TEMPLATE)).toBe(true)
   })
 })
 

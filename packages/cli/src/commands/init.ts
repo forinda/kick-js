@@ -39,6 +39,10 @@ export function registerInitCommand(program: Command): void {
       "Fullstack web/ scaffold: 'kick' (wired React app) or 'vite' (create-vite, unwired)",
     )
     .option(
+      '--vite-template <name>',
+      "create-vite TypeScript template for --frontend vite (default 'react-ts')",
+    )
+    .option(
       '--packages <packages>',
       'Comma-separated packages to include (e.g. swagger,ws,queue,devtools)',
     )
@@ -276,18 +280,22 @@ export function registerInitCommand(program: Command): void {
         outro('Aborted.')
         return
       }
-      // create-vite asks for the framework itself, so this cannot run
-      // unattended: with --yes it would either hang on its prompt or pick a
-      // template nobody chose.
-      if (opts.frontend === 'vite' && yes) {
+      const { VITE_TEMPLATES, DEFAULT_VITE_TEMPLATE } = await import('../generators/fullstack')
+      if (
+        opts.viteTemplate !== undefined &&
+        !VITE_TEMPLATES.some((t) => t.value === opts.viteTemplate)
+      ) {
         log.error(
-          '--frontend vite needs an interactive terminal (create-vite prompts for the framework). ' +
-            'Drop --yes, or use --frontend kick for a scripted run.',
+          `Unknown --vite-template '${String(opts.viteTemplate)}'. ` +
+            `TypeScript templates only: ${VITE_TEMPLATES.map((t) => t.value).join(', ')}.`,
         )
         outro('Aborted.')
         return
       }
       let frontend: 'kick' | 'vite' = opts.frontend === 'vite' ? 'vite' : 'kick'
+      // The framework is decided here and passed to create-vite, so nothing
+      // prompts downstream — `--yes` stays unattended.
+      let viteTemplate: string = opts.viteTemplate ?? DEFAULT_VITE_TEMPLATE
       if (template === 'fullstack' && !opts.frontend && !yes) {
         frontend = (await select({
           message: 'Frontend for web/',
@@ -305,6 +313,13 @@ export function registerInitCommand(program: Command): void {
           ],
         })) as 'kick' | 'vite'
       }
+      if (frontend === 'vite' && !opts.viteTemplate && !yes) {
+        viteTemplate = (await select({
+          message: 'create-vite template',
+          options: VITE_TEMPLATES.map((t) => ({ value: t.value, label: t.label })),
+          initialValue: DEFAULT_VITE_TEMPLATE,
+        })) as string
+      }
 
       // ── Scaffold ──────────────────────────────────────────────────
       if (template === 'fullstack') {
@@ -318,6 +333,7 @@ export function registerInitCommand(program: Command): void {
           schemaLib,
           runtime,
           frontend,
+          viteTemplate,
         })
         outro(
           `Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager}${packageManager === 'pnpm' ? ' dev' : ' run dev:server'}`)}`,

@@ -1,6 +1,8 @@
 # Wiring your own frontend
 
-`kick new --template fullstack` asks who scaffolds `web/`. Pick **Delegate to create-vite** and the CLI hands the directory to `create-vite` — you choose React, Vue, Svelte, Solid, whatever it offers — and then wires **nothing**. Choose a **TypeScript** variant when it asks: the steps below are typed, and the route map is a `.d.ts`. Your app is yours; this page is the four steps that connect it to the API.
+`kick new --template fullstack` asks who scaffolds `web/`. Pick **Delegate to create-vite** and the CLI asks which framework — React, Vue, Svelte, Solid, Preact, Lit, Qwik or vanilla — then runs `create-vite` with that template and wires **nothing**.
+
+Only TypeScript templates are offered: the route map is a `.d.ts` and the client is `createClient<KickClientApi.Api>`, so a JavaScript template would leave you following a guide that cannot apply. For a scripted run, `--frontend vite --vite-template svelte-ts` skips both questions. Your app is yours; this page is the four steps that connect it to the API.
 
 The wired option does all of this for you. Choose it if you want the React app rather than the framework of your choice.
 
