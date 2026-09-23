@@ -182,19 +182,42 @@ function fallbackRange(name: string): string {
  * — making the per-call budget the only thing standing between a scaffold
  * and a package.json full of fallbacks.
  */
-export async function resolveSiblingVersions(): Promise<Record<string, string>> {
-  const siblings = SIBLING_PACKAGES.map(async (name) => {
-    // Network failure / package not yet published / npm unavailable
-    // all surface as null → fall back to a range that always resolves.
-    const out = await captureCommandAsync('npm', ['view', name, 'version'], { timeout: 20_000 })
-    const version = parseNpmVersion(out)
-    return [name, version ? `^${version}` : fallbackRange(name)] as const
+/**
+ * Run `task` over every item, at most `limit` at a time. Each `npm view` is a
+ * process; the full list is 37 of them, and firing all of them at once can
+ * exhaust process or memory limits on a small machine (CI containers, a
+ * Raspberry Pi) — which fails the scaffold rather than slowing it.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await task(items[index]!)
+    }
   })
+  await Promise.all(workers)
+  return results
+}
 
-  const thirdParty = Object.entries(THIRD_PARTY_PACKAGES).map(async ([name, { fallback, cap }]) => {
+export async function resolveSiblingVersions(): Promise<Record<string, string>> {
+  const queries = [
+    ...SIBLING_PACKAGES.map((name) => ({ name, fallback: fallbackRange(name), cap: undefined })),
+    ...Object.entries(THIRD_PARTY_PACKAGES).map(([name, entry]) => ({ name, ...entry })),
+  ]
+
+  const resolved = await mapWithConcurrency(queries, 8, async ({ name, fallback, cap }) => {
+    // Network failure / package not yet published / npm unavailable all
+    // surface as null → fall back to a range that always resolves.
     const spec = cap ? `${name}@${cap}` : name
     const out = await captureCommandAsync(
       'npm',
+      // A capped query matches many versions; npm prints them as JSON.
       cap ? ['view', spec, 'version', '--json'] : ['view', spec, 'version'],
       { timeout: 20_000 },
     )
@@ -202,7 +225,7 @@ export async function resolveSiblingVersions(): Promise<Record<string, string>> 
     return [name, version ? `^${version}` : fallback] as const
   })
 
-  return Object.fromEntries(await Promise.all([...siblings, ...thirdParty]))
+  return Object.fromEntries(resolved)
 }
 
 /**
@@ -302,6 +325,13 @@ interface InitProjectOptions {
    * member — the platforms build from the root, which owns those files.
    */
   platformConfig?: boolean
+  /**
+   * Ranges resolved by the caller. The fullstack generator passes one map for
+   * the whole workspace: resolving per package lets a failed lookup fall back
+   * on one side and succeed on the other, which is how server/ and web/ end
+   * up on different vite or TypeScript majors.
+   */
+  versions?: Record<string, string>
 }
 
 /** Scaffold a new KickJS project */
@@ -329,8 +359,8 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // CLI's own version under-installs adopters whenever a sibling
   // bumps independently. `npm view` fallback keeps the scaffold
   // working offline.
-  log('Resolving package versions...')
-  const versions = await resolveSiblingVersions()
+  if (!options.versions) log('Resolving package versions...')
+  const versions = options.versions ?? (await resolveSiblingVersions())
 
   // A 'latest' range means the registry query failed for that package. The
   // install still works, but the pin is looser than intended and the user

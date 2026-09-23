@@ -73,6 +73,11 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
 
   console.log(`\n  Creating fullstack KickJS workspace: ${name}\n`)
 
+  // One map for both packages: the workspace shares a toolchain, so server/
+  // and web/ must not end up on different vite or TypeScript majors.
+  console.log('  Resolving package versions...')
+  const versions = await resolveSiblingVersions()
+
   // ── server/ — the standard scaffold, deferred install/git ──────────
   await initProject({
     name: `${name}-server`,
@@ -100,11 +105,8 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     // a second process. The adapter is inert until `../web/dist` exists, so
     // `dev` (Vite serves the client and proxies /api here) is untouched.
     spaClientDir: '../web/dist',
+    versions,
   })
-
-  // Resolved once for both packages: the workspace shares a toolchain, so
-  // server/ and web/ must not end up on different vite or TypeScript majors.
-  const versions = await resolveSiblingVersions()
 
   // ── web/ — either our wired React app, or whatever create-vite makes ──
   if (frontend === 'vite') {
@@ -144,7 +146,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     join(dir, 'vercel.json'),
     generateVercelJson(`${packageManager} run build:vercel`),
   )
-  await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
+  await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager, frontend))
 
   // Workspace-root agent docs (CLAUDE.md + .agents/) flavored for the
   // fullstack layout — the server/ subdir keeps its own generated set.
@@ -498,8 +500,8 @@ dist/
 `
 }
 
-function rootReadme(name: string, pm: string): string {
-  return `# ${name}
+export function rootReadme(name: string, pm: string, frontend: 'kick' | 'vite' = 'kick'): string {
+  const readme = `# ${name}
 
 Fullstack KickJS workspace — typed end to end.
 
@@ -573,5 +575,25 @@ export const api = createClient<Api>({ baseUrl: '/api/v1' })
 \`\`\`
 
 Docs: https://kickjs.app/guide/typed-client.html
+`
+
+  if (frontend !== 'vite') return readme
+
+  // create-vite's output is not ours to describe: it has no typed client, no
+  // proxy and no route-map types until the reader wires them. Everything from
+  // "The type loop" on is about files that do not exist in that scaffold.
+  const typeLoop = readme.indexOf('## The type loop')
+  return `${readme
+    .slice(0, typeLoop)
+    .replace(
+      'Vite + React, typed against the API via `@forinda/kickjs-client`',
+      'create-vite scaffold — unwired (see below)                       ',
+    )
+    .replace(' (Vite proxies `/api`)', '')}## Wiring web/ to the API
+
+\`web/\` is whatever create-vite scaffolded; nothing connects it to the API yet.
+Four steps — typed client, \`/api\` dev proxy, route-map types, \`src/api.ts\`:
+
+${FRONTEND_WIRING_URL}
 `
 }

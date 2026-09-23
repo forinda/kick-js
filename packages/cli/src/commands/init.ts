@@ -269,8 +269,25 @@ export function registerInitCommand(program: Command): void {
       // ── Frontend (fullstack only) ─────────────────────────────────
       // Delegation is an interactive choice: create-vite runs its own prompts,
       // so `--yes` (CI, offline) always takes the wired template.
-      let frontend: 'kick' | 'vite' =
-        opts.frontend === 'vite' || opts.frontend === 'kick' ? opts.frontend : 'kick'
+      if (opts.frontend !== undefined && opts.frontend !== 'kick' && opts.frontend !== 'vite') {
+        log.error(
+          `Unknown --frontend '${String(opts.frontend)}'. Use 'kick' (wired React app) or 'vite' (create-vite).`,
+        )
+        outro('Aborted.')
+        return
+      }
+      // create-vite asks for the framework itself, so this cannot run
+      // unattended: with --yes it would either hang on its prompt or pick a
+      // template nobody chose.
+      if (opts.frontend === 'vite' && yes) {
+        log.error(
+          '--frontend vite needs an interactive terminal (create-vite prompts for the framework). ' +
+            'Drop --yes, or use --frontend kick for a scripted run.',
+        )
+        outro('Aborted.')
+        return
+      }
+      let frontend: 'kick' | 'vite' = opts.frontend === 'vite' ? 'vite' : 'kick'
       if (template === 'fullstack' && !opts.frontend && !yes) {
         frontend = (await select({
           message: 'Frontend for web/',
