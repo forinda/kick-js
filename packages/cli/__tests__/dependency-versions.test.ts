@@ -79,3 +79,40 @@ describe('generated package.json', () => {
     }
   })
 })
+
+describe('registry budget', () => {
+  it('stops probing once the budget is spent and takes the fallbacks', async () => {
+    vi.useFakeTimers()
+    try {
+      const { VERSION_LOOKUP_BUDGET_MS } = await import('../src/generators/project')
+      capture.mockReset()
+      // Every probe burns the whole budget, as a stalled registry would.
+      capture.mockImplementation(async () => {
+        vi.setSystemTime(Date.now() + VERSION_LOOKUP_BUDGET_MS)
+        return null
+      })
+
+      const versions = await resolveSiblingVersions()
+
+      // 8 workers each get one probe in; the remaining ~29 take fallbacks
+      // instead of waiting for another timeout.
+      expect(capture.mock.calls.length).toBeLessThanOrEqual(8)
+      expect(Object.keys(versions).length).toBeGreaterThan(30)
+      expect(versions.react).toMatch(/^\^\d+\.\d+\.\d+$/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives each probe only the time left in the budget', async () => {
+    capture.mockReset()
+    capture.mockResolvedValue('1.2.3')
+    await resolveSiblingVersions()
+
+    for (const call of capture.mock.calls) {
+      const options = call[2] as { timeout: number }
+      expect(options.timeout).toBeGreaterThan(0)
+      expect(options.timeout).toBeLessThanOrEqual(20_000)
+    }
+  })
+})

@@ -205,13 +205,28 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
+/**
+ * How long the whole resolution may take before the rest of the packages take
+ * their fallback ranges. Node's `timeout` applies per child process, so a
+ * stalled registry would otherwise cost one timeout per wave of the worker
+ * pool — 37 lookups, 8 at a time, is five waves and over a minute of a
+ * scaffold sitting still.
+ */
+export const VERSION_LOOKUP_BUDGET_MS = 20_000
+
 export async function resolveSiblingVersions(): Promise<Record<string, string>> {
   const queries = [
     ...SIBLING_PACKAGES.map((name) => ({ name, fallback: fallbackRange(name), cap: undefined })),
     ...Object.entries(THIRD_PARTY_PACKAGES).map(([name, entry]) => ({ name, ...entry })),
   ]
 
+  const deadline = Date.now() + VERSION_LOOKUP_BUDGET_MS
+
   const resolved = await mapWithConcurrency(queries, 8, async ({ name, fallback, cap }) => {
+    // Out of budget: take the fallback rather than start another probe.
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return [name, fallback] as const
+
     // Network failure / package not yet published / npm unavailable all
     // surface as null → fall back to a range that always resolves.
     const spec = cap ? `${name}@${cap}` : name
@@ -219,7 +234,7 @@ export async function resolveSiblingVersions(): Promise<Record<string, string>> 
       'npm',
       // A capped query matches many versions; npm prints them as JSON.
       cap ? ['view', spec, 'version', '--json'] : ['view', spec, 'version'],
-      { timeout: 20_000 },
+      { timeout: remaining },
     )
     const version = parseNpmVersion(out)
     return [name, version ? `^${version}` : fallback] as const
