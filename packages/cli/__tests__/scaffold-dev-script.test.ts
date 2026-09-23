@@ -9,13 +9,22 @@ import { describe, it, expect } from 'vitest'
 
 import { generatePackageJson } from '../src/generators/templates/project-config'
 
-const versions = () => ({
-  '@forinda/kickjs': '^5.16.0',
-  '@forinda/kickjs-schema': '^0.1.2',
-  '@forinda/kickjs-cli': '^6.0.1',
-  '@forinda/kickjs-testing': '^7.0.0',
-  '@forinda/kickjs-vite': '^6.0.1',
-})
+/**
+ * The shape `resolveSiblingVersions()` returns: siblings resolved by name,
+ * third-party packages resolved too — the templates read every range from
+ * this map rather than carrying pins.
+ */
+const versions = () =>
+  new Proxy(
+    {
+      '@forinda/kickjs': '^5.16.0',
+      '@forinda/kickjs-schema': '^0.1.2',
+      '@forinda/kickjs-cli': '^6.0.1',
+      '@forinda/kickjs-testing': '^7.0.0',
+      '@forinda/kickjs-vite': '^6.0.1',
+    } as Record<string, string>,
+    { get: (target, key: string) => target[key] ?? '^1.0.0' },
+  )
 
 describe('scaffolded package.json scripts', () => {
   it('dev runs kick dev (typegen watcher), not bare vite', () => {

@@ -22,10 +22,10 @@ const PACKAGE_DEPS: Record<string, string> = {
  * brand `kick typegen` reads). Whichever lands here is what `resolveSchemaLib`
  * later detects when generating DTO schemas.
  */
-const SCHEMA_LIB_DEPS: Record<SchemaLib, { name: string; range: string }> = {
-  zod: { name: 'zod', range: '^4.3.6' },
-  valibot: { name: 'valibot', range: '^1.4.1' },
-  yup: { name: 'yup', range: '^1.7.1' },
+const SCHEMA_LIB_NAMES: Record<SchemaLib, string> = {
+  zod: 'zod',
+  valibot: 'valibot',
+  yup: 'yup',
 }
 
 /**
@@ -68,7 +68,7 @@ export function generatePackageJson(
    */
   withClientMap = false,
 ): string {
-  const schemaDep = SCHEMA_LIB_DEPS[schemaLib]
+  const schemaLibName = SCHEMA_LIB_NAMES[schemaLib]
   const baseDeps: Record<string, string> = {
     '@forinda/kickjs': take(versions, '@forinda/kickjs'),
     // The schema-agnostic abstraction kickjs-schema wraps zod / valibot
@@ -80,23 +80,23 @@ export function generatePackageJson(
     // `dotenv` is an optional peer of @forinda/kickjs — scaffolded apps
     // get it pre-installed so `.env` files Just Work. Apps that load
     // env from the shell or a secret manager can drop this safely.
-    dotenv: '^17.3.1',
-    'reflect-metadata': '^0.2.2',
-    [schemaDep.name]: schemaDep.range,
+    dotenv: take(versions, 'dotenv'),
+    'reflect-metadata': take(versions, 'reflect-metadata'),
+    [schemaLibName]: take(versions, schemaLibName),
   }
 
   // Engine peers for the chosen runtime (optional peers of @forinda/kickjs).
   if (runtime === 'express') {
     // Express is the engine itself.
-    baseDeps.express = '^5.1.0'
+    baseDeps.express = take(versions, 'express')
   } else if (runtime === 'fastify') {
-    baseDeps.fastify = '^5.0.0'
-    baseDeps['@fastify/middie'] = '^9.0.0'
+    baseDeps.fastify = take(versions, 'fastify')
+    baseDeps['@fastify/middie'] = take(versions, '@fastify/middie')
     // Static serving uses `serve-static` (no express dependency).
-    baseDeps['serve-static'] = '^2.2.0'
+    baseDeps['serve-static'] = take(versions, 'serve-static')
   } else if (runtime === 'h3') {
-    baseDeps.h3 = '^1.0.0'
-    baseDeps['serve-static'] = '^2.2.0'
+    baseDeps.h3 = take(versions, 'h3')
+    baseDeps['serve-static'] = take(versions, 'serve-static')
   }
 
   // Add user-selected optional packages — each looked up against
@@ -149,25 +149,27 @@ export function generatePackageJson(
         // writes fails on a missing import.
         '@forinda/kickjs-testing': take(versions, '@forinda/kickjs-testing'),
         '@forinda/kickjs-vite': take(versions, '@forinda/kickjs-vite'),
-        '@types/supertest': '^7.2.1',
-        '@swc/core': '^1.15.21',
+        '@types/supertest': take(versions, '@types/supertest'),
+        '@swc/core': take(versions, '@swc/core'),
         // Express types only when Express is the engine (it's the only runtime
         // that imports `express` in src/index.ts).
-        ...(runtime === 'express' ? { '@types/express': '^5.0.6' } : {}),
-        '@types/node': '^25.0.0',
-        'unplugin-swc': '^1.5.9',
-        vite: '^8.0.3',
-        supertest: '^7.2.2',
-        vitest: '^4.1.2',
-        typescript: '^7.0.2',
+        ...(runtime === 'express' ? { '@types/express': take(versions, '@types/express') } : {}),
+        '@types/node': take(versions, '@types/node'),
+        'unplugin-swc': take(versions, 'unplugin-swc'),
+        vite: take(versions, 'vite'),
+        supertest: take(versions, 'supertest'),
+        vitest: take(versions, 'vitest'),
+        typescript: take(versions, 'typescript'),
         // Only scaffolds that consume the client route map pin the TypeScript 7
         // compiler API: it is a 10 kB shim over a 24 MB `typescript@6`, which is
         // not something to put in every project. Today that means fullstack,
         // whose web app reads the map from the ambient `KickClientApi`
         // namespace. rest/minimal have no frontend and stay lean.
-        ...(withClientMap ? { '@typescript/typescript6': '^6.0.2' } : {}),
-        oxfmt: '^0.65.0',
-        oxlint: '^1.80.0',
+        ...(withClientMap
+          ? { '@typescript/typescript6': take(versions, '@typescript/typescript6') }
+          : {}),
+        oxfmt: take(versions, 'oxfmt'),
+        oxlint: take(versions, 'oxlint'),
       },
     },
     null,

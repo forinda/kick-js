@@ -35,6 +35,14 @@ export function registerInitCommand(program: Command): void {
       'Schema library for env / DTOs: zod | valibot | yup (default: zod)',
     )
     .option(
+      '--frontend <kind>',
+      "Fullstack web/ scaffold: 'kick' (wired React app) or 'vite' (create-vite, unwired)",
+    )
+    .option(
+      '--vite-template <name>',
+      "create-vite TypeScript template for --frontend vite (default 'react-ts')",
+    )
+    .option(
       '--packages <packages>',
       'Comma-separated packages to include (e.g. swagger,ws,queue,devtools)',
     )
@@ -262,6 +270,57 @@ export function registerInitCommand(program: Command): void {
         installDeps = opts.install
       }
 
+      // ── Frontend (fullstack only) ─────────────────────────────────
+      // Delegation is an interactive choice: create-vite runs its own prompts,
+      // so `--yes` (CI, offline) always takes the wired template.
+      if (opts.frontend !== undefined && opts.frontend !== 'kick' && opts.frontend !== 'vite') {
+        log.error(
+          `Unknown --frontend '${String(opts.frontend)}'. Use 'kick' (wired React app) or 'vite' (create-vite).`,
+        )
+        outro('Aborted.')
+        return
+      }
+      const { VITE_TEMPLATES, DEFAULT_VITE_TEMPLATE } = await import('../generators/fullstack')
+      if (
+        opts.viteTemplate !== undefined &&
+        !VITE_TEMPLATES.some((t) => t.value === opts.viteTemplate)
+      ) {
+        log.error(
+          `Unknown --vite-template '${String(opts.viteTemplate)}'. ` +
+            `TypeScript templates only: ${VITE_TEMPLATES.map((t) => t.value).join(', ')}.`,
+        )
+        outro('Aborted.')
+        return
+      }
+      let frontend: 'kick' | 'vite' = opts.frontend === 'vite' ? 'vite' : 'kick'
+      // The framework is decided here and passed to create-vite, so nothing
+      // prompts downstream — `--yes` stays unattended.
+      let viteTemplate: string = opts.viteTemplate ?? DEFAULT_VITE_TEMPLATE
+      if (template === 'fullstack' && !opts.frontend && !yes) {
+        frontend = (await select({
+          message: 'Frontend for web/',
+          options: [
+            {
+              value: 'kick',
+              label: 'KickJS React app',
+              hint: 'typed client, /api proxy, route types — wired',
+            },
+            {
+              value: 'vite',
+              label: 'Delegate to create-vite',
+              hint: 'pick any framework; wiring is manual (guide printed after)',
+            },
+          ],
+        })) as 'kick' | 'vite'
+      }
+      if (frontend === 'vite' && !opts.viteTemplate && !yes) {
+        viteTemplate = (await select({
+          message: 'create-vite template',
+          options: VITE_TEMPLATES.map((t) => ({ value: t.value, label: t.label })),
+          initialValue: DEFAULT_VITE_TEMPLATE,
+        })) as string
+      }
+
       // ── Scaffold ──────────────────────────────────────────────────
       if (template === 'fullstack') {
         const { initFullstackProject } = await import('../generators/fullstack')
@@ -273,6 +332,8 @@ export function registerInitCommand(program: Command): void {
           installDeps,
           schemaLib,
           runtime,
+          frontend,
+          viteTemplate,
         })
         outro(
           `Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager}${packageManager === 'pnpm' ? ' dev' : ' run dev:server'}`)}`,

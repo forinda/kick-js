@@ -39,8 +39,13 @@ describe('resolveSiblingVersions', () => {
       if (name === '@forinda/kickjs-cli') {
         // The CLI's own version is the one pin that is genuinely correct.
         expect(range).toBe(`^${cliVersion}`)
-      } else {
+      } else if (name.startsWith('@forinda/')) {
         expect(range).toBe('latest')
+      } else {
+        // Third-party packages fall back to the range they shipped with:
+        // `latest` could name a major the templates are not written against,
+        // which is the failure the caps exist to prevent.
+        expect(range, name).toMatch(/^\^\d+\.\d+\.\d+$/)
       }
     }
   })
@@ -50,7 +55,9 @@ describe('resolveSiblingVersions', () => {
     capture.mockResolvedValue(null)
 
     const versions = await resolveSiblingVersions()
-    const siblings = Object.entries(versions).filter(([n]) => n !== '@forinda/kickjs-cli')
+    const siblings = Object.entries(versions).filter(
+      ([n]) => n.startsWith('@forinda/') && n !== '@forinda/kickjs-cli',
+    )
 
     expect(siblings.length).toBeGreaterThan(0)
     expect(siblings.filter(([, r]) => r === `^${cliVersion}`)).toEqual([])

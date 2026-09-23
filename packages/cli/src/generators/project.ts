@@ -82,6 +82,78 @@ const SIBLING_PACKAGES = [
 ] as const
 
 /**
+ * Third-party dependencies the templates install, resolved at scaffold time
+ * instead of pinned here — a pin means every React, Vitest or oxlint release
+ * needs a CLI release to reach new projects, and the pins drift apart (the
+ * fullstack web app shipped vite ^7 while the server template was on ^8).
+ *
+ * `cap` is the range a package may float within, for the ones where a new
+ * major changes what the templates generate or what KickJS peers on: the
+ * engine packages, the schema libraries, and the toolchain the generated
+ * configs are written against. Everything else tracks `latest`.
+ *
+ * The value is the fallback: what gets written when `npm view` says nothing
+ * (offline, registry down), so a scaffold without network still installs.
+ */
+const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: string }> = {
+  // Frontend — the fullstack web app. Nothing the template writes is
+  // version-specific (`createRoot`, JSX, a plugin call), so these float.
+  react: { fallback: '^19.0.0' },
+  'react-dom': { fallback: '^19.0.0' },
+  '@types/react': { fallback: '^19.0.0' },
+  '@types/react-dom': { fallback: '^19.0.0' },
+  '@vitejs/plugin-react': { fallback: '^5.0.0' },
+  // Toolchain.
+  '@types/node': { fallback: '^25.0.0' },
+  '@types/supertest': { fallback: '^7.2.1' },
+  supertest: { fallback: '^7.2.2' },
+  vitest: { fallback: '^4.1.2' },
+  '@swc/core': { fallback: '^1.15.21' },
+  'unplugin-swc': { fallback: '^1.5.9' },
+  oxfmt: { fallback: '^0.65.0' },
+  oxlint: { fallback: '^1.80.0' },
+  dotenv: { fallback: '^17.3.1' },
+  'reflect-metadata': { fallback: '^0.2.2' },
+  // Capped — a new major here breaks the generated project, not just its deps.
+  // vite: `@forinda/kickjs-vite` peers on it and the generated vite.config.ts
+  // is written against this major.
+  vite: { fallback: '^8.0.3', cap: '^8' },
+  // typescript: the generated tsconfig.json targets this major.
+  typescript: { fallback: '^7.0.2', cap: '^7' },
+  '@typescript/typescript6': { fallback: '^6.0.2', cap: '^6' },
+  // HTTP engines: `bootstrap({ runtime })` peers on the major.
+  express: { fallback: '^5.1.0', cap: '^5' },
+  '@types/express': { fallback: '^5.0.6', cap: '^5' },
+  fastify: { fallback: '^5.0.0', cap: '^5' },
+  '@fastify/middie': { fallback: '^9.0.0', cap: '^9' },
+  // h3 v2 is a different runtime (`./h3-web`), not an upgrade of this one.
+  h3: { fallback: '^1.0.0', cap: '^1' },
+  'serve-static': { fallback: '^2.2.0', cap: '^2' },
+  // Schema libraries: `@forinda/kickjs-schema` adapts one major each.
+  zod: { fallback: '^4.3.6', cap: '^4' },
+  valibot: { fallback: '^1.4.1', cap: '^1' },
+  yup: { fallback: '^1.7.1', cap: '^1' },
+}
+
+/**
+ * Newest version matching `spec`. A bare name asks for the `latest` tag and
+ * npm prints one version; a range prints every match as JSON, newest last.
+ */
+export function parseNpmVersion(output: string | null): string | null {
+  if (!output) return null
+  const trimmed = output.trim()
+  if (/^\d+\.\d+\.\d+/.test(trimmed)) return trimmed.split(/\s/)[0]!
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    const list = Array.isArray(parsed) ? parsed : [parsed]
+    const versions = list.filter((v): v is string => typeof v === 'string')
+    return versions.length > 0 ? versions[versions.length - 1]! : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Range to write when `npm view <name> version` gives us nothing.
  *
  * It must never be the CLI's own version. Sibling packages version
@@ -110,19 +182,65 @@ function fallbackRange(name: string): string {
  * — making the per-call budget the only thing standing between a scaffold
  * and a package.json full of fallbacks.
  */
+/**
+ * Run `task` over every item, at most `limit` at a time. Each `npm view` is a
+ * process; the full list is 37 of them, and firing all of them at once can
+ * exhaust process or memory limits on a small machine (CI containers, a
+ * Raspberry Pi) — which fails the scaffold rather than slowing it.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = Array.from({ length: items.length })
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await task(items[index]!)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
+/**
+ * How long the whole resolution may take before the rest of the packages take
+ * their fallback ranges. Node's `timeout` applies per child process, so a
+ * stalled registry would otherwise cost one timeout per wave of the worker
+ * pool — 37 lookups, 8 at a time, is five waves and over a minute of a
+ * scaffold sitting still.
+ */
+export const VERSION_LOOKUP_BUDGET_MS = 20_000
+
 export async function resolveSiblingVersions(): Promise<Record<string, string>> {
-  const results = await Promise.all(
-    SIBLING_PACKAGES.map(async (name) => {
-      // Network failure / package not yet published / npm unavailable
-      // all surface as null → fall back to a range that always resolves.
-      const out = await captureCommandAsync('npm', ['view', name, 'version'], { timeout: 20_000 })
-      if (out && /^\d+\.\d+\.\d+/.test(out)) {
-        return [name, `^${out}`] as const
-      }
-      return [name, fallbackRange(name)] as const
-    }),
-  )
-  return Object.fromEntries(results)
+  const queries = [
+    ...SIBLING_PACKAGES.map((name) => ({ name, fallback: fallbackRange(name), cap: undefined })),
+    ...Object.entries(THIRD_PARTY_PACKAGES).map(([name, entry]) => ({ name, ...entry })),
+  ]
+
+  const deadline = Date.now() + VERSION_LOOKUP_BUDGET_MS
+
+  const resolved = await mapWithConcurrency(queries, 8, async ({ name, fallback, cap }) => {
+    // Out of budget: take the fallback rather than start another probe.
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return [name, fallback] as const
+
+    // Network failure / package not yet published / npm unavailable all
+    // surface as null → fall back to a range that always resolves.
+    const spec = cap ? `${name}@${cap}` : name
+    const out = await captureCommandAsync(
+      'npm',
+      // A capped query matches many versions; npm prints them as JSON.
+      cap ? ['view', spec, 'version', '--json'] : ['view', spec, 'version'],
+      { timeout: remaining },
+    )
+    const version = parseNpmVersion(out)
+    return [name, version ? `^${version}` : fallback] as const
+  })
+
+  return Object.fromEntries(resolved)
 }
 
 /**
@@ -222,6 +340,13 @@ interface InitProjectOptions {
    * member — the platforms build from the root, which owns those files.
    */
   platformConfig?: boolean
+  /**
+   * Ranges resolved by the caller. The fullstack generator passes one map for
+   * the whole workspace: resolving per package lets a failed lookup fall back
+   * on one side and succeed on the other, which is how server/ and web/ end
+   * up on different vite or TypeScript majors.
+   */
+  versions?: Record<string, string>
 }
 
 /** Scaffold a new KickJS project */
@@ -249,8 +374,8 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // CLI's own version under-installs adopters whenever a sibling
   // bumps independently. `npm view` fallback keeps the scaffold
   // working offline.
-  log('Resolving package versions...')
-  const versions = await resolveSiblingVersions()
+  if (!options.versions) log('Resolving package versions...')
+  const versions = options.versions ?? (await resolveSiblingVersions())
 
   // A 'latest' range means the registry query failed for that package. The
   // install still works, but the pin is looser than intended and the user
