@@ -1,5 +1,19 @@
 # @forinda/kickjs-cli
 
+## 8.4.0
+
+### Minor Changes
+
+- [#734](https://github.com/forinda/kick-js/pull/734) [`1993e89`](https://github.com/forinda/kick-js/commit/1993e89a01bacc8517374c692eba64c065da2c55) Thanks [@forinda](https://github.com/forinda)! - `kick new --template fullstack` now asks who scaffolds `web/`: the wired KickJS React app (default), or `create-vite`. Choosing create-vite hands the directory over — you pick the framework at its own prompts — and KickJS patches nothing afterwards; the scaffold prints the [Wiring your own frontend](https://kickjs.app/guide/fullstack-frontend.html) guide, which covers the four steps (typed client, `/api` dev proxy, route-map types, `src/api.ts`).
+  
+  The framework is chosen in `kick new`, not by create-vite's own prompts: the CLI passes `--template`, `--no-interactive` and `--no-immediate`, so the scaffold never waits for input and never starts a dev server. Only TypeScript templates are offered (react-ts, react-compiler-ts, vue-ts, svelte-ts, solid-ts, preact-ts, lit-ts, qwik-ts, vanilla-ts) — the wiring is typed, so a JavaScript template could not follow the guide.
+  
+  `--frontend kick|vite` and `--vite-template <name>` answer both questions for a scripted run, including with `--yes`.
+
+- [#734](https://github.com/forinda/kick-js/pull/734) [`7a57e8e`](https://github.com/forinda/kick-js/commit/7a57e8ef9a0d848a2bba192749eb84665270f1c0) Thanks [@forinda](https://github.com/forinda)! - `kick new` resolves third-party dependency versions from the registry instead of the ranges pinned in the CLI. A new project now gets today's React, Vitest, oxlint, `@types/*` and friends without waiting for a CLI release — and the two templates can no longer drift apart, as they had (the fullstack web app scaffolded `vite ^7` and `typescript ^5.9` while the server package used `vite ^8` and `typescript ^7`).
+  
+  Packages whose major the generated code is written against stay capped to that major: `vite`, `typescript`, the HTTP engines (`express`, `fastify`, `@fastify/middie`, `h3`, `serve-static`) and the schema libraries (`zod`, `valibot`, `yup`). Everything else tracks `latest`. When `npm view` answers nothing — offline, registry down — each package falls back to the range it shipped with, so the scaffold still writes a valid manifest (installing it then needs a warm package-manager cache or a reachable registry, as any install does).
+
 ## 8.3.0
 
 ### Minor Changes
