@@ -82,6 +82,78 @@ const SIBLING_PACKAGES = [
 ] as const
 
 /**
+ * Third-party dependencies the templates install, resolved at scaffold time
+ * instead of pinned here — a pin means every React, Vitest or oxlint release
+ * needs a CLI release to reach new projects, and the pins drift apart (the
+ * fullstack web app shipped vite ^7 while the server template was on ^8).
+ *
+ * `cap` is the range a package may float within, for the ones where a new
+ * major changes what the templates generate or what KickJS peers on: the
+ * engine packages, the schema libraries, and the toolchain the generated
+ * configs are written against. Everything else tracks `latest`.
+ *
+ * The value is the fallback: what gets written when `npm view` says nothing
+ * (offline, registry down), so a scaffold without network still installs.
+ */
+const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: string }> = {
+  // Frontend — the fullstack web app. Nothing the template writes is
+  // version-specific (`createRoot`, JSX, a plugin call), so these float.
+  react: { fallback: '^19.0.0' },
+  'react-dom': { fallback: '^19.0.0' },
+  '@types/react': { fallback: '^19.0.0' },
+  '@types/react-dom': { fallback: '^19.0.0' },
+  '@vitejs/plugin-react': { fallback: '^5.0.0' },
+  // Toolchain.
+  '@types/node': { fallback: '^25.0.0' },
+  '@types/supertest': { fallback: '^7.2.1' },
+  supertest: { fallback: '^7.2.2' },
+  vitest: { fallback: '^4.1.2' },
+  '@swc/core': { fallback: '^1.15.21' },
+  'unplugin-swc': { fallback: '^1.5.9' },
+  oxfmt: { fallback: '^0.65.0' },
+  oxlint: { fallback: '^1.80.0' },
+  dotenv: { fallback: '^17.3.1' },
+  'reflect-metadata': { fallback: '^0.2.2' },
+  // Capped — a new major here breaks the generated project, not just its deps.
+  // vite: `@forinda/kickjs-vite` peers on it and the generated vite.config.ts
+  // is written against this major.
+  vite: { fallback: '^8.0.3', cap: '^8' },
+  // typescript: the generated tsconfig.json targets this major.
+  typescript: { fallback: '^7.0.2', cap: '^7' },
+  '@typescript/typescript6': { fallback: '^6.0.2', cap: '^6' },
+  // HTTP engines: `bootstrap({ runtime })` peers on the major.
+  express: { fallback: '^5.1.0', cap: '^5' },
+  '@types/express': { fallback: '^5.0.6', cap: '^5' },
+  fastify: { fallback: '^5.0.0', cap: '^5' },
+  '@fastify/middie': { fallback: '^9.0.0', cap: '^9' },
+  // h3 v2 is a different runtime (`./h3-web`), not an upgrade of this one.
+  h3: { fallback: '^1.0.0', cap: '^1' },
+  'serve-static': { fallback: '^2.2.0', cap: '^2' },
+  // Schema libraries: `@forinda/kickjs-schema` adapts one major each.
+  zod: { fallback: '^4.3.6', cap: '^4' },
+  valibot: { fallback: '^1.4.1', cap: '^1' },
+  yup: { fallback: '^1.7.1', cap: '^1' },
+}
+
+/**
+ * Newest version matching `spec`. A bare name asks for the `latest` tag and
+ * npm prints one version; a range prints every match as JSON, newest last.
+ */
+export function parseNpmVersion(output: string | null): string | null {
+  if (!output) return null
+  const trimmed = output.trim()
+  if (/^\d+\.\d+\.\d+/.test(trimmed)) return trimmed.split(/\s/)[0]!
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    const list = Array.isArray(parsed) ? parsed : [parsed]
+    const versions = list.filter((v): v is string => typeof v === 'string')
+    return versions.length > 0 ? versions[versions.length - 1]! : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Range to write when `npm view <name> version` gives us nothing.
  *
  * It must never be the CLI's own version. Sibling packages version
@@ -111,18 +183,26 @@ function fallbackRange(name: string): string {
  * and a package.json full of fallbacks.
  */
 export async function resolveSiblingVersions(): Promise<Record<string, string>> {
-  const results = await Promise.all(
-    SIBLING_PACKAGES.map(async (name) => {
-      // Network failure / package not yet published / npm unavailable
-      // all surface as null → fall back to a range that always resolves.
-      const out = await captureCommandAsync('npm', ['view', name, 'version'], { timeout: 20_000 })
-      if (out && /^\d+\.\d+\.\d+/.test(out)) {
-        return [name, `^${out}`] as const
-      }
-      return [name, fallbackRange(name)] as const
-    }),
-  )
-  return Object.fromEntries(results)
+  const siblings = SIBLING_PACKAGES.map(async (name) => {
+    // Network failure / package not yet published / npm unavailable
+    // all surface as null → fall back to a range that always resolves.
+    const out = await captureCommandAsync('npm', ['view', name, 'version'], { timeout: 20_000 })
+    const version = parseNpmVersion(out)
+    return [name, version ? `^${version}` : fallbackRange(name)] as const
+  })
+
+  const thirdParty = Object.entries(THIRD_PARTY_PACKAGES).map(async ([name, { fallback, cap }]) => {
+    const spec = cap ? `${name}@${cap}` : name
+    const out = await captureCommandAsync(
+      'npm',
+      cap ? ['view', spec, 'version', '--json'] : ['view', spec, 'version'],
+      { timeout: 20_000 },
+    )
+    const version = parseNpmVersion(out)
+    return [name, version ? `^${version}` : fallback] as const
+  })
+
+  return Object.fromEntries(await Promise.all([...siblings, ...thirdParty]))
 }
 
 /**

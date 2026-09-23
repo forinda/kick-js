@@ -82,9 +82,8 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
 
   // ── web/ — Vite + React, typed client ──────────────────────────────
   const versions = await resolveSiblingVersions()
-  const clientVersion = versions['@forinda/kickjs-client'] ?? '^0.1.0'
 
-  await writeFileSafe(join(dir, 'web/package.json'), webPackageJson(name, clientVersion))
+  await writeFileSafe(join(dir, 'web/package.json'), webPackageJson(name, versions))
   await writeFileSafe(join(dir, 'web/vite.config.ts'), webViteConfig())
   await writeFileSafe(join(dir, 'web/tsconfig.json'), webTsConfig())
   await writeFileSafe(join(dir, 'web/index.html'), webIndexHtml(name))
@@ -187,7 +186,9 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
 
 // ── web templates ─────────────────────────────────────────────────────
 
-function webPackageJson(name: string, clientVersion: string): string {
+function webPackageJson(name: string, versions: Record<string, string>): string {
+  // Every range here is resolved at scaffold time — see THIRD_PARTY_PACKAGES.
+  const dep = (pkg: string) => versions[pkg] ?? 'latest'
   return `${JSON.stringify(
     {
       name: `${name}-web`,
@@ -201,16 +202,17 @@ function webPackageJson(name: string, clientVersion: string): string {
         typecheck: 'tsc --noEmit',
       },
       dependencies: {
-        '@forinda/kickjs-client': clientVersion,
-        react: '^19.0.0',
-        'react-dom': '^19.0.0',
+        '@forinda/kickjs-client': dep('@forinda/kickjs-client'),
+        react: dep('react'),
+        'react-dom': dep('react-dom'),
       },
       devDependencies: {
-        '@types/react': '^19.0.0',
-        '@types/react-dom': '^19.0.0',
-        '@vitejs/plugin-react': '^5.0.0',
-        typescript: '^5.9.0',
-        vite: '^7.0.0',
+        '@types/react': dep('@types/react'),
+        '@types/react-dom': dep('@types/react-dom'),
+        '@vitejs/plugin-react': dep('@vitejs/plugin-react'),
+        // Same majors as the server package: one workspace, one toolchain.
+        typescript: dep('typescript'),
+        vite: dep('vite'),
       },
     },
     null,
