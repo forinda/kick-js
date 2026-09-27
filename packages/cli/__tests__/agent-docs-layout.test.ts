@@ -190,3 +190,29 @@ describe('the factory skills', () => {
     expect(body).toContain('@Public(false)')
   })
 })
+
+describe('the route-flags skill mount points', () => {
+  const body = () =>
+    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find(
+      (f) => f.slug === 'route-flags',
+    )!.content
+
+  it('says where each consumer mounts, not just that it exists', () => {
+    // Knowing a guard reads ctx.route is useless without knowing a guard is
+    // mounted with @Middleware() and global middleware runs before matching.
+    expect(body()).toContain('@Middleware(fn)')
+    expect(body()).toContain('bootstrap({ middlewares:')
+    expect(body()).toContain('AppAdapter.middleware()')
+    expect(body()).toContain('bootstrap({ contributors })')
+  })
+
+  it('carries the five contributor precedence levels in order', () => {
+    expect(body()).toContain(
+      'method > class > module `contributors()` > adapter `contributors()` > `bootstrap({ contributors })`',
+    )
+  })
+
+  it('warns that ctx.route is absent before route matching', () => {
+    expect(body()).toMatch(/ctx\.route.*undefined/)
+  })
+})

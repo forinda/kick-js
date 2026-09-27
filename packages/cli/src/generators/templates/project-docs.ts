@@ -1374,13 +1374,25 @@ pathname strings that cannot express \`/users/:id\`.
      login(ctx: RequestContext) {}
    }
    \`\`\`
-3. Read it from the consumer that already exists, rather than a new one:
-   - handlers, \`@Middleware()\`, guards, contributors: \`ctx.route?.flags.has('auth.public')\`, \`ctx.route?.flags.get('rate.limit')\`
-   - contributors: \`skipWhen: 'auth.public'\` / \`onlyWhen\` on the registration
-   - guards: \`csrfGuard({ exemptWhen: 'csrf.exempt' })\`, \`rateLimitGuard({ max: 60, exemptWhen: 'auth.public' })\`
-   - pre-match middleware (\`rateLimit()\`): reads the route policy table, since it runs before a route is matched
-   - OpenAPI: \`SwaggerAdapter({ publicFlag: 'auth.public' })\`
-   - tools: \`McpAdapter({ exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })\`
+3. Read it from the consumer that already exists, rather than a new one.
+   **Where a consumer is mounted decides how it reads flags** — everything
+   after route matching gets \`ctx.route\`; anything before it does not:
+
+   | Consumer | Mounted at | Reads flags by |
+   | --- | --- | --- |
+   | Handler | the route itself | \`ctx.route?.flags.has('auth.public')\` |
+   | Guard / \`@Middleware()\` | \`@Middleware(fn)\` on a method or controller class | \`ctx.route\`, or the built-ins' \`exemptWhen\` |
+   | \`csrfGuard()\` / \`rateLimitGuard()\` | same — \`@Middleware()\`, class or method | \`exemptWhen: 'csrf.exempt'\` |
+   | Contributor | method > class > module \`contributors()\` > adapter \`contributors()\` > \`bootstrap({ contributors })\` | \`skipWhen\` / \`onlyWhen\` on the registration |
+   | Global middleware (\`rateLimit()\`, \`csrf()\`) | \`bootstrap({ middlewares: [...] })\` — runs **before** matching | the route policy table (\`bindRoutePolicy\`); \`ctx.route\` is \`undefined\` here |
+   | Adapter middleware | \`AppAdapter.middleware()\`, phase \`beforeGlobal\` … \`afterRoutes\` | policy table before routes, \`ctx.route\` in \`afterRoutes\` |
+   | OpenAPI | \`SwaggerAdapter({ publicFlag: 'auth.public' })\` | read once at startup, not per request |
+   | MCP / AI tools | \`McpAdapter({ exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })\` | read once at startup |
+
+   The contributor row is the one that buys the most: those five levels mean a
+   plugin's contributor can be skipped on one route (\`skipWhen\`) without
+   forking it, and a method-level registration beats the adapter's.
+
 4. Run \`kick typegen\`. It writes the \`KickRouteFlags\` augmentation, so flag
    names autocomplete and a typo fails \`tsc\` instead of silently never matching.
 
@@ -1394,7 +1406,8 @@ pathname strings that cannot express \`/users/:id\`.
 - \`@Public.off\` on a route that never inherited the flag — a no-op, and
   usually a sign the expected class-level flag is not there.
 - Reading \`ctx.route\` in global middleware — it is \`undefined\` before a route
-  is matched. Use the policy table or a guard.
+  is matched (steps 1-6 of the pipeline). Move the check into a guard mounted
+  with \`@Middleware()\`, or read the policy table.
 - Inventing a flag name per consumer (\`auth.open\`, \`public\`, \`isPublic\`). The
   framework names none of them; pick one name per fact and reuse it.`,
     },
