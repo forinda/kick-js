@@ -133,3 +133,99 @@ describe('generateKickJsSkillFiles — direct contract', () => {
     expect(addModuleYarn.content).not.toMatch(/pnpm run/)
   })
 })
+
+describe('the deploy skill', () => {
+  const skill = () =>
+    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find((f) => f.slug === 'deploy')!
+
+  it('is generated with the shared frontmatter shape', () => {
+    expect(skill()).toBeDefined()
+    expect(skill().content).toMatch(/^---\nname:\s+kickjs-deploy\n/)
+  })
+
+  it('carries the three failures that cost real deploys', () => {
+    const body = skill().content
+    // Wrangler's esbuild emits no decorator metadata, so DI dies at startup.
+    expect(body).toContain('nodejs_compat')
+    expect(body).toContain('createFetchHandler')
+    // preferStatic makes the SPA rewrite shadow the Netlify function.
+    expect(body).toContain('preferStatic')
+    expect(body).toContain('build:netlify')
+    expect(body).toContain('build:vercel')
+  })
+})
+
+describe('the factory skills', () => {
+  const skills = () => generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define')
+  const bySlug = (slug: string) => skills().find((f) => f.slug === slug)!
+
+  it('teaches every define* factory an app author reaches for', () => {
+    // One skill per factory, so an agent asked for any of them has steps to
+    // follow instead of inventing a middleware.
+    const covered = skills()
+      .map((f) => f.content)
+      .join('\n')
+    for (const factory of [
+      'defineModule',
+      'defineAdapter',
+      'definePlugin',
+      'defineContextDecorator',
+      'defineRouteFlag',
+      'defineCliPlugin',
+    ]) {
+      expect(covered, `${factory} should be taught by some skill`).toContain(factory)
+    }
+  })
+
+  it('keeps the two plugin kinds apart', () => {
+    // defineCliPlugin extends the CLI; definePlugin hooks the running app.
+    const body = bySlug('cli-plugin').content
+    expect(body).toContain('@forinda/kickjs-cli')
+    expect(body).toContain('definePlugin')
+  })
+
+  it('spells flag removal as .off, never a falsy value', () => {
+    const body = bySlug('route-flags').content
+    expect(body).toContain('.off')
+    expect(body).toContain('@Public(false)')
+  })
+})
+
+describe('the route-flags skill mount points', () => {
+  const body = () =>
+    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find(
+      (f) => f.slug === 'route-flags',
+    )!.content
+
+  it('says where each consumer mounts, not just that it exists', () => {
+    // Knowing a guard reads ctx.route is useless without knowing a guard is
+    // mounted with @Middleware() and global middleware runs before matching.
+    expect(body()).toContain('@Middleware(fn)')
+    expect(body()).toContain('bootstrap({ middlewares:')
+    expect(body()).toContain('AppAdapter.middleware()')
+    expect(body()).toContain('bootstrap({ contributors })')
+  })
+
+  it('carries the five contributor precedence levels in order', () => {
+    expect(body()).toContain(
+      'method > class > module `contributors()` > adapter `contributors()` > `bootstrap({ contributors })`',
+    )
+  })
+
+  it('warns that ctx.route is absent before route matching', () => {
+    expect(body()).toMatch(/ctx\.route.*undefined/)
+  })
+})
+
+describe('the deploy skill on Workers config', () => {
+  it("tells the worker entry not to import './config'", () => {
+    // Verified on workerd: that import pulls createRequire and the Worker
+    // dies at startup, and loadEnvFromSchema would parse a process.env that
+    // Workers do not have. The env binding feeds @Value instead.
+    const body = generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find(
+      (f) => f.slug === 'deploy',
+    )!.content
+    expect(body).toMatch(/Do not .import '\.\/config'/)
+    expect(body).toContain('env` binding')
+  })
+})
