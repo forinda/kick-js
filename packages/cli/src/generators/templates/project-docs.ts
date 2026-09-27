@@ -1520,6 +1520,14 @@ Two things make or break that deploy:
    at startup with a \`getOwnMetadata\` TypeError before any request lands.
 2. **\`compatibility_flags = ["nodejs_compat"]\`** — request-scoped DI and
    \`ctx.set\` / \`ctx.get\` ride on \`AsyncLocalStorage\`.
+3. **Do not \`import './config'\` here.** It is required in \`src/index.ts\` and
+   \`src/serverless.ts\`, and wrong in a Worker twice over: the config module
+   reaches for \`node:fs\` / \`createRequire\`, which kills the Worker at
+   startup, and \`loadEnvFromSchema\` parses \`process.env\`, which Workers do
+   not have. The \`env\` binding threaded through \`createFetchHandler\` is what
+   feeds \`ConfigService.get()\` and \`@Value()\` instead — so values arrive as
+   the raw strings the platform holds, without the schema's coercion or
+   defaults. Coerce where you read them.
 
 Not available on Workers: views, SPA/static serving, \`@Asset\`, adapters and
 plugins. Serve static files from Workers Assets or a separate deploy.

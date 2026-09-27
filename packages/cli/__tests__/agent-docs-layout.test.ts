@@ -216,3 +216,16 @@ describe('the route-flags skill mount points', () => {
     expect(body()).toMatch(/ctx\.route.*undefined/)
   })
 })
+
+describe('the deploy skill on Workers config', () => {
+  it("tells the worker entry not to import './config'", () => {
+    // Verified on workerd: that import pulls createRequire and the Worker
+    // dies at startup, and loadEnvFromSchema would parse a process.env that
+    // Workers do not have. The env binding feeds @Value instead.
+    const body = generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find(
+      (f) => f.slug === 'deploy',
+    )!.content
+    expect(body).toMatch(/Do not .import '\.\/config'/)
+    expect(body).toContain('env` binding')
+  })
+})
