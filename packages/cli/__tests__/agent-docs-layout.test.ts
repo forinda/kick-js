@@ -154,3 +154,39 @@ describe('the deploy skill', () => {
     expect(body).toContain('build:vercel')
   })
 })
+
+describe('the factory skills', () => {
+  const skills = () => generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define')
+  const bySlug = (slug: string) => skills().find((f) => f.slug === slug)!
+
+  it('teaches every define* factory an app author reaches for', () => {
+    // One skill per factory, so an agent asked for any of them has steps to
+    // follow instead of inventing a middleware.
+    const covered = skills()
+      .map((f) => f.content)
+      .join('\n')
+    for (const factory of [
+      'defineModule',
+      'defineAdapter',
+      'definePlugin',
+      'defineContextDecorator',
+      'defineRouteFlag',
+      'defineCliPlugin',
+    ]) {
+      expect(covered, `${factory} should be taught by some skill`).toContain(factory)
+    }
+  })
+
+  it('keeps the two plugin kinds apart', () => {
+    // defineCliPlugin extends the CLI; definePlugin hooks the running app.
+    const body = bySlug('cli-plugin').content
+    expect(body).toContain('@forinda/kickjs-cli')
+    expect(body).toContain('definePlugin')
+  })
+
+  it('spells flag removal as .off, never a falsy value', () => {
+    const body = bySlug('route-flags').content
+    expect(body).toContain('.off')
+    expect(body).toContain('@Public(false)')
+  })
+})

@@ -437,6 +437,8 @@ Each of these has a skill with the steps and the traps:
 | Write a controller test | \`kickjs-write-controller-test\` |
 | List endpoint with filters / pagination | \`kickjs-query-parsing-list-endpoint\` |
 | Serve bundled assets | \`kickjs-use-asset-manager\` |
+| Flag a route (public, exempt, unmetered) | \`kickjs-route-flags\` |
+| Add a kick CLI command or generator | \`kickjs-cli-plugin\` |
 | Deploy to Netlify / Vercel / Cloudflare | \`kickjs-deploy\` |
 | Anything else | \`kickjs-docs-lookup\` |
 
@@ -1334,6 +1336,127 @@ kick g config --force --repo postgres                  # Drop a kick.config.ts i
 - Running \`kick new <name> --yes\` in a non-empty directory expecting it to wipe — \`--yes\` aborts without \`--force\`; pair them when destruction is intended.
 - Skipping \`kick g config\` on a legacy project then wondering why generators ignore \`modules.dir\` / \`modules.repo\`.
 - Editing \`kick.config.ts\` with deprecated top-level \`modulesDir\` / \`defaultRepo\` / \`schemaDir\` / \`pluralize\` instead of the nested \`modules\` block.`,
+    },
+    {
+      slug: 'route-flags',
+      frontmatterName: 'kickjs-route-flags',
+      description:
+        'Use when a fact about a route (public, CSRF-exempt, unmetered, expose as a tool) has to be read by auth, CSRF, rate limiting, OpenAPI or MCP — instead of repeating it as paths in each consumer.',
+      body: `A route flag is a named, inheritable fact about a route. It carries no
+behaviour: it records something every consumer can read, so "this endpoint is
+open" is declared once instead of restated as an auth contributor, a
+\`csrf ignorePaths\` entry and a \`rateLimit skipPaths\` entry — two of which are
+pathname strings that cannot express \`/users/:id\`.
+
+**Steps**:
+1. Declare it once, in its own module:
+   \`\`\`ts
+   import { defineRouteFlag } from '@forinda/kickjs'
+
+   export const Public = defineRouteFlag('auth.public')
+   export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+   \`\`\`
+2. Apply it. A class flag is inherited by every route under it; \`.off\` on a
+   method removes it:
+   \`\`\`ts
+   @Public // every route below inherits it
+   @Controller()
+   export class WebhooksController {
+     @Get('/health')
+     health(ctx: RequestContext) {} // public
+
+     @Public.off // the method wins
+     @Post('/admin')
+     admin(ctx: RequestContext) {} // not public
+
+     @Limit({ rpm: 10 }) // flags can carry a value
+     @Post('/login')
+     login(ctx: RequestContext) {}
+   }
+   \`\`\`
+3. Read it from the consumer that already exists, rather than a new one:
+   - handlers, \`@Middleware()\`, guards, contributors: \`ctx.route?.flags.has('auth.public')\`, \`ctx.route?.flags.get('rate.limit')\`
+   - contributors: \`skipWhen: 'auth.public'\` / \`onlyWhen\` on the registration
+   - guards: \`csrfGuard({ exemptWhen: 'csrf.exempt' })\`, \`rateLimitGuard({ max: 60, exemptWhen: 'auth.public' })\`
+   - pre-match middleware (\`rateLimit()\`): reads the route policy table, since it runs before a route is matched
+   - OpenAPI: \`SwaggerAdapter({ publicFlag: 'auth.public' })\`
+   - tools: \`McpAdapter({ exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })\`
+4. Run \`kick typegen\`. It writes the \`KickRouteFlags\` augmentation, so flag
+   names autocomplete and a typo fails \`tsc\` instead of silently never matching.
+
+**Red flags**:
+- Writing \`@Public(false)\` to remove a flag — removal is \`@Public.off\`. A
+  resolved flag is present or absent; \`false\` is a legitimate *value* for a
+  flag declared \`boolean\`, and a presence check would still answer \`true\`.
+- A new consumer growing its own \`skipPaths\` / \`ignorePaths\` list — that is
+  the duplication flags exist to remove, and path strings break on params and
+  on any \`apiPrefix\` change.
+- \`@Public.off\` on a route that never inherited the flag — a no-op, and
+  usually a sign the expected class-level flag is not there.
+- Reading \`ctx.route\` in global middleware — it is \`undefined\` before a route
+  is matched. Use the policy table or a guard.
+- Inventing a flag name per consumer (\`auth.open\`, \`public\`, \`isPublic\`). The
+  framework names none of them; pick one name per fact and reuse it.`,
+    },
+    {
+      slug: 'cli-plugin',
+      frontmatterName: 'kickjs-cli-plugin',
+      description:
+        'Use when adding a kick <name> command, a kick g <name> generator, or a typegen emitter to this project or a package it ships.',
+      body: `A CLI plugin contributes commands, generators and typegen emitters to the
+\`kick\` CLI. Every built-in command ships as one, so the contract is the same
+one the framework uses.
+
+**Steps**:
+1. Write the plugin. All four contribution kinds are optional:
+   \`\`\`ts
+   // kick-tool.ts
+   import { defineCliPlugin } from '@forinda/kickjs-cli'
+
+   export const toolPlugin = (options: { watch?: boolean } = {}) =>
+     defineCliPlugin({
+       // Stable id, unique across plugins — it names the plugin in conflict errors.
+       name: 'my-tool',
+       // Declarative: same shape as kick.config.ts \`commands\`.
+       commands: [{ name: 'db:migrate', description: 'Apply migrations', steps: 'node ./scripts/migrate.js' }],
+       // Programmatic: full commander API, when you need options or subcommands.
+       register(program, ctx) {
+         program
+           .command('my-tool')
+           .description('Do the thing')
+           .option('--watch', 'Watch mode')
+           .action(async () => {
+             ctx.log(\`running in \${ctx.projectRoot}\`)
+             // ctx.config is the loaded kick.config.ts
+           })
+       },
+     })
+   \`\`\`
+2. Register it in \`kick.config.ts\`:
+   \`\`\`ts
+   import { toolPlugin } from './kick-tool'
+
+   export default defineConfig({ plugins: [toolPlugin()] })
+   \`\`\`
+3. Check it is loaded: \`kick --help\` lists the command, and \`kick info\` shows
+   the plugin.
+
+**Which kind to use**: \`commands\` for a shell one-liner, \`register\` for
+options / subcommands / async work, \`generators\` (\`defineGenerator\`) for
+\`kick g <name>\` scaffolders, \`typegens\` for a file under \`.kickjs/types/\`.
+
+**Red flags**:
+- Confusing this with a runtime plugin: \`defineCliPlugin\` (from
+  \`@forinda/kickjs-cli\`) extends the CLI; \`definePlugin\` (from
+  \`@forinda/kickjs\`) hooks the running app. They share nothing.
+- Claiming a command name a built-in owns (\`build:netlify\`, \`typegen\`,
+  \`generate\`) — duplicate declarative names are a startup conflict, and
+  \`register\` has no conflict detection at all, so it silently loses. Namespace
+  your own (\`my-tool:build\`).
+- Doing real work inside \`register\` — it runs at CLI startup for every
+  command, so it must only register. Put the work in the action.
+- Importing heavy dependencies at module scope. \`await import()\` them inside
+  the action, so an unrelated \`kick dev\` does not pay for them.`,
     },
     {
       slug: 'deploy',
