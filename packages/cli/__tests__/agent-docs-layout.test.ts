@@ -133,3 +133,24 @@ describe('generateKickJsSkillFiles — direct contract', () => {
     expect(addModuleYarn.content).not.toMatch(/pnpm run/)
   })
 })
+
+describe('the deploy skill', () => {
+  const skill = () =>
+    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find((f) => f.slug === 'deploy')!
+
+  it('is generated with the shared frontmatter shape', () => {
+    expect(skill()).toBeDefined()
+    expect(skill().content).toMatch(/^---\nname:\s+kickjs-deploy\n/)
+  })
+
+  it('carries the three failures that cost real deploys', () => {
+    const body = skill().content
+    // Wrangler's esbuild emits no decorator metadata, so DI dies at startup.
+    expect(body).toContain('nodejs_compat')
+    expect(body).toContain('createFetchHandler')
+    // preferStatic makes the SPA rewrite shadow the Netlify function.
+    expect(body).toContain('preferStatic')
+    expect(body).toContain('build:netlify')
+    expect(body).toContain('build:vercel')
+  })
+})

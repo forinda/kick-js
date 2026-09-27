@@ -437,6 +437,7 @@ Each of these has a skill with the steps and the traps:
 | Write a controller test | \`kickjs-write-controller-test\` |
 | List endpoint with filters / pagination | \`kickjs-query-parsing-list-endpoint\` |
 | Serve bundled assets | \`kickjs-use-asset-manager\` |
+| Deploy to Netlify / Vercel / Cloudflare | \`kickjs-deploy\` |
 | Anything else | \`kickjs-docs-lookup\` |
 
 ## Testing Guidelines
@@ -1333,6 +1334,73 @@ kick g config --force --repo postgres                  # Drop a kick.config.ts i
 - Running \`kick new <name> --yes\` in a non-empty directory expecting it to wipe — \`--yes\` aborts without \`--force\`; pair them when destruction is intended.
 - Skipping \`kick g config\` on a legacy project then wondering why generators ignore \`modules.dir\` / \`modules.repo\`.
 - Editing \`kick.config.ts\` with deprecated top-level \`modulesDir\` / \`defaultRepo\` / \`schemaDir\` / \`pluralize\` instead of the nested \`modules\` block.`,
+    },
+    {
+      slug: 'deploy',
+      frontmatterName: 'kickjs-deploy',
+      description:
+        'Use when deploying this app — Netlify, Vercel or Cloudflare Workers — or when an API route returns the SPA shell, the platform build fails, or the function is missing from a deploy.',
+      body: `**Netlify and Vercel** run the app as a Node function; the CLI builds both:
+
+\`\`\`bash
+${pm} run build:netlify   # → .netlify/v1/functions/api.mjs
+${pm} run build:vercel    # → .vercel/output (Build Output API v3)
+\`\`\`
+
+Both bundle \`src/serverless.ts\` (\`createHandler\`), which is a second entry
+beside \`src/index.ts\` — the long-running server. Keep the shared options in
+one module both import, so they cannot drift.
+
+Settings are detected from the layout: a workspace member beside a \`web\`
+package publishes \`web/dist\` and routes \`/api/*\`; a standalone API takes
+every path. Override in \`kick.config.ts\`:
+
+\`\`\`ts
+export default defineConfig({
+  deploy: { apiPath: '/api', staticDir: '../web/dist' },
+})
+\`\`\`
+
+**Cloudflare Workers** is a different entry, not a third flag on this one.
+Workers have no \`node:http\`, so \`createHandler\` cannot run there; use the
+web entry over h3 v2:
+
+\`\`\`ts
+// src/worker.ts
+import 'reflect-metadata'
+import { createFetchHandler } from '@forinda/kickjs/web'
+import * as h3 from 'h3' // v2 — passed in, edge bundlers have no createRequire
+import { modules } from './modules'
+
+export default createFetchHandler((env) => ({ h3, modules, env }))
+\`\`\`
+
+Two things make or break that deploy:
+
+1. **Pre-bundle it yourself.** Point \`wrangler.jsonc\`'s \`main\` at a bundle
+   built with SWC (the same Vite + \`unplugin-swc\` setup as the other
+   targets), never at \`src/worker.ts\`. Wrangler's own esbuild compiles
+   decorators as ES decorators and emits no decorator metadata, so DI fails
+   at startup with a \`getOwnMetadata\` TypeError before any request lands.
+2. **\`compatibility_flags = ["nodejs_compat"]\`** — request-scoped DI and
+   \`ctx.set\` / \`ctx.get\` ride on \`AsyncLocalStorage\`.
+
+Not available on Workers: views, SPA/static serving, \`@Asset\`, adapters and
+plugins. Serve static files from Workers Assets or a separate deploy.
+
+**Red flags**:
+- An \`/api/*\` route returning \`index.html\` on Netlify — the function is not
+  routed. Check the deploy summary says a function was deployed, keep
+  \`preferStatic\` out of its config, and leave Netlify's **Package directory**
+  unset so it reads the function at the repo root.
+- Committing \`.netlify/\` or \`.vercel/\` — both are build output.
+- A frontend that builds somewhere other than \`web/dist\` and only one of
+  \`deploy.staticDir\`, \`SpaAdapter({ clientDir })\` and netlify.toml's
+  \`publish\` updated. All three name that directory.
+- Pointing a platform at \`src/index.ts\` — it calls \`bootstrap()\`, which
+  listens on a port and registers signal handlers inside the function.
+- Expecting \`kick build\` alone to produce a deployable function; it builds
+  the server. Run the target command after it.`,
     },
     {
       slug: 'docs-lookup',
