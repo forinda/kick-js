@@ -1384,8 +1384,8 @@ pathname strings that cannot express \`/users/:id\`.
    | Guard / \`@Middleware()\` | \`@Middleware(fn)\` on a method or controller class | \`ctx.route\`, or the built-ins' \`exemptWhen\` |
    | \`csrfGuard()\` / \`rateLimitGuard()\` | same — \`@Middleware()\`, class or method | \`exemptWhen: 'csrf.exempt'\` |
    | Contributor | method > class > module \`contributors()\` > adapter \`contributors()\` > \`bootstrap({ contributors })\` | \`skipWhen\` / \`onlyWhen\` on the registration |
-   | Global middleware (\`rateLimit()\`, \`csrf()\`) | \`bootstrap({ middlewares: [...] })\` — runs **before** matching | the route policy table (\`bindRoutePolicy\`); \`ctx.route\` is \`undefined\` here |
-   | Adapter middleware | \`AppAdapter.middleware()\`, phase \`beforeGlobal\` … \`afterRoutes\` | policy table before routes, \`ctx.route\` in \`afterRoutes\` |
+   | Global middleware (\`rateLimit()\`) | \`bootstrap({ middlewares: [...] })\` — runs **before** matching | the route policy table (\`bindRoutePolicy\`); \`ctx.route\` is \`undefined\` here |
+   | Adapter middleware | \`AppAdapter.middleware()\`, phase \`beforeGlobal\` … \`afterRoutes\` | the policy table — the handler is Express-style \`(req, res, next)\`, so there is no \`ctx\` in any phase |
    | OpenAPI | \`SwaggerAdapter({ publicFlag: 'auth.public' })\` | read once at startup, not per request |
    | MCP / AI tools | \`McpAdapter({ exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })\` | read once at startup |
 
@@ -1451,8 +1451,10 @@ one the framework uses.
 
    export default defineConfig({ plugins: [toolPlugin()] })
    \`\`\`
-3. Check it is loaded: \`kick --help\` lists the command, and \`kick info\` shows
-   the plugin.
+3. Check it is loaded, per contribution kind: \`kick --help\` lists a command,
+   \`kick g --list\` lists a generator, \`kick typegen\` runs an emitter. A
+   plugin that fails to load takes the whole CLI down with a conflict error,
+   so silence here means the config never referenced it.
 
 **Which kind to use**: \`commands\` for a shell one-liner, \`register\` for
 options / subcommands / async work, \`generators\` (\`defineGenerator\`) for
