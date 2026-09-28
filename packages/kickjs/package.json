@@ -127,7 +127,7 @@
   },
   "peerDependencies": {
     "@fastify/middie": "^9.0.0",
-    "@fastify/multipart": "^10.1.1",
+    "@fastify/multipart": "^10.1.2",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "fastify": "^5.0.0",
@@ -160,11 +160,11 @@
   },
   "devDependencies": {
     "@fastify/middie": "^9.3.4",
-    "@fastify/multipart": "^10.1.1",
+    "@fastify/multipart": "^10.1.2",
     "@swc/core": "^1.16.2",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.2",
     "@types/serve-static": "^2.2.0",
     "fastify": "^5.12.5",
     "h3": "1.15.11",
@@ -172,7 +172,7 @@
     "multer": "^2.4.0",
     "serve-static": "^2.2.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0",
+    "vite": "^8.3.1",
     "vitest": "^5.0.1",
     "zod": "^4.6.5"
   },
