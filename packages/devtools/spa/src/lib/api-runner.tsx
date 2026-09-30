@@ -22,14 +22,22 @@ import {
   Index,
   onCleanup,
   Show,
+  untrack,
   type Component,
   type JSX,
 } from 'solid-js'
-import type { RouteEntry } from './store'
+import { store, type RouteEntry } from './store'
+import { rpc } from './rpc'
 import { methodColor } from './format'
 import {
   DEFAULT_SETTINGS,
   acceptsBody,
+  applyHints,
+  editorLink,
+  historyLabel,
+  openApiHints,
+  pushHistory,
+  type HistoryEntry,
   emptyInputs,
   formatBody,
   inputsKey,
@@ -55,6 +63,7 @@ const VARIABLES_KEY = 'kickjs-devtools:runner:variables'
 const SETTINGS_KEY = 'kickjs-devtools:runner:settings'
 /** Whether default headers + variables persist across browser sessions. */
 const REMEMBER_KEY = 'kickjs-devtools:runner:remember'
+const HISTORY_KEY = 'kickjs-devtools:runner:history'
 const MAX_BODY_CHARS = 200_000
 
 const [activeRoute, setActiveRoute] = createSignal<RouteEntry | null>(null)
@@ -67,6 +76,25 @@ const [activeRoute, setActiveRoute] = createSignal<RouteEntry | null>(null)
  * closing and reopening the same route also invalidates the old request.
  */
 let generation = 0
+
+/** Inputs to open the next route with instead of its saved ones — set by a history restore. */
+let pendingInputs: RouteInputs | null = null
+
+/**
+ * The OpenAPI spec per URL: `undefined` while loading, `null` when the app
+ * doesn't serve one. Fetched once per URL per page load.
+ */
+const [specs, setSpecs] = createSignal<Record<string, unknown>>({})
+
+function loadSpec(url: string): void {
+  // Untracked: an effect calling this must not rerun when the spec arrives.
+  if (url in untrack(specs)) return
+  setSpecs((prev) => ({ ...prev, [url]: undefined }))
+  fetch(url, { credentials: 'same-origin' })
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null)
+    .then((spec) => setSpecs((prev) => ({ ...prev, [url]: spec })))
+}
 
 /** Open the runner for a route. */
 export function openApiRunner(route: RouteEntry): void {
@@ -84,8 +112,9 @@ function load<T>(storage: () => Storage, key: string, fallback: T): T {
 
 function loadRows(storage: () => Storage, key: string): KeyValueRow[] {
   try {
-    const raw = storage().getItem(key)
-    return raw ? (JSON.parse(raw) as KeyValueRow[]) : []
+    const parsed: unknown = JSON.parse(storage().getItem(key) ?? '[]')
+    // Anything but an array (hand-edited, or an older format) starts empty.
+    return Array.isArray(parsed) ? (parsed as KeyValueRow[]) : []
   } catch {
     return []
   }
@@ -148,16 +177,44 @@ export const ApiRunnerHost: Component = () => {
   const [error, setError] = createSignal<string | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
   const [snippetKind, setSnippetKind] = createSignal<'curl' | 'fetch'>('curl')
+  const [history, setHistory] = createSignal<HistoryEntry[]>(
+    (() => {
+      try {
+        const parsed: unknown = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')
+        return Array.isArray(parsed) ? (parsed as HistoryEntry[]) : []
+      } catch {
+        return []
+      }
+    })(),
+  )
+  const [editorNote, setEditorNote] = createSignal<string | null>(null)
+  // A route opened with nothing saved takes the OpenAPI prefill once the spec arrives.
+  const [awaitingPrefill, setAwaitingPrefill] = createSignal(false)
+
+  const hints = createMemo(() => {
+    const route = activeRoute()
+    const spec = specs()[settings().openApiUrl]
+    return route && spec ? openApiHints(spec, route) : undefined
+  })
 
   // Load the route's saved inputs whenever a route is opened.
   createEffect(() => {
     const route = activeRoute()
     generation++
     if (!route) return
-    const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
+    let isNew = false
+    try {
+      isNew = localStorage.getItem(inputsKey(route)) === null
+    } catch {
+      /* storage unavailable */
+    }
+    const saved = pendingInputs ?? load(() => localStorage, inputsKey(route), emptyInputs(route))
+    pendingInputs = null
     // Keep params in sync with the path even if the saved inputs are older.
     const params = Object.fromEntries(pathParams(route.path).map((p) => [p, saved.params[p] ?? '']))
     setInputs({ ...saved, params })
+    setAwaitingPrefill(isNew)
+    setEditorNote(null)
     setResult(null)
     setError(null)
     setArmed(false)
@@ -181,6 +238,16 @@ export const ApiRunnerHost: Component = () => {
     save(() => localStorage, REMEMBER_KEY, remember())
   })
   createEffect(() => save(() => localStorage, SETTINGS_KEY, settings()))
+  createEffect(() => save(() => localStorage, HISTORY_KEY, history()))
+  createEffect(() => {
+    if (activeRoute()) loadSpec(settings().openApiUrl)
+  })
+  createEffect(() => {
+    const h = hints()
+    if (!h || !awaitingPrefill()) return
+    setAwaitingPrefill(false)
+    setInputs((prev) => (prev ? applyHints(prev, h) : prev))
+  })
 
   // Escape closes the sheet wherever focus is.
   createEffect(() => {
@@ -226,6 +293,19 @@ export const ApiRunnerHost: Component = () => {
     setError(null)
     const started = performance.now()
     const sentIn = generation
+    const route = activeRoute()!
+    const sentInputs = inputs()!
+    const record = (outcome: Partial<HistoryEntry>) =>
+      setHistory((list) =>
+        pushHistory(list, {
+          at: Date.now(),
+          method: route.method.toUpperCase(),
+          path: route.path,
+          inputs: sentInputs,
+          ms: Math.round(performance.now() - started),
+          ...outcome,
+        }),
+      )
     try {
       const res = await fetch(req.url, {
         method: req.method,
@@ -234,6 +314,7 @@ export const ApiRunnerHost: Component = () => {
         credentials: 'same-origin',
       })
       const text = await res.text()
+      record({ status: res.status })
       if (sentIn !== generation) return
       setResult({
         status: res.status,
@@ -245,6 +326,7 @@ export const ApiRunnerHost: Component = () => {
         truncated: text.length > MAX_BODY_CHARS,
       })
     } catch (err) {
+      record({ error: err instanceof Error ? err.message : String(err) })
       if (sentIn !== generation) return
       setResult(null)
       setError(err instanceof Error ? err.message : String(err))
@@ -299,6 +381,35 @@ export const ApiRunnerHost: Component = () => {
     setCaptureNote(`Saved {{${key}}}`)
   }
 
+  /** Reopen a past request: its route, with the inputs it was sent with. */
+  function restore(entry: HistoryEntry): void {
+    const route = store
+      .routes()
+      .find((r) => r.method.toUpperCase() === entry.method && r.path === entry.path)
+    if (!route) return
+    pendingInputs = entry.inputs
+    // Same route: the open effect won't rerun, so set the inputs directly.
+    if (route === activeRoute()) {
+      pendingInputs = null
+      update(entry.inputs)
+    } else {
+      setActiveRoute(route)
+    }
+  }
+
+  async function openInEditor(): Promise<void> {
+    const route = activeRoute()
+    if (!route) return
+    setEditorNote(null)
+    try {
+      const src = await rpc.source(route.controller, route.handler)
+      window.location.href = editorLink(settings().editorUrl, src.file, src.line)
+      setEditorNote(`${src.relative}:${src.line}`)
+    } catch {
+      setEditorNote('Source not found under src/')
+    }
+  }
+
   const isPublic = () => {
     const route = activeRoute()
     return route ? isPublicRoute(route, settings()) : false
@@ -332,9 +443,20 @@ export const ApiRunnerHost: Component = () => {
                     </h2>
                   </div>
                   <p class="text-xs text-text-muted mt-1">
-                    {route().controller}.{route().handler}
+                    <button
+                      type="button"
+                      class="underline decoration-dotted hover:text-kick-500"
+                      title="Open in editor"
+                      onClick={openInEditor}
+                    >
+                      {route().controller}.{route().handler}
+                    </button>
+                    <Show when={editorNote()}> · {editorNote()}</Show>
                     <Show when={isPublic()}> · public route — default Authorization not sent</Show>
                   </p>
+                  <Show when={hints()?.summary}>
+                    <p class="text-sm text-text-secondary mt-1">{hints()!.summary}</p>
+                  </Show>
                 </div>
                 <button
                   type="button"
@@ -375,6 +497,7 @@ export const ApiRunnerHost: Component = () => {
                                 </span>
                                 <input
                                   class={inputClass}
+                                  placeholder={hints()?.params[name]}
                                   value={current().params[name] ?? ''}
                                   onInput={(e) =>
                                     update({
@@ -394,6 +517,19 @@ export const ApiRunnerHost: Component = () => {
 
                     <Section title="Query" count={enabledCount(current().query)}>
                       <RowsEditor rows={current().query} onChange={(query) => update({ query })} />
+                      <Show when={hints()?.query.length}>
+                        <ul class="text-xs text-text-muted mt-2 flex flex-col gap-0.5">
+                          <For each={hints()!.query}>
+                            {(q) => (
+                              <li>
+                                <code>{q.name}</code>
+                                {q.required ? ' (required)' : ''}
+                                {q.description ? ` — ${q.description}` : ''}
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </Show>
                     </Section>
 
                     <Section title="Headers" count={enabledCount(current().headers)}>
@@ -501,9 +637,21 @@ export const ApiRunnerHost: Component = () => {
                 </p>
                 <RowsEditor rows={variables()} onChange={setVariables} />
 
+                <Show when={hints()}>
+                  {(h) => (
+                    <button
+                      type="button"
+                      class={`${secondaryButton} mt-4`}
+                      onClick={() => update(applyHints(inputs()!, h()))}
+                    >
+                      Fill empty inputs from OpenAPI
+                    </button>
+                  )}
+                </Show>
+
                 <h3 class="text-xs font-semibold text-text-secondary mt-4 mb-1">Settings</h3>
-                <div class="flex flex-col sm:flex-row sm:items-end gap-3">
-                  <label class="flex-1 flex flex-col gap-1 text-xs text-text-muted">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label class="flex flex-col gap-1 text-xs text-text-muted">
                     Public route flags (comma-separated)
                     <input
                       class={inputClass}
@@ -521,11 +669,13 @@ export const ApiRunnerHost: Component = () => {
                       [
                         ['csrfCookie', 'CSRF cookie'],
                         ['csrfHeader', 'CSRF header'],
+                        ['openApiUrl', 'OpenAPI spec URL'],
+                        ['editorUrl', 'Editor link ({file}, {line})'],
                       ] as const
                     }
                   >
                     {([key, label]) => (
-                      <label class="flex-1 flex flex-col gap-1 text-xs text-text-muted">
+                      <label class="flex flex-col gap-1 text-xs text-text-muted">
                         {label}
                         <input
                           class={inputClass}
@@ -645,6 +795,47 @@ export const ApiRunnerHost: Component = () => {
                   </Section>
                 )}
               </Show>
+
+              <Section title="History" count={history().length}>
+                <Show
+                  when={history().length > 0}
+                  fallback={<p class="text-xs text-text-muted">Nothing sent yet.</p>}
+                >
+                  <ul class="flex flex-col gap-1">
+                    <For each={history()}>
+                      {(entry) => (
+                        <li>
+                          <button
+                            type="button"
+                            class="w-full flex items-center gap-2 text-xs text-left rounded px-2 py-1 hover:bg-surface-2"
+                            title="Open with these inputs"
+                            onClick={() => restore(entry)}
+                          >
+                            <span class={`font-bold w-14 shrink-0 ${methodColor(entry.method)}`}>
+                              {entry.method}
+                            </span>
+                            <span class="font-mono truncate flex-1">{historyLabel(entry)}</span>
+                            <span class={entry.status ? statusColor(entry.status) : 'text-red-400'}>
+                              {entry.status ?? 'failed'}
+                            </span>
+                            <span class="text-text-muted w-16 text-right">{entry.ms} ms</span>
+                            <span class="text-text-muted w-16 text-right">
+                              {new Date(entry.at).toLocaleTimeString()}
+                            </span>
+                          </button>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                  <button
+                    type="button"
+                    class={`${secondaryButton} mt-2`}
+                    onClick={() => setHistory([])}
+                  >
+                    Clear history
+                  </button>
+                </Show>
+              </Section>
             </div>
 
             {/* Footer actions */}

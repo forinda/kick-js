@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import * as vscode from 'vscode'
 import { fetchDebugData } from '../utils'
 
@@ -29,7 +31,52 @@ class RouteItem extends vscode.TreeItem {
       `Flags: ${flags || 'none'}`,
     ].join('\n')
     this.iconPath = new vscode.ThemeIcon(methodIcon(route.method))
+    this.contextValue = 'kickjs.route'
+    this.command = { command: 'kickjs.openHandler', title: 'Open Handler', arguments: [route] }
   }
+}
+
+/** Where the devtools `/source` endpoint found a handler. */
+export interface HandlerSource {
+  file: string
+  relative: string
+  line: number
+}
+
+/**
+ * The file to open: the app's absolute path when it exists here, otherwise
+ * its project-relative path under a workspace folder — the app may run in a
+ * container or on another machine with a different checkout path.
+ */
+export function resolveSourcePath(
+  found: HandlerSource,
+  workspaceRoots: readonly string[],
+  exists: (path: string) => boolean = existsSync,
+): string | undefined {
+  if (exists(found.file)) return found.file
+  return workspaceRoots.map((root) => join(root, found.relative)).find(exists)
+}
+
+/** `kickjs.openHandler` — open a route's handler at its line. */
+export async function openHandler(
+  baseUrl: string,
+  token: string | undefined,
+  route: { controller: string; handler: string },
+): Promise<void> {
+  const query = new URLSearchParams({ controller: route.controller, handler: route.handler })
+  const found = (await fetchDebugData(baseUrl, `/source?${query}`, token)) as HandlerSource | null
+  const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+  const path = found ? resolveSourcePath(found, roots) : undefined
+  if (!found || !path) {
+    void vscode.window.showWarningMessage(
+      `KickJS: couldn't find ${route.controller}.${route.handler} in the project source.`,
+    )
+    return
+  }
+  const at = new vscode.Position(found.line - 1, 0)
+  await vscode.window.showTextDocument(vscode.Uri.file(path), {
+    selection: new vscode.Range(at, at),
+  })
 }
 
 /**

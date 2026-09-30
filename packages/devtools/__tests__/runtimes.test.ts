@@ -5,7 +5,10 @@
  * Fastify or h3 app.
  */
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import request from 'supertest'
@@ -97,6 +100,32 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
 
     await http.get('/_debug/container').expect(200)
     await http.get('/_debug/graph').expect(200)
+  })
+
+  it('locates a route handler in the project source', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kick-src-'))
+    mkdirSync(join(root, 'src'))
+    writeFileSync(
+      join(root, 'src/ping.controller.ts'),
+      'export class PingController {\n  get(ctx) {}\n}\n',
+    )
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root)
+    try {
+      const http = await boot(runtime)
+      const found = await http
+        .get('/_debug/source?controller=PingController&handler=get')
+        .expect(200)
+      expect(found.body).toEqual({
+        file: join(root, 'src/ping.controller.ts'),
+        relative: 'src/ping.controller.ts',
+        line: 2,
+      })
+      // Only registered routes are looked up.
+      await http.get('/_debug/source?controller=PingController&handler=nope').expect(404)
+    } finally {
+      cwd.mockRestore()
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('reports @FileUpload config on the route, without non-serialisable options', async () => {

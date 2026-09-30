@@ -1,5 +1,9 @@
 # kickjs-devtools
 
+## Unreleased
+
+- **Open Handler:** click a route in the Routes view (or its inline button) to open the handler at its line. The path comes from the app's devtools `/source` endpoint; when it doesn't exist locally, the extension maps the project-relative path into the workspace.
+
 ## 5.3.0
 
 ### Minor Changes

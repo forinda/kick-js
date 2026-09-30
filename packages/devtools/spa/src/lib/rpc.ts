@@ -185,6 +185,11 @@ export const rpc = {
         }
       >
     }>('/metrics'),
+  /** Where a route's handler is declared — for "open in editor". */
+  source: (controller: string, handler: string) =>
+    get<{ file: string; relative: string; line: number }>(
+      `/source?${new URLSearchParams({ controller, handler })}`,
+    ),
   /** Route registry — method/path/controller/handler/middleware per route. */
   routeRegistry: () =>
     get<{

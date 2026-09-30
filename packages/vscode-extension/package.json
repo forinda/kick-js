@@ -46,6 +46,11 @@
         "title": "KickJS: Show Routes"
       },
       {
+        "command": "kickjs.openHandler",
+        "title": "KickJS: Open Handler",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "kickjs.showContainer",
         "title": "KickJS: Show DI Container"
       },
@@ -311,6 +316,17 @@
         {
           "command": "kickjs.dbRollback",
           "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.openHandler",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "kickjs.openHandler",
+          "when": "view == kickjs.routes && viewItem == kickjs.route",
+          "group": "inline"
         }
       ]
     },

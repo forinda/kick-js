@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import { HealthTreeProvider } from './providers/health'
-import { RoutesTreeProvider } from './providers/routes'
+import { RoutesTreeProvider, openHandler } from './providers/routes'
 import { ContainerTreeProvider } from './providers/container'
 import { DashboardPanel } from './panels/dashboard'
 import { registerConnectCommand } from './commands/connect'
@@ -156,6 +156,9 @@ function registerCommands(context: vscode.ExtensionContext): void {
       DashboardPanel.createOrShow(context.extensionUri, current.baseUrl, await getToken(context))
     }),
     vscode.commands.registerCommand('kickjs.showRoutes', () => current?.routes.refresh()),
+    vscode.commands.registerCommand('kickjs.openHandler', async (route) => {
+      if (current && route) await openHandler(current.baseUrl, await getToken(context), route)
+    }),
     vscode.commands.registerCommand('kickjs.showContainer', () => current?.container.refresh()),
     vscode.commands.registerCommand('kickjs.showMetrics', () => current?.health.refresh()),
     vscode.commands.registerCommand('kickjs.refreshAll', () => refreshAll()),
