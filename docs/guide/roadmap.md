@@ -2,7 +2,7 @@
 
 This document captures ideas for how to evolve KickJS. Each proposal carries enough detail to deliberate on it without re-deriving the motivation every time. **DB-related items are deferred** — we're working through the non-DB tracks first.
 
-> **Last audited 2026-09-03** against the source, not from memory. Statuses below reflect what
+> **Last audited 2026-09-30** against the source, not from memory. Statuses below reflect what
 > actually ships; where a proposal was delivered by a different design than the one sketched, the
 > status says so rather than quietly matching the text to the code.
 
@@ -350,7 +350,7 @@ Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@
 
 ### B.6 Route flags — one vocabulary for per-route policy {#b-6-route-flags-one-vocabulary-for-per-route-policy}
 
-**Status:** `in design` — working spec at [`route-flags-design.md`](https://github.com/forinda/kick-js/blob/main/route-flags-design.md)
+**Status:** `shipped` — all four phases. `defineRouteFlag` + `ctx.route` + contributor `skipWhen` / `onlyWhen`; `exemptWhen` on `csrfGuard()` / `rateLimitGuard()`; the pre-match `rateLimit()` policy table (per-route `@RateLimit({ rpm })`); and the readers: `/_debug` shows resolved flags per route, and swagger's `securityResolver` can derive security from flags. Module-level flags and AI/MCP tool selection followed. See the [route flags guide](./route-flags.md) and [`route-flags-design.md`](https://github.com/forinda/kick-js/blob/main/route-flags-design.md).
 **Effort:** 1–2 weeks for phase 1; phases 2–4 independently schedulable
 
 **Why it matters.** "Whitelist these endpoints" is a request every API eventually makes, and today the answer depends on which subsystem is asking. Auth uses a contributor (`@Public` = `LoadAuthUser({ on401: 'allow' })`). CSRF uses `ignorePaths`. Rate limiting uses `skipPaths` / `skip`. One fact — _this endpoint is open_ — stated three ways, in two places, under two notions of identity.
@@ -525,7 +525,7 @@ Small enough to bundle into other work or do in a half-day. Listed for visibilit
 
 | #   | Idea                                                           | Effort | Status                                                                                                         |
 | --- | -------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `proposed` — overlaps [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy); fold in or drop             |
+| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `rejected` — covered by [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy) (`defineRouteFlag`)        |
 | Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                |
 | Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `proposed`                                                                                                     |
 | Q.4 | `kick new --with auth,swagger,drizzle,docker` preset bundles   | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                |
@@ -563,12 +563,12 @@ Registries die without a maintainer. Lean on npm's existing naming convention (`
 
 These are valid but we're not working on them yet — focus is the non-DB tracks above.
 
-| #   | Idea                                                                     | Status     |
-| --- | ------------------------------------------------------------------------ | ---------- |
-| D.1 | First-class migrations CLI (`kick db:migrate dev/deploy/rollback`)       | `deferred` |
-| D.2 | `kick db:seed` first-class command                                       | `deferred` |
-| D.3 | Auto-generated repository methods from `@Schema()` class (C.1 follow-on) | `deferred` |
-| D.4 | DB connection pool observability (auto-instrumented)                     | `deferred` |
+| #   | Idea                                                                     | Status                                                                       |
+| --- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| D.1 | First-class migrations CLI (`kick db:migrate dev/deploy/rollback`)       | `shipped` in part — `kickjs-db generate` + `migrate latest/up/down/rollback` |
+| D.2 | `kick db:seed` first-class command                                       | `deferred` — today: `kickjs-db generate --empty` for a seed migration        |
+| D.3 | Auto-generated repository methods from `@Schema()` class (C.1 follow-on) | `deferred`                                                                   |
+| D.4 | DB connection pool observability (auto-instrumented)                     | `deferred`                                                                   |
 
 These will get their own track once we have a clearer picture from the non-DB work.
 
@@ -577,17 +577,16 @@ These will get their own track once we have a clearer picture from the non-DB wo
 ## Prioritization — current thinking
 
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
-**B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, and **A.3**
+**B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above). The list below is what remains.
+above), and **B.6** route flags (all four phases). The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.6 — Route flags** (1–2 weeks for phase 1, retires three exemption mechanisms and unblocks per-route rate limits)
-2. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-3. **A.2 — Observability** (re-scope first — the BYO turn changed the premise)
-4. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-5. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+2. **A.2 — Observability** (re-scope first — the BYO turn changed the premise)
+3. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+4. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 
