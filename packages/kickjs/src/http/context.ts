@@ -10,6 +10,7 @@ import {
 import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
 import { MissingContextValueError } from '../core/context-errors'
 import { requestStore } from './request-store'
+import { waitUntil } from './background'
 import { resolveClientIp, type ClientRequestLike } from './client-ip'
 import {
   parseQuery,
@@ -1046,6 +1047,17 @@ export class RequestContext<
       this.signal.removeEventListener('abort', stop)
       this._response.end()
     }
+  }
+
+  /**
+   * Keep `promise` running after the response is sent — an audit log, an
+   * email, an analytics call. The Node server's `shutdown()` waits for it;
+   * `createHandler()` and the web entry hand it to the platform's
+   * `waitUntil` when you pass the platform context in. A rejection is
+   * logged, never unhandled. Same as the standalone `waitUntil()` export.
+   */
+  waitUntil(promise: Promise<unknown>): void {
+    waitUntil(promise)
   }
 
   sse<T = unknown>(): SseHandler<T> {

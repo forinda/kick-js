@@ -42,6 +42,7 @@ import {
 import { getClassMeta } from '../core/metadata'
 import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from './body-policy'
 import { requestId } from './middleware/request-id'
+import { pendingBackgroundWork, settleBackgroundWork } from './background'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
@@ -1428,6 +1429,22 @@ export class Application {
           for (const session of this.http2Sessions) session.destroy()
         } else {
           log.debug('All in-flight requests completed')
+        }
+      }
+
+      // Step 2b: Wait for work handed to `waitUntil()` — it outlives its
+      // response, so draining requests alone doesn't cover it. Same budget
+      // as the drain; skipped on a reload, where the process keeps running.
+      if (closeServer && pendingBackgroundWork() > 0) {
+        log.debug(`Waiting for ${pendingBackgroundWork()} waitUntil() task(s) to settle...`)
+        const settled = await Promise.race([
+          settleBackgroundWork().then(() => 'settled' as const),
+          forceExitPromise,
+        ])
+        if (settled === 'timeout') {
+          log.warn(
+            `Shutdown timeout (${timeoutMs}ms) reached with ${pendingBackgroundWork()} waitUntil() task(s) still running`,
+          )
         }
       }
 

@@ -564,7 +564,7 @@ hand-built `router` carry no metadata and can't be listed — say so in the UI.
 
 ### E.2 `waitUntil` for work that outlives the response
 
-**Status:** `proposed`
+**Status:** `shipped` — `ctx.waitUntil(p)` and a standalone `waitUntil()`. The Node server's `shutdown()` awaits the work (within `shutdownTimeout`); `createHandler().fetch/node` and the web entry take the platform context as a last argument and hand the work to its `waitUntil`; `createFetchHandler` forwards the Workers `ctx`; `kick build:netlify` / `build:vercel` generate entries that pass it. See [Serverless](./serverless.md).
 **Effort:** 2–3 days
 
 **What they do.** srvx gives every request `waitUntil(promise)`, and `close()` awaits pending work;
@@ -755,17 +755,16 @@ These will get their own track once we have a clearer picture from the non-DB wo
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), and **B.6** route flags (all four phases). The list below is what remains.
+above), **B.6** route flags (all four phases), and **E.2** `waitUntil`. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **E.2 — `waitUntil`** (2–3 days; unblocks E.6 and fixes lost background work on serverless)
-2. **E.1 — API runner MVP** (~1 week; the most visible DX gain from the Nitro/Nuxt comparison)
-3. **E.3 + E.4 — error funnel and tracing channels** (1–2 weeks; likely the re-scoped form of A.2)
-4. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
-5. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-6. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-7. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **E.1 — API runner MVP** (~1 week; the most visible DX gain from the Nitro/Nuxt comparison)
+2. **E.3 + E.4 — error funnel and tracing channels** (1–2 weeks; likely the re-scoped form of A.2)
+3. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
+4. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+5. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+6. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 

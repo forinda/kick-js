@@ -4,6 +4,10 @@
  * with no `deploy` block. The platform output is exact: Netlify reads the
  * function's `config` without running the file, and Vercel routes by `src`.
  */
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -11,6 +15,7 @@ import {
   netlifyPublishDir,
   netlifyFunctionSource,
   resolveDeploy,
+  vercelFunctionSource,
   vercelRoutes,
 } from '../src/commands/deploy'
 
@@ -80,7 +85,8 @@ describe('netlifyFunctionSource', () => {
     const source = netlifyFunctionSource('../../../server/dist/serverless/server.mjs', '/api')
     expect(source).toBe(`import { handler } from '../../../server/dist/serverless/server.mjs'
 
-export default (request) => handler.fetch(request)
+// Netlify's context carries waitUntil, so ctx.waitUntil() work finishes after the response.
+export default (request, context) => handler.fetch(request, context)
 
 export const config = {
   path: '/api/*',
@@ -92,6 +98,36 @@ export const config = {
 
   it("gives the function every path when apiPath is ''", () => {
     expect(netlifyFunctionSource('../../../dist/serverless/server.mjs', '')).toContain("path: '/*'")
+  })
+})
+
+describe('vercelFunctionSource', () => {
+  it("passes Vercel's per-request context (waitUntil) to handler.node", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-vercel-fn-'))
+    writeFileSync(
+      join(dir, 'server.mjs'),
+      'export const calls = []\nexport const handler = { node: (req, res, platform) => calls.push({ req, res, platform }) }\n',
+    )
+    writeFileSync(join(dir, 'index.mjs'), vercelFunctionSource())
+    const key = Symbol.for('@vercel/request-context')
+    const context = { waitUntil: () => {} }
+    const g = globalThis as Record<symbol, unknown>
+    try {
+      const entry = await import(pathToFileURL(join(dir, 'index.mjs')).href)
+      const server = await import(pathToFileURL(join(dir, 'server.mjs')).href)
+
+      entry.default('req', 'res') // not on Vercel: no context
+      g[key] = { get: () => context }
+      entry.default('req', 'res')
+
+      expect(server.calls).toEqual([
+        { req: 'req', res: 'res', platform: undefined },
+        { req: 'req', res: 'res', platform: context },
+      ])
+    } finally {
+      delete g[key]
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

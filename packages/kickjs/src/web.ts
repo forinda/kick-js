@@ -32,6 +32,7 @@ import {
   buildRouteTable,
 } from './http/router-builder'
 import { requestStore } from './http/request-store'
+import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { compileWebRoute } from './http/web/handler'
 import { buildMountPath } from './core/path'
 
@@ -40,6 +41,7 @@ export { compileWebRoute } from './http/web/handler'
 // Return-value handler helpers — edge consumers can't import the main barrel.
 export { reply, isReply, type Reply, type InferHandlerResponse } from './http/reply'
 export type { SseHandler } from './http/context'
+export { waitUntil, type PlatformContext } from './http/background'
 // Edge-safe stores + ctx-style rate limiter (zero runtime imports).
 export {
   KvRateLimitStore,
@@ -97,8 +99,12 @@ export interface CreateWebAppOptions {
 }
 
 export interface WebApp {
-  /** Web-standard entry: `Request` in, `Response` out. */
-  fetch: (request: Request) => Promise<Response>
+  /**
+   * Web-standard entry: `Request` in, `Response` out. Pass the platform
+   * context (Workers `ctx`, Netlify `context`) so work handed to
+   * `ctx.waitUntil()` finishes after the response.
+   */
+  fetch: (request: Request, platform?: PlatformContext) => Promise<Response>
   /** The underlying h3 v2 app, for advanced composition. */
   h3: unknown
 }
@@ -209,7 +215,11 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   }
 
   return {
-    fetch: (request: Request) => app.fetch(request),
+    fetch: async (request: Request, platform?: PlatformContext) => {
+      const response = await app.fetch(request)
+      forwardBackgroundWork(platform)
+      return response
+    },
     h3: app,
   }
 }
@@ -218,18 +228,27 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
  * Cloudflare Workers convenience: lazily build the app on the first request
  * so the Workers `env` binding can seed config before any module resolves.
  *
+ * The Workers execution context (third argument) is forwarded, so work
+ * handed to `ctx.waitUntil()` keeps running after the response.
+ *
  * ```ts
  * export default createFetchHandler((env) => ({ h3, modules, env }))
  * ```
  */
 export function createFetchHandler(
   build: (env: Record<string, string | undefined>) => CreateWebAppOptions,
-): { fetch: (request: Request, env?: Record<string, string | undefined>) => Promise<Response> } {
+): {
+  fetch: (
+    request: Request,
+    env?: Record<string, string | undefined>,
+    ctx?: PlatformContext,
+  ) => Promise<Response>
+} {
   let app: WebApp | undefined
   return {
-    fetch: (request, env = {}) => {
+    fetch: (request, env = {}, ctx) => {
       app ??= createWebApp(build(env))
-      return app.fetch(request)
+      return app.fetch(request, ctx)
     },
   }
 }

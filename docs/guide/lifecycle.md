@@ -204,6 +204,7 @@ RequestContext
 ├─ ctx.get(key)        ← typed read via augmented ContextMeta
 ├─ ctx.set(key, value) ← typed write via augmented ContextMeta
 ├─ ctx.setHeader(k, v) ← response header, runtime-neutral
+├─ ctx.waitUntil(p)    ← keep work running after the response (awaited on shutdown)
 ├─ ctx.json(data)      ← 200 response
 ├─ ctx.created(data)   ← 201 response
 ├─ ctx.noContent()     ← 204 response

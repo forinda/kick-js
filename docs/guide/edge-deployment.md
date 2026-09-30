@@ -60,7 +60,10 @@ export default createFetchHandler((env) => ({ h3, modules, env }))
 
 `createFetchHandler` builds the app lazily on the **first request** so the
 Workers `env` binding can seed configuration before any module resolves —
-Workers have no ambient `process.env`.
+Workers have no ambient `process.env`. It also forwards the Workers execution
+context, so work handed to `ctx.waitUntil()` keeps running after the response.
+If you call `createWebApp` yourself, pass it along:
+`fetch: (request, env, ctx) => app.fetch(request, ctx)`.
 
 The `nodejs_compat` flag is required: request-scoped DI and `ctx.set`/`ctx.get`
 ride on `AsyncLocalStorage`.
