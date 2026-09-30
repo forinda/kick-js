@@ -2,7 +2,7 @@
 
 **Theme:** close the M4 carry-over (column DEFAULT preservation through `pgEnum` rename-recreate), thread request-scoped cancellation end-to-end through `db.query.*`, and clean up the Kysely-0.29 surface (`ReadonlyKysely` re-export, typed-IR helpers for `ALTER TYPE`, `plugins?` opt-in).
 
-M5 ships in two waves. **M5.A.1** is a correctness patch on `@forinda/kickjs-db`; **M5.A.2 + M5.A.3 + M5.B** are additive minors on the db family; the new **`RequestContext.signal`** lands as an additive minor on `@forinda/kickjs`. No major bumps in the whole milestone — every shipped change fits inside patch or minor semantics, per the M5 "no majors" discipline locked in [`m5-plan.md`](./m5-plan.md).
+M5 ships in two waves. **M5.A.1** is a correctness patch on `@forinda/kickjs-db`; **M5.A.2 + M5.A.3 + M5.B** are additive minors on the db family; the new **`RequestContext.signal`** lands as an additive minor on `@forinda/kickjs`. No major bumps in the whole milestone — every shipped change fits inside patch or minor semantics, per the M5 "no majors" discipline.
 
 Two items from the plan didn't land in this cycle: **M5.C** (connection-pool devtools tab) — pure DX, deferred to M6 to avoid blocking the M5 release line; and the **hardening suite** (benchmarks vs drizzle/prisma/raw-pg, diff-engine fuzz, migration replay) that the original architecture spec listed for M5 — also deferred to M6 (see "Out of scope" below). Everything else on the plan shipped.
 
@@ -14,7 +14,7 @@ Two items from the plan didn't land in this cycle: **M5.C** (connection-pool dev
 
 `emitRemoveEnumValueRecreate` now brackets the type swap with `ALTER COLUMN … DROP DEFAULT` (per affected column) and `ALTER COLUMN … SET DEFAULT 'value'::foo` (re-attached through the freshly-created type name). Columns without a default still emit the bare swap — output is byte-identical to pre-M5.A.1 so previously-applied migration hashes stay valid.
 
-Spec: [`docs/db/spec-default-preservation.md`](./spec-default-preservation.md). Locked by `packages/db/__tests__/unit/default-preservation.test.ts` + the Testcontainers `packages/db/__tests__/integration/enum-drop-with-default.test.ts` lifecycle.
+Locked by `packages/db/__tests__/unit/default-preservation.test.ts` + the Testcontainers `packages/db/__tests__/integration/enum-drop-with-default.test.ts` lifecycle.
 
 ### `AbortSignal` threading through `db.query.*` (M5.A.2)
 
@@ -23,8 +23,6 @@ Spec: [`docs/db/spec-default-preservation.md`](./spec-default-preservation.md). 
 Already-aborted signals short-circuit before any compile or DB round trip. Driver-level abort shapes (DOM `AbortError`, PG SQLSTATE `57014`, mysql2 `EAGAIN_QUERY_INTERRUPTED`, better-sqlite3 `SQLITE_INTERRUPT`) plus any rejection while `signal.aborted` is true are normalised to `RelationalQueryCancelledError`. Unrelated rejections pass through verbatim.
 
 Default cancellation strategy is Kysely 0.29's `'ignore query'` — JS-side promise rejects, DB-side query keeps running. The stricter `'cancel query'` (`pg_cancel_backend` / `KILL QUERY`) needs per-dialect support and isn't safe across all peers; spec covers the trade-off.
-
-Spec: [`docs/db/spec-abortsignal-threading.md`](./spec-abortsignal-threading.md).
 
 ### `RequestContext.signal` — request-scoped cancellation end-to-end (`@forinda/kickjs`)
 

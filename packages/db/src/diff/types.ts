@@ -120,8 +120,6 @@ export interface AddEnumValue {
  * `-- KICK ENUM REMOVE` header. The runner refuses to apply such a
  * migration without `confirmEnumDrop: true` on `RunnerOptions` (or
  * `--confirm-enum-drop` from the CLI).
- *
- * Spec: docs/db/spec-enum-value-removal.md.
  */
 export interface RemoveEnumValue {
   kind: 'removeEnumValue'
@@ -144,7 +142,7 @@ export interface RemoveEnumValue {
    * declared on the prior snapshot, or `null` when the column has no
    * default. The emitter wraps the type swap in
    * `DROP DEFAULT` / `SET DEFAULT … ::"<enum>"` brackets only when
-   * this is non-null. Spec: docs/db/spec-default-preservation.md.
+   * this is non-null.
    */
   affectedColumns: readonly { table: string; column: string; default: string | null }[]
 }

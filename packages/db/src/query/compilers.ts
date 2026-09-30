@@ -7,9 +7,6 @@
  *   - PG     → `compilePg`     (kysely/helpers/postgres)
  *   - SQLite → `compileSqlite` (kysely/helpers/sqlite)
  *   - MySQL  → `compileMysql`  (kysely/helpers/mysql)
- *
- * Spec: docs/db/spec-relational-query.md §4.3 +
- * docs/db/spec-relational-query-other-dialects.md §4.
  */
 
 import { compilePg } from './compile-pg'

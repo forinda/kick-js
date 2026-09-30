@@ -4,8 +4,6 @@
  * re-export the same alias here so compile-time consumers can stay
  * scoped to `query/` imports without reaching into the snapshot
  * module.
- *
- * Spec: docs/db/spec-relational-query.md §5.3.
  */
 
 import type { RelationSnapshot } from '../snapshot/types'

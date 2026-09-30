@@ -1,5 +1,5 @@
 // `@forinda/kickjs/web` — the web-standard fetch entry for edge runtimes
-// (Cloudflare Workers), Bun, and Deno. See web-standards-edge-design.md §3.
+// (Cloudflare Workers), Bun, and Deno.
 //
 // PURITY CONTRACT: this entry's import graph must stay free of node-only
 // runtime imports — no `node:http`, `node:cluster`, `node:fs`, `node:module`,

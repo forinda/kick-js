@@ -1,5 +1,5 @@
 /**
- * Asset manager runtime (assets-plan.md PR 3).
+ * Asset manager runtime.
  *
  * Three accessor surfaces over one resolver engine:
  *
@@ -40,7 +40,7 @@ interface ResolvedManifest {
 }
 
 /**
- * Augmentable interface — `kick typegen` (assets-plan.md PR 4) emits
+ * Augmentable interface — `kick typegen` emits
  * a `declare global` augmentation listing every namespace + key for
  * the project's `assetMap`. Adopters who haven't run typegen yet
  * still get a runtime-correct Proxy; only typed autocomplete waits

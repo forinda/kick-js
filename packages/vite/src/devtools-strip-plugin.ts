@@ -9,8 +9,6 @@
  * one strips top-level devtools-kit imports + their `defineDevtoolsRenderTab(...)` /
  * `defineDevtoolsTab(...)` call sites without requiring adopters to
  * wrap them in the flag.
- *
- * Spec: docs/db/m3-plan.md §M3.C.
  */
 
 import type { Plugin } from 'vite'

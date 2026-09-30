@@ -5,8 +5,6 @@
  * `affectedColumns[i].default` field. The Testcontainers integration
  * test (enum-drop-with-default.test.ts) covers the live-PG round trip;
  * these tests just lock the SQL string output + the diff-time guard.
- *
- * Spec: docs/db/spec-default-preservation.md.
  */
 
 import { describe, expect, it } from 'vitest'

@@ -22,7 +22,6 @@ export interface RunnerOptions {
   /**
    * Allow migrations carrying the `-- KICK ENUM REMOVE` header to
    * apply. Default `false`. CLI exposes via `--confirm-enum-drop`.
-   * Spec: docs/db/spec-enum-value-removal.md.
    */
   confirmEnumDrop?: boolean
 }

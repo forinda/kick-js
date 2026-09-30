@@ -10,9 +10,6 @@
  *      compile, no DB round trip.
  *   2. Signal fires between statements (less observable here; PG /
  *      MySQL exercise the in-flight cancel path).
- *
- * Spec: docs/db/spec-abortsignal-threading.md §"Dialect-level
- * cancellation".
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'

@@ -1,6 +1,6 @@
 /**
  * Unit tests for the typegen asset discovery + ambient-augmentation
- * renderer (assets-plan.md PR 4).
+ * renderer.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'

@@ -1,5 +1,5 @@
 /**
- * The route policy table — phase 3 of `route-flags-design.md`.
+ * The route policy table — route flags for pre-match middleware.
  *
  * Middleware mounted app-wide (the connect-style `rateLimit()`, `csrf()`) runs
  * *before* a route is matched, so it cannot read `ctx.route.flags`: there is no

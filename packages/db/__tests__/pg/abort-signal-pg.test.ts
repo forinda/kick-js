@@ -10,8 +10,6 @@
  *      JS-side wait abandoned). `pg_stat_activity` for the cancelled
  *      backend shows the query gone within a beat.
  *   3. The total wall time is well under the sleep duration.
- *
- * Spec: docs/db/spec-abortsignal-threading.md.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'

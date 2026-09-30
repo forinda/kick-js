@@ -16,8 +16,6 @@
  *   5. Per-relation `where` + `limit` filter the inner aggregation.
  *   6. Row parity with a hand-written nested SELECT to lock the
  *      compiler against PG's `json_agg` / `to_json` semantics.
- *
- * Spec: docs/db/spec-relational-query.md §4.1 + §6.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'

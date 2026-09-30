@@ -4,8 +4,6 @@
  * through `compileSqlite` -> kysely/helpers/sqlite's
  * `jsonArrayFrom`/`jsonObjectFrom` -> `ParseJSONResultsPlugin` ->
  * better-sqlite3 -> JS row tree.
- *
- * Spec: docs/db/spec-relational-query-other-dialects.md §3.1.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'

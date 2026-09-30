@@ -1,7 +1,7 @@
 // @forinda/kickjs-client — typed fetch client for KickJS APIs.
 //
-// Consumes the flat `KickRoutes.Api` map that `kick typegen` emits
-// (response-inference-design.md R3): keys are `'METHOD /path'`, values are
+// Consumes the flat `KickRoutes.Api` map that `kick typegen` emits:
+// keys are `'METHOD /path'`, values are
 // the route shapes (`params` / `body` / `query` / `response`). The client is
 // a ~150-line fetch wrapper — every type below exists so the CALL SITE
 // infers exactly:

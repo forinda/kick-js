@@ -402,7 +402,7 @@ export function Value<K extends string>(
   }
 }
 
-// ── @Asset — typed asset path injection (assets-plan.md PR 3+) ─────────
+// ── @Asset — typed asset path injection ─────────────────────────────────
 
 import type { KickAssets } from './assets'
 

@@ -1,5 +1,5 @@
 /**
- * Route flags (spec: `route-flags-design.md`).
+ * Route flags.
  *
  * The load-bearing case is the last group: a class-level `@Public` with a
  * method-level `@Public.off` must resolve with the flag ABSENT on that

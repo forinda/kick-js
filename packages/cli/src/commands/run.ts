@@ -363,7 +363,7 @@ export function registerRunCommands(program: Command): void {
         }
       }
 
-      // Asset manager (assets-plan.md PR 2). Drives its own copy +
+      // Asset manager. Drives its own copy +
       // emits dist/.kickjs-assets.json for the runtime resolver. No-op
       // when assetMap is missing — silent for adopters who don't use it.
       if (config?.assetMap && Object.keys(config.assetMap).length > 0) {

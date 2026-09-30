@@ -3,7 +3,7 @@ import { renderRoutes } from '../src/typegen/render/routes'
 import type { DiscoveredRoute } from '../src/typegen/scanner'
 
 /**
- * R2 (response-inference-design.md): `KickRoutes[...].response` is emitted as
+ * `KickRoutes[...].response` is emitted as
  * a TYPE REFERENCE to the controller method — the consumer's tsc computes the
  * actual type via InferHandlerResponse. The scanner stays checker-free.
  */

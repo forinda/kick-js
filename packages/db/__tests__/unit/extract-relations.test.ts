@@ -1,8 +1,7 @@
 /**
  * Coverage for `extractRelations` — resolves `relations()`
  * declarations into the JSON-serializable sidecar consumed by the
- * relational-query compiler. Spec: docs/db/spec-relational-query.md
- * §5.3.
+ * relational-query compiler.
  *
  * One assertion per spec rule + each error path:
  *   - `one` resolves directly from `fields` / `references`.

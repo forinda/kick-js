@@ -152,7 +152,7 @@ export function registerTypegenCommand(program: Command): void {
         noCache: opts.cache === false,
         schemaValidator,
         envFile,
-        // Asset typegen (assets-plan.md PR 4) — drives `KickAssets`
+        // Asset typegen — drives `KickAssets`
         // augmentation generation. No-op when assetMap is empty.
         assetMap: config?.assetMap,
         // The CLI command drives the plugin pipeline directly (see

@@ -1,8 +1,7 @@
 /**
  * Web Crypto helpers — portable across node/bun/deno/workers via
  * `globalThis.crypto`. The Web Crypto migration lives here so the request
- * path never imports `node:crypto` (edge-runtime portability, see
- * `web-standards-edge-design.md` P0).
+ * path never imports `node:crypto` (edge-runtime portability).
  */
 
 /** Random hex string — replacement for `randomBytes(n).toString('hex')`. */

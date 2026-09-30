@@ -11,8 +11,6 @@
  * The compile + execute split keeps the compiler pure and testable
  * (snapshot SQL fixtures in `query-compile.test.ts`) while the
  * builder owns the I/O.
- *
- * Spec: docs/db/spec-relational-query.md §5.2.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

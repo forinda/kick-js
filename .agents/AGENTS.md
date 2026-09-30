@@ -118,6 +118,15 @@ When adding new features, use these as templates:
 - [ ] Update versioned docs in `docs/versions/` if modifying existing pages
 - [ ] Run `pnpm docs:build` to verify
 
+## Mandatory: Design Notes Stay Private
+
+Design docs, specs, plans, and experiment write-ups are working material, not public documentation.
+
+- **Where they live:** `.ignored/designs/` (git-ignored). This covers `*-design.md`, `spec-*.md`, `*-plan.md`, milestone plans, and optimisation/benchmark experiments. Never commit them at the repo root, under `docs/`, or inside a package.
+- **No references from tracked files.** Source, tests, published docs, changesets, and PR/issue bodies must not point at them. That means no `Spec: docs/…md`, `see x-design.md`, and no bare section or phase IDs from a design doc (`§3.1`, `R2`, `M4.B`, "phase 3 of …"). State the behaviour in the comment itself, or link a published page on kickjs.app.
+- **If users need it, publish it.** When a published guide needs something from a design doc (an example, a per-dialect table, a caveat), write that content into the guide, not a link to the design doc.
+- **Check before committing:** `git grep -nE '(-design|spec-[a-z-]+|-plan)\.md' -- ':!*CHANGELOG.md'` should find nothing new.
+
 ## Mandatory: Keep Docs in Sync
 
 **Every feature addition, update, or API change MUST include documentation updates.** This prevents docs from going stale.

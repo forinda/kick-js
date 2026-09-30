@@ -2,7 +2,10 @@
  * Architecture-spec §13 hardening — SQL emission threat model.
  *
  * Adversarial-input coverage that empirically locks the trust
- * boundary documented in `docs/db/spec-sql-emission-threat-model.md`:
+ * boundary of the SQL emitter. Trust is decided by time of authorship:
+ * identifiers declared through the schema DSL are code and may be
+ * emitted (quoted); anything passed to a query method at runtime is
+ * user input and must be parameter-bound.
  *
  *   1. Runtime values that flow through Kysely's `ExpressionBuilder`
  *      MUST be parameter-bound. Adversarial strings containing every

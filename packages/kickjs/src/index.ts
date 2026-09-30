@@ -57,7 +57,7 @@ export type {
 } from './core/route-flag'
 export type { MatchedRoute } from './http/runtime'
 
-// Return-value handlers + response inference (response-inference-design.md)
+// Return-value handlers + response inference
 export {
   reply,
   isReply,

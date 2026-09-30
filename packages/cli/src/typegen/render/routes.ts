@@ -73,7 +73,7 @@ export const kickRpc = {} as const
   // Hoisted controller type imports for response inference — one alias per
   // (file, class). The consumer's tsc computes the response from the
   // handler's return type via InferHandlerResponse; the scanner never runs
-  // a type checker (response-inference-design.md R2).
+  // a type checker.
   const controllerImports = new Map<string, string>()
   const planControllerImport = (m: DiscoveredRoute): string => {
     const key = `${m.filePath}::${m.controller}`

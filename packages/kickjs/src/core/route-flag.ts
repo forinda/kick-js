@@ -1,6 +1,5 @@
 /**
- * Route flags — a named, inheritable fact about a route (spec:
- * `route-flags-design.md`).
+ * Route flags — a named, inheritable fact about a route.
  *
  * A flag carries no behaviour. It records something about the route that any
  * consumer may read: `auth.public`, `csrf.exempt`, `rate.limit`. Auth reads it

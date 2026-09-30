@@ -4,8 +4,6 @@
  * Mirror of `query-compile.test.ts` (PG) but with SQLite-flavored
  * SQL — `json_group_array` / `json_object` instead of PG's
  * `json_agg` / `row_to_json`, double-quote identifiers, no LATERAL.
- *
- * Spec: docs/db/spec-relational-query-other-dialects.md §3.1.
  */
 
 import { describe, expect, it } from 'vitest'

@@ -66,7 +66,6 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // kysely/helpers/<dialect> jsonArrayFrom / jsonObjectFrom won't
   // round-trip without ParseJSONResultsPlugin. PG decodes JSON
   // natively — skip the plugin there to keep the chain minimal.
-  // Spec: docs/db/spec-relational-query-other-dialects.md §5.
   const dialectTag = detectDialect(opts.dialect)
 
   // Unified per-query stream for the DevTools "Database" tab — every

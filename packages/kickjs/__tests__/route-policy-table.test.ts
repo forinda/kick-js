@@ -1,5 +1,5 @@
 /**
- * Phase 3 of `route-flags-design.md`: the connect-style `rateLimit()` runs
+ * Route flags in the policy table: the connect-style `rateLimit()` runs
  * before route matching, so it reads flags from a table built at boot instead
  * of from `ctx.route`.
  *

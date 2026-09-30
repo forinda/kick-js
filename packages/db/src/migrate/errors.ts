@@ -51,8 +51,7 @@ export class UnreviewedMigrationError extends MigrationError {
 /**
  * Thrown by the runner when a migration carries the `-- KICK ENUM
  * REMOVE` header and the operator hasn't passed `confirmEnumDrop:
- * true` (CLI: `--confirm-enum-drop`). Spec:
- * docs/db/spec-enum-value-removal.md §4.
+ * true` (CLI: `--confirm-enum-drop`).
  */
 export class MigrationEnumDropError extends MigrationError {
   readonly id: string

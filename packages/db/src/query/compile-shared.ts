@@ -7,8 +7,6 @@
  * passes its own `jsonArrayFrom` / `jsonObjectFrom` from the matching
  * `kysely/helpers/<dialect>` module into `runCompile`, which then
  * walks the `with` clause using shared helpers.
- *
- * Spec: docs/db/spec-relational-query-other-dialects.md §4.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

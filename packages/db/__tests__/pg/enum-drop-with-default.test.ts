@@ -4,8 +4,6 @@
  * (enum-drop-value.test.ts) with the DEFAULT preservation path so
  * adopters whose schemas declare `column.notNull().default('foo')`
  * can run the rename-recreate dance without manual SQL editing.
- *
- * Spec: docs/db/spec-default-preservation.md.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'

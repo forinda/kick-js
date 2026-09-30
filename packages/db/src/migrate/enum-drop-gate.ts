@@ -7,7 +7,11 @@
  * `MigrationEnumDropError` when the header is present and
  * `confirmEnumDrop` is falsy.
  *
- * Spec: docs/db/spec-enum-value-removal.md §4.
+ * Why a gate: PostgreSQL has no `ALTER TYPE … DROP VALUE`, so removing
+ * a value means renaming and recreating the type and casting every
+ * column with `USING`. That cast fails on any row still holding the
+ * removed value, so the operator should review the migration before it
+ * runs rather than find out mid-deploy.
  */
 
 import { ENUM_DROP_HEADER } from '../emit/pg'

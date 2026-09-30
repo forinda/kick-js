@@ -113,7 +113,25 @@ this.db.query.tasks.findUnique({
 })
 ```
 
-Two-FK cycles where the same target table is referenced by two distinct columns (e.g. `messages.senderId` + `messages.recipientId` both → `users`) need a `relationName: 'foo'` tag on both sides. See [the relation-name spec](../db/spec-relation-name.md) for the full pattern.
+Two-FK cycles where the same target table is referenced by two distinct columns (e.g. `messages.senderId` + `messages.recipientId` both → `users`) need a `relationName` tag on both sides, pairing each `one` with its inverse `many`:
+
+```ts
+relations(messages, ({ one }) => ({
+  sender: one(users, { fields: [messages.senderId], references: [users.id], relationName: 'sent' }),
+  recipient: one(users, {
+    fields: [messages.recipientId],
+    references: [users.id],
+    relationName: 'received',
+  }),
+}))
+
+relations(users, ({ many }) => ({
+  sentMessages: many(messages, { relationName: 'sent' }),
+  receivedMessages: many(messages, { relationName: 'received' }),
+}))
+```
+
+Without the tags, `users.sentMessages` can't tell which of the two `messages → users` relations is its inverse.
 
 ## Dialect notes
 

@@ -1,6 +1,5 @@
 /**
- * Type-level shape of `db.query.X.findMany({ with })` — see
- * `docs/db/spec-relational-query.md` §3 for the locked design.
+ * Type-level shape of `db.query.X.findMany({ with })`.
  *
  * The type story has three layers:
  *
@@ -63,8 +62,7 @@ export interface KickDbRelationsRegister {}
  *
  * `relationName` (optional) is the pairing tag from
  * `relations()`'s helpers. When set, the resolver uses it to pair
- * `one` + `many` declarations across multi-FK schemas. See
- * docs/db/spec-relation-name.md (M4.B).
+ * `one` + `many` declarations across multi-FK schemas.
  */
 export interface RelationMapEntry {
   kind: 'one' | 'many'
@@ -154,7 +152,7 @@ export interface FindManyOptions<
    * Bind to `RequestContext.signal` from kickjs-http to short-circuit
    * the query when the client disconnects or the request times out.
    *
-   * Spec: docs/db/spec-abortsignal-threading.md. Per-relation
+   * Per-relation
    * `signal` on a `with` value is intentionally not supported;
    * nested LATERAL/correlated subqueries inherit the parent signal.
    */

@@ -82,8 +82,7 @@ export interface RelationSnapshot {
   targetColumns: readonly string[]
   /**
    * Optional pairing tag from `relationName: 'foo'` on both sides of
-   * the relation. Disambiguates multi-FK schemas. See
-   * docs/db/spec-relation-name.md (M4.B).
+   * the relation. Disambiguates multi-FK schemas.
    */
   relationName?: string
 }

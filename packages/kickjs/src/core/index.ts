@@ -275,7 +275,7 @@ export {
   type AugmentationMeta,
 } from './augmentation'
 
-// Asset manager (assets-plan.md). Three accessor variants over one
+// Asset manager. Three accessor variants over one
 // resolver engine — the typed `assets` Proxy, the `useAssets()` hook,
 // and the string `resolveAsset()` for dynamic dispatch.
 export {
