@@ -14,11 +14,29 @@ export interface KeyValueRow {
 }
 
 /** What the user typed for one route. */
+/**
+ * One multipart field. `file` rows carry the picked files in memory only —
+ * `File` objects can't be saved, so they are dropped from stored inputs and
+ * have to be picked again after a reload.
+ */
+export interface FormRow {
+  key: string
+  value: string
+  enabled: boolean
+  type: 'text' | 'file'
+  files?: File[]
+}
+
+export type BodyMode = 'raw' | 'form'
+
 export interface RouteInputs {
   params: Record<string, string>
   query: KeyValueRow[]
   headers: KeyValueRow[]
   body: string
+  /** `raw` sends `body` as text; `form` sends `form` as multipart/form-data. */
+  bodyMode?: BodyMode
+  form?: FormRow[]
 }
 
 /** Runner settings — names an app can change from the framework defaults. */
@@ -46,14 +64,26 @@ export interface RunnerRoute {
   method: string
   path: string
   flags?: Record<string, unknown>
+  /** From `@FileUpload` — the runner starts such routes in form mode with this field. */
+  upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
 }
 
 /** A request ready to send or to render as a snippet. */
+/** One multipart part, as the snippets describe it. */
+export interface FormPart {
+  name: string
+  value?: string
+  fileName?: string
+}
+
 export interface PreparedRequest {
   method: string
   url: string
   headers: Record<string, string>
-  body?: string
+  /** Text body, or multipart form data (no Content-Type: the browser adds the boundary). */
+  body?: string | FormData
+  /** Present for multipart bodies — what `toCurl` / `toFetch` render. */
+  form?: FormPart[]
 }
 
 /**
@@ -186,6 +216,10 @@ export function prepareRequest(input: {
     query: fillRows(input.inputs.query),
     headers: fillRows(input.inputs.headers),
     body: fill(input.inputs.body),
+    bodyMode: input.inputs.bodyMode,
+    // A copy, not an in-place edit: the rows are the UI's live state.
+    // oxlint-disable-next-line no-map-spread
+    form: (input.inputs.form ?? []).map((r) => ({ ...r, key: fill(r.key), value: fill(r.value) })),
   }
   const defaults = fillRows(input.defaults)
   const method = route.method.toUpperCase()
@@ -213,17 +247,43 @@ export function prepareRequest(input: {
     if (token) headers[settings.csrfHeader] = token
   }
 
+  const url = buildUrl(origin, route.path, inputs.params, inputs.query)
+
+  if (acceptsBody(method) && inputs.bodyMode === 'form') {
+    const { body, form } = buildForm(inputs.form ?? [])
+    // A Content-Type set here would lack the multipart boundary the browser
+    // generates — drop any, so the request can be parsed.
+    for (const name of Object.keys(headers)) {
+      if (name.toLowerCase() === 'content-type') delete headers[name]
+    }
+    return { method, url, headers, body, form }
+  }
+
   const body = acceptsBody(method) && inputs.body.trim() ? inputs.body : undefined
   if (body !== undefined && !has('content-type') && /^\s*[[{]/.test(body)) {
     headers['Content-Type'] = 'application/json'
   }
 
-  return {
-    method,
-    url: buildUrl(origin, route.path, inputs.params, inputs.query),
-    headers,
-    ...(body !== undefined ? { body } : {}),
+  return { method, url, headers, ...(body !== undefined ? { body } : {}) }
+}
+
+/** Build the multipart body from the enabled rows, plus the description the snippets use. */
+function buildForm(rows: FormRow[]): { body: FormData; form: FormPart[] } {
+  const body = new FormData()
+  const form: FormPart[] = []
+  for (const row of rows) {
+    if (!row.enabled || !row.key) continue
+    if (row.type === 'file') {
+      for (const file of row.files ?? []) {
+        body.append(row.key, file, file.name)
+        form.push({ name: row.key, fileName: file.name })
+      }
+    } else {
+      body.append(row.key, row.value)
+      form.push({ name: row.key, value: row.value })
+    }
   }
+  return { body, form }
 }
 
 /** Single-quote a string for POSIX shells. */
@@ -232,14 +292,37 @@ const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'
 export function toCurl(req: PreparedRequest): string {
   const parts = [`curl -X ${req.method} ${shellQuote(req.url)}`]
   for (const [k, v] of Object.entries(req.headers)) parts.push(`-H ${shellQuote(`${k}: ${v}`)}`)
-  if (req.body !== undefined) parts.push(`--data-raw ${shellQuote(req.body)}`)
+  if (req.form) {
+    // `-F name=@path` uploads a file; the path is the picked file's name, so
+    // run it from the directory holding the file (or edit the path).
+    for (const part of req.form) {
+      parts.push(
+        `-F ${shellQuote(part.fileName !== undefined ? `${part.name}=@${part.fileName}` : `${part.name}=${part.value ?? ''}`)}`,
+      )
+    }
+  } else if (typeof req.body === 'string') {
+    parts.push(`--data-raw ${shellQuote(req.body)}`)
+  }
   return parts.join(' \\\n  ')
 }
 
 export function toFetch(req: PreparedRequest): string {
   const init: Record<string, unknown> = { method: req.method }
   if (Object.keys(req.headers).length) init.headers = req.headers
-  if (req.body !== undefined) init.body = req.body
+  if (req.form) {
+    // Files can't be written into code: each one is read from a file input.
+    const lines = ['const form = new FormData()']
+    for (const part of req.form) {
+      lines.push(
+        part.fileName !== undefined
+          ? `form.append(${JSON.stringify(part.name)}, fileInput.files[0]) // ${part.fileName}`
+          : `form.append(${JSON.stringify(part.name)}, ${JSON.stringify(part.value ?? '')})`,
+      )
+    }
+    const initText = JSON.stringify(init, null, 2).replace(/\n}$/, ',\n  "body": form\n}')
+    return `${lines.join('\n')}\n\nawait fetch(${JSON.stringify(req.url)}, ${initText})`
+  }
+  if (typeof req.body === 'string') init.body = req.body
   return `await fetch(${JSON.stringify(req.url)}, ${JSON.stringify(init, null, 2)})`
 }
 
@@ -257,9 +340,22 @@ export function formatBody(text: string, contentType: string | null): string {
 export const inputsKey = (route: RunnerRoute): string =>
   `kickjs-devtools:runner:${route.method.toUpperCase()} ${route.path}`
 
-export const emptyInputs = (route: RunnerRoute): RouteInputs => ({
-  params: Object.fromEntries(pathParams(route.path).map((p) => [p, ''])),
-  query: [],
-  headers: [],
-  body: '',
-})
+export const emptyInputs = (route: RunnerRoute): RouteInputs => {
+  const upload = route.upload && route.upload.mode !== 'none' ? route.upload : undefined
+  return {
+    params: Object.fromEntries(pathParams(route.path).map((p) => [p, ''])),
+    query: [],
+    headers: [],
+    body: '',
+    // An @FileUpload route starts in form mode with its declared field.
+    bodyMode: upload ? 'form' : 'raw',
+    form: upload
+      ? [{ key: upload.fieldName ?? 'file', value: '', enabled: true, type: 'file' }]
+      : [],
+  }
+}
+
+/** Inputs as they are saved: files are in-memory only, so they are dropped. */
+export function storableInputs(inputs: RouteInputs): RouteInputs {
+  return { ...inputs, form: inputs.form?.map(({ files: _files, ...row }) => row) }
+}

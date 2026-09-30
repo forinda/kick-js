@@ -10,6 +10,7 @@ import {
   prepareRequest,
   interpolate,
   readJsonPath,
+  storableInputs,
   unresolvedVariables,
   variableMap,
   publicFlagNames,
@@ -164,6 +165,93 @@ describe('variables', () => {
     expect(readJsonPath(body, 'items[0].id')).toBe('first')
     expect(readJsonPath(body, 'data.user')).toBe('{"id":7}')
     expect(readJsonPath(body, 'data.nope.deeper')).toBeUndefined()
+  })
+})
+
+describe('multipart form bodies', () => {
+  const route = {
+    method: 'POST',
+    path: '/api/v1/avatars',
+    upload: { mode: 'single' as const, fieldName: 'avatar' },
+  }
+  const file = new File([new Uint8Array([0xff, 0x00, 0xfe])], 'pic.png', { type: 'image/png' })
+  const inputs = (): RouteInputs => ({
+    ...emptyInputs(route),
+    form: [
+      { key: 'note', value: 'hi {{who}}', enabled: true, type: 'text' },
+      { key: 'avatar', value: '', enabled: true, type: 'file', files: [file] },
+      { key: 'off', value: 'x', enabled: false, type: 'text' },
+    ],
+  })
+
+  it('an @FileUpload route starts in form mode with its declared field', () => {
+    expect(emptyInputs(route)).toMatchObject({
+      bodyMode: 'form',
+      form: [{ key: 'avatar', type: 'file', enabled: true }],
+    })
+    expect(emptyInputs({ method: 'POST', path: '/x' }).bodyMode).toBe('raw')
+  })
+
+  it('builds FormData with text (variables filled) and file parts, and no Content-Type', async () => {
+    const req = prepareRequest({
+      route,
+      inputs: inputs(),
+      defaults: [row('Content-Type', 'application/json')],
+      settings: DEFAULT_SETTINGS,
+      origin: 'http://x',
+      cookies: '',
+      variables: { who: 'kick' },
+    })
+    expect(req.body).toBeInstanceOf(FormData)
+    const body = req.body as FormData
+    expect(body.get('note')).toBe('hi kick')
+    const sent = body.get('avatar') as File
+    expect(sent.name).toBe('pic.png')
+    expect([...new Uint8Array(await sent.arrayBuffer())]).toEqual([0xff, 0x00, 0xfe])
+    expect(body.has('off')).toBe(false)
+    expect(req.headers).toEqual({})
+    expect(req.form).toEqual([
+      { name: 'note', value: 'hi kick' },
+      { name: 'avatar', fileName: 'pic.png' },
+    ])
+  })
+
+  it('renders -F parts in curl and a FormData block in fetch', () => {
+    const req = prepare(route, inputs())
+    expect(toCurl(req)).toBe(
+      [
+        `curl -X POST 'http://localhost:3000/api/v1/avatars'`,
+        `-F 'note=hi {{who}}'`,
+        `-F 'avatar=@pic.png'`,
+      ].join(' \\\n  '),
+    )
+
+    const appended: unknown[] = []
+    const calls: unknown[] = []
+    class FormDataStub {
+      append(...args: unknown[]) {
+        appended.push(args)
+      }
+    }
+    runInNewContext(toFetch(req).replace('await fetch', 'fetch'), {
+      FormData: FormDataStub,
+      fileInput: { files: ['<file>'] },
+      fetch: (url: string, init: { method: string; body: unknown }) =>
+        calls.push({ url, method: init.method, isForm: init.body instanceof FormDataStub }),
+    })
+    expect(appended).toEqual([
+      ['note', 'hi {{who}}'],
+      ['avatar', '<file>'],
+    ])
+    expect(calls).toEqual([
+      { url: 'http://localhost:3000/api/v1/avatars', method: 'POST', isForm: true },
+    ])
+  })
+
+  it('drops picked files from stored inputs', () => {
+    const stored = storableInputs(inputs())
+    expect(stored.form?.[1]).toEqual({ key: 'avatar', value: '', enabled: true, type: 'file' })
+    expect(JSON.parse(JSON.stringify(stored)).form).toHaveLength(3)
   })
 })
 

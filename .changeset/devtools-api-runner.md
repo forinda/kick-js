@@ -8,7 +8,7 @@ The DevTools dashboard has an API runner. **Try** on a row of the Routes tab ope
 
 - **Path params:** one field per `:param`.
 - **Query and headers:** key/value rows that can be switched off.
-- **Body:** raw text, for methods that take one.
+- **Body:** raw text, or **form data** (`multipart/form-data`) with text fields and file pickers, for testing uploads. A route with `@FileUpload` opens in form mode with its field ready. `/_debug/routes` now reports each route's `@FileUpload` settings as `upload`.
 - **Environment:** default headers, variables and settings. They're kept for the browser tab unless **Remember on this browser** is on, which moves them to `localStorage`.
 - **Code snippet:** the request rendered as `curl` or `fetch`, readable and selectable.
 - **Response:** status, time, headers, and the body pretty-printed as JSON, with **Save to variable** to capture a value from it.

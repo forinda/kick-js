@@ -528,7 +528,7 @@ so it isn't chased. Each item is `proposed` until picked up.
 
 ### E.1 API runner in the DevTools dashboard
 
-**Status:** `shipped` (MVP) — **Try** on the Routes tab opens a side sheet with collapsible path-param / query / header / body sections, an environment of default headers and `{{variables}}` (session-only, or remembered on the browser) with **Save to variable** from a response, a rendered `curl` / `fetch` snippet, and the response; CSRF auto-fill, a configurable list of public flags that skip the default `Authorization`, and a second click for `DELETE` / `PUT` / `PATCH`. See [DevTools → API runner](./devtools.md#api-runner). Phases 2–3 below remain `proposed`.
+**Status:** `shipped` (MVP) — **Try** on the Routes tab opens a side sheet with collapsible path-param / query / header / body sections (raw or multipart form data with file pickers — `@FileUpload` routes open ready to upload), an environment of default headers and `{{variables}}` (session-only, or remembered on the browser) with **Save to variable** from a response, a rendered `curl` / `fetch` snippet, and the response; CSRF auto-fill, a configurable list of public flags that skip the default `Authorization`, and a second click for `DELETE` / `PUT` / `PATCH`. See [DevTools → API runner](./devtools.md#api-runner). Phases 2–3 below remain `proposed`.
 **Effort:** MVP ~1 week; phases 2–3 independently schedulable
 
 **What they do.** Nuxt DevTools' _Server Routes_ tab is a Postman-style runner: pick a route, fill

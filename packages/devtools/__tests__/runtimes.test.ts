@@ -9,7 +9,15 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import request from 'supertest'
-import { Application, Container, Controller, Get, type RequestContext } from '@forinda/kickjs'
+import {
+  Application,
+  Container,
+  Controller,
+  FileUpload,
+  Get,
+  Post,
+  type RequestContext,
+} from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { fastifyRuntime } from '../../kickjs/src/http/runtimes/fastify'
 import { h3Runtime } from '../../kickjs/src/http/runtimes/h3'
@@ -30,6 +38,12 @@ async function boot(runtime: (() => unknown) | undefined, secret: string | false
     @Get('/:id')
     get(ctx: RequestContext) {
       ctx.json({ id: ctx.params.id })
+    }
+
+    @Post('/avatar')
+    @FileUpload({ mode: 'single', fieldName: 'avatar', allowedTypes: () => true })
+    avatar(ctx: RequestContext) {
+      ctx.json({ name: ctx.file?.originalname ?? null })
     }
   }
 
@@ -83,6 +97,15 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
 
     await http.get('/_debug/container').expect(200)
     await http.get('/_debug/graph').expect(200)
+  })
+
+  it('reports @FileUpload config on the route, without non-serialisable options', async () => {
+    const http = await boot(runtime)
+    const routes = await http.get('/_debug/routes').expect(200)
+    const avatar = routes.body.routes.find((r: { handler: string }) => r.handler === 'avatar')
+    expect(avatar.upload).toEqual({ mode: 'single', fieldName: 'avatar' })
+    const get = routes.body.routes.find((r: { handler: string }) => r.handler === 'get')
+    expect(get.upload).toBeUndefined()
   })
 
   it('keys latency by the matched route pattern, not the raw URL', async () => {

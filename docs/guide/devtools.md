@@ -67,7 +67,8 @@ Resolution order: explicit `enabled` option → `KICKJS_DEVTOOLS=0|1|true|false`
 ### `GET /_debug/routes`
 
 Lists all registered routes with their HTTP method, path, controller, handler, middleware, and
-resolved [route flags](./route-flags.md).
+resolved [route flags](./route-flags.md). A handler with `@FileUpload` also reports `upload`
+(`mode`, `fieldName`, `maxCount`; never `allowedTypes`, which may be a function).
 
 ```json
 {
@@ -320,7 +321,7 @@ The tab nav scrolls horizontally when there are too many tabs to fit; switching 
 
 - **Path params** — one field per `:param`; the resolved URL updates as you type.
 - **Query** and **Headers** — key/value rows you can switch off without deleting.
-- **Body** — raw text for `POST` / `PUT` / `PATCH` / `DELETE`; JSON gets `Content-Type: application/json`.
+- **Body** — for `POST` / `PUT` / `PATCH` / `DELETE`, either **Raw** text (JSON gets `Content-Type: application/json`) or **Form data**: `multipart/form-data` rows that are text fields or **file pickers**. A route with `@FileUpload` opens in form mode with its declared field ready, and says how many files it takes. Picked files are kept in memory only, so pick them again after reopening; the snippets use `-F 'field=@file'` (curl) and a `FormData` (fetch).
 - **Environment** — default headers sent with every route (an `Authorization` token, a tenant header), variables, and settings. Kept for the browser tab only, unless you tick **Remember on this browser** (see below).
 - **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
 - **Response** — status, time, headers and the body (JSON pretty-printed), plus **Save to variable**.

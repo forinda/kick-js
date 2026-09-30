@@ -33,6 +33,7 @@ import {
   emptyInputs,
   formatBody,
   inputsKey,
+  storableInputs,
   readJsonPath,
   unresolvedVariables,
   variableMap,
@@ -43,6 +44,7 @@ import {
   publicFlagNames,
   toCurl,
   toFetch,
+  type FormRow,
   type KeyValueRow,
   type RouteInputs,
   type RunnerSettings,
@@ -154,7 +156,7 @@ export const ApiRunnerHost: Component = () => {
   createEffect(() => {
     const route = activeRoute()
     const current = inputs()
-    if (route && current) save(() => localStorage, inputsKey(route), current)
+    if (route && current) save(() => localStorage, inputsKey(route), storableInputs(current))
   })
   // Write the environment where `remember` says, and clear the other storage so
   // switching the toggle moves it instead of leaving a copy behind.
@@ -387,12 +389,60 @@ export const ApiRunnerHost: Component = () => {
 
                     <Show when={acceptsBody(route().method)}>
                       <Section title="Body" open>
-                        <textarea
-                          class={`${inputClass} font-mono min-h-40`}
-                          placeholder='{ "name": "value" }'
-                          value={current().body}
-                          onInput={(e) => update({ body: e.currentTarget.value })}
-                        />
+                        <div class="flex items-center gap-1 mb-2">
+                          <For
+                            each={
+                              [
+                                ['raw', 'Raw'],
+                                ['form', 'Form data'],
+                              ] as const
+                            }
+                          >
+                            {([mode, label]) => (
+                              <button
+                                type="button"
+                                aria-pressed={(current().bodyMode ?? 'raw') === mode}
+                                onClick={() => update({ bodyMode: mode })}
+                                class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                                  (current().bodyMode ?? 'raw') === mode
+                                    ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
+                                    : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            )}
+                          </For>
+                          <Show when={route().upload && route().upload!.mode !== 'none'}>
+                            <span class="text-xs text-text-muted ml-2">
+                              @FileUpload: field <code>{route().upload!.fieldName ?? 'file'}</code>
+                              {route().upload!.mode === 'array'
+                                ? `, up to ${route().upload!.maxCount ?? 10} files`
+                                : ', one file'}
+                            </span>
+                          </Show>
+                        </div>
+                        <Show
+                          when={current().bodyMode === 'form'}
+                          fallback={
+                            <textarea
+                              class={`${inputClass} font-mono min-h-40`}
+                              placeholder='{ "name": "value" }'
+                              value={current().body}
+                              onInput={(e) => update({ body: e.currentTarget.value })}
+                            />
+                          }
+                        >
+                          <FormEditor
+                            rows={current().form ?? []}
+                            multiple={route().upload?.mode === 'array'}
+                            onChange={(form) => update({ form })}
+                          />
+                          <p class="text-xs text-text-muted mt-2">
+                            Sent as multipart/form-data. Picked files aren't saved — pick them again
+                            after reopening.
+                          </p>
+                        </Show>
                       </Section>
                     </Show>
                   </>
@@ -625,6 +675,82 @@ const Section: Component<{
     <div class="px-3 pb-3">{props.children}</div>
   </details>
 )
+
+/**
+ * Multipart rows: a text field or a file picker each, plus one blank row.
+ * `<Index>` for the same focus reason as `RowsEditor`.
+ */
+const FormEditor: Component<{
+  rows: FormRow[]
+  multiple: boolean
+  onChange: (rows: FormRow[]) => void
+}> = (props) => {
+  const rows = (): FormRow[] => [...props.rows, { key: '', value: '', enabled: true, type: 'text' }]
+  const set = (index: number, patch: Partial<FormRow>) => {
+    // Copy-on-write on purpose: mutating a row in place would not re-render it.
+    // oxlint-disable-next-line no-map-spread
+    const next = rows().map((row, i) => (i === index ? { ...row, ...patch } : row))
+    props.onChange(next.filter((row) => row.key || row.value || row.files?.length))
+  }
+  return (
+    <div class="flex flex-col gap-2">
+      <Index each={rows()}>
+        {(row, i) => (
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              aria-label="Enabled"
+              checked={row().enabled}
+              onChange={(e) => set(i, { enabled: e.currentTarget.checked })}
+            />
+            <select
+              aria-label="Field type"
+              class={`${inputClass} w-24 shrink-0`}
+              value={row().type}
+              onChange={(e) =>
+                set(i, { type: e.currentTarget.value as FormRow['type'], value: '', files: [] })
+              }
+            >
+              <option value="text">Text</option>
+              <option value="file">File</option>
+            </select>
+            <input
+              class={inputClass}
+              placeholder="name"
+              value={row().key}
+              onInput={(e) => set(i, { key: e.currentTarget.value })}
+            />
+            <Show
+              when={row().type === 'file'}
+              fallback={
+                <input
+                  class={inputClass}
+                  placeholder="value"
+                  value={row().value}
+                  onInput={(e) => set(i, { value: e.currentTarget.value })}
+                />
+              }
+            >
+              <label class={`${inputClass} cursor-pointer truncate`}>
+                <input
+                  type="file"
+                  class="sr-only"
+                  multiple={props.multiple}
+                  onChange={(e) => set(i, { files: [...(e.currentTarget.files ?? [])] })}
+                />
+                {row().files?.length
+                  ? row()
+                      .files!.map((f) => f.name)
+                      .join(', ')
+                  : 'Choose file…'}
+              </label>
+            </Show>
+          </div>
+        )}
+      </Index>
+    </div>
+  )
+}
 
 /**
  * Key/value rows with enable toggles; always shows one blank row to type into.
