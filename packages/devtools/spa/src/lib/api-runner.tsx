@@ -1,0 +1,551 @@
+/**
+ * API runner — send a request to one of the app's routes from the dashboard.
+ *
+ * A sheet that slides in from the right, with one collapsible section per
+ * part of the request (native `<details>`: keyboard and screen-reader
+ * behaviour for free). Opened from the Routes tab (`openApiRunner(route)`);
+ * mount `<ApiRunnerHost />` once in App.tsx.
+ *
+ * Requests go straight from the browser to the app on the same origin — no
+ * proxy, so it behaves the same on every runtime. The devtools token is never
+ * attached to them.
+ *
+ * Storage: per-route inputs in `localStorage`; default headers (which tend to
+ * hold credentials) in `sessionStorage`, so they are gone when the tab closes.
+ */
+
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Index,
+  onCleanup,
+  Show,
+  type Component,
+  type JSX,
+} from 'solid-js'
+import type { RouteEntry } from './store'
+import { methodColor } from './format'
+import {
+  DEFAULT_SETTINGS,
+  acceptsBody,
+  emptyInputs,
+  formatBody,
+  inputsKey,
+  isPublicRoute,
+  needsConfirmation,
+  pathParams,
+  prepareRequest,
+  publicFlagNames,
+  toCurl,
+  toFetch,
+  type KeyValueRow,
+  type RouteInputs,
+  type RunnerSettings,
+} from './api-runner-core'
+
+const DEFAULTS_KEY = 'kickjs-devtools:runner:defaults'
+const SETTINGS_KEY = 'kickjs-devtools:runner:settings'
+const MAX_BODY_CHARS = 200_000
+
+const [activeRoute, setActiveRoute] = createSignal<RouteEntry | null>(null)
+
+/** Open the runner for a route. */
+export function openApiRunner(route: RouteEntry): void {
+  setActiveRoute(route)
+}
+
+function load<T>(storage: () => Storage, key: string, fallback: T): T {
+  try {
+    const raw = storage().getItem(key)
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function loadRows(key: string): KeyValueRow[] {
+  try {
+    const raw = sessionStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as KeyValueRow[]) : []
+  } catch {
+    return []
+  }
+}
+
+function save(storage: () => Storage, key: string, value: unknown): void {
+  try {
+    storage().setItem(key, JSON.stringify(value))
+  } catch {
+    /* storage unavailable (private mode) — the runner still works, unsaved */
+  }
+}
+
+interface RunResult {
+  status: number
+  statusText: string
+  ms: number
+  headers: [string, string][]
+  body: string
+  truncated: boolean
+}
+
+const enabledCount = (rows: KeyValueRow[]) => rows.filter((r) => r.enabled && r.key).length
+
+export const ApiRunnerHost: Component = () => {
+  const [inputs, setInputs] = createSignal<RouteInputs | null>(null)
+  const [defaults, setDefaults] = createSignal<KeyValueRow[]>(loadRows(DEFAULTS_KEY))
+  const [settings, setSettings] = createSignal<RunnerSettings>(
+    load(() => localStorage, SETTINGS_KEY, DEFAULT_SETTINGS),
+  )
+  const [armed, setArmed] = createSignal(false)
+  const [sending, setSending] = createSignal(false)
+  const [result, setResult] = createSignal<RunResult | null>(null)
+  const [error, setError] = createSignal<string | null>(null)
+  const [copied, setCopied] = createSignal<string | null>(null)
+  const [snippetKind, setSnippetKind] = createSignal<'curl' | 'fetch'>('curl')
+
+  // Load the route's saved inputs whenever a route is opened.
+  createEffect(() => {
+    const route = activeRoute()
+    if (!route) return
+    const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
+    // Keep params in sync with the path even if the saved inputs are older.
+    const params = Object.fromEntries(pathParams(route.path).map((p) => [p, saved.params[p] ?? '']))
+    setInputs({ ...saved, params })
+    setResult(null)
+    setError(null)
+    setArmed(false)
+  })
+
+  createEffect(() => {
+    const route = activeRoute()
+    const current = inputs()
+    if (route && current) save(() => localStorage, inputsKey(route), current)
+  })
+  createEffect(() => save(() => sessionStorage, DEFAULTS_KEY, defaults()))
+  createEffect(() => save(() => localStorage, SETTINGS_KEY, settings()))
+
+  // Escape closes the sheet wherever focus is.
+  createEffect(() => {
+    if (!activeRoute()) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    document.addEventListener('keydown', onKey)
+    onCleanup(() => document.removeEventListener('keydown', onKey))
+  })
+
+  const prepared = createMemo(() => {
+    const route = activeRoute()
+    const current = inputs()
+    if (!route || !current) return null
+    return prepareRequest({
+      route,
+      inputs: current,
+      defaults: defaults(),
+      settings: settings(),
+      origin: window.location.origin,
+      cookies: document.cookie,
+    })
+  })
+
+  const close = () => setActiveRoute(null)
+
+  const update = (patch: Partial<RouteInputs>) => {
+    setArmed(false)
+    setInputs((prev) => (prev ? { ...prev, ...patch } : prev))
+  }
+
+  async function send(): Promise<void> {
+    const req = prepared()
+    if (!req) return
+    if (needsConfirmation(req.method) && !armed()) {
+      setArmed(true)
+      return
+    }
+    setArmed(false)
+    setSending(true)
+    setError(null)
+    const started = performance.now()
+    try {
+      const res = await fetch(req.url, {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+        credentials: 'same-origin',
+      })
+      const text = await res.text()
+      setResult({
+        status: res.status,
+        statusText: res.statusText,
+        ms: Math.round(performance.now() - started),
+        headers: [...res.headers.entries()],
+        body: formatBody(text.slice(0, MAX_BODY_CHARS), res.headers.get('content-type')),
+        truncated: text.length > MAX_BODY_CHARS,
+      })
+    } catch (err) {
+      setResult(null)
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // The snippet is rendered in the sheet, so it can be read and selected by
+  // hand; the Copy button is only a shortcut.
+  const snippet = createMemo(() => {
+    const req = prepared()
+    if (!req) return ''
+    return snippetKind() === 'curl' ? toCurl(req) : toFetch(req)
+  })
+
+  async function copySnippet(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(snippet())
+      setCopied('Copied')
+    } catch {
+      setCopied('Copy failed — select the text instead')
+    }
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+  const isPublic = () => {
+    const route = activeRoute()
+    return route ? isPublicRoute(route, settings()) : false
+  }
+
+  return (
+    <Show when={activeRoute()}>
+      {(route) => (
+        <div
+          class="fixed inset-0 z-50 bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) close()
+          }}
+        >
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Try ${route().method} ${route().path}`}
+            class="absolute right-0 top-0 h-full w-full max-w-2xl bg-surface-1 border-l border-border-strong shadow-2xl flex flex-col"
+          >
+            {/* Header */}
+            <header class="px-5 py-4 border-b border-border">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class={`text-xs font-bold ${methodColor(route().method)}`}>
+                      {route().method.toUpperCase()}
+                    </span>
+                    <h2 class="text-base font-semibold font-mono text-text-body break-all">
+                      {route().path}
+                    </h2>
+                  </div>
+                  <p class="text-xs text-text-muted mt-1">
+                    {route().controller}.{route().handler}
+                    <Show when={isPublic()}> · public route — default Authorization not sent</Show>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="text-text-muted hover:text-text-strong p-1 text-lg leading-none"
+                  aria-label="Close"
+                  onClick={close}
+                >
+                  ✕
+                </button>
+              </div>
+              <div class="font-mono text-xs bg-surface-2 border border-border rounded-lg px-3 py-2 mt-3 break-all text-text-secondary">
+                {prepared()?.url}
+              </div>
+            </header>
+
+            {/* Sections */}
+            <div class="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
+              <Show when={inputs()}>
+                {(current) => (
+                  <>
+                    <Show when={pathParams(route().path).length > 0}>
+                      <Section title="Path params" open>
+                        <div class="flex flex-col gap-2">
+                          <For each={pathParams(route().path)}>
+                            {(name) => (
+                              <label class="flex items-center gap-3 text-sm">
+                                <span class="font-mono text-text-secondary w-28 shrink-0">
+                                  :{name}
+                                </span>
+                                <input
+                                  class={inputClass}
+                                  value={current().params[name] ?? ''}
+                                  onInput={(e) =>
+                                    update({
+                                      params: {
+                                        ...current().params,
+                                        [name]: e.currentTarget.value,
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                            )}
+                          </For>
+                        </div>
+                      </Section>
+                    </Show>
+
+                    <Section title="Query" count={enabledCount(current().query)}>
+                      <RowsEditor rows={current().query} onChange={(query) => update({ query })} />
+                    </Section>
+
+                    <Section title="Headers" count={enabledCount(current().headers)}>
+                      <RowsEditor
+                        rows={current().headers}
+                        onChange={(headers) => update({ headers })}
+                      />
+                    </Section>
+
+                    <Show when={acceptsBody(route().method)}>
+                      <Section title="Body" open>
+                        <textarea
+                          class={`${inputClass} font-mono min-h-40`}
+                          placeholder='{ "name": "value" }'
+                          value={current().body}
+                          onInput={(e) => update({ body: e.currentTarget.value })}
+                        />
+                      </Section>
+                    </Show>
+                  </>
+                )}
+              </Show>
+
+              <Section title="Defaults & settings" count={enabledCount(defaults())}>
+                <p class="text-xs text-text-muted mb-2">
+                  Headers sent with every route, kept for this browser tab only. A default
+                  Authorization is skipped on routes carrying a public flag.
+                </p>
+                <RowsEditor rows={defaults()} onChange={setDefaults} />
+                <div class="flex flex-col sm:flex-row gap-3 mt-3">
+                  <label class="flex-1 flex flex-col gap-1 text-xs text-text-muted">
+                    Public route flags (comma-separated)
+                    <input
+                      class={inputClass}
+                      value={publicFlagNames(settings().publicFlag).join(', ')}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings(),
+                          publicFlag: publicFlagNames(e.currentTarget.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <For
+                    each={
+                      [
+                        ['csrfCookie', 'CSRF cookie'],
+                        ['csrfHeader', 'CSRF header'],
+                      ] as const
+                    }
+                  >
+                    {([key, label]) => (
+                      <label class="flex-1 flex flex-col gap-1 text-xs text-text-muted">
+                        {label}
+                        <input
+                          class={inputClass}
+                          value={settings()[key]}
+                          onInput={(e) =>
+                            setSettings({ ...settings(), [key]: e.currentTarget.value })
+                          }
+                        />
+                      </label>
+                    )}
+                  </For>
+                </div>
+              </Section>
+
+              <Section title="Code snippet">
+                <div class="flex items-center gap-1 mb-2">
+                  <For each={['curl', 'fetch'] as const}>
+                    {(kind) => (
+                      <button
+                        type="button"
+                        aria-pressed={snippetKind() === kind}
+                        onClick={() => setSnippetKind(kind)}
+                        class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                          snippetKind() === kind
+                            ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
+                            : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+                        }`}
+                      >
+                        {kind}
+                      </button>
+                    )}
+                  </For>
+                  <button type="button" class={`${secondaryButton} ml-auto`} onClick={copySnippet}>
+                    Copy
+                  </button>
+                  <Show when={copied()}>
+                    <span class="text-xs text-text-muted" role="status">
+                      {copied()}
+                    </span>
+                  </Show>
+                </div>
+                <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all select-text">
+                  {snippet()}
+                </pre>
+              </Section>
+
+              <Show when={error()}>
+                <div class="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                  Request failed: {error()}
+                </div>
+              </Show>
+
+              <Show when={result()}>
+                {(res) => (
+                  <Section
+                    open
+                    title={
+                      <span class="flex items-center gap-3">
+                        Response
+                        <span class={`font-bold ${statusColor(res().status)}`}>
+                          {res().status} {res().statusText}
+                        </span>
+                        <span class="text-text-muted text-xs font-normal">{res().ms} ms</span>
+                      </span>
+                    }
+                  >
+                    <details class="text-xs mb-2">
+                      <summary class="cursor-pointer text-text-secondary">
+                        Response headers ({res().headers.length})
+                      </summary>
+                      <table class="mt-2">
+                        <tbody>
+                          <For each={res().headers}>
+                            {([k, v]) => (
+                              <tr>
+                                <td class="font-mono text-text-secondary pr-4">{k}</td>
+                                <td class="font-mono break-all">{v}</td>
+                              </tr>
+                            )}
+                          </For>
+                        </tbody>
+                      </table>
+                    </details>
+                    <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
+                      {res().body || '(empty body)'}
+                    </pre>
+                    <Show when={res().truncated}>
+                      <p class="mt-1 text-xs text-text-muted">
+                        Body truncated to {MAX_BODY_CHARS.toLocaleString()} characters.
+                      </p>
+                    </Show>
+                  </Section>
+                )}
+              </Show>
+            </div>
+
+            {/* Footer actions */}
+            <footer class="px-5 py-3 border-t border-border flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={sending()}
+                onClick={send}
+                class={`px-4 py-2 text-sm font-semibold rounded-lg border transition-colors ${
+                  armed()
+                    ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                    : 'bg-kick-500/20 text-kick-500 border-kick-500/30 hover:bg-kick-500/30'
+                }`}
+              >
+                {sending()
+                  ? 'Sending…'
+                  : armed()
+                    ? `Click again to send ${route().method.toUpperCase()}`
+                    : 'Send'}
+              </button>
+            </footer>
+          </aside>
+        </div>
+      )}
+    </Show>
+  )
+}
+
+/** One collapsible block of the sheet — a native `<details>`. */
+const Section: Component<{
+  title: JSX.Element
+  count?: number
+  open?: boolean
+  children: JSX.Element
+}> = (props) => (
+  <details open={props.open} class="border border-border rounded-lg bg-surface-1 group">
+    <summary class="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-text-body flex items-center gap-2">
+      <span class="text-text-muted transition-transform group-open:rotate-90">▸</span>
+      {props.title}
+      <Show when={props.count}>
+        <span class="text-xs font-normal text-text-muted">({props.count})</span>
+      </Show>
+    </summary>
+    <div class="px-3 pb-3">{props.children}</div>
+  </details>
+)
+
+/**
+ * Key/value rows with enable toggles; always shows one blank row to type into.
+ * `<Index>` (keyed by position), not `<For>` (keyed by object identity): every
+ * keystroke builds a new row object, and `<For>` would rebuild the input and
+ * drop focus on each one.
+ */
+const RowsEditor: Component<{
+  rows: KeyValueRow[]
+  onChange: (rows: KeyValueRow[]) => void
+}> = (props) => {
+  const rows = () => [...props.rows, { key: '', value: '', enabled: true }]
+  const set = (index: number, patch: Partial<KeyValueRow>) => {
+    // Copy-on-write on purpose: mutating a row in place would not re-render it.
+    // oxlint-disable-next-line no-map-spread
+    const next = rows().map((row, i) => (i === index ? { ...row, ...patch } : row))
+    props.onChange(next.filter((row) => row.key || row.value))
+  }
+  return (
+    <div class="flex flex-col gap-2">
+      <Index each={rows()}>
+        {(row, i) => (
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              aria-label="Enabled"
+              checked={row().enabled}
+              onChange={(e) => set(i, { enabled: e.currentTarget.checked })}
+            />
+            <input
+              class={inputClass}
+              placeholder="name"
+              value={row().key}
+              onInput={(e) => set(i, { key: e.currentTarget.value })}
+            />
+            <input
+              class={inputClass}
+              placeholder="value"
+              value={row().value}
+              onInput={(e) => set(i, { value: e.currentTarget.value })}
+            />
+          </div>
+        )}
+      </Index>
+    </div>
+  )
+}
+
+const inputClass =
+  'w-full min-w-0 bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500'
+const secondaryButton =
+  'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+
+function statusColor(status: number): string {
+  if (status >= 500) return 'text-red-400'
+  if (status >= 400) return 'text-amber-400'
+  if (status >= 300) return 'text-cyan-400'
+  return 'text-emerald-400'
+}

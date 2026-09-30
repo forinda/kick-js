@@ -40,3 +40,13 @@ export function formatUptime(seconds: number): string {
 export function formatPercent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`
 }
+
+/** HTTP method → text colour, shared by the Routes tab and the API runner. */
+export function methodColor(method: string): string {
+  const m = method.toUpperCase()
+  if (m === 'GET') return 'text-emerald-400'
+  if (m === 'POST') return 'text-cyan-400'
+  if (m === 'PUT' || m === 'PATCH') return 'text-amber-400'
+  if (m === 'DELETE') return 'text-red-400'
+  return 'text-text-secondary'
+}

@@ -528,7 +528,7 @@ so it isn't chased. Each item is `proposed` until picked up.
 
 ### E.1 API runner in the DevTools dashboard
 
-**Status:** `proposed`
+**Status:** `shipped` (MVP) — **Try** on the Routes tab opens a side sheet with collapsible path-param / query / header / body sections, default headers (session-only) and settings, a rendered `curl` / `fetch` snippet, and the response; CSRF auto-fill, a configurable list of public flags that skip the default `Authorization`, and a second click for `DELETE` / `PUT` / `PATCH`. See [DevTools → API runner](./devtools.md#api-runner). Phases 2–3 below remain `proposed`.
 **Effort:** MVP ~1 week; phases 2–3 independently schedulable
 
 **What they do.** Nuxt DevTools' _Server Routes_ tab is a Postman-style runner: pick a route, fill
@@ -755,13 +755,13 @@ These will get their own track once we have a clearer picture from the non-DB wo
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), and **E.2** `waitUntil`. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, and the **E.1** API runner MVP. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **E.1 — API runner MVP** (~1 week; the most visible DX gain from the Nitro/Nuxt comparison)
-2. **E.3 + E.4 — error funnel and tracing channels** (1–2 weeks; likely the re-scoped form of A.2)
-3. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
+1. **E.3 + E.4 — error funnel and tracing channels** (1–2 weeks; likely the re-scoped form of A.2)
+2. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
+3. **E.1 phase 2** — OpenAPI prefill, request history, open handler in editor
 4. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
 5. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
 6. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
