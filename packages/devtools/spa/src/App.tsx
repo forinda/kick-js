@@ -19,6 +19,7 @@ import { startUnifiedStream } from './lib/unified-stream'
 import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
+import { ApiRunnerHost } from './lib/api-runner'
 import { AuthGate } from './lib/auth-gate'
 
 type BuiltInTabId =
@@ -421,6 +422,7 @@ export const App: Component = () => {
         </main>
       </div>
       <DetailModalHost />
+      <ApiRunnerHost />
       <AuthGate />
     </div>
   )

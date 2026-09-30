@@ -37,6 +37,18 @@ import { createServerBus, type ServerBus } from './bus/server'
 
 const log = createLogger('DevTools')
 
+/** The serialisable part of a handler's `@FileUpload` config, if it has one. */
+function uploadInfo(controllerClass: any, handlerName: string): Pick<RouteInfo, 'upload'> {
+  const config = getMethodMeta<
+    { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number } | undefined
+  >(METADATA.FILE_UPLOAD, controllerClass, handlerName, undefined)
+  if (!config) return {}
+  const { mode, fieldName, maxCount } = config
+  return {
+    upload: { mode, ...(fieldName ? { fieldName } : {}), ...(maxCount ? { maxCount } : {}) },
+  }
+}
+
 /** Route metadata collected during mount */
 interface RouteInfo {
   method: string
@@ -50,6 +62,12 @@ interface RouteInfo {
    * itself, rather than by reading the controller.
    */
   flags: Record<string, unknown>
+  /**
+   * `@FileUpload` config, when the handler declares one — the dashboard's API
+   * runner starts such routes in multipart mode with this field. Only the
+   * plain fields: `allowedTypes` may be a function and isn't serialisable.
+   */
+  upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
 }
 
 /** Per-route latency stats with percentile tracking */
@@ -1050,6 +1068,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               ...methodMiddleware.map((m: any) => m.name || 'anonymous'),
             ],
             flags: Object.fromEntries(getRouteFlags(controllerClass, route.handlerName)),
+            ...uploadInfo(controllerClass, route.handlerName),
           })
         }
       },

@@ -1,6 +1,7 @@
 /**
  * Route registry tab — method/path/controller/handler/middleware/flags
- * listing with search + method-filter + pagination.
+ * listing with search + method-filter + pagination. "Try" opens the API
+ * runner for a route.
  *
  * Sources its data from the shared store (`store.routes()`), which
  * is populated by the unified /stream consumer. Filters are local
@@ -14,6 +15,8 @@
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type RouteEntry } from '../lib/store'
 import { Pagination, usePagination } from '../lib/pagination'
+import { openApiRunner } from '../lib/api-runner'
+import { methodColor } from '../lib/format'
 
 const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
 type MethodFilter = (typeof METHODS)[number]
@@ -119,6 +122,9 @@ export const RoutesTab: Component = () => {
                 <th>Handler</th>
                 <th>Middleware</th>
                 <th>Flags</th>
+                <th>
+                  <span class="sr-only">Try</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -135,6 +141,15 @@ export const RoutesTab: Component = () => {
                       {r.middleware.length ? r.middleware.join(', ') : '—'}
                     </td>
                     <td class="text-text-muted text-xs">{formatFlags(r.flags)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => openApiRunner(r)}
+                        class="px-2.5 py-1 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-kick-500 hover:border-kick-500/40"
+                      >
+                        Try
+                      </button>
+                    </td>
                   </tr>
                 )}
               </For>
@@ -145,14 +160,4 @@ export const RoutesTab: Component = () => {
       </Show>
     </div>
   )
-}
-
-/** HTTP method → text colour. Mirrors the legacy palette. */
-function methodColor(method: string): string {
-  const m = method.toUpperCase()
-  if (m === 'GET') return 'text-emerald-400'
-  if (m === 'POST') return 'text-cyan-400'
-  if (m === 'PUT' || m === 'PATCH') return 'text-amber-400'
-  if (m === 'DELETE') return 'text-red-400'
-  return 'text-text-secondary'
 }

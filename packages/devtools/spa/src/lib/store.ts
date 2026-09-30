@@ -37,6 +37,8 @@ export interface RouteEntry {
   middleware: string[]
   /** Route flags in force, resolved method-over-class. */
   flags?: Record<string, unknown>
+  /** `@FileUpload` config, when the handler declares one. */
+  upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
 }
 
 export interface ContainerRegistration {

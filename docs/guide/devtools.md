@@ -67,7 +67,8 @@ Resolution order: explicit `enabled` option → `KICKJS_DEVTOOLS=0|1|true|false`
 ### `GET /_debug/routes`
 
 Lists all registered routes with their HTTP method, path, controller, handler, middleware, and
-resolved [route flags](./route-flags.md).
+resolved [route flags](./route-flags.md). A handler with `@FileUpload` also reports `upload`
+(`mode`, `fieldName`, `maxCount`; never `allowedTypes`, which may be a function).
 
 ```json
 {
@@ -300,19 +301,48 @@ The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you
 
 Each tab subscribes to a slice of the shared store; nothing owns its own polling loop.
 
-| Tab           | What it shows                                                                                                                                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**  | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit.      |
-| **Runtime**   | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`.                                                                                                                           |
-| **Memory**    | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button.                                                                                         |
-| **Topology**  | Plugin / adapter / contributor / DI-token introspection from `/topology`.                                                                                                                                         |
-| **Routes**    | Method / path / controller / handler / middleware registry. Search input + method filter pills (ALL / GET / POST / PUT / DELETE / PATCH) + paginated (20/page).                                                   |
-| **Metrics**   | Per-route latency table (avg / p50 / p95 / p99 / max).                                                                                                                                                            |
-| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status. |
-| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                               |
-| **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                   |
+| Tab           | What it shows                                                                                                                                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**  | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit.           |
+| **Runtime**   | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`.                                                                                                                                |
+| **Memory**    | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button.                                                                                              |
+| **Topology**  | Plugin / adapter / contributor / DI-token introspection from `/topology`.                                                                                                                                              |
+| **Routes**    | Method / path / controller / handler / middleware / flags registry. Search input + method filter pills (ALL / GET / POST / PUT / DELETE / PATCH) + paginated. **Try** opens the [API runner](#api-runner) for a route. |
+| **Metrics**   | Per-route latency table (avg / p50 / p95 / p99 / max).                                                                                                                                                                 |
+| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status.      |
+| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                                    |
+| **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                        |
 
 The tab nav scrolls horizontally when there are too many tabs to fit; switching to a tab via localStorage restore scrolls it into view automatically.
+
+### API runner
+
+**Try** on a row of the Routes tab opens a side sheet that sends a request to that route, from the browser, on the same origin — so it behaves the same on Express, Fastify and h3, and needs no extra endpoint. Each part of the request is a collapsible section:
+
+- **Path params** — one field per `:param`; the resolved URL updates as you type.
+- **Query** and **Headers** — key/value rows you can switch off without deleting.
+- **Body** — for `POST` / `PUT` / `PATCH` / `DELETE`, either **Raw** text (JSON gets `Content-Type: application/json`) or **Form data**: `multipart/form-data` rows that are text fields or **file pickers**. A route with `@FileUpload` opens in form mode with its declared field ready, and says how many files it takes. Picked files are kept in memory only, so pick them again after reopening; the snippets use `-F 'field=@file'` (curl) and a `FormData` (fetch).
+- **Environment** — default headers sent with every route (an `Authorization` token, a tenant header), variables, and settings. Kept for the browser tab only, unless you tick **Remember on this browser** (see below).
+- **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
+- **Response** — status, time, headers and the body (JSON pretty-printed), plus **Save to variable**.
+
+#### Variables and saved auth
+
+Like environments in Postman or Insomnia, variables save you re-typing the same values:
+
+- Write `{{name}}` in any param, query, header or body value, and set `name` under _Environment → Variables_. A `{{name}}` with no value is left as written and flagged under the URL.
+- **Save to variable** on a response reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable from it.
+- Together: send your login route once, save `data.accessToken` as `token`, and add a default header `Authorization: Bearer {{token}}` — every route now sends it, and logging in again updates it everywhere.
+- **Remember on this browser** keeps default headers and variables in `localStorage`, so they survive closing the tab. They often hold tokens: leave it off on a shared machine. Switching it moves them rather than copying.
+
+It handles the framework's conventions for you:
+
+- **CSRF** — for unsafe methods it reads the `_csrf` cookie and sends it as `x-csrf-token`, the `csrf()` / `csrfGuard()` defaults. Change the names under _Environment → Settings_ if your app overrides them.
+- **Public routes** — on a route carrying a public [route flag](./route-flags.md), a default `Authorization` header is left out, so you see the route work without credentials. The flag name defaults to `auth.public`; list several (comma-separated) if your app uses more than one.
+- **Data-changing requests** — `DELETE`, `PUT` and `PATCH` need a second click before they are sent. They run against whatever the app is connected to.
+- **The devtools token is never sent** to your routes.
+
+Per-route inputs are saved in `localStorage`. Routes mounted through a hand-built `router` carry no route metadata, so they aren't listed.
 
 ### Detail modal
 
