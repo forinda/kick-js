@@ -94,16 +94,19 @@ export class DashboardPanel {
   </div>
   <div id="content"></div>
   <script>
-    const BASE = '${this.baseUrl}';
+    const BASE = ${JSON.stringify(this.baseUrl)};
     const TOKEN = ${JSON.stringify(this.token ?? '')};
     let allRoutes = [];
 
     // Authenticated GET — sends the devtools token as a header (not a
     // query string), matching the tree providers. Without this the
     // dashboard 401s against any server with a configured secret.
+    // /health answers 503 when degraded — that body is still the status.
     function getJson(path) {
       const headers = TOKEN ? { 'x-devtools-token': TOKEN } : undefined;
-      return fetch(BASE + path, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+      return fetch(BASE + path, { headers })
+        .then(r => (r.ok || (path === '/health' && r.status === 503)) ? r.json() : null)
+        .catch(() => null);
     }
 
     // Escape HTML entities in dynamic string values
@@ -163,6 +166,44 @@ export class DashboardPanel {
       return div;
     }
 
+    function mb(bytes) {
+      return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    /** A titled card of label/value rows; rows with an undefined value are skipped. */
+    function buildCard(title, rows) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const h = document.createElement('h2');
+      h.textContent = title;
+      card.appendChild(h);
+      rows.forEach(([label, value]) => {
+        if (value !== undefined && value !== null) card.appendChild(buildStatRow(label, value));
+      });
+      return card;
+    }
+
+    function buildQueueTable(queues) {
+      const table = document.createElement('table');
+      const head = document.createElement('tr');
+      ['Queue', 'Waiting', 'Active', 'Delayed', 'Failed', 'Completed'].forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        head.appendChild(th);
+      });
+      table.appendChild(head);
+      queues.forEach(q => {
+        const tr = document.createElement('tr');
+        [q.name, q.waiting, q.active, q.delayed, q.failed, q.completed].forEach(v => {
+          const td = document.createElement('td');
+          td.textContent = v === undefined ? '—' : String(v);
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+      return table;
+    }
+
     function buildBadge(text, ok) {
       const span = document.createElement('span');
       span.className = 'badge ' + (ok ? 'ok' : 'err');
@@ -173,12 +214,18 @@ export class DashboardPanel {
     async function load() {
       const content = document.getElementById('content');
       try {
-        const [health, metrics, routes, container] = await Promise.all([
-          getJson('/health'),
-          getJson('/metrics'),
-          getJson('/routes'),
-          getJson('/container'),
-        ]);
+        const [health, metrics, routes, container, runtime, topology, graph, queues, ws] =
+          await Promise.all([
+            getJson('/health'),
+            getJson('/metrics'),
+            getJson('/routes'),
+            getJson('/container'),
+            getJson('/runtime'),
+            getJson('/topology'),
+            getJson('/graph'),
+            getJson('/queues'),
+            getJson('/ws'),
+          ]);
 
         allRoutes = routes?.routes ?? [];
         content.replaceChildren();
@@ -232,7 +279,68 @@ export class DashboardPanel {
           metricsCard.appendChild(p);
         }
         grid.appendChild(metricsCard);
+
+        // Runtime card — /runtime is 404 when the sampler is off, so the card
+        // only appears when there is something to show.
+        if (runtime && runtime.latest) {
+          const p = runtime.process || {};
+          const m = runtime.latest.memory || {};
+          const loop = runtime.latest.eventLoop || {};
+          const card = buildCard('Runtime', [
+            ['Engine', p.runtime && p.runtime.name],
+            ['Node', p.nodeVersion && (p.nodeVersion + ' · pid ' + p.pid)],
+            ['Heap', m.heapUsed !== undefined ? mb(m.heapUsed) + ' / ' + mb(m.heapTotal) : undefined],
+            ['RSS', m.rss !== undefined ? mb(m.rss) : undefined],
+            ['Event loop p99', loop.p99 !== undefined ? loop.p99.toFixed(1) + ' ms' : undefined],
+          ]);
+          const severity = runtime.health && runtime.health.heapGrowthSeverity;
+          if (severity) {
+            const row = document.createElement('div');
+            row.className = 'stat';
+            const label = document.createElement('span');
+            label.className = 'stat-label';
+            label.textContent = 'Heap growth';
+            row.appendChild(label);
+            row.appendChild(buildBadge(severity, severity === 'ok'));
+            card.appendChild(row);
+          }
+          grid.appendChild(card);
+        }
+
+        if (topology) {
+          const names = (list) => (list || []).map(x => x.name).join(', ') || 'none';
+          grid.appendChild(buildCard('Topology', [
+            ['Adapters', names(topology.adapters)],
+            ['Plugins', names(topology.plugins)],
+            ['Contributors', (topology.contributors || []).length],
+            ['DI tokens', (topology.diTokens || []).length],
+            ['Introspection errors', (topology.errors || []).length || undefined],
+          ]));
+        }
+
+        if (ws && ws.enabled) {
+          grid.appendChild(buildCard('WebSockets', [
+            ['Active connections', ws.activeConnections],
+            ['Total connections', ws.totalConnections],
+            ['Messages in / out', ws.messagesReceived + ' / ' + ws.messagesSent],
+            ['Errors', ws.errors],
+          ]));
+        }
+
         content.appendChild(grid);
+
+        if (queues && queues.enabled) {
+          const title = document.createElement('h2');
+          title.textContent = 'Queues (' + (queues.queues || []).length + ')';
+          content.appendChild(title);
+          if (queues.error) {
+            const p = document.createElement('p');
+            p.className = 'dimmed';
+            p.textContent = queues.error;
+            content.appendChild(p);
+          }
+          content.appendChild(buildQueueTable(queues.queues || []));
+        }
 
         // Routes with search
         if (allRoutes.length) {
@@ -257,6 +365,13 @@ export class DashboardPanel {
           const containerTitle = document.createElement('h2');
           containerTitle.textContent = 'DI Container (' + container.count + ' registrations)';
           content.appendChild(containerTitle);
+          if (graph) {
+            const p = document.createElement('p');
+            p.className = 'dimmed';
+            p.textContent =
+              'Dependency graph: ' + graph.nodes.length + ' nodes, ' + graph.edges.length + ' edges';
+            content.appendChild(p);
+          }
         }
 
         document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
