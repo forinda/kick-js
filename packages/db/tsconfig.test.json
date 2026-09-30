@@ -8,7 +8,8 @@
       "@forinda/kickjs/*": ["../kickjs/src/*"],
       "@forinda/kickjs-db": ["./src/index.ts"],
       "@forinda/kickjs-db/pg": ["./src/pg.ts"],
-      "@forinda/kickjs-db/*": ["./src/*"]
+      "@forinda/kickjs-db/*": ["./src/*"],
+      "@forinda/kickjs-schema": ["../schema/src/index.ts"]
     }
   },
   "include": ["src", "__tests__"],

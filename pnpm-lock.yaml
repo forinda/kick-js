@@ -246,6 +246,9 @@ importers:
       '@forinda/kickjs-devtools-kit':
         specifier: workspace:*
         version: link:../devtools-kit
+      '@forinda/kickjs-schema':
+        specifier: workspace:*
+        version: link:../schema
       '@testcontainers/postgresql':
         specifier: ^12.1.0
         version: 12.1.0

@@ -103,6 +103,7 @@ const guideSidebar = [
       { text: 'Adopting on an Existing DB', link: '/guide/database/adopting' },
       { text: 'Schema', link: '/guide/database/schema' },
       { text: 'Schema Types', link: '/guide/db-schema-types' },
+      { text: 'Validation from Tables', link: '/guide/db-table-schemas' },
       { text: 'Queries', link: '/guide/database/queries' },
       { text: 'Relational Queries', link: '/guide/db-relational-query' },
       { text: 'Migrations', link: '/guide/database/migrations' },

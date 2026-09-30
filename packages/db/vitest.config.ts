@@ -36,6 +36,14 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'src/pg.ts'),
       },
       {
+        find: '@forinda/kickjs-db/schema',
+        replacement: path.resolve(__dirname, 'src/schema.ts'),
+      },
+      {
+        find: '@forinda/kickjs-schema',
+        replacement: path.resolve(__dirname, '../schema/src/index.ts'),
+      },
+      {
         find: '@forinda/kickjs-db/sqlite',
         replacement: path.resolve(__dirname, 'src/sqlite.ts'),
       },
