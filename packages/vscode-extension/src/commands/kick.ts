@@ -1,6 +1,6 @@
 /**
  * Palette wrappers around the `kick` CLI — `dev`, `build`, `start`, the
- * generators (module/controller/service/scaffold), `add`, and `rm`.
+ * generators, `add`, `rm`, `typegen`, `info`, and `check --di`.
  *
  * Each command writes a fully-formed `kick <subcommand>` line into a
  * shared "KickJS" terminal so the user sees the exit + output the same
@@ -40,6 +40,15 @@ export function registerKickCommands(_context: vscode.ExtensionContext): vscode.
     vscode.commands.registerCommand('kickjs.generateService', () =>
       promptAndRunGenerator('service', 'service name', 'users'),
     ),
+    vscode.commands.registerCommand('kickjs.generate', async () => {
+      const kind = await vscode.window.showQuickPick(generatorOptions(), {
+        title: 'KickJS: generate',
+        placeHolder: 'Pick what to generate',
+      })
+      if (!kind) return
+      if (kind.label === 'config') return runKick('g config')
+      await promptAndRunGenerator(kind.label, `${kind.label} name`, 'users')
+    }),
     vscode.commands.registerCommand('kickjs.generateScaffold', async () => {
       const name = await vscode.window.showInputBox({
         title: 'KickJS: scaffold name',
@@ -101,6 +110,9 @@ export function registerKickCommands(_context: vscode.ExtensionContext): vscode.
     // `kick doctor` runs the v6 runtime-aware pre-flight checks (engine
     // peers, upload driver, env wiring) in the shared terminal.
     vscode.commands.registerCommand('kickjs.doctor', () => runKick('doctor')),
+    vscode.commands.registerCommand('kickjs.checkDi', () => runKick('check --di')),
+    vscode.commands.registerCommand('kickjs.typegen', () => runKick('typegen')),
+    vscode.commands.registerCommand('kickjs.info', () => runKick('info')),
 
     // ── kick/db utilities ───────────────────────────────────────────
     // The first-party database (`kick/db`) ships a `kick db` command tree
@@ -125,11 +137,13 @@ export function registerKickCommands(_context: vscode.ExtensionContext): vscode.
 async function pickAgentDocsScope(): Promise<string | undefined> {
   const choice = await vscode.window.showQuickPick(
     [
-      { label: 'all', description: 'AGENTS.md + CLAUDE.md + kickjs-skills.md (default)' },
-      { label: 'agents', description: 'AGENTS.md only' },
-      { label: 'claude', description: 'CLAUDE.md only' },
-      { label: 'skills', description: 'kickjs-skills.md only' },
-      { label: 'both', description: 'agents + claude (skip skills)' },
+      { label: 'all', description: 'Everything below (default)' },
+      { label: 'agents', description: '.agents/AGENTS.md only' },
+      { label: 'claude', description: 'CLAUDE.md (project root) only' },
+      { label: 'gemini', description: '.agents/GEMINI.md only' },
+      { label: 'copilot', description: '.agents/COPILOT.md only' },
+      { label: 'skills', description: '.agents/skills/*/SKILL.md only' },
+      { label: 'both', description: 'agents + claude' },
     ],
     {
       title: 'KickJS: regenerate agent docs',
@@ -139,8 +153,25 @@ async function pickAgentDocsScope(): Promise<string | undefined> {
   return choice?.label
 }
 
+/**
+ * Generators without a dedicated palette command — kept in sync with the
+ * built-in list in `packages/cli/src/commands/generate.ts`.
+ */
+function generatorOptions(): vscode.QuickPickItem[] {
+  return [
+    { label: 'middleware', description: 'Middleware function' },
+    { label: 'guard', description: 'Route guard (auth, roles, etc.)' },
+    { label: 'contributor', description: 'Context contributor' },
+    { label: 'dto', description: 'Zod DTO schema' },
+    { label: 'adapter', description: 'AppAdapter with lifecycle hooks' },
+    { label: 'plugin', description: 'KickPlugin with every hook stubbed' },
+    { label: 'test', description: 'Vitest test scaffold' },
+    { label: 'config', description: 'kick.config.ts' },
+  ]
+}
+
 async function promptAndRunGenerator(
-  kind: 'module' | 'controller' | 'service',
+  kind: string,
   prompt: string,
   placeholder: string,
 ): Promise<void> {
@@ -180,10 +211,14 @@ function addPackageOptions(): vscode.QuickPickItem[] {
     { label: 'queue:bullmq', description: 'Queue + BullMQ + Redis peers' },
     { label: 'queue:rabbitmq', description: 'Queue + RabbitMQ peer (amqplib)' },
     { label: 'queue:kafka', description: 'Queue + Kafka peer (kafkajs)' },
+    { label: 'queue:redis-pubsub', description: 'Lightweight pub/sub via Redis (no persistence)' },
     { label: 'devtools', description: 'Debug dashboard at /_debug' },
     { label: 'mcp', description: 'Model Context Protocol server' },
     { label: 'ai', description: 'AI toolkit — LLM providers, tools from controllers' },
     { label: 'testing', description: 'TestModule builder + helpers' },
+    { label: 'zod', description: 'Zod schema validation — wrap with fromZod()' },
+    { label: 'valibot', description: 'Valibot schema validation — wrap with fromValibot()' },
+    { label: 'yup', description: 'Yup schema validation — wrap with fromYup()' },
   ]
 }
 

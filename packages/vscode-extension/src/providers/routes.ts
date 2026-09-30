@@ -19,15 +19,29 @@ class ControllerItem extends vscode.TreeItem {
 class RouteItem extends vscode.TreeItem {
   constructor(route: any) {
     super(`${route.method} ${route.path}`, vscode.TreeItemCollapsibleState.None)
-    this.description = route.handler
+    const flags = formatFlags(route.flags)
+    this.description = flags ? `${route.handler} · ${flags}` : route.handler
     this.tooltip = [
       `${route.method} ${route.path}`,
       `Controller: ${route.controller}`,
       `Handler: ${route.handler}`,
       `Middleware: ${route.middleware?.join(', ') || 'none'}`,
+      `Flags: ${flags || 'none'}`,
     ].join('\n')
     this.iconPath = new vscode.ThemeIcon(methodIcon(route.method))
   }
+}
+
+/**
+ * Route flags as sent by the devtools `/routes` endpoint (resolved
+ * method-over-class). Bare flags carry `true` and print as their name;
+ * valued flags print as `name=<json>`. Older devtools omit the field.
+ */
+export function formatFlags(flags: Record<string, unknown> | undefined): string {
+  if (!flags) return ''
+  return Object.entries(flags)
+    .map(([name, value]) => (value === true ? name : `${name}=${JSON.stringify(value)}`))
+    .join(', ')
 }
 
 function methodIcon(method: string): string {

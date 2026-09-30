@@ -98,6 +98,11 @@
         "icon": "$(new-file)"
       },
       {
+        "command": "kickjs.generate",
+        "title": "KickJS: Generate…",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "kickjs.generateScaffold",
         "title": "KickJS: Generate Scaffold…",
         "icon": "$(layers)"
@@ -131,6 +136,21 @@
         "command": "kickjs.doctor",
         "title": "KickJS: Doctor (pre-flight checks)",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "kickjs.checkDi",
+        "title": "KickJS: Check DI Scopes",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "kickjs.typegen",
+        "title": "KickJS: Regenerate Types",
+        "icon": "$(symbol-interface)"
+      },
+      {
+        "command": "kickjs.info",
+        "title": "KickJS: Info (versions + runtime)",
+        "icon": "$(info)"
       },
       {
         "command": "kickjs.dbMigrate",
@@ -224,6 +244,10 @@
           "when": "kickjs.isKickProject"
         },
         {
+          "command": "kickjs.generate",
+          "when": "kickjs.isKickProject"
+        },
+        {
           "command": "kickjs.generateScaffold",
           "when": "kickjs.isKickProject"
         },
@@ -249,6 +273,18 @@
         },
         {
           "command": "kickjs.doctor",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.checkDi",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.typegen",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.info",
           "when": "kickjs.isKickProject"
         },
         {
