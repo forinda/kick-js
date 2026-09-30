@@ -10,16 +10,21 @@ function createAdapter(opts: DevToolsOptions = {}) {
   return DevToolsAdapter({ enabled: true, ...opts })
 }
 
-/** Build a minimal mock Request */
+/**
+ * Build a minimal mock Request. A `route: { path }` override stands in for the
+ * matched route, which every runtime publishes on the request under the
+ * `Symbol.for('kick.route')` slot; `route: undefined` means no route matched.
+ */
 function mockReq(overrides: Partial<Request> = {}): Request {
+  const route = 'route' in overrides ? overrides.route : { path: '/test' }
   return {
     method: 'GET',
     path: '/test',
-    route: { path: '/test' },
     headers: {},
     query: {},
     on: vi.fn(),
     ...overrides,
+    [Symbol.for('kick.route')]: route ? { path: route.path, flags: new Map() } : undefined,
   } as unknown as Request
 }
 
@@ -417,118 +422,6 @@ describe('DevToolsAdapter', () => {
       expect(stats.count).toBe(1050)
       // Ring buffer should cap at MAX_SAMPLES = 1000
       expect(stats.samples.length).toBeLessThanOrEqual(1000)
-    })
-  })
-
-  // ── Secret token authentication guard ──────────────────────────────
-  //
-  // The actual guard is installed inside beforeMount on an Express router,
-  // so we replicate the guard logic here to test it in isolation.
-
-  describe('secret token guard', () => {
-    /**
-     * Replicates the guard logic from DevToolsAdapter.beforeMount so we
-     * can test it without a real Express app.
-     */
-    function guardMiddleware(secret: string) {
-      return (req: Request, res: Response, next: NextFunction) => {
-        const provided = req.headers['x-devtools-token'] ?? (req.query as any)?.token
-        if (provided === secret) return next()
-        if (req.path === '/' && req.method === 'GET' && !(req.query as any)?.token) return next()
-        if (req.path.endsWith('.js') || req.path.endsWith('.css')) return next()
-        res.status(403).json({ error: 'Forbidden -- invalid or missing devtools token' })
-      }
-    }
-
-    it('should block API requests without a valid token', () => {
-      const guard = guardMiddleware('test-secret')
-      const req = mockReq({ path: '/routes', method: 'GET', headers: {}, query: {} })
-      const res = mockRes()
-      const next = mockNext()
-
-      guard(req, res, next)
-
-      expect(next).not.toHaveBeenCalled()
-      expect(res.status).toHaveBeenCalledWith(403)
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ error: expect.stringContaining('Forbidden') }),
-      )
-    })
-
-    it('should allow requests with the correct header token', () => {
-      const guard = guardMiddleware('valid-token')
-      const req = mockReq({
-        path: '/routes',
-        method: 'GET',
-        headers: { 'x-devtools-token': 'valid-token' },
-        query: {},
-      })
-      const res = mockRes()
-      const next = mockNext()
-
-      guard(req, res, next)
-
-      expect(next).toHaveBeenCalled()
-    })
-
-    it('should allow requests with the correct query token', () => {
-      const guard = guardMiddleware('query-token')
-      const req = mockReq({
-        path: '/routes',
-        method: 'GET',
-        headers: {},
-        query: { token: 'query-token' },
-      })
-      const res = mockRes()
-      const next = mockNext()
-
-      guard(req, res, next)
-
-      expect(next).toHaveBeenCalled()
-    })
-
-    it('should allow dashboard root GET without token (serves HTML)', () => {
-      const guard = guardMiddleware('some-secret')
-      const req = mockReq({ path: '/', method: 'GET', headers: {}, query: {} })
-      const res = mockRes()
-      const next = mockNext()
-
-      guard(req, res, next)
-
-      expect(next).toHaveBeenCalled()
-    })
-
-    it('should allow static .js and .css assets without token', () => {
-      const guard = guardMiddleware('some-secret')
-
-      const jsReq = mockReq({ path: '/app.js', method: 'GET', headers: {}, query: {} })
-      const jsRes = mockRes()
-      const jsNext = mockNext()
-      guard(jsReq, jsRes, jsNext)
-      expect(jsNext).toHaveBeenCalled()
-
-      const cssReq = mockReq({ path: '/style.css', method: 'GET', headers: {}, query: {} })
-      const cssRes = mockRes()
-      const cssNext = mockNext()
-      guard(cssReq, cssRes, cssNext)
-      expect(cssNext).toHaveBeenCalled()
-    })
-
-    it('should reject requests with a wrong token', () => {
-      const guard = guardMiddleware('correct-token')
-      const req = mockReq({
-        path: '/metrics',
-        method: 'GET',
-        headers: { 'x-devtools-token': 'wrong-token' },
-        query: {},
-      })
-      const res = mockRes()
-      const next = mockNext()
-
-      guard(req, res, next)
-
-      expect(next).not.toHaveBeenCalled()
-      expect(res.status).toHaveBeenCalledWith(403)
     })
   })
 

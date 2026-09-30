@@ -275,7 +275,7 @@ The DevToolsAdapter uses three layers:
 
 1. **Reactive primitives** (`ref`, `computed`, `watch`) from `@forinda/kickjs/reactivity`
 2. **Middleware** that increments reactive counters on each request (phase: `beforeGlobal`)
-3. **Express routes** at `/_debug/*` that read reactive state and return JSON
+3. **Routes** at `/_debug/*`, registered through the engine-neutral adapter HTTP surface, that read reactive state and return JSON. They run the same on Express, Fastify, and h3
 
 Because the state is reactive, the computed values (error rate, uptime) are always consistent and only recalculate when their dependencies change.
 
@@ -344,3 +344,4 @@ The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension]
 - Config endpoint is **opt-in** and redacts all variables not matching your prefix list
 - Consider adding authentication middleware if exposing in staging environments
 - The browser dashboard's auth gate (above) is the front door for `requireToken: true` mounts; the token is sent as `x-devtools-token` header on every request
+- With a `secret` set, only the dashboard page and its static bundle (`/_debug/assets/*`) load without the token; every `/_debug/*` data endpoint requires it
