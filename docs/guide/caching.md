@@ -126,10 +126,12 @@ setCacheProvider(new MemoryCacheProvider())
 
 The cache key is constructed as `{prefix}:{JSON.stringify(args)}`:
 
-- **prefix** defaults to the method name, or can be set via `options.key`
+- **prefix** defaults to `{method}:{ClassName}` (for example `findAll:UserService`), or is exactly `options.key` when you set one
 - **args** are the method arguments, serialized to JSON
 
-This means `findById('abc')` and `findById('xyz')` get separate cache entries, while `findAll()` with no args is cached under `{prefix}:[]`.
+This means `findById('abc')` and `findById('xyz')` get separate cache entries, and `UserService.findAll()` and `PostService.findAll()` don't share one. The method name stays first, so `@CacheEvict('findAll')` still clears default-keyed `findAll` entries — for every class that has one. An explicit `options.key` is used as given, so two classes that set the same key share entries on purpose.
+
+Simultaneous misses on the same key share one call: if ten requests miss `findAll:UserService:[]` at once, the method runs once and all ten get its result. A failed call isn't cached, so the next one retries.
 
 ## @CacheEvict
 
@@ -151,10 +153,10 @@ For this to work across methods, both decorators must use the same `key` prefix,
 
 ### `@Cacheable(ttl?, options?)`
 
-| Param         | Type     | Default     | Description                 |
-| ------------- | -------- | ----------- | --------------------------- |
-| `ttl`         | `number` | `60`        | Time-to-live in **seconds** |
-| `options.key` | `string` | method name | Cache key prefix            |
+| Param         | Type     | Default                | Description                 |
+| ------------- | -------- | ---------------------- | --------------------------- |
+| `ttl`         | `number` | `60`                   | Time-to-live in **seconds** |
+| `options.key` | `string` | `{method}:{ClassName}` | Cache key prefix            |
 
 ### `@CacheEvict(key)`
 

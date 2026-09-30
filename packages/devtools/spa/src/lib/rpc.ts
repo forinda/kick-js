@@ -49,23 +49,40 @@ export function getToken(): string | null {
   }
   const match = document.cookie.match(new RegExp(`${TOKEN_COOKIE}=([^;]+)`))
   if (match) {
-    _runtimeToken = decodeURIComponent(match[1])
+    // Re-persist: moves a token saved by older versions (path=/) under the
+    // dashboard's own path — see setToken.
+    setToken(decodeURIComponent(match[1]))
     return _runtimeToken
   }
   return null
 }
 
-/** Persist + activate a token. Used by the auth-gate after a successful probe. */
+/**
+ * Persist + activate a token. Used by the auth-gate after a successful probe.
+ *
+ * The cookie is scoped to the dashboard's base path. At `path=/` the browser
+ * sent the devtools secret with every request to the app itself, where any
+ * request logger or handler could see it. The root-path cookie older
+ * versions wrote is expired here too.
+ */
 export function setToken(token: string): void {
   _runtimeToken = token
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=${getBasePath()}; max-age=${
     60 * 60 * 24 * TOKEN_TTL_DAYS
   }; SameSite=Lax`
+  expireRootCookie()
 }
 
 /** Wipe the cached token + cookie. */
 export function clearToken(): void {
   _runtimeToken = null
+  document.cookie = `${TOKEN_COOKIE}=; path=${getBasePath()}; max-age=0; SameSite=Lax`
+  expireRootCookie()
+}
+
+/** Drop the `path=/` cookie written by versions before the cookie was scoped. */
+function expireRootCookie(): void {
+  if (getBasePath() === '/') return
   document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 
