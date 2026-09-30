@@ -242,14 +242,17 @@ src/
       controller.ts, dtos.ts, domain.ts, ...
   scaffold/overlay.ts             # renders templates/<layer>/files/ for kick new
 templates/                        # scaffold layers shipped with the CLI
-  base/                           # always rendered
+  base/                           # always rendered (incl. vite/kick config, README)
   template-{minimal,rest}/        # src/index.ts with slot markers
   runtime-{express,fastify,h3}/   # runtime factory + engine packages
   schema-{zod,valibot,yup}/       # src/config/index.ts
-  feature-{swagger,devtools,ws,queue}/  # adapter entries + packages
+  feature-{swagger,devtools,ws,queue}/  # adapter entries + packages (also used by kick add)
+  host-config/                    # netlify.toml / vercel.json for a standalone project
+  server-fullstack/               # fullstack server: strictPort, client route map, TS 6 pin
+  fullstack-root/ web-kick/       # fullstack workspace root files; the kick web app
 ```
 
-Each layer has `files/` (copied; `_dot_x` → `.x`; `x.append` appends to `x`) and an optional `feature.json` (`dependencies`, `devDependencies`, `builds` install-script answers, `integrations`). Shared files mark slots with `// @kick:imports` / `// @kick:<slot>` comment lines; layers declare `{ import, slot, code }` entries instead of editing them. package.json ranges still come from the scaffold-time version map, so every listed package must be in `SIBLING_PACKAGES` or `THIRD_PARTY_PACKAGES`. `kick.config.ts`, `vite.config.ts`, README, agent docs and platform config are still template functions.
+Each layer has `files/` (copied; `_dot_x` → `.x`; `x.append` appends to `x`) and an optional `feature.json` (`dependencies`, `devDependencies`, `builds` install-script answers, `integrations`). Shared files mark slots with `// @kick:imports` / `// @kick:<slot>` comment lines; layers declare `{ import, slot, code }` entries instead of editing them. package.json ranges still come from the scaffold-time version map, so every listed package must be in `SIBLING_PACKAGES` or `THIRD_PARTY_PACKAGES`. Files may use `{{name}}` placeholders, filled after rendering (`fillVars`) — so a value can depend on the result, like README's package list. Still generated in code: every `package.json` (version ranges), the fullstack root's per-package-manager scripts and README, `pnpm-workspace.yaml`, and the agent docs (shared with `kick g agents`). `kick add <feature>` applies `feature-*` layers to an existing app (`src/scaffold/wire.ts` splices the adapter in with oxc).
 
 ### Key CLI Config (kick.config.ts)
 

@@ -18,7 +18,7 @@ import { writeFileSafe } from '../utils/fs'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
 import { approveInstallScripts } from '../commands/add'
-import { generateNetlifyToml, generateVercelJson } from './templates/project-config'
+import { fillVars, renderLayers } from '../scaffold/overlay'
 
 /** Wiring a frontend we did not scaffold: typed client, proxy, route types. */
 export const FRONTEND_WIRING_URL = 'https://kickjs.app/guide/fullstack-frontend.html'
@@ -130,12 +130,10 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     schemaLib,
     runtime,
     packages,
-    // web/ reads the resolved route map from the ambient KickClientApi
-    // namespace, which needs the TS 7 compiler API to produce.
-    withClientMap: true,
-    // web/vite.config.ts proxies /api to the server's port; if kick dev moved
-    // to another port the proxy would silently reach the wrong process.
-    strictPort: true,
+    // The client route map web/ reads (with the compiler API it needs), and a
+    // strict port — web/vite.config.ts proxies /api to it, so moving to
+    // another port would silently reach the wrong process.
+    extraLayers: ['server-fullstack'],
     // server/ is a workspace member; the root records the approvals.
     approveInstallScripts: false,
     // netlify.toml / vercel.json live at the workspace root, written below.
@@ -161,7 +159,9 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     const [file, ...args] = createViteCommand(packageManager, 'web', viteTemplate)
     runCommand(file!, args, { cwd: dir })
   } else {
-    await writeWebTemplate(dir, name, versions)
+    // The wired React app (typed client, dev proxy, route-map types): its
+    // package.json here, its files from the web-kick layer below.
+    await writeFileSafe(join(dir, 'web/package.json'), webPackageJson(name, versions))
   }
 
   // ── workspace root ──────────────────────────────────────────────────
@@ -176,20 +176,13 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   }
   // Before install, at the root every package manager reads them from.
   approveInstallScripts(packageManager, dir, server.builds)
-  await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
-  // Platform deploy config, at the root both platforms build from.
-  await writeFileSafe(
-    join(dir, 'netlify.toml'),
-    generateNetlifyToml({
-      command: `${packageManager} run build:netlify`,
-      publish: 'web/dist',
-      spa: true,
-    }),
-  )
-  await writeFileSafe(
-    join(dir, 'vercel.json'),
-    generateVercelJson(`${packageManager} run build:vercel`),
-  )
+  // .gitignore, and netlify.toml / vercel.json at the root both platforms
+  // build from; plus the kick web app's files under web/.
+  const layers = ['fullstack-root', ...(frontend === 'vite' ? [] : ['web-kick'])]
+  const files = fillVars(renderLayers(layers).files, { name, packageManager })
+  for (const [path, contents] of files) {
+    await writeFileSafe(join(dir, path), contents)
+  }
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager, frontend))
 
   // Workspace-root agent docs (CLAUDE.md + .agents/) flavored for the
@@ -266,21 +259,6 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
 
 // ── web templates ─────────────────────────────────────────────────────
 
-/** The wired React app: typed client, dev proxy, route-map types. */
-async function writeWebTemplate(
-  dir: string,
-  name: string,
-  versions: Record<string, string>,
-): Promise<void> {
-  await writeFileSafe(join(dir, 'web/package.json'), webPackageJson(name, versions))
-  await writeFileSafe(join(dir, 'web/vite.config.ts'), webViteConfig())
-  await writeFileSafe(join(dir, 'web/tsconfig.json'), webTsConfig())
-  await writeFileSafe(join(dir, 'web/index.html'), webIndexHtml(name))
-  await writeFileSafe(join(dir, 'web/src/main.tsx'), webMain())
-  await writeFileSafe(join(dir, 'web/src/App.tsx'), webApp())
-  await writeFileSafe(join(dir, 'web/src/api.ts'), webApi())
-}
-
 function webPackageJson(name: string, versions: Record<string, string>): string {
   // Every range here is resolved at scaffold time — see THIRD_PARTY_PACKAGES.
   const dep = (pkg: string) => versions[pkg] ?? 'latest'
@@ -313,153 +291,6 @@ function webPackageJson(name: string, versions: Record<string, string>): string 
     null,
     2,
   )}\n`
-}
-
-function webViteConfig(): string {
-  return `import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    // The KickJS server (kick dev) listens on 3000; the client's baseUrl is
-    // the relative '/api/v1', so the browser hits Vite and Vite forwards.
-    proxy: {
-      '/api': 'http://localhost:3000',
-    },
-  },
-})
-`
-}
-
-export function webTsConfig(): string {
-  return `${JSON.stringify(
-    {
-      compilerOptions: {
-        target: 'ES2022',
-        lib: ['ES2022', 'DOM', 'DOM.Iterable'],
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-        jsx: 'react-jsx',
-        strict: true,
-        skipLibCheck: true,
-        noEmit: true,
-        isolatedModules: true,
-        // The resolved client route map, as an ambient global type package —
-        // the same mechanism as "node" or "vitest/globals". It makes
-        // `KickClientApi.Api` available with no import and no bridge file.
-        //
-        // Note this is a `types` ENTRY, not an `include`: the map is a global
-        // type package, not source of this app. It also means the file must
-        // exist — `kick new` runs typegen for you, and `kick typegen` in
-        // server/ refreshes it. (An `include` entry tolerates the file being
-        // absent; a `types` entry reports TS2688, which is the louder and
-        // more useful failure for something the app depends on.)
-        //
-        // No `experimentalDecorators` here: unlike the ambient
-        // `KickRoutes.Api` bridge, this map carries no reference to the
-        // server's decorated controller sources.
-        types: ['../server/.kickjs/types/kick__client'],
-      },
-      include: ['src'],
-    },
-    null,
-    2,
-  )}\n`
-}
-
-function webIndexHtml(name: string): string {
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${name}</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-`
-}
-
-function webMain(): string {
-  return `import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { App } from './App'
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
-`
-}
-
-function webApp(): string {
-  return `import { useEffect, useState } from 'react'
-import { api } from './api'
-
-// The response types below are INFERRED from the server's handlers —
-// change server/src/modules/hello/hello.service.ts and these types follow on
-// the next \`kick typegen\`. Not under \`kick dev\`: resolving the client map
-// builds a whole TypeScript program, so it is a build step, not a per-save one.
-type Greeting = Awaited<ReturnType<typeof fetchGreeting>>
-
-function fetchGreeting() {
-  return api.get('/hello')
-}
-
-export function App() {
-  const [greeting, setGreeting] = useState<Greeting | null>(null)
-  const [health, setHealth] = useState<string>('checking…')
-
-  useEffect(() => {
-    fetchGreeting().then(setGreeting).catch(console.error)
-    api
-      .get('/hello/health')
-      .then((h) => setHealth(h.status))
-      .catch(() => setHealth('down'))
-  }, [])
-
-  return (
-    <main style={{ fontFamily: 'system-ui', maxWidth: 640, margin: '4rem auto', padding: '0 1rem' }}>
-      <h1>KickJS fullstack</h1>
-      <p>
-        <strong>{greeting?.message ?? 'loading…'}</strong>
-      </p>
-      <p>
-        Server said hello at <code>{greeting?.timestamp ?? '…'}</code> — health:{' '}
-        <code>{health}</code>
-      </p>
-      <p style={{ color: '#666' }}>
-        This call is typed end to end: <code>api.get('/hello')</code> returns the exact shape
-        <code> HelloService.greet()</code> produces. Rename a field on the server and this file
-        stops compiling.
-      </p>
-    </main>
-  )
-}
-`
-}
-
-export function webApi(): string {
-  return `import { createClient } from '@forinda/kickjs-client'
-
-// KickClientApi is ambient — the resolved route map from
-// server/.kickjs/types/kick__client.d.ts, wired in tsconfig's \`types\`. Every
-// response type is a literal shape, so nothing from the server's source graph
-// enters this program.
-//
-// Keys are module-mount-relative paths; the bootstrap-level '/api/v1' prefix
-// lives here in baseUrl, and the Vite dev proxy forwards it to the KickJS
-// server.
-//
-// Prefer an explicit import? The same file exports the type:
-//   import type { Api } from '../../server/.kickjs/types/kick__client'
-export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
-`
 }
 
 // ── root templates ────────────────────────────────────────────────────
@@ -530,18 +361,6 @@ function rootPackageJson(name: string, pm: string, cliVersion: string): string {
     null,
     2,
   )}\n`
-}
-
-function rootGitignore(): string {
-  return `node_modules/
-dist/
-.env
-*.log
-.DS_Store
-# Platform build output — written by \`kick build:netlify\` / \`kick build:vercel\`.
-.netlify/
-.vercel/
-`
 }
 
 export function rootReadme(name: string, pm: string, frontend: 'kick' | 'vite' = 'kick'): string {

@@ -1,0 +1,13 @@
+[build]
+command = "{{packageManager}} run build:netlify"
+publish = "web/dist"
+
+[build.environment]
+NODE_VERSION = "22"
+
+# Client-side routes fall back to the app shell. The function claims /api/*
+# through its own `config.path`, so this rule never sees those requests.
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200

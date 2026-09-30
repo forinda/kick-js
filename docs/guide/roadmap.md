@@ -133,7 +133,7 @@ Things that don't make headlines but determine whether adopters stick around.
 
 ### B.1 Scaffolder feature-overlay model
 
-**Status:** `in progress` — `kick new` renders from `packages/cli/templates/` layers with slots (steps 1–2: template, runtime, schema library and the optional packages), and `kick add` wires those packages into an existing app (step 4). Still generated in code: `kick.config.ts`, `vite.config.ts`, README, host config and fullstack's `web/`. The scaffold-and-boot matrix (step 5) is not started.
+**Status:** `in progress` — steps 1–4 shipped. `kick new` renders every file it can from `packages/cli/templates/` layers with slots (template, runtime, schema library, optional packages, host config, the fullstack server, root and web app), and `kick add` wires those packages into an existing app. `package.json` files, the fullstack root's per-package-manager scripts and README, and the agent docs stay code. The scaffold-and-boot matrix (step 5) is not started.
 **Effort:** 3–6 weeks
 
 **Why it matters.** `kick new` is built from TS functions that return file contents as strings (`packages/cli/src/generators/`, about 4.6k lines). Feature choices show up as conditionals inside those functions, and the combinations keep multiplying: template × runtime × schema library × repo × optional packages × package manager × frontend. A contributor can't see what a scaffolded project looks like without running `kick new`, adding a feature means editing several generators, and `ws` / `queue` are installed but never wired into `src/index.ts`. `kick add` only installs packages, and nothing in CI installs, typechecks or boots a `kick new` output.

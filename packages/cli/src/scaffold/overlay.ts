@@ -152,6 +152,20 @@ export function renderLayers(
   }
 }
 
+/**
+ * Fill `{{name}}` placeholders in rendered files. Separate from rendering so
+ * a value can depend on the result (README lists the packages the layers
+ * chose). Unknown names are left as written.
+ */
+export function fillVars(
+  files: ReadonlyMap<string, string>,
+  vars: Record<string, string>,
+): Map<string, string> {
+  const fill = (text: string) =>
+    text.replace(/\{\{(\w+)\}\}/g, (all, key: string) => (key in vars ? vars[key]! : all))
+  return new Map([...files].map(([path, contents]) => [path, fill(contents)]))
+}
+
 const MARKER = /^([ \t]*)\/\/ @kick:([\w-]+)[ \t]*$/
 
 /** Fill one file's slot markers. */

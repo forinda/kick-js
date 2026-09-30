@@ -1,0 +1,13 @@
+{
+  "devDependencies": ["@typescript/typescript6"],
+  "integrations": [
+    {
+      "slot": "vite-option",
+      "code": "server: {\n  // web/vite.config.ts proxies /api to this port \u2014 fail instead of moving\n  // to another port when it's taken, or the proxy would reach the wrong process.\n  strictPort: true,\n}"
+    },
+    {
+      "slot": "typegen-option",
+      "code": "// web/ reads this map from the ambient KickClientApi namespace. Producing\n// it builds a TypeScript program over the server, so it stays off unless a\n// project actually consumes it.\nclient: true"
+    }
+  ]
+}

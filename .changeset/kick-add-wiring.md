@@ -12,3 +12,5 @@
   - `--no-wire` installs only.
 
 Also, `kick new` caps `dotenv` at `^17`, the range `@forinda/kickjs` peers on. It used to install `dotenv@18` with an unmet-peer warning.
+
+`kick new` also builds `vite.config.ts`, `kick.config.ts`, README, `netlify.toml` / `vercel.json` and the fullstack workspace's root and web files from template layers. The output is the same, except that README's "Packages" section now lists the `@forinda/*` packages the project actually installs (before, it listed Swagger and DevTools for every `rest` app).

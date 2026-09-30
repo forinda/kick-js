@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+# Platform build output — written by `kick build:netlify` / `kick build:vercel`.
+.netlify/
+.vercel/

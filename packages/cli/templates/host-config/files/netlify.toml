@@ -1,0 +1,6 @@
+[build]
+command = "{{packageManager}} run build:netlify"
+publish = "dist/public"
+
+[build.environment]
+NODE_VERSION = "22"
