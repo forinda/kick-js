@@ -2,7 +2,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 
 import { integer, relations, serial, table, text, uuid } from '../../src/index'
-import type { ColumnRef } from '../../src/dsl/table'
 import { pgEnum } from '../../src/dsl/columns/pg'
 import {
   Column,
@@ -70,10 +69,11 @@ describe('typed foreign keys with fk()', () => {
     fk(text(), () => tags.id)
   })
 
-  it('O / A refs are untyped, so fk() cannot check them', () => {
+  it('O: table() refs carry value types too, so fk() checks them', () => {
     const plain = table('plain', { id: serial().primaryKey() })
-    fk(uuid(), () => plain.id) // compiles: nothing to compare against
-    expectTypeOf(plain.id).toEqualTypeOf<ColumnRef>()
+    fk(integer(), () => plain.id)
+    // @ts-expect-error — uuid column → integer (serial) key
+    fk(uuid(), () => plain.id)
   })
 })
 

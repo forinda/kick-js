@@ -259,10 +259,9 @@ describe('discovery (kick db generate snapshots the schema module exports)', () 
     expect(Object.keys(snap(moduleExports).tables).toSorted()).toEqual(['a', 'b', 'd', 'o'])
   })
 
-  it('C: an exported class is NOT found — export `X.table` too', () => {
+  it('C: exporting the class is enough', () => {
     class User extends TableBase('users', { id: serial() }) {}
-    expect(Object.keys(snap({ User }).tables)).toEqual([])
-    expect(Object.keys(snap({ User, users: User.table }).tables)).toEqual(['users'])
+    expect(Object.keys(snap({ User }).tables)).toEqual(['users'])
   })
 
   it('A, B, C: the class name is not the table name', () => {

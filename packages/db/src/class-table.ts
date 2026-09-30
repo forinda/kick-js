@@ -22,7 +22,12 @@
  */
 import type { ColumnRule, SchemaLike } from './schema'
 import { ColumnBuilder as ColumnBuilderClass } from './dsl/columns/types'
-import type { ColumnBuilder, NotNullBrand } from './dsl/columns/types'
+import type {
+  ColumnBuilder,
+  NotNullBrand,
+  TypedColumnRef,
+  TypedColumnRefs,
+} from './dsl/columns/types'
 import type { IndexDecl } from './dsl/constraints'
 import { pgSchema } from './dsl/pg-schema'
 import { table, type ColumnRef, type TableDecl } from './dsl/table'
@@ -67,48 +72,13 @@ function build(
   schema?: string,
   constraints?: (refs: never) => Record<string, IndexDecl>,
 ) {
-  const decl = schema
+  return schema
     ? pgSchema(schema).table(name, columns, constraints as never)
     : table(name, columns, constraints as never)
-  bindSelfRefs(name, columns, decl as unknown as Record<string, ColumnRef>)
-  return decl
 }
 
-// ── Self-references without an annotation ──────────────────────────────
-//
-// `parentId: uuid().references(() => categories.id)` inside `table(...)` is
-// TS7022: the const's type depends on its own initializer. The usual fix,
-// `(): ColumnRef => categories.id`, is the step people don't know about.
-// `selfRef('id')` names the column instead of reaching for the const; the
-// form binds it to its own table once that exists.
-
-const SELF = Symbol.for('@forinda/kickjs-db/self-ref')
-
-/** A foreign key to a column of the table being declared. */
-export function selfRef(column: string): () => ColumnRef {
-  const thunk = () => {
-    throw new Error(`selfRef('${column}') used outside a class-table form`)
-  }
-  return Object.assign(thunk, { [SELF]: column })
-}
-
-function bindSelfRefs(
-  tableName: string,
-  columns: Record<string, ColumnBuilder>,
-  decl: Record<string, ColumnRef>,
-): void {
-  for (const builder of Object.values(columns)) {
-    const fkSpec = builder.__state().references as {
-      thunk: (() => ColumnRef) & { [SELF]?: string }
-    } | null
-    const target = fkSpec?.thunk[SELF]
-    if (target === undefined) continue
-    if (!(target in columns)) {
-      throw new Error(`selfRef('${target}'): table '${tableName}' has no column '${target}'`)
-    }
-    fkSpec!.thunk = () => decl[target]!
-  }
-}
+// Self-references: `selfRef()` lives in the core now — `table()` binds it.
+export { selfRef } from './dsl/self-ref'
 
 /**
  * Declare a column with a kick/db builder. `rule` adds the validation a SQL
@@ -424,16 +394,12 @@ export function defineTable<const N extends string, const S extends string | und
 //   authorId: fk(integer().notNull(), () => Author.table.id)  // ✓ integer → serial
 //   authorId: fk(uuid().notNull(),    () => Author.table.id)  // ✗ uuid → serial
 //
-// `table()`'s refs are untyped, so `fk()` accepts them — the check needs the
-// value type on the ref, which only these forms supply today.
+// With typed refs in the core, `table()`'s refs carry value types too, so
+// `fk()` checks every form's foreign keys.
 
-/** A column ref that knows its column's value type. */
-export type TypedRef<T> = ColumnRef & { readonly __valueType?: T }
-
-/** Typed refs for a column record. */
-export type TypedRefs<C> = {
-  [K in keyof C]: TypedRef<C[K] extends ColumnBuilder<infer T> ? T : never>
-}
+/** Typed refs now come from the core — `table()`'s refs carry value types too. */
+export type TypedRef<T> = TypedColumnRef<T>
+export type TypedRefs<C> = TypedColumnRefs<C>
 
 /** A foreign key whose target column must hold the same type as this one. */
 export function fk<T, B extends ColumnBuilder<T>>(
@@ -442,4 +408,26 @@ export function fk<T, B extends ColumnBuilder<T>>(
   options: Parameters<ColumnBuilder['references']>[1] = {},
 ): B {
   return builder.references(target, options) as B
+}
+
+// ── Cycles without an annotation: link() ────────────────────────────────
+//
+// Two tables that reference each other trip TS7022 in every form but B:
+// each const's type waits on the other's initializer. `link()` adds the
+// foreign key AFTER both tables exist, so neither initializer mentions the
+// other and nothing needs an annotation:
+//
+//   const users = table('users', { id: uuid().primaryKey(), featuredPostId: integer() })
+//   const posts = table('posts', { id: serial().primaryKey(), authorId: fk(uuid(), () => users.id) })
+//   link(users.featuredPostId, () => posts.id)          // typed: integer → serial ✓
+//
+// Safe because references are thunks read at snapshot time, not at declaration.
+
+/** Add a foreign key to an already-declared column. Value types must match. */
+export function link<T>(
+  column: TypedColumnRef<T>,
+  target: () => TypedColumnRef<NoInfer<T>>,
+  options: Parameters<ColumnBuilder['references']>[1] = {},
+): void {
+  column.__builder.references(target, options)
 }

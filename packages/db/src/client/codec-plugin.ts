@@ -42,7 +42,7 @@ import {
 
 import { CustomColumnBuilder } from '../custom-type'
 import type { ColumnBuilder } from '../dsl/columns/types'
-import type { TableDecl } from '../dsl/table'
+import { unwrapTable, type TableDecl } from '../dsl/table'
 
 /** Map of column name → encoder/decoder. Built once at createDbClient time. */
 export type CodecMap = Map<string, (value: unknown) => unknown>
@@ -220,8 +220,9 @@ function collectCodecs(schema: unknown, key: 'toDriver' | 'fromDriver'): CodecMa
   // a loud warning makes the clash debuggable instead of invisible.
   const owner = new Map<string, string>()
 
-  for (const value of Object.values(schema as Record<string, unknown>)) {
-    if (!isTableDecl(value)) continue
+  for (const exported of Object.values(schema as Record<string, unknown>)) {
+    const value = unwrapTable(exported)
+    if (!value || !isTableDecl(value)) continue
     const tableName = value.__name
     for (const [colName, col] of Object.entries(value.__columns)) {
       if (!(col instanceof CustomColumnBuilder)) continue

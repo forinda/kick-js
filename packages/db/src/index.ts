@@ -120,6 +120,7 @@ export type { GenerateOptions, GenerateResult } from './cli/generate'
 
 export * from './dsl/columns'
 export * from './dsl/table'
+export { selfRef } from './dsl/self-ref'
 export * from './dsl/constraints'
 export * from './dsl/relations'
 

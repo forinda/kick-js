@@ -56,10 +56,17 @@ type TableKey<T> = T extends { __name: infer N extends string }
     : never
   : never
 
+/** A schema-barrel export's table: itself, or a class form's `static table`. */
+type TableOf<V> = V extends { __isTable: true }
+  ? V
+  : V extends { table: infer T extends { __isTable: true } }
+    ? T
+    : never
+
 export type SchemaToTypes<S> = {
-  [
-    K in keyof S as S[K] extends { __isTable: true } ? TableKey<S[K]> : never
-  ]: S[K] extends TableDecl<string, infer C, string | undefined>
+  [K in keyof S as [TableOf<S[K]>] extends [never] ? never : TableKey<TableOf<S[K]>>]: TableOf<
+    S[K]
+  > extends TableDecl<string, infer C, string | undefined>
     ? { [Col in keyof C]: ColumnTSType<C[Col]> }
     : never
 }
