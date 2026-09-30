@@ -126,7 +126,11 @@ async function boot(cwd, paths) {
       const deadline = Date.now() + 30_000
       let status = 0
       while (Date.now() < deadline) {
-        status = await fetch(`http://127.0.0.1:${port}${path}`)
+        // Bounded by the deadline too: a server that accepts the connection
+        // but never answers would otherwise hang here past it.
+        status = await fetch(`http://127.0.0.1:${port}${path}`, {
+          signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+        })
           .then((res) => res.status)
           .catch(() => 0)
         if (status === 200 || child.exitCode !== null) break
