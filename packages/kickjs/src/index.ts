@@ -17,6 +17,19 @@ export {
 } from './http/application'
 export { waitUntil, settleBackgroundWork, type PlatformContext } from './http/background'
 export {
+  reportError,
+  reportResponse,
+  type ErrorInfo,
+  type ErrorSource,
+  type ResponseInfo,
+} from './core/observers'
+export {
+  HANDLER_CHANNEL,
+  ERROR_CHANNEL,
+  RESPONSE_CHANNEL,
+  type HandlerTraceContext,
+} from './http/tracing'
+export {
   healthModule,
   HealthController,
   HEALTH_PROBE,

@@ -113,6 +113,11 @@ export interface RouteMeta {
    * question. See `core/route-flag.ts`.
    */
   flags?: RouteFlags
+  /**
+   * The full mounted pattern (`/api/v1/users/:id`) — set by the Application
+   * for controller routes. `path` is relative to the module mount.
+   */
+  pattern?: string
 }
 
 /**
@@ -137,6 +142,7 @@ export function publishMatchedRoute(req: unknown, entry: RouteEntry): void {
     controller: entry.meta.controller,
     handlerName: entry.meta.handlerName,
     flags: entry.meta.flags ?? EMPTY_FLAGS,
+    pattern: entry.meta.pattern ?? entry.path,
   }
 }
 
@@ -146,6 +152,12 @@ export interface MatchedRoute {
   method: RouteMethod
   /** Path as declared on the handler, e.g. `/:id`. */
   path: string
+  /**
+   * The full route pattern including the mount prefix and version, e.g.
+   * `/api/v1/users/:id` — what metrics and spans should be keyed by. Falls
+   * back to `path` for routes registered without a mount.
+   */
+  pattern: string
   controller?: Constructor
   handlerName?: string
   /** Enabled flags only — see {@link RouteMeta.flags}. */

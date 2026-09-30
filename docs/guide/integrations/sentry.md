@@ -117,58 +117,33 @@ export const env = loadEnv(envSchema)
 
 ## Capturing Errors in Controllers
 
-KickJS's error handler automatically catches thrown `HttpException` errors. To also capture them in Sentry, create a middleware:
+Give the adapter an `onError` hook. The framework calls it for every error — request errors (any status), uncaught exceptions, unhandled rejections, failed `waitUntil` work and failed queue jobs — before the error handler answers, on every runtime. See [Observing Errors and Responses](../observability.md).
 
 ```ts
-// src/middleware/sentry-error.middleware.ts
-import * as Sentry from '@sentry/node'
-import type { Request, Response, NextFunction } from 'express'
+// inside the SentryAdapter's build()
+onError(error, info) {
+  Sentry.withScope((scope) => {
+    scope.setTag('source', info.source)
+    if (info.route) scope.setTag('route', info.route)
+    if (info.requestId) scope.setTag('requestId', info.requestId)
+    if (info.method) scope.setTag('method', info.method)
 
-export function sentryErrorCapture() {
-  return (err: any, req: Request, res: Response, next: NextFunction) => {
-    // Capture the error in Sentry with request context
-    Sentry.withScope((scope) => {
-      scope.setTag('url', req.originalUrl)
-      scope.setTag('method', req.method)
-      scope.setExtra('requestId', (req as any).requestId)
-
-      if (err.statusCode && err.statusCode < 500) {
-        // Client errors (4xx) — capture as breadcrumb, not error
-        scope.setLevel('warning')
-        Sentry.addBreadcrumb({
-          message: err.message,
-          category: 'http',
-          level: 'warning',
-          data: { statusCode: err.statusCode, url: req.originalUrl },
-        })
-      } else {
-        // Server errors (5xx) — capture as error
-        Sentry.captureException(err)
-      }
-    })
-
-    next(err)
-  }
-}
+    if (info.source === 'request' && (info.status ?? 500) < 500) {
+      // Client errors (4xx) — a breadcrumb, not an issue
+      Sentry.addBreadcrumb({
+        message: error instanceof Error ? error.message : String(error),
+        category: 'http',
+        level: 'warning',
+        data: { status: info.status, path: info.path },
+      })
+      return
+    }
+    Sentry.captureException(error)
+  })
+},
 ```
 
-Add it before the default error handler:
-
-```ts
-bootstrap({
-  modules,
-  adapters: [SentryAdapter({ dsn: env.SENTRY_DSN })],
-  middlewares: [
-    helmet(),
-    cors(),
-    requestId(),
-    requestLogger(),
-    express.json(),
-    // Sentry error capture runs before KickJS error handler
-    sentryErrorCapture(),
-  ],
-})
-```
+Nothing to add to `middlewares`: an error middleware registered there runs before the routes, so it never sees their errors.
 
 ## Adding Context to Errors
 

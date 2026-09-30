@@ -1,6 +1,7 @@
 import type http from 'node:http'
 import type https from 'node:https'
 import type http2 from 'node:http2'
+import type { ErrorInfo, ResponseInfo } from './observers'
 import type { RequestHandler, ErrorRequestHandler } from 'express'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
@@ -252,6 +253,20 @@ export interface AppAdapter {
    * backing service (database, Redis, queue, etc.).
    */
   onHealthCheck?(): Promise<{ name: string; status: 'up' | 'down' }>
+
+  /**
+   * Observe every error the app reports — request errors (any status; filter
+   * on `info.status`), uncaught exceptions, unhandled rejections, failed
+   * `waitUntil` work, failed queue jobs, and anything passed to
+   * `reportError()`. Observe-only: the response is not yours to change, and a
+   * throw here is logged and skipped. The place to wire Sentry & co.
+   */
+  onError?(error: unknown, info: ErrorInfo): void | Promise<void>
+  /**
+   * Observe every finished response — method, path, the matched route
+   * pattern, status, duration. Only timed while something listens.
+   */
+  onResponse?(info: ResponseInfo): void | Promise<void>
 
   /**
    * Called on shutdown — release what this adapter owns.

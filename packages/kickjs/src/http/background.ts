@@ -17,6 +17,7 @@
  * @module @forinda/kickjs/http/background
  */
 import { createLogger } from '../core/logger'
+import { reportError } from '../core/observers'
 import { requestStore } from './request-store'
 
 const log = createLogger('waitUntil')
@@ -42,6 +43,7 @@ export function waitUntil(promise: Promise<unknown>): void {
     () => {},
     (err: unknown) => {
       log.error({ err, requestId }, 'Background work passed to waitUntil() failed')
+      reportError(err, { source: 'background', requestId })
     },
   )
   pending.add(tracked)

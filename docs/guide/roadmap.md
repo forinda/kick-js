@@ -67,7 +67,7 @@ const user = await api.users.create({ email: 'a@b.com' })
 
 ### A.2 First-class observability {#a-2-first-class-observability}
 
-**Status:** `proposed` — **premise has moved.** `@forinda/kickjs-otel` was deprecated to a [BYO recipe](./byo-recipes.md) rather than promoted, so the sketch below (a `bootstrap({ observability })` block owned by the framework) now runs against the BYO direction. What did ship is the seam: `Logger.setProvider()`, `processHooks` so an observability SDK can own SIGTERM, and adapter `introspect()`. Re-scope before building.
+**Status:** `shipped` as re-scoped — the bring-your-own seam it called for now exists: `onError` / `onResponse` hooks on adapters and plugins, `reportError()`, and `diagnostics_channel` channels (`kickjs:handler`, `kickjs:error`, `kickjs:response`) that OpenTelemetry and APM agents subscribe to. See [E.3](#e-3-one-error-funnel-and-request-response-observer-hooks), [E.4](#e-4-diagnostics-channel-tracing) and [Observing Errors and Responses](./observability.md). The framework-owned `bootstrap({ observability })` block sketched below is not planned. Original note: **premise has moved.** `@forinda/kickjs-otel` was deprecated to a [BYO recipe](./byo-recipes.md) rather than promoted, so the sketch below (a `bootstrap({ observability })` block owned by the framework) now runs against the BYO direction. What did ship is the seam: `Logger.setProvider()`, `processHooks` so an observability SDK can own SIGTERM, and adapter `introspect()`. Re-scope before building.
 **Effort:** 1–2 months
 
 **Why it matters.** The `@forinda/kickjs-otel` package exists but isn't the headline experience. Production-readiness is one of the top reasons engineering teams pick a framework — and "just install us, every controller is traced" is a story Nest doesn't have.
@@ -580,9 +580,9 @@ is killed on serverless and lost on `SIGTERM`.
 
 ---
 
-### E.3 One error funnel, and request / response observer hooks
+### E.3 One error funnel, and request / response observer hooks {#e-3-one-error-funnel-and-request-response-observer-hooks}
 
-**Status:** `proposed` — overlaps [A.2](#a-2-first-class-observability)
+**Status:** `shipped` — `onError` / `onResponse` on adapters and plugins, fed by `reportError()` / `reportResponse()` from request errors (every runtime), uncaught exceptions, unhandled rejections, failed `waitUntil` work and failed queue jobs. See [Observing Errors and Responses](./observability.md).
 **Effort:** 3–5 days
 
 **What they do.** Nitro has runtime hooks `request`, `response`, `error`, `close`, and one
@@ -597,9 +597,9 @@ each take their own path. Wiring Sentry means re-implementing the default handle
 
 ---
 
-### E.4 `diagnostics_channel` tracing
+### E.4 `diagnostics_channel` tracing {#e-4-diagnostics-channel-tracing}
 
-**Status:** `proposed` — overlaps [A.2](#a-2-first-class-observability)
+**Status:** `shipped` — `kickjs:handler` (a tracing channel around each controller handler, named by the full route pattern), `kickjs:error` and `kickjs:response`, all free without subscribers. Node server only; the web entry doesn't publish them. Middleware and contributor channels are not published.
 **Effort:** 2–3 days
 
 **What they do.** srvx wraps the request and each middleware in `tracingChannel`
@@ -754,16 +754,15 @@ These will get their own track once we have a clearer picture from the non-DB wo
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, and the **E.1** API runner MVP. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner MVP, and **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped). The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **E.3 + E.4 — error funnel and tracing channels** (1–2 weeks; likely the re-scoped form of A.2)
-2. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
-3. **E.1 phase 2** — OpenAPI prefill, request history, open handler in editor
-4. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-5. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-6. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
+2. **E.1 phase 2** — OpenAPI prefill, request history, open handler in editor
+3. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+4. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+5. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 

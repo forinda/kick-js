@@ -358,8 +358,15 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           // chain (Vite dev fall-through) when present, else run the framework's
           // notFound handler so it returns a proper 404 — only genuine handler
           // errors reach the error middleware (and the ErrorHandler log).
+          //
+          // Only the ROUTER's no-match counts: h3 builds it from a plain object,
+          // so its `cause` is not an Error. A handler that throws
+          // `HttpException(404, '…')` arrives wrapped with the exception as
+          // `cause` — that is a handler error and belongs to the error
+          // middleware, which keeps its detail (and reports it to observers).
           const status = (error as { statusCode?: number } | undefined)?.statusCode
-          if (status === 404) {
+          const thrownByHandler = (error as { cause?: unknown } | undefined)?.cause instanceof Error
+          if (status === 404 && !thrownByHandler) {
             const next = (event.node.req as IncomingMessage & { [NEXT]?: () => void })[NEXT]
             if (next) {
               next()

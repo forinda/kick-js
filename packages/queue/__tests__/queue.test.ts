@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Job, Process, QueueService, QueueAdapter, QUEUE_MANAGER } from '@forinda/kickjs-queue'
 import { QUEUE_METADATA, jobRegistry } from '../src/types'
 import { getClassMetaOrUndefined, getClassMeta, Container } from '@forinda/kickjs'
+import { Worker } from 'bullmq'
+import { setObservers } from '../../kickjs/src/core/observers'
 
 // ─── Mock bullmq ────────────────────────────────────────────────────────────
 vi.mock('bullmq', () => {
@@ -30,6 +32,7 @@ vi.mock('bullmq', () => {
   }
 
   class Worker {
+    static instances: Worker[] = []
     name: string
     processor: any
     close = vi.fn().mockResolvedValue(undefined)
@@ -37,11 +40,15 @@ vi.mock('bullmq', () => {
     constructor(name: string, processor: any, _opts?: any) {
       this.name = name
       this.processor = processor
+      Worker.instances.push(this)
     }
     on(event: string, handler: Function) {
       if (!this.listeners[event]) this.listeners[event] = []
       this.listeners[event].push(handler)
       return this
+    }
+    emit(event: string, ...args: unknown[]) {
+      for (const handler of this.listeners[event] ?? []) handler(...args)
     }
   }
 
@@ -302,6 +309,37 @@ describe('QueueAdapter', () => {
 
     // The queue should have been created for the discovered @Job class
     expect(adapter.getQueueNames()).toContain('worker-queue')
+  })
+
+  it('reports a failed job to the app’s error observers', () => {
+    @Job('reports-queue')
+    class _ReportsProcessor {
+      @Process('build')
+      async handle() {}
+    }
+    const seen: unknown[] = []
+    setObservers([{ name: 'rec', onError: (error, info) => void seen.push({ error, info }) }])
+    try {
+      const adapter = QueueAdapter({ redis: redisOpts })
+      adapter.beforeStart({ container: Container.getInstance() } as any)
+      const worker = (
+        Worker as unknown as { instances: { name: string; emit: Function }[] }
+      ).instances.find((w) => w.name === 'reports-queue')!
+      const err = new Error('render failed')
+      worker.emit('failed', { name: 'build', id: '9', attemptsMade: 3 }, err)
+
+      expect(seen).toEqual([
+        {
+          error: err,
+          info: {
+            source: 'job',
+            context: { queue: 'reports-queue', job: 'build', id: '9', attemptsMade: 3 },
+          },
+        },
+      ])
+    } finally {
+      setObservers([])
+    }
   })
 
   it('skips @Job classes that have no @Process methods', () => {
