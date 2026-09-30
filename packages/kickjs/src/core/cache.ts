@@ -166,11 +166,25 @@ function isCachedNull(value: unknown): boolean {
   )
 }
 
+/**
+ * Loads in flight, by cache key — simultaneous misses on one key share a
+ * single call instead of each running the method (a cache stampede).
+ * Per process: instances sharing a remote cache still each load once.
+ */
+const inFlight = new Map<string, Promise<unknown>>()
+
 export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecorator {
-  return (_target, propertyKey, descriptor: PropertyDescriptor) => {
+  return (target, propertyKey, descriptor: PropertyDescriptor) => {
     const original = descriptor.value
     const cacheTtl = (ttl ?? 60) * 1000
-    const keyPrefix = options?.key ?? String(propertyKey)
+    // The default key keeps the method name FIRST — `@CacheEvict('findAll')`
+    // is a prefix match and must keep reaching it — and adds the class after
+    // it, so `UserService.findAll` and `PostService.findAll` no longer share
+    // entries. The class NAME, not an identity, so every instance behind a
+    // shared cache computes the same key. An explicit `key` is used as given:
+    // the caller chose it, possibly to share it.
+    const owner = typeof target === 'function' ? target.name : target.constructor?.name
+    const keyPrefix = options?.key ?? `${String(propertyKey)}:${owner ?? 'anonymous'}`
 
     descriptor.value = async function (...args: any[]) {
       const cacheKey = `${keyPrefix}:${JSON.stringify(args)}`
@@ -181,12 +195,24 @@ export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecor
         return isCachedNull(cached) ? null : cached
       }
 
-      const result = await original.apply(this, args)
-      // Cache legit-null results via the sentinel; `undefined` stays
-      // uncached (callers returning undefined get pre-existing behavior).
-      if (result === null) await provider.set(cacheKey, CACHED_NULL, cacheTtl)
-      else if (result !== undefined) await provider.set(cacheKey, result, cacheTtl)
-      return result
+      const pending = inFlight.get(cacheKey)
+      if (pending) return pending
+
+      const load = (async () => {
+        const result = await original.apply(this, args)
+        // Cache legit-null results via the sentinel; `undefined` stays
+        // uncached (callers returning undefined get pre-existing behavior).
+        if (result === null) await provider.set(cacheKey, CACHED_NULL, cacheTtl)
+        else if (result !== undefined) await provider.set(cacheKey, result, cacheTtl)
+        return result
+      })()
+      inFlight.set(cacheKey, load)
+      try {
+        return await load
+      } finally {
+        // Settled either way: a failed load is not cached, so the next call retries.
+        inFlight.delete(cacheKey)
+      }
     }
 
     return descriptor

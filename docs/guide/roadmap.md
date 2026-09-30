@@ -23,7 +23,7 @@ Each proposal uses the same template:
   - `deferred` — agreed valuable, waiting on something else
   - `rejected` — decided against; kept here so we don't relitigate
 
-Proposals are grouped into **tracks** by intent: the **moat** (differentiation), **DX wins** (retention), and **bold bets** (high-risk / high-reward).
+Proposals are grouped into **tracks** by intent: the **moat** (differentiation), **DX wins** (retention), **bold bets** (high-risk / high-reward), and **lessons from Nitro, srvx and Nuxt** (Track E — gaps found by reading their source).
 
 ---
 
@@ -65,7 +65,7 @@ const user = await api.users.create({ email: 'a@b.com' })
 
 ---
 
-### A.2 First-class observability
+### A.2 First-class observability {#a-2-first-class-observability}
 
 **Status:** `proposed` — **premise has moved.** `@forinda/kickjs-otel` was deprecated to a [BYO recipe](./byo-recipes.md) rather than promoted, so the sketch below (a `bootstrap({ observability })` block owned by the framework) now runs against the BYO direction. What did ship is the seam: `Logger.setProvider()`, `processHooks` so an observability SDK can own SIGTERM, and adapter `introspect()`. Re-scope before building.
 **Effort:** 1–2 months
@@ -519,19 +519,195 @@ The framework wires per-request tenant resolution, scopes the DI container, swit
 
 ---
 
+## Track E — Lessons from Nitro, srvx and Nuxt {#track-e-lessons-from-nitro-srvx-and-nuxt}
+
+Captured 2026-09-30 from a source-level comparison with Nitro v3 (`3.0.260903-beta`), srvx
+`1.0.5` (Nitro's server layer) and Nuxt 5 + Nuxt DevTools `4.0.0-beta.2`. Every claim was read in
+their code and checked against ours; where we already match or beat them, it is listed at the end
+so it isn't chased. Each item is `proposed` until picked up.
+
+### E.1 API runner in the DevTools dashboard
+
+**Status:** `proposed`
+**Effort:** MVP ~1 week; phases 2–3 independently schedulable
+
+**What they do.** Nuxt DevTools' _Server Routes_ tab is a Postman-style runner: pick a route, fill
+path params / query / headers / JSON body (typed key-value rows), send, and read status, timing,
+content-type and a formatted body (JSON, HTML, image/video/PDF previews). "Default inputs" merge
+into every request; there are `useFetch` / `$fetch` snippets and _open handler in editor_. Requests
+go from the browser to the same origin — no proxy. Per-route inputs live in `localStorage`; the
+global defaults (which can hold tokens) are written to a JSON file under `~/.nuxt/devtools/`.
+
+**What we have.** `/_debug/routes` already returns fully resolved paths (API prefix + version
+applied) and route flags; the Routes tab is read-only. The Swagger adapter's `/openapi.json` has
+param/query/body shapes when mounted. Typegen output is `.d.ts` only — not readable in a browser.
+
+**What it looks like.**
+
+- **MVP** (no new server surface): split pane in the Routes tab — param inputs, query/header rows,
+  raw JSON body, send; response status / time / headers / pretty body; copy as `curl` / `fetch`;
+  per-route inputs and globals saved. KickJS specifics: use the listed path as-is (prefix and
+  version are applied), auto-fill `x-csrf-token` from the `_csrf` cookie for unsafe methods, skip a
+  global `Authorization` on routes carrying a configurable "public" flag (default `auth.public`),
+  never forward the devtools token to app routes.
+- **Phase 2:** prefill and hints from `/openapi.json` when present; last-N history; open handler in
+  editor (the typegen scanner already records each controller's file) plus the VS Code command;
+  multipart / file bodies.
+- **Phase 3:** typed-client (`@forinda/kickjs-client`) snippets; export `.http` files or Postman
+  collections; link a response to its request-id trace.
+
+**Open questions.** Confirm before `DELETE` / `PUT` / `PATCH`? Default auth values to
+`sessionStorage` (Nuxt persists them in plain text — we shouldn't)? Routes mounted through a
+hand-built `router` carry no metadata and can't be listed — say so in the UI.
+
+---
+
+### E.2 `waitUntil` for work that outlives the response
+
+**Status:** `proposed`
+**Effort:** 2–3 days
+
+**What they do.** srvx gives every request `waitUntil(promise)`, and `close()` awaits pending work;
+Nitro passes it to tasks and cache revalidation, and forwards the platform's (Workers, Vercel).
+
+**What we have.** Nothing. `createFetchHandler` (`web.ts`) takes `(request, env)` and drops the
+Workers execution context; `createHandler().fetch` takes only a request; `shutdown()` drains
+in-flight requests but not detached promises. Fire-and-forget work (audit logs, emails, analytics)
+is killed on serverless and lost on `SIGTERM`.
+
+**What it looks like.** `ctx.waitUntil(p)`: on Node, tracked and awaited during shutdown (inside
+`shutdownTimeout`); on the web entry and serverless handlers, forwarded to the platform's
+`waitUntil`, with the Workers `ctx` accepted by `createFetchHandler`.
+
+---
+
+### E.3 One error funnel, and request / response observer hooks
+
+**Status:** `proposed` — overlaps [A.2](#a-2-first-class-observability)
+**Effort:** 3–5 days
+
+**What they do.** Nitro has runtime hooks `request`, `response`, `error`, `close`, and one
+`captureError` funnel that request errors, cache errors and unhandled rejections all go through.
+
+**What we have.** Adapter and plugin hooks cover boot and shutdown only. `bootstrap({ onError })`
+_replaces_ the error handler rather than observing it; cron, queue, contributor and uncaught errors
+each take their own path. Wiring Sentry means re-implementing the default handler.
+
+**What it looks like.** Observer hooks on adapters/plugins — `onError(err, { ctx?, source })` and
+`onResponse(ctx, status, ms)` — engine-neutral, observe-only, fed from every error source.
+
+---
+
+### E.4 `diagnostics_channel` tracing
+
+**Status:** `proposed` — overlaps [A.2](#a-2-first-class-observability)
+**Effort:** 2–3 days
+
+**What they do.** srvx wraps the request and each middleware in `tracingChannel`
+(`srvx.request`, `srvx.middleware`); Nitro turns those into spans named by route template.
+
+**What we have.** W3C `traceparent` propagation (`trace-context.ts`) and request logging; no
+channels. OpenTelemetry is a bring-your-own recipe.
+
+**What it looks like.** Publish `kickjs.request` (with the matched route template, e.g.
+`/users/:id`), `kickjs.middleware` and `kickjs.contributor`. Zero cost when nobody subscribes;
+dd-trace, OpenTelemetry and DevTools can subscribe without coupling. This may be the
+re-scoped form of A.2 that fits the bring-your-own direction.
+
+---
+
+### E.5 `@Cron` that survives serverless deploys
+
+**Status:** `proposed`
+**Effort:** 3–5 days
+
+**What they do.** Nitro runs scheduled tasks itself (croner, with per-task dedup of overlapping
+runs), and presets translate schedules into platform config: Vercel `crons`, the Workers
+`scheduled` handler.
+
+**What we have.** `@Cron` records metadata; the runner is bring-your-own. `kick build:vercel`
+emits no `crons`, and the web entry has no `scheduled` export — jobs silently don't run.
+
+**What it looks like.** At minimum, `kick build:vercel` emits `crons` for `@Cron` jobs and warns
+when a serverless build has jobs it can't schedule; later, a `scheduled` export on the web entry.
+
+---
+
+### E.6 Response caching with stale-while-revalidate and ETag / 304
+
+**Status:** `proposed` — after [Q.8](#quick-wins)
+**Effort:** 3–5 days
+
+**What they do.** `defineCachedHandler` and the `cache` route rule cache whole responses, with
+`swr` / `staleMaxAge` / `varies`, conditional-request handling, and revalidation in the
+background via `waitUntil`.
+
+**What we have.** Method-level `@Cacheable` only (fixed in Q.8); no ETag / `If-None-Match` for
+dynamic responses.
+
+**What it looks like.** `@CacheResponse({ maxAge, swr, varies })` on `CacheProvider`, answering
+`304` on a matching ETag; `swr` needs E.2.
+
+---
+
+### E.7 Compressed static assets
+
+**Status:** `proposed`
+**Effort:** 1–2 days
+
+**What they do.** srvx serves precompressed `.br` / `.gz` siblings and compresses on the fly
+(1 KB–10 MB) with `Vary`; Nitro adds `zstd`.
+
+**What we have.** `serveStatic` → `serve-static` (ETag, ranges, `Last-Modified`), and
+`SpaAdapter` sets immutable caching — but nothing is compressed, so fullstack apps ship
+uncompressed JS unless a CDN sits in front.
+
+---
+
+### E.8 Smaller items
+
+| #     | What they do                                                                                                                                              | KickJS today                                                                                                                           | Effort |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| E.8.1 | Per-path route rules — `headers`, `cors`, `redirect`, `proxy`, `cache` on a pattern (`/api/**`)                                                           | Decorators and global middleware; no proxy helper. Lower value for a decorator-first framework                                         | M      |
+| E.8.2 | mTLS: `request.tls.{peerCertificate, authorized}`, and `496` when no client certificate is sent                                                           | `server.tls` already passes `requestCert` / `ca` through; no `ctx.tls` and no guard                                                    | S      |
+| E.8.3 | Accept a file path for `tls.cert` / `tls.key` (srvx reads the file)                                                                                       | Callers `readFileSync` themselves                                                                                                      | S      |
+| E.8.4 | Request body size limit — `srvx/body-limit` rejects early on `content-length` and counts streamed bytes (so length-less HTTP/2 bodies are covered), `413` | Express's JSON parser caps at 100 KB by default; the h3 runtime has no limit at all. Should apply to every runtime, as problem details | S–M    |
+| E.8.5 | Source-mapped, colourised dev error output (Youch)                                                                                                        | Dev JSON with raw stack lines; framework errors already carry fix hints                                                                | S, low |
+
+### Reports for upstream
+
+- **h3 v1** — `readRawBody` returns `undefined` for an HTTP/2 body without `content-length`
+  (`src/utils/body.ts` on the `v1` branch). Worked around in our h3 runtime; Nuxt 5's h3-v1
+  compatibility layer re-implements `readRawBody` without the header check.
+- **srvx** — shutdown never closes open HTTP/2 sessions (`close()` calls `closeAllConnections`,
+  which HTTP/2 servers don't have), so on Node 22 and earlier a client keeps sending requests
+  through shutdown. We track and close sessions ourselves.
+
+### Where we already match or lead (don't chase)
+
+- Graceful shutdown with request draining and `/health` answering `503` while draining.
+- Dev HMR: selective module invalidation, typegen on save, disposables cleaned up on swap.
+- Errors: RFC 9457 problem details plus the `KICK0xx` catalogue with fix hints.
+- Edge-safe KV stores (`KvRateLimitStore`, `KvSessionStore`); a full storage layer is YAGNI for now.
+- Request logging and W3C trace propagation.
+
+---
+
 ## Quick wins
 
 Small enough to bundle into other work or do in a half-day. Listed for visibility.
 
-| #   | Idea                                                           | Effort | Status                                                                                                                                                                                              |
-| --- | -------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `rejected` — covered by [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy) (`defineRouteFlag`)                                                                                             |
-| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                                                                                                     |
-| Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `shipped` for HTTP/2 — `server: { tls, http2 }` on Fastify / h3 ([HTTPS and HTTP/2](./http-runtimes.md#https-and-http-2)); Express cannot (KICK007). HTTP/3 `deferred` until Node ships stable QUIC |
-| Q.4 | `kick new --with auth,swagger,drizzle,docker` preset bundles   | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                                                                                                     |
-| Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed` — `createTestApp` + supertest covers it without a command; confirm the wrapper still earns its keep                                                                                      |
-| Q.6 | First-party `SentryLoggerProvider` example snippet in docs     | 1 day  | `shipped` — [Sentry integration](./integrations/sentry.md)                                                                                                                                          |
-| Q.7 | `kick info` — print resolved versions, peer deps, runtime info | 1 day  | `shipped` — `kick info`                                                                                                                                                                             |
+| #   | Idea                                                           | Effort | Status                                                                                                                                                                                                                                    |
+| --- | -------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `rejected` — covered by [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy) (`defineRouteFlag`)                                                                                                                                   |
+| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                                                                                                                                           |
+| Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `shipped` for HTTP/2 — `server: { tls, http2 }` on Fastify / h3 ([HTTPS and HTTP/2](./http-runtimes.md#https-and-http-2)); Express cannot (KICK007). HTTP/3 `deferred` until Node ships stable QUIC                                       |
+| Q.4 | `kick new --with swagger,db,docker` preset bundles             | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                                                                                                                                           |
+| Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed` — `createTestApp` + supertest covers it without a command; confirm the wrapper still earns its keep                                                                                                                            |
+| Q.6 | First-party `SentryLoggerProvider` example snippet in docs     | 1 day  | `shipped` — [Sentry integration](./integrations/sentry.md)                                                                                                                                                                                |
+| Q.7 | `kick info` — print resolved versions, peer deps, runtime info | 1 day  | `shipped` — `kick info`                                                                                                                                                                                                                   |
+| Q.8 | `@Cacheable` keys without the class, and cache stampedes       | 1 day  | `shipped` — default key is `{method}:{ClassName}:{args}` (the method stays first, so `@CacheEvict(method)` still matches); concurrent misses share one call. Found in the [Track E](#track-e-lessons-from-nitro-srvx-and-nuxt) comparison |
+| Q.9 | DevTools token cookie sent to every app route                  | ½ day  | `shipped` — the dashboard's token cookie is scoped to the devtools base path; the old `path=/` cookie is removed on next load                                                                                                             |
 
 ---
 
@@ -583,10 +759,13 @@ above), and **B.6** route flags (all four phases). The list below is what remain
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-2. **A.2 — Observability** (re-scope first — the BYO turn changed the premise)
-3. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-4. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **E.2 — `waitUntil`** (2–3 days; unblocks E.6 and fixes lost background work on serverless)
+2. **E.1 — API runner MVP** (~1 week; the most visible DX gain from the Nitro/Nuxt comparison)
+3. **E.3 + E.4 — error funnel and tracing channels** (1–2 weeks; likely the re-scoped form of A.2)
+4. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
+5. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+6. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+7. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 
