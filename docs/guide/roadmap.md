@@ -133,36 +133,50 @@ Things that don't make headlines but determine whether adopters stick around.
 
 ### B.1 Scaffolder feature-overlay model
 
-**Status:** `proposed`
+**Status:** `proposed` — design settled, not started
 **Effort:** 3–6 weeks
 
-**Why it matters.** Today the CLI scaffolder is template-functions-that-return-strings (`packages/cli/src/generators/templates/`). Powerful, type-safe, but a contributor can't see "what a scaffolded REST project with a Postgres repository stub looks like" without running `kick new`. Adding a new combination requires writing TS code. The combinatorial space (pattern × repo × features) keeps growing.
+**Why it matters.** `kick new` is built from TS functions that return file contents as strings (`packages/cli/src/generators/`, about 4.6k lines). Feature choices show up as conditionals inside those functions, and the combinations keep multiplying: template × runtime × schema library × repo × optional packages × package manager × frontend. A contributor can't see what a scaffolded project looks like without running `kick new`, adding a feature means editing several generators, and `ws` / `queue` are installed but never wired into `src/index.ts`. `kick add` only installs packages, and nothing in CI installs, typechecks or boots a `kick new` output.
 
-**What it looks like.** Adopt the `create-vue` pattern — a feature-overlay file system where each "feature" is a directory:
+**What others do.**
+
+- **create-vite** — one complete, runnable directory per template, copied as-is (dotfiles stored as `_gitignore` so npm publish keeps them). Optional features are small patches after the copy. A release script bumps the template version ranges.
+- **TanStack CLI** — a base project plus add-on directories (`info.json`, a `package.json` fragment, `assets/`), with `dependsOn`, exclusive groups and env vars. Shared files expose typed **integration slots** (providers, vite plugins, devtools) that add-ons fill, so add-ons never edit shared files. `add` on an existing project re-renders it and overwrites changed files after a confirm. A small end-to-end matrix scaffolds, builds and boots selected combinations on a schedule.
+- **TanStack Router's route generator** — fills only empty files from token templates, which users can override, and never overwrites a file changed underneath it.
+
+**What it looks like.**
 
 ```
 packages/cli/templates/
-  base/                  # always rendered
-  pattern-rest/
-  pattern-minimal/
+  base/                         # the --yes defaults
+  template-rest/
+  runtime-{express,fastify,h3}/
+  schema-{zod,valibot,yup}/
   repo-inmemory/
-  repo-stub/
-  feature-swagger/
-  feature-ws/
-  feature-queue/
-  feature-devtools/
-  feature-auth/
+  feature-{swagger,devtools,ws,queue}/
+  host-{netlify,vercel}/
 ```
 
-The scaffolder picks the user's chosen dirs and renders them in order. Code/text files are copied verbatim; JSON files (`package.json`, `tsconfig.json`) are deep-merged. New feature = new folder, no TS edits.
+- Each directory has a `feature.json` (`id`, `dependsOn`, `exclusive`, `packageAdditions`, `integrations`, `envVars`), an optional `package.json` fragment, and files. Files are copied (`_dot_` becomes `.`, `.append` files append), later layers override earlier ones, and `package.json` fragments are merged per key, with conflicts reported.
+- **Slots** in the shared files — `adapter`, `middleware`, `contributor` and `runtime` in `src/index.ts`, `env-field` in `src/env.ts`, `vite-plugin`, and `config` in `kick.config.ts`. A feature declares `{ type: 'adapter', import, code }` and the base file renders every entry. Base files never check which features were picked.
+- **No template engine** to start: copying, merging and slots cover most of it. The few real conditionals (naming, pluralization, per-package-manager scripts, agent docs) stay TS functions next to the engine. `kick g` generators stay code.
+- **`kick add <feature>`** applies the same directory to an existing app. It writes new files, merges `package.json` and `.env*`, records the feature in `kick.config.ts`, and inserts slot entries into `src/index.ts` through the AST rather than re-rendering it — entry files are edited by hand and must not be overwritten. When it can't find the spot, it prints the snippet instead of guessing. It refuses on a dirty git tree unless `--force` is passed.
+- **Versions** live in the fragments and are bumped at release, so scaffolding needs no `npm view` round-trips (these become an opt-in refresh).
+- **Tests** — engine tests on an in-memory filesystem; parity snapshots against today's generator during the migration; and a matrix of about six combinations that scaffold, install against the workspace packages, typecheck, boot and hit `/health` — daily and on demand, with one smoke combination on every PR.
 
-**Why this is DX.** Contributors can read a real project to understand each feature. Adopters see exactly what they'd get. Adding a new template variant goes from "edit several TS files and hope" to "drop a folder and submit a PR."
+**Migration.**
+
+1. Build the engine and port the `--yes` defaults to `base/`, with output matching today's.
+2. Move schemas, runtimes, swagger / devtools / ws / queue (now wired) and hosts into directories, deleting each matching template function as it moves.
+3. Rebuild `rest` and `fullstack` from those directories (`web/` keeps its create-vite option).
+4. `kick add` applies feature directories.
+5. Turn on the scaffold-and-boot matrix, then remove the dead template code.
 
 **Open questions.**
 
-- Do we keep the TS-function generators for the parts that need real logic (pluralization, name casing), with file-overlay for the rest? Or commit fully to overlay?
-- Conditional logic inside files (e.g. "if user picked feature X, include this line in `index.ts`") — Hygen-style EJS tags? Or accept that those cases stay as TS templates?
-- Migration path: keep current generator working through one release, add the overlay system, deprecate the function-based one over two releases?
+- Slot markers as comments inside real, typecheckable `.ts` base files, or a separate slot list?
+- Per-feature options (e.g. a queue driver): a select prompt per feature, or wait until one needs it?
+- Third-party features loaded from a URL, and `kick new --from <git url>` starters — later, or never?
 
 ---
 
