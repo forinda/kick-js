@@ -128,22 +128,21 @@ Brand-based instead of a class generic so chained methods preserve subclass iden
 
 ## Self-referencing tables
 
-A column whose foreign key points back at the same table needs lazy thunk resolution because the const binding doesn't exist when the column is built:
+A column whose foreign key points back at the same table names the column with `selfRef`:
 
 ```ts
-import { table, uuid, varchar, type ColumnRef } from '@forinda/kickjs-db'
+import { selfRef, table, uuid, varchar } from '@forinda/kickjs-db'
 
 export const categories = table('categories', {
   id: uuid().primaryKey().defaultRandom(),
   name: varchar(255).notNull(),
-  parentId: uuid().references(
-    (): ColumnRef => categories.id, // ← explicit return type breaks TS7022
-    { onDelete: 'set_null' },
-  ),
+  parentId: uuid().references(selfRef('id'), { onDelete: 'set_null' }),
 })
 ```
 
-`ColumnRef` is the canonical column reference type. The annotation breaks the `categories` initializer cycle (without it, TS needs to infer `categories` while the initializer references it). The thunk fires later — at extract / render / emit time — by which point the const binding has landed.
+A thunk to the const itself — `() => categories.id` — makes TypeScript infer `categories` from an initializer that references it (TS7022), which is why it used to need an explicit `(): ColumnRef => categories.id`. `selfRef` avoids the cycle; the table binds it once it exists. The same holds between two tables that reference each other — use `link()` ([Schema → Typed foreign keys and cycles](./database/schema.md#typed-foreign-keys-and-cycles)).
+
+Column refs carry their column's value type (`TypedColumnRef<T>`), which is what lets `fk()` / `link()` reject a foreign key whose type doesn't match its target.
 
 `onDelete` / `onUpdate` are typed `FkAction` (`'cascade' | 'restrict' | 'set_null' | 'set_default' | 'no_action'`) so typos like `'set null'` (with a space) catch at compile time.
 

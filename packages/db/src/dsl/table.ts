@@ -1,5 +1,6 @@
-import type { ColumnBuilder, ColumnRef } from './columns/types'
+import type { ColumnBuilder, ColumnRef, TypedColumnRefs } from './columns/types'
 import type { IndexDecl } from './constraints'
+import { resolveSelfRefs } from './self-ref'
 
 export type { ColumnRef }
 
@@ -21,6 +22,11 @@ export interface TableDecl<
    * on MySQL/SQLite at snapshot time rather than emitting subtly wrong DDL.
    */
   __schema?: TSchema
+  /**
+   * Validation rules a table form declared (`@Rule`, `rules`, `.column(k, b, rule)`),
+   * applied by `insertSchema` / `selectSchema` / `updateSchema`. Not enumerable.
+   */
+  readonly __rules?: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -48,13 +54,11 @@ type TableRefs<
   TName extends string,
   C extends Record<string, ColumnBuilder>,
   TSchema extends string | undefined = undefined,
-> = TableDecl<TName, C, TSchema> & {
-  [K in keyof C]: ColumnRef
-}
+> = TableDecl<TName, C, TSchema> & TypedColumnRefs<C>
 
-type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (refs: {
-  [K in keyof C]: ColumnRef
-}) => Record<string, IndexDecl>
+type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (
+  refs: TypedColumnRefs<C>,
+) => Record<string, IndexDecl>
 
 /**
  * Declare a typed table. The `TName extends string` generic narrows to the
@@ -80,10 +84,12 @@ export function buildTable<
   TSchema extends string | undefined,
 >(
   name: TName,
-  columns: C,
+  declared: C,
   constraints: ConstraintBuilder<C> | undefined,
   schema: TSchema,
 ): TableRefs<TName, C, TSchema> {
+  const selfRefs: Record<string, ColumnRef> = {}
+  const columns = resolveSelfRefs(name, declared, selfRefs)
   const decl: TableDecl<TName, C, TSchema> = {
     __isTable: true,
     __name: name,
@@ -110,10 +116,31 @@ export function buildTable<
     }
   }
 
+  Object.assign(selfRefs, refs)
+
   if (constraints) {
     const declared = constraints(refs)
     decl.__indexes = Object.values(declared)
   }
 
   return Object.assign(decl, refs)
+}
+
+/**
+ * The table a schema-barrel export stands for: a table itself, or a class
+ * form carrying one as `static table` (`class User extends TableBase(...)`).
+ * Everything that scans a schema for tables goes through this, so exporting
+ * the class is enough — no separate `export const users = User.table`.
+ */
+export function unwrapTable(value: unknown): TableDecl | undefined {
+  if (value && typeof value === 'object' && (value as TableDecl).__isTable === true) {
+    return value as TableDecl
+  }
+  if (typeof value === 'function') {
+    const inner = (value as { table?: unknown }).table
+    if (inner && typeof inner === 'object' && (inner as TableDecl).__isTable === true) {
+      return inner as TableDecl
+    }
+  }
+  return undefined
 }

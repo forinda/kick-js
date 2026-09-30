@@ -87,6 +87,19 @@ export const createUser = insertSchema(users, {
 
 A rule takes `format` (`email`, `uri`, `uuid` and `date-time` are checked), `minLength`, `maxLength`, `pattern`, `minimum` and `maximum`, and they appear in the OpenAPI output too.
 
+## Rules declared with the table
+
+A table declared with one of the [table forms](./db-table-forms.md) can carry its rules — `@Rule(...)` on a builder field, `rules` on a `TableBase`, the third argument of `defineTable().column()`. `insertSchema` / `selectSchema` / `updateSchema` apply them with no options; `columns` still overrides one.
+
+```ts
+export const users = defineTable('users')
+  .column('id', uuid().primaryKey().defaultRandom())
+  .column('email', varchar(120).notNull(), { format: 'email' })
+  .build()
+
+export const createUser = insertSchema(users, { omit: ['id'] }) // email checked as an email
+```
+
 ## Row types
 
 ```ts

@@ -34,6 +34,18 @@ export interface ColumnRef {
  * inside its own initializer. Storing the thunk and resolving on read
  * (extract / render / emit) defers until after the const binding lands.
  */
+/**
+ * A column ref that knows its column's value type — what lets a foreign key
+ * be checked against the column it points at (`fk()`). Assignable to
+ * `ColumnRef`, so every existing ref-taking API keeps working.
+ */
+export type TypedColumnRef<T> = ColumnRef & { readonly __valueType?: T }
+
+/** Typed refs for a column record — one per column. */
+export type TypedColumnRefs<C> = {
+  [K in keyof C]: TypedColumnRef<C[K] extends ColumnBuilder<infer T> ? T : never>
+}
+
 export interface FkSpec {
   thunk: () => ColumnRef
   onDelete: FkAction

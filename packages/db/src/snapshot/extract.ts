@@ -1,6 +1,6 @@
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { derivedFkName, derivedUniqueName } from './name'
-import { qualifiedTableName, type TableDecl } from '../dsl/table'
+import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
 import { extractRelations } from '../query/extract-relations'
 import type {
   Dialect,
@@ -69,7 +69,8 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
 
   const schemaNames = new Set<string>()
 
-  for (const value of Object.values(schema)) {
+  for (const exported of Object.values(schema)) {
+    const value = unwrapTable(exported) ?? exported
     if (isTable(value)) {
       // Key by qualified name so two schemas can hold same-named tables
       // without the later one silently overwriting the earlier.

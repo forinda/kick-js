@@ -1,4 +1,4 @@
-import type { ColumnBuilder, ColumnRef } from './columns/types'
+import type { ColumnBuilder, TypedColumnRefs } from './columns/types'
 import type { IndexDecl } from './constraints'
 import { buildTable, type TableDecl } from './table'
 
@@ -36,8 +36,8 @@ export interface PgSchema<TSchema extends string | undefined = string | undefine
   table<TName extends string, C extends Record<string, ColumnBuilder>>(
     name: TName,
     columns: C,
-    constraints?: (refs: { [K in keyof C]: ColumnRef }) => Record<string, IndexDecl>,
-  ): TableDecl<TName, C, TSchema> & { [K in keyof C]: ColumnRef }
+    constraints?: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>,
+  ): TableDecl<TName, C, TSchema> & TypedColumnRefs<C>
 }
 
 /**
@@ -85,7 +85,7 @@ export function pgSchema<TName extends string>(name: TName): PgSchema<EffectiveS
     table<TName2 extends string, C extends Record<string, ColumnBuilder>>(
       tableName: TName2,
       columns: C,
-      constraints?: (refs: { [K in keyof C]: ColumnRef }) => Record<string, IndexDecl>,
+      constraints?: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>,
     ) {
       return buildTable(tableName, columns, constraints, effective)
     },
