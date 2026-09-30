@@ -18,6 +18,7 @@ import {
   emitSqlite,
   extractSnapshot,
   fk,
+  index,
   integer,
   link,
   selfRef,
@@ -219,6 +220,16 @@ describe('indexes', () => {
     expect(X.table.__indexes).toEqual(byslug)
   })
 
+  it('fluent: repeated .index() calls add up', () => {
+    const x = defineTable('x')
+      .column('slug', varchar(40).notNull())
+      .column('title', text())
+      .index((t) => ({ s: unique('x_slug').on(t.slug) }))
+      .index((t) => ({ t: index('x_title').on(t.title) }))
+      .build()
+    expect(x.__indexes.map((i) => i.name)).toEqual(['x_slug', 'x_title'])
+  })
+
   it('fluent: .index()', () => {
     const x = defineTable('x')
       .column('slug', varchar(40).notNull())
@@ -302,6 +313,12 @@ describe('self-references, cycles and typed foreign keys', () => {
     ).toThrow('bad index')
     const ok = table('ok', { id: uuid().primaryKey(), parentId: parent })
     expect(extractSnapshot({ ok }, 'postgres').tables.ok!.foreignKeys[0]!.refTable).toBe('ok')
+  })
+
+  it('selfRef rejects an inherited name, not only a missing one', () => {
+    expect(() => table('n', { id: uuid(), p: uuid().references(selfRef('constructor')) })).toThrow(
+      "table 'n' has no column 'constructor'",
+    )
   })
 
   it('selfRef names a missing column', () => {

@@ -46,7 +46,8 @@ export function resolveSelfRefs<C extends Record<string, ColumnBuilder>>(
       | undefined
     const target = thunk?.[SELF]
     if (target === undefined) continue
-    if (!(target in columns)) {
+    // Own keys only: `in` would accept inherited names like `constructor`.
+    if (!Object.hasOwn(columns, target)) {
       throw new Error(`selfRef('${target}'): table '${tableName}' has no column '${target}'`)
     }
     targets.push([key, target])

@@ -249,16 +249,19 @@ export class TableDefinition<
     )
   }
 
-  /** Indexes / unique constraints over the columns declared so far. */
+  /** Indexes / unique constraints over the columns declared so far. Calls add up. */
   index(
     constraints: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>,
   ): TableDefinition<N, C, S> {
+    const previous = this.constraints
+    const next = constraints as Constraints
+    const combined: Constraints = previous ? (refs) => ({ ...previous(refs), ...next(refs) }) : next
     return new TableDefinition(
       this.name,
       this.schema,
       this.columns,
       this.columnRules,
-      constraints as Constraints,
+      combined,
       this.built,
     )
   }

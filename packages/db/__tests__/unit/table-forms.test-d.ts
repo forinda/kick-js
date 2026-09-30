@@ -95,6 +95,9 @@ describe('the table name reaches the typed client', () => {
     expectTypeOf<keyof SchemaToTypes<{ i: typeof InvC }>>().toEqualTypeOf<Q>()
     expectTypeOf<keyof SchemaToTypes<{ i: typeof invD }>>().toEqualTypeOf<Q>()
   })
+  it('a plain { table } object is not a table (runtime discovery ignores it too)', () => {
+    expectTypeOf<keyof SchemaToTypes<{ w: { table: typeof D } }>>().toBeNever()
+  })
   it('through relations()', () => {
     expectTypeOf(relations(B, () => ({})).__sourceTable).toEqualTypeOf<'users'>()
     expectTypeOf(relations(UserC.table, () => ({})).__sourceTable).toEqualTypeOf<'users'>()

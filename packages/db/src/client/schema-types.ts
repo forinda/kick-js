@@ -59,7 +59,12 @@ type TableKey<T> = T extends { __name: infer N extends string }
 /** A schema-barrel export's table: itself, or a class form's `static table`. */
 type TableOf<V> = V extends { __isTable: true }
   ? V
-  : V extends { table: infer T extends { __isTable: true } }
+  : // Class constructors only — the same exports `unwrapTable()` accepts at
+    // runtime. A plain `{ table }` object would be typed here but invisible
+    // to snapshot extraction and the codec plugin.
+    V extends (abstract new (...args: never) => unknown) & {
+        table: infer T extends { __isTable: true }
+      }
     ? T
     : never
 

@@ -10,7 +10,6 @@ Pick the one that reads best for a table. Mixing forms in one schema is fine.
 import {
   TableBase,
   defineTable,
-  selfRef,
   table,
   tableFromClass,
   uuid,
@@ -19,7 +18,7 @@ import {
 } from '@forinda/kickjs-db'
 
 // Object — the default
-export const users = table('users', {
+export const usersObject = table('users', {
   id: uuid().primaryKey().defaultRandom(),
   email: varchar(120).notNull(),
 })
@@ -30,7 +29,7 @@ class Users {
   id = uuid().primaryKey().defaultRandom()
   @Rule({ format: 'email' }) email = varchar(120).notNull()
 }
-export const users = tableFromClass(Users)
+export const usersFromFields = tableFromClass(Users)
 
 // Base class — the class is the row type, and can hold methods
 export class User extends TableBase(
@@ -44,13 +43,13 @@ export class User extends TableBase(
 }
 
 // Fluent — column by column
-export const users = defineTable('users')
+export const usersFluent = defineTable('users')
   .column('id', uuid().primaryKey().defaultRandom())
   .column('email', varchar(120).notNull(), { format: 'email' })
   .build()
 ```
 
-All four give the same row types, the same literal table name to the typed client (`db.selectFrom('users')`), and typed column refs.
+All four declare the same `users` table — one file shows them side by side here; a real schema declares each table once, in whichever form. They give the same row types, the same literal table name to the typed client (`db.selectFrom('users')`), and typed column refs.
 
 ## Where they differ
 
