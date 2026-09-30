@@ -497,6 +497,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
+      http2: true,
     },
   }
 }

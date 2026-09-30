@@ -168,6 +168,8 @@ KICK001: No provider for UserService
 | `KICK004` | Config: `@Value('X')` resolved but env var not set and no default given                                                                                     |
 | `KICK005` | Module: `routes()` declared a path without `controller` or `router`                                                                                         |
 | `KICK006` | Routing: two handlers claim the same verb + mounted path (param names ignored — `/:id` and `/:taskId` collide); thrown at boot on both node and web entries |
+| `KICK007` | Server: `server.http2` on a runtime that cannot serve HTTP/2 (Express); thrown by `start()` before setup                                                    |
+| `KICK008` | Server: `server.http2` without `server.tls` (no cleartext HTTP/2); thrown by `start()` before setup                                                         |
 
 More framework errors will migrate to `KickError` over time. Each new entry gets the next free code; codes are stable and never reused.
 

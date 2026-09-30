@@ -1,4 +1,6 @@
 import type http from 'node:http'
+import type https from 'node:https'
+import type http2 from 'node:http2'
 import type { RequestHandler, ErrorRequestHandler } from 'express'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
@@ -82,6 +84,9 @@ export interface AdapterMiddleware {
  * }
  * ```
  */
+/** The Node server behind the app — see `ApplicationOptions.server`. */
+export type KickServer = http.Server | https.Server | http2.Http2SecureServer
+
 export interface AdapterContext {
   /**
    * Engine-agnostic HTTP surface — the supported way to add routes, mounts,
@@ -110,8 +115,13 @@ export interface AdapterContext {
   fetch(request: Request): Promise<Response>
   /** DI container */
   container: Container
-  /** Node.js http.Server — only available in afterStart */
-  server?: http.Server
+  /**
+   * The Node server the app listens on — only available in afterStart. An
+   * `http.Server` by default; an `https.Server` or `Http2SecureServer` when
+   * `bootstrap({ server })` sets `tls` / `http2`. All three emit `upgrade`
+   * for HTTP/1.1 clients, which is what WebSocket libraries attach to.
+   */
+  server?: KickServer
   /** Current NODE_ENV value (default: 'development') */
   env: string
   /** true when NODE_ENV === 'production' */

@@ -253,6 +253,13 @@ export interface RuntimeCapabilities {
    * false — it relies on the `express.json()` connect middleware.
    */
   nativeBodyParsing: boolean
+  /**
+   * The engine's `nodeHandler` works behind `node:http2` (the HTTP/2
+   * compatibility API), so `server: { http2: true }` may use it. Fastify/h3:
+   * true. Express: false — it does not run on that layer. Absent = false, so
+   * custom runtimes opt in explicitly.
+   */
+  http2?: boolean
 }
 
 /**

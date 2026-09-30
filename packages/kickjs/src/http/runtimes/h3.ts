@@ -455,6 +455,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
       uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
+      http2: true,
     },
   }
 }

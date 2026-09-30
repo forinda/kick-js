@@ -88,6 +88,7 @@ describe('expressRuntime', () => {
       uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: false,
+      http2: false,
     })
   })
 
