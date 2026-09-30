@@ -9,6 +9,7 @@ export default defineConfig({
     pg: 'src/pg.ts',
     sqlite: 'src/sqlite.ts',
     mysql: 'src/mysql.ts',
+    schema: 'src/schema.ts',
     cli: 'src/cli.ts',
     'devtools-events': 'src/devtools-events.ts',
   },

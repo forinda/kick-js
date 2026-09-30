@@ -6,6 +6,10 @@ KickJS validates request data through the [`@forinda/kickjs-schema`](schema.md) 
 Under the hood the validate middleware calls `detectSchema(schema).safeParse(payload)`. The same `KickSchema` flows into the swagger spec generator and `loadEnvFromSchema()` — so picking Valibot for one DTO and Yup for another in the same project Just Works, no extra config. See the [schema-agnostic validation guide](schema.md) for the adapter surface.
 :::
 
+::: tip Validate with your database tables
+With `@forinda/kickjs-db`, `insertSchema(users)` / `updateSchema(users)` build the route schema from the table itself — no second declaration to keep in step. See [Validation from Tables](./db-table-schemas.md).
+:::
+
 ::: tip Scaffold one
 `kick g dto <name>` writes a schema plus its inferred type, in the shape the route decorators below expect — in whichever of the three libraries the project depends on.
 

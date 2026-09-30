@@ -37,6 +37,10 @@
       "import": "./dist/mysql.mjs",
       "types": "./dist/mysql.d.mts"
     },
+    "./schema": {
+      "import": "./dist/schema.mjs",
+      "types": "./dist/schema.d.mts"
+    },
     "./cli": {
       "import": "./dist/cli.mjs",
       "types": "./dist/cli.d.mts"
@@ -90,6 +94,7 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
+    "@forinda/kickjs-schema": "workspace:*",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.2",
