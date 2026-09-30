@@ -415,7 +415,7 @@ High-risk, high-reward. Each of these could be the thing KickJS is famous for, i
 
 ### C.1 Schema-first via one decorator
 
-**Status:** `proposed` — **partially superseded.** `@forinda/kickjs-db` took the code-first route instead: schema defined in TS, with snapshot / diff / migrate and dialect subpaths. That covers the schema-to-database projection; the `@Schema` / `@Field` class projecting to validator + OpenAPI + types in one declaration is still unbuilt. Decide whether this is now "project kick/db schemas into Zod + OpenAPI" rather than a fresh decorator surface.
+**Status:** `re-scoped` — the database half shipped as `@forinda/kickjs-db` (code-first tables, snapshot / diff / migrate). What remains is projecting a kick/db table into request validation and OpenAPI, not a new `@Schema` / `@Field` surface: `insertSchema(users)` / `selectSchema(users)` / `updateSchema(users)` return a schema that validation, Swagger, typegen and the typed client already accept, with a per-column override map for what a table can't express (email, lengths, `json` shapes). About 1–2 weeks rather than 4–6 months. The original sketch below is kept for context.
 **Effort:** 4–6 months
 
 **Why it matters.** Today an entity is defined four times: Prisma/Drizzle schema, Zod validator, TypeScript type, OpenAPI doc. Each has its own syntax. Drift is constant. A single source of truth — declared once, projected to all four — is the holy grail.
@@ -462,7 +462,7 @@ From this one class:
 
 ### C.2 TS compiler plugin for runtime types
 
-**Status:** `proposed` — **partially superseded.** `kick typegen` gets much of this from a source scan rather than a compiler transformer: `KickRoutes`, `KickEnv`, `KickAssets`, `KickJsPluginRegistry`. What a transformer would still add is inference the scan cannot do. Worth re-reading against typegen's current reach before committing months to it.
+**Status:** `not planned` as a compiler plugin. `kick typegen` covers the types-at-runtime need by scanning source and emitting types the user's `tsc` checks, and uses the TypeScript checker where it has to (the client route map). Injecting interfaces without tokens needs whole-program knowledge a per-file transform doesn't have, and the build-tool gaps (esbuild, tsx) are handled by the SWC build and explicit `@Inject`. The pain that remains is smaller — a class that is never imported never registers — and belongs to typegen: emit a registration manifest from the classes its scanner already finds. The original sketch below is kept for context.
 **Effort:** 3–6 months
 
 **Why it matters.** TypeScript's types are erased at runtime. That's why we need decorators in the first place — to recover the type info at runtime. A `ts-patch` / `swc` plugin (like `ts-runtime-checks`, `typia`, or `tspl`) preserves the type info, making decorators in some cases unnecessary.
@@ -772,8 +772,9 @@ above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** 
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-2. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **C.1 (re-scoped) — kick/db table → validation + OpenAPI** (1–2 weeks)
+2. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+3. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
 
 Open for redirection — these are starting points, not commitments.
 
