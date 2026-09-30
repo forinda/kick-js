@@ -142,6 +142,31 @@ describe('kick new --yes (non-interactive)', () => {
     expect(config).toContain(`repo: 'inmemory'`)
   })
 
+  it('wires --packages into the fullstack server and approves their scripts at the root', () => {
+    const result = runNew(cwd, [
+      'my-app',
+      '--yes',
+      '--template',
+      'fullstack',
+      '--pm',
+      'pnpm',
+      '--packages',
+      'swagger,queue',
+      '--no-install',
+      '--no-git',
+    ])
+    expect(result.exitCode).toBe(0)
+    const dir = join(cwd, 'my-app')
+    const entry = readFileSync(join(dir, 'server/src/index.ts'), 'utf-8')
+    expect(entry).toContain('SwaggerAdapter(')
+    expect(entry).toContain('QueueAdapter(')
+    expect(entry).toContain('SpaAdapter(')
+    // The root installs the workspace, so the root records the answers.
+    const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf-8')
+    expect(workspace).toContain(`'@scarf/scarf': true`)
+    expect(workspace).toContain('msgpackr-extract: false')
+  })
+
   it('aborts cleanly when target dir is non-empty and --force is missing', () => {
     const target = join(cwd, 'my-api')
     mkdirSync(target, { recursive: true })

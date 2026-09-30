@@ -1,39 +1,13 @@
-type ProjectTemplate = 'rest' | 'minimal'
-
 // `SchemaLib` is defined next to `resolveSchemaLib` in ../../config, so the
 // scaffold that installs the library and the generators that import from it
 // read the same list. Re-exported here for existing importers.
 export type { SchemaLib } from '../../config'
-import type { SchemaLib } from '../../config'
-
-/** Map of optional package names to their npm package identifiers */
-const PACKAGE_DEPS: Record<string, string> = {
-  swagger: '@forinda/kickjs-swagger',
-  ws: '@forinda/kickjs-ws',
-  queue: '@forinda/kickjs-queue',
-  devtools: '@forinda/kickjs-devtools',
-}
-
-/**
- * Schema-lib runtime dependency ranges. Pinned to a recent release.
- *
- * Exactly one of these is installed, chosen by `--schema`; `zod` is the `--yes`
- * default for its ecosystem reach (OpenAPI generation, the Standard Schema
- * brand `kick typegen` reads). Whichever lands here is what `resolveSchemaLib`
- * later detects when generating DTO schemas.
- */
-const SCHEMA_LIB_NAMES: Record<SchemaLib, string> = {
-  zod: 'zod',
-  valibot: 'valibot',
-  yup: 'yup',
-}
 
 /**
  * Map of package name → semver range string (`^x.y.z`). Resolved
  * from `npm view <name> version` upstream so per-package independent
- * versioning is honoured at scaffold time. Every sibling
- * `@forinda/kickjs-*` package we might add to the new project must
- * appear here; missing keys throw during package.json generation
+ * versioning is honoured at scaffold time. Every package a scaffold layer
+ * lists must appear here; missing keys throw during package.json generation
  * (loud failure beats silently shipping `^undefined`).
  */
 export type SiblingVersions = Record<string, string>
@@ -43,70 +17,36 @@ function take(versions: SiblingVersions, name: string): string {
   if (!v) {
     throw new Error(
       `generatePackageJson: missing resolved version for ${name}. ` +
-        `Add it to SIBLING_PACKAGES in generators/project.ts.`,
+        `Add it to SIBLING_PACKAGES or THIRD_PARTY_PACKAGES in generators/project.ts.`,
     )
   }
   return v
 }
 
-/** Generate package.json with template-aware dependencies */
+/** Name → resolved range, sorted by name (the order npm and pnpm write). */
+function pinned(names: readonly string[], versions: SiblingVersions): Record<string, string> {
+  return Object.fromEntries(names.toSorted().map((name) => [name, take(versions, name)]))
+}
+
+/**
+ * Generate package.json. Which packages it lists comes from the scaffold
+ * layers (`templates/<layer>/feature.json`); the ranges come from `versions`.
+ */
 export function generatePackageJson(
   name: string,
-  template: ProjectTemplate,
   versions: SiblingVersions,
-  packages: string[] = [],
-  schemaLib: SchemaLib = 'zod',
-  runtime: 'express' | 'fastify' | 'h3' = 'express',
+  packages: { dependencies: readonly string[]; devDependencies: readonly string[] },
   /**
    * Pin the TypeScript 7 compiler API, needed to resolve the client route map
    * (`.kickjs/types/kick__client.d.ts`). Set by the fullstack generator, whose
-   * web app reads that map from the ambient `KickClientApi` namespace.
-   *
-   * Deliberately a flag rather than `template === 'fullstack'`: the fullstack
-   * workspace scaffolds its SERVER with `template: 'minimal'`, so keying off
-   * the template name silently pinned nothing.
+   * web app reads that map from the ambient `KickClientApi` namespace. It is a
+   * 10 kB shim over a 24 MB `typescript@6`, so rest/minimal stay without it.
    */
   withClientMap = false,
 ): string {
-  const schemaLibName = SCHEMA_LIB_NAMES[schemaLib]
-  const baseDeps: Record<string, string> = {
-    '@forinda/kickjs': take(versions, '@forinda/kickjs'),
-    // The schema-agnostic abstraction kickjs-schema wraps zod / valibot
-    // / yup behind a single `KickSchema` interface — env validation,
-    // body validation, and swagger spec generation all flow through
-    // `detectSchema()`. Shipping it as a direct dep (rather than a peer)
-    // keeps the new-project install one-step.
-    '@forinda/kickjs-schema': take(versions, '@forinda/kickjs-schema'),
-    // `dotenv` is an optional peer of @forinda/kickjs — scaffolded apps
-    // get it pre-installed so `.env` files Just Work. Apps that load
-    // env from the shell or a secret manager can drop this safely.
-    dotenv: take(versions, 'dotenv'),
-    'reflect-metadata': take(versions, 'reflect-metadata'),
-    [schemaLibName]: take(versions, schemaLibName),
-  }
-
-  // Engine peers for the chosen runtime (optional peers of @forinda/kickjs).
-  if (runtime === 'express') {
-    // Express is the engine itself.
-    baseDeps.express = take(versions, 'express')
-  } else if (runtime === 'fastify') {
-    baseDeps.fastify = take(versions, 'fastify')
-    baseDeps['@fastify/middie'] = take(versions, '@fastify/middie')
-    // Static serving uses `serve-static` (no express dependency).
-    baseDeps['serve-static'] = take(versions, 'serve-static')
-  } else if (runtime === 'h3') {
-    baseDeps.h3 = take(versions, 'h3')
-    baseDeps['serve-static'] = take(versions, 'serve-static')
-  }
-
-  // Add user-selected optional packages — each looked up against
-  // the resolved version map so they're independently up-to-date.
-  for (const pkg of packages) {
-    const dep = PACKAGE_DEPS[pkg]
-    if (dep && !baseDeps[dep]) {
-      baseDeps[dep] = take(versions, dep)
-    }
-  }
+  const devDependencies = withClientMap
+    ? [...packages.devDependencies, '@typescript/typescript6']
+    : packages.devDependencies
 
   return JSON.stringify(
     {
@@ -140,37 +80,8 @@ export function generatePackageJson(
         'build:netlify': 'kick build && kick build:netlify',
         'build:vercel': 'kick build && kick build:vercel',
       },
-      dependencies: baseDeps,
-      devDependencies: {
-        '@forinda/kickjs-cli': take(versions, '@forinda/kickjs-cli'),
-        // The generated AGENTS.md and the `write-controller-test` skill both
-        // tell you to test with `createTestApp` + supertest. Shipping those
-        // instructions without the packages means the first test a reader
-        // writes fails on a missing import.
-        '@forinda/kickjs-testing': take(versions, '@forinda/kickjs-testing'),
-        '@forinda/kickjs-vite': take(versions, '@forinda/kickjs-vite'),
-        '@types/supertest': take(versions, '@types/supertest'),
-        '@swc/core': take(versions, '@swc/core'),
-        // Express types only when Express is the engine (it's the only runtime
-        // that imports `express` in src/index.ts).
-        ...(runtime === 'express' ? { '@types/express': take(versions, '@types/express') } : {}),
-        '@types/node': take(versions, '@types/node'),
-        'unplugin-swc': take(versions, 'unplugin-swc'),
-        vite: take(versions, 'vite'),
-        supertest: take(versions, 'supertest'),
-        vitest: take(versions, 'vitest'),
-        typescript: take(versions, 'typescript'),
-        // Only scaffolds that consume the client route map pin the TypeScript 7
-        // compiler API: it is a 10 kB shim over a 24 MB `typescript@6`, which is
-        // not something to put in every project. Today that means fullstack,
-        // whose web app reads the map from the ambient `KickClientApi`
-        // namespace. rest/minimal have no frontend and stay lean.
-        ...(withClientMap
-          ? { '@typescript/typescript6': take(versions, '@typescript/typescript6') }
-          : {}),
-        oxfmt: take(versions, 'oxfmt'),
-        oxlint: take(versions, 'oxlint'),
-      },
+      dependencies: pinned(packages.dependencies, versions),
+      devDependencies: pinned(devDependencies, versions),
     },
     null,
     2,

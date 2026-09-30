@@ -6,4 +6,3 @@ export { generateCreateDTO, generateUpdateDTO, generateResponseDTO } from './dto
 export { generateRepositoryFactory } from './repository'
 export { generateControllerTest, generateRepositoryTest } from './tests'
 export { generateRestService, generateRestConstants } from './rest-service'
-export { generateEnvFile } from './project-app'

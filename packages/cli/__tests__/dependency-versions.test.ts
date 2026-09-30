@@ -16,8 +16,16 @@ vi.mock('../src/utils/shell', async (importOriginal) => ({
   captureCommandAsync: (...args: unknown[]) => capture(...args),
 }))
 
-const { parseNpmVersion, resolveSiblingVersions } = await import('../src/generators/project')
+const { parseNpmVersion, resolveSiblingVersions, scaffoldLayers } =
+  await import('../src/generators/project')
 const { generatePackageJson } = await import('../src/generators/templates/project-config')
+const { renderLayers } = await import('../src/scaffold/overlay')
+
+/** The `--yes` selection's package lists. */
+const defaultPackages = () =>
+  renderLayers(
+    scaffoldLayers({ template: 'minimal', runtime: 'express', schemaLib: 'zod', packages: [] }),
+  )
 
 describe('parseNpmVersion', () => {
   it('reads the single version npm prints for a dist-tag query', () => {
@@ -71,7 +79,7 @@ describe('generated package.json', () => {
       return spec.includes('@^') ? '["1.2.3"]' : '1.2.3'
     })
     const versions = await resolveSiblingVersions()
-    const pkg = JSON.parse(generatePackageJson('demo-app', 'minimal', versions))
+    const pkg = JSON.parse(generatePackageJson('demo-app', versions, defaultPackages()))
 
     const ranges = { ...pkg.dependencies, ...pkg.devDependencies }
     for (const [name, range] of Object.entries(ranges)) {

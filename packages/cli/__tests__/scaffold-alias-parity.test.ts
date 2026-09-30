@@ -16,7 +16,7 @@ import { describe, it, expect } from 'vitest'
 import { generateViteConfig } from '../src/generators/templates/project-config'
 import { renderLayers } from '../src/scaffold/overlay'
 
-const base = renderLayers(['base'])
+const base = renderLayers(['base']).files
 
 describe('@ alias is single-sourced across the scaffold', () => {
   it('defines the alias in the vite config and mirrors it in tsconfig paths', () => {

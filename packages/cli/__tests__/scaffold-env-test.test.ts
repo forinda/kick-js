@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 
 import { renderLayers } from '../src/scaffold/overlay'
 
-const base = renderLayers(['base'])
+const base = renderLayers(['base']).files
 const file = (path: string) => base.get(path)!
 
 describe('scaffolded .env.test', () => {

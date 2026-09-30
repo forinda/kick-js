@@ -1,0 +1,13 @@
+{
+  "dependencies": ["@forinda/kickjs-ws", "ws"],
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs-ws",
+        "names": ["WsAdapter"]
+      },
+      "slot": "adapter",
+      "code": "// WebSocket upgrades on /ws \u2014 see guide/websockets.\nWsAdapter({ path: '/ws' })"
+    }
+  ]
+}

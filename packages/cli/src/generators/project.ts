@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
-import { renderLayers } from '../scaffold/overlay'
+import { renderLayers, TEMPLATES_DIR, type Integration } from '../scaffold/overlay'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
 import {
   generatePackageJson,
@@ -11,7 +11,7 @@ import {
   generateNetlifyToml,
   generateVercelJson,
 } from './templates/project-config'
-import { generateEntryFile, generateEnvFile, generateKickConfig } from './templates/project-app'
+import { generateKickConfig } from './templates/project-app'
 import { generateReadme } from './templates/project-docs'
 import {
   AVAILABLE_ADD_PACKAGES,
@@ -51,7 +51,7 @@ const cliPkg = JSON.parse(
  * `@forinda/kickjs-cli@5.4.2` and `@forinda/kickjs-swagger@5.3.1`;
  * pinning them all to the CLI's version under-installs adopters.
  */
-const SIBLING_PACKAGES = [
+export const SIBLING_PACKAGES = [
   '@forinda/kickjs',
   '@forinda/kickjs-cli',
   '@forinda/kickjs-schema',
@@ -78,7 +78,7 @@ const SIBLING_PACKAGES = [
  * The value is the fallback: what gets written when `npm view` says nothing
  * (offline, registry down), so a scaffold without network still installs.
  */
-const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: string }> = {
+export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: string }> = {
   // Frontend — the fullstack web app. Nothing the template writes is
   // version-specific (`createRoot`, JSX, a plugin call), so these float.
   react: { fallback: '^19.0.0' },
@@ -116,6 +116,11 @@ const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: string }> =
   zod: { fallback: '^4.3.6', cap: '^4' },
   valibot: { fallback: '^1.4.1', cap: '^1' },
   yup: { fallback: '^1.7.1', cap: '^1' },
+  // Peers of the optional packages (`--packages ws,queue`), capped at the
+  // major those packages peer on.
+  ws: { fallback: '^8.18.0', cap: '^8' },
+  bullmq: { fallback: '^5.0.0', cap: '^5' },
+  ioredis: { fallback: '^5.0.0', cap: '^5' },
 }
 
 /**
@@ -333,7 +338,14 @@ interface InitProjectOptions {
 }
 
 /** Scaffold a new KickJS project */
-export async function initProject(options: InitProjectOptions): Promise<void> {
+/**
+ * Scaffold a project. Returns the install-script answers it needs, so a
+ * caller that installs from elsewhere (the fullstack workspace root) can
+ * record them there.
+ */
+export async function initProject(
+  options: InitProjectOptions,
+): Promise<{ builds: Record<string, boolean> }> {
   const {
     name,
     directory,
@@ -415,18 +427,24 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     }
   }
 
-  // ── package.json — template-aware deps ────────────────────────────
+  // ── Layers — templates/<layer>/ ──────────────────────────────────
+  // Everything that follows from the options: the entry file (runtime,
+  // adapters), the env schema, .env additions and the package lists.
+  const unknown = packages.filter((pkg) => !existsSync(join(TEMPLATES_DIR, `feature-${pkg}`)))
+  if (unknown.length > 0) {
+    log(
+      `WARNING: skipping unknown package(s): ${unknown.join(', ')} — add them later with kick add`,
+    )
+  }
+  const project = renderLayers(scaffoldLayers({ template, runtime, schemaLib, packages }), {
+    vars: { name, version: cliPkg.version },
+    extra: options.spaClientDir ? [spaIntegration(options.spaClientDir)] : [],
+  })
+
+  // ── package.json ─────────────────────────────────────────────────────
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(
-      name,
-      template,
-      versions,
-      packages,
-      schemaLib,
-      runtime,
-      options.withClientMap,
-    ),
+    generatePackageJson(name, versions, project, options.withClientMap),
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
@@ -435,25 +453,13 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     generateViteConfig({ strictPort: options.strictPort }),
   )
 
-  // ── Files that don't depend on options — templates/base ─────────
-  // tsconfig, formatter/editor/git config, .env files, vitest config and the
-  // hello module. `.env.test` is read INSTEAD of `.env` under a test run, so
-  // shipping it is what isolates a new project's tests by default.
-  for (const [path, contents] of renderLayers(['base'])) {
+  // tsconfig, formatter/editor/git config, .env files (`.env.test` is read
+  // INSTEAD of `.env` under a test run, so shipping it isolates a new
+  // project's tests), vitest config, the hello module, `src/config/index.ts`
+  // (the typed env schema `kick typegen` reads) and `src/index.ts`.
+  for (const [path, contents] of project.files) {
     await writeFileSafe(join(dir, path), contents)
   }
-
-  // ── src/config/index.ts — typed env schema (read by `kick typegen`) ─
-  // Lives under `src/config/` so the framework's "config" concept has a
-  // single, conventional home. Old projects with `src/env.ts` still
-  // work — `detectEnvFile()` searches both locations.
-  await writeFileSafe(join(dir, 'src/config/index.ts'), generateEnvFile(schemaLib))
-
-  // ── src/index.ts — template-aware entry point ─────────────────────
-  await writeFileSafe(
-    join(dir, 'src/index.ts'),
-    generateEntryFile(name, template, cliPkg.version, packages, runtime, options.spaClientDir),
-  )
 
   // ── kick.config.ts — CLI configuration ─────────────────────────────
   await writeFileSafe(
@@ -504,8 +510,9 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   // ── Install-script approvals ─────────────────────────────────────────
   // Before install; see approveInstallScripts.
+  const builds = { ...TEMPLATE_BUILDS, ...buildsFor(packages), ...project.builds }
   if (options.approveInstallScripts !== false) {
-    approveInstallScripts(packageManager, dir, { ...TEMPLATE_BUILDS, ...buildsFor(packages) })
+    approveInstallScripts(packageManager, dir, builds)
   }
 
   // ── Install Dependencies ────────────────────────────────────────────
@@ -586,4 +593,45 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('')
   log(`Available: ${AVAILABLE_ADD_PACKAGES}`)
   log('')
+
+  return { builds }
+}
+
+/**
+ * `SpaAdapter` for the fullstack server, which serves `web/`'s build from the
+ * API's origin in production. The path is text the caller chose, so it goes
+ * in through JSON.stringify — a quote, backslash or newline in it would
+ * otherwise break the emitted module or change the path it resolves.
+ */
+export function spaIntegration(clientDir: string): Integration {
+  return {
+    import: { from: '@forinda/kickjs/spa', names: ['SpaAdapter'] },
+    slot: 'adapter',
+    code:
+      '// Serves the built frontend from this origin in production.\n' +
+      '// Inert until the client build exists, so `kick dev` (where Vite\n' +
+      '// serves the client and proxies /api here) is unaffected.\n' +
+      `SpaAdapter({ clientDir: ${JSON.stringify(clientDir)} })`,
+  }
+}
+
+/**
+ * The layers a `kick new` selection renders, in order. Unknown package
+ * names are left out (the caller warns about them).
+ */
+export function scaffoldLayers(selection: {
+  template: 'rest' | 'minimal'
+  runtime: 'express' | 'fastify' | 'h3'
+  schemaLib: SchemaLib
+  packages: readonly string[]
+}): string[] {
+  return [
+    'base',
+    `template-${selection.template}`,
+    `runtime-${selection.runtime}`,
+    `schema-${selection.schemaLib}`,
+    ...selection.packages
+      .filter((pkg) => existsSync(join(TEMPLATES_DIR, `feature-${pkg}`)))
+      .map((pkg) => `feature-${pkg}`),
+  ]
 }

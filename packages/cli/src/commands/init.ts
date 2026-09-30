@@ -332,6 +332,7 @@ export function registerInitCommand(program: Command): void {
           installDeps,
           schemaLib,
           runtime,
+          packages: selectedPackages,
           frontend,
           viteTemplate,
         })

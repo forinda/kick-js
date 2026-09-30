@@ -149,6 +149,10 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   'queue:bullmq': {
     pkg: '@forinda/kickjs-queue',
     peers: ['bullmq', 'ioredis'],
+    // bullmq → msgpackr → msgpackr-extract (optional native addon). msgpackr
+    // falls back to JS without it, so the script is declined — but it must be
+    // answered, or pnpm 10+ fails the install (ERR_PNPM_IGNORED_BUILDS).
+    builds: { 'msgpackr-extract': false },
     description: 'Queue with BullMQ + Redis',
   },
   'queue:rabbitmq': {

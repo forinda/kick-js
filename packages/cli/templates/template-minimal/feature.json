@@ -1,0 +1,10 @@
+{
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs",
+        "names": ["bootstrap"]
+      }
+    }
+  ]
+}

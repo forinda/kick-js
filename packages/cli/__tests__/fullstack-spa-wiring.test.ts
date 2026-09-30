@@ -10,11 +10,26 @@
  */
 import { describe, it, expect } from 'vitest'
 
-import { generateEntryFile } from '../src/generators/templates/project-app'
+import { scaffoldLayers, spaIntegration } from '../src/generators/project'
+import { renderLayers } from '../src/scaffold/overlay'
+
+/** The fullstack server's entry file: a minimal scaffold, plus SpaAdapter when given a dir. */
+function generateEntry(packages: string[], clientDir?: string): string {
+  const layers = scaffoldLayers({
+    template: 'minimal',
+    runtime: 'express',
+    schemaLib: 'zod',
+    packages,
+  })
+  const extra = clientDir === undefined ? [] : [spaIntegration(clientDir)]
+  return renderLayers(layers, { extra, vars: { name: 'demo', version: '1.0.0' } }).files.get(
+    'src/index.ts',
+  )!
+}
 
 describe('fullstack entry wiring', () => {
   it('wires SpaAdapter when a client dir is given', () => {
-    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '../web/dist')
+    const entry = generateEntry([], '../web/dist')
     expect(entry).toContain("import { SpaAdapter } from '@forinda/kickjs/spa'")
     expect(entry).toContain('SpaAdapter({ clientDir: \"../web/dist\" })')
     expect(entry).toContain('adapters:')
@@ -24,24 +39,17 @@ describe('fullstack entry wiring', () => {
     // The inert-until-built behaviour is the whole reason this can be
     // unconditional; a reader deleting it "because dev serves via Vite"
     // would break production.
-    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '../web/dist')
+    const entry = generateEntry([], '../web/dist')
     expect(entry).toMatch(/Inert until/)
   })
 
   it('adds nothing when no client dir is given', () => {
-    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express')
+    const entry = generateEntry([])
     expect(entry).not.toContain('SpaAdapter')
   })
 
   it('composes with other adapters rather than replacing them', () => {
-    const entry = generateEntryFile(
-      'demo',
-      'minimal',
-      '1.0.0',
-      ['swagger'],
-      'express',
-      '../web/dist',
-    )
+    const entry = generateEntry(['swagger'], '../web/dist')
     expect(entry).toContain('SwaggerAdapter')
     expect(entry).toContain('SpaAdapter')
   })
@@ -52,19 +60,19 @@ describe('generated path is serialized, not interpolated', () => {
     // The value is arbitrary caller-supplied path text written into a
     // TypeScript module. A raw `'${dir}'` template hole let a quote close the
     // string early and emit invalid TS — or worse, silently change the path.
-    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', "../we'b/dist")
+    const entry = generateEntry([], "../we'b/dist")
     expect(entry).toContain('SpaAdapter({ clientDir: "../we\'b/dist" })')
     // The raw value must not reach the comment either.
     expect(entry).not.toContain("Inert until '../we'b/dist'")
   })
 
   it('escapes a backslash (Windows-style path)', () => {
-    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '..\\web\\dist')
+    const entry = generateEntry([], '..\\web\\dist')
     expect(entry).toContain('SpaAdapter({ clientDir: "..\\\\web\\\\dist" })')
   })
 
   it('keeps the ordinary path readable', () => {
-    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '../web/dist')
+    const entry = generateEntry([], '../web/dist')
     expect(entry).toContain('SpaAdapter({ clientDir: "../web/dist" })')
   })
 })

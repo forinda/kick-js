@@ -1,0 +1,13 @@
+{
+  "dependencies": ["h3", "serve-static"],
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs/h3",
+        "names": ["h3Runtime"]
+      },
+      "slot": "runtime",
+      "code": "runtime: h3Runtime()"
+    }
+  ]
+}

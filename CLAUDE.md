@@ -242,10 +242,14 @@ src/
       controller.ts, dtos.ts, domain.ts, ...
   scaffold/overlay.ts             # renders templates/<layer>/files/ for kick new
 templates/                        # scaffold layers shipped with the CLI
-  base/files/                     # option-independent project files; `_dot_x` → `.x`
+  base/                           # always rendered
+  template-{minimal,rest}/        # src/index.ts with slot markers
+  runtime-{express,fastify,h3}/   # runtime factory + engine packages
+  schema-{zod,valibot,yup}/       # src/config/index.ts
+  feature-{swagger,devtools,ws,queue}/  # adapter entries + packages
 ```
 
-`kick new` renders `templates/base` for files that don't depend on options; files that do (package.json, `src/index.ts`, the env schema, `kick.config.ts`, README) are still template functions until their options become layers.
+Each layer has `files/` (copied; `_dot_x` → `.x`; `x.append` appends to `x`) and an optional `feature.json` (`dependencies`, `devDependencies`, `builds` install-script answers, `integrations`). Shared files mark slots with `// @kick:imports` / `// @kick:<slot>` comment lines; layers declare `{ import, slot, code }` entries instead of editing them. package.json ranges still come from the scaffold-time version map, so every listed package must be in `SIBLING_PACKAGES` or `THIRD_PARTY_PACKAGES`. `kick.config.ts`, `vite.config.ts`, README, agent docs and platform config are still template functions.
 
 ### Key CLI Config (kick.config.ts)
 
