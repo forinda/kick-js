@@ -1,5 +1,10 @@
 // Application
-export { Application, type ApplicationOptions, type MiddlewareEntry } from './application'
+export {
+  Application,
+  type ApplicationOptions,
+  type MiddlewareEntry,
+  type ServerOptions,
+} from './application'
 
 // Bootstrap — zero-boilerplate entry point
 export { bootstrap } from './bootstrap'
