@@ -7,16 +7,21 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Application, type ApplicationOptions } from './application'
+import { forwardBackgroundWork, settleBackgroundWork, type PlatformContext } from './background'
 
 /** A KickJS app exposed as request handlers. See {@link createHandler}. */
 export interface KickHandler {
   /**
    * Web-standard handler: `fetch(Request) → Response`. Netlify Functions,
    * Vercel's fetch export, and anything else that speaks `Request`.
+   *
+   * Pass the platform context (Netlify's `context`, `{ waitUntil }` from
+   * `@vercel/functions`) so work handed to `ctx.waitUntil()` finishes after
+   * the response instead of being frozen with the instance.
    */
-  fetch(request: Request): Promise<Response>
+  fetch(request: Request, platform?: PlatformContext): Promise<Response>
   /** Node handler: `(req, res)`. Vercel Node functions, `http.createServer`. */
-  node(req: IncomingMessage, res: ServerResponse): Promise<void>
+  node(req: IncomingMessage, res: ServerResponse, platform?: PlatformContext): Promise<void>
   /** Set the app up now instead of on the first request (warm-up). */
   ready(): Promise<Application>
   /** Shut adapters down and stop the internal forwarding server, if one started. */
@@ -52,7 +57,7 @@ export interface KickHandler {
  * export const handler = createHandler({ modules })
  *
  * // netlify/functions/api.mjs
- * export default (request) => handler.fetch(request)
+ * export default (request, context) => handler.fetch(request, context)
  * export const config = { path: '/api/*' }
  * ```
  */
@@ -80,13 +85,21 @@ export function createHandler(options: ApplicationOptions): KickHandler {
   return {
     ready,
 
-    async fetch(request) {
-      return (await ready()).fetch(request)
+    async fetch(request, platform) {
+      const response = await (await ready()).fetch(request)
+      forwardBackgroundWork(platform)
+      return response
     },
 
-    async node(req, res) {
+    async node(req, res, platform) {
       const instance = await ready()
       instance.handle(req, res)
+      if (platform?.waitUntil) {
+        // The response is written asynchronously: start settling only once it
+        // has gone out, so work the handler registered along the way is included.
+        const sent = new Promise<void>((resolve) => res.once('close', () => resolve()))
+        platform.waitUntil(sent.then(settleBackgroundWork))
+      }
     },
 
     async close() {

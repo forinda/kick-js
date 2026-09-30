@@ -79,11 +79,27 @@ export function resolveDeploy(
 export function netlifyFunctionSource(bundleImport: string, apiPath: string): string {
   return `import { handler } from '${bundleImport}'
 
-export default (request) => handler.fetch(request)
+// Netlify's context carries waitUntil, so ctx.waitUntil() work finishes after the response.
+export default (request, context) => handler.fetch(request, context)
 
 export const config = {
   path: '${apiPath}/*',
 }
+`
+}
+
+/**
+ * The Vercel function entry. Vercel's Node runtime passes no per-request
+ * context argument; it exposes the request context — `waitUntil` included —
+ * on a global, per request (the channel `@vercel/functions` reads). Absent
+ * outside Vercel, so the handler just gets `undefined`.
+ */
+export function vercelFunctionSource(): string {
+  return `import { handler } from './server.mjs'
+
+const requestContext = () => globalThis[Symbol.for('@vercel/request-context')]?.get?.()
+
+export default (req, res) => handler.node(req, res, requestContext())
 `
 }
 
@@ -254,10 +270,7 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
 
       // Nothing outside the .func directory is visible at runtime.
       cpSync(server, resolve(fn, 'server.mjs'))
-      writeFileSync(
-        resolve(fn, 'index.mjs'),
-        `import { handler } from './server.mjs'\nexport default handler.node\n`,
-      )
+      writeFileSync(resolve(fn, 'index.mjs'), vercelFunctionSource())
       writeFileSync(
         resolve(fn, '.vc-config.json'),
         `${JSON.stringify(

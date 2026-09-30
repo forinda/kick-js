@@ -14,12 +14,12 @@ import { modules } from './modules'
 export const handler = createHandler({ modules })
 ```
 
-| Method                   | Signature                     | Use it for                                 |
-| ------------------------ | ----------------------------- | ------------------------------------------ |
-| `handler.fetch(request)` | `Request → Promise<Response>` | Netlify Functions, anything web-standard   |
-| `handler.node(req, res)` | Node `(req, res)`             | Vercel Node functions, `http.createServer` |
-| `handler.ready()`        | `Promise<Application>`        | Warm the app up before the first request   |
-| `handler.close()`        | `Promise<void>`               | Shut adapters down (tests, graceful exit)  |
+| Method                              | Signature                     | Use it for                                 |
+| ----------------------------------- | ----------------------------- | ------------------------------------------ |
+| `handler.fetch(request, platform?)` | `Request → Promise<Response>` | Netlify Functions, anything web-standard   |
+| `handler.node(req, res, platform?)` | Node `(req, res)`             | Vercel Node functions, `http.createServer` |
+| `handler.ready()`                   | `Promise<Application>`        | Warm the app up before the first request   |
+| `handler.close()`                   | `Promise<void>`               | Shut adapters down (tests, graceful exit)  |
 
 ## Which project layout
 
@@ -88,6 +88,32 @@ Import `app-options` first in each entry, so its side effects run before anythin
 - **Nothing listens on a port**, so adapter `afterStart` hooks do not run. Startup logs a warning naming any adapter that has one — WebSocket adapters and anything else that attaches to the `http.Server` are unavailable.
 - **No process signal or error handlers** are registered. The platform owns the process.
 - **One handler per process.** The DI container is process-wide.
+
+### Work that outlives the response (`waitUntil`)
+
+A serverless platform may freeze or stop the instance as soon as the response is sent, so a promise a handler starts and doesn't await (an audit log, an email, an analytics call) can be cut off. Hand it to `ctx.waitUntil()`, or to the standalone `waitUntil()` export from a service:
+
+```ts
+@Post('/')
+async create(ctx: RequestContext) {
+  const order = await this.orders.create(ctx.body)
+  ctx.waitUntil(this.mailer.sendReceipt(order))
+  return order
+}
+```
+
+Then pass the platform context as the handler's last argument, so the platform keeps the instance alive until that work settles:
+
+```ts
+// Netlify: the context carries waitUntil
+export default (request, context) => handler.fetch(request, context)
+
+// Vercel (Node): read the per-request context Vercel exposes on a global
+const requestContext = () => globalThis[Symbol.for('@vercel/request-context')]?.get?.()
+export default (req, res) => handler.node(req, res, requestContext())
+```
+
+`kick build:netlify` and `kick build:vercel` generate exactly these entries. Without a platform context the work still runs, but nothing stops the platform from freezing it. A rejected promise is logged, never left unhandled.
 
 ### How `fetch` works on Express
 
@@ -190,7 +216,7 @@ writeFileSync(
   '.netlify/v1/functions/api.mjs',
   `import { handler } from '${bundle}'
 
-export default (request) => handler.fetch(request)
+export default (request, context) => handler.fetch(request, context)
 
 export const config = {
   path: '/api/*',
