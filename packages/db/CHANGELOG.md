@@ -1,5 +1,30 @@
 # @forinda/kickjs-db
 
+## 7.4.0
+
+### Minor Changes
+
+- [#765](https://github.com/forinda/kick-js/pull/765) [`b0a2011`](https://github.com/forinda/kick-js/commit/b0a201137b47ad023525a2124ca1aa12b9f84581) Thanks [@forinda](https://github.com/forinda)! - Validate requests with your tables: `insertSchema`, `selectSchema` and `updateSchema` from the new `@forinda/kickjs-db/schema` subpath.
+  
+  Each one turns a kick/db table into a schema a route validates with:
+  
+  ```ts
+  export const createNote = insertSchema(notes, { omit: ['id'] })
+  
+  @Post('/', { body: createNote })
+  ```
+  
+  Request validation, the Swagger spec, `kick typegen`'s `ctx.body` type and the typed client all take it the way they take a wrapped Zod schema, and it is a Standard Schema too. No schema library is needed. Export the schema as a named `const`: typegen reads the name, not an inline call.
+  
+  - **Per-column rules:** each column is checked by its SQL type. `varchar(n)` enforces a length, enums enforce their values, and dates, `bigint` and decimals are parsed to the column's TypeScript type. Nullability and database defaults decide what's required.
+  - **`columns`:** adds what a table can't say, like `format: 'email'`, lengths, ranges and patterns, or a whole schema for a `json` column.
+  - **`omit`:** leaves columns out.
+  - **Row types:** also exports `InferSelect<typeof table>` and `InferInsert<typeof table>`.
+
+### Patch Changes
+
+- [#754](https://github.com/forinda/kick-js/pull/754) [`aec608f`](https://github.com/forinda/kick-js/commit/aec608f1287c078db2f80db18a052798d4ea4560) Thanks [@forinda](https://github.com/forinda)! - The missing-inverse relation error now points to the published guide (`kickjs.app/guide/db-relational-query#self-references-and-cycles`). Before, it named an internal spec file that isn't part of the published docs.
+
 ## 7.3.0
 
 ### Minor Changes

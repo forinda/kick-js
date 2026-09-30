@@ -1,5 +1,19 @@
 # @forinda/kickjs-queue
 
+## 7.1.0
+
+### Minor Changes
+
+- [#761](https://github.com/forinda/kick-js/pull/761) [`d9bbe1a`](https://github.com/forinda/kick-js/commit/d9bbe1a4fbb44e47d77be2fc4298b20304bac3e5) Thanks [@forinda](https://github.com/forinda)! - `QueueAdapter` no longer serves its DevTools panel routes in production.
+  
+  `/_kick/queue/panel` and `/_kick/queue/data` have no auth and list every queue with its job counts. Before, they were mounted in every environment. They now follow DevTools' own default: on unless `NODE_ENV` is `production`, and the "Queue" DevTools tab is hidden when they're off. Pass the new `panel` option (`true` / `false`) to decide explicitly.
+
+### Patch Changes
+
+- [#757](https://github.com/forinda/kick-js/pull/757) [`3ac7432`](https://github.com/forinda/kick-js/commit/3ac74329d235b585504ec020afaf7186c9449c59) Thanks [@forinda](https://github.com/forinda)! - A failed job is reported to the app's error observers (`onError` with `source: 'job'` and `context: { queue, job, id, attemptsMade }`), in addition to the existing log line. On a `@forinda/kickjs` release without `reportError`, it's skipped.
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.0.2
+
 ## 7.0.2
 
 ### Patch Changes

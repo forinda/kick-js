@@ -1,5 +1,81 @@
 # @forinda/kickjs
 
+## 8.7.0
+
+### Minor Changes
+
+- [#758](https://github.com/forinda/kick-js/pull/758) [`9139a7b`](https://github.com/forinda/kick-js/commit/9139a7b242a637aa07a4900813adbfbbe5d252cb) Thanks [@forinda](https://github.com/forinda)! - `@Cron` jobs can run on the Node server, on Vercel and on Cloudflare Workers.
+  
+  - **Options:** `name` (stable job name), `overlap` (default off: a tick that finds the job still running is skipped), `enabled` (a boolean, or a function checked on each tick) and `meta` (free-form data).
+  - **Run context:** the handler receives a `CronRun` with `name`, `expression`, `meta`, `firedAt` and `trigger`.
+  - **Errors:** a failed job is reported to the error observers with `source: 'cron'`.
+  - **Node:** `KickCronAdapter()` schedules jobs using the optional peer `croner`. It's opt-in, so apps that run `@Cron` jobs with their own adapter don't run them twice. In cluster mode only one worker schedules.
+  - **Serverless:** with `CRON_SECRET` set, `createHandler()` apps answer `GET /_kick/cron/:scheduleId` (bearer-guarded) by running the jobs on that schedule. The web entry's `createFetchHandler()` returns `scheduled()` for Workers cron triggers.
+  - **New exports:** `KickCronAdapter`, `CRON_WORKER_ENV`, `listCronJobs`, `runCronJob`, `runCronJobs`, `cronScheduleId`, `isCronJobEnabled`, and the `CronRun` / `CronJob` / `CronOptions` types.
+
+- [#757](https://github.com/forinda/kick-js/pull/757) [`3ac7432`](https://github.com/forinda/kick-js/commit/3ac74329d235b585504ec020afaf7186c9449c59) Thanks [@forinda](https://github.com/forinda)! - Observe every error and response from one place: `onError` / `onResponse` hooks, `reportError()`, and `diagnostics_channel` tracing.
+  
+  - **Hooks:** adapters and plugins can declare `onError(error, info)` and `onResponse(info)`. They are observe-only, and a hook that throws is logged and skipped.
+  - **Where `onError` fires:**
+    - request errors of any status, on Express, Fastify and h3, before the error handler (including a custom `bootstrap({ onError })`);
+    - uncaught exceptions and unhandled rejections;
+    - failed `waitUntil()` work;
+    - anything passed to the new exported `reportError()`.
+  
+    `info` carries the `source`, the matched route pattern, the status and the request id.
+  
+  - **`onResponse`:** gets method, path, the full route pattern (`/api/v1/users/:id`), status and duration. Responses are only timed while something listens.
+  - **`diagnostics_channel`:**
+    - `kickjs:handler` is a tracing channel around each controller handler, for APM spans;
+    - `kickjs:error` and `kickjs:response` carry the same data as the hooks.
+  
+    All are free without subscribers. The names are exported (`HANDLER_CHANNEL`, `ERROR_CHANNEL`, `RESPONSE_CHANNEL`), plus the `HandlerTraceContext` type.
+  
+  - **`ctx.route.pattern`:** `MatchedRoute` gains `pattern`, the full mounted route pattern. `path` is still relative to the module mount.
+
+- [#752](https://github.com/forinda/kick-js/pull/752) [`f1d1114`](https://github.com/forinda/kick-js/commit/f1d11147f64c5d053d00b4159216b8ca635058cb) Thanks [@forinda](https://github.com/forinda)! - `bootstrap({ server: { tls, http2 } })`: serve HTTPS, and optionally HTTP/2, from the production server.
+  
+  - `{ tls }` serves HTTPS on every runtime (`https.createServer`).
+  - `{ tls, http2: true }` serves HTTP/2 with HTTP/1.1 fallback (`http2.createSecureServer` with `allowHTTP1: true`) on Fastify and h3. HTTP/1.1 clients and WebSocket handshakes keep working on the same port.
+  - `http2: true` on the Express runtime fails at boot with **KICK007**, because Express does not run on Node's HTTP/2 compatibility layer. `http2` without `tls` fails with **KICK008**. Both checks run before `setup()`.
+  - `RuntimeCapabilities` gains an optional `http2` flag. Custom runtimes opt in; if it's absent, the runtime is treated as not supporting HTTP/2.
+  - The option is ignored in dev mode, where Vite owns the server, with a warning.
+  
+  **Type change:** `AdapterContext.server` and `Application.getHttpServer()` are now typed `KickServer` (`http.Server | https.Server | http2.Http2SecureServer`, exported) instead of `http.Server`. Adapters that only attach to `upgrade` or read `address()` need no change. Code that relies on `http.Server`-only members must narrow the type first.
+  
+  `@forinda/kickjs-devtools`: the WebSocket bus accepts any `KickServer`.
+
+- [#755](https://github.com/forinda/kick-js/pull/755) [`0124ca7`](https://github.com/forinda/kick-js/commit/0124ca71bcf174cd60404783854d5ef1b7f4d5ac) Thanks [@forinda](https://github.com/forinda)! - `ctx.waitUntil(promise)` and a standalone `waitUntil()`: keep work running after the response is sent, such as an audit log, an email or an analytics call.
+  
+  - **Node server:** `shutdown()` waits for this work after draining in-flight requests, within the same `shutdownTimeout`.
+  - **`createHandler()`:** `fetch(request, platform?)` and `node(req, res, platform?)` take the platform context as a last argument and hand the work to its `waitUntil`. That covers Netlify's `context`, Vercel's request context, and anything with a `waitUntil` method.
+  - **Web entry:** `WebApp.fetch(request, platform?)` does the same, and `createFetchHandler` now forwards the Workers execution context `(request, env, ctx)`.
+  
+  A rejected promise is logged with its request id, never left unhandled. `settleBackgroundWork()` and the `PlatformContext` type are exported too.
+
+### Patch Changes
+
+- [#753](https://github.com/forinda/kick-js/pull/753) [`91fc6a2`](https://github.com/forinda/kick-js/commit/91fc6a20b493281f2d7c46133b66fe7c2c719ae0) Thanks [@forinda](https://github.com/forinda)! - `@Cacheable`: classes no longer share cache entries, and simultaneous misses run the method once.
+  
+  - **Cross-class collision:** the default key was `{method}:{args}`, so `UserService.findAll()` and `PostService.findAll()` read and wrote the same entry, and one could return the other's data. The default key is now `{method}:{ClassName}:{args}`. The method name stays first so existing `@CacheEvict('findAll')` prefixes keep matching. An explicit `options.key` is unchanged.
+  - **Stampede:** N concurrent misses on one key used to run the method N times. They now share one in-flight call, per process. A failed call isn't cached, so the next call retries.
+  
+  Existing default-keyed entries in a shared cache (for example Redis) are simply not read after upgrading; they expire on their TTL.
+
+- [#757](https://github.com/forinda/kick-js/pull/757) [`3ac7432`](https://github.com/forinda/kick-js/commit/3ac74329d235b585504ec020afaf7186c9449c59) Thanks [@forinda](https://github.com/forinda)! - h3 runtime: a handler that throws `HttpException(404, '…')` now gets the error handler's problem-details response with its `detail`, as on Express and Fastify.
+  
+  Before, h3 treated any error with status 404 as "no route matched" and sent it to the not-found handler. That dropped the message and skipped the error handler. Only the router's own no-match now counts as not found.
+
+- [#751](https://github.com/forinda/kick-js/pull/751) [`64ef2b6`](https://github.com/forinda/kick-js/commit/64ef2b61772ff339aed320073866a442fd13cc15) Thanks [@forinda](https://github.com/forinda)! - h3 runtime: read request bodies sent over HTTP/2 without `content-length`.
+  
+  HTTP/2 carries a request body in DATA frames. It has no `transfer-encoding`, and `content-length` is optional. The h3 runtime, like h3's own `readRawBody`, decided whether a body was sent from those two headers, so a streamed HTTP/2 body reached the handler as `undefined`. HTTP/2 requests now count as having a body unless they send `content-length: 0`, and a body without a length is read from the stream directly. Fastify was already correct. Express can't run on Node's HTTP/2 compatibility layer at all.
+
+- [#751](https://github.com/forinda/kick-js/pull/751) [`c9da4f4`](https://github.com/forinda/kick-js/commit/c9da4f46373228f4874e469d6197e4f65edadd72) Thanks [@forinda](https://github.com/forinda)! - Fixes to HTTPS / HTTP/2 serving, from review:
+  
+  - **h3 uploads over HTTP/2:** a multipart upload sent without `content-length` lost every file and field. The h3 runtime now reads a length-less HTTP/2 body once, as bytes, and hands it to h3 on `req.rawBody`. That covers both uploads and JSON/text bodies, and file bytes are never decoded as text.
+  - **Incomplete TLS credentials fail at boot with KICK009.** Before, Node started an HTTPS / HTTP/2 server with a key but no cert (or no identity at all, or a key that doesn't match its cert), and every TLS handshake then failed. The check accepts `key` + `cert`, `pfx`, `SNICallback` or `pskCallback`. It also builds the secure context once, so unreadable PEMs and key/cert mismatches are caught too.
+  - **Shutdown closes open HTTP/2 sessions.** `server.close()` stops new sessions, but on Node 22 and earlier existing sessions kept accepting new requests, even after `shutdown()` returned. Shutdown now closes every session gracefully (in-flight streams finish, new ones are refused) and destroys any that remain if the shutdown timeout is reached.
+
 ## 8.6.0
 
 ### Minor Changes

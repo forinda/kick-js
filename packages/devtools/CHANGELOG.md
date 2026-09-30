@@ -1,5 +1,76 @@
 # @forinda/kickjs-devtools
 
+## 7.3.0
+
+### Minor Changes
+
+- [#756](https://github.com/forinda/kick-js/pull/756) [`3a36506`](https://github.com/forinda/kick-js/commit/3a36506e40fa13fddd3387b9cd7d6031f5b9a03e) Thanks [@forinda](https://github.com/forinda)! - The DevTools dashboard has an API runner. **Try** on a row of the Routes tab opens a side sheet that sends a request to that route from the browser, on the same origin, so it works on every runtime with no extra endpoint.
+  
+  **Sections** (each collapsible):
+  
+  - **Path params:** one field per `:param`.
+  - **Query and headers:** key/value rows that can be switched off.
+  - **Body:** raw text, or **form data** (`multipart/form-data`) with text fields and file pickers, for testing uploads. A route with `@FileUpload` opens in form mode with its field ready. `/_debug/routes` now reports each route's `@FileUpload` settings as `upload`.
+  - **Environment:** default headers, variables and settings. They're kept for the browser tab unless **Remember on this browser** is on, which moves them to `localStorage`.
+  - **Code snippet:** the request rendered as `curl` or `fetch`, readable and selectable.
+  - **Response:** status, time, headers, and the body pretty-printed as JSON, with **Save to variable** to capture a value from it.
+  
+  **Variables:** `{{name}}` works in any param, query, header or body value, and a variable with no value is flagged. **Save to variable** reads a JSON path (`data.token`, `items[0].id`) from a response. So you can log in once, save the token, and a default `Authorization: Bearer {{token}}` header is sent on every route.
+  
+  **Built-in handling:**
+  
+  - It reads the CSRF cookie and sends the matching header on unsafe methods.
+  - It leaves out a default `Authorization` header on routes carrying a public route flag. The flag name is configurable, and several can be listed.
+  - `DELETE`, `PUT` and `PATCH` need a second click before they're sent.
+  - The devtools token is never sent to app routes.
+
+- [#747](https://github.com/forinda/kick-js/pull/747) [`901efeb`](https://github.com/forinda/kick-js/commit/901efeb9a01b34f49ce8331a02629399754edcbc) Thanks [@forinda](https://github.com/forinda)! - DevTools now runs on every HTTP runtime: Express, Fastify, and h3.
+  
+  Every `/_debug/*` endpoint used to answer through Express's `req` / `res`, and the dashboard files were served with `express.static`, so the adapter only worked on the Express runtime. Now:
+  
+  - Routes answer through `RequestContext`: `ctx.json`, `ctx.html`, and `ctx.sse()` for the three live streams.
+  - The heap snapshot streams through `ctx.sendResponse`, with backpressure. It is never buffered whole in memory.
+  - The dashboard files are served with `http.serveStatic`.
+  - The token guard runs inside each route, so it no longer depends on how an engine parses the request path and query.
+  - Per-route latency is keyed by the matched route pattern on every engine. It reads the slot each runtime publishes for `ctx.route`, instead of Express's `req.route`.
+  
+  **Peer dependencies:** `express` is no longer a peer. `@forinda/kickjs` now requires `>=8.6.0` (was `>=8.2.0`), the first release with `ctx.sendResponse`.
+  
+  **Also fixed on Express:** `GET /_debug` used to be answered by the static middleware with a 301 redirect. That meant the page with `data-base` injected was never served, which broke custom `basePath` mounts. The dashboard route now owns the page on every engine, and only `assets/` is served statically.
+
+- [#759](https://github.com/forinda/kick-js/pull/759) [`2a949b8`](https://github.com/forinda/kick-js/commit/2a949b8ac7d72b644a74845dc981abdfbac1a93f) Thanks [@forinda](https://github.com/forinda)! - The API runner gains history, OpenAPI prefill, and open handler in editor.
+  
+  - **History:** the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Kept in `localStorage`, with `{{variables}}` as written rather than their values.
+  - **OpenAPI prefill:** when the app serves a spec (`/openapi.json` by default, configurable), a route opened for the first time gets its query parameters and an example JSON body from the request schema. Summaries and parameter descriptions show as hints, and **Fill empty inputs from OpenAPI** applies it later without overwriting what you typed.
+  - **Open in editor:** click the handler name in the runner to open it in your editor, through a configurable link (`vscode://file{file}:{line}` by default).
+  - **`GET /_debug/source?controller=&handler=`:** new endpoint that finds a registered route's handler under the project's `src/`. The VS Code extension uses it too.
+
+### Patch Changes
+
+- [#745](https://github.com/forinda/kick-js/pull/745) [`8701026`](https://github.com/forinda/kick-js/commit/87010264db5118c8a9d6d3eb3b40b0db4dd93b94) Thanks [@forinda](https://github.com/forinda)! - Raise the `@forinda/kickjs` peer range from `>=5.18.0` to `>=8.2.0`.
+  
+  The adapter imports `getRouteFlags`, which `@forinda/kickjs` first exported in 8.2.0. On 5.18–8.1 the peer range was satisfied but the app failed at startup on the missing export. The range now says what the package actually needs, so the package manager warns at install time instead.
+
+- [#757](https://github.com/forinda/kick-js/pull/757) [`3ac7432`](https://github.com/forinda/kick-js/commit/3ac74329d235b585504ec020afaf7186c9449c59) Thanks [@forinda](https://github.com/forinda)! - The dashboard's request counters and per-route latency are fed from the framework's `onResponse` hook instead of their own middleware, on `@forinda/kickjs` releases that have it. Older releases keep the middleware.
+  
+  Latency is now keyed by the full route pattern (`GET /api/v1/users/:id`). Before, two modules' routes with the same relative path (`/users/:id` and `/orders/:id`) shared one bucket.
+
+- [#753](https://github.com/forinda/kick-js/pull/753) [`91fc6a2`](https://github.com/forinda/kick-js/commit/91fc6a20b493281f2d7c46133b66fe7c2c719ae0) Thanks [@forinda](https://github.com/forinda)! - The dashboard now stores its access token in a cookie scoped to the devtools base path (for example `/_debug`) instead of `path=/`. At `path=/` the browser sent the devtools secret with every request to the app, so any request logger or handler could see it. The root-path cookie written by earlier versions is removed the next time the dashboard loads.
+
+- [#752](https://github.com/forinda/kick-js/pull/752) [`f1d1114`](https://github.com/forinda/kick-js/commit/f1d11147f64c5d053d00b4159216b8ca635058cb) Thanks [@forinda](https://github.com/forinda)! - `bootstrap({ server: { tls, http2 } })`: serve HTTPS, and optionally HTTP/2, from the production server.
+  
+  - `{ tls }` serves HTTPS on every runtime (`https.createServer`).
+  - `{ tls, http2: true }` serves HTTP/2 with HTTP/1.1 fallback (`http2.createSecureServer` with `allowHTTP1: true`) on Fastify and h3. HTTP/1.1 clients and WebSocket handshakes keep working on the same port.
+  - `http2: true` on the Express runtime fails at boot with **KICK007**, because Express does not run on Node's HTTP/2 compatibility layer. `http2` without `tls` fails with **KICK008**. Both checks run before `setup()`.
+  - `RuntimeCapabilities` gains an optional `http2` flag. Custom runtimes opt in; if it's absent, the runtime is treated as not supporting HTTP/2.
+  - The option is ignored in dev mode, where Vite owns the server, with a warning.
+  
+  **Type change:** `AdapterContext.server` and `Application.getHttpServer()` are now typed `KickServer` (`http.Server | https.Server | http2.Http2SecureServer`, exported) instead of `http.Server`. Adapters that only attach to `upgrade` or read `address()` need no change. Code that relies on `http.Server`-only members must narrow the type first.
+  
+  `@forinda/kickjs-devtools`: the WebSocket bus accepts any `KickServer`.
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.0.2
+
 ## 7.2.0
 
 ### Minor Changes
