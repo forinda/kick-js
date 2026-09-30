@@ -121,6 +121,20 @@ export type { GenerateOptions, GenerateResult } from './cli/generate'
 export * from './dsl/columns'
 export * from './dsl/table'
 export { selfRef } from './dsl/self-ref'
+export {
+  Rule,
+  TableBase,
+  TableDefinition,
+  defineTable,
+  fk,
+  link,
+  tableFromClass,
+  type ClassRefs,
+  type NumberRule,
+  type RuleFor,
+  type StringRule,
+  type TableClass,
+} from './dsl/table-forms'
 export * from './dsl/constraints'
 export * from './dsl/relations'
 

@@ -1,17 +1,18 @@
 // B — builder fields. Plain thunks for the self-reference and the cycle:
 // the class body breaks TypeScript's inference loop, so no annotation.
 import {
+  type ClassRefs,
   index,
   integer,
   relations,
   serial,
+  tableFromClass,
   text,
   timestamptz,
   uuid,
   varchar,
 } from '../../../../src/index'
 import { pgEnum } from '../../../../src/dsl/columns/pg'
-import { tableFromClass, type ClassRefs } from '../../../../src/class-table'
 
 export const postStatus = pgEnum('post_status', 'draft', 'published')
 

@@ -1,18 +1,20 @@
 // C — TableBase classes, exported as classes (discovery now unwraps them).
 // selfRef for the self-reference, link() for the cycle.
 import {
+  fk,
   index,
   integer,
+  link,
   relations,
   selfRef,
   serial,
+  TableBase,
   text,
   timestamptz,
   uuid,
   varchar,
 } from '../../../../src/index'
 import { pgEnum } from '../../../../src/dsl/columns/pg'
-import { TableBase, fk, link } from '../../../../src/class-table'
 
 export const postStatus = pgEnum('post_status', 'draft', 'published')
 

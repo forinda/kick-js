@@ -147,14 +147,43 @@ its own constraints (Postgres' default is `<table>_<column>_fkey`), and keeping
 the real name is what stops the next diff from proposing a rename of every
 foreign key in the schema.
 
-For a self-reference, annotate the thunk return type so the const can refer to itself:
+For a self-reference, name the column with `selfRef` — the table binds it to its own column:
 
 ```ts
+import { selfRef } from '@forinda/kickjs-db'
+
 export const categories = table('categories', {
   id: uuid().primaryKey().defaultRandom(),
-  parentId: uuid().references((): ColumnRef => categories.id),
+  parentId: uuid().references(selfRef('id')),
 })
 ```
+
+Written as `() => categories.id`, the const would reference itself in its own initializer, which TypeScript rejects (TS7022) unless the thunk is annotated `(): ColumnRef => categories.id`. `selfRef` needs no annotation, and a column name that doesn't exist fails when the table is declared.
+
+### Typed foreign keys and cycles
+
+`fk(builder, () => target)` is `.references()` that checks both sides hold the same type — a `uuid()` column pointing at a `serial()` key is a type error:
+
+```ts
+import { fk } from '@forinda/kickjs-db'
+
+authorId: fk(uuid().notNull(), () => users.id, { onDelete: 'cascade' }),
+```
+
+Two tables that reference each other hit the same TS7022 — each const waits on the other. `link()` adds the foreign key once both exist, so neither initializer names the other:
+
+```ts
+import { link } from '@forinda/kickjs-db'
+
+export const users = table('users', { id: uuid().primaryKey(), featuredPostId: integer() })
+export const posts = table('posts', {
+  id: serial().primaryKey(),
+  authorId: fk(uuid().notNull(), () => users.id),
+})
+link(users.featuredPostId, () => posts.id)
+```
+
+Tables can also be declared as classes or column by column — see [Table Forms](../db-table-forms.md).
 
 ## Indexes & unique constraints
 

@@ -22,6 +22,11 @@ export interface TableDecl<
    * on MySQL/SQLite at snapshot time rather than emitting subtly wrong DDL.
    */
   __schema?: TSchema
+  /**
+   * Validation rules a table form declared (`@Rule`, `rules`, `.column(k, b, rule)`),
+   * applied by `insertSchema` / `selectSchema` / `updateSchema`. Not enumerable.
+   */
+  readonly __rules?: Readonly<Record<string, unknown>>
 }
 
 /**

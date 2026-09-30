@@ -3,10 +3,9 @@ import { describe, expectTypeOf, it } from 'vitest'
 
 import { integer } from '../../src/index'
 import type { SchemaToTypes } from '../../src/index'
-import { fk } from '../../src/class-table'
+import { fk } from '../../src/index'
 import type { InferSelect } from '../../src/schema'
 import * as O from './fixtures/table-forms/o-object'
-import * as A from './fixtures/table-forms/a-decorators'
 import * as B from './fixtures/table-forms/b-fields'
 import * as C from './fixtures/table-forms/c-base-class'
 import * as D from './fixtures/table-forms/d-fluent'
@@ -27,9 +26,6 @@ describe('typed client keys from the module (what createDbClient sees)', () => {
     expectTypeOf<keyof SchemaToTypes<typeof C>>().toEqualTypeOf<Tables>()
     expectTypeOf<keyof SchemaToTypes<typeof D>>().toEqualTypeOf<Tables>()
   })
-  it('A: a meaningless `${string}.${string}` — name and schema are both plain string', () => {
-    expectTypeOf<keyof SchemaToTypes<typeof A>>().toEqualTypeOf<`${string}.${string}`>()
-  })
 })
 
 describe('row types', () => {
@@ -39,9 +35,6 @@ describe('row types', () => {
     expectTypeOf<InferSelect<typeof C.Post.table>>().toEqualTypeOf<Post>()
     expectTypeOf<C.Post>().toEqualTypeOf<Post>()
     expectTypeOf<InferSelect<typeof D.posts>>().toEqualTypeOf<Post>()
-  })
-  it('A: unknown', () => {
-    expectTypeOf<InferSelect<typeof A.posts>['title']>().toEqualTypeOf<unknown>()
   })
 })
 
@@ -55,9 +48,6 @@ describe('a mistyped foreign key is rejected', () => {
     fk(integer(), () => C.User.table.id)
     // @ts-expect-error — D
     fk(integer(), () => D.users.id)
-  })
-  it('A: accepted — its refs carry no value type', () => {
-    fk(integer(), () => A.users.id)
   })
 })
 

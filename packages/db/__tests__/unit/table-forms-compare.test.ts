@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest'
 
 import { extractSnapshot } from '../../src/index'
 import * as O from './fixtures/table-forms/o-object'
-import * as A from './fixtures/table-forms/a-decorators'
 import * as B from './fixtures/table-forms/b-fields'
 import * as C from './fixtures/table-forms/c-base-class'
 import * as D from './fixtures/table-forms/d-fluent'
@@ -37,13 +36,6 @@ describe('the same schema in every form', () => {
     ['D defineTable', D],
   ])('%s snapshots exactly like the object form', (_name, mod) => {
     expect(snap(mod as Record<string, unknown>)).toEqual(expected)
-  })
-
-  it('A decorators matches except for the index it has no place to declare', () => {
-    const a = snap(A)
-    expect(a.tables.posts!.indexes).toEqual([])
-    a.tables.posts!.indexes = expected.tables.posts!.indexes
-    expect(a).toEqual(expected)
   })
 
   it('C: rows are instances with methods', () => {

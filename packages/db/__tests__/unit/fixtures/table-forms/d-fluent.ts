@@ -1,8 +1,11 @@
 // D — defineTable. The column callback for the self-reference (key and type
 // checked), link() for the cycle.
 import {
+  defineTable,
+  fk,
   index,
   integer,
+  link,
   relations,
   serial,
   text,
@@ -11,7 +14,6 @@ import {
   varchar,
 } from '../../../../src/index'
 import { pgEnum } from '../../../../src/dsl/columns/pg'
-import { defineTable, fk, link } from '../../../../src/class-table'
 
 export const postStatus = pgEnum('post_status', 'draft', 'published')
 

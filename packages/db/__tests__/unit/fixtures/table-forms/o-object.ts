@@ -1,8 +1,10 @@
 // O — table(), with the core fixes: selfRef, typed fk(), link() for the cycle.
 // No `(): ColumnRef =>` annotations anywhere.
 import {
+  fk,
   index,
   integer,
+  link,
   relations,
   selfRef,
   serial,
@@ -13,7 +15,6 @@ import {
   varchar,
 } from '../../../../src/index'
 import { pgEnum } from '../../../../src/dsl/columns/pg'
-import { fk, link } from '../../../../src/class-table'
 
 export const postStatus = pgEnum('post_status', 'draft', 'published')
 

@@ -401,9 +401,11 @@ function buildSchema<TOutput>(
       name,
       nullable: builder.__state().nullable,
       required: mode === 'select' || (mode === 'insert' && !optionalOnInsert(builder)),
+      // `columns` overrides a rule the table form declared.
       spec: withRule(
         specFor(builder),
-        (options.columns as Record<string, ColumnRule | SchemaLike> | undefined)?.[name],
+        (options.columns as Record<string, ColumnRule | SchemaLike> | undefined)?.[name] ??
+          (table.__rules?.[name] as ColumnRule | SchemaLike | undefined),
       ),
     }))
 
