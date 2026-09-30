@@ -78,6 +78,8 @@ It's opt-in so an app that already schedules `@Cron` jobs with its own adapter d
 
 Jobs stop on shutdown and on every HMR reload, and a reload replaces a class's old jobs rather than adding to them.
 
+`overlap: false` is per process: it stops a job stacking up within one server, not across instances.
+
 **Several processes.** With `bootstrap({ cluster })`, only one worker schedules jobs (the primary sets `KICK_CRON_WORKER=1` on it, and hands the role to its replacement if it dies). Separate instances behind a load balancer each schedule every job: pass `KickCronAdapter({ enabled: false })` on all but one, or have the job take a lock.
 
 ## Vercel
@@ -89,7 +91,8 @@ Set `CRON_SECRET` in the Vercel project. Vercel sends it as `Authorization: Bear
 The build warns about what can't be scheduled:
 
 - an expression that isn't a string literal (`@Cron(EVERY_HOUR)`) — the build reads source, it doesn't run it;
-- a `timezone` — Vercel crons run in UTC.
+- a `timezone` — Vercel crons run in UTC;
+- a six-field expression with seconds — Vercel takes five fields only, so it gets no entry.
 
 The trigger path is fixed at `/_kick/cron/...`, outside `apiPrefix`, so the build and the app always agree on it.
 

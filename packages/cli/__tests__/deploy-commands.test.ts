@@ -203,6 +203,16 @@ export class Jobs {
     ])
   })
 
+  it('skips expressions that are not five fields', () => {
+    const { crons, warnings } = vercelCrons([
+      { file: 'src/a.ts', line: 3, expression: '*/5 * * * * *', timezone: false },
+    ])
+    expect(crons).toEqual([])
+    expect(warnings).toEqual([
+      'src/a.ts:3: Vercel crons need a five-field expression, so it has no Vercel cron entry',
+    ])
+  })
+
   it('computes the same schedule id as the framework', () => {
     for (const expr of ['0 * * * *', ' */5  * * * * ', '0 9 * * MON-FRI', '@daily']) {
       expect(cronScheduleId(expr)).toBe(coreScheduleId(expr))

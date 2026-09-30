@@ -232,8 +232,15 @@ export function vercelCrons(found: FoundCron[]): {
     if (cron.timezone) {
       warnings.push(`${at}: Vercel crons run in UTC — the timezone option is ignored there`)
     }
-    const id = cronScheduleId(cron.expression)
-    schedules.set(id, cron.expression.trim().replace(/\s+/g, ' '))
+    const schedule = cron.expression.trim().replace(/\s+/g, ' ')
+    // Croner also takes a seconds field; Vercel rejects anything but five.
+    if (schedule.split(' ').length !== 5) {
+      warnings.push(
+        `${at}: Vercel crons need a five-field expression, so it has no Vercel cron entry`,
+      )
+      continue
+    }
+    schedules.set(cronScheduleId(schedule), schedule)
   }
   return {
     crons: [...schedules].map(([id, schedule]) => ({ path: `/_kick/cron/${id}`, schedule })),

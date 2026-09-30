@@ -133,6 +133,31 @@ describe('runCronJob', () => {
     expect(started).toBe(3)
   })
 
+  it('does not treat two jobs that share a name as one', async () => {
+    let release!: () => void
+    const ran: string[] = []
+    @Service()
+    class Twins {
+      @Cron('0 3 * * *', { name: 'twin' })
+      async a() {
+        ran.push('a')
+        await new Promise<void>((r) => (release = r))
+      }
+
+      @Cron('0 3 * * *', { name: 'twin' })
+      b() {
+        ran.push('b')
+      }
+    }
+    void Twins
+    const [a, b] = own('twin')
+    const first = runCronJob(a, container(), 'manual')
+    expect(await runCronJob(b, container(), 'manual')).toBe(true)
+    release()
+    await first
+    expect(ran).toEqual(['a', 'b'])
+  })
+
   it('reports a failure to the error observers and rethrows', async () => {
     const seen: unknown[] = []
     setObservers([{ name: 'spy', onError: (error, info) => void seen.push({ error, info }) }])
@@ -202,6 +227,28 @@ describe('KickCronAdapter', () => {
       expect.arrayContaining(['ReportJobs.hourly', 'sweep']),
     )
     await adapter.shutdown!()
+  })
+
+  it('waits for running jobs on shutdown', async () => {
+    let release!: () => void
+    @Service()
+    class Long {
+      @Cron('0 4 * * *', { name: 'long', runOnInit: true })
+      async run() {
+        await new Promise<void>((r) => (release = r))
+      }
+    }
+    void Long
+    const adapter = KickCronAdapter()
+    await adapter.afterStart!({ container: container() } as never)
+    await new Promise((r) => setTimeout(r, 0))
+    let done = false
+    const stopping = Promise.resolve(adapter.shutdown!()).then(() => (done = true))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(done).toBe(false)
+    release()
+    await stopping
+    expect(done).toBe(true)
   })
 
   it('schedules nothing when disabled', async () => {

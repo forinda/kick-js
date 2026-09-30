@@ -160,11 +160,13 @@ export async function runCronJob(
   trigger: CronRun['trigger'],
 ): Promise<boolean> {
   if (!isCronJobEnabled(job)) return false
-  if (!job.overlap && running.has(job.name)) {
+  // Keyed by class + method: `name` is user-chosen and may repeat.
+  const key = `${job.target.name}.${job.handlerName}`
+  if (!job.overlap && running.has(key)) {
     log.warn(`${job.name} is still running — skipped this tick`)
     return false
   }
-  running.add(job.name)
+  running.add(key)
   try {
     const instance = container.resolve(job.target) as Record<string, (run: CronRun) => unknown>
     await instance[job.handlerName]({
@@ -183,7 +185,7 @@ export async function runCronJob(
     })
     throw err
   } finally {
-    running.delete(job.name)
+    running.delete(key)
   }
 }
 

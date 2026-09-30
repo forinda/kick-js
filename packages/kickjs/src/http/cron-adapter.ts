@@ -68,6 +68,7 @@ export const KickCronAdapter = defineAdapter<CronAdapterOptions>({
   defaults: { enabled: true },
   build(options) {
     const schedules: Schedule[] = []
+    const inFlight = new Set<Promise<unknown>>()
     let jobs: CronJob[] = []
 
     return {
@@ -85,9 +86,12 @@ export const KickCronAdapter = defineAdapter<CronAdapterOptions>({
           return
         }
 
-        const run = (job: CronJob, trigger: 'schedule' | 'init') =>
+        const run = (job: CronJob, trigger: 'schedule' | 'init') => {
           // Failures are already logged and reported by runCronJob.
-          runCronJob(job, container as Container, trigger).catch(() => {})
+          const p = runCronJob(job, container as Container, trigger).catch(() => {})
+          inFlight.add(p)
+          void p.finally(() => inFlight.delete(p))
+        }
 
         for (const job of jobs) {
           schedules.push(
@@ -96,17 +100,22 @@ export const KickCronAdapter = defineAdapter<CronAdapterOptions>({
               // No croner `name`: croner keeps names in a process-wide registry
               // and throws on a duplicate.
               job.timezone ? { timezone: job.timezone } : {},
-              () => void run(job, 'schedule'),
+              () => run(job, 'schedule'),
             ),
           )
-          if (job.runOnInit) void run(job, 'init')
+          if (job.runOnInit) run(job, 'init')
         }
         log.info(`Scheduled ${jobs.length} @Cron job(s): ${jobs.map((j) => j.name).join(', ')}`)
       },
 
-      /** Also runs on every HMR reload, so a reload never leaves a second copy ticking. */
-      shutdown() {
+      /**
+       * Stops the schedules, then waits for running jobs so they don't lose
+       * their dependencies mid-run. Also runs on every HMR reload, so a reload
+       * never leaves a second copy ticking.
+       */
+      async shutdown() {
         for (const schedule of schedules.splice(0)) schedule.stop()
+        await Promise.all(inFlight)
       },
 
       introspect() {
