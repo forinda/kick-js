@@ -275,3 +275,25 @@ Or remove \`http2\` if TLS is terminated in front of the app.`,
     docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
   })
 }
+
+/**
+ * KICK009 — `server.tls` cannot identify the server. Node starts an HTTPS /
+ * HTTP/2 server without a certificate (or with a key that does not match it)
+ * and then fails every TLS handshake, so this is checked at boot instead.
+ */
+export function tlsCredentialsError(problem: string): KickError {
+  return new KickError({
+    code: 'KICK009',
+    summary: `server.tls is not usable: ${problem}`,
+    cause: `\`bootstrap({ server: { tls } })\` was given TLS options the server cannot use:
+${problem}. Node would start anyway and fail every TLS handshake.`,
+    fix: `Give the server an identity:
+  • \`key\` and \`cert\` together (PEM, matching each other), or
+  • \`pfx\` (with \`passphrase\` if it is encrypted), or
+  • \`SNICallback\` / \`pskCallback\` for per-host or PSK setups.
+
+      server: { tls: { key: readFileSync('key.pem'), cert: readFileSync('cert.pem') } }`,
+    docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
+    context: { problem },
+  })
+}

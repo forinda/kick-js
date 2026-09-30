@@ -1,7 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import http2 from 'node:http2'
-import type tls from 'node:tls'
+import tls from 'node:tls'
 import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
@@ -30,6 +30,7 @@ import {
   http2RequiresTlsError,
   http2UnsupportedRuntimeError,
   moduleRouteMissingControllerError,
+  tlsCredentialsError,
 } from '../core/kick-errors'
 import { RoutePolicyTable, offerRoutePolicy } from '../core/route-policy'
 import {
@@ -79,6 +80,27 @@ export interface ShutdownOptions {
    * the part a reload needs.
    */
   closeServer?: boolean
+}
+
+/**
+ * Throw KICK009 unless `options` can identify the server. Node creates an
+ * HTTPS / HTTP/2 server without a certificate and then fails every handshake,
+ * so the check has to happen here, at boot.
+ */
+function assertUsableTls(options: tls.SecureContextOptions & tls.TlsOptions): void {
+  const { key, cert, pfx, SNICallback, pskCallback } = options
+  if (!pfx && !SNICallback && !pskCallback) {
+    if (!key && !cert) throw tlsCredentialsError('no key/cert, pfx, SNICallback, or pskCallback')
+    if (!key) throw tlsCredentialsError('cert is set but key is missing')
+    if (!cert) throw tlsCredentialsError('key is set but cert is missing')
+  }
+  // Build the context once: surfaces unreadable PEMs, a wrong passphrase, and
+  // a key that does not match its certificate before any adapter runs.
+  try {
+    tls.createSecureContext(options)
+  } catch (err) {
+    throw tlsCredentialsError((err as Error).message)
+  }
 }
 
 /** See {@link ApplicationOptions.server}. */
@@ -540,6 +562,12 @@ export class Application {
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: KickServer | null = null
+  /**
+   * Open HTTP/2 sessions. `server.close()` stops new sessions, but on older
+   * Node (22 and earlier) existing ones keep accepting new streams — so
+   * shutdown closes them itself.
+   */
+  private readonly http2Sessions = new Set<http2.ServerHttp2Session>()
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
   private readonly adapters: AppAdapter[]
@@ -1196,9 +1224,12 @@ export class Application {
     // before any adapter has done work.
     if (serverOptions && g.__kickjs_httpServer) {
       log.warn('server options (tls / http2) are ignored in dev mode — Vite owns the server')
-    } else if (serverOptions?.http2) {
-      if (!serverOptions.tls) throw http2RequiresTlsError()
-      if (!this.runtime.capabilities.http2) throw http2UnsupportedRuntimeError(this.runtime.name)
+    } else if (serverOptions) {
+      if (serverOptions.http2 && !serverOptions.tls) throw http2RequiresTlsError()
+      if (serverOptions.http2 && !this.runtime.capabilities.http2) {
+        throw http2UnsupportedRuntimeError(this.runtime.name)
+      }
+      if (serverOptions.tls) assertUsableTls(serverOptions.tls)
     }
 
     await this.setup()
@@ -1280,7 +1311,12 @@ export class Application {
     if (useHttp2) {
       // The compat API hands the handler Http2ServerRequest/Response; runtimes
       // that declare `capabilities.http2` accept them.
-      return http2.createSecureServer({ ...tls, allowHTTP1: true }, handler as never)
+      const server = http2.createSecureServer({ ...tls, allowHTTP1: true }, handler as never)
+      server.on('session', (session) => {
+        this.http2Sessions.add(session)
+        session.once('close', () => this.http2Sessions.delete(session))
+      })
+      return server
     }
     if (tls) return https.createServer(tls, handler)
     return http.createServer(handler)
@@ -1369,6 +1405,9 @@ export class Application {
       // we track request draining separately via the tracking middleware.
       if (closeServer && this.httpServer) {
         this.httpServer.close(() => {})
+        // GOAWAY on every open HTTP/2 session: streams in flight finish,
+        // new ones are refused.
+        for (const session of this.http2Sessions) session.close()
       }
 
       // Step 2: Wait for in-flight requests to drain (or timeout).
@@ -1386,6 +1425,7 @@ export class Application {
           log.warn(
             `Shutdown timeout (${timeoutMs}ms) reached with ${this._inFlightRequests} request(s) still in-flight, forcing shutdown`,
           )
+          for (const session of this.http2Sessions) session.destroy()
         } else {
           log.debug('All in-flight requests completed')
         }

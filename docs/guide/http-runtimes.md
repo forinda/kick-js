@@ -175,7 +175,7 @@ export const app = await bootstrap({
 | `{ tls }`              | `https.createServer`                               | all         |
 | `{ tls, http2: true }` | `http2.createSecureServer` with `allowHTTP1: true` | Fastify, h3 |
 
-- `tls` takes any Node TLS option (`key`, `cert`, `ca`, `pfx`, `passphrase`, …).
+- `tls` takes any Node TLS option (`key`, `cert`, `ca`, `pfx`, `passphrase`, …). It must identify the server — `key` + `cert`, `pfx`, `SNICallback`, or `pskCallback` — and is loaded once at boot, so a missing cert, an unreadable PEM, or a key that does not match its cert fails with `KICK009` instead of on every handshake.
 - With `http2`, clients that negotiate `h2` get HTTP/2 and everything else —
   including WebSocket handshakes — falls back to HTTP/1.1 on the same port, so
   `@forinda/kickjs-ws`, Socket.IO, and the DevTools bus keep working. Adapters

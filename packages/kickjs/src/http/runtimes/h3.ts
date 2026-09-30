@@ -168,6 +168,19 @@ function makeEventHandler(
     // Populate the express-shaped request fields h3 keeps elsewhere.
     req.params = getRouterParams(event) ?? {}
     req.query = getQuery(event) ?? {}
+
+    // HTTP/2 frames a body in DATA frames: no `transfer-encoding`, and
+    // `content-length` is optional. h3's `readRawBody` — behind both the
+    // JSON/text path and `readMultipartFormData` — returns `undefined` when
+    // neither header is present, dropping the body. Read it once as bytes and
+    // hand it over on `req.rawBody`, which `readRawBody` checks first.
+    if (
+      req.httpVersionMajor === 2 &&
+      req.headers['content-length'] === undefined &&
+      BODY_METHODS.has(req.method ?? 'GET')
+    ) {
+      ;(req as { rawBody?: Buffer }).rawBody = await readStreamBuffer(req)
+    }
     if (upload && upload.mode !== 'none') {
       // @FileUpload: read the multipart body once (readBody would consume the
       // same stream, so the two are mutually exclusive). File parts → the
@@ -215,13 +228,7 @@ function makeEventHandler(
         // RAW STRING for malformed input instead of throwing (#590).
         const kind = classifyMediaType(req.headers['content-type'])
         if (kind !== 'multipart') {
-          // h3's `readRawBody` makes the same header check and returns
-          // `undefined` for an HTTP/2 body without `content-length`, so read
-          // the stream directly in that case.
-          const raw =
-            req.httpVersionMajor === 2 && length === undefined
-              ? await readStreamText(req)
-              : await readRawBody(event, 'utf8')
+          const raw = await readRawBody(event, 'utf8')
           // Reject only once the body is known to be non-empty. `sentBody` is
           // true for an empty CHUNKED post — `transfer-encoding` is present
           // with no payload — and rejecting on that alone would 415 a request
@@ -325,11 +332,11 @@ function unwrapH3Error(error: unknown): unknown {
  * h3 parses bodies itself (`readBody`), so the Application skips its default
  * `express.json()` (see `nativeBodyParsing`).
  */
-/** Collect a request stream as UTF-8 text. */
-async function readStreamText(req: AsyncIterable<Buffer | string>): Promise<string> {
+/** Collect a request stream as bytes — never decoded, so file parts stay intact. */
+async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Buffer> {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
 }
 
 export function h3Runtime(): HttpRuntime<H3AppLike> {

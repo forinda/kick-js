@@ -9,7 +9,14 @@ import 'reflect-metadata'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import http2 from 'node:http2'
 import type { AddressInfo } from 'node:net'
-import { Application, Container, Controller, Post, type RequestContext } from '../src/index'
+import {
+  Application,
+  Container,
+  Controller,
+  FileUpload,
+  Post,
+  type RequestContext,
+} from '../src/index'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
 
@@ -31,6 +38,16 @@ async function boot(runtime: () => unknown): Promise<number> {
     echo(ctx: RequestContext) {
       ctx.json({ body: ctx.body ?? null })
     }
+
+    @Post('/upload')
+    @FileUpload({ mode: 'single', fieldName: 'file' })
+    upload(ctx: RequestContext) {
+      ctx.json({
+        name: ctx.file?.originalname ?? null,
+        hex: ctx.file?.buffer.toString('hex') ?? null,
+        note: (ctx.body as { note?: string } | undefined)?.note ?? null,
+      })
+    }
   }
   const app = new Application({
     modules: [{ routes: () => ({ path: '/echo', controller: EchoController }) } as never],
@@ -42,11 +59,16 @@ async function boot(runtime: () => unknown): Promise<number> {
   return (server!.address() as AddressInfo).port
 }
 
-function post(port: number, body: string | undefined, headers: Record<string, string>) {
+function post(
+  port: number,
+  body: string | Buffer | undefined,
+  headers: Record<string, string>,
+  path = '/api/v1/echo',
+) {
   return new Promise<{ status: number; json: unknown }>((resolve, reject) => {
     const client = http2.connect(`http://127.0.0.1:${port}`)
     client.on('error', reject)
-    const req = client.request({ ':method': 'POST', ':path': '/api/v1/echo', ...headers })
+    const req = client.request({ ':method': 'POST', ':path': path, ...headers })
     let status = 0
     let text = ''
     req.on('response', (h) => (status = Number(h[':status'])))
@@ -78,6 +100,32 @@ describe.each([
       'content-length': '7',
     })
     expect(res).toEqual({ status: 200, json: { body: { n: 2 } } })
+  })
+
+  it('reads a multipart upload sent without content-length, bytes intact', async () => {
+    const port = await boot(runtime)
+    const boundary = 'kickboundary'
+    // Not valid UTF-8 — any decode-as-text step would corrupt it.
+    const bytes = Buffer.from([0xff, 0x00, 0xfe, 0x80])
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="note"\r\n\r\nhello\r\n` +
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="b.bin"\r\n` +
+          `Content-Type: application/octet-stream\r\n\r\n`,
+      ),
+      bytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ])
+    const res = await post(
+      port,
+      body,
+      { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      '/api/v1/echo/upload',
+    )
+    expect(res).toEqual({
+      status: 200,
+      json: { name: 'b.bin', hex: 'ff00fe80', note: 'hello' },
+    })
   })
 
   it('treats a POST with no body as no body', async () => {

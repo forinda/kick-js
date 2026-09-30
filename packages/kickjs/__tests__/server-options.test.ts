@@ -10,10 +10,12 @@
 import 'reflect-metadata'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
+import { generateKeyPairSync } from 'node:crypto'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import https from 'node:https'
+import { createSecureContext } from 'node:tls'
 import http2 from 'node:http2'
 import type { AddressInfo } from 'node:net'
 import {
@@ -206,6 +208,63 @@ describe.skipIf(!hasOpenssl)('server: { tls, http2: true }', () => {
     expect(err).toBeInstanceOf(KickError)
     expect((err as KickError).code).toBe('KICK007')
     expect(app!.getHttpServer()).toBeNull()
+  })
+})
+
+describe.skipIf(!hasOpenssl)('shutdown with HTTP/2 sessions open', () => {
+  it('stops new streams on sessions that were open before shutdown', async () => {
+    const port = await start(fastifyRuntime, { tls, http2: true })
+    const client = http2.connect(`https://localhost:${port}`, { ca: tls.cert })
+    client.on('error', () => {})
+    const get = () =>
+      new Promise<string>((resolve) => {
+        const req = client.request({ ':path': '/api/v1/echo' })
+        req.on('response', (h) => resolve(`status ${h[':status']}`))
+        req.on('error', (e) => resolve(`refused: ${(e as NodeJS.ErrnoException).code}`))
+        req.end()
+      })
+
+    expect(await get()).toBe('status 200')
+    await app!.shutdown()
+    app = undefined
+
+    // The session was open before shutdown; it must not keep serving.
+    const after = await Promise.race([
+      get(),
+      new Promise<string>((resolve) => setTimeout(() => resolve('no answer'), 1000)),
+    ])
+    expect(after).not.toBe('status 200')
+    client.destroy()
+  })
+})
+
+describe.skipIf(!hasOpenssl)('unusable tls fails at boot with KICK009', () => {
+  const otherKey = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({
+    type: 'pkcs8',
+    format: 'pem',
+  })
+
+  it.each([
+    ['key without cert', () => ({ key: tls.key }), /cert is missing/],
+    ['cert without key', () => ({ cert: tls.cert }), /key is missing/],
+    ['no identity at all', () => ({}), /no key\/cert/],
+    ['a key that does not match the cert', () => ({ key: otherKey, cert: tls.cert }), /mismatch/i],
+  ])('%s', async (_label, makeTls, message) => {
+    const err = await start(fastifyRuntime, { tls: makeTls() }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KickError)
+    expect((err as KickError).code).toBe('KICK009')
+    expect((err as KickError).message).toMatch(message)
+    expect(app!.getHttpServer()).toBeNull()
+  })
+
+  it('accepts an SNICallback-only setup', async () => {
+    const port = await start(undefined, {
+      tls: {
+        SNICallback: (_name: string, cb: (err: Error | null, ctx?: unknown) => void) =>
+          cb(null, createSecureContext(tls)),
+      },
+    })
+    expect(port).toBeGreaterThan(0)
   })
 })
 
