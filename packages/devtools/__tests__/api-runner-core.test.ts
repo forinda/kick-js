@@ -248,6 +248,13 @@ describe('multipart form bodies', () => {
     ])
   })
 
+  it('reports {{variables}} left unresolved in form fields', () => {
+    const req = prepare(route, {
+      form: [{ key: 'note', value: 'by {{author}}', enabled: true, type: 'text' }],
+    })
+    expect(unresolvedVariables(req)).toEqual(['author'])
+  })
+
   it('drops picked files from stored inputs', () => {
     const stored = storableInputs(inputs())
     expect(stored.form?.[1]).toEqual({ key: 'avatar', value: '', enabled: true, type: 'file' })

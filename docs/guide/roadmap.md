@@ -551,8 +551,7 @@ param/query/body shapes when mounted. Typegen output is `.d.ts` only — not rea
   global `Authorization` on routes carrying a configurable "public" flag (default `auth.public`),
   never forward the devtools token to app routes.
 - **Phase 2:** prefill and hints from `/openapi.json` when present; last-N history; open handler in
-  editor (the typegen scanner already records each controller's file) plus the VS Code command;
-  multipart / file bodies.
+  editor (the typegen scanner already records each controller's file) plus the VS Code command.
 - **Phase 3:** typed-client (`@forinda/kickjs-client`) snippets; export `.http` files or Postman
   collections; link a response to its request-id trace.
 

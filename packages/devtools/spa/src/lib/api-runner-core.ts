@@ -166,7 +166,10 @@ export function variableMap(rows: KeyValueRow[]): Record<string, string> {
 
 /** `{{name}}` references that no variable resolves — shown as a hint in the UI. */
 export function unresolvedVariables(req: PreparedRequest): string[] {
-  const text = [req.url, ...Object.entries(req.headers).flat(), req.body ?? ''].join('\n')
+  // A multipart body is a FormData — scan its described parts, not the object.
+  const body = typeof req.body === 'string' ? req.body : ''
+  const formText = (req.form ?? []).flatMap((part) => [part.name, part.value ?? ''])
+  const text = [req.url, ...Object.entries(req.headers).flat(), body, ...formText].join('\n')
   return [...new Set([...text.matchAll(VARIABLE)].map((m) => m[1]))]
 }
 

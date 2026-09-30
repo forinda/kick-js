@@ -59,6 +59,15 @@ const MAX_BODY_CHARS = 200_000
 
 const [activeRoute, setActiveRoute] = createSignal<RouteEntry | null>(null)
 
+/**
+ * Bumped every time the sheet opens a route (or closes). A request only shows
+ * its response if this hasn't moved since it was sent — otherwise a slow
+ * response from the previous route would land under the new one, and
+ * "Save to variable" would capture it. A counter, not the route object, so
+ * closing and reopening the same route also invalidates the old request.
+ */
+let generation = 0
+
 /** Open the runner for a route. */
 export function openApiRunner(route: RouteEntry): void {
   setActiveRoute(route)
@@ -143,6 +152,7 @@ export const ApiRunnerHost: Component = () => {
   // Load the route's saved inputs whenever a route is opened.
   createEffect(() => {
     const route = activeRoute()
+    generation++
     if (!route) return
     const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
     // Keep params in sync with the path even if the saved inputs are older.
@@ -151,6 +161,9 @@ export const ApiRunnerHost: Component = () => {
     setResult(null)
     setError(null)
     setArmed(false)
+    // A request still running for the previous route won't clear this (its
+    // generation is stale), so the newly opened route starts idle.
+    setSending(false)
   })
 
   createEffect(() => {
@@ -212,6 +225,7 @@ export const ApiRunnerHost: Component = () => {
     setSending(true)
     setError(null)
     const started = performance.now()
+    const sentIn = generation
     try {
       const res = await fetch(req.url, {
         method: req.method,
@@ -220,6 +234,7 @@ export const ApiRunnerHost: Component = () => {
         credentials: 'same-origin',
       })
       const text = await res.text()
+      if (sentIn !== generation) return
       setResult({
         status: res.status,
         statusText: res.statusText,
@@ -230,10 +245,11 @@ export const ApiRunnerHost: Component = () => {
         truncated: text.length > MAX_BODY_CHARS,
       })
     } catch (err) {
+      if (sentIn !== generation) return
       setResult(null)
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setSending(false)
+      if (sentIn === generation) setSending(false)
     }
   }
 
