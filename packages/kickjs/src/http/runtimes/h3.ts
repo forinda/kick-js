@@ -199,8 +199,14 @@ function makeEventHandler(
       // on `undefined` where Express and Fastify both answer 400 — a client
       // sending broken JSON got a success response, and the handler executed
       // against data that was never valid.
+      // HTTP/2 frames the body in DATA frames: no `transfer-encoding`, and
+      // `content-length` is optional, so there a body may be present with
+      // neither header — only an explicit `content-length: 0` rules it out.
       const { 'content-length': length, 'transfer-encoding': encoding } = req.headers
-      const sentBody = encoding !== undefined || (length !== undefined && length !== '0')
+      const sentBody =
+        encoding !== undefined ||
+        (length !== undefined && length !== '0') ||
+        (req.httpVersionMajor === 2 && length !== '0')
       if (sentBody) {
         // Read raw and apply the shared policy rather than calling `readBody`,
         // whose own content-type dispatch is the source of the divergence:
@@ -209,7 +215,13 @@ function makeEventHandler(
         // RAW STRING for malformed input instead of throwing (#590).
         const kind = classifyMediaType(req.headers['content-type'])
         if (kind !== 'multipart') {
-          const raw = await readRawBody(event, 'utf8')
+          // h3's `readRawBody` makes the same header check and returns
+          // `undefined` for an HTTP/2 body without `content-length`, so read
+          // the stream directly in that case.
+          const raw =
+            req.httpVersionMajor === 2 && length === undefined
+              ? await readStreamText(req)
+              : await readRawBody(event, 'utf8')
           // Reject only once the body is known to be non-empty. `sentBody` is
           // true for an empty CHUNKED post — `transfer-encoding` is present
           // with no payload — and rejecting on that alone would 415 a request
@@ -313,6 +325,13 @@ function unwrapH3Error(error: unknown): unknown {
  * h3 parses bodies itself (`readBody`), so the Application skips its default
  * `express.json()` (see `nativeBodyParsing`).
  */
+/** Collect a request stream as UTF-8 text. */
+async function readStreamText(req: AsyncIterable<Buffer | string>): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 export function h3Runtime(): HttpRuntime<H3AppLike> {
   return {
     name: 'h3',
