@@ -36,6 +36,11 @@ describe('findHandlerLine', () => {
     expect(findHandlerLine(source, 'UsersController', 'missing')).toBe(8)
     expect(findHandlerLine(source, 'Users', 'list')).toBeUndefined()
   })
+
+  it('does not pick a same-named method from a later class', () => {
+    // `Other` has no `get`; UsersController (declared after it) does.
+    expect(findHandlerLine(source, 'Other', 'get')).toBe(3)
+  })
 })
 
 describe('locateHandler', () => {

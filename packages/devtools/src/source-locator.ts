@@ -30,11 +30,17 @@ export function findHandlerLine(
   const cls = new RegExp(`\\bclass\\s+${escape(controller)}\\b`).exec(source)
   if (!cls) return undefined
   const lineAt = (offset: number) => source.slice(0, offset).split('\n').length
+  // Only this class's body: up to the next top-level class declaration, so a
+  // same-named method of a later class is never picked.
+  const start = cls.index + cls[0].length
+  const rest = source.slice(start)
+  const next = rest.search(/^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s/m)
+  const body = next === -1 ? rest : rest.slice(0, next)
   const method = new RegExp(
     `^[ \\t]*(?:(?:public|private|protected|static|async|override)\\s+)*${escape(handler)}\\s*[(<]`,
     'm',
-  ).exec(source.slice(cls.index))
-  return lineAt(method ? cls.index + method.index + method[0].search(/\S/) : cls.index)
+  ).exec(body)
+  return lineAt(method ? start + method.index + method[0].search(/\S/) : cls.index)
 }
 
 /** Locate `controller.handler` under `<root>/src` (or `<root>` when there is no `src/`). */

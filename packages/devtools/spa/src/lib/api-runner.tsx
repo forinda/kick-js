@@ -112,8 +112,9 @@ function load<T>(storage: () => Storage, key: string, fallback: T): T {
 
 function loadRows(storage: () => Storage, key: string): KeyValueRow[] {
   try {
-    const raw = storage().getItem(key)
-    return raw ? (JSON.parse(raw) as KeyValueRow[]) : []
+    const parsed: unknown = JSON.parse(storage().getItem(key) ?? '[]')
+    // Anything but an array (hand-edited, or an older format) starts empty.
+    return Array.isArray(parsed) ? (parsed as KeyValueRow[]) : []
   } catch {
     return []
   }
@@ -179,7 +180,8 @@ export const ApiRunnerHost: Component = () => {
   const [history, setHistory] = createSignal<HistoryEntry[]>(
     (() => {
       try {
-        return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]') as HistoryEntry[]
+        const parsed: unknown = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')
+        return Array.isArray(parsed) ? (parsed as HistoryEntry[]) : []
       } catch {
         return []
       }
