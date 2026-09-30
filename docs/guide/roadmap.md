@@ -617,7 +617,7 @@ re-scoped form of A.2 that fits the bring-your-own direction.
 
 ### E.5 `@Cron` that survives serverless deploys
 
-**Status:** `proposed`
+**Status:** `shipped` — `@Cron` gains `name`, `overlap`, `enabled` and `meta`, and handlers get a run context. On Node, the opt-in `KickCronAdapter()` schedules jobs (one worker per cluster). `kick build:vercel` writes Vercel `crons` that call a `CRON_SECRET`-guarded trigger, the web entry exports `scheduled()` for Workers, and `kick build:netlify` warns. See [Scheduled Tasks](./cron.md).
 **Effort:** 3–5 days
 
 **What they do.** Nitro runs scheduled tasks itself (croner, with per-task dedup of overlapping
@@ -754,15 +754,14 @@ These will get their own track once we have a clearer picture from the non-DB wo
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner MVP, and **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped). The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner MVP, **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), and **E.5** `@Cron` on serverless. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **E.5 — `@Cron` on serverless** (3–5 days; today jobs silently don't run there)
-2. **E.1 phase 2** — OpenAPI prefill, request history, open handler in editor
-3. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-4. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-5. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **E.1 phase 2** — OpenAPI prefill, request history, open handler in editor
+2. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+3. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+4. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 

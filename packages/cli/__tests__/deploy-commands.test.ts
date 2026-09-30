@@ -10,12 +10,16 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { cronScheduleId as coreScheduleId } from '@forinda/kickjs'
 import {
+  cronScheduleId,
   detectLayout,
+  findCronDecorators,
   netlifyPublishDir,
   netlifyFunctionSource,
   resolveDeploy,
   vercelFunctionSource,
+  vercelCrons,
   vercelRoutes,
 } from '../src/commands/deploy'
 
@@ -142,6 +146,67 @@ describe('vercelRoutes', () => {
       { handle: 'filesystem' },
       { src: '^/(.*)$', dest: '/api' },
     ])
+  })
+
+  it('routes the cron trigger to the function when the API path does not cover it', () => {
+    expect(vercelRoutes('/api', true, true)).toEqual([
+      { handle: 'filesystem' },
+      { src: '^/api/(.*)$', dest: '/api' },
+      { src: '^/_kick/(.*)$', dest: '/api' },
+      { src: '^/(.*)$', dest: '/index.html' },
+    ])
+    expect(vercelRoutes('', false, true)).toEqual([
+      { handle: 'filesystem' },
+      { src: '^/(.*)$', dest: '/api' },
+    ])
+  })
+})
+
+describe('@Cron scan', () => {
+  const source = `
+import { Cron, Service } from '@forinda/kickjs'
+const EVERY = '0 0 * * *'
+@Service()
+export class Jobs {
+  @Cron('0 * * * *', { description: 'hourly (paren) in a string' })
+  hourly() {}
+
+  @Cron(\`*/5  * * * *\`, { timezone: 'Africa/Nairobi', enabled: () => (1 > 0) })
+  sweep() {}
+
+  @Cron(EVERY)
+  daily() {}
+
+  @Cron('0 * * * *', { name: 'second-hourly' })
+  again() {}
+}
+`
+
+  it('reads literal expressions, flags timezones and non-literals', () => {
+    expect(findCronDecorators(source, 'src/jobs.ts')).toEqual([
+      { file: 'src/jobs.ts', line: 6, expression: '0 * * * *', timezone: false },
+      { file: 'src/jobs.ts', line: 9, expression: '*/5  * * * *', timezone: true },
+      { file: 'src/jobs.ts', line: 12, expression: undefined, timezone: false },
+      { file: 'src/jobs.ts', line: 15, expression: '0 * * * *', timezone: false },
+    ])
+  })
+
+  it('writes one Vercel cron per distinct expression, with warnings', () => {
+    const { crons, warnings } = vercelCrons(findCronDecorators(source, 'src/jobs.ts'))
+    expect(crons).toEqual([
+      { path: `/_kick/cron/${cronScheduleId('0 * * * *')}`, schedule: '0 * * * *' },
+      { path: `/_kick/cron/${cronScheduleId('*/5 * * * *')}`, schedule: '*/5 * * * *' },
+    ])
+    expect(warnings).toEqual([
+      'src/jobs.ts:9: Vercel crons run in UTC — the timezone option is ignored there',
+      'src/jobs.ts:12: @Cron expression is not a string literal, so it has no Vercel cron entry',
+    ])
+  })
+
+  it('computes the same schedule id as the framework', () => {
+    for (const expr of ['0 * * * *', ' */5  * * * * ', '0 9 * * MON-FRI', '@daily']) {
+      expect(cronScheduleId(expr)).toBe(coreScheduleId(expr))
+    }
   })
 })
 

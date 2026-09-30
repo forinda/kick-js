@@ -7,10 +7,19 @@
 // TypeScript (its esbuild pass drops `emitDecoratorMetadata`, which silently
 // breaks constructor injection).
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
+import { parseSync } from 'oxc-parser'
 import type { DeployConfig } from '../config'
 import type { KickCliPluginContext } from '../plugin/types'
 
@@ -109,14 +118,127 @@ export function netlifyPublishDir(toml: string): string | undefined {
   return match?.[1]?.replace(/^\.\//, '').replace(/\/+$/, '')
 }
 
-/** Vercel Build Output API routes: files first, then the function, then the SPA shell. */
-export function vercelRoutes(apiPath: string, hasStatic: boolean): Array<Record<string, string>> {
+/**
+ * Vercel Build Output API routes: files first, then the function, then the SPA
+ * shell. With crons, `/_kick/*` (the cron trigger) goes to the function too
+ * when the API path doesn't already cover it.
+ */
+export function vercelRoutes(
+  apiPath: string,
+  hasStatic: boolean,
+  hasCrons = false,
+): Array<Record<string, string>> {
   const routes: Array<Record<string, string>> = [
     { handle: 'filesystem' },
     { src: `^${apiPath}/(.*)$`, dest: '/api' },
   ]
+  if (hasCrons && apiPath !== '') routes.push({ src: '^/_kick/(.*)$', dest: '/api' })
   if (hasStatic) routes.push({ src: '^/(.*)$', dest: '/index.html' })
   return routes
+}
+
+/** One `@Cron(...)` found in source. `expression` is absent when it isn't a literal. */
+export interface FoundCron {
+  file: string
+  line: number
+  expression?: string
+  timezone: boolean
+}
+
+/** Every `@Cron(...)` decorator in a file, read from the AST. */
+export function findCronDecorators(source: string, file: string): FoundCron[] {
+  let program: unknown
+  try {
+    program = parseSync(file, source).program
+  } catch {
+    return []
+  }
+  const found: FoundCron[] = []
+  const lineOf = (offset: number) => source.slice(0, offset).split('\n').length
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) return node.forEach(visit)
+    const n = node as Record<string, any>
+    const call = n.expression
+    if (
+      n.type === 'Decorator' &&
+      call?.type === 'CallExpression' &&
+      call.callee?.type === 'Identifier' &&
+      call.callee.name === 'Cron'
+    ) {
+      const [expr, options] = call.arguments ?? []
+      const literal =
+        expr?.type === 'Literal' && typeof expr.value === 'string'
+          ? expr.value
+          : expr?.type === 'TemplateLiteral' && expr.expressions.length === 0
+            ? expr.quasis[0]?.value?.cooked
+            : undefined
+      found.push({
+        file,
+        line: lineOf(n.start ?? 0),
+        expression: literal,
+        timezone:
+          options?.type === 'ObjectExpression' &&
+          options.properties.some((p: any) => (p.key?.name ?? p.key?.value) === 'timezone'),
+      })
+    }
+    for (const key in n) if (key !== 'parent') visit(n[key])
+  }
+  visit(program)
+  return found
+}
+
+/** `@Cron` decorators across the project's `src/`. */
+function scanCrons(root: string): FoundCron[] {
+  const src = resolve(root, 'src')
+  if (!existsSync(src)) return []
+  return readdirSync(src, { recursive: true, encoding: 'utf-8' })
+    .filter((f) => /\.m?ts$/.test(f) && !/\.(test|spec|d)\.m?ts$/.test(f))
+    .flatMap((f) => {
+      const source = readFileSync(resolve(src, f), 'utf-8')
+      return source.includes('@Cron') ? findCronDecorators(source, `src/${f}`) : []
+    })
+}
+
+/**
+ * Same hash as `cronScheduleId` in `@forinda/kickjs` (a parity test keeps
+ * them equal) — the app answers `/_kick/cron/<id>` for the jobs on that
+ * expression. Copied rather than imported so the CLI doesn't load the framework.
+ */
+export function cronScheduleId(expression: string): string {
+  let hash = 0x811c9dc5
+  for (const char of expression.trim().replace(/\s+/g, ' ')) {
+    hash ^= char.codePointAt(0)!
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
+}
+
+/** Vercel `crons` entries — one per distinct expression — plus warnings for what can't run there. */
+export function vercelCrons(found: FoundCron[]): {
+  crons: Array<{ path: string; schedule: string }>
+  warnings: string[]
+} {
+  const warnings: string[] = []
+  const schedules = new Map<string, string>()
+  for (const cron of found) {
+    const at = `${cron.file}:${cron.line}`
+    if (cron.expression === undefined) {
+      warnings.push(
+        `${at}: @Cron expression is not a string literal, so it has no Vercel cron entry`,
+      )
+      continue
+    }
+    if (cron.timezone) {
+      warnings.push(`${at}: Vercel crons run in UTC — the timezone option is ignored there`)
+    }
+    const id = cronScheduleId(cron.expression)
+    schedules.set(id, cron.expression.trim().replace(/\s+/g, ' '))
+  }
+  return {
+    crons: [...schedules].map(([id, schedule]) => ({ path: `/_kick/cron/${id}`, schedule })),
+    warnings,
+  }
 }
 
 /**
@@ -222,6 +344,14 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
       const server = await bundle(root, options, ctx.log)
       const siteRoot = resolve(root, options.siteRoot)
 
+      const crons = scanCrons(root)
+      if (crons.length > 0) {
+        ctx.log(
+          `warning: ${crons.length} @Cron job(s) found — Netlify has no cron trigger for them, ` +
+            'so they will not run. Use Netlify scheduled functions, or deploy to Vercel or Workers.',
+        )
+      }
+
       const functions = resolve(siteRoot, '.netlify/v1/functions')
       mkdirSync(functions, { recursive: true })
       // The function imports the bundle; Netlify packages what it imports.
@@ -293,10 +423,20 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
         }
         cpSync(staticDir, resolve(output, 'static'), { recursive: true })
       }
-      writeFileSync(
-        resolve(output, 'config.json'),
-        `${JSON.stringify({ version: 3, routes: vercelRoutes(options.apiPath, Boolean(staticDir)) }, null, 2)}\n`,
-      )
+      const { crons, warnings } = vercelCrons(scanCrons(root))
+      for (const warning of warnings) ctx.log(`warning: ${warning}`)
+      const config = {
+        version: 3,
+        routes: vercelRoutes(options.apiPath, Boolean(staticDir), crons.length > 0),
+        ...(crons.length > 0 ? { crons } : {}),
+      }
+      writeFileSync(resolve(output, 'config.json'), `${JSON.stringify(config, null, 2)}\n`)
       ctx.log(`wrote ${relative(process.cwd(), output)}`)
+      if (crons.length > 0) {
+        ctx.log(
+          `${crons.length} cron schedule(s) written. Set CRON_SECRET in the Vercel project — ` +
+            'the trigger is not mounted without it.',
+        )
+      }
     })
 }

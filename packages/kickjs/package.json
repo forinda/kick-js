@@ -128,6 +128,7 @@
   "peerDependencies": {
     "@fastify/middie": "^9.0.0",
     "@fastify/multipart": "^10.1.2",
+    "croner": "^10.0.1",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "fastify": "^5.0.0",
@@ -140,6 +141,9 @@
       "optional": true
     },
     "@fastify/multipart": {
+      "optional": true
+    },
+    "croner": {
       "optional": true
     },
     "dotenv": {
@@ -166,6 +170,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^26.6.2",
     "@types/serve-static": "^2.2.0",
+    "croner": "^10.0.1",
     "fastify": "^5.12.5",
     "h3": "1.15.11",
     "h3-v2": "npm:h3@2.0.1-rc.22",

@@ -45,6 +45,7 @@ Plugins take the same two hooks.
 | `uncaught`            | An uncaught exception (with the default `processHooks`)                         |
 | `unhandled-rejection` | An unhandled promise rejection                                                  |
 | `background`          | Work passed to [`ctx.waitUntil()`](./serverless.md) failed                      |
+| `cron`                | A [`@Cron`](./cron.md) job failed (`context` holds job, expression, trigger)    |
 | `job`                 | A `@forinda/kickjs-queue` job failed (`context` holds queue, job, id, attempts) |
 
 Request errors also carry `method`, `path`, `route` (the matched pattern, e.g. `/api/v1/users/:id`), `status` (what the error is answered with) and `requestId`.
@@ -57,12 +58,14 @@ Observers run **before** the error handler — the default one or your `bootstra
 
 ### Reporting your own errors
 
-A cron runner, a message consumer, or any code outside a request can report through the same funnel:
+A message consumer, or any code outside a request, can report through the same funnel:
 
 ```ts
 import { reportError } from '@forinda/kickjs'
 
-cron.on('error', (err, job) => reportError(err, { source: 'cron', context: { job: job.name } }))
+consumer.on('error', (err, msg) =>
+  reportError(err, { source: 'consumer', context: { id: msg.id } }),
+)
 ```
 
 ## The channels

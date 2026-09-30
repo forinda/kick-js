@@ -33,6 +33,7 @@ import {
 } from './http/router-builder'
 import { requestStore } from './http/request-store'
 import { forwardBackgroundWork, type PlatformContext } from './http/background'
+import { runCronJobs } from './core/cron'
 import { compileWebRoute } from './http/web/handler'
 import { buildMountPath } from './core/path'
 
@@ -42,6 +43,7 @@ export { compileWebRoute } from './http/web/handler'
 export { reply, isReply, type Reply, type InferHandlerResponse } from './http/reply'
 export type { SseHandler } from './http/context'
 export { waitUntil, type PlatformContext } from './http/background'
+export { runCronJobs, type CronRun } from './core/cron'
 // Edge-safe stores + ctx-style rate limiter (zero runtime imports).
 export {
   KvRateLimitStore,
@@ -231,6 +233,10 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
  * The Workers execution context (third argument) is forwarded, so work
  * handed to `ctx.waitUntil()` keeps running after the response.
  *
+ * `scheduled` runs the `@Cron` jobs whose expression equals the trigger's
+ * `event.cron` — list the same expressions under `[triggers] crons` in
+ * wrangler.toml.
+ *
  * ```ts
  * export default createFetchHandler((env) => ({ h3, modules, env }))
  * ```
@@ -243,12 +249,25 @@ export function createFetchHandler(
     env?: Record<string, string | undefined>,
     ctx?: PlatformContext,
   ) => Promise<Response>
+  scheduled: (
+    event: { cron: string },
+    env?: Record<string, string | undefined>,
+    ctx?: PlatformContext,
+  ) => Promise<void>
 } {
   let app: WebApp | undefined
   return {
     fetch: (request, env = {}, ctx) => {
       app ??= createWebApp(build(env))
       return app.fetch(request, ctx)
+    },
+    scheduled: async (event, env = {}, ctx) => {
+      app ??= createWebApp(build(env))
+      const run = runCronJobs(Container.getInstance(), { expression: event.cron }, 'workers').then(
+        () => {},
+      )
+      ctx?.waitUntil?.(run)
+      await run
     },
   }
 }
