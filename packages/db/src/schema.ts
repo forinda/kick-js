@@ -115,6 +115,8 @@ type Parsed = { ok: true; value: unknown } | { ok: false; message: string; code:
 
 interface ColumnSpec {
   json: Record<string, unknown>
+  /** For a whole-schema override: its JSON Schema in the caller's target. */
+  jsonFor?: (options: JsonSchemaOptions) => Record<string, unknown>
   parse(value: unknown): Parsed
 }
 
@@ -126,13 +128,25 @@ const DECIMAL = /^-?\d+(\.\d+)?$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-function integerSpec(): ColumnSpec {
+/**
+ * An integer the column can store. Out of range, the database would reject
+ * the insert with a server error; here it is a validation issue instead.
+ */
+function integerSpec(minimum: number, maximum: number): ColumnSpec {
   return {
-    json: { type: 'integer' },
+    json: { type: 'integer', minimum, maximum },
     parse: (v) =>
-      typeof v === 'number' && Number.isInteger(v) ? ok(v) : fail('Expected an integer'),
+      typeof v !== 'number' || !Number.isInteger(v)
+        ? fail('Expected an integer')
+        : v < minimum || v > maximum
+          ? fail(`Must be between ${minimum} and ${maximum}`, v < minimum ? 'too_small' : 'too_big')
+          : ok(v),
   }
 }
+
+const INT16 = 32_767
+const INT32 = 2_147_483_647
+const INT64 = 2n ** 63n
 
 function stringSpec(json: Record<string, unknown> = {}, check?: (v: string) => string | null) {
   return {
@@ -207,23 +221,34 @@ function specForType(type: string): ColumnSpec {
   const base = type.replace(/\(.*$/, '').trim()
   const size = Number(/\((\d+)/.exec(type)?.[1])
   switch (base) {
-    case 'serial':
+    // serial values start at 1.
     case 'smallserial':
+      return integerSpec(1, INT16)
+    case 'serial':
+      return integerSpec(1, INT32)
+    case 'smallint':
+      return integerSpec(-INT16 - 1, INT16)
     case 'integer':
     case 'int':
-    case 'smallint':
-      return integerSpec()
+      return integerSpec(-INT32 - 1, INT32)
     case 'bigserial':
     case 'bigint':
       // JSON has no 64-bit integer: accept a number or a string of digits,
       // parse to the column's TS type, bigint.
       return {
         json: { type: 'string', pattern: INTEGER.source },
-        parse: (v) =>
-          (typeof v === 'number' && Number.isInteger(v)) ||
-          (typeof v === 'string' && INTEGER.test(v))
-            ? ok(BigInt(v))
-            : fail('Expected an integer or a string of digits'),
+        parse: (v) => {
+          if (
+            !(typeof v === 'number' && Number.isInteger(v)) &&
+            !(typeof v === 'string' && INTEGER.test(v))
+          ) {
+            return fail('Expected an integer or a string of digits')
+          }
+          const n = BigInt(v)
+          return n < -INT64 || n >= INT64
+            ? fail('Out of range for a 64-bit integer', 'too_big')
+            : ok(n)
+        },
       }
     case 'real':
     case 'double precision':
@@ -297,7 +322,8 @@ function withRule(spec: ColumnSpec, rule: ColumnRule | SchemaLike | undefined): 
   if (!rule) return spec
   if (isSchemaLike(rule)) {
     return {
-      json: rule.toJsonSchema({ target: 'openapi-3.0' }),
+      json: rule.toJsonSchema(),
+      jsonFor: (options) => rule.toJsonSchema(options),
       parse: (v) => {
         const result = rule.safeParse(v)
         if (result.success) return ok(result.data)
@@ -417,11 +443,12 @@ function buildSchema<TOutput>(
     const openapi = jsonOptions.target === 'openapi-3.0'
     const properties: Record<string, unknown> = {}
     for (const column of columns) {
+      const json = column.spec.jsonFor?.(jsonOptions) ?? column.spec.json
       properties[column.name] = !column.nullable
-        ? column.spec.json
+        ? json
         : openapi
-          ? { ...column.spec.json, nullable: true }
-          : { anyOf: [column.spec.json, { type: 'null' }] }
+          ? { ...json, nullable: true }
+          : { anyOf: [json, { type: 'null' }] }
     }
     const required = columns.filter((c) => c.required).map((c) => c.name)
     return {

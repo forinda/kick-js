@@ -15,6 +15,7 @@ import {
   integer,
   jsonb,
   serial,
+  smallint,
   table,
   text,
   timestamptz,
@@ -191,12 +192,80 @@ describe('JSON Schema', () => {
     expect(openapi.required.toSorted()).toEqual(['active', 'email'])
     expect(openapi.properties.email).toEqual({ type: 'string', maxLength: 120, format: 'email' })
     expect(openapi.properties.role).toEqual({ type: 'string', enum: ['admin', 'member'] })
-    expect(openapi.properties.age).toEqual({ type: 'integer', nullable: true })
+    expect(openapi.properties.age).toEqual({
+      type: 'integer',
+      minimum: -2147483648,
+      maximum: 2147483647,
+      nullable: true,
+    })
     expect(openapi.properties.createdAt).toEqual({ type: 'string', format: 'date-time' })
     expect(openapi.properties.embedding).toMatchObject({ type: 'array', minItems: 3, maxItems: 3 })
 
     const draft = schema.toJsonSchema() as { properties: Record<string, unknown> }
-    expect(draft.properties.age).toEqual({ anyOf: [{ type: 'integer' }, { type: 'null' }] })
+    expect(draft.properties.age).toEqual({
+      anyOf: [{ type: 'integer', minimum: -2147483648, maximum: 2147483647 }, { type: 'null' }],
+    })
+  })
+})
+
+describe('integer ranges', () => {
+  const counters = table('counters', {
+    id: serial(),
+    small: smallint(),
+    normal: integer(),
+    big: bigint(),
+  })
+  const schema = insertSchema(counters)
+
+  it('rejects values the column cannot store, instead of a database error', () => {
+    const result = schema.safeParse({
+      id: 0,
+      small: 40_000,
+      normal: 2 ** 40,
+      big: '9223372036854775808',
+    })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(Object.fromEntries(result.issues.map((i) => [i.path[0], i.message]))).toEqual({
+      id: 'Must be between 1 and 2147483647',
+      small: 'Must be between -32768 and 32767',
+      normal: 'Must be between -2147483648 and 2147483647',
+      big: 'Out of range for a 64-bit integer',
+    })
+    expect(
+      schema.safeParse({ small: -32768, normal: 2147483647, big: '-9223372036854775808' }).success,
+    ).toBe(true)
+  })
+})
+
+describe('whole-schema overrides', () => {
+  it('render in the JSON Schema target the caller asks for', () => {
+    const targets: unknown[] = []
+    const schema = insertSchema(users, {
+      columns: {
+        meta: {
+          safeParse: (v: unknown) => ({ success: true as const, data: v }),
+          toJsonSchema: (options?: { target?: string }) => {
+            targets.push(options?.target)
+            return { type: 'object', 'x-target': options?.target ?? 'default' }
+          },
+        },
+      },
+    })
+    const draft = schema.toJsonSchema({ target: 'draft-07' }) as {
+      properties: Record<string, unknown>
+    }
+    expect(draft.properties.meta).toEqual({
+      anyOf: [{ type: 'object', 'x-target': 'draft-07' }, { type: 'null' }],
+    })
+    const openapi = schema.toJsonSchema({ target: 'openapi-3.0' }) as {
+      properties: Record<string, unknown>
+    }
+    expect(openapi.properties.meta).toEqual({
+      type: 'object',
+      'x-target': 'openapi-3.0',
+      nullable: true,
+    })
   })
 })
 

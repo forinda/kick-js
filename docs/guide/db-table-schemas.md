@@ -49,21 +49,21 @@ Export the schema as a `const` and pass it by name — typegen reads the name, n
 
 ## What each column type accepts
 
-| Column                                          | Accepts                                                        | Parsed to        |
-| ----------------------------------------------- | -------------------------------------------------------------- | ---------------- |
-| `integer`, `smallint`, `serial`                 | an integer                                                     | `number`         |
-| `bigint`, `bigSerial`                           | an integer, or a string of digits (JSON has no 64-bit integer) | `bigint`         |
-| `real`, `doublePrecision`                       | a number                                                       | `number`         |
-| `decimal`, `numeric`, `money`                   | a number or a decimal string                                   | `string` (exact) |
-| `varchar(n)`, `char(n)`                         | a string of at most `n` characters                             | `string`         |
-| `text`, `citext`, `time`, `interval`, `inet`, … | a string                                                       | `string`         |
-| `boolean`                                       | a boolean                                                      | `boolean`        |
-| `timestamp`, `timestamptz`, `date`              | an ISO string or a `Date`                                      | `Date`           |
-| `uuid`                                          | a UUID string                                                  | `string`         |
-| `pgEnum(...)`                                   | one of its values                                              | `string`         |
-| `vector(n)`                                     | `n` numbers                                                    | `number[]`       |
-| `.array()`                                      | an array of the element type                                   | array            |
-| `json`, `jsonb`, `customType`                   | anything — add a schema (below)                                | as given         |
+| Column                                          | Accepts                                                                              | Parsed to        |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------- |
+| `integer`, `smallint`, `serial`                 | an integer the column can store (`smallint` ±32767, `integer` ±2³¹, `serial` from 1) | `number`         |
+| `bigint`, `bigSerial`                           | a 64-bit integer, as a number or a string of digits (JSON has no 64-bit integer)     | `bigint`         |
+| `real`, `doublePrecision`                       | a number                                                                             | `number`         |
+| `decimal`, `numeric`, `money`                   | a number or a decimal string                                                         | `string` (exact) |
+| `varchar(n)`, `char(n)`                         | a string of at most `n` characters                                                   | `string`         |
+| `text`, `citext`, `time`, `interval`, `inet`, … | a string                                                                             | `string`         |
+| `boolean`                                       | a boolean                                                                            | `boolean`        |
+| `timestamp`, `timestamptz`, `date`              | an ISO string or a `Date`                                                            | `Date`           |
+| `uuid`                                          | a UUID string                                                                        | `string`         |
+| `pgEnum(...)`                                   | one of its values                                                                    | `string`         |
+| `vector(n)`                                     | `n` numbers                                                                          | `number[]`       |
+| `.array()`                                      | an array of the element type                                                         | array            |
+| `json`, `jsonb`, `customType`                   | anything — add a schema (below)                                                      | as given         |
 
 ## Adding what a table can't say
 
