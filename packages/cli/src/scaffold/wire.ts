@@ -62,10 +62,13 @@ export function wireIntegrations(
       result.manual.push({ ...integration, code })
       continue
     }
+    // Under the name this file calls it: `import { SwaggerAdapter as SA }` → `SA(`.
+    const local =
+      call && integration.import ? localName(program, integration.import.from, call) : call
     if (
       prop &&
-      call &&
-      result.source.slice(prop.value.start, prop.value.end).includes(`${call}(`)
+      local &&
+      result.source.slice(prop.value.start, prop.value.end).includes(`${local}(`)
     ) {
       result.present.push(call ?? firstLine(code))
       continue
@@ -100,6 +103,18 @@ function findBootstrapOptions(program: Node): Node | undefined {
   }
   visit(program)
   return found
+}
+
+/** The local binding of `imported` from `from`, when this file imports it (possibly renamed). */
+function localName(program: Node, from: string, imported: string): string {
+  for (const node of program.body as Node[]) {
+    if (node.type !== 'ImportDeclaration' || node.source.value !== from) continue
+    for (const specifier of node.specifiers as Node[]) {
+      const name = specifier.imported?.name ?? specifier.imported?.value
+      if (specifier.type === 'ImportSpecifier' && name === imported) return specifier.local.name
+    }
+  }
+  return imported
 }
 
 /** `SwaggerAdapter` for `// comment\nSwaggerAdapter({ ... })`. */
@@ -166,6 +181,8 @@ export function addImport(source: string, spec: ImportSpec, file = 'src/index.ts
     (n) =>
       n.source.value === spec.from &&
       n.importKind !== 'type' &&
+      // A side-effect `import 'x'` has nothing to merge into.
+      n.specifiers.length > 0 &&
       !n.specifiers.some((s: Node) => s.type === 'ImportNamespaceSpecifier'),
   )
   const names = spec.names ?? []

@@ -112,3 +112,24 @@ describe('wireEntry', () => {
     expect(entry).toContain('adapters: [')
   })
 })
+
+describe('kick add --entry', () => {
+  it('stops before installing when the entry file does not exist', async () => {
+    tmp()
+    writeFileSync(join(dir, 'package.json'), '{ "name": "app" }')
+    const { spawnSync } = await import('node:child_process')
+    const cli = join(import.meta.dirname, '..', 'dist', 'cli.mjs')
+    const result = spawnSync(
+      'node',
+      [cli, 'add', 'swagger', '--pm', 'pnpm', '--entry', 'src/nope.ts'],
+      {
+        cwd: dir,
+        encoding: 'utf-8',
+        env: { ...process.env, NO_COLOR: '1' },
+      },
+    )
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('--entry src/nope.ts does not exist')
+    expect(result.stdout).not.toContain('Installing')
+  })
+})

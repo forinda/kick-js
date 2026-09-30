@@ -707,6 +707,13 @@ export function registerAddCommand(program: Command): void {
       // The entry file imports them, so they install as regular dependencies
       // (devtools is otherwise a dev dependency), with the peers the layer uses.
       const cwd = process.cwd()
+      // A mistyped --entry would otherwise install first and only then say
+      // there was nothing to wire.
+      if (opts.entry && !existsSync(resolve(cwd, opts.entry))) {
+        console.error(`\n  --entry ${opts.entry} does not exist.\n`)
+        process.exitCode = 1
+        return
+      }
       const wiring = opts.wire === false ? undefined : planWiring(packages)
       const entry = wiring ? findEntry(cwd, opts.entry) : undefined
       if (wiring) {

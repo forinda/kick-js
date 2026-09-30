@@ -90,6 +90,21 @@ describe('wireIntegrations', () => {
     expect(twice.source).toBe(once.source)
   })
 
+  it('recognises an adapter imported under another name', () => {
+    const source = [
+      "import { SwaggerAdapter as SA } from '@forinda/kickjs-swagger'",
+      'bootstrap({',
+      '  adapters: [',
+      '    SA(),',
+      '  ],',
+      '})',
+      '',
+    ].join('\n')
+    const out = wireIntegrations(source, [swagger], fill)
+    expect(out.present).toEqual(['SwaggerAdapter'])
+    expect(out.source).toBe(source)
+  })
+
   it('returns entries it cannot place, rather than guessing', () => {
     const noBootstrap = 'export const app = createApp({ modules })\n'
     expect(wireIntegrations(noBootstrap, [swagger], fill).manual).toHaveLength(1)
@@ -115,6 +130,17 @@ describe('addImport', () => {
         names: ['cors', 'bootstrap'],
       }),
     ).toBe("import { bootstrap, cors } from '@forinda/kickjs'\n")
+  })
+
+  it('adds a separate import next to a side-effect import of the module', () => {
+    expect(
+      addImport("import '@forinda/kickjs-swagger'\n", {
+        from: '@forinda/kickjs-swagger',
+        names: ['SwaggerAdapter'],
+      }),
+    ).toBe(
+      "import '@forinda/kickjs-swagger'\nimport { SwaggerAdapter } from '@forinda/kickjs-swagger'\n",
+    )
   })
 
   it('adds named imports next to a default import, and skips type-only imports', () => {
