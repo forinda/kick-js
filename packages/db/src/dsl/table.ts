@@ -1,6 +1,6 @@
 import type { ColumnBuilder, ColumnRef, TypedColumnRefs } from './columns/types'
 import type { IndexDecl } from './constraints'
-import { bindSelfRefs } from './self-ref'
+import { resolveSelfRefs } from './self-ref'
 
 export type { ColumnRef }
 
@@ -84,10 +84,12 @@ export function buildTable<
   TSchema extends string | undefined,
 >(
   name: TName,
-  columns: C,
+  declared: C,
   constraints: ConstraintBuilder<C> | undefined,
   schema: TSchema,
 ): TableRefs<TName, C, TSchema> {
+  const selfRefs: Record<string, ColumnRef> = {}
+  const columns = resolveSelfRefs(name, declared, selfRefs)
   const decl: TableDecl<TName, C, TSchema> = {
     __isTable: true,
     __name: name,
@@ -114,7 +116,7 @@ export function buildTable<
     }
   }
 
-  bindSelfRefs(owner, columns, refs as Record<string, ColumnRef>)
+  Object.assign(selfRefs, refs)
 
   if (constraints) {
     const declared = constraints(refs)

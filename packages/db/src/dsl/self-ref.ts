@@ -21,21 +21,51 @@ export function selfRef(column: string): () => ColumnRef {
   return Object.assign(thunk, { [SELF]: column })
 }
 
-/** Point each `selfRef(...)` among `columns` at the matching ref. */
-export function bindSelfRefs(
+/**
+ * The columns a table is built from, with each `selfRef(...)` resolved to
+ * THIS table's column.
+ *
+ * The caller's builders are never mutated: a column carrying a self-reference
+ * is copied, and the copy is bound. A builder shared by two tables
+ * (`const parent = uuid().references(selfRef('id'))`) therefore points each
+ * one at itself, and a table that fails to build leaves nothing bound. Every
+ * target is checked before anything is copied.
+ *
+ * `refs` is filled in by the caller once the table's refs exist; the bound
+ * thunks read it lazily, at snapshot time.
+ */
+export function resolveSelfRefs<C extends Record<string, ColumnBuilder>>(
   tableName: string,
-  columns: Record<string, ColumnBuilder>,
+  columns: C,
   refs: Record<string, ColumnRef>,
-): void {
-  for (const builder of Object.values(columns)) {
-    const spec = builder.__state().references as {
-      thunk: (() => ColumnRef) & { [SELF]?: string }
-    } | null
-    const target = spec?.thunk[SELF]
+): C {
+  const targets: Array<[key: string, target: string]> = []
+  for (const [key, builder] of Object.entries(columns)) {
+    const thunk = builder.__state().references?.thunk as
+      | ((() => ColumnRef) & { [SELF]?: string })
+      | undefined
+    const target = thunk?.[SELF]
     if (target === undefined) continue
     if (!(target in columns)) {
       throw new Error(`selfRef('${target}'): table '${tableName}' has no column '${target}'`)
     }
-    spec!.thunk = () => refs[target]!
+    targets.push([key, target])
   }
+  if (targets.length === 0) return columns
+
+  const resolved: Record<string, ColumnBuilder> = { ...columns }
+  for (const [key, target] of targets) {
+    const original = columns[key]!
+    const copy = Object.assign(
+      Object.create(Object.getPrototypeOf(original)),
+      original,
+    ) as ColumnBuilder
+    const state = original.__state()
+    ;(copy as unknown as { state: unknown }).state = {
+      ...state,
+      references: { ...state.references!, thunk: () => refs[target]! },
+    }
+    resolved[key] = copy
+  }
+  return resolved as C
 }

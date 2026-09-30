@@ -283,6 +283,27 @@ describe('self-references, cycles and typed foreign keys', () => {
     }
   })
 
+  it('a selfRef builder shared by two tables points each at itself', () => {
+    const parent = uuid().references(selfRef('id'))
+    const a = table('a', { id: uuid().primaryKey(), parentId: parent })
+    const b = pgSchema('org').table('b', { id: uuid().primaryKey(), parentId: parent })
+    const target = (t: object, key: string) =>
+      extractSnapshot({ t }, 'postgres').tables[key]!.foreignKeys[0]!.refTable
+    expect(target(a, 'a')).toBe('a')
+    expect(target(b, 'org.b')).toBe('org.b')
+  })
+
+  it('a table that fails to build leaves its selfRef builder unbound', () => {
+    const parent = uuid().references(selfRef('id'))
+    expect(() =>
+      table('broken', { id: uuid().primaryKey(), parentId: parent }, () => {
+        throw new Error('bad index')
+      }),
+    ).toThrow('bad index')
+    const ok = table('ok', { id: uuid().primaryKey(), parentId: parent })
+    expect(extractSnapshot({ ok }, 'postgres').tables.ok!.foreignKeys[0]!.refTable).toBe('ok')
+  })
+
   it('selfRef names a missing column', () => {
     expect(() => table('c', { id: uuid(), parentId: uuid().references(selfRef('nope')) })).toThrow(
       "selfRef('nope'): table 'c' has no column 'nope'",
