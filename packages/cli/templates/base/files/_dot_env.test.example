@@ -1,0 +1,11 @@
+# Template for .env.test. Copy it and fill in your machine's values:
+#   cp .env.test.example .env.test
+# Read INSTEAD of .env when NODE_ENV=test (or under vitest).
+# No fallback to .env — declare here everything the suite needs, so a
+# missing var fails the run instead of silently resolving to your dev value.
+#
+# Not committed. Add new keys to .env.test.example too, with placeholder
+# values — never real endpoints or credentials.
+NODE_ENV=test
+PORT=0
+LOG_LEVEL=silent

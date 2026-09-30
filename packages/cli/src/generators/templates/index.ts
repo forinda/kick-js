@@ -6,9 +6,4 @@ export { generateCreateDTO, generateUpdateDTO, generateResponseDTO } from './dto
 export { generateRepositoryFactory } from './repository'
 export { generateControllerTest, generateRepositoryTest } from './tests'
 export { generateRestService, generateRestConstants } from './rest-service'
-export {
-  generateHelloService,
-  generateHelloController,
-  generateHelloModule,
-  generateEnvFile,
-} from './project-app'
+export { generateEnvFile } from './project-app'

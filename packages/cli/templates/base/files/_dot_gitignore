@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+# Machine-specific: each developer's test env differs (database names, ports).
+# The shared template is the committed `.env.test.example`.
+.env.test
+*.local
+coverage/
+.DS_Store
+*.tsbuildinfo
+.kickjs/
+# Platform build output — written by `kick build:netlify` / `kick build:vercel`.
+.netlify/
+.vercel/

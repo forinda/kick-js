@@ -240,7 +240,12 @@ src/
       types.ts                    # TemplateContext interface
       repository.ts               # inmemory + custom repo generators
       controller.ts, dtos.ts, domain.ts, ...
+  scaffold/overlay.ts             # renders templates/<layer>/files/ for kick new
+templates/                        # scaffold layers shipped with the CLI
+  base/files/                     # option-independent project files; `_dot_x` → `.x`
 ```
+
+`kick new` renders `templates/base` for files that don't depend on options; files that do (package.json, `src/index.ts`, the env schema, `kick.config.ts`, README) are still template functions until their options become layers.
 
 ### Key CLI Config (kick.config.ts)
 

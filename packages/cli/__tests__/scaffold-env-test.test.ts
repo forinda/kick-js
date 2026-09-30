@@ -11,17 +11,14 @@
  */
 import { describe, it, expect } from 'vitest'
 
-import {
-  generateEnv,
-  generateEnvTest,
-  generateEnvTestExample,
-  generateGitIgnore,
-  generateVitestConfig,
-} from '../src/generators/templates/project-config'
+import { renderLayers } from '../src/scaffold/overlay'
+
+const base = renderLayers(['base'])
+const file = (path: string) => base.get(path)!
 
 describe('scaffolded .env.test', () => {
   it('declares the base-schema vars the suite needs', () => {
-    const env = generateEnvTest()
+    const env = file('.env.test')
     expect(env).toContain('NODE_ENV=test')
     // Port 0 = ask the OS for a free one, so a run cannot collide with a
     // dev server already holding the scaffolded 3000.
@@ -32,35 +29,35 @@ describe('scaffolded .env.test', () => {
   it('is not a copy of .env — an omitted var must go missing, not inherit', () => {
     // The whole value of the short-circuit is that a var absent here is
     // absent at runtime. Mirroring every key back in rebuilds the trap.
-    expect(generateEnvTest()).not.toBe(generateEnv())
-    expect(generateEnv()).toContain('NODE_ENV=development')
+    expect(file('.env.test')).not.toBe(file('.env'))
+    expect(file('.env')).toContain('NODE_ENV=development')
   })
 
   it('warns against putting real credentials in the committed template', () => {
     // Its keys are mirrored into the committed .env.test.example, so the
     // guidance has to be in the file.
-    expect(generateEnvTest().toLowerCase()).toContain('credentials')
+    expect(file('.env.test').toLowerCase()).toContain('credentials')
   })
 
   it('leaves the vitest config free of env pins', () => {
     // vitest `test.env` sets process.env before modules load, which
     // outranks every file — pins there would stop `.env.test` taking
     // effect at all.
-    expect(generateVitestConfig()).not.toContain('env:')
+    expect(file('vitest.config.ts')).not.toContain('env:')
   })
 
   it('gitignores .env.test and *.local; the committed template is .env.test.example', () => {
     // Values differ per machine; a tracked .env.test turns every local
     // tweak into a diff (and a conflict) for the whole team.
-    const ignore = generateGitIgnore().split('\n')
+    const ignore = file('.gitignore').split('\n')
     expect(ignore).toContain('.env.test')
     expect(ignore).toContain('*.local')
     expect(ignore).not.toContain('.env.test.example')
   })
 
   it('ships a .env.test.example with the same keys and copy instructions', () => {
-    const example = generateEnvTestExample()
+    const example = file('.env.test.example')
     expect(example).toContain('cp .env.test.example .env.test')
-    expect(example).toContain(generateEnvTest())
+    expect(example).toContain(file('.env.test'))
   })
 })

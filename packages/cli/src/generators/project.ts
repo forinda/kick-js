@@ -3,32 +3,15 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
+import { renderLayers } from '../scaffold/overlay'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
 import {
   generatePackageJson,
   generateViteConfig,
-  generateTsConfig,
-  generateFormatterConfig,
-  generateEditorConfig,
-  generateGitIgnore,
-  generateGitAttributes,
-  generateEnv,
-  generateEnvExample,
-  generateEnvTest,
-  generateEnvTestExample,
-  generateVitestConfig,
   generateNetlifyToml,
   generateVercelJson,
 } from './templates/project-config'
-import {
-  generateEntryFile,
-  generateEnvFile,
-  generateModulesIndex,
-  generateKickConfig,
-  generateHelloService,
-  generateHelloController,
-  generateHelloModule,
-} from './templates/project-app'
+import { generateEntryFile, generateEnvFile, generateKickConfig } from './templates/project-app'
 import { generateReadme } from './templates/project-docs'
 import {
   AVAILABLE_ADD_PACKAGES,
@@ -452,34 +435,13 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     generateViteConfig({ strictPort: options.strictPort }),
   )
 
-  // ── tsconfig.json ───────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'tsconfig.json'), generateTsConfig())
-
-  // ── .oxfmtrc.json ───────────────────────────────────────────────────
-  await writeFileSafe(join(dir, '.oxfmtrc.json'), generateFormatterConfig())
-
-  // ── .editorconfig ─────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, '.editorconfig'), generateEditorConfig())
-
-  // ── .gitignore ──────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, '.gitignore'), generateGitIgnore())
-
-  // ── .gitattributes ────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, '.gitattributes'), generateGitAttributes())
-
-  // ── .env ────────────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, '.env'), generateEnv())
-
-  await writeFileSafe(join(dir, '.env.example'), generateEnvExample())
-
-  // `.env.test` is read INSTEAD of `.env` under a test run, so scaffolding
-  // it is what makes a new project isolated by default. Without it the
-  // generated app ships the exact shape `kick doctor` warns about — a
-  // `.env` plus a test runner — and its first test run prints the backfill
-  // warning rather than being isolated. It is gitignored like `.env` —
-  // values differ per machine — so the committed template is the example.
-  await writeFileSafe(join(dir, '.env.test'), generateEnvTest())
-  await writeFileSafe(join(dir, '.env.test.example'), generateEnvTestExample())
+  // ── Files that don't depend on options — templates/base ─────────
+  // tsconfig, formatter/editor/git config, .env files, vitest config and the
+  // hello module. `.env.test` is read INSTEAD of `.env` under a test run, so
+  // shipping it is what isolates a new project's tests by default.
+  for (const [path, contents] of renderLayers(['base'])) {
+    await writeFileSafe(join(dir, path), contents)
+  }
 
   // ── src/config/index.ts — typed env schema (read by `kick typegen`) ─
   // Lives under `src/config/` so the framework's "config" concept has a
@@ -493,22 +455,11 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     generateEntryFile(name, template, cliPkg.version, packages, runtime, options.spaClientDir),
   )
 
-  // ── src/modules/index.ts ────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'src/modules/index.ts'), generateModulesIndex())
-
-  // ── src/modules/hello/ — sample module ─────────────────────────────
-  await writeFileSafe(join(dir, 'src/modules/hello/hello.service.ts'), generateHelloService())
-  await writeFileSafe(join(dir, 'src/modules/hello/hello.controller.ts'), generateHelloController())
-  await writeFileSafe(join(dir, 'src/modules/hello/hello.module.ts'), generateHelloModule())
-
   // ── kick.config.ts — CLI configuration ─────────────────────────────
   await writeFileSafe(
     join(dir, 'kick.config.ts'),
     generateKickConfig(template, defaultRepo, packageManager, runtime, options.withClientMap),
   )
-
-  // ── vitest.config.ts ────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'vitest.config.ts'), generateVitestConfig())
 
   // ── README.md ────────────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'README.md'), generateReadme(name, template, packageManager))
