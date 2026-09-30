@@ -41,6 +41,7 @@ const guideSidebar = [
       { text: 'Validation', link: '/guide/validation' },
       { text: 'Schema (Zod / Valibot / Yup)', link: '/guide/schema' },
       { text: 'Error Handling', link: '/guide/error-handling' },
+      { text: 'Observing Errors & Responses', link: '/guide/observability' },
       { text: 'Request Lifecycle', link: '/guide/lifecycle' },
     ],
   },

@@ -24,6 +24,7 @@ import {
   type MatchedRoute,
   type RequestContext,
 } from '@forinda/kickjs'
+import * as kick from '@forinda/kickjs'
 import {
   MemoryAnalyzer,
   PROTOCOL_VERSION,
@@ -88,6 +89,15 @@ const MAX_SAMPLES = 1000
  * symbol, so it is shared across module copies.
  */
 const MATCHED_ROUTE_SLOT = Symbol.for('kick.route')
+
+/**
+ * Whether the installed `@forinda/kickjs` reports every response to adapter
+ * `onResponse` hooks. When it does, the dashboard's counters are fed from
+ * there; on older releases (still supported peers) the adapter falls back to
+ * its own middleware. Looked up, not imported by name, so older releases load.
+ */
+const FRAMEWORK_REPORTS_RESPONSES =
+  typeof (kick as { reportResponse?: unknown }).reportResponse === 'function'
 
 /** Compute a percentile from a sorted array of numbers */
 function percentile(sorted: number[], p: number): number {
@@ -363,6 +373,36 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     let routes: RouteInfo[] = []
     let container: Container | null = null
     let appRef: any = null
+
+    /**
+     * One finished response into the reactive state. Latency is keyed by the
+     * full route pattern (`GET /api/v1/users/:id`), so two modules' `/:id`
+     * routes no longer share a bucket; unmatched requests (404 probing)
+     * collapse into one `<unmatched>` bucket per method instead of one entry
+     * per raw URL, which grew the map without bound.
+     */
+    const recordResponse = (
+      method: string,
+      route: string | undefined,
+      status: number,
+      elapsedMs: number,
+    ): void => {
+      requestCount.value++
+      if (status >= 500) errorCount.value++
+      else if (status >= 400) clientErrorCount.value++
+
+      const routeKey = `${method} ${route ?? '<unmatched>'}`
+      if (!routeLatency[routeKey]) {
+        routeLatency[routeKey] = { count: 0, totalMs: 0, minMs: Infinity, maxMs: 0, samples: [] }
+      }
+      const stats = routeLatency[routeKey]
+      stats.count++
+      stats.totalMs += elapsedMs
+      stats.minMs = Math.min(stats.minMs, elapsedMs)
+      stats.maxMs = Math.max(stats.maxMs, elapsedMs)
+      stats.samples.push(elapsedMs)
+      if (stats.samples.length > MAX_SAMPLES) stats.samples.shift()
+    }
     const adapterStatuses: Record<string, string> = {}
     let stopErrorWatch: (() => void) | null = null
 
@@ -989,51 +1029,37 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         }
       },
 
+      /**
+       * Feeds the reactive counters (`requestCount`, `errorCount`,
+       * `routeLatency`, …) from the framework's response funnel — one
+       * listener for every observer instead of one middleware per adapter.
+       */
+      onResponse(info) {
+        if (!enabled) return
+        recordResponse(info.method, info.route, info.status, info.durationMs)
+      },
+
       middleware(): AdapterMiddleware[] {
-        if (!enabled) return []
+        // The framework already reports every response to `onResponse`.
+        if (!enabled || FRAMEWORK_REPORTS_RESPONSES) return []
 
         return [
           {
-            // Connect-style, so it sees the engine's raw Node request/response
-            // on every runtime. The matched route comes from the slot each
-            // runtime publishes on the request (`ctx.route` reads the same slot).
+            // Older kickjs: time the response ourselves. Connect-style, so it
+            // sees the engine's raw Node request/response on every runtime.
             handler: (req: IncomingMessage, res: ServerResponse, next: () => void) => {
               const start = Date.now()
-              requestCount.value++
-
               res.on('finish', () => {
-                if (res.statusCode >= 500) errorCount.value++
-                else if (res.statusCode >= 400) clientErrorCount.value++
-
-                // Bucket unmatched paths (404s) under a single key. The
-                // previous `?? req.path` fallback used the raw URL, which
-                // grows the reactive map unboundedly under 404 probing —
-                // each random path became its own entry, bloating
-                // `/_debug/metrics` and leaking memory.
                 const matched = (req as unknown as Record<symbol, MatchedRoute | undefined>)[
                   MATCHED_ROUTE_SLOT
                 ]
-                const routeKey = `${req.method} ${matched?.path ?? '<unmatched>'}`
-                const elapsed = Date.now() - start
-
-                if (!routeLatency[routeKey]) {
-                  routeLatency[routeKey] = {
-                    count: 0,
-                    totalMs: 0,
-                    minMs: Infinity,
-                    maxMs: 0,
-                    samples: [],
-                  }
-                }
-                const stats = routeLatency[routeKey]
-                stats.count++
-                stats.totalMs += elapsed
-                stats.minMs = Math.min(stats.minMs, elapsed)
-                stats.maxMs = Math.max(stats.maxMs, elapsed)
-                stats.samples.push(elapsed)
-                if (stats.samples.length > MAX_SAMPLES) stats.samples.shift()
+                recordResponse(
+                  req.method ?? 'GET',
+                  matched?.pattern ?? matched?.path,
+                  res.statusCode,
+                  Date.now() - start,
+                )
               })
-
               next()
             },
             phase: 'beforeGlobal',

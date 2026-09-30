@@ -43,6 +43,10 @@ import { getClassMeta } from '../core/metadata'
 import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from './body-policy'
 import { requestId } from './middleware/request-id'
 import { pendingBackgroundWork, settleBackgroundWork } from './background'
+import { installChannelPublisher, traceHandler } from './tracing'
+import { hasResponseObservers, reportError, reportResponse, setObservers } from '../core/observers'
+import { ROUTE_SLOT } from '../core/route-flag'
+import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
@@ -643,6 +647,10 @@ export class Application {
       return adapter as AppAdapter & { name: string }
     })
     this.adapters = mountSort(namedAdapters, 'adapter')
+    // Adapters and plugins with onError / onResponse observe every error and
+    // response; the diagnostics_channel channels are fed from the same funnel.
+    setObservers([...this.adapters, ...this.plugins])
+    installChannelPublisher()
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
   }
@@ -1083,7 +1091,26 @@ export class Application {
               mountedPaths.push({ method: entry.method, path: fullPath })
               this.routePolicy.add(entry.method, fullPath, entry.meta.flags)
             }
-            this.runtime.mountRoutes(this.app, [{ mountPath, routes: routeTable }])
+            // Each handler runs inside the `kickjs:handler` tracing channel (a
+            // no-op without subscribers), and carries its full pattern so
+            // metrics and spans are keyed by `/api/v1/users/:id`, not `/:id`.
+            // Copies, not edits: `routeTable` entries also feed the route policy
+            // table and the duplicate-route check above.
+            // oxlint-disable-next-line no-map-spread
+            const traced = routeTable.map((entry) => {
+              const pattern = joinPaths(mountPath, entry.path)
+              return {
+                ...entry,
+                handler: traceHandler(entry.handler, {
+                  method: entry.method,
+                  route: pattern,
+                  controller: route.controller?.name,
+                  handler: entry.meta.handlerName,
+                }),
+                meta: { ...entry.meta, pattern },
+              }
+            })
+            this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])
           } else {
             throw moduleRouteMissingControllerError(mountPath)
           }
@@ -1173,7 +1200,7 @@ export class Application {
     }
 
     this.runtime.setNotFound(this.app, this.options.onNotFound ?? notFoundHandler(mountedPaths))
-    this.runtime.setErrorHandler(this.app, this.options.onError ?? errorHandler())
+    this.runtime.setErrorHandler(this.app, observeErrors(this.options.onError ?? errorHandler()))
   }
 
   /** Register modules and DI without starting the HTTP server (used by kick tinker) */
@@ -1532,6 +1559,9 @@ export class Application {
       this.container.flushChanges()
       await this.loopback?.close()
       this.loopback = undefined
+      // The adapters are shut down: stop routing reports to them. A reload
+      // keeps the same adapters, so it keeps them observing.
+      if (closeServer) setObservers([])
     } finally {
       if (timer) clearTimeout(timer)
     }
@@ -1713,11 +1743,25 @@ export class Application {
 
   /** Middleware that tracks in-flight requests for graceful draining */
   private requestTrackingMiddleware(): RequestHandler {
-    return (_req, res, next) => {
+    return (req, res, next) => {
       this._inFlightRequests++
+      // Timed only while something observes responses — checked per request,
+      // since a diagnostics channel can gain a subscriber at any time.
+      const started = hasResponseObservers() ? performance.now() : undefined
       const onFinish = () => {
         res.removeListener('finish', onFinish)
         res.removeListener('close', onFinish)
+        if (started !== undefined) {
+          const matched = (req as unknown as Record<symbol, MatchedRoute | undefined>)[ROUTE_SLOT]
+          reportResponse({
+            method: req.method,
+            path: requestPath(req),
+            route: matched?.pattern,
+            status: res.statusCode,
+            durationMs: performance.now() - started,
+            requestId: requestIdOf(req),
+          })
+        }
         this._inFlightRequests--
         // If draining and no more in-flight requests, resolve all waiters
         if (this._draining && this._inFlightRequests === 0) {
@@ -1734,4 +1778,47 @@ export class Application {
   }
 
   /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
+}
+
+/** The request path without the query string, on every engine. */
+function requestPath(req: { originalUrl?: string; url?: string }): string {
+  return (req.originalUrl ?? req.url ?? '').split('?')[0]
+}
+
+function requestIdOf(req: {
+  requestId?: string
+  headers?: Record<string, unknown>
+}): string | undefined {
+  const header = req.headers?.['x-request-id']
+  return req.requestId ?? (typeof header === 'string' ? header : undefined)
+}
+
+/** The status an error will be answered with, as the default handler decides it. */
+function errorStatus(err: any): number {
+  if (typeof err?.problem?.status === 'number') return err.problem.status
+  if (typeof err?.status === 'number') return err.status
+  if (typeof err?.statusCode === 'number') return err.statusCode
+  if (err?.name === 'ZodError') return 422
+  return 500
+}
+
+/**
+ * Report every request error to the observers, then hand it to the real error
+ * handler (the default one or `bootstrap({ onError })`) unchanged.
+ */
+function observeErrors<H extends (err: any, req: any, res: any, next: any) => unknown>(
+  handler: H,
+): H {
+  return ((err: any, req: any, res: any, next: any) => {
+    const matched = req?.[ROUTE_SLOT] as MatchedRoute | undefined
+    reportError(err, {
+      source: 'request',
+      requestId: requestIdOf(req ?? {}),
+      method: req?.method,
+      path: requestPath(req ?? {}),
+      route: matched?.pattern,
+      status: errorStatus(err),
+    })
+    return handler(err, req, res, next)
+  }) as H
 }

@@ -5,6 +5,7 @@ import type { ContributorRegistrations } from './context-decorator'
 import type { IntrospectionSnapshot } from './introspect'
 import type { KickJsPluginName } from './augmentation'
 import type { ModuleRegistry } from './module-registry'
+import type { ErrorInfo, ResponseInfo } from './observers'
 
 /**
  * Plugin interface for extending KickJS applications.
@@ -183,6 +184,20 @@ export interface KickPlugin {
    * Use for post-startup logic like logging, health registration, etc.
    */
   onReady?(container: Container): void | Promise<void>
+
+  /**
+   * Observe every error the app reports — request errors (any status; filter
+   * on `info.status`), uncaught exceptions, unhandled rejections, failed
+   * `waitUntil` work, failed queue jobs, and anything passed to
+   * `reportError()`. Observe-only: the response is not yours to change, and a
+   * throw here is logged and skipped. The place to wire Sentry & co.
+   */
+  onError?(error: unknown, info: ErrorInfo): void | Promise<void>
+  /**
+   * Observe every finished response — method, path, the matched route
+   * pattern, status, duration. Only timed while something listens.
+   */
+  onResponse?(info: ResponseInfo): void | Promise<void>
 
   /**
    * Called during application shutdown — release what this plugin owns

@@ -6,6 +6,7 @@ import {
   getClassMetaOrUndefined,
   getClassMeta,
 } from '@forinda/kickjs'
+import * as kick from '@forinda/kickjs'
 import {
   defineDevtoolsTab,
   PROTOCOL_VERSION,
@@ -214,6 +215,19 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
 
           worker.on('failed', (job, err) => {
             log.error({ err }, `Job failed: ${queueName}/${job?.name} (id: ${job?.id})`)
+            // Hand it to the app's error observers (Sentry & co.). `reportError`
+            // is looked up, not imported by name: kickjs releases before it
+            // existed are still supported peers, and there it is just skipped.
+            const report = (kick as { reportError?: typeof kick.reportError }).reportError
+            report?.(err, {
+              source: 'job',
+              context: {
+                queue: queueName,
+                job: job?.name,
+                id: job?.id,
+                attemptsMade: job?.attemptsMade,
+              },
+            })
           })
 
           worker.on('completed', (job) => {

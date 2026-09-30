@@ -2,7 +2,6 @@ import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { DevToolsAdapter, type DevToolsOptions } from '@forinda/kickjs-devtools'
 import { Container, Controller, Get, Post, Middleware } from '@forinda/kickjs'
-import type { Request, Response, NextFunction } from 'express'
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -10,47 +9,15 @@ function createAdapter(opts: DevToolsOptions = {}) {
   return DevToolsAdapter({ enabled: true, ...opts })
 }
 
-/**
- * Build a minimal mock Request. A `route: { path }` override stands in for the
- * matched route, which every runtime publishes on the request under the
- * `Symbol.for('kick.route')` slot; `route: undefined` means no route matched.
- */
-function mockReq(overrides: Partial<Request> = {}): Request {
-  const route = 'route' in overrides ? overrides.route : { path: '/test' }
-  return {
-    method: 'GET',
-    path: '/test',
-    headers: {},
-    query: {},
-    on: vi.fn(),
-    ...overrides,
-    [Symbol.for('kick.route')]: route ? { path: route.path, flags: new Map() } : undefined,
-  } as unknown as Request
-}
-
-/** Build a minimal mock Response that supports `on('finish', cb)` */
-function mockRes(statusCode = 200): Response & { _finishCb: () => void } {
-  let finishCb: () => void = () => {}
-  const res = {
-    statusCode,
-    on: vi.fn((event: string, cb: () => void) => {
-      if (event === 'finish') finishCb = cb
-    }),
-    status: vi.fn().mockReturnThis(),
-    json: vi.fn().mockReturnThis(),
-    type: vi.fn().mockReturnThis(),
-    send: vi.fn().mockReturnThis(),
-    writeHead: vi.fn(),
-    write: vi.fn(),
-    get _finishCb() {
-      return finishCb
-    },
-  } as unknown as Response & { _finishCb: () => void }
-  return res
-}
-
-function mockNext(): NextFunction {
-  return vi.fn() as unknown as NextFunction
+/** Report one finished response the way the framework does. */
+function respond(
+  adapter: ReturnType<typeof DevToolsAdapter>,
+  method: string,
+  route: string | undefined,
+  status: number,
+  durationMs = 1,
+): void {
+  adapter.onResponse?.({ method, path: route ?? '/x', route, status, durationMs })
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -207,158 +174,95 @@ describe('DevToolsAdapter', () => {
 
   // ── Middleware (request/response tracking) ─────────────────────────
 
-  describe('middleware', () => {
-    it('should return empty array when disabled', () => {
-      const adapter = DevToolsAdapter({ enabled: false })
-      expect(adapter.middleware()).toEqual([])
+  describe('response tracking (onResponse)', () => {
+    it('installs no middleware of its own — the framework reports responses', () => {
+      expect(createAdapter().middleware()).toEqual([])
+      expect(DevToolsAdapter({ enabled: false }).middleware()).toEqual([])
     })
 
-    it('should return one middleware entry with phase beforeGlobal', () => {
+    it('should increment requestCount on each response', () => {
       const adapter = createAdapter()
-      const mws = adapter.middleware()
-      expect(mws).toHaveLength(1)
-      expect(mws[0].phase).toBe('beforeGlobal')
-    })
-
-    it('should increment requestCount on each request', () => {
-      const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-      const req = mockReq()
-      const res = mockRes()
-      const next = mockNext()
-
-      mw(req, res, next)
-      mw(req, res, next)
-      mw(req, res, next)
-
+      respond(adapter, 'GET', '/api/v1/a', 200)
+      respond(adapter, 'GET', '/api/v1/a', 200)
+      respond(adapter, 'GET', '/api/v1/a', 200)
       expect(adapter.requestCount.value).toBe(3)
-      expect(next).toHaveBeenCalledTimes(3)
     })
 
     it('should increment errorCount on 5xx status', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      const res = mockRes(500)
-      mw(mockReq(), res, mockNext())
-      // Simulate the response finishing
-      res._finishCb()
-
+      respond(adapter, 'GET', '/api/v1/a', 500)
       expect(adapter.errorCount.value).toBe(1)
       expect(adapter.clientErrorCount.value).toBe(0)
     })
 
     it('should increment clientErrorCount on 4xx status', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      const res = mockRes(404)
-      mw(mockReq(), res, mockNext())
-      res._finishCb()
-
+      respond(adapter, 'GET', undefined, 404)
       expect(adapter.clientErrorCount.value).toBe(1)
       expect(adapter.errorCount.value).toBe(0)
     })
 
     it('should not increment error counts on 2xx status', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      const res = mockRes(200)
-      mw(mockReq(), res, mockNext())
-      res._finishCb()
-
+      respond(adapter, 'GET', '/api/v1/a', 200)
       expect(adapter.errorCount.value).toBe(0)
       expect(adapter.clientErrorCount.value).toBe(0)
     })
 
-    it('should track per-route latency stats', () => {
+    it('should track per-route latency stats, keyed by the full route pattern', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
+      respond(adapter, 'GET', '/api/v1/users/:id', 200, 12)
 
-      const req = mockReq({ method: 'GET', route: { path: '/api/users' } } as any)
-      const res = mockRes(200)
-      mw(req, res, mockNext())
-      res._finishCb()
-
-      const key = 'GET /api/users'
-      const stats = adapter.routeLatency[key]
+      const stats = adapter.routeLatency['GET /api/v1/users/:id']
       expect(stats).toBeDefined()
       expect(stats.count).toBe(1)
-      expect(stats.totalMs).toBeGreaterThanOrEqual(0)
-      expect(stats.minMs).toBeGreaterThanOrEqual(0)
-      expect(stats.maxMs).toBeGreaterThanOrEqual(0)
-      expect(stats.samples).toHaveLength(1)
+      expect(stats.totalMs).toBe(12)
+      expect(stats.minMs).toBe(12)
+      expect(stats.maxMs).toBe(12)
+      expect(stats.samples).toEqual([12])
+    })
+
+    it('keeps two modules’ same-shaped routes in separate buckets', () => {
+      // Regression: the key used the path relative to the module mount, so
+      // `/users/:id` and `/orders/:id` both landed in `GET /:id`.
+      const adapter = createAdapter()
+      respond(adapter, 'GET', '/api/v1/users/:id', 200)
+      respond(adapter, 'GET', '/api/v1/orders/:id', 200)
+      expect(adapter.routeLatency['GET /api/v1/users/:id'].count).toBe(1)
+      expect(adapter.routeLatency['GET /api/v1/orders/:id'].count).toBe(1)
     })
 
     it('should accumulate stats across multiple requests to the same route', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      for (let i = 0; i < 5; i++) {
-        const req = mockReq({ method: 'POST', route: { path: '/api/items' } } as any)
-        const res = mockRes(201)
-        mw(req, res, mockNext())
-        res._finishCb()
-      }
-
-      const key = 'POST /api/items'
-      const stats = adapter.routeLatency[key]
+      for (let i = 0; i < 5; i++) respond(adapter, 'POST', '/api/v1/items', 201)
+      const stats = adapter.routeLatency['POST /api/v1/items']
       expect(stats.count).toBe(5)
       expect(stats.samples).toHaveLength(5)
-      expect(stats.totalMs).toBeGreaterThanOrEqual(0)
     })
 
     it('buckets requests with no matching route under a single <unmatched> key', () => {
-      // Regression: the previous fallback used `req.path` (the raw URL)
-      // as the latency key, so each probed 404 created a new entry —
-      // unbounded growth in the reactive map. The fix collapses every
-      // unmatched request for a given method into one bucket.
+      // Regression: keying by the raw URL made every probed 404 a new entry —
+      // unbounded growth in the reactive map.
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      const probedPaths = ['/wp-admin', '/.env', '/api/v2/users/123', '/random-junk']
-      for (const path of probedPaths) {
-        const req = mockReq({ method: 'GET', path, route: undefined } as any)
-        const res = mockRes(404)
-        mw(req, res, mockNext())
-        res._finishCb()
-      }
-
-      // All four distinct 404 paths land in the same bucket — none of
-      // the raw URLs become keys.
-      expect(adapter.routeLatency['GET <unmatched>']).toBeDefined()
+      for (let i = 0; i < 4; i++) respond(adapter, 'GET', undefined, 404)
       expect(adapter.routeLatency['GET <unmatched>'].count).toBe(4)
-      for (const path of probedPaths) {
-        expect(adapter.routeLatency[`GET ${path}`]).toBeUndefined()
-      }
+      expect(Object.keys(adapter.routeLatency)).toEqual(['GET <unmatched>'])
     })
 
     it('keeps matched and unmatched buckets separate per method', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      // Matched GET — uses the route pattern.
-      const matched = mockReq({ method: 'GET', route: { path: '/api/users' } } as any)
-      const resMatched = mockRes(200)
-      mw(matched, resMatched, mockNext())
-      resMatched._finishCb()
-
-      // Unmatched GET — different raw paths, same bucket.
-      const unmatchedGet = mockReq({ method: 'GET', path: '/junk-1', route: undefined } as any)
-      const resGet = mockRes(404)
-      mw(unmatchedGet, resGet, mockNext())
-      resGet._finishCb()
-
-      // Unmatched POST — separate bucket because the method differs.
-      const unmatchedPost = mockReq({ method: 'POST', path: '/junk-2', route: undefined } as any)
-      const resPost = mockRes(404)
-      mw(unmatchedPost, resPost, mockNext())
-      resPost._finishCb()
-
-      expect(adapter.routeLatency['GET /api/users']).toBeDefined()
+      respond(adapter, 'GET', '/api/v1/users', 200)
+      respond(adapter, 'GET', undefined, 404)
+      respond(adapter, 'POST', undefined, 404)
+      expect(adapter.routeLatency['GET /api/v1/users']).toBeDefined()
       expect(adapter.routeLatency['GET <unmatched>']).toBeDefined()
       expect(adapter.routeLatency['POST <unmatched>']).toBeDefined()
+    })
+
+    it('ignores responses when disabled', () => {
+      const adapter = DevToolsAdapter({ enabled: false })
+      respond(adapter, 'GET', '/api/v1/a', 200)
+      expect(adapter.requestCount.value).toBe(0)
     })
   })
 
@@ -367,13 +271,7 @@ describe('DevToolsAdapter', () => {
   describe('percentile calculations', () => {
     it('should compute correct percentiles from routeLatency samples', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      // Manually populate samples to get deterministic values
-      const req = mockReq({ method: 'GET', route: { path: '/perf' } } as any)
-      const res = mockRes(200)
-      mw(req, res, mockNext())
-      res._finishCb()
+      respond(adapter, 'GET', '/perf', 200)
 
       // Override samples with known values for deterministic testing
       const stats = adapter.routeLatency['GET /perf']
@@ -392,12 +290,7 @@ describe('DevToolsAdapter', () => {
 
     it('should handle empty samples gracefully', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      const req = mockReq({ method: 'GET', route: { path: '/empty' } } as any)
-      const res = mockRes(200)
-      mw(req, res, mockNext())
-      res._finishCb()
+      respond(adapter, 'GET', '/empty', 200)
 
       // Clear samples to test empty case
       adapter.routeLatency['GET /empty'].samples = []
@@ -408,15 +301,7 @@ describe('DevToolsAdapter', () => {
 
     it('should cap samples at MAX_SAMPLES (1000) using ring buffer', () => {
       const adapter = createAdapter()
-      const mw = adapter.middleware()[0].handler
-
-      // Push 1050 requests through
-      for (let i = 0; i < 1050; i++) {
-        const req = mockReq({ method: 'GET', route: { path: '/ring' } } as any)
-        const res = mockRes(200)
-        mw(req, res, mockNext())
-        res._finishCb()
-      }
+      for (let i = 0; i < 1050; i++) respond(adapter, 'GET', '/ring', 200)
 
       const stats = adapter.routeLatency['GET /ring']
       expect(stats.count).toBe(1050)
@@ -633,13 +518,9 @@ describe('DevToolsAdapter', () => {
       adapter.shutdown()
     })
 
-    it('reflects request counts after the middleware runs', () => {
+    it('reflects request counts after responses are reported', () => {
       const adapter = createAdapter()
-      const middleware = adapter.middleware()[0]!.handler
-      // Simulate two requests + one server error
-      const req = mockReq()
-      middleware(req, mockRes(200), mockNext())
-      ;(mockRes(200) as any)._finishCb?.()
+      respond(adapter, 'GET', '/x', 200)
       adapter.requestCount.value = 5
       adapter.errorCount.value = 1
       const snap = adapter.introspect?.() as any

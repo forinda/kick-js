@@ -1,4 +1,5 @@
 import cluster from 'node:cluster'
+import { reportError } from '../core/observers'
 import { createLogger, Container } from '../core'
 import { reloadEnv } from '../config/env'
 import { Application, type ApplicationOptions } from './application'
@@ -83,10 +84,12 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
     if (processHooks !== 'manual') {
       process.on('uncaughtException', (err) => {
         log.error(err, 'Uncaught exception')
+        reportError(err, { source: 'uncaught' })
       })
 
       process.on('unhandledRejection', (reason) => {
         log.error(reason as any, 'Unhandled rejection')
+        reportError(reason, { source: 'unhandled-rejection' })
       })
     }
 
