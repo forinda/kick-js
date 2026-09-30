@@ -9,9 +9,11 @@ The DevTools dashboard has an API runner. **Try** on a row of the Routes tab ope
 - **Path params:** one field per `:param`.
 - **Query and headers:** key/value rows that can be switched off.
 - **Body:** raw text, for methods that take one.
-- **Defaults & settings:** default headers, kept only for the browser tab.
+- **Environment:** default headers, variables and settings. They're kept for the browser tab unless **Remember on this browser** is on, which moves them to `localStorage`.
 - **Code snippet:** the request rendered as `curl` or `fetch`, readable and selectable.
-- **Response:** status, time, headers, and the body pretty-printed as JSON.
+- **Response:** status, time, headers, and the body pretty-printed as JSON, with **Save to variable** to capture a value from it.
+
+**Variables:** `{{name}}` works in any param, query, header or body value, and a variable with no value is flagged. **Save to variable** reads a JSON path (`data.token`, `items[0].id`) from a response. So you can log in once, save the token, and a default `Authorization: Bearer {{token}}` header is sent on every route.
 
 **Built-in handling:**
 

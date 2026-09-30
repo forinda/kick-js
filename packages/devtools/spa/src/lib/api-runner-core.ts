@@ -115,9 +115,51 @@ export function readCookie(cookieHeader: string, name: string): string | undefin
   return undefined
 }
 
+const VARIABLE = /\{\{\s*([\w.-]+)\s*\}\}/g
+
+/**
+ * Replace `{{name}}` with the variable's value. An unknown variable is left as
+ * written, so a typo shows up in the request instead of becoming an empty string.
+ */
+export function interpolate(text: string, variables: Record<string, string>): string {
+  return text.replace(VARIABLE, (whole, name: string) =>
+    Object.prototype.hasOwnProperty.call(variables, name) ? variables[name] : whole,
+  )
+}
+
+/** Enabled rows with a name, as a lookup table. */
+export function variableMap(rows: KeyValueRow[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const row of rows) if (row.enabled && row.key) out[row.key] = row.value
+  return out
+}
+
+/** `{{name}}` references that no variable resolves — shown as a hint in the UI. */
+export function unresolvedVariables(req: PreparedRequest): string[] {
+  const text = [req.url, ...Object.entries(req.headers).flat(), req.body ?? ''].join('\n')
+  return [...new Set([...text.matchAll(VARIABLE)].map((m) => m[1]))]
+}
+
+/**
+ * Read a value out of parsed JSON by a dotted path with optional indexes —
+ * `accessToken`, `data.token`, `items[0].id`. Objects come back as JSON text;
+ * a missing path returns `undefined`.
+ */
+export function readJsonPath(json: unknown, path: string): string | undefined {
+  const keys = path.match(/[^.[\]]+/g) ?? []
+  let current: unknown = json
+  for (const key of keys) {
+    if (current === null || typeof current !== 'object') return undefined
+    current = (current as Record<string, unknown>)[key]
+  }
+  if (current === undefined) return undefined
+  return typeof current === 'string' ? current : JSON.stringify(current)
+}
+
 /**
  * Assemble the request: default headers first, the route's own headers over
- * them, then what the framework needs.
+ * them, then what the framework needs. `{{name}}` in any value — params,
+ * query, header names and values, body — is replaced from `variables`.
  *
  * - On a route carrying the public flag, a default `Authorization` is left out —
  *   the point of trying a public route is seeing it work without credentials.
@@ -132,8 +174,20 @@ export function prepareRequest(input: {
   settings: RunnerSettings
   origin: string
   cookies: string
+  variables?: Record<string, string>
 }): PreparedRequest {
-  const { route, inputs, defaults, settings, origin, cookies } = input
+  const { route, settings, origin, cookies } = input
+  const vars = input.variables ?? {}
+  const fill = (text: string) => interpolate(text, vars)
+  const fillRows = (rows: KeyValueRow[]) =>
+    rows.map((r) => ({ ...r, key: fill(r.key), value: fill(r.value) }))
+  const inputs: RouteInputs = {
+    params: Object.fromEntries(Object.entries(input.inputs.params).map(([k, v]) => [k, fill(v)])),
+    query: fillRows(input.inputs.query),
+    headers: fillRows(input.inputs.headers),
+    body: fill(input.inputs.body),
+  }
+  const defaults = fillRows(input.defaults)
   const method = route.method.toUpperCase()
   const isPublic = isPublicRoute(route, settings)
 

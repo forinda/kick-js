@@ -8,6 +8,10 @@ import {
   needsConfirmation,
   pathParams,
   prepareRequest,
+  interpolate,
+  readJsonPath,
+  unresolvedVariables,
+  variableMap,
   publicFlagNames,
   readCookie,
   toCurl,
@@ -102,6 +106,64 @@ describe('prepareRequest', () => {
     expect(post.headers['Content-Type']).toBe('application/json')
     expect(prepare({ method: 'GET', path: '/x' }, { body: '{"n":1}' }).body).toBeUndefined()
     expect(prepare({ method: 'POST', path: '/x' }, { body: 'plain' }).headers).toEqual({})
+  })
+})
+
+describe('variables', () => {
+  it('interpolate fills known {{names}} and leaves unknown ones visible', () => {
+    expect(interpolate('Bearer {{ token }} / {{missing}}', { token: 'abc' })).toBe(
+      'Bearer abc / {{missing}}',
+    )
+  })
+
+  it('prepareRequest fills variables in params, query, headers and body', () => {
+    const route = { method: 'POST', path: '/api/v1/orgs/:org' }
+    const req = prepareRequest({
+      route,
+      inputs: {
+        params: { org: '{{org}}' },
+        query: [row('{{qk}}', '{{qv}}')],
+        headers: [row('x-tenant', '{{org}}')],
+        body: '{"owner":"{{user}}"}',
+      },
+      defaults: [row('Authorization', 'Bearer {{token}}')],
+      settings: DEFAULT_SETTINGS,
+      origin: 'http://x',
+      cookies: '',
+      variables: variableMap([
+        row('org', 'acme'),
+        row('qk', 'page'),
+        row('qv', '2'),
+        row('token', 't1'),
+        row('user', 'u9'),
+        row('off', 'x', false),
+      ]),
+    })
+    expect(req.url).toBe('http://x/api/v1/orgs/acme?page=2')
+    expect(req.headers).toEqual({
+      Authorization: 'Bearer t1',
+      'x-tenant': 'acme',
+      'Content-Type': 'application/json',
+    })
+    expect(req.body).toBe('{"owner":"u9"}')
+    expect(unresolvedVariables(req)).toEqual([])
+  })
+
+  it('reports variables nothing resolves', () => {
+    const req = prepare(
+      { method: 'GET', path: '/x' },
+      {},
+      { defaults: [row('Authorization', 'Bearer {{token}}')] },
+    )
+    expect(unresolvedVariables(req)).toEqual(['token'])
+  })
+
+  it('readJsonPath reads dotted paths with indexes', () => {
+    const body = { data: { token: 'abc', user: { id: 7 } }, items: [{ id: 'first' }] }
+    expect(readJsonPath(body, 'data.token')).toBe('abc')
+    expect(readJsonPath(body, 'items[0].id')).toBe('first')
+    expect(readJsonPath(body, 'data.user')).toBe('{"id":7}')
+    expect(readJsonPath(body, 'data.nope.deeper')).toBeUndefined()
   })
 })
 

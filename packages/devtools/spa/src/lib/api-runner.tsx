@@ -33,6 +33,9 @@ import {
   emptyInputs,
   formatBody,
   inputsKey,
+  readJsonPath,
+  unresolvedVariables,
+  variableMap,
   isPublicRoute,
   needsConfirmation,
   pathParams,
@@ -46,7 +49,10 @@ import {
 } from './api-runner-core'
 
 const DEFAULTS_KEY = 'kickjs-devtools:runner:defaults'
+const VARIABLES_KEY = 'kickjs-devtools:runner:variables'
 const SETTINGS_KEY = 'kickjs-devtools:runner:settings'
+/** Whether default headers + variables persist across browser sessions. */
+const REMEMBER_KEY = 'kickjs-devtools:runner:remember'
 const MAX_BODY_CHARS = 200_000
 
 const [activeRoute, setActiveRoute] = createSignal<RouteEntry | null>(null)
@@ -65,12 +71,28 @@ function load<T>(storage: () => Storage, key: string, fallback: T): T {
   }
 }
 
-function loadRows(key: string): KeyValueRow[] {
+function loadRows(storage: () => Storage, key: string): KeyValueRow[] {
   try {
-    const raw = sessionStorage.getItem(key)
+    const raw = storage().getItem(key)
     return raw ? (JSON.parse(raw) as KeyValueRow[]) : []
   } catch {
     return []
+  }
+}
+
+function remove(storage: () => Storage, key: string): void {
+  try {
+    storage().removeItem(key)
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function readRemember(): boolean {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) === 'true'
+  } catch {
+    return false
   }
 }
 
@@ -83,6 +105,8 @@ function save(storage: () => Storage, key: string, value: unknown): void {
 }
 
 interface RunResult {
+  /** The body as received, for "Save to variable". */
+  raw: string
   status: number
   statusText: string
   ms: number
@@ -95,7 +119,15 @@ const enabledCount = (rows: KeyValueRow[]) => rows.filter((r) => r.enabled && r.
 
 export const ApiRunnerHost: Component = () => {
   const [inputs, setInputs] = createSignal<RouteInputs | null>(null)
-  const [defaults, setDefaults] = createSignal<KeyValueRow[]>(loadRows(DEFAULTS_KEY))
+  // Default headers and variables live in sessionStorage unless the user asks to
+  // remember them: they usually hold credentials.
+  const [remember, setRemember] = createSignal(readRemember())
+  const envStorage = () => (remember() ? localStorage : sessionStorage)
+  const otherStorage = () => (remember() ? sessionStorage : localStorage)
+  const [defaults, setDefaults] = createSignal<KeyValueRow[]>(loadRows(envStorage, DEFAULTS_KEY))
+  const [variables, setVariables] = createSignal<KeyValueRow[]>(loadRows(envStorage, VARIABLES_KEY))
+  const [capture, setCapture] = createSignal({ path: '', name: '' })
+  const [captureNote, setCaptureNote] = createSignal<string | null>(null)
   const [settings, setSettings] = createSignal<RunnerSettings>(
     load(() => localStorage, SETTINGS_KEY, DEFAULT_SETTINGS),
   )
@@ -124,7 +156,15 @@ export const ApiRunnerHost: Component = () => {
     const current = inputs()
     if (route && current) save(() => localStorage, inputsKey(route), current)
   })
-  createEffect(() => save(() => sessionStorage, DEFAULTS_KEY, defaults()))
+  // Write the environment where `remember` says, and clear the other storage so
+  // switching the toggle moves it instead of leaving a copy behind.
+  createEffect(() => {
+    save(envStorage, DEFAULTS_KEY, defaults())
+    save(envStorage, VARIABLES_KEY, variables())
+    remove(otherStorage, DEFAULTS_KEY)
+    remove(otherStorage, VARIABLES_KEY)
+    save(() => localStorage, REMEMBER_KEY, remember())
+  })
   createEffect(() => save(() => localStorage, SETTINGS_KEY, settings()))
 
   // Escape closes the sheet wherever focus is.
@@ -145,6 +185,7 @@ export const ApiRunnerHost: Component = () => {
       route,
       inputs: current,
       defaults: defaults(),
+      variables: variableMap(variables()),
       settings: settings(),
       origin: window.location.origin,
       cookies: document.cookie,
@@ -182,6 +223,7 @@ export const ApiRunnerHost: Component = () => {
         statusText: res.statusText,
         ms: Math.round(performance.now() - started),
         headers: [...res.headers.entries()],
+        raw: text,
         body: formatBody(text.slice(0, MAX_BODY_CHARS), res.headers.get('content-type')),
         truncated: text.length > MAX_BODY_CHARS,
       })
@@ -209,6 +251,34 @@ export const ApiRunnerHost: Component = () => {
       setCopied('Copy failed — select the text instead')
     }
     setTimeout(() => setCopied(null), 1500)
+  }
+
+  // "Save to variable": read a JSON path out of the last response and set (or
+  // add) the variable — log in once, then {{token}} fills every request.
+  function captureVariable(): void {
+    const res = result()
+    const { path, name } = capture()
+    if (!res || !path.trim() || !name.trim()) return
+    let json: unknown
+    try {
+      json = JSON.parse(res.raw)
+    } catch {
+      setCaptureNote('The response is not JSON')
+      return
+    }
+    const value = readJsonPath(json, path.trim())
+    if (value === undefined) {
+      setCaptureNote(`Nothing at "${path.trim()}"`)
+      return
+    }
+    const key = name.trim()
+    const rows = variables()
+    setVariables(
+      rows.some((r) => r.key === key)
+        ? rows.map((r) => (r.key === key ? { ...r, value, enabled: true } : r))
+        : [...rows, { key, value, enabled: true }],
+    )
+    setCaptureNote(`Saved {{${key}}}`)
   }
 
   const isPublic = () => {
@@ -260,6 +330,15 @@ export const ApiRunnerHost: Component = () => {
               <div class="font-mono text-xs bg-surface-2 border border-border rounded-lg px-3 py-2 mt-3 break-all text-text-secondary">
                 {prepared()?.url}
               </div>
+              <Show when={prepared() && unresolvedVariables(prepared()!).length > 0}>
+                <p class="text-xs text-amber-400 mt-2">
+                  No value for{' '}
+                  {unresolvedVariables(prepared()!)
+                    .map((v) => `{{${v}}}`)
+                    .join(', ')}{' '}
+                  — add it under Environment → Variables.
+                </p>
+              </Show>
             </header>
 
             {/* Sections */}
@@ -320,13 +399,44 @@ export const ApiRunnerHost: Component = () => {
                 )}
               </Show>
 
-              <Section title="Defaults & settings" count={enabledCount(defaults())}>
+              <Section
+                title="Environment"
+                count={enabledCount(defaults()) + enabledCount(variables())}
+              >
+                <label class="flex items-start gap-2 text-sm mb-3">
+                  <input
+                    type="checkbox"
+                    class="mt-1"
+                    checked={remember()}
+                    onChange={(e) => setRemember(e.currentTarget.checked)}
+                  />
+                  <span>
+                    Remember on this browser
+                    <span class="block text-xs text-text-muted">
+                      {remember()
+                        ? 'Default headers and variables are saved in localStorage and survive closing the tab. They may hold tokens — turn this off on a shared machine.'
+                        : 'Default headers and variables are kept for this browser tab only.'}
+                    </span>
+                  </span>
+                </label>
+
+                <h3 class="text-xs font-semibold text-text-secondary mb-1">Default headers</h3>
                 <p class="text-xs text-text-muted mb-2">
-                  Headers sent with every route, kept for this browser tab only. A default
-                  Authorization is skipped on routes carrying a public flag.
+                  Sent with every route. A default Authorization is skipped on routes carrying a
+                  public flag.
                 </p>
                 <RowsEditor rows={defaults()} onChange={setDefaults} />
-                <div class="flex flex-col sm:flex-row gap-3 mt-3">
+
+                <h3 class="text-xs font-semibold text-text-secondary mt-4 mb-1">Variables</h3>
+                <p class="text-xs text-text-muted mb-2">
+                  Use <code>{'{{name}}'}</code> in any param, query, header or body value — e.g. a
+                  default header <code>Authorization: Bearer {'{{token}}'}</code>. Fill them by hand
+                  or with "Save to variable" on a response.
+                </p>
+                <RowsEditor rows={variables()} onChange={setVariables} />
+
+                <h3 class="text-xs font-semibold text-text-secondary mt-4 mb-1">Settings</h3>
+                <div class="flex flex-col sm:flex-row sm:items-end gap-3">
                   <label class="flex-1 flex flex-col gap-1 text-xs text-text-muted">
                     Public route flags (comma-separated)
                     <input
@@ -436,6 +546,31 @@ export const ApiRunnerHost: Component = () => {
                     <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
                       {res().body || '(empty body)'}
                     </pre>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs">
+                      <span class="text-text-secondary font-semibold shrink-0">
+                        Save to variable
+                      </span>
+                      <input
+                        class={inputClass}
+                        placeholder="JSON path, e.g. data.accessToken"
+                        value={capture().path}
+                        onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
+                      />
+                      <input
+                        class={inputClass}
+                        placeholder="variable, e.g. token"
+                        value={capture().name}
+                        onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
+                      />
+                      <button type="button" class={secondaryButton} onClick={captureVariable}>
+                        Save
+                      </button>
+                    </div>
+                    <Show when={captureNote()}>
+                      <p class="text-xs text-text-muted mt-1" role="status">
+                        {captureNote()}
+                      </p>
+                    </Show>
                     <Show when={res().truncated}>
                       <p class="mt-1 text-xs text-text-muted">
                         Body truncated to {MAX_BODY_CHARS.toLocaleString()} characters.
