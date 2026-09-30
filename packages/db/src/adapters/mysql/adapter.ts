@@ -45,8 +45,6 @@ export interface MysqlAdapterOptions {
  * Minimum supported MySQL major + MariaDB version. `JSON_ARRAYAGG`
  * shipped in MySQL 8.0 and MariaDB 10.5 — earlier versions can't
  * run kickjs-db's relational query layer.
- *
- * Spec: docs/db/spec-relational-query-other-dialects.md §7 R-1.
  */
 const MIN_MYSQL_MAJOR = 8
 const MIN_MARIADB_MAJOR = 10

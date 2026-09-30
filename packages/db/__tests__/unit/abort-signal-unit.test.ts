@@ -5,8 +5,6 @@
  * passthrough Kysely 0.29 expects. Real-driver cancellation lives
  * in the dialect-specific peer integration tests (db-pg / db-sqlite
  * / db-mysql).
- *
- * Spec: docs/db/spec-abortsignal-threading.md.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

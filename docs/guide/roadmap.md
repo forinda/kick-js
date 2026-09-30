@@ -350,7 +350,7 @@ Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@
 
 ### B.6 Route flags — one vocabulary for per-route policy {#b-6-route-flags-one-vocabulary-for-per-route-policy}
 
-**Status:** `shipped` — all four phases. `defineRouteFlag` + `ctx.route` + contributor `skipWhen` / `onlyWhen`; `exemptWhen` on `csrfGuard()` / `rateLimitGuard()`; the pre-match `rateLimit()` policy table (per-route `@RateLimit({ rpm })`); and the readers: `/_debug` shows resolved flags per route, and swagger's `securityResolver` can derive security from flags. Module-level flags and AI/MCP tool selection followed. See the [route flags guide](./route-flags.md) and [`route-flags-design.md`](https://github.com/forinda/kick-js/blob/main/route-flags-design.md).
+**Status:** `shipped` — all four phases. `defineRouteFlag` + `ctx.route` + contributor `skipWhen` / `onlyWhen`; `exemptWhen` on `csrfGuard()` / `rateLimitGuard()`; the pre-match `rateLimit()` policy table (per-route `@RateLimit({ rpm })`); and the readers: `/_debug` shows resolved flags per route, and swagger's `securityResolver` can derive security from flags. Module-level flags and AI/MCP tool selection followed. See the [route flags guide](./route-flags.md).
 **Effort:** 1–2 weeks for phase 1; phases 2–4 independently schedulable
 
 **Why it matters.** "Whitelist these endpoints" is a request every API eventually makes, and today the answer depends on which subsystem is asking. Auth uses a contributor (`@Public` = `LoadAuthUser({ on401: 'allow' })`). CSRF uses `ignorePaths`. Rate limiting uses `skipPaths` / `skip`. One fact — _this endpoint is open_ — stated three ways, in two places, under two notions of identity.

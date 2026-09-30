@@ -1,6 +1,6 @@
 /**
  * Type-level coverage for `db.query.X.findMany({ with })` —
- * spec-relational-query.md §3.3 expectTypeOf matrix.
+ * an expectTypeOf matrix over the relation topologies.
  *
  * The test file owns the global `KickDbRelationsRegister` augmentation
  * for this run: a 4-table fixture (users / posts / comments /

@@ -1,6 +1,6 @@
 /**
  * Real-PG round trip for the M3.B `pgEnum` value-removal flow
- * (M4.E.1 from `docs/db/m4-plan.md`). Exercises the full lifecycle:
+ * Exercises the full lifecycle:
  *
  *   1. Schema with referenced enum + seeded rows.
  *   2. Migration that removes a value via `kick db generate`.

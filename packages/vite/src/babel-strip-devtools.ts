@@ -31,8 +31,6 @@
  *
  * The dev path is unchanged: this transform only runs when Vite's
  * `command === 'build'`. In dev, devtools-kit imports stay live.
- *
- * Spec: docs/db/m3-plan.md §M3.C.
  */
 
 // Namespace import, not a default import: Babel 8 ships as native ESM and

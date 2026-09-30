@@ -1,8 +1,7 @@
 /**
  * MySQL compiler for `db.query.X.findMany({ with })`.
  *
- * Strategy locked in `docs/db/spec-relational-query-other-dialects.md`
- * §3.2: each `many` relation becomes a Kysely `jsonArrayFrom(...)`
+ * Strategy: each `many` relation becomes a Kysely `jsonArrayFrom(...)`
  * select expression that compiles to
  * `cast(coalesce(json_arrayagg(json_object(...)), '[]') as json)`.
  * Each `one` becomes `jsonObjectFrom(...)`, compiling to a

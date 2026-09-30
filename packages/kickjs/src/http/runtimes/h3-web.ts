@@ -1,8 +1,7 @@
 // The h3 v2 (web-standards) runtime — `@forinda/kickjs/h3-web`.
 //
 // ADDITIVE runtime: the h3 v1 runtime (`./h3.ts`, `@forinda/kickjs/h3`)
-// stays untouched so existing adopters keep working (locked decision,
-// web-standards-edge-design.md §3.1). This runtime targets h3 >= 2 — the
+// stays untouched so existing adopters keep working. This runtime targets h3 >= 2 — the
 // web-standard rebase where `event.req` is a WHATWG Request, handlers
 // return values/Responses, and `app.fetch(request)` is the universal entry.
 //

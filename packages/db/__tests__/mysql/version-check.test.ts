@@ -8,8 +8,6 @@
  * Real-driver Testcontainers MySQL integration test ships in a
  * follow-up — kicking the larger Docker-image dependency to a
  * separate PR keeps this suite cheap to run on every commit.
- *
- * Spec: docs/db/spec-relational-query-other-dialects.md §7 R-1.
  */
 
 import { describe, expect, it } from 'vitest'

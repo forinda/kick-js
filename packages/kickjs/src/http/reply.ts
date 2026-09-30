@@ -1,4 +1,4 @@
-// Return-value handler support (response-inference-design.md §3.1).
+// Return-value handler support.
 //
 // Handlers may RETURN their response payload instead of calling `ctx.json`:
 // the runtime auto-sends it when the pipeline finishes with nothing written.

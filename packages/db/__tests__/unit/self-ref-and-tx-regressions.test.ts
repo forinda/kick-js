@@ -6,8 +6,6 @@
  * but those pass under both the buggy and the fixed implementation.
  * These regression tests fail loudly under the bug and pass only
  * under the fix.
- *
- * Spec: docs/db/m4-plan.md §M4.E.2.
  */
 
 import { describe, expect, it } from 'vitest'

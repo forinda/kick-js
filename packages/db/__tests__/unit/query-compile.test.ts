@@ -1,8 +1,7 @@
 /**
  * Snapshot SQL tests for the PG relational-query compiler.
  *
- * One fixture per topology in spec-relational-query.md §3.3 + the
- * error-path coverage from §6 / §7. Builds against a Kysely instance
+ * One fixture per relation topology, plus the error paths. Builds against a Kysely instance
  * with `DummyDriver` so the test never opens a connection — we only
  * assert the compiled `{ sql, parameters }`.
  */

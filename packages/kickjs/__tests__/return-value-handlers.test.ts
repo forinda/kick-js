@@ -15,7 +15,7 @@ import type { HttpRuntime } from '../src/http/runtime'
 import type { RequestContext } from '../src/http/context'
 
 /**
- * Return-value handlers (response-inference-design.md R1): handlers may
+ * Return-value handlers: handlers may
  * RETURN the payload instead of calling ctx.json; runtimes auto-send when
  * the pipeline finished with nothing written. Conformance across express /
  * fastify / h3 v1 (supertest) and the web entry (fetch).

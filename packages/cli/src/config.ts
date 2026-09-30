@@ -89,7 +89,7 @@ export type RepoTypeConfig = BuiltinRepoType | CustomRepoType
 export type SchemaValidator = 'zod' | 'kickjs-schema' | false
 
 /**
- * One entry in the typed `assetMap` config record (`assets-plan.md`).
+ * One entry in the typed `assetMap` config record.
  * Each entry names a source directory whose files become addressable
  * via the `assets.<name>.*` typed accessor at runtime.
  */
@@ -500,7 +500,7 @@ export interface KickConfig {
     outDir?: string
   }
   /**
-   * Typed, addressable assets — see `assets-plan.md`. Each entry maps
+   * Typed, addressable assets — see https://kickjs.app/guide/asset-manager. Each entry maps
    * a logical namespace name to a source directory. The build pipeline
    * auto-derives the necessary copy step + emits a manifest at
    * `dist/.kickjs-assets.json`; the runtime exposes

@@ -1,6 +1,6 @@
 /**
  * Walks every `assetMap` entry's source directory + emits a typed
- * `KickAssets` ambient augmentation (assets-plan.md PR 4). Generates
+ * `KickAssets` ambient augmentation. Generates
  * `.kickjs/types/assets.d.ts` so adopters get autocomplete on
  * `assets.<namespace>.<key>` and `@Asset('<namespace>/<key>')`.
  *

@@ -17,8 +17,6 @@
  * Driver-agnostic: takes a structural query runner (any pg-protocol-
  * compatible client). The CLI wires this against the same pool used for
  * `kick db migrate` so adopters don't configure a second connection.
- *
- * Spec: docs/db/m4-plan.md §M4.C.
  */
 
 import { KickDbError } from '../errors'

@@ -104,8 +104,6 @@ export const ENUM_DROP_HEADER = '-- KICK ENUM REMOVE'
  * The leading `-- KICK ENUM REMOVE` header is the runner's gate
  * signal — without `confirmEnumDrop`, the runner refuses to apply
  * before any DB write happens.
- *
- * Spec: docs/db/spec-enum-value-removal.md.
  */
 function emitRemoveEnumValueRecreate(change: {
   enum: string

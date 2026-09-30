@@ -1,5 +1,5 @@
 /**
- * Asset manager runtime tests (assets-plan.md PR 3).
+ * Asset manager runtime tests.
  *
  * Covers all three accessor variants (Proxy, hook, string), the
  * three resolution modes (env override, built manifest, dev

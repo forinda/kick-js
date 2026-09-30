@@ -11,8 +11,6 @@
  *  - Alias collisions (a relation name that shadows a column on the
  *    same table) throw `RelationalQueryAliasCollisionError` per spec
  *    §7 R-5.
- *
- * Spec: docs/db/spec-relational-query.md §5.3.
  */
 
 import type { Relation, RelationOne, RelationsDecl } from '../dsl/relations'
@@ -87,12 +85,15 @@ export function extractRelations(
         continue
       }
 
-      // `many` resolution precedence (spec-relation-name.md §4):
+      // `many` resolution precedence:
       //   1. `relationName` match — both sides declared.
       //   2. Single untagged inverse `one` — exactly one + neither
       //      side has a relationName.
       //   3. FK introspection — exactly one FK back to source.
       //   4. Throw MissingInverseError with hint.
+      // The tag wins because with two FKs to the same table an untagged
+      // lookup would take whichever relation was declared first —
+      // silently joining on the wrong column half the time.
       const target = rel.target.__name
       const targetRelations = declsBySource[target] ?? {}
 

@@ -2,9 +2,6 @@
  * Errors thrown by the relational-query compiler. All extend
  * `KickDbError` so adopters can catch the family with a single
  * `instanceof` check.
- *
- * Spec: docs/db/spec-relational-query.md §6 (edge cases) + §7 (R-3,
- * R-5).
  */
 
 import { KickDbError } from '../errors'
@@ -74,8 +71,6 @@ export class RelationalQueryAliasCollisionError extends KickDbError {
  * `AbortController.abort(reason)` — on the `cause` field for adopter
  * inspection (e.g. distinguishing HTTP timeout from explicit
  * cancellation from user-disconnect).
- *
- * Spec: docs/db/spec-abortsignal-threading.md.
  */
 export class RelationalQueryCancelledError extends KickDbError {
   readonly cause?: unknown
@@ -123,8 +118,7 @@ export class RelationalQueryNotSupportedError extends KickDbError {
  * on the **target** table shares the same `relationName` AND points
  * back at the same source — the actual ambiguity case for resolver
  * step 1. Scope is per `(sourceTable, targetTable, relationName)`:
- * the same tag can be reused across unrelated table pairs. Spec:
- * docs/db/spec-relation-name.md §7 R-2.
+ * the same tag can be reused across unrelated table pairs.
  */
 export class RelationalQueryAmbiguousRelationNameError extends KickDbError {
   readonly sourceTable: string
@@ -171,7 +165,7 @@ export class RelationalQueryMissingInverseError extends KickDbError {
         `no inverse \`one\` relation declared on \`${targetTable}\` pointing back to \`${sourceTable}\`, ` +
         `and ${targetTable}'s foreign keys to ${sourceTable} are either zero or ambiguous. ` +
         `If the target has multiple FKs to the source, tag both sides with the same ` +
-        `\`relationName: 'foo'\` to pair them — see docs/db/spec-relation-name.md. ` +
+        `\`relationName: 'foo'\` to pair them — see https://kickjs.app/guide/db-relational-query#self-references-and-cycles. ` +
         `Otherwise add e.g. \`relations(${targetTable}, h => ({ ${sourceTable}: h.one(${sourceTable}, { fields: [${targetTable}.${sourceTable}Id], references: [${sourceTable}.id] }) }))\` ` +
         `so the compiler knows which columns join the two tables.`,
     )

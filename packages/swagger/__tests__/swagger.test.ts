@@ -873,7 +873,7 @@ describe('buildOpenAPISpec — security (Swagger-owned, not coupled to any auth 
   })
 
   it('securityResolver + getRouteFlags marks flagged routes public', () => {
-    // Phase 4 of route-flags-design.md: the OpenAPI spec reads the same flag
+    // The OpenAPI spec reads the same flag
     // the auth contributor and the guards read, so a route declared public in
     // one place is documented public without a second annotation.
     const Public = defineRouteFlag('auth.public')

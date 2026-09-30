@@ -217,5 +217,4 @@ retypes them to that engine — Fastify's `FastifyInstance` / `FastifyRequest` /
 A runtime implements the `HttpRuntime` contract (`createApp`, `nodeHandler`,
 `mountRoutes`, `useConnect`, `serveStatic`, `setNotFound`, `setErrorHandler`,
 `capabilities`). `expressRuntime()` is the reference implementation; the Fastify
-runtime is ~250 lines over the same contract. See the
-[design spec](../http/spec-http-runtimes.md) for the full contract and rationale.
+runtime is ~250 lines over the same contract.

@@ -20,8 +20,7 @@ export interface RelationOne<
   /**
    * Disambiguates this relation from sibling `one` relations on the
    * same source table that point at the same target. Pair with the
-   * matching `relationName` on the inverse `many` side. See
-   * docs/db/spec-relation-name.md.
+   * matching `relationName` on the inverse `many` side.
    */
   relationName?: string
 }

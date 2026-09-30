@@ -28,7 +28,7 @@ export { buildRouteTable } from './router-builder'
 export type { BuildRoutesOptions } from './router-builder'
 export { buildRoutes, materializeRouter, expressRuntime } from './runtimes/express'
 
-// HTTP runtime seam (spec: docs/http/spec-http-runtimes.md)
+// HTTP runtime seam
 export type {
   HttpRuntime,
   AdapterHttp,

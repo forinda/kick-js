@@ -1,8 +1,7 @@
 /**
  * SQLite compiler for `db.query.X.findMany({ with })`.
  *
- * Strategy locked in `docs/db/spec-relational-query-other-dialects.md`
- * §3.1: each `many` relation becomes a Kysely `jsonArrayFrom(...)`
+ * Strategy: each `many` relation becomes a Kysely `jsonArrayFrom(...)`
  * select expression that compiles to
  * `coalesce(json_group_array(json_object(...)), '[]')`. Each `one`
  * becomes `jsonObjectFrom(...)`, compiling to a `json_object(...)`

@@ -1,5 +1,5 @@
 /**
- * Phase 2 of `route-flags-design.md`: the guards that can see a route read its
+ * Route flags in guards: the guards that can see a route read its
  * flags, so "this endpoint is exempt" is declared once on the route instead of
  * restated as a pathname string per concern.
  */

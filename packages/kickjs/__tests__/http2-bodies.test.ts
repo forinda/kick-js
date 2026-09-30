@@ -3,7 +3,7 @@
  * `transfer-encoding`, and `content-length` is optional — so a runtime that
  * decides "was a body sent" from those two headers alone drops a streamed
  * HTTP/2 body. Express is absent on purpose: it cannot run on Node's HTTP/2
- * compatibility layer at all (see http2-design.md).
+ * compatibility layer at all.
  */
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'

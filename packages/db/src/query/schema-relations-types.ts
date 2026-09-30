@@ -15,8 +15,6 @@
  * declarations rather than hand-mirrored. Adding or removing a
  * relation in `src/db/schema/relations.ts` flows through to call-
  * site type-checking automatically; no second file to maintain.
- *
- * Spec: docs/db/spec-relational-query.md §3.2.
  */
 
 import type { ColumnBuilder } from '../dsl/columns/types'

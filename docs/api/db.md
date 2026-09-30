@@ -408,7 +408,9 @@ async showFull(ctx: RequestContext) {
 }
 ```
 
-`RequestContext.signal` is provided by `@forinda/kickjs` ≥5.6.0. See [`spec-abortsignal-threading.md`](../db/spec-abortsignal-threading.md) for cross-dialect cancellation semantics.
+`RequestContext.signal` is provided by `@forinda/kickjs` ≥5.6.0.
+
+Cancellation is JS-side on every dialect: the promise rejects at once, but a query already sent keeps running on the database until it finishes and its connection returns to the pool (PostgreSQL, MySQL). SQLite runs synchronously, so the signal can only stop work before a statement starts. For true server-side cancellation of a long PostgreSQL or MySQL query, call Kysely directly through `db.qb` with `inflightQueryAbortStrategy: 'cancel query'`.
 
 ## Plugins
 

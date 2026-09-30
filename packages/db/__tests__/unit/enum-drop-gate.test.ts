@@ -2,8 +2,6 @@
  * Coverage for the runner gate that detects the `-- KICK ENUM
  * REMOVE` header in a migration's up.sql and refuses to apply
  * without `confirmEnumDrop`.
- *
- * Spec: docs/db/spec-enum-value-removal.md §4.
  */
 
 import { describe, expect, it } from 'vitest'

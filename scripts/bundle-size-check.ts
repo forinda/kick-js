@@ -1,7 +1,6 @@
 /**
  * Bundle-size assertion harness for the Babel devtools-strip plugin
- * (`@forinda/kickjs-vite > devtoolsStripPlugin`). M4.D from
- * `docs/db/m4-plan.md`.
+ * (`@forinda/kickjs-vite > devtoolsStripPlugin`).
  *
  * Validates that the strip transform actually removes
  * `@forinda/kickjs-devtools-kit` imports + their top-level call sites

@@ -18,8 +18,6 @@ export class KickDbError extends Error {
  *
  * The operator's options: change the column's default in the schema
  * to a value that survives the removal, or drop the default entirely.
- *
- * Spec: docs/db/spec-default-preservation.md.
  */
 export class RemovedValueAsDefaultError extends KickDbError {
   readonly enum: string

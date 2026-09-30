@@ -1,7 +1,7 @@
 /**
  * Coverage for `stripDevtoolsCode` — the pure transform that drops
  * devtools-kit imports + their top-level call sites from production
- * bundles. Spec: docs/db/m3-plan.md §M3.C.
+ * bundles.
  */
 
 import { describe, expect, it } from 'vitest'

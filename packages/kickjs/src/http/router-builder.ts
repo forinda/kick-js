@@ -88,7 +88,7 @@ export interface BuildRoutesOptions {
 /**
  * Turn a controller class decorated with @Get, @Post, etc. into a plain-data
  * {@link RouteEntry}[] — the engine-neutral route table an {@link HttpRuntime}
- * materializes (see `docs/http/spec-http-runtimes.md`, Avenue B).
+ * materializes.
  *
  * What used to be per-handler Express `(req, res, next)` closures is now
  * captured as data: `middlewares` keep their `(ctx, next)` shape, the contributor

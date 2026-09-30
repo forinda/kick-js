@@ -7,8 +7,6 @@
  * `KickDbRelationsRegister['db']` declaration would carry, so
  * adopters who delete the hand-rolled file get the exact same
  * type surface from the typegen output.
- *
- * Spec: docs/db/spec-relational-query.md §3.2.
  */
 
 import { describe, expectTypeOf, it } from 'vitest'

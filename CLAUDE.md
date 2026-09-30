@@ -323,6 +323,7 @@ test: description      # Test changes
 
 ## Important Notes
 
+- Design docs, specs, plans, and experiment notes live in the git-ignored `.ignored/designs/` and are never referenced from tracked files (code comments, tests, docs, changesets, PR bodies). See "Design Notes Stay Private" in `.agents/AGENTS.md`.
 - Decorators fire at class definition time — tests need `Container.reset()` + re-registration
 - Don't manually publish — the changesets workflow does it via OIDC. Private packages are skipped by changesets v3 by default — no `ignore` entry needed.
 - All internal links in docs must be **relative** (for versioning/i18n support)

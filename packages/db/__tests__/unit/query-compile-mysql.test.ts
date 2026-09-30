@@ -4,8 +4,6 @@
  * Mirror of `query-compile-sqlite.test.ts` but with MySQL-flavored
  * SQL — `json_arrayagg` + `json_object` wrapped in
  * `cast(... as json)`, backtick identifiers, no LATERAL.
- *
- * Spec: docs/db/spec-relational-query-other-dialects.md §3.2.
  */
 
 import { describe, expect, it } from 'vitest'

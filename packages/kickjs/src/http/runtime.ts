@@ -1,4 +1,4 @@
-// The HttpRuntime seam (spec: docs/http/spec-http-runtimes.md, Avenue B).
+// The HttpRuntime seam.
 //
 // Decorators no longer emit an `express.Router` directly. `buildRouteTable()`
 // turns controller metadata into a plain-data `RouteEntry[]`; an `HttpRuntime`
@@ -10,6 +10,12 @@
 // and the SAME `HttpRuntime` contract; the request/response driver abstraction
 // that lets `RequestContext` run engine-agnostically lands with them (M3), since
 // under Express the drivers ARE the Express request/response objects already.
+//
+// Why a seam: running Fastify / h3 behind an Express-compat layer
+// (`@fastify/express`, h3's node bridge) bypasses their router and
+// serialization, and rebuilding `ctx` over web-standard Request/Response
+// would break SSE / streaming, multer uploads and `ctx.res` for every adopter.
+// The seam keeps `ctx` and swaps only the engine underneath it.
 
 import { ROUTE_SLOT, type RouteFlags } from '../core/route-flag'
 import type { IncomingMessage, ServerResponse } from 'node:http'

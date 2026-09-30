@@ -922,7 +922,7 @@ export class Container {
       })
     }
 
-    // @Asset — lazy asset path injection (assets-plan.md). Same lazy-
+    // @Asset — lazy asset path injection. Same lazy-
     // getter pattern as @Value: resolve on every property access via
     // the asset manager's cached resolver, not at class instantiation.
     // namespace/key were pre-split at plan build.

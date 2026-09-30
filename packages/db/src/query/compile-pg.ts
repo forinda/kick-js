@@ -1,7 +1,7 @@
 /**
  * PostgreSQL compiler for `db.query.X.findMany({ with })`.
  *
- * Strategy locked in `docs/db/spec-relational-query.md` §4.1:
+ * Strategy:
  *
  *  - Each `many` relation becomes a Kysely `jsonArrayFrom(...)`
  *    select expression (PG: `coalesce((select json_agg(agg) from

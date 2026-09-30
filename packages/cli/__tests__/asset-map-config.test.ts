@@ -1,5 +1,5 @@
 /**
- * Unit tests for `validateAssetMap` (PR 1 of assets-plan.md).
+ * Unit tests for `validateAssetMap`.
  *
  * Validates only — no copy / typegen / runtime behaviour yet. Those
  * arrive in PRs 2–4. Tests focus on the warning surface so we don't
