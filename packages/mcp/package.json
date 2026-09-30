@@ -64,7 +64,7 @@
     "express": "^5.1.0",
     "supertest": "^7.3.0",
     "typescript": "^7.0.2",
-    "unplugin-swc": "^1.6.0",
+    "unplugin-swc": "^2.0.0",
     "vitest": "^5.0.1",
     "zod": "^4.6.5"
   },
