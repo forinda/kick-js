@@ -71,6 +71,8 @@ export interface RenderedProject {
   dependencies: string[]
   devDependencies: string[]
   builds: Record<string, boolean>
+  /** Every layer's integrations plus `extra`, in layer order — `kick add` wires these. */
+  integrations: Integration[]
 }
 
 /** The project path a template file lands at: `_dot_` segment prefixes become `.`. */
@@ -146,6 +148,7 @@ export function renderLayers(
     dependencies: [...new Set(dependencies)],
     devDependencies: [...new Set(devDependencies)],
     builds,
+    integrations,
   }
 }
 

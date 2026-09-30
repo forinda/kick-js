@@ -95,7 +95,9 @@ export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: stri
   'unplugin-swc': { fallback: '^1.5.9' },
   oxfmt: { fallback: '^0.65.0' },
   oxlint: { fallback: '^1.80.0' },
-  dotenv: { fallback: '^17.3.1' },
+  // Capped: an optional peer of @forinda/kickjs at this major. Uncapped,
+  // `latest` (18) installed with an unmet-peer warning on every scaffold.
+  dotenv: { fallback: '^17.3.1', cap: '^17' },
   'reflect-metadata': { fallback: '^0.2.2' },
   // Capped — a new major here breaks the generated project, not just its deps.
   // vite: `@forinda/kickjs-vite` peers on it and the generated vite.config.ts

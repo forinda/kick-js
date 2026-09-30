@@ -4,6 +4,15 @@ import { dirname, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config'
 import { setAllowBuilds } from '../generators/templates/project-config'
+import {
+  applyLayerFiles,
+  dirtyFiles,
+  findEntry,
+  manualSnippet,
+  planWiring,
+  projectVars,
+  wireEntry,
+} from './add-wire'
 
 interface PackageEntry {
   pkg: string
@@ -652,6 +661,9 @@ export function registerAddCommand(program: Command): void {
       'HTTP engine for peer resolution: express | fastify | h3 (overrides kick.config.ts)',
     )
     .option('--all', 'When listing, include the full optional catalog')
+    .option('--no-wire', 'Install only — do not add adapters to the entry file or .env')
+    .option('--entry <file>', 'Entry file to wire (default: src/index.ts, then src/main.ts)')
+    .option('-f, --force', 'Wire even when the files it edits have uncommitted changes')
     .action(async (packages: string[], opts: any) => {
       // List mode
       if (opts.list || packages.length === 0) {
@@ -686,11 +698,35 @@ export function registerAddCommand(program: Command): void {
         process.exitCode = 1
         return
       }
-      const { prodDeps, devDeps, unknown, warnings, notices } = planAddPackages(
-        packages,
-        Boolean(opts.dev),
-        runtime,
-      )
+      const plan = planAddPackages(packages, Boolean(opts.dev), runtime)
+      const { unknown, warnings, notices } = plan
+      let { prodDeps, devDeps } = plan
+
+      // Packages with a scaffold layer (swagger, devtools, ws, queue) are also
+      // wired: their adapter goes into the entry file and their .env lines in.
+      // The entry file imports them, so they install as regular dependencies
+      // (devtools is otherwise a dev dependency), with the peers the layer uses.
+      const cwd = process.cwd()
+      const wiring = opts.wire === false ? undefined : planWiring(packages)
+      const entry = wiring ? findEntry(cwd, opts.entry) : undefined
+      if (wiring) {
+        prodDeps = [...new Set([...prodDeps, ...wiring.dependencies])]
+        devDeps = [
+          ...new Set([...devDeps, ...wiring.devDependencies].filter((d) => !prodDeps.includes(d))),
+        ]
+        // Wiring edits files in place; refuse over uncommitted work there, so
+        // the change stays reviewable (and revertable) as its own diff.
+        const dirty = dirtyFiles(cwd, [...(entry ? [entry] : []), ...wiring.files.keys()])
+        if (dirty.length > 0 && !opts.force) {
+          console.error(
+            `\n  ${dirty.join(', ')} ${dirty.length === 1 ? 'has' : 'have'} uncommitted changes, ` +
+              `and kick add would edit ${dirty.length === 1 ? 'it' : 'them'}.\n` +
+              `  Commit or stash first, pass --force to edit anyway, or --no-wire to install only.\n`,
+          )
+          process.exitCode = 1
+          return
+        }
+      }
 
       for (const warning of warnings) {
         console.warn(`\n  WARNING: ${warning}`)
@@ -708,12 +744,13 @@ export function registerAddCommand(program: Command): void {
 
       // Answer install-script approvals before installing, so the package
       // manager doesn't block the scripts these packages bring in.
-      const builds = buildsFor(packages)
+      const builds = { ...buildsFor(packages), ...wiring?.builds }
       if (Object.keys(builds).length > 0) {
         const file = approveInstallScripts(pm, installRoot(pm), builds)
         if (file) console.log(`\n  Approved install scripts in ${file}`)
       }
 
+      let installed = true
       // Install production dependencies
       if (prodDeps.length > 0) {
         const deps = prodDeps
@@ -724,6 +761,7 @@ export function registerAddCommand(program: Command): void {
         try {
           execSync(cmd, { stdio: 'inherit' })
         } catch {
+          installed = false
           console.log(`\n  Installation failed. Run manually:\n    ${cmd}\n`)
         }
       }
@@ -738,7 +776,35 @@ export function registerAddCommand(program: Command): void {
         try {
           execSync(cmd, { stdio: 'inherit' })
         } catch {
+          installed = false
           console.log(`\n  Installation failed. Run manually:\n    ${cmd}\n`)
+        }
+      }
+
+      if (wiring) {
+        if (!installed) {
+          console.log('  Skipped wiring — the install did not finish.\n')
+        } else {
+          for (const path of await applyLayerFiles(cwd, wiring.files)) {
+            console.log(`  Updated ${path}`)
+          }
+          const result = entry ? await wireEntry(cwd, entry, wiring.integrations) : undefined
+          for (const name of result?.added ?? []) console.log(`  Added ${name} to ${entry}`)
+          for (const name of result?.present ?? []) console.log(`  ${name} is already in ${entry}`)
+          const fill = projectVars(cwd)
+          const manual = result
+            ? result.manual
+            : wiring.integrations
+                .filter((i) => i.slot && i.code)
+                .map((i) => ({ ...i, code: fill(i.code!) }))
+          if (manual.length > 0) {
+            console.log(
+              `\n  ${entry ? `Could not find bootstrap({ adapters: [...] }) in ${entry}` : 'No entry file found'}` +
+                ' — add this yourself:\n',
+            )
+            console.log(manualSnippet(manual).replace(/^/gm, '    '))
+            console.log()
+          }
         }
       }
 
