@@ -71,11 +71,11 @@ All four declare the same `users` table — one file shows them side by side her
 A rule declared with the table fits its column's type — `@Rule({ minLength: 2 })` on an integer column is a type error — and [`insertSchema`](./db-table-schemas.md) applies it with no options:
 
 ```ts
-export const createUser = insertSchema(users, { omit: ['id'] })
+export const createUser = insertSchema(usersFluent, { omit: ['id'] })
 createUser.safeParse({ email: 'nope' }) // fails: not an email
 ```
 
-`insertSchema(users, { columns: { email: { ... } } })` still overrides one.
+`insertSchema(usersFluent, { columns: { email: { ... } } })` still overrides one.
 
 ## Postgres schemas
 
