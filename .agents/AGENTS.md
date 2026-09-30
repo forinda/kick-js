@@ -53,17 +53,17 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 
 ### Configuration
 
-| What                       | Where                                         |
-| -------------------------- | --------------------------------------------- |
-| TypeScript base config     | `tsconfig.base.json`                          |
-| Wireit build orchestration | Per-package `wireit` config in `package.json` |
-| Prettier config            | `.prettierrc`                                 |
-| Vitest config              | `vitest.config.ts`                            |
-| Pre-commit hook            | `.husky/pre-commit`                           |
-| VitePress config           | `docs/.vitepress/config.mts`                  |
-| CI pipeline                | `.github/workflows/ci.yml`                    |
-| Release pipeline           | `.github/workflows/release.yml`               |
-| Docs deploy                | `.github/workflows/deploy-docs.yml`           |
+| What                      | Where                               |
+| ------------------------- | ----------------------------------- |
+| TypeScript base config    | `tsconfig.base.json`                |
+| Turbo build orchestration | `turbo.json`                        |
+| oxfmt / oxlint config     | `.oxfmtrc.json`, `.oxlintrc.json`   |
+| Vitest config             | `vitest.config.ts`                  |
+| Pre-commit hook           | `lefthook.yml`                      |
+| VitePress config          | `docs/.vitepress/config.mts`        |
+| CI pipeline               | `.github/workflows/ci.yml`          |
+| Release pipeline          | `.github/workflows/release.yml`     |
+| Docs deploy               | `.github/workflows/deploy-docs.yml` |
 
 ### Reference Implementations
 
