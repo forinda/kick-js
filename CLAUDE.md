@@ -25,6 +25,7 @@ pnpm docs:dev           # Dev docs server
 pnpm docs:build         # Build docs
 pnpm changeset          # Add a changeset to the current PR
 pnpm changeset:status   # Preview pending bumps
+pnpm scaffold:matrix    # kick new → install → typecheck → build → boot, per scenario (after pnpm build)
 ```
 
 ## Repository Structure

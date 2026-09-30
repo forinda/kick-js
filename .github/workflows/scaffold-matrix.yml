@@ -1,0 +1,77 @@
+name: Scaffold matrix
+
+# `kick new` a project per scenario, install it against this commit's
+# packages (packed, like npm would ship them), and check it typechecks,
+# builds and serves. See scripts/scaffold-matrix.mjs.
+#
+# Every scenario runs daily and on demand. A pull request that touches the
+# CLI runs one smoke scenario: the full matrix takes a few minutes per
+# scenario and hits the npm registry, which is too much for every push.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'One scenario (blank = all). List: node scripts/scaffold-matrix.mjs --list'
+        required: false
+        default: ''
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'packages/cli/**'
+      - 'scripts/scaffold-matrix.mjs'
+      - '.github/workflows/scaffold-matrix.yml'
+
+concurrency:
+  group: scaffold-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Pick scenarios
+    runs-on: ubuntu-latest
+    outputs:
+      scenarios: ${{ steps.pick.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          ONE: ${{ github.event.inputs.scenario }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            echo 'scenarios=["yes-default"]' >> "$GITHUB_OUTPUT"
+          elif [ -n "$ONE" ]; then
+            echo "scenarios=[\"$ONE\"]" >> "$GITHUB_OUTPUT"
+          else
+            echo "scenarios=$(node scripts/scaffold-matrix.mjs --list --json)" >> "$GITHUB_OUTPUT"
+          fi
+
+  scenario:
+    name: ${{ matrix.scenario }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.plan.outputs.scenarios) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Packages only — the docs site is not part of a scaffold.
+      - run: pnpm turbo run build --filter='./packages/*'
+      - name: Scaffold, install, typecheck, build and boot
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: node scripts/scaffold-matrix.mjs "$SCENARIO"
