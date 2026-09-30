@@ -5,7 +5,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 ## Engine & package layout (read first — avoids the two most common mistakes)
 
 - **KickJS is engine-pluggable, not Express-only.** It runs on **Express (default), Fastify, or h3** behind one `HttpRuntime` seam (`bootstrap({ runtime })`). Controllers, modules, DI, and context decorators are engine-neutral — write to `ctx` (`ctx.json`/`ctx.body`/`ctx.params`/`ctx.sse`), not raw Express APIs. The runtimes (incl. the h3 v2 web-standard entries `./h3-web` and `./web` for edge/Bun/Deno) + cross-engine file uploads ship in the **stable** release.
-- **The framework lives in `packages/kickjs`** (`@forinda/kickjs`) — DI core under `src/core/`, HTTP layer under `src/http/`, runtimes under `src/http/runtimes/{express,fastify,h3}.ts`. The old `packages/core` + `packages/http` split (referenced in some tables below) **no longer exists**; map any such path to `packages/kickjs/src/{core,http}`.
+- **The framework lives in `packages/kickjs`** (`@forinda/kickjs`) — DI core under `src/core/`, HTTP layer under `src/http/`, runtimes under `src/http/runtimes/{express,fastify,h3}.ts`. There is no separate `packages/core`, `packages/http`, or `packages/config`.
 
 ## Before You Start
 
@@ -16,8 +16,6 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 ## Where to Find Things
 
 ### Source Code
-
-> Paths below use the legacy `packages/core` / `packages/http` names — the real location is `packages/kickjs/src/core/…` and `packages/kickjs/src/http/…` respectively.
 
 | What                 | Where                                                                      |
 | -------------------- | -------------------------------------------------------------------------- |
@@ -34,7 +32,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | Router builder       | `packages/kickjs/src/http/router-builder.ts`                               |
 | Middleware           | `packages/kickjs/src/http/middleware/*.ts`                                 |
 | Query parsing        | `packages/kickjs/src/http/query/`                                          |
-| Config/env           | `packages/config/src/`                                                     |
+| Config/env           | `packages/kickjs/src/config/`                                              |
 | CLI commands         | `packages/cli/src/commands/`                                               |
 | Code generators      | `packages/cli/src/generators/`                                             |
 | Generator patterns   | `packages/cli/src/generators/patterns/{rest,minimal}.ts`                   |
@@ -97,8 +95,8 @@ When adding new features, use these as templates:
 - [ ] Create `packages/<name>/` directory
 - [ ] Add `package.json` (name: `@forinda/kickjs-<name>`, version: `0.0.0` — first changeset sets the published version)
 - [ ] Add `tsconfig.json` (extends `../../tsconfig.base.json`)
-- [ ] Add `vite.config.ts` (ESM lib mode, node20, `minify: 'esbuild'`, externals)
-- [ ] Add `tsconfig.build.json` (extends tsconfig, `emitDeclarationOnly: true`)
+- [ ] Add `tsdown.config.ts` (`format: ['esm']`, `dts: true`, runtime deps in `external`) and `vitest.config.ts` — copy `packages/schema/`
+- [ ] Check the `package.json` exports map matches what tsdown emits
 - [ ] Add `src/index.ts` (barrel exports)
 - [ ] Add `README.md` and `LICENSE`
 - [ ] Run `pnpm install` to link workspace
@@ -108,12 +106,9 @@ When adding new features, use these as templates:
 
 ### New Example App
 
-- [ ] Scaffold with CLI: `cd examples && node ../packages/cli/bin.js new <name> --template rest --pm pnpm --repo inmemory --no-git --no-install --force`
-- [ ] Add `package.json` (private: true, `workspace:*` deps — examples don't publish; their version is irrelevant)
-- [ ] Nothing to do for changesets — `"private": true` is enough; changesets v3 skips private packages by default
-- [ ] Add docs page at `docs/examples/<name>.md`
-- [ ] Add to sidebar in `docs/.vitepress/config.mts`
-- [ ] Reference examples live in github.com/forinda/kickjs-examples-archive
+- [ ] Example apps live in [kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive), not this repo — there is no in-repo `examples/`
+- [ ] Scaffold there with the built CLI (see below)
+- [ ] List it in `docs/examples/index.md`
 
 ### Documentation Changes
 
@@ -129,10 +124,9 @@ When adding new features, use these as templates:
 
 - New middleware → add a guide page at `docs/guide/<name>.md` + sidebar entry
 - New package → add an API page at `docs/api/<name>.md` + sidebar entry
-- New example → add a page at `docs/examples/<name>.md` + sidebar entry
+- New example → list it in `docs/examples/index.md`
 - Changed API/options → update the relevant docs page
-- Completed roadmap item → check it off in `docs/roadmap.md`
-- New feature → update `docs/roadmap.md` "Recently Completed" section
+- Completed roadmap item → set its `Status:` to `shipped` in `docs/guide/roadmap.md`
 
 Do NOT consider a feature complete until its docs are written and the sidebar is updated in `docs/.vitepress/config.mts`.
 
@@ -141,27 +135,24 @@ Do NOT consider a feature complete until its docs are written and the sidebar is
 **Example apps MUST be scaffolded using the KickJS CLI** (`kick new` + `kick g module`). This ensures the CLI stays functional and tested against the latest framework changes. If a scaffold fails, that's a CLI bug — fix it before creating the example manually.
 
 ```bash
-# Build the CLI first
+# Build the CLI first (in this repo)
 pnpm build
 
-# Scaffold from examples/ directory
-cd examples
-# Fastest — `--yes` picks defaults (template=minimal, repo=inmemory, no extras,
-# pm resolved from corepack/lockfile). Add explicit flags to override any default.
-node ../packages/cli/bin.js new upload-api --yes --no-install --force
+# Scaffold inside your kickjs-examples-archive clone
+node <path-to-kick-js>/packages/cli/bin.js new upload-api --yes --no-install --force
 
 # Or specify each flag for a non-default scaffold
-node ../packages/cli/bin.js new upload-api \
+node <path-to-kick-js>/packages/cli/bin.js new upload-api \
   --template rest --pm pnpm --repo postgres --no-git --no-install --force
 
 # Generate modules inside the example
 cd upload-api
-node ../../packages/cli/bin.js g module upload
+node <path-to-kick-js>/packages/cli/bin.js g module upload
 ```
 
 `--yes` (alias `--non-interactive`, short `-y`) bypasses every prompt. Without it, missing flags trigger interactive selection.
 
-Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages swagger,ws,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 After scaffolding, customize the generated code for the example's purpose.
 

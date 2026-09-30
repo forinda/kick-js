@@ -10,9 +10,9 @@
 
 KickJS is a decorator-driven Node.js framework for TypeScript. The HTTP engine is pluggable — it runs on **Express (default), Fastify, or h3**, selected via `bootstrap({ runtime })`; controllers/modules/DI/context decorators are engine-neutral. Monorepo managed with pnpm workspaces and Turbo.
 
-> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). The `packages/core` + `packages/http` split described in older parts of this doc is **stale**; treat `packages/kickjs/src/{core,http}` as the source of truth. Fastify/h3 runtimes, the h3 v2 web-standard entries (`./h3-web`, `./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
+> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). Fastify/h3 runtimes, the h3 v2 web-standard entries (`./h3-web`, `./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
 
-**30+ workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, Prisma/Drizzle/kick-db support. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); `examples/` in-repo holds only test fixtures.
+**18 workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, kick/db. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); there is no in-repo `examples/`.
 
 ## Quick Commands
 
@@ -45,14 +45,9 @@ packages/               # Workspace packages (@forinda/kickjs* on npm unless pri
   testing/              # createTestApp, createTestModule, plugin harness
   devtools/ devtools-kit/          # /_debug dashboard + adapter tab kit
   grpc/                 # Connect RPC — gRPC-Web/Connect on the shared HTTP port
-  ai/ mcp/ graphql/ ws/ queue/ cron/ mailer/ otel/
-  notifications/ multi-tenant/
+  ai/ mcp/ ws/ queue/
   cli-kit/ lint/ vscode-extension/
-  core/ http/ config/   # LEGACY split — superseded by packages/kickjs; do not edit
-examples/               # Test fixtures only (typegen-test). Runnable apps live in
-                        #   github.com/forinda/kickjs-examples-archive
-articles/               # Blog articles (dev.to)
-scripts/                # release.js (versioning)
+scripts/                # benchmarks, bundle-size check, Bun smoke test, docs snapshot/translate
 docs/                   # VitePress documentation site
 ```
 
@@ -60,8 +55,7 @@ docs/                   # VitePress documentation site
 
 - **pnpm** — always use `pnpm`, never npm/yarn
 - **Turbo** — orchestrates builds with dependency-aware caching
-- **Vite 8** — builds each package in library mode (ESM, esbuild minify, node20 target)
-- **tsc** — generates `.d.ts` via `tsconfig.build.json` (`emitDeclarationOnly`)
+- **tsdown** — builds the library packages (`tsdown.config.ts`: ESM, `dts: true`, runtime deps in `external`); `vscode-extension` and `devtools/spa` use Vite, `docs` uses VitePress
 - **Vitest** — test runner with SWC for decorator support
 
 ## Code Style
@@ -99,34 +93,17 @@ Implement `AppAdapter` from `@forinda/kickjs/adapter`:
 
 ### Adding an Example App
 
-Use the built CLI to scaffold — never create files manually.
+Example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive), not this repo. Scaffold them with the built CLI — never create files manually; a scaffold failure is a CLI bug to fix first.
 
 ```bash
-# 1. Build CLI first (if not already built)
-pnpm build
-
-# 2. Scaffold from examples/ directory
-cd examples
-# Fastest — name + --yes picks all defaults (template=minimal, repo=inmemory,
-# no extras, git+install on, pm resolved from corepack/lockfile)
-node ../packages/cli/bin.js new my-example-api --yes --no-install --force
-
-# Or specify each flag explicitly when you want a non-default template/repo
-node ../packages/cli/bin.js new my-example-api \
-  --template rest --pm pnpm --repo postgres --no-git --no-install --force
+pnpm build   # in this repo
+# in your kickjs-examples-archive clone:
+node <path-to-kick-js>/packages/cli/bin.js new my-example-api --yes --no-install --force
 ```
 
-`--yes` (alias `--non-interactive`) bypasses every prompt with safe defaults; explicit flags override individual answers. Without `--yes`, every unset flag prompts interactively.
+`--yes` (alias `--non-interactive`) bypasses every prompt with safe defaults (template=minimal, repo=inmemory); explicit flags override individual answers.
 
-Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
-
-3. Update generated `package.json`:
-   - Rename to `@forinda/kickjs-example-<name>`
-   - Set `"private": true`
-   - Replace published `@forinda/kickjs*` deps with `workspace:*` references
-4. `pnpm-workspace.yaml` already includes `examples/*` — no change needed
-5. Add row to Example Apps table in `README.md`
-6. Run `pnpm install && pnpm build` from root to verify
+Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages swagger,ws,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 ### Decorators
 
@@ -347,9 +324,9 @@ test: description      # Test changes
 ## Important Notes
 
 - Decorators fire at class definition time — tests need `Container.reset()` + re-registration
-- Don't manually publish — the changesets workflow does it via OIDC. Examples are private, and changesets v3 skips private packages by default — no `ignore` entry needed.
+- Don't manually publish — the changesets workflow does it via OIDC. Private packages are skipped by changesets v3 by default — no `ignore` entry needed.
 - All internal links in docs must be **relative** (for versioning/i18n support)
 - The `kick` CLI binary comes from `packages/cli/src/cli.ts`
-- Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`
+- tsdown configs: `format: ['esm']`, `dts: true`, all runtime deps in `external`
 - Old top-level config fields (`modulesDir`, `defaultRepo`, etc.) are deprecated — use `modules` block
 - **Env wiring** (applies to **generated applications**, not to the workspace's own library packages under `packages/` — none of which have or need an `src/env.ts`): `src/env.ts` must call `loadEnv(envSchema)` as a side effect AND be imported from `src/index.ts` (`import './env'`) before `bootstrap()` runs. Otherwise `ConfigService.get('CUSTOM_KEY')` returns `undefined` while `@Value('CUSTOM_KEY')` _appears_ to work via its `process.env` fallback. The CLI generators wire both halves automatically; manual upgrades must add both. See `docs/guide/configuration.md#wiring-the-schema-at-startup`.
