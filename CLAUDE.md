@@ -66,9 +66,9 @@ docs/                   # VitePress documentation site
 
 ## Code Style
 
-- **Prettier** — no semicolons, single quotes, trailing commas, 100 char width
-- **No ESLint** — relies on TypeScript strict mode + Prettier
-- **Pre-commit hook** — runs `build → test → format:check` via husky
+- **oxfmt** — formatter (`.oxfmtrc.json`): no semicolons, single quotes, trailing commas, 100 char width. Not Prettier — `npx prettier` reformats unrelated lines
+- **oxlint** — linter (`.oxlintrc.json`), plus `pnpm lint:tokens` (kick-lint token conventions)
+- **Pre-commit hook** — lefthook (`lefthook.yml`) runs oxfmt check, oxlint, and token lint on staged files only; build + tests run in CI
 - Format before committing: `pnpm format`
 
 ## Key Patterns
