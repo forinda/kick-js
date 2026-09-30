@@ -1,9 +1,9 @@
-import type { Request, Response, NextFunction, RequestHandler } from 'express'
-import { static as serveStatic } from 'express'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { createReadStream, existsSync, readFileSync, statSync, unlink } from 'node:fs'
+import { Readable } from 'node:stream'
 import { randomBytes } from 'node:crypto'
 import { writeHeapSnapshot } from 'node:v8'
 import {
@@ -21,6 +21,8 @@ import {
   getClassMeta,
   getMethodMeta,
   getRouteFlags,
+  type MatchedRoute,
+  type RequestContext,
 } from '@forinda/kickjs'
 import {
   MemoryAnalyzer,
@@ -62,6 +64,13 @@ interface RouteStats {
 
 const MAX_SAMPLES = 1000
 
+/**
+ * Where every runtime publishes the matched route on the raw request — the
+ * same `Symbol.for` slot `ctx.route` reads in `@forinda/kickjs`. Registry
+ * symbol, so it is shared across module copies.
+ */
+const MATCHED_ROUTE_SLOT = Symbol.for('kick.route')
+
 /** Compute a percentile from a sorted array of numbers */
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
@@ -77,30 +86,6 @@ function computePercentiles(stats: RouteStats): { p50: number; p95: number; p99:
     p95: percentile(sorted, 0.95),
     p99: percentile(sorted, 0.99),
   }
-}
-
-/**
- * Open an SSE response — sets the headers, flushes them, and disables
- * any compression middleware that may have been registered upstream
- * (compression buffers SSE chunks indefinitely; we need flush-on-write).
- */
-function openSseStream(req: Request, res: Response): void {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  })
-  res.flushHeaders?.()
-  // Defensive: the compression middleware checks this header. Some
-  // setups also wrap res.write — calling res.flush after each write
-  // is safe even when no compression is in play.
-  void req
-}
-
-/** Write a single SSE `data:` event with a JSON payload + double newline. */
-function writeSseEvent(res: Response, payload: unknown): void {
-  res.write(`data: ${JSON.stringify(payload)}\n\n`)
 }
 
 /**
@@ -492,60 +477,51 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         runtimeSampler?.start()
         memoryAnalyzer?.start()
 
-        // Register dashboard routes through the engine-agnostic HTTP facade
-        // (`ctx.http`) instead of an Express Router, so devtools no longer
-        // depends on the raw Express app for mounting. The `router` shim keeps
-        // every existing `(req, res)` handler verbatim — `req` / `res` are the
-        // engine-native request/response under the default runtime.
+        // Every dashboard route registers through the engine-agnostic HTTP
+        // facade (`ctx.http`) and answers through `RequestContext`, so the
+        // dashboard runs under Express, Fastify, and h3 alike. The dashboard
+        // root (`'/'`) maps to `basePath` itself.
         //
-        // `use()` scopes the middleware to `basePath` (Express strips the
-        // prefix, so the guard still sees router-relative `req.path`). `get` /
-        // `post` register the prefixed path; the dashboard root (`'/'`) maps to
-        // `basePath` itself, matching the old `router.get('/')` at the mount.
+        // The token guard runs inside each route rather than as a path-scoped
+        // connect middleware: connect middleware sees the engine's raw
+        // request, whose `path` / `query` differ per engine (and Express
+        // strips the mount prefix while the others don't).
         const joinBase = (p: string): string => (p === '/' ? basePath : `${basePath}${p}`)
+        const authorized = (ctx: RequestContext): boolean => {
+          if (secret === false) return true
+          const provided = ctx.headers['x-devtools-token'] ?? ctx.query?.token
+          if (provided === secret) return true
+          ctx.json({ error: 'Forbidden — invalid or missing devtools token' }, 403)
+          return false
+        }
+        const guarded =
+          (handler: (ctx: RequestContext) => unknown) =>
+          (ctx: RequestContext): unknown =>
+            authorized(ctx) ? handler(ctx) : undefined
         const router = {
-          use: (mw: RequestHandler): void => http.use(mw, { path: basePath }),
-          get: (path: string, handler: (req: Request, res: Response) => unknown): void =>
-            http.route('GET', joinBase(path), (ctx) => handler(ctx.req, ctx.res)),
-          post: (path: string, handler: (req: Request, res: Response) => unknown): void =>
-            http.route('POST', joinBase(path), (ctx) => handler(ctx.req, ctx.res)),
+          get: (path: string, handler: (ctx: RequestContext) => unknown): void =>
+            http.route('GET', joinBase(path), guarded(handler)),
+          post: (path: string, handler: (ctx: RequestContext) => unknown): void =>
+            http.route('POST', joinBase(path), guarded(handler)),
         }
 
-        // ── Access guard — require secret token ──────────────────
-        if (secret !== false) {
-          const token = secret
-          router.use((req: Request, res: Response, next: NextFunction) => {
-            const provided = req.headers['x-devtools-token'] ?? req.query?.token
-            if (provided === token) return next()
-            // Allow the dashboard HTML itself (it will include the token in API calls)
-            if (req.path === '/' && req.method === 'GET' && !req.query?.token) {
-              return next() // serve dashboard, it handles auth via token
-            }
-            // Serve static assets for the dashboard (js files)
-            if (req.path.endsWith('.js') || req.path.endsWith('.css')) {
-              return next()
-            }
-            res.status(403).json({ error: 'Forbidden — invalid or missing devtools token' })
-          })
-        }
-
-        router.get('/routes', (_req: Request, res: Response) => {
-          res.json({ routes })
+        router.get('/routes', (ctx: RequestContext) => {
+          ctx.json({ routes })
         })
 
-        router.get('/container', (_req: Request, res: Response) => {
+        router.get('/container', (ctx: RequestContext) => {
           const registrations = container?.getRegistrations() ?? []
-          res.json({ registrations, count: registrations.length })
+          ctx.json({ registrations, count: registrations.length })
         })
 
-        router.get('/metrics', (_req: Request, res: Response) => {
+        router.get('/metrics', (ctx: RequestContext) => {
           // Build latency with percentiles, omitting raw samples from response
           const latency: Record<string, any> = {}
           for (const [key, stats] of Object.entries(routeLatency)) {
             const { samples: _, ...rest } = stats
             latency[key] = { ...rest, ...computePercentiles(stats) }
           }
-          res.json({
+          ctx.json({
             requests: requestCount.value,
             serverErrors: errorCount.value,
             clientErrors: clientErrorCount.value,
@@ -556,7 +532,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
-        router.get('/health', async (_req: Request, res: Response) => {
+        router.get('/health', async (ctx: RequestContext) => {
           const healthy = errorRate.value < errorRateThreshold
           const status = healthy ? 'healthy' : 'degraded'
 
@@ -593,20 +569,23 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             }),
           )
 
-          res.status(healthy ? 200 : 503).json({
-            status,
-            errorRate: errorRate.value,
-            uptime: uptimeSeconds.value,
-            runtime: readActiveRuntime(),
-            adapters: live,
-          })
+          ctx.json(
+            {
+              status,
+              errorRate: errorRate.value,
+              uptime: uptimeSeconds.value,
+              runtime: readActiveRuntime(),
+              adapters: live,
+            },
+            healthy ? 200 : 503,
+          )
         })
 
-        router.get('/state', (_req: Request, res: Response) => {
+        router.get('/state', (ctx: RequestContext) => {
           const wsAdapter = getPeerAdapters().find(
             (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
           )
-          res.json({
+          ctx.json({
             reactive: {
               requestCount: requestCount.value,
               errorCount: errorCount.value,
@@ -627,15 +606,15 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // computed from the sampler's ring buffer. Returns 404 when the
         // sampler is disabled so adopters can distinguish "off" from
         // "starting up".
-        router.get('/runtime', (_req: Request, res: Response) => {
+        router.get('/runtime', (ctx: RequestContext) => {
           if (!runtimeSampler || !memoryAnalyzer) {
-            res.status(404).json({ error: 'runtime sampler disabled — set runtime.enabled = true' })
+            ctx.json({ error: 'runtime sampler disabled — set runtime.enabled = true' }, 404)
             return
           }
           const latest = runtimeSampler.latest()
           const history = runtimeSampler.history()
           const health = memoryAnalyzer.health(history)
-          res.json({
+          ctx.json({
             protocolVersion: PROTOCOL_VERSION,
             // Identity of the process these stats describe — every memory / CPU /
             // event-loop number below is for THIS Node process (the one running
@@ -658,44 +637,44 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // Pushes the latest RuntimeSnapshot every `intervalMs`. SSE
         // (not WebSocket) avoids the http.Server `upgrade`-event
         // coordination cost — see devtools-flows.md §3 for rationale.
-        router.get('/runtime/stream', (req: Request, res: Response) => {
+        router.get('/runtime/stream', (ctx: RequestContext) => {
           if (!runtimeSampler) {
-            res.status(404).json({ error: 'runtime sampler disabled' })
+            ctx.json({ error: 'runtime sampler disabled' }, 404)
             return
           }
-          openSseStream(req, res)
+          const sse = ctx.sse()
           const intervalMs = options.runtime?.intervalMs ?? 1000
           const tick = (): void => {
             const snap = runtimeSampler.latest()
-            if (snap) writeSseEvent(res, snap)
+            if (snap) sse.send(snap)
           }
           tick()
           const interval = setInterval(tick, intervalMs)
-          const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 30_000)
-          req.on('close', () => {
+          const heartbeat = setInterval(() => sse.comment('heartbeat'), 30_000)
+          sse.onClose(() => {
             clearInterval(interval)
             clearInterval(heartbeat)
           })
         })
 
         // ── SSE: memory health composite (architecture.md §23) ──────
-        router.get('/memory/stream', (req: Request, res: Response) => {
+        router.get('/memory/stream', (ctx: RequestContext) => {
           if (!runtimeSampler || !memoryAnalyzer) {
-            res.status(404).json({ error: 'runtime sampler disabled' })
+            ctx.json({ error: 'runtime sampler disabled' }, 404)
             return
           }
-          openSseStream(req, res)
+          const sse = ctx.sse()
           const intervalMs = options.runtime?.intervalMs ?? 1000
           const tick = (): void => {
             const snap = runtimeSampler.latest()
             if (!snap) return
             const health = memoryAnalyzer.health(runtimeSampler.history())
-            writeSseEvent(res, { snapshot: snap, health })
+            sse.send({ snapshot: snap, health })
           }
           tick()
           const interval = setInterval(tick, intervalMs)
-          const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 30_000)
-          req.on('close', () => {
+          const heartbeat = setInterval(() => sse.comment('heartbeat'), 30_000)
+          sse.onClose(() => {
             clearInterval(interval)
             clearInterval(heartbeat)
           })
@@ -709,15 +688,14 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // large heaps), so the endpoint enforces single-flight via a
         // module-scoped flag — concurrent calls return 503.
         //
-        // The temp file is deleted as soon as the response stream
-        // completes (success or error). Worst case if the process
-        // dies mid-snapshot is a stranded file in `os.tmpdir()`,
-        // which the OS cleans up on next boot.
-        router.post('/memory/snapshot', (_req: Request, res: Response) => {
+        // The file streams through `ctx.sendResponse` (engine-neutral, with
+        // backpressure — never buffered whole) and the temp file is deleted
+        // once the response completes, fails, or the client disconnects.
+        // Worst case if the process dies mid-snapshot is a stranded file in
+        // `os.tmpdir()`, which the OS cleans up on next boot.
+        router.post('/memory/snapshot', async (ctx: RequestContext) => {
           if (snapshotInProgress) {
-            res
-              .status(503)
-              .json({ error: 'heap snapshot already in progress — wait for it to complete' })
+            ctx.json({ error: 'heap snapshot already in progress — wait for it to complete' }, 503)
             return
           }
           snapshotInProgress = true
@@ -734,9 +712,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           } catch (err) {
             snapshotInProgress = false
             log.error({ err }, 'heap snapshot capture failed')
-            res
-              .status(500)
-              .json({ error: 'snapshot capture failed', message: (err as Error).message })
+            ctx.json({ error: 'snapshot capture failed', message: (err as Error).message }, 500)
             return
           }
 
@@ -751,33 +727,29 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             `Heap snapshot captured: ${written} (${(size / 1024 / 1024).toFixed(1)} MiB in ${elapsedMs}ms)`,
           )
 
-          res.setHeader('Content-Type', 'application/json')
-          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
-          if (size > 0) res.setHeader('Content-Length', String(size))
-          res.setHeader('X-Snapshot-Capture-Ms', String(elapsedMs))
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+            'X-Snapshot-Capture-Ms': String(elapsedMs),
+          }
+          if (size > 0) headers['Content-Length'] = String(size)
 
-          const cleanup = (): void => {
+          const stream = createReadStream(written)
+          try {
+            await ctx.sendResponse(
+              new Response(Readable.toWeb(stream) as ReadableStream, { headers }),
+            )
+          } catch (err) {
+            log.error({ err }, 'heap snapshot stream failed')
+          } finally {
+            // Also covers a client that disconnected mid-download:
+            // sendResponse stops reading, so close the file here.
+            stream.destroy()
             unlink(written, (err) => {
               if (err) log.warn(`Failed to delete heap snapshot ${written}: ${err.message}`)
               snapshotInProgress = false
             })
           }
-          const stream = createReadStream(written)
-          stream.on('end', cleanup)
-          stream.on('error', (err) => {
-            log.error({ err }, 'heap snapshot stream failed')
-            if (!res.headersSent) res.status(500).end()
-            cleanup()
-          })
-          // Defensive: if the client disconnects mid-download, abort
-          // the stream + run cleanup so the temp file doesn't linger.
-          res.on('close', () => {
-            stream.destroy()
-            // If the stream already fired 'end', cleanup already ran
-            // — the unlink is idempotent enough that running twice
-            // just yields ENOENT which we ignore in cleanup.
-          })
-          stream.pipe(res)
         })
 
         // ── Force GC — Tier 3 monitoring (architecture.md §23) ──────
@@ -789,12 +761,16 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // Returns 412 Precondition Failed (with hint) when the flag
         // wasn't set, so the SPA can show "Run with --expose-gc to
         // enable this button" instead of a generic 5xx.
-        router.post('/memory/gc', (_req: Request, res: Response) => {
+        router.post('/memory/gc', (ctx: RequestContext) => {
           const gc = (globalThis as { gc?: () => void }).gc
           if (typeof gc !== 'function') {
-            res.status(412).json({
-              error: 'global.gc unavailable — start Node with --expose-gc to enable this endpoint',
-            })
+            ctx.json(
+              {
+                error:
+                  'global.gc unavailable — start Node with --expose-gc to enable this endpoint',
+              },
+              412,
+            )
             return
           }
           const before = process.memoryUsage().heapUsed
@@ -802,10 +778,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           try {
             gc()
           } catch (err) {
-            res.status(500).json({
-              error: 'forced GC failed',
-              message: err instanceof Error ? err.message : String(err),
-            })
+            ctx.json(
+              {
+                error: 'forced GC failed',
+                message: err instanceof Error ? err.message : String(err),
+              },
+              500,
+            )
             return
           }
           const after = process.memoryUsage().heapUsed
@@ -814,7 +793,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           log.info(
             `Forced GC reclaimed ${(reclaimedBytes / 1024 / 1024).toFixed(2)} MiB in ${elapsedMs}ms`,
           )
-          res.json({ before, after, reclaimedBytes, elapsedMs })
+          ctx.json({ before, after, reclaimedBytes, elapsedMs })
         })
 
         // ── Custom-tab discovery (architecture.md §23) ──────────────
@@ -822,13 +801,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // and serves the deduped + validated list. The SPA fetches
         // this once at boot to render dynamic tabs after the four
         // built-ins.
-        router.get('/tabs', (_req: Request, res: Response) => {
+        router.get('/tabs', (ctx: RequestContext) => {
           const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
           if (!kickApp) {
-            res.status(503).json({ error: 'tabs unavailable — application surface not exposed' })
+            ctx.json({ error: 'tabs unavailable — application surface not exposed' }, 503)
             return
           }
-          res.json(collectDevtoolsTabs(kickApp))
+          ctx.json(collectDevtoolsTabs(kickApp))
         })
 
         // ── Topology RPC (architecture.md §23) ──────────────────────
@@ -836,44 +815,42 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // into one snapshot; calls each primitive's introspect() in
         // parallel with a per-call timeout so a misbehaving adapter
         // can't block the endpoint. Errors are collected, not thrown.
-        router.get('/topology', async (_req: Request, res: Response) => {
+        router.get('/topology', async (ctx: RequestContext) => {
           if (!container) {
-            res.status(503).json({ error: 'topology unavailable — container not bound yet' })
+            ctx.json({ error: 'topology unavailable — container not bound yet' }, 503)
             return
           }
           const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
           if (!kickApp) {
-            res
-              .status(503)
-              .json({ error: 'topology unavailable — application surface not exposed' })
+            ctx.json({ error: 'topology unavailable — application surface not exposed' }, 503)
             return
           }
           try {
             const snapshot = await collectTopologySnapshot({ app: kickApp, container })
-            res.json(snapshot)
+            ctx.json(snapshot)
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
-            res.status(500).json({ error: 'topology collection failed', message })
+            ctx.json({ error: 'topology collection failed', message }, 500)
           }
         })
 
-        router.get('/ws', (_req: Request, res: Response) => {
+        router.get('/ws', (ctx: RequestContext) => {
           const wsAdapter = getPeerAdapters().find(
             (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
           )
           if (!wsAdapter) {
-            res.json({ enabled: false, message: 'WsAdapter not found' })
+            ctx.json({ enabled: false, message: 'WsAdapter not found' })
             return
           }
-          res.json({ enabled: true, ...wsAdapter.getStats() })
+          ctx.json({ enabled: true, ...wsAdapter.getStats() })
         })
 
-        router.get('/queues', async (_req: Request, res: Response) => {
+        router.get('/queues', async (ctx: RequestContext) => {
           const queueAdapter = getPeerAdapters().find(
             (a) => a.name === 'QueueAdapter' && typeof a.getQueueNames === 'function',
           )
           if (!queueAdapter) {
-            res.json({ enabled: false, message: 'QueueAdapter not found' })
+            ctx.json({ enabled: false, message: 'QueueAdapter not found' })
             return
           }
           try {
@@ -883,14 +860,14 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               const stats = await queueAdapter.getQueueStats?.(name)
               queues.push({ name, ...stats })
             }
-            res.json({ enabled: true, queues })
+            ctx.json({ enabled: true, queues })
           } catch {
-            res.json({ enabled: true, queues: [], error: 'Failed to fetch queue stats' })
+            ctx.json({ enabled: true, queues: [], error: 'Failed to fetch queue stats' })
           }
         })
 
         // ── Dependency graph ────────────────────────────────────────
-        router.get('/graph', (_req: Request, res: Response) => {
+        router.get('/graph', (ctx: RequestContext) => {
           const registrations = container?.getRegistrations() ?? []
           const nodes = registrations
             .filter((r) => !r.token.startsWith('__hmr__'))
@@ -910,45 +887,36 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               }
             }
           }
-          res.json({ nodes, edges })
+          ctx.json({ nodes, edges })
         })
 
         // ── SSE stream for real-time updates ────────────────────────
-        router.get('/stream', (req: Request, res: Response) => {
-          res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-          })
+        router.get('/stream', (ctx: RequestContext) => {
+          const sse = ctx.sse()
 
           const sendMetrics = () => {
-            const data = {
+            sse.send({
               type: 'metrics',
               requestCount: requestCount.value,
               errorCount: errorCount.value,
               clientErrorCount: clientErrorCount.value,
               errorRate: errorRate.value,
               uptimeSeconds: uptimeSeconds.value,
-            }
-            res.write(`data: ${JSON.stringify(data)}\n\n`)
+            })
           }
           sendMetrics()
 
           const unsubContainer = container?.onChange?.((changes) => {
-            res.write(
-              `data: ${JSON.stringify({ type: 'container', changes, timestamp: Date.now() })}\n\n`,
-            )
+            sse.send({ type: 'container', changes, timestamp: Date.now() })
             sendMetrics()
           })
 
           const stopRequestWatch = watch(requestCount, () => sendMetrics())
           const stopErrWatch = watch(errorCount, () => sendMetrics())
 
-          const heartbeat = setInterval(() => {
-            res.write(`: heartbeat\n\n`)
-          }, 30000)
+          const heartbeat = setInterval(() => sse.comment('heartbeat'), 30000)
 
-          req.on('close', () => {
+          sse.onClose(() => {
             unsubContainer?.()
             stopRequestWatch()
             stopErrWatch()
@@ -957,35 +925,43 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         })
 
         if (exposeConfig) {
-          router.get('/config', (_req: Request, res: Response) => {
+          router.get('/config', (ctx: RequestContext) => {
             const config: Record<string, string> = {}
             for (const [key, value] of Object.entries(process.env)) {
               if (value === undefined) continue
               const allowed = configPrefixes.some((prefix) => key.startsWith(prefix))
               config[key] = allowed ? value : '[REDACTED]'
             }
-            res.json({ config })
+            ctx.json({ config })
           })
         }
 
         // Dashboard UI — Vue + Tailwind from public/devtools directory
         const publicDir = resolvePublicDir()
+        // The page itself is not token-guarded — it loads first and sends the
+        // token on its API calls — unless a `?token=` is given, which must match.
+        const dashboard =
+          (html: string) =>
+          (ctx: RequestContext): unknown =>
+            ctx.query?.token === undefined || authorized(ctx) ? ctx.html(html) : undefined
         if (publicDir) {
-          router.use(serveStatic(publicDir))
+          // Serve only the SPA's `assets/` statically, so the static server can
+          // never answer the dashboard root with the raw `index.html` — the
+          // route below owns it and injects `data-base`. The legacy Vue
+          // dashboard keeps its files at the top level.
+          const assetsDir = join(publicDir, 'assets')
+          if (existsSync(assetsDir)) http.serveStatic(`${basePath}/assets`, assetsDir)
+          else http.serveStatic(basePath, publicDir)
 
           const indexHtml = readFileSync(join(publicDir, 'index.html'), 'utf-8')
-          router.get('/', (_req: Request, res: Response) => {
-            const html = indexHtml.replace('<body', `<body data-base="${basePath}"`)
-            res.type('html').send(html)
-          })
+          http.route(
+            'GET',
+            basePath,
+            dashboard(indexHtml.replace('<body', `<body data-base="${basePath}"`)),
+          )
         } else {
-          router.get('/', (_req: Request, res: Response) => {
-            res.type('html').send('<h1>DevTools: public directory not found</h1>')
-          })
+          http.route('GET', basePath, dashboard('<h1>DevTools: public directory not found</h1>'))
         }
-
-        // Routes self-register through the facade as they're declared above —
-        // no Router to mount here.
 
         if (secret) {
           log.info(`DevTools mounted at ${basePath} [token: ${secret}]`)
@@ -1000,7 +976,10 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
         return [
           {
-            handler: (req: Request, res: Response, next: NextFunction) => {
+            // Connect-style, so it sees the engine's raw Node request/response
+            // on every runtime. The matched route comes from the slot each
+            // runtime publishes on the request (`ctx.route` reads the same slot).
+            handler: (req: IncomingMessage, res: ServerResponse, next: () => void) => {
               const start = Date.now()
               requestCount.value++
 
@@ -1013,9 +992,10 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
                 // grows the reactive map unboundedly under 404 probing —
                 // each random path became its own entry, bloating
                 // `/_debug/metrics` and leaking memory.
-                const routeKey = req.route?.path
-                  ? `${req.method} ${req.route.path}`
-                  : `${req.method} <unmatched>`
+                const matched = (req as unknown as Record<symbol, MatchedRoute | undefined>)[
+                  MATCHED_ROUTE_SLOT
+                ]
+                const routeKey = `${req.method} ${matched?.path ?? '<unmatched>'}`
                 const elapsed = Date.now() - start
 
                 if (!routeLatency[routeKey]) {

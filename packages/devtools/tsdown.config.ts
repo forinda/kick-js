@@ -15,7 +15,6 @@ export default defineConfig({
     '@forinda/kickjs',
     '@forinda/kickjs-devtools-kit',
     'reflect-metadata',
-    'express',
     /^node:/,
   ],
   banner: { js: createBanner(pkg.name, pkg.version) },
