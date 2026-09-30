@@ -222,6 +222,7 @@ Top-level `modulesDir`, `defaultRepo`, `pluralize`, `schemaDir` are deprecated â
 - Reset DI container: `beforeEach(() => Container.reset())`
 - Build must pass before tests run (wireit dependency graph)
 - Run specific test: `pnpm vitest run tests/<file>.test.ts`
+- Scaffold changes (`packages/cli/templates/`, generators, `kick add`): `pnpm build && pnpm scaffold:matrix [scenario]` scaffolds each scenario, installs it against this checkout's packed packages, and typechecks, builds and boots it. CI runs every scenario daily and `yes-default` on PRs touching the CLI.
 
 ## Git Workflow
 
