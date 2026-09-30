@@ -60,9 +60,23 @@ let observers: readonly Observer[] = []
 let publisher: Observer | undefined
 let publisherWantsResponses: () => boolean = () => false
 
-/** Replace the observer set — called by the Application from its adapters and plugins. */
-export function setObservers(list: readonly Observer[]): void {
+/**
+ * Replace the observer set — called by the Application from its adapters and
+ * plugins. Returns the installed set, so its owner can later release exactly
+ * that set (see {@link releaseObservers}).
+ */
+export function setObservers(list: readonly Observer[]): readonly Observer[] {
   observers = list.filter((o) => o.onError || o.onResponse)
+  return observers
+}
+
+/**
+ * Clear the observer set — but only if it is still the one `installed`. The
+ * set is process-wide: a newer Application may have replaced it, and an older
+ * one shutting down must not clear the newer one's observers.
+ */
+export function releaseObservers(installed: readonly Observer[]): void {
+  if (observers === installed) observers = []
 }
 
 /**

@@ -44,7 +44,14 @@ import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from './body-policy'
 import { requestId } from './middleware/request-id'
 import { pendingBackgroundWork, settleBackgroundWork } from './background'
 import { installChannelPublisher, traceHandler } from './tracing'
-import { hasResponseObservers, reportError, reportResponse, setObservers } from '../core/observers'
+import {
+  hasResponseObservers,
+  releaseObservers,
+  reportError,
+  reportResponse,
+  setObservers,
+  type Observer,
+} from '../core/observers'
 import { ROUTE_SLOT } from '../core/route-flag'
 import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
@@ -567,6 +574,8 @@ export class Application {
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: KickServer | null = null
+  /** The observer set this app installed — released on shutdown only if still current. */
+  private observers: readonly Observer[] = []
   /**
    * Open HTTP/2 sessions. `server.close()` stops new sessions, but on older
    * Node (22 and earlier) existing ones keep accepting new streams — so
@@ -649,7 +658,7 @@ export class Application {
     this.adapters = mountSort(namedAdapters, 'adapter')
     // Adapters and plugins with onError / onResponse observe every error and
     // response; the diagnostics_channel channels are fed from the same funnel.
-    setObservers([...this.adapters, ...this.plugins])
+    this.observers = setObservers([...this.adapters, ...this.plugins])
     installChannelPublisher()
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
@@ -1561,7 +1570,7 @@ export class Application {
       this.loopback = undefined
       // The adapters are shut down: stop routing reports to them. A reload
       // keeps the same adapters, so it keeps them observing.
-      if (closeServer) setObservers([])
+      if (closeServer) releaseObservers(this.observers)
     } finally {
       if (timer) clearTimeout(timer)
     }

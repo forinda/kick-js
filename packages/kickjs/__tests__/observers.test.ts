@@ -303,6 +303,21 @@ describe('diagnostics channels', () => {
 })
 
 describe('shutdown', () => {
+  it('only clears the observers it registered, not a newer app’s', async () => {
+    const first = recorder()
+    await boot(undefined, [first.adapter])
+    const older = app!
+
+    Container.reset()
+    const second = recorder()
+    await boot(undefined, [second.adapter]) // replaces the process-wide set
+    await older.shutdown()
+
+    reportError(new Error('after'), { source: 'job' })
+    expect(first.errors).toEqual([])
+    expect(second.errors).toHaveLength(1)
+  })
+
   it('stops routing reports to the app’s adapters', async () => {
     const rec = recorder()
     await boot(undefined, [rec.adapter])
