@@ -14,6 +14,13 @@ export interface QueueAdapterOptions {
   queues?: string[]
   /** Default worker concurrency (default: 1) */
   concurrency?: number
+  /**
+   * Serve the DevTools "Queue" panel at `/_kick/queue/panel` and its data at
+   * `/_kick/queue/data`. The routes carry no auth and list every queue with
+   * its job counts, so they follow DevTools' own default: on, except when
+   * `NODE_ENV` is `production`.
+   */
+  panel?: boolean
 }
 
 /** DI token for resolving the QueueService from the container. */

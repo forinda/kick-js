@@ -410,3 +410,34 @@ describe('QueueAdapter', () => {
     })
   })
 })
+
+describe('QueueAdapter panel routes', () => {
+  const redis = { host: 'localhost', port: 6379 }
+  const mountedPaths = (adapter: ReturnType<typeof QueueAdapter>) => {
+    const paths: string[] = []
+    adapter.beforeMount!({
+      http: { route: (_m: string, path: string) => paths.push(path) },
+    } as never)
+    return paths
+  }
+
+  it('serves the DevTools panel outside production', () => {
+    const adapter = QueueAdapter({ redis })
+    expect(mountedPaths(adapter)).toEqual(['/_kick/queue/panel', '/_kick/queue/data'])
+    expect(adapter.devtoolsTabs!()).toHaveLength(1)
+  })
+
+  it('mounts no unauthenticated routes in production, or when turned off', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      const adapter = QueueAdapter({ redis })
+      expect(mountedPaths(adapter)).toEqual([])
+      expect(adapter.devtoolsTabs!()).toEqual([])
+      // Opting back in is explicit.
+      expect(mountedPaths(QueueAdapter({ redis, panel: true }))).toHaveLength(2)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+    expect(mountedPaths(QueueAdapter({ redis, panel: false }))).toEqual([])
+  })
+})

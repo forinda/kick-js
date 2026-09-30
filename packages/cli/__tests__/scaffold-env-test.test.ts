@@ -58,6 +58,11 @@ describe('scaffolded .env.test', () => {
   it('ships a .env.test.example with the same keys and copy instructions', () => {
     const example = file('.env.test.example')
     expect(example).toContain('cp .env.test.example .env.test')
-    expect(example).toContain(file('.env.test'))
+    // Same variables, in the same order.
+    const keys = (text: string) => text.match(/^[A-Z_]+(?==)/gm)
+    expect(keys(example)).toEqual(keys(file('.env.test')))
+    // It describes itself, not the file it's copied to.
+    expect(example).not.toContain('Not committed')
+    expect(example).toContain('This file is committed')
   })
 })
