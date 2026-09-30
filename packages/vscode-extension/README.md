@@ -9,7 +9,7 @@ VS Code extension for inspecting running KickJS apps — health, routes, DI cont
 
 ## Requirements
 
-Your app must mount `DevToolsAdapter` (Express runtime) so `/_debug/*` is reachable. For
+Your app must mount `DevToolsAdapter` (any runtime — Express, Fastify, or h3; `@forinda/kickjs-devtools` 7.3+) so `/_debug/*` is reachable. For
 non-dev environments, set a `secret` so the dashboard isn't world-readable:
 
 ```ts
