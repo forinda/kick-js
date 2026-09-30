@@ -22,6 +22,7 @@
 import * as vscode from 'vscode'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { registerExplainCommand } from './explain'
 
 const TERMINAL_NAME = 'KickJS'
 
@@ -113,6 +114,7 @@ export function registerKickCommands(_context: vscode.ExtensionContext): vscode.
     vscode.commands.registerCommand('kickjs.checkDi', () => runKick('check --di')),
     vscode.commands.registerCommand('kickjs.typegen', () => runKick('typegen')),
     vscode.commands.registerCommand('kickjs.info', () => runKick('info')),
+    registerExplainCommand(),
 
     // ── kick/db utilities ───────────────────────────────────────────
     // The first-party database (`kick/db`) ships a `kick db` command tree

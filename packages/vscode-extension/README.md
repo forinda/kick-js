@@ -38,6 +38,8 @@ export const app = await bootstrap({
 
 The extension reads the token from VS Code's secret storage — set it with `KickJS: Set DevTools Token…`.
 
+`KickJS: Inspect Running App` opens a dashboard with health, metrics, routes, and the DI container, plus runtime and memory (when the adapter's runtime sampler is on), topology (adapters, plugins, contributors), WebSocket and queue stats (when those adapters are mounted), and a dependency-graph summary.
+
 The routes view shows each route's resolved [route flags](https://kickjs.app/guide/route-flags) next to its handler.
 
 ## Commands
@@ -47,7 +49,7 @@ Everything is under `KickJS:` in the command palette.
 - **Inspect:** Connect to App, Inspect Running App, Show Routes, Show DI Container, Show Metrics, Refresh All, Set / Clear DevTools Token
 - **Run:** Run Dev Server, Build, Start (Production)
 - **Generate:** Module, Controller, Service, Scaffold, and `Generate…` for middleware, guard, contributor, DTO, adapter, plugin, test, and `kick.config.ts`; Remove Module
-- **Project:** Add Package, Regenerate Types, Regenerate Agent Docs, Doctor, Check DI Scopes, Info
+- **Project:** Add Package, Regenerate Types, Regenerate Agent Docs, Doctor, Check DI Scopes, Info, Explain Error (runs `kick explain` on a pasted or selected error and opens the diagnosis as a Markdown preview)
 - **MCP:** Start MCP Server, Initialise MCP Config
 - **kick/db** (needs `dbCliPlugin` in `kick.config.ts`): Migrate, Status, Generate Migration, Rollback
 

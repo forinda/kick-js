@@ -153,6 +153,11 @@
         "icon": "$(info)"
       },
       {
+        "command": "kickjs.explain",
+        "title": "KickJS: Explain Error…",
+        "icon": "$(question)"
+      },
+      {
         "command": "kickjs.dbMigrate",
         "title": "KickJS: DB Migrate (latest)",
         "icon": "$(database)"
@@ -285,6 +290,10 @@
         },
         {
           "command": "kickjs.info",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.explain",
           "when": "kickjs.isKickProject"
         },
         {
