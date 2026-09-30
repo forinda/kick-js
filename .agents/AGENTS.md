@@ -152,7 +152,7 @@ node <path-to-kick-js>/packages/cli/bin.js g module upload
 
 `--yes` (alias `--non-interactive`, short `-y`) bypasses every prompt. Without it, missing flags trigger interactive selection.
 
-Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages swagger,ws,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 After scaffolding, customize the generated code for the example's purpose.
 

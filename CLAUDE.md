@@ -12,7 +12,7 @@ KickJS is a decorator-driven Node.js framework for TypeScript. The HTTP engine i
 
 > The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). Fastify/h3 runtimes, the h3 v2 web-standard entries (`./h3-web`, `./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
 
-**20+ workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, Prisma/Drizzle/kick-db support. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); there is no in-repo `examples/`.
+**18 workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, kick/db. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); there is no in-repo `examples/`.
 
 ## Quick Commands
 
@@ -45,7 +45,6 @@ packages/               # Workspace packages (@forinda/kickjs* on npm unless pri
   testing/              # createTestApp, createTestModule, plugin harness
   devtools/ devtools-kit/          # /_debug dashboard + adapter tab kit
   grpc/                 # Connect RPC — gRPC-Web/Connect on the shared HTTP port
-  auth/ prisma/ drizzle/  # auth strategies, ORM integrations
   ai/ mcp/ ws/ queue/
   cli-kit/ lint/ vscode-extension/
 scripts/                # benchmarks, bundle-size check, Bun smoke test, docs snapshot/translate
@@ -56,7 +55,7 @@ docs/                   # VitePress documentation site
 
 - **pnpm** — always use `pnpm`, never npm/yarn
 - **Turbo** — orchestrates builds with dependency-aware caching
-- **tsdown** — builds each package (`tsdown.config.ts`: ESM, `dts: true`, runtime deps in `external`)
+- **tsdown** — builds the library packages (`tsdown.config.ts`: ESM, `dts: true`, runtime deps in `external`); `vscode-extension` and `devtools/spa` use Vite, `docs` uses VitePress
 - **Vitest** — test runner with SWC for decorator support
 
 ## Code Style
@@ -104,7 +103,7 @@ node <path-to-kick-js>/packages/cli/bin.js new my-example-api --yes --no-install
 
 `--yes` (alias `--non-interactive`) bypasses every prompt with safe defaults (template=minimal, repo=inmemory); explicit flags override individual answers.
 
-Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages swagger,ws,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 ### Decorators
 
