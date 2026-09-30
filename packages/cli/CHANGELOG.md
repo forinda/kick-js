@@ -1,5 +1,55 @@
 # @forinda/kickjs-cli
 
+## 8.6.0
+
+### Minor Changes
+
+- [#758](https://github.com/forinda/kick-js/pull/758) [`9139a7b`](https://github.com/forinda/kick-js/commit/9139a7b242a637aa07a4900813adbfbbe5d252cb) Thanks [@forinda](https://github.com/forinda)! - `kick build:vercel` writes a Vercel cron for every distinct `@Cron` expression in `src/`, pointing at the app's `/_kick/cron/<id>` trigger. It routes `/_kick/*` to the function when the API path doesn't already cover it, and reminds you to set `CRON_SECRET`.
+  
+  It warns about jobs Vercel can't run as written: a non-literal expression, and a `timezone` (Vercel crons are UTC).
+  
+  `kick build:netlify` warns that `@Cron` jobs won't run on Netlify.
+
+- [#755](https://github.com/forinda/kick-js/pull/755) [`0124ca7`](https://github.com/forinda/kick-js/commit/0124ca71bcf174cd60404783854d5ef1b7f4d5ac) Thanks [@forinda](https://github.com/forinda)! - `kick build:netlify` and `kick build:vercel` now generate function entries that pass the platform context to the handler, so `ctx.waitUntil()` work keeps running after the response:
+  
+  - **Netlify:** `(request, context) => handler.fetch(request, context)`.
+  - **Vercel:** reads the per-request context Vercel's Node runtime exposes on `globalThis[Symbol.for('@vercel/request-context')]`, the same channel `@vercel/functions` uses. It needs no extra dependency and passes nothing outside Vercel.
+
+- [#762](https://github.com/forinda/kick-js/pull/762) [`c1eb2b2`](https://github.com/forinda/kick-js/commit/c1eb2b2c46e7c42da28681183f1803a0d2cdcc07) Thanks [@forinda](https://github.com/forinda)! - `kick add swagger | devtools | ws | queue` now wires the package as well as installing it, the same way `kick new --packages` does.
+  
+  - **Entry file:** the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), and its import is merged in. The file is edited in place through the AST, so the rest of it is left untouched. A second run doesn't add a duplicate. When the file has no such call, the snippet is printed to paste instead.
+  - **`queue`:** `REDIS_HOST` / `REDIS_PORT` are added to `.env` and `.env.example`, with existing values kept. `queue` now means BullMQ, as in `kick new`, and installs `bullmq` and `ioredis`.
+  - **Dependencies:** wired packages go into `dependencies`, because the entry file imports them. That includes `devtools`, which used to be added as a dev dependency.
+  - **Flags:**
+    - it refuses to edit files with uncommitted changes, unless `--force` is passed;
+    - `--no-wire` installs only.
+  
+  Also, `kick new` caps `dotenv` at `^17`, the range `@forinda/kickjs` peers on. It used to install `dotenv@18` with an unmet-peer warning.
+  
+  `kick new` also builds `vite.config.ts`, `kick.config.ts`, README, `netlify.toml` / `vercel.json` and the fullstack workspace's root and web files from template layers. The output is the same, except that README's "Packages" section now lists the `@forinda/*` packages the project actually installs (before, it listed Swagger and DevTools for every `rest` app).
+
+- [#761](https://github.com/forinda/kick-js/pull/761) [`2f264f6`](https://github.com/forinda/kick-js/commit/2f264f68c2b1c4ede48e1b02b27d4498d89916d9) Thanks [@forinda](https://github.com/forinda)! - `kick new` builds projects from template layers, and `--packages ws,queue` now produce working apps.
+  
+  - **ws and queue are wired and complete.** Before, they were added to package.json but never wired into `src/index.ts`, and their peers were missing, so the app couldn't use them.
+    - `ws` now adds `WsAdapter({ path: '/ws' })` and installs `ws`.
+    - `queue` now adds `QueueAdapter` over Redis (`REDIS_HOST` / `REDIS_PORT`, written to `.env`) and installs `bullmq` and `ioredis`. Nothing connects until a job or queue is used, so the app boots without Redis.
+  - **pnpm 10+ installs no longer fail on bullmq.** `bullmq`'s `msgpackr-extract` install script is now answered (declined — msgpackr falls back to JS), which pnpm requires. This also fixes `kick add queue:bullmq`.
+  - **`--template fullstack` honours `--packages`.** The packages are wired into `server/`, with their install-script answers recorded at the workspace root. Before, the choice was dropped.
+  - **Unknown `--packages` names** are skipped with a warning instead of being ignored silently.
+  - **Generated files change shape slightly, not behaviour:**
+    - `src/index.ts` merges its imports per module and always spells out `bootstrap({ ... })` over several lines.
+    - The `rest` template notes why `express.json()` is there.
+    - `package.json` dependencies are sorted by name.
+    - `tsconfig.json` and `.oxfmtrc.json` end with a newline.
+  - **`--yes` with explicit flags** (`--runtime`, `--schema`, `--packages`, `--template`, `--pm`, `--repo`) keeps overriding the defaults as before.
+  - **Config warnings:** a fresh scaffold (or a global `kick` in a project whose dependencies aren't installed) no longer warns `Failed to load kick.config.ts: Cannot find module '@forinda/kickjs-cli'`. The config loader uses the running CLI when the project doesn't have the package.
+
+### Patch Changes
+
+- Updated dependencies [[`91fc6a2`](https://github.com/forinda/kick-js/commit/91fc6a20b493281f2d7c46133b66fe7c2c719ae0), [`9139a7b`](https://github.com/forinda/kick-js/commit/9139a7b242a637aa07a4900813adbfbbe5d252cb), [`aec608f`](https://github.com/forinda/kick-js/commit/aec608f1287c078db2f80db18a052798d4ea4560), [`b0a2011`](https://github.com/forinda/kick-js/commit/b0a201137b47ad023525a2124ca1aa12b9f84581), [`3ac7432`](https://github.com/forinda/kick-js/commit/3ac74329d235b585504ec020afaf7186c9449c59), [`64ef2b6`](https://github.com/forinda/kick-js/commit/64ef2b61772ff339aed320073866a442fd13cc15), [`3ac7432`](https://github.com/forinda/kick-js/commit/3ac74329d235b585504ec020afaf7186c9449c59), [`c9da4f4`](https://github.com/forinda/kick-js/commit/c9da4f46373228f4874e469d6197e4f65edadd72), [`f1d1114`](https://github.com/forinda/kick-js/commit/f1d11147f64c5d053d00b4159216b8ca635058cb), [`0124ca7`](https://github.com/forinda/kick-js/commit/0124ca71bcf174cd60404783854d5ef1b7f4d5ac)]:
+  - @forinda/kickjs@8.7.0
+  - @forinda/kickjs-db@7.4.0
+
 ## 8.5.0
 
 ### Minor Changes
