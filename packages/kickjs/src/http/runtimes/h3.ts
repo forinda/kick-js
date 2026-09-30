@@ -168,6 +168,19 @@ function makeEventHandler(
     // Populate the express-shaped request fields h3 keeps elsewhere.
     req.params = getRouterParams(event) ?? {}
     req.query = getQuery(event) ?? {}
+
+    // HTTP/2 frames a body in DATA frames: no `transfer-encoding`, and
+    // `content-length` is optional. h3's `readRawBody` — behind both the
+    // JSON/text path and `readMultipartFormData` — returns `undefined` when
+    // neither header is present, dropping the body. Read it once as bytes and
+    // hand it over on `req.rawBody`, which `readRawBody` checks first.
+    if (
+      req.httpVersionMajor === 2 &&
+      req.headers['content-length'] === undefined &&
+      BODY_METHODS.has(req.method ?? 'GET')
+    ) {
+      ;(req as { rawBody?: Buffer }).rawBody = await readStreamBuffer(req)
+    }
     if (upload && upload.mode !== 'none') {
       // @FileUpload: read the multipart body once (readBody would consume the
       // same stream, so the two are mutually exclusive). File parts → the
@@ -199,8 +212,14 @@ function makeEventHandler(
       // on `undefined` where Express and Fastify both answer 400 — a client
       // sending broken JSON got a success response, and the handler executed
       // against data that was never valid.
+      // HTTP/2 frames the body in DATA frames: no `transfer-encoding`, and
+      // `content-length` is optional, so there a body may be present with
+      // neither header — only an explicit `content-length: 0` rules it out.
       const { 'content-length': length, 'transfer-encoding': encoding } = req.headers
-      const sentBody = encoding !== undefined || (length !== undefined && length !== '0')
+      const sentBody =
+        encoding !== undefined ||
+        (length !== undefined && length !== '0') ||
+        (req.httpVersionMajor === 2 && length !== '0')
       if (sentBody) {
         // Read raw and apply the shared policy rather than calling `readBody`,
         // whose own content-type dispatch is the source of the divergence:
@@ -313,6 +332,13 @@ function unwrapH3Error(error: unknown): unknown {
  * h3 parses bodies itself (`readBody`), so the Application skips its default
  * `express.json()` (see `nativeBodyParsing`).
  */
+/** Collect a request stream as bytes — never decoded, so file parts stay intact. */
+async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+  return Buffer.concat(chunks)
+}
+
 export function h3Runtime(): HttpRuntime<H3AppLike> {
   return {
     name: 'h3',
@@ -436,6 +462,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
       uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
+      http2: true,
     },
   }
 }

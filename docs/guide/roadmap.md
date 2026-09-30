@@ -523,15 +523,15 @@ The framework wires per-request tenant resolution, scopes the DI container, swit
 
 Small enough to bundle into other work or do in a half-day. Listed for visibility.
 
-| #   | Idea                                                           | Effort | Status                                                                                                         |
-| --- | -------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `rejected` — covered by [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy) (`defineRouteFlag`)        |
-| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                |
-| Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `proposed`                                                                                                     |
-| Q.4 | `kick new --with auth,swagger,drizzle,docker` preset bundles   | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                |
-| Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed` — `createTestApp` + supertest covers it without a command; confirm the wrapper still earns its keep |
-| Q.6 | First-party `SentryLoggerProvider` example snippet in docs     | 1 day  | `shipped` — [Sentry integration](./integrations/sentry.md)                                                     |
-| Q.7 | `kick info` — print resolved versions, peer deps, runtime info | 1 day  | `shipped` — `kick info`                                                                                        |
+| #   | Idea                                                           | Effort | Status                                                                                                                                                                                              |
+| --- | -------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `rejected` — covered by [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy) (`defineRouteFlag`)                                                                                             |
+| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                                                                                                     |
+| Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `shipped` for HTTP/2 — `server: { tls, http2 }` on Fastify / h3 ([HTTPS and HTTP/2](./http-runtimes.md#https-and-http-2)); Express cannot (KICK007). HTTP/3 `deferred` until Node ships stable QUIC |
+| Q.4 | `kick new --with auth,swagger,drizzle,docker` preset bundles   | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                                                                                                     |
+| Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed` — `createTestApp` + supertest covers it without a command; confirm the wrapper still earns its keep                                                                                      |
+| Q.6 | First-party `SentryLoggerProvider` example snippet in docs     | 1 day  | `shipped` — [Sentry integration](./integrations/sentry.md)                                                                                                                                          |
+| Q.7 | `kick info` — print resolved versions, peer deps, runtime info | 1 day  | `shipped` — `kick info`                                                                                                                                                                             |
 
 ---
 

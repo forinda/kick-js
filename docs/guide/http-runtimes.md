@@ -135,18 +135,61 @@ Connect-style `(req, res, next)` middleware runs on both paths:
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                     | Express     | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                                    |
-| ------------------------------ | ----------- | ----------------------- | ----------------------- | --------------------------------------------------- |
-| Routing + `ctx.json`           | ✅          | ✅                      | ✅                      | ✅                                                  |
-| Connect middleware             | ✅          | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
-| Context decorators             | ✅          | ✅                      | ✅                      | ✅                                                  |
-| Errors / 404                   | ✅          | ✅                      | ✅                      | ✅                                                  |
-| Server-Sent Events             | ✅          | ✅                      | ✅                      | ✅ (web streams)                                    |
-| Validation                     | ✅          | ✅                      | ✅                      | ✅                                                  |
-| `ctx.render` (views)           | ✅          | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                                 |
-| File uploads (`ctx.file`)      | ✅ (multer) | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                                 |
-| File download (`ctx.download`) | ✅          | ✅                      | ✅                      | ✅                                                  |
-| Edge / Bun / Deno deploy       | ❌          | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
+| Capability                     | Express      | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                                    |
+| ------------------------------ | ------------ | ----------------------- | ----------------------- | --------------------------------------------------- |
+| Routing + `ctx.json`           | ✅           | ✅                      | ✅                      | ✅                                                  |
+| Connect middleware             | ✅           | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
+| Context decorators             | ✅           | ✅                      | ✅                      | ✅                                                  |
+| Errors / 404                   | ✅           | ✅                      | ✅                      | ✅                                                  |
+| Server-Sent Events             | ✅           | ✅                      | ✅                      | ✅ (web streams)                                    |
+| Validation                     | ✅           | ✅                      | ✅                      | ✅                                                  |
+| `ctx.render` (views)           | ✅           | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                                 |
+| File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                                 |
+| File download (`ctx.download`) | ✅           | ✅                      | ✅                      | ✅                                                  |
+| Edge / Bun / Deno deploy       | ❌           | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
+| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅                      | — (the platform's server)                           |
+
+## HTTPS and HTTP/2
+
+In production, `start()` creates a plain `http.Server`. Pass `server` to serve
+TLS directly, and optionally HTTP/2:
+
+```ts
+import { readFileSync } from 'node:fs'
+import { bootstrap } from '@forinda/kickjs'
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
+
+export const app = await bootstrap({
+  modules,
+  runtime: fastifyRuntime(),
+  server: {
+    tls: { key: readFileSync('key.pem'), cert: readFileSync('cert.pem') },
+    http2: true,
+  },
+})
+```
+
+| `server`               | Node server                                        | Engines     |
+| ---------------------- | -------------------------------------------------- | ----------- |
+| omitted                | `http.createServer`                                | all         |
+| `{ tls }`              | `https.createServer`                               | all         |
+| `{ tls, http2: true }` | `http2.createSecureServer` with `allowHTTP1: true` | Fastify, h3 |
+
+- `tls` takes any Node TLS option (`key`, `cert`, `ca`, `pfx`, `passphrase`, …). It must identify the server — `key` + `cert`, `pfx`, `SNICallback`, or `pskCallback` — and is loaded once at boot, so a missing cert, an unreadable PEM, or a key that does not match its cert fails with `KICK009` instead of on every handshake.
+- With `http2`, clients that negotiate `h2` get HTTP/2 and everything else —
+  including WebSocket handshakes — falls back to HTTP/1.1 on the same port, so
+  `@forinda/kickjs-ws`, Socket.IO, and the DevTools bus keep working. Adapters
+  receive the server in `afterStart({ server })`, typed `KickServer`.
+- **Express cannot serve HTTP/2** — it does not run on Node's HTTP/2
+  compatibility layer — so `http2: true` on the Express runtime fails at boot
+  with `KICK007`. `http2` without `tls` fails with `KICK008`: browsers only
+  speak HTTP/2 over TLS, and cleartext HTTP/2 (h2c) is not offered.
+- Ignored in dev mode, where Vite owns the server.
+
+Most deployments terminate TLS and HTTP/2 at a proxy or platform (nginx, Caddy,
+a load balancer, Cloudflare, Vercel) and send HTTP/1.1 to the app — those need
+none of this. It is for apps exposed directly, or local HTTPS. HTTP/3 is not
+offered: Node has no stable QUIC yet.
 
 ## The engine-native escape hatch
 

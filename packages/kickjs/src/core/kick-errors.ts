@@ -228,3 +228,72 @@ the second controller under a different module path / version:
     context: { method, path, owner, prior },
   })
 }
+
+// ── Server ────────────────────────────────────────────────────────────
+
+/**
+ * KICK007 — `server.http2` on a runtime that cannot serve HTTP/2. Express 5
+ * does not run on Node's HTTP/2 compatibility layer (requests hang and it
+ * throws internally), so this fails at boot rather than on the first request.
+ */
+export function http2UnsupportedRuntimeError(runtime: string): KickError {
+  return new KickError({
+    code: 'KICK007',
+    summary: `The ${runtime} runtime cannot serve HTTP/2`,
+    cause: `\`bootstrap({ server: { http2: true } })\` asks for an HTTP/2 server, but the
+\`${runtime}\` runtime does not support Node's HTTP/2 compatibility layer —
+requests would hang instead of being answered.`,
+    fix: `Pick one:
+  • Switch to a runtime that serves HTTP/2:
+      bootstrap({ runtime: fastifyRuntime(), server: { tls, http2: true } })
+    (or h3Runtime()).
+  • Drop \`http2\` and keep HTTPS over HTTP/1.1: server: { tls }.
+  • Terminate HTTP/2 at your proxy / load balancer and serve HTTP/1.1 to it.`,
+    docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
+    context: { runtime },
+  })
+}
+
+/**
+ * KICK008 — `server.http2` without `server.tls`. Browsers only speak HTTP/2
+ * over TLS; cleartext HTTP/2 (h2c) is not offered.
+ */
+export function http2RequiresTlsError(): KickError {
+  return new KickError({
+    code: 'KICK008',
+    summary: 'server.http2 requires server.tls',
+    cause: `\`bootstrap({ server: { http2: true } })\` was set without \`tls\`. Browsers only
+negotiate HTTP/2 over TLS, and KickJS does not serve cleartext HTTP/2 (h2c).`,
+    fix: `Pass the certificate and key alongside http2:
+
+      server: {
+        tls: { key: readFileSync('key.pem'), cert: readFileSync('cert.pem') },
+        http2: true,
+      }
+
+Or remove \`http2\` if TLS is terminated in front of the app.`,
+    docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
+  })
+}
+
+/**
+ * KICK009 — `server.tls` cannot identify the server. Node starts an HTTPS /
+ * HTTP/2 server without a certificate (or with a key that does not match it)
+ * and then fails every TLS handshake, so this is checked at boot instead.
+ */
+export function tlsCredentialsError(problem: string): KickError {
+  return new KickError({
+    code: 'KICK009',
+    summary: `server.tls is not usable: ${problem}`,
+    cause: `\`bootstrap({ server: { tls } })\` was given TLS options the server cannot use:
+${problem}. Node would start anyway and fail every TLS handshake.`,
+    fix: `Give the server an identity:
+  • \`key\` and \`cert\` together (PEM, matching each other), or
+  • \`pfx\` (with \`passphrase\` if it is encrypted), or
+  • \`SNICallback\` / \`pskCallback\` for per-host or PSK setups.
+
+      server: { tls: { key: readFileSync('key.pem'), cert: readFileSync('cert.pem') } }`,
+    docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
+    context: { problem },
+  })
+}

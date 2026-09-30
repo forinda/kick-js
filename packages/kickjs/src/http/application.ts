@@ -1,4 +1,7 @@
 import http from 'node:http'
+import https from 'node:https'
+import http2 from 'node:http2'
+import tls from 'node:tls'
 import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
@@ -13,6 +16,7 @@ import {
   type AppModuleEntry,
   type AppAdapter,
   type AdapterContext,
+  type KickServer,
   type AdapterMiddleware,
   type ContributorRegistrations,
   type KickPlugin,
@@ -22,7 +26,12 @@ import {
   mountSort,
   MutableModuleRegistry,
 } from '../core'
-import { moduleRouteMissingControllerError } from '../core/kick-errors'
+import {
+  http2RequiresTlsError,
+  http2UnsupportedRuntimeError,
+  moduleRouteMissingControllerError,
+  tlsCredentialsError,
+} from '../core/kick-errors'
 import { RoutePolicyTable, offerRoutePolicy } from '../core/route-policy'
 import {
   disposeAll,
@@ -73,6 +82,35 @@ export interface ShutdownOptions {
   closeServer?: boolean
 }
 
+/**
+ * Throw KICK009 unless `options` can identify the server. Node creates an
+ * HTTPS / HTTP/2 server without a certificate and then fails every handshake,
+ * so the check has to happen here, at boot.
+ */
+function assertUsableTls(options: tls.SecureContextOptions & tls.TlsOptions): void {
+  const { key, cert, pfx, SNICallback, pskCallback } = options
+  if (!pfx && !SNICallback && !pskCallback) {
+    if (!key && !cert) throw tlsCredentialsError('no key/cert, pfx, SNICallback, or pskCallback')
+    if (!key) throw tlsCredentialsError('cert is set but key is missing')
+    if (!cert) throw tlsCredentialsError('key is set but cert is missing')
+  }
+  // Build the context once: surfaces unreadable PEMs, a wrong passphrase, and
+  // a key that does not match its certificate before any adapter runs.
+  try {
+    tls.createSecureContext(options)
+  } catch (err) {
+    throw tlsCredentialsError((err as Error).message)
+  }
+}
+
+/** See {@link ApplicationOptions.server}. */
+export interface ServerOptions {
+  /** TLS credentials and options (`key`, `cert`, `ca`, `pfx`, `passphrase`, …). */
+  tls?: tls.SecureContextOptions & tls.TlsOptions
+  /** Serve HTTP/2 with HTTP/1.1 fallback. Requires `tls` and an HTTP/2-capable runtime. */
+  http2?: boolean
+}
+
 export interface ApplicationOptions {
   /**
    * Feature modules to load. Accepts both class form
@@ -108,6 +146,31 @@ export interface ApplicationOptions {
   adapters?: AppAdapter[]
   /** Server port (falls back to PORT env var, then 3000) */
   port?: number
+  /**
+   * The Node server `start()` creates in production. Omit for plain HTTP.
+   *
+   * - `{ tls }` — HTTPS on every runtime.
+   * - `{ tls, http2: true }` — HTTP/2 (ALPN `h2`) with HTTP/1.1 fallback, so
+   *   HTTP/1.1 clients and WebSocket upgrades keep working. Fastify and h3
+   *   only; Express fails at boot with KICK007, and `http2` without `tls`
+   *   with KICK008.
+   *
+   * Ignored in dev mode, where Vite owns the server. Most deploys terminate
+   * TLS / HTTP/2 at a proxy and need none of this.
+   *
+   * @example
+   * ```ts
+   * bootstrap({
+   *   modules,
+   *   runtime: fastifyRuntime(),
+   *   server: {
+   *     tls: { key: readFileSync('key.pem'), cert: readFileSync('cert.pem') },
+   *     http2: true,
+   *   },
+   * })
+   * ```
+   */
+  server?: ServerOptions
   /** Global API prefix (default: '/api'). Pass `''` to mount at the root. */
   apiPrefix?: string
   /**
@@ -498,7 +561,13 @@ export class Application {
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
   private readonly runtime: HttpRuntime
   private container: Container
-  private httpServer: http.Server | null = null
+  private httpServer: KickServer | null = null
+  /**
+   * Open HTTP/2 sessions. `server.close()` stops new sessions, but on older
+   * Node (22 and earlier) existing ones keep accepting new streams — so
+   * shutdown closes them itself.
+   */
+  private readonly http2Sessions = new Set<http2.ServerHttp2Session>()
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
   private readonly adapters: AppAdapter[]
@@ -1148,9 +1217,22 @@ export class Application {
    * In **production**: creates its own `http.Server` and binds to the port.
    */
   async start(): Promise<void> {
-    await this.setup()
-
     const g = globalThis as any
+    const serverOptions = this.options.server
+
+    // Check the server options before setup() so a bad combination fails
+    // before any adapter has done work.
+    if (serverOptions && g.__kickjs_httpServer) {
+      log.warn('server options (tls / http2) are ignored in dev mode — Vite owns the server')
+    } else if (serverOptions) {
+      if (serverOptions.http2 && !serverOptions.tls) throw http2RequiresTlsError()
+      if (serverOptions.http2 && !this.runtime.capabilities.http2) {
+        throw http2UnsupportedRuntimeError(this.runtime.name)
+      }
+      if (serverOptions.tls) assertUsableTls(serverOptions.tls)
+    }
+
+    await this.setup()
 
     if (g.__kickjs_httpServer) {
       // ── DEV MODE: Vite owns the http.Server ──────────────────────
@@ -1181,7 +1263,7 @@ export class Application {
 
     // ── PRODUCTION: Create and own the http.Server ─────────────────
     const port = this.options.port ?? parseInt(process.env.PORT || '3000', 10)
-    this.httpServer = http.createServer(this.runtime.nodeHandler(this.app))
+    this.httpServer = this.createNodeServer()
 
     this.httpServer.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
@@ -1200,7 +1282,9 @@ export class Application {
     await new Promise<void>((resolve, reject) => {
       this.httpServer!.listen(port, async () => {
         try {
-          log.info(`Server running on http://localhost:${port}`)
+          const scheme = serverOptions?.tls ? 'https' : 'http'
+          const protocol = serverOptions?.http2 ? ' (HTTP/2)' : ''
+          log.info(`Server running on ${scheme}://localhost:${port}${protocol}`)
 
           for (const adapter of this.adapters) {
             const afterCtx = this.adapterCtx(this.httpServer!)
@@ -1218,6 +1302,24 @@ export class Application {
         }
       })
     })
+  }
+
+  /** The production server for {@link ApplicationOptions.server}. */
+  private createNodeServer(): KickServer {
+    const handler = this.runtime.nodeHandler(this.app)
+    const { tls, http2: useHttp2 } = this.options.server ?? {}
+    if (useHttp2) {
+      // The compat API hands the handler Http2ServerRequest/Response; runtimes
+      // that declare `capabilities.http2` accept them.
+      const server = http2.createSecureServer({ ...tls, allowHTTP1: true }, handler as never)
+      server.on('session', (session) => {
+        this.http2Sessions.add(session)
+        session.once('close', () => this.http2Sessions.delete(session))
+      })
+      return server
+    }
+    if (tls) return https.createServer(tls, handler)
+    return http.createServer(handler)
   }
 
   /** HMR rebuild: swap Express handler without restarting the server */
@@ -1303,6 +1405,9 @@ export class Application {
       // we track request draining separately via the tracking middleware.
       if (closeServer && this.httpServer) {
         this.httpServer.close(() => {})
+        // GOAWAY on every open HTTP/2 session: streams in flight finish,
+        // new ones are refused.
+        for (const session of this.http2Sessions) session.close()
       }
 
       // Step 2: Wait for in-flight requests to drain (or timeout).
@@ -1320,6 +1425,7 @@ export class Application {
           log.warn(
             `Shutdown timeout (${timeoutMs}ms) reached with ${this._inFlightRequests} request(s) still in-flight, forcing shutdown`,
           )
+          for (const session of this.http2Sessions) session.destroy()
         } else {
           log.debug('All in-flight requests completed')
         }
@@ -1521,7 +1627,7 @@ export class Application {
     return out
   }
 
-  getHttpServer(): http.Server | null {
+  getHttpServer(): KickServer | null {
     return this.httpServer
   }
 

@@ -81,6 +81,7 @@ export {
   type AppAdapter,
   type AppAdapterClass,
   type AdapterContext,
+  type KickServer,
   type AdapterMiddleware,
   type MiddlewarePhase,
   type MiddlewarePath,

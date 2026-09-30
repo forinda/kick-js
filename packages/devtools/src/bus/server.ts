@@ -40,7 +40,7 @@
 //     the server and back to itself.
 
 import type { IncomingMessage } from 'node:http'
-import type http from 'node:http'
+import type { KickServer } from '@forinda/kickjs'
 import type { Socket } from 'node:net'
 
 import { createBusCore } from '@forinda/kickjs-devtools-kit/bus'
@@ -64,8 +64,11 @@ interface TaggedEnvelope extends KickDevtoolsEvent {
 }
 
 export interface ServerBus extends KickEventBus {
-  /** Hook into an existing http.Server's `upgrade` event. */
-  attachUpgrade(httpServer: http.Server): void
+  /**
+   * Hook into the app server's `upgrade` event — `http`, `https`, or HTTP/2
+   * with HTTP/1.1 fallback all emit it for WebSocket handshakes.
+   */
+  attachUpgrade(httpServer: KickServer): void
   /** Drop all clients + detach. Idempotent. */
   close(): void
   /** Currently connected client count. Useful for the devtools health card. */
@@ -78,7 +81,7 @@ export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
   const core = createBusCore()
   const wss = new WebSocketServer({ noServer: true })
   const clients = new Set<WebSocket>()
-  let attachedServer: http.Server | null = null
+  let attachedServer: KickServer | null = null
   let upgradeHandler: ((req: IncomingMessage, socket: Socket, head: Buffer) => void) | null = null
 
   wss.on('connection', (ws: WebSocket) => {
@@ -134,7 +137,7 @@ export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
     return params.get('token') === secret
   }
 
-  const attachUpgrade = (httpServer: http.Server): void => {
+  const attachUpgrade = (httpServer: KickServer): void => {
     if (attachedServer) return // idempotent
     attachedServer = httpServer
     upgradeHandler = (req, socket, head) => {
