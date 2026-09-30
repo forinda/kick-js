@@ -36,18 +36,7 @@ export function generatePackageJson(
   name: string,
   versions: SiblingVersions,
   packages: { dependencies: readonly string[]; devDependencies: readonly string[] },
-  /**
-   * Pin the TypeScript 7 compiler API, needed to resolve the client route map
-   * (`.kickjs/types/kick__client.d.ts`). Set by the fullstack generator, whose
-   * web app reads that map from the ambient `KickClientApi` namespace. It is a
-   * 10 kB shim over a 24 MB `typescript@6`, so rest/minimal stay without it.
-   */
-  withClientMap = false,
 ): string {
-  const devDependencies = withClientMap
-    ? [...packages.devDependencies, '@typescript/typescript6']
-    : packages.devDependencies
-
   return JSON.stringify(
     {
       name,
@@ -81,116 +70,11 @@ export function generatePackageJson(
         'build:vercel': 'kick build && kick build:vercel',
       },
       dependencies: pinned(packages.dependencies, versions),
-      devDependencies: pinned(devDependencies, versions),
+      devDependencies: pinned(packages.devDependencies, versions),
     },
     null,
     2,
   )
-}
-
-/**
- * Generate vite.config.ts with the KickJS Vite plugin.
- *
- * The plugin handles:
- * - SSR environment setup for backend Node.js code
- * - Virtual module generation (virtual:kickjs/app)
- * - Module auto-discovery (scans *.module.ts files)
- * - HMR with selective container invalidation
- * - Express mounting via configureServer() post-hook
- * - httpServer piping to adapters (WsAdapter, Socket.IO, etc.)
- */
-export function generateViteConfig(options: { strictPort?: boolean } = {}): string {
-  // The fullstack web app proxies /api to a fixed port. Without strictPort,
-  // Vite moves to the next free port when that one is taken and the proxy
-  // silently talks to whatever else holds it; with it, `kick dev` fails loudly.
-  const server = options.strictPort
-    ? `  server: {
-    // web/vite.config.ts proxies /api to this port — fail instead of moving
-    // to another port when it's taken, or the proxy would reach the wrong process.
-    strictPort: true,
-  },
-`
-    : ''
-  return `import { defineConfig } from 'vite'
-import { fileURLToPath } from 'node:url'
-import swc from 'unplugin-swc'
-import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
-
-export default defineConfig({
-  oxc: false,
-  plugins: [
-    swc.vite(),
-    kickjsVitePlugin({ entry: 'src/index.ts' }),
-    // Watches .env files and triggers a full reload on change so the
-    // dev server picks up env tweaks without a manual restart.
-    envWatchPlugin(),
-  ],
-${server}  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-  },
-  build: {
-    target: 'node20',
-    ssr: true,
-    outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      input: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      output: { format: 'esm' },
-    },
-  },
-})
-`
-}
-
-/**
- * `netlify.toml` for `kick build:netlify`.
- *
- * Netlify publishes a directory whatever else happens: with a frontend that
- * is its build, and without one it must be an empty directory the build
- * creates — otherwise Netlify serves the project's own files as static
- * content, and those shadow the function.
- */
-export function generateNetlifyToml(options: {
-  command: string
-  publish: string
-  spa: boolean
-}): string {
-  const redirect = options.spa
-    ? `
-# Client-side routes fall back to the app shell. The function claims /api/*
-# through its own \`config.path\`, so this rule never sees those requests.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-`
-    : ''
-  return `[build]
-  command = "${options.command}"
-  publish = "${options.publish}"
-
-[build.environment]
-  NODE_VERSION = "22"
-${redirect}`
-}
-
-/**
- * `vercel.json` for a Git-connected project. `framework: null` keeps Vercel
- * from treating the repo as a plain Vite app; the build writes
- * `.vercel/output`, which Vercel then deploys as-is.
- */
-export function generateVercelJson(buildCommand: string): string {
-  return `${JSON.stringify(
-    {
-      $schema: 'https://openapi.vercel.sh/vercel.json',
-      framework: null,
-      buildCommand,
-    },
-    null,
-    2,
-  )}\n`
 }
 
 /**

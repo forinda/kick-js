@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SIBLING_PACKAGES, THIRD_PARTY_PACKAGES, scaffoldLayers } from '../src/generators/project'
 import {
   TEMPLATES_DIR,
+  fillVars,
   outputPath,
   renderImports,
   renderLayers,
@@ -161,6 +162,18 @@ describe('renderImports', () => {
 describe('the shipped layers', () => {
   const layers = readdirSync(TEMPLATES_DIR)
 
+  it('leave no markers or {{vars}} in the fullstack root and web layers', () => {
+    const files = fillVars(renderLayers(['fullstack-root', 'web-kick']).files, {
+      name: 'demo',
+      packageManager: 'pnpm',
+    })
+    for (const [path, contents] of files) {
+      expect(contents, path).not.toMatch(/@kick:|\{\{\w+\}\}/)
+    }
+    expect(files.get('web/index.html')).toContain('<title>demo</title>')
+    expect(files.get('netlify.toml')).toContain('pnpm run build:netlify')
+  })
+
   it('only list packages the scaffold resolves a version for', () => {
     const resolvable = new Set<string>([...SIBLING_PACKAGES, ...Object.keys(THIRD_PARTY_PACKAGES)])
     const project = renderLayers(layers.filter((l) => !l.startsWith('template-')))
@@ -172,15 +185,28 @@ describe('the shipped layers', () => {
   it('leave no slot markers or {{vars}} in any combination', () => {
     for (const template of ['minimal', 'rest'] as const) {
       for (const runtime of ['express', 'fastify', 'h3'] as const) {
-        const { files } = renderLayers(
-          scaffoldLayers({
-            template,
-            runtime,
-            schemaLib: 'zod',
-            packages: ['swagger', 'devtools', 'ws', 'queue'],
-          }),
+        const project = renderLayers(
+          [
+            ...scaffoldLayers({
+              template,
+              runtime,
+              schemaLib: 'zod',
+              packages: ['swagger', 'devtools', 'ws', 'queue'],
+            }),
+            'host-config',
+            'server-fullstack',
+          ],
           { vars: { name: 'demo', version: '1.0.0' } },
         )
+        // The vars `kick new` fills after rendering.
+        const files = fillVars(project.files, {
+          name: 'demo',
+          template,
+          runtime,
+          packageManager: 'pnpm',
+          templateLabel: 'Minimal',
+          packages: '- `@forinda/kickjs`',
+        })
         for (const [path, contents] of files) {
           expect(contents, `${template}/${runtime}: ${path}`).not.toMatch(/@kick:|\{\{\w+\}\}/)
         }

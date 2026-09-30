@@ -487,6 +487,23 @@ kick add --list           # show core packages (alias: kick list)
 kick add --list --all     # full optional catalog
 ```
 
+### Wiring: adapters added for you
+
+`swagger`, `devtools`, `ws` and `queue` (BullMQ; also `queue:bullmq`) are wired as well as installed — the same way `kick new --packages` wires them:
+
+- the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), with its import. An `adapters` list is created if the call has none;
+- `queue` adds `REDIS_HOST` / `REDIS_PORT` to `.env` and `.env.example` — only the keys that aren't there, so existing values stay;
+- the package goes into `dependencies` (the entry file imports it) along with the peers the adapter uses.
+
+```text
+  Added SwaggerAdapter to src/index.ts
+  Added WsAdapter to src/index.ts
+```
+
+Only the call's position changes — the rest of the file is left as it was, and running `kick add` again for the same package doesn't add a second copy. When the file doesn't have that shape (no `bootstrap({ ... })`, or `adapters` is a variable rather than a list), `kick add` prints the import and the call to paste yourself.
+
+`kick add` won't edit a file with uncommitted changes, so the wiring lands as its own diff: commit or stash first, or pass `--force`. `--no-wire` installs without touching any file.
+
 `auth`, `drizzle` and `prisma` were **removed from the catalog in v8** along with their packages — `kick add auth` now reports an unknown package. Replacements: [BYO auth](./byo-recipes.md#auth) composed from context decorators, and `@forinda/kickjs-db` (`kick add db` / `pg` / `sqlite` / `mysql`) for the ORM adapters.
 
 ### Core packages

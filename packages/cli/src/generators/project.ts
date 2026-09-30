@@ -3,16 +3,9 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
-import { renderLayers, TEMPLATES_DIR, type Integration } from '../scaffold/overlay'
+import { fillVars, renderLayers, TEMPLATES_DIR, type Integration } from '../scaffold/overlay'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
-import {
-  generatePackageJson,
-  generateViteConfig,
-  generateNetlifyToml,
-  generateVercelJson,
-} from './templates/project-config'
-import { generateKickConfig } from './templates/project-app'
-import { generateReadme } from './templates/project-docs'
+import { generatePackageJson } from './templates/project-config'
 import {
   AVAILABLE_ADD_PACKAGES,
   TEMPLATE_BUILDS,
@@ -95,7 +88,9 @@ export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: stri
   'unplugin-swc': { fallback: '^1.5.9' },
   oxfmt: { fallback: '^0.65.0' },
   oxlint: { fallback: '^1.80.0' },
-  dotenv: { fallback: '^17.3.1' },
+  // Capped: an optional peer of @forinda/kickjs at this major. Uncapped,
+  // `latest` (18) installed with an unmet-peer warning on every scaffold.
+  dotenv: { fallback: '^17.3.1', cap: '^17' },
   'reflect-metadata': { fallback: '^0.2.2' },
   // Capped — a new major here breaks the generated project, not just its deps.
   // vite: `@forinda/kickjs-vite` peers on it and the generated vite.config.ts
@@ -313,10 +308,11 @@ interface InitProjectOptions {
   runtime?: 'express' | 'fastify' | 'h3'
   /** Wire `SpaAdapter` at this clientDir (fullstack template). */
   spaClientDir?: string
-  /** Pin the compiler API + generate the client route map (fullstack). */
-  withClientMap?: boolean
-  /** Fail `kick dev` when its port is taken instead of moving (fullstack's /api proxy needs the port). */
-  strictPort?: boolean
+  /**
+   * Layers rendered after the selection's — `server-fullstack` for the
+   * fullstack workspace's server (strict port, client route map, TS 6 pin).
+   */
+  extraLayers?: string[]
   /**
    * Record install-script approvals for the package manager (pnpm-workspace.yaml,
    * or package.json for npm/bun). Default true; false when the project is a
@@ -436,39 +432,52 @@ export async function initProject(
       `WARNING: skipping unknown package(s): ${unknown.join(', ')} — add them later with kick add`,
     )
   }
-  const project = renderLayers(scaffoldLayers({ template, runtime, schemaLib, packages }), {
-    vars: { name, version: cliPkg.version },
-    extra: options.spaClientDir ? [spaIntegration(options.spaClientDir)] : [],
-  })
+  const project = renderLayers(
+    [
+      ...scaffoldLayers({ template, runtime, schemaLib, packages }),
+      // netlify.toml / vercel.json — inert until the project is connected to
+      // a platform. A workspace member leaves them to the root.
+      ...(options.platformConfig !== false ? ['host-config'] : []),
+      ...(options.extraLayers ?? []),
+    ],
+    {
+      vars: { name, version: cliPkg.version },
+      extra: [
+        // `inmemory` is the only built-in; any other name is a `{ name }` custom repo.
+        {
+          slot: 'repo',
+          code:
+            defaultRepo === 'inmemory'
+              ? `repo: 'inmemory'`
+              : `repo: { name: '${defaultRepo.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' }`,
+        },
+        ...(options.spaClientDir ? [spaIntegration(options.spaClientDir)] : []),
+      ],
+    },
+  )
 
   // ── package.json ─────────────────────────────────────────────────────
-  await writeFileSafe(
-    join(dir, 'package.json'),
-    generatePackageJson(name, versions, project, options.withClientMap),
-  )
+  await writeFileSafe(join(dir, 'package.json'), generatePackageJson(name, versions, project))
 
-  // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
-  await writeFileSafe(
-    join(dir, 'vite.config.ts'),
-    generateViteConfig({ strictPort: options.strictPort }),
-  )
-
-  // tsconfig, formatter/editor/git config, .env files (`.env.test` is read
-  // INSTEAD of `.env` under a test run, so shipping it isolates a new
-  // project's tests), vitest config, the hello module, `src/config/index.ts`
-  // (the typed env schema `kick typegen` reads) and `src/index.ts`.
-  for (const [path, contents] of project.files) {
+  // tsconfig, vite/vitest/kick config, formatter/editor/git config, .env
+  // files (`.env.test` is read INSTEAD of `.env` under a test run, so
+  // shipping it isolates a new project's tests), README, the hello module,
+  // `src/config/index.ts` (the typed env schema `kick typegen` reads) and
+  // `src/index.ts`.
+  const files = fillVars(project.files, {
+    name,
+    template,
+    runtime,
+    packageManager,
+    templateLabel: template === 'rest' ? 'REST API' : 'Minimal',
+    packages: [...project.dependencies, ...project.devDependencies]
+      .filter((pkg) => pkg.startsWith('@forinda/'))
+      .map((pkg) => `- \`${pkg}\``)
+      .join('\n'),
+  })
+  for (const [path, contents] of files) {
     await writeFileSafe(join(dir, path), contents)
   }
-
-  // ── kick.config.ts — CLI configuration ─────────────────────────────
-  await writeFileSafe(
-    join(dir, 'kick.config.ts'),
-    generateKickConfig(template, defaultRepo, packageManager, runtime, options.withClientMap),
-  )
-
-  // ── README.md ────────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'README.md'), generateReadme(name, template, packageManager))
 
   // ── Agent docs ──────────────────────────────────────────────────────
   // Delegate to `generateAgentDocs()` so `kick new` emits the same
@@ -487,26 +496,6 @@ export async function initProject(
     only: 'all',
     force: true,
   })
-
-  // ── Platform deploy config ───────────────────────────────────────────
-  // Inert until you connect the project to a platform; `kick build:netlify`
-  // / `kick build:vercel` are what they run.
-  if (options.platformConfig !== false) {
-    await writeFileSafe(
-      join(dir, 'netlify.toml'),
-      generateNetlifyToml({
-        command: `${packageManager} run build:netlify`,
-        // No frontend here: the function serves every path, and this empty
-        // directory exists only so Netlify has something to publish.
-        publish: 'dist/public',
-        spa: false,
-      }),
-    )
-    await writeFileSafe(
-      join(dir, 'vercel.json'),
-      generateVercelJson(`${packageManager} run build:vercel`),
-    )
-  }
 
   // ── Install-script approvals ─────────────────────────────────────────
   // Before install; see approveInstallScripts.

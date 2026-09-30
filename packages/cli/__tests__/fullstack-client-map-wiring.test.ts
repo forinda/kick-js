@@ -10,7 +10,11 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { webApi, webTsConfig } from '../src/generators/fullstack'
+import { renderLayers } from '../src/scaffold/overlay'
+
+const web = renderLayers(['web-kick']).files
+const webApi = () => web.get('web/src/api.ts')!
+const webTsConfig = () => web.get('web/tsconfig.json')!
 
 /** Statements only — the file comments the explicit-import alternative. */
 const code = (out: string) =>

@@ -133,7 +133,7 @@ Things that don't make headlines but determine whether adopters stick around.
 
 ### B.1 Scaffolder feature-overlay model
 
-**Status:** `proposed` — design settled, not started
+**Status:** `shipped` — `kick new` renders every file it can from `packages/cli/templates/` layers with slots (template, runtime, schema library, optional packages, host config, the fullstack server, root and web app); `kick add` wires those packages into an existing app; and a scaffold matrix (`pnpm scaffold:matrix`, daily in CI, one scenario per CLI pull request) scaffolds, installs this commit's packed packages, typechecks, builds and boots six scenarios. `package.json` files, the fullstack root's per-package-manager scripts and README, and the agent docs stay code.
 **Effort:** 3–6 weeks
 
 **Why it matters.** `kick new` is built from TS functions that return file contents as strings (`packages/cli/src/generators/`, about 4.6k lines). Feature choices show up as conditionals inside those functions, and the combinations keep multiplying: template × runtime × schema library × repo × optional packages × package manager × frontend. A contributor can't see what a scaffolded project looks like without running `kick new`, adding a feature means editing several generators, and `ws` / `queue` are installed but never wired into `src/index.ts`. `kick add` only installs packages, and nothing in CI installs, typechecks or boots a `kick new` output.
@@ -768,13 +768,12 @@ These will get their own track once we have a clearer picture from the non-DB wo
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), and **E.5** `@Cron` on serverless. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-2. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-3. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
+1. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+2. **C.1, C.2** — bold bets, and both want re-reading against what kick/db and typegen already do
 
 Open for redirection — these are starting points, not commitments.
 

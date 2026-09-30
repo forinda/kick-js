@@ -1,7 +1,5 @@
 {
-  "dependencies": [
-    "@forinda/kickjs-swagger"
-  ],
+  "dependencies": ["@forinda/kickjs-swagger"],
   "builds": {
     "@scarf/scarf": true
   },
@@ -9,9 +7,7 @@
     {
       "import": {
         "from": "@forinda/kickjs-swagger",
-        "names": [
-          "SwaggerAdapter"
-        ]
+        "names": ["SwaggerAdapter"]
       },
       "slot": "adapter",
       "code": "SwaggerAdapter({ info: { title: '{{name}}', version: '{{version}}' } })"

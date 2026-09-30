@@ -6,7 +6,13 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { generateViteConfig } from '../src/generators/templates/project-config'
+import { renderLayers } from '../src/scaffold/overlay'
+
+/** The server's vite.config.ts — with the fullstack server layer when `strictPort`. */
+const generateViteConfig = (options: { strictPort?: boolean } = {}) =>
+  renderLayers(options.strictPort ? ['base', 'server-fullstack'] : ['base']).files.get(
+    'vite.config.ts',
+  )!
 
 describe('generated vite.config.ts — strictPort', () => {
   it('sets server.strictPort for the fullstack server, with the reason', () => {
