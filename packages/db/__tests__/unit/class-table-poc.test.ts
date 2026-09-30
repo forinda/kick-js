@@ -22,12 +22,23 @@ import {
   table,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
 } from '../../src/index'
 import { sqliteDialect } from '../../src/sqlite'
 import { pgSchema } from '../../src/pg'
-import { Column, Rule, Table, rulesOf, tableFromClass, tableOf } from '../../src/class-table'
+import {
+  Column,
+  Rule,
+  Table,
+  TableBase,
+  defineTable,
+  rulesOf,
+  tableFromClass,
+  tableOf,
+  type ClassRefs,
+} from '../../src/class-table'
 import { insertSchema } from '../../src/schema'
 
 // The object form both variants must reproduce.
@@ -196,5 +207,92 @@ describe('a table in a Postgres schema', () => {
     const snap = extractSnapshot({ invoices: tableFromClass(Invoices) }, 'postgres')
     expect(Object.keys(snap.tables)).toEqual(['billing.invoices'])
     expect(snap).toEqual(extractSnapshot({ invoices: invoicesObj }, 'postgres'))
+  })
+})
+
+// ── C: base-class factory, D: fluent builder ────────────────────────────
+
+class Author extends TableBase(
+  'authors',
+  {
+    id: serial().primaryKey(),
+    email: varchar(120).notNull().unique(),
+    bio: text(),
+  },
+  { rules: { email: { format: 'email' } } },
+) {
+  get domain() {
+    return this.email.split('@')[1]
+  }
+}
+
+const authorsD = defineTable('authors')
+  .column('id', serial().primaryKey())
+  .column('email', varchar(120).notNull().unique(), { format: 'email' })
+  .column('bio', text())
+  .build()
+
+describe('C: TableBase', () => {
+  it('snapshots like the object form, and rows become instances with methods', () => {
+    expect(extractSnapshot({ authors: Author.table }, 'sqlite')).toEqual(
+      extractSnapshot({ authors: authorsObj }, 'sqlite'),
+    )
+    const ada = Author.from({ id: 1, email: 'ada@example.com', bio: null })
+    expect(ada).toBeInstanceOf(Author)
+    expect(ada.domain).toBe('example.com')
+  })
+
+  it('carries its rules into the request schema', () => {
+    const create = insertSchema(Author.table, { columns: Author.rules })
+    expect(create.safeParse({ email: 'nope' }).success).toBe(false)
+  })
+
+  it('takes indexes over its columns', () => {
+    class Tagged extends TableBase(
+      'tagged',
+      { id: serial().primaryKey(), slug: varchar(40).notNull() },
+      { indexes: (t) => ({ bySlug: unique('tagged_slug').on(t.slug) }) },
+    ) {}
+    expect(Tagged.table.__indexes).toEqual([
+      { name: 'tagged_slug', columns: ['slug'], unique: true },
+    ])
+  })
+})
+
+describe('D: defineTable', () => {
+  it('snapshots like the object form, and carries its rules', () => {
+    expect(extractSnapshot({ authors: authorsD }, 'sqlite')).toEqual(
+      extractSnapshot({ authors: authorsObj }, 'sqlite'),
+    )
+    const rules = defineTable('authors')
+      .column('email', varchar(120).notNull(), { format: 'email' })
+      .rules()
+    expect(rules).toEqual({ email: { format: 'email' } })
+  })
+
+  it('takes indexes and a Postgres schema', () => {
+    const invoices = defineTable('invoices', { schema: 'billing' })
+      .column('id', uuid().primaryKey())
+      .column('ref', varchar(20).notNull())
+      .index((t) => ({ byRef: unique('invoices_ref').on(t.ref) }))
+      .build()
+    expect(invoices.__schema).toBe('billing')
+    expect(invoices.__indexes).toEqual([{ name: 'invoices_ref', columns: ['ref'], unique: true }])
+  })
+})
+
+describe('B: static indexes', () => {
+  it('passes them to the table', () => {
+    class Slugs {
+      static readonly tableName = 'slugs'
+      static readonly indexes = (t: ClassRefs<typeof Slugs>) => ({
+        bySlug: unique('slugs_slug').on(t.slug),
+      })
+      id = serial().primaryKey()
+      slug = varchar(40).notNull()
+    }
+    expect(tableFromClass(Slugs).__indexes).toEqual([
+      { name: 'slugs_slug', columns: ['slug'], unique: true },
+    ])
   })
 })
