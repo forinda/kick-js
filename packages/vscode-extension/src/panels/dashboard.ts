@@ -1,5 +1,14 @@
 import * as vscode from 'vscode'
 
+/**
+ * A string as a JS literal that is safe inside an HTML `<script>` element.
+ * `JSON.stringify` alone isn't: a value containing `</script>` would end the
+ * element before the string does, so `<` is escaped as `\u003c` too.
+ */
+export function scriptString(value: string): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c')
+}
+
 export class DashboardPanel {
   public static currentPanel: DashboardPanel | undefined
   private readonly panel: vscode.WebviewPanel
@@ -94,8 +103,8 @@ export class DashboardPanel {
   </div>
   <div id="content"></div>
   <script>
-    const BASE = ${JSON.stringify(this.baseUrl)};
-    const TOKEN = ${JSON.stringify(this.token ?? '')};
+    const BASE = ${scriptString(this.baseUrl)};
+    const TOKEN = ${scriptString(this.token ?? '')};
     let allRoutes = [];
 
     // Authenticated GET — sends the devtools token as a header (not a

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Script } from 'node:vm'
 import * as vscode from 'vscode'
-import { DashboardPanel } from '../src/panels/dashboard'
+import { DashboardPanel, scriptString } from '../src/panels/dashboard'
 
 /** Open the panel and return the HTML it rendered into the webview. */
 function renderHtml(baseUrl: string, token?: string): string {
@@ -26,6 +26,19 @@ describe('DashboardPanel webview', () => {
     const html = renderHtml(`http://h/'; alert(1); '`)
     expect(html).toContain(`const BASE = "http://h/'; alert(1); '";`)
     expect(() => new Script(inlineScript(html))).not.toThrow()
+  })
+
+  it('keeps a script-closing base URL or token inside the script element', () => {
+    const payload = '</script><script>alert(1)</script>'
+    const html = renderHtml(`http://h/${payload}`, payload)
+    expect(html.match(/<\/script>/g)).toHaveLength(1)
+    expect(html).not.toContain(payload)
+    expect(() => new Script(inlineScript(html))).not.toThrow()
+  })
+
+  it('scriptString round-trips through JS', () => {
+    const value = `</script> "q" 'q' \\ \u2028`
+    expect(new Script(`(${scriptString(value)})`).runInNewContext()).toBe(value)
   })
 
   it('fetches the extended endpoints', () => {
