@@ -34,6 +34,7 @@ import {
 import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs } from './devtools-tabs'
+import { locateHandler } from './source-locator'
 import { createServerBus, type ServerBus } from './bus/server'
 
 const log = createLogger('DevTools')
@@ -565,6 +566,22 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
         router.get('/routes', (ctx: RequestContext) => {
           ctx.json({ routes })
+        })
+
+        // Where a route's handler lives — "open in editor" in the dashboard
+        // and the VS Code extension.
+        router.get('/source', (ctx: RequestContext) => {
+          const { controller, handler } = ctx.query as Record<string, string | undefined>
+          const known = routes.some((r) => r.controller === controller && r.handler === handler)
+          const found =
+            known && controller && handler
+              ? locateHandler(process.cwd(), controller, handler)
+              : undefined
+          if (!found) {
+            ctx.json({ error: 'Handler source not found' }, 404)
+            return
+          }
+          ctx.json(found)
         })
 
         router.get('/container', (ctx: RequestContext) => {

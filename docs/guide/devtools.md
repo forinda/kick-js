@@ -325,6 +325,17 @@ The tab nav scrolls horizontally when there are too many tabs to fit; switching 
 - **Environment** — default headers sent with every route (an `Authorization` token, a tenant header), variables, and settings. Kept for the browser tab only, unless you tick **Remember on this browser** (see below).
 - **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
 - **Response** — status, time, headers and the body (JSON pretty-printed), plus **Save to variable**.
+- **History** — the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Entries keep `{{variables}}` as written, not their values.
+
+The header names the handler (`UsersController.list`): click it to **open the handler in your editor**. The dashboard asks the app where the class is declared under `src/`, then follows a `vscode://file{file}:{line}` link. For another editor, change **Editor link** under _Environment → Settings_ — e.g. `cursor://file{file}:{line}`, `windsurf://file{file}:{line}`, or `idea://open?file={file}&line={line}`.
+
+#### OpenAPI prefill
+
+When the [Swagger adapter](./swagger.md) serves a spec (`/openapi.json` by default; change **OpenAPI spec URL** in settings if yours differs), the runner reads the route's operation:
+
+- a route opened for the first time gets its query parameters as rows (switched on when required) and an example JSON body built from the request schema — `example`, `default` or the first `enum` value where the schema gives one, a blank of the right type otherwise;
+- the summary shows under the route, path-param descriptions show as placeholders, and query parameters are listed with their descriptions;
+- **Fill empty inputs from OpenAPI** (under _Environment_) applies it later. It only fills empty fields and adds missing query rows — it never overwrites what you typed.
 
 #### Variables and saved auth
 
@@ -366,7 +377,7 @@ If the server runs `DevToolsAdapter({ requireToken: true })` and you open the da
 
 ### VSCode extension
 
-The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension](https://marketplace.visualstudio.com/items?itemName=forinda.kickjs-devtools) — install it, run **KickJS: Connect to App…** from the palette, and the Activity Bar gets Health / Routes / DI Container tree views without leaving the editor. When the server requires a token, run **KickJS: Set DevTools Token…** to paste it.
+The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension](https://marketplace.visualstudio.com/items?itemName=forinda.kickjs-devtools) — install it, run **KickJS: Connect to App…** from the palette, and the Activity Bar gets Health / Routes / DI Container tree views without leaving the editor. Click a route (or its inline **Open Handler** button) to jump to the handler — the path comes from the app, and the extension maps it into your workspace when the app runs elsewhere (a container, another checkout). When the server requires a token, run **KickJS: Set DevTools Token…** to paste it.
 
 ## Security
 

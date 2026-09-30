@@ -72,6 +72,7 @@ export const window: Record<string, any> = {
   showErrorMessage: vi.fn(),
   showQuickPick: vi.fn(),
   showInputBox: vi.fn(),
+  showTextDocument: vi.fn(),
   withProgress: vi.fn(async (_opts: unknown, task: () => Promise<unknown>) => task()),
 }
 
@@ -111,6 +112,20 @@ export const commands: Record<string, any> = {
 export const Uri = {
   file: (path: string) => ({ fsPath: path, scheme: 'file' }),
   parse: (str: string) => ({ toString: () => str, scheme: str.split(':')[0] }),
+}
+
+export class Position {
+  constructor(
+    public line: number,
+    public character: number,
+  ) {}
+}
+
+export class Range {
+  constructor(
+    public start: Position,
+    public end: Position,
+  ) {}
 }
 
 export enum ViewColumn {

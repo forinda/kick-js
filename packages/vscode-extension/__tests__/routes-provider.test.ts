@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { RoutesTreeProvider, formatFlags } from '../src/providers/routes'
+import * as vscode from 'vscode'
+import {
+  RoutesTreeProvider,
+  formatFlags,
+  openHandler,
+  resolveSourcePath,
+} from '../src/providers/routes'
 
 describe('RoutesTreeProvider', () => {
   const originalFetch = globalThis.fetch
@@ -119,5 +125,55 @@ describe('formatFlags', () => {
   it('returns empty for missing or empty flags (older devtools)', () => {
     expect(formatFlags(undefined)).toBe('')
     expect(formatFlags({})).toBe('')
+  })
+})
+
+describe('open handler', () => {
+  const found = {
+    file: '/srv/app/src/users.controller.ts',
+    relative: 'src/users.controller.ts',
+    line: 12,
+  }
+
+  it('uses the absolute path when it exists, else the relative one under a workspace folder', () => {
+    expect(resolveSourcePath(found, ['/ws'], (p) => p === found.file)).toBe(found.file)
+    expect(
+      resolveSourcePath(found, ['/a', '/ws'], (p) => p === '/ws/src/users.controller.ts'),
+    ).toBe('/ws/src/users.controller.ts')
+    expect(resolveSourcePath(found, ['/ws'], () => false)).toBeUndefined()
+  })
+
+  it('asks the devtools server and opens the file at the line', async () => {
+    const originalFetch = globalThis.fetch
+    const file = __filename
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...found, file }),
+    }) as never
+    try {
+      await openHandler('http://localhost/_debug', 't0k', {
+        controller: 'UsersController',
+        handler: 'list',
+      })
+      const [url, init] = (globalThis.fetch as any).mock.calls[0]
+      expect(url).toBe('http://localhost/_debug/source?controller=UsersController&handler=list')
+      expect(init.headers).toEqual({ 'x-devtools-token': 't0k' })
+      const [uri, options] = (vscode.window.showTextDocument as any).mock.calls[0]
+      expect(uri.fsPath).toBe(file)
+      expect(options.selection.start).toEqual({ line: 11, character: 0 })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('makes route items open their handler on click', async () => {
+    const provider = new RoutesTreeProvider('http://localhost/_debug')
+    ;(provider as any).routes = [
+      { method: 'GET', path: '/u', controller: 'UsersController', handler: 'list' },
+    ]
+    const [group] = provider.getChildren()
+    const [item] = provider.getChildren(group as any) as any[]
+    expect(item.contextValue).toBe('kickjs.route')
+    expect(item.command.command).toBe('kickjs.openHandler')
   })
 })

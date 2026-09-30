@@ -51,12 +51,18 @@ export interface RunnerSettings {
   csrfCookie: string
   /** `csrf()` / `csrfGuard()` header name. */
   csrfHeader: string
+  /** Where the Swagger adapter serves the spec — prefills inputs when it answers. */
+  openApiUrl: string
+  /** "Open in editor" link; `{file}` (absolute) and `{line}` are filled in. */
+  editorUrl: string
 }
 
 export const DEFAULT_SETTINGS: RunnerSettings = {
   publicFlag: 'auth.public',
   csrfCookie: '_csrf',
   csrfHeader: 'x-csrf-token',
+  openApiUrl: '/openapi.json',
+  editorUrl: 'vscode://file{file}:{line}',
 }
 
 /** The route fields the runner needs (a subset of the store's RouteEntry). */
@@ -361,4 +367,155 @@ export const emptyInputs = (route: RunnerRoute): RouteInputs => {
 /** Inputs as they are saved: files are in-memory only, so they are dropped. */
 export function storableInputs(inputs: RouteInputs): RouteInputs {
   return { ...inputs, form: inputs.form?.map(({ files: _files, ...row }) => row) }
+}
+
+// ── History ─────────────────────────────────────────────────────────────
+
+/**
+ * One sent request. Stores the inputs as typed — `{{variables}}` unresolved —
+ * so the history never holds more than the saved inputs already do.
+ */
+export interface HistoryEntry {
+  at: number
+  method: string
+  path: string
+  inputs: RouteInputs
+  status?: number
+  ms?: number
+  error?: string
+}
+
+export const HISTORY_LIMIT = 30
+
+/** Newest first, capped. */
+export function pushHistory(
+  list: HistoryEntry[],
+  entry: HistoryEntry,
+  limit = HISTORY_LIMIT,
+): HistoryEntry[] {
+  return [{ ...entry, inputs: storableInputs(entry.inputs) }, ...list].slice(0, limit)
+}
+
+/** The request line a history row shows: path with params and query filled in, no origin. */
+export const historyLabel = (entry: HistoryEntry): string =>
+  buildUrl('', entry.path, entry.inputs.params, entry.inputs.query)
+
+// ── OpenAPI ─────────────────────────────────────────────────────────────
+
+/** What the spec says about one operation, reduced to what the runner fills in. */
+export interface OpenApiHints {
+  summary?: string
+  params: Record<string, string>
+  query: Array<{ name: string; required: boolean; description?: string }>
+  /** Example JSON body, built from the request schema. */
+  body?: string
+}
+
+type Json = Record<string, any>
+
+/** The operation for this route: spec paths use `{id}`, routes use `:id`. */
+function findOperation(spec: Json, route: RunnerRoute): Json | undefined {
+  for (const [path, item] of Object.entries<Json>(spec?.paths ?? {})) {
+    if (path.replace(/\{([^}]+)\}/g, ':$1') === route.path) {
+      return item?.[route.method.toLowerCase()]
+    }
+  }
+  return undefined
+}
+
+function deref(spec: Json, schema: Json | undefined): Json | undefined {
+  const ref = schema?.$ref
+  if (typeof ref !== 'string' || !ref.startsWith('#/')) return schema
+  let node: any = spec
+  for (const key of ref.slice(2).split('/')) node = node?.[key]
+  return node
+}
+
+/** A value shaped like the schema: its example or default when given, else a blank of its type. */
+export function exampleFromSchema(spec: Json, input: Json | undefined, depth = 0): unknown {
+  const schema = deref(spec, input)
+  if (!schema || depth > 6) return null
+  if (schema.example !== undefined) return schema.example
+  if (schema.default !== undefined) return schema.default
+  if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0]
+  const variant = schema.oneOf?.[0] ?? schema.anyOf?.[0]
+  if (variant) return exampleFromSchema(spec, variant, depth + 1)
+  if (schema.allOf) {
+    return Object.assign(
+      {},
+      ...schema.allOf.map((part: Json) => exampleFromSchema(spec, part, depth + 1)),
+    )
+  }
+  const type = Array.isArray(schema.type)
+    ? schema.type.find((t: string) => t !== 'null')
+    : schema.type
+  switch (type ?? (schema.properties ? 'object' : undefined)) {
+    case 'object':
+      return Object.fromEntries(
+        Object.entries<Json>(schema.properties ?? {}).map(([key, prop]) => [
+          key,
+          exampleFromSchema(spec, prop, depth + 1),
+        ]),
+      )
+    case 'array':
+      return schema.items ? [exampleFromSchema(spec, schema.items, depth + 1)] : []
+    case 'string':
+      return ''
+    case 'integer':
+    case 'number':
+      return 0
+    case 'boolean':
+      return false
+    default:
+      return null
+  }
+}
+
+export function openApiHints(spec: unknown, route: RunnerRoute): OpenApiHints | undefined {
+  const op = findOperation(spec as Json, route)
+  if (!op) return undefined
+  const params: Record<string, string> = {}
+  const query: OpenApiHints['query'] = []
+  for (const raw of op.parameters ?? []) {
+    const p = deref(spec as Json, raw)
+    if (!p?.name) continue
+    if (p.in === 'path' && p.description) params[p.name] = p.description
+    if (p.in === 'query') {
+      query.push({ name: p.name, required: Boolean(p.required), description: p.description })
+    }
+  }
+  const schema = op.requestBody?.content?.['application/json']?.schema
+  return {
+    summary: op.summary ?? op.description,
+    params,
+    query,
+    ...(schema ? { body: JSON.stringify(exampleFromSchema(spec as Json, schema), null, 2) } : {}),
+  }
+}
+
+/**
+ * Fill what's empty from the spec: query rows the inputs don't have yet
+ * (enabled only when required) and an empty body. Never overwrites.
+ */
+export function applyHints(inputs: RouteInputs, hints: OpenApiHints): RouteInputs {
+  const have = new Set(inputs.query.map((r) => r.key))
+  const query = [
+    ...inputs.query,
+    ...hints.query
+      .filter((q) => !have.has(q.name))
+      .map((q) => ({ key: q.name, value: '', enabled: q.required })),
+  ]
+  const body = inputs.body.trim() || !hints.body ? inputs.body : hints.body
+  return { ...inputs, query, body }
+}
+
+// ── Editor ──────────────────────────────────────────────────────────────
+
+/**
+ * The "open in editor" URL. `{file}` is the absolute path; a Windows path gets
+ * a leading `/` so `vscode://file{file}` stays a valid URL.
+ */
+export function editorLink(template: string, file: string, line: number): string {
+  const path = file.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')
+  return template.replace('{file}', encodeURI(path)).replace('{line}', String(line))
 }

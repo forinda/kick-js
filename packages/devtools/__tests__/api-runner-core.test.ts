@@ -2,6 +2,12 @@ import { runInNewContext } from 'node:vm'
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_SETTINGS,
+  applyHints,
+  editorLink,
+  exampleFromSchema,
+  historyLabel,
+  openApiHints,
+  pushHistory,
   buildUrl,
   emptyInputs,
   formatBody,
@@ -305,5 +311,129 @@ describe('helpers', () => {
   it('asks for confirmation on data-changing methods', () => {
     expect(['DELETE', 'put', 'PATCH'].map(needsConfirmation)).toEqual([true, true, true])
     expect(['GET', 'POST'].map(needsConfirmation)).toEqual([false, false])
+  })
+})
+
+describe('history', () => {
+  const entry = (n: number) => ({
+    at: n,
+    method: 'GET',
+    path: '/users/:id',
+    inputs: { ...emptyInputs({ method: 'GET', path: '/users/:id' }), params: { id: String(n) } },
+    status: 200,
+  })
+
+  it('keeps the newest entries first, capped', () => {
+    let list = [entry(1)]
+    for (let n = 2; n <= 5; n++) list = pushHistory(list, entry(n), 3)
+    expect(list.map((e) => e.at)).toEqual([5, 4, 3])
+  })
+
+  it('drops picked files, and labels entries by path and query', () => {
+    const file = new File(['x'], 'a.png')
+    const [saved] = pushHistory([], {
+      ...entry(1),
+      inputs: {
+        ...entry(1).inputs,
+        query: [row('q', '{{term}}')],
+        form: [{ key: 'f', value: '', enabled: true, type: 'file', files: [file] }],
+      },
+    })
+    expect(saved.inputs.form?.[0].files).toBeUndefined()
+    expect(historyLabel(saved)).toBe('/users/1?q=%7B%7Bterm%7D%7D')
+  })
+})
+
+describe('OpenAPI hints', () => {
+  const spec = {
+    paths: {
+      '/api/v1/users/{id}': {
+        patch: {
+          summary: 'Update a user',
+          parameters: [
+            { name: 'id', in: 'path', required: true, description: 'User id (uuid)' },
+            { $ref: '#/components/parameters/Verbose' },
+            { name: 'page', in: 'query' },
+          ],
+          requestBody: {
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } },
+          },
+        },
+      },
+    },
+    components: {
+      parameters: {
+        Verbose: { name: 'verbose', in: 'query', required: true, description: 'More fields' },
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', example: 'Ada' },
+            role: { type: 'string', enum: ['admin', 'user'] },
+            age: { type: ['integer', 'null'] },
+            tags: { type: 'array', items: { type: 'string' } },
+            address: { allOf: [{ properties: { city: { type: 'string', default: 'Nairobi' } } }] },
+            active: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  }
+  const route = { method: 'PATCH', path: '/api/v1/users/:id' }
+
+  it('reads the matching operation', () => {
+    expect(openApiHints(spec, route)).toEqual({
+      summary: 'Update a user',
+      params: { id: 'User id (uuid)' },
+      query: [
+        { name: 'verbose', required: true, description: 'More fields' },
+        { name: 'page', required: false, description: undefined },
+      ],
+      body: JSON.stringify(
+        {
+          name: 'Ada',
+          role: 'admin',
+          age: 0,
+          tags: [''],
+          address: { city: 'Nairobi' },
+          active: false,
+        },
+        null,
+        2,
+      ),
+    })
+    expect(openApiHints(spec, { method: 'GET', path: '/api/v1/users/:id' })).toBeUndefined()
+    expect(openApiHints(null, route)).toBeUndefined()
+  })
+
+  it('stops on a self-referencing schema', () => {
+    const loop = { components: { schemas: { Node: { $ref: '#/components/schemas/Node' } } } }
+    expect(() => exampleFromSchema(loop, { $ref: '#/components/schemas/Node' })).not.toThrow()
+  })
+
+  it('fills only what is empty', () => {
+    const hints = openApiHints(spec, route)!
+    const filled = applyHints({ ...emptyInputs(route), query: [row('page', '2')], body: '' }, hints)
+    expect(filled.query).toEqual([row('page', '2'), row('verbose', '', true)])
+    expect(JSON.parse(filled.body).name).toBe('Ada')
+
+    const kept = applyHints({ ...emptyInputs(route), body: '{"x":1}' }, hints)
+    expect(kept.body).toBe('{"x":1}')
+    expect(kept.query.map((r) => [r.key, r.enabled])).toEqual([
+      ['verbose', true],
+      ['page', false],
+    ])
+  })
+})
+
+describe('editorLink', () => {
+  it('fills the template, keeping Windows paths valid in a URL', () => {
+    expect(editorLink(DEFAULT_SETTINGS.editorUrl, '/home/me/app/src/a b.ts', 12)).toBe(
+      'vscode://file/home/me/app/src/a%20b.ts:12',
+    )
+    expect(editorLink('cursor://file{file}:{line}', 'C:\\app\\src\\a.ts', 3)).toBe(
+      'cursor://file/C:/app/src/a.ts:3',
+    )
   })
 })
