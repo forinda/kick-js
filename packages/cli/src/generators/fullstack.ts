@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSafe } from '../utils/fs'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
-import { TEMPLATE_BUILDS, approveInstallScripts } from '../commands/add'
+import { approveInstallScripts } from '../commands/add'
 import { generateNetlifyToml, generateVercelJson } from './templates/project-config'
 
 /** Wiring a frontend we did not scaffold: typed client, proxy, route types. */
@@ -83,6 +83,8 @@ export interface InitFullstackOptions {
   installDeps?: boolean
   schemaLib?: 'zod' | 'valibot' | 'yup'
   runtime?: 'express' | 'fastify' | 'h3'
+  /** Optional packages (`--packages`), wired into the server like a plain scaffold. */
+  packages?: string[]
 }
 
 export async function initFullstackProject(options: InitFullstackOptions): Promise<void> {
@@ -91,6 +93,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     directory,
     schemaLib = 'zod',
     runtime = 'express',
+    packages = [],
     frontend = 'kick',
     viteTemplate = DEFAULT_VITE_TEMPLATE,
   } = options
@@ -119,13 +122,14 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   const versions = await resolveSiblingVersions()
 
   // ── server/ — the standard scaffold, deferred install/git ──────────
-  await initProject({
+  const server = await initProject({
     name: `${name}-server`,
     directory: join(dir, 'server'),
     packageManager,
     template: 'minimal',
     schemaLib,
     runtime,
+    packages,
     // web/ reads the resolved route map from the ambient KickClientApi
     // namespace, which needs the TS 7 compiler API to produce.
     withClientMap: true,
@@ -171,7 +175,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - server\n  - web\n')
   }
   // Before install, at the root every package manager reads them from.
-  approveInstallScripts(packageManager, dir, TEMPLATE_BUILDS)
+  approveInstallScripts(packageManager, dir, server.builds)
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
   // Platform deploy config, at the root both platforms build from.
   await writeFileSafe(

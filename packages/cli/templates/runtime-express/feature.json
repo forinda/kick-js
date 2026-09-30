@@ -1,0 +1,22 @@
+{
+  "dependencies": ["express"],
+  "devDependencies": ["@types/express"],
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs",
+        "names": ["expressRuntime"]
+      },
+      "slot": "runtime",
+      "code": "runtime: expressRuntime()"
+    },
+    {
+      "import": {
+        "from": "express",
+        "default": "express"
+      },
+      "slot": "middleware",
+      "code": "// Express needs a body parser; Fastify and h3 parse bodies natively.\nexpress.json()"
+    }
+  ]
+}

@@ -8,6 +8,14 @@
 import { describe, it, expect } from 'vitest'
 
 import { generatePackageJson } from '../src/generators/templates/project-config'
+import { scaffoldLayers } from '../src/generators/project'
+import { renderLayers } from '../src/scaffold/overlay'
+
+/** The `--yes` selection's package lists. */
+const defaultPackages = () =>
+  renderLayers(
+    scaffoldLayers({ template: 'minimal', runtime: 'express', schemaLib: 'zod', packages: [] }),
+  )
 
 /**
  * The shape `resolveSiblingVersions()` returns: siblings resolved by name,
@@ -29,13 +37,13 @@ const versions = () =>
 describe('scaffolded package.json scripts', () => {
   it('dev runs kick dev (typegen watcher), not bare vite', () => {
     const fixture = versions()
-    const pkg = JSON.parse(generatePackageJson('demo-app', 'minimal', fixture))
+    const pkg = JSON.parse(generatePackageJson('demo-app', fixture, defaultPackages()))
     expect(pkg.scripts.dev).toBe('kick dev')
     expect(pkg.scripts.build).toBe('kick build')
   })
 
   it('ships the four everyday scripts plus the two deploy targets, and no script it cannot run', () => {
-    const pkg = JSON.parse(generatePackageJson('demo-app', 'minimal', versions()))
+    const pkg = JSON.parse(generatePackageJson('demo-app', versions(), defaultPackages()))
 
     // The deploy pair runs `kick build:netlify` / `kick build:vercel`, both
     // built into the CLI that is already a devDependency.
@@ -58,7 +66,7 @@ describe('scaffolded package.json scripts', () => {
   })
 
   it('formats with the tool the framework itself uses', () => {
-    const pkg = JSON.parse(generatePackageJson('demo-app', 'minimal', versions()))
+    const pkg = JSON.parse(generatePackageJson('demo-app', versions(), defaultPackages()))
 
     // A scaffold arriving with prettier, from a repo formatted by oxfmt, makes
     // the generated project disagree with the framework it came from.

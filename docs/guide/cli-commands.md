@@ -111,11 +111,13 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 
 | Flag                             | Description                                                            | Default                                  |
 | -------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
-| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`                       | Prompted (or `rest` with `--yes`)        |
+| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`                       | Prompted (or `minimal` with `--yes`)     |
+| `--runtime <engine>`             | HTTP engine: `express`, `fastify`, `h3`                                | Prompted (or `express` with `--yes`)     |
+| `-s, --schema <lib>`             | Schema library: `zod`, `valibot`, `yup`                                | Prompted (or `zod` with `--yes`)         |
 | `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`) | Prompted (or `inmemory` with `--yes`)    |
 | `-d, --directory <dir>`          | Target directory                                                       | Project name                             |
 | `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`                       | Prompted (or auto-detected with `--yes`) |
-| `--packages <list>`              | Comma-separated optional packages                                      | Prompted (or none with `--yes`)          |
+| `--packages <list>`              | Comma-separated optional packages (see below)                          | Prompted (or none with `--yes`)          |
 | `--git / --no-git`               | Initialize git repository                                              | Prompted (or `true` with `--yes`)        |
 | `--install / --no-install`       | Install dependencies                                                   | Prompted (or `true` with `--yes`)        |
 | `-f, --force`                    | Clear non-empty directory without prompting                            | `false`                                  |
@@ -123,11 +125,24 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 
 ### Templates
 
-| Template         | Adapters           | Packages installed                                             |
-| ---------------- | ------------------ | -------------------------------------------------------------- |
-| `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger                            |
-| `minimal`        | None               | kickjs, kickjs-vite                                            |
-| `fullstack`      | None (minimal API) | server: kickjs, kickjs-vite · web: kickjs-client, React + Vite |
+| Template    | What you get                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------- |
+| `minimal`   | A hello module and a bare `bootstrap()`                                                           |
+| `rest`      | The same, plus `helmet`, `cors`, request id and request logging (and `express.json()` on Express) |
+| `fullstack` | A workspace: a minimal API in `server/` and a typed React app in `web/`                           |
+
+### Optional packages
+
+Each one is installed with the packages it needs and wired into `src/index.ts`:
+
+| Package    | Adds to `adapters`                         | Installs                                     |
+| ---------- | ------------------------------------------ | -------------------------------------------- |
+| `swagger`  | `SwaggerAdapter` — docs at `/docs`         | `@forinda/kickjs-swagger`                    |
+| `devtools` | `DevToolsAdapter` — dashboard at `/_debug` | `@forinda/kickjs-devtools`                   |
+| `ws`       | `WsAdapter({ path: '/ws' })`               | `@forinda/kickjs-ws`, `ws`                   |
+| `queue`    | `QueueAdapter` over Redis (BullMQ)         | `@forinda/kickjs-queue`, `bullmq`, `ioredis` |
+
+`queue` reads `REDIS_HOST` / `REDIS_PORT` (added to `.env`). Nothing connects until a `@Job` class or a queue is used, so the app boots without Redis. An unknown name is skipped with a warning.
 
 `fullstack` scaffolds a pnpm workspace — `server/` (KickJS API) + `web/`
 (Vite + React typed against the API via the

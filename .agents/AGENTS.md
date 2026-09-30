@@ -38,6 +38,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | Generator patterns   | `packages/cli/src/generators/patterns/{rest,minimal}.ts`                   |
 | Template functions   | `packages/cli/src/generators/templates/`                                   |
 | TemplateContext type | `packages/cli/src/generators/templates/types.ts`                           |
+| Scaffold layers      | `packages/cli/templates/<layer>/files/` + `src/scaffold/overlay.ts`        |
 | ModuleConfig type    | `packages/cli/src/config.ts`                                               |
 | Swagger decorators   | `packages/swagger/src/decorators.ts`                                       |
 | OpenAPI builder      | `packages/swagger/src/openapi-builder.ts`                                  |

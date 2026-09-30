@@ -62,6 +62,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
     concurrency: 1,
   },
   build: (options) => {
+    const panel = options.panel ?? process.env.NODE_ENV !== 'production'
     const workers: Worker[] = []
     const queueService = new QueueService()
 
@@ -117,6 +118,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
       // the URL with `sandbox="allow-scripts allow-same-origin"` so
       // the page can call back to /_debug/queues for live data.
       devtoolsTabs(): DevtoolsTabDescriptor[] {
+        if (!panel) return []
         return [
           defineDevtoolsTab({
             id: 'queue',
@@ -132,6 +134,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
       // Standalone HTML page — no framework, no build step; bundled inline so
       // adopters don't have to ship our panel as a separate static asset.
       beforeMount({ http }) {
+        if (!panel) return
         http.route('GET', '/_kick/queue/panel', (ctx) => {
           ctx.html(QUEUE_PANEL_HTML)
         })

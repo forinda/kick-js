@@ -1,0 +1,13 @@
+{
+  "dependencies": ["fastify", "@fastify/middie", "serve-static"],
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs/fastify",
+        "names": ["fastifyRuntime"]
+      },
+      "slot": "runtime",
+      "code": "runtime: fastifyRuntime()"
+    }
+  ]
+}

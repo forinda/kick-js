@@ -13,20 +13,19 @@
  */
 import { describe, it, expect } from 'vitest'
 
-import {
-  generateViteConfig,
-  generateVitestConfig,
-  generateTsConfig,
-} from '../src/generators/templates/project-config'
+import { generateViteConfig } from '../src/generators/templates/project-config'
+import { renderLayers } from '../src/scaffold/overlay'
+
+const base = renderLayers(['base']).files
 
 describe('@ alias is single-sourced across the scaffold', () => {
   it('defines the alias in the vite config and mirrors it in tsconfig paths', () => {
     expect(generateViteConfig()).toContain("'@': fileURLToPath(new URL('./src', import.meta.url))")
-    expect(JSON.parse(generateTsConfig()).compilerOptions.paths['@/*']).toEqual(['./src/*'])
+    expect(JSON.parse(base.get('tsconfig.json')!).compilerOptions.paths['@/*']).toEqual(['./src/*'])
   })
 
   it('has the vitest config merge the vite config rather than restate it', () => {
-    const cfg = generateVitestConfig()
+    const cfg = base.get('vitest.config.ts')!
     expect(cfg).toContain('mergeConfig')
     // The extension is required: without it Vite's native config loader warns
     // on every test run.

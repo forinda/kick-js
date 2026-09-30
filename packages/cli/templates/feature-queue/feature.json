@@ -1,0 +1,16 @@
+{
+  "dependencies": ["@forinda/kickjs-queue", "bullmq", "ioredis"],
+  "builds": {
+    "msgpackr-extract": false
+  },
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs-queue",
+        "names": ["QueueAdapter"]
+      },
+      "slot": "adapter",
+      "code": "// BullMQ over Redis. Nothing connects until a @Job class or a queue\n// is used, so the app boots without Redis running.\nQueueAdapter({\n  redis: {\n    host: process.env.REDIS_HOST ?? '127.0.0.1',\n    port: Number(process.env.REDIS_PORT ?? 6379),\n  },\n})"
+    }
+  ]
+}

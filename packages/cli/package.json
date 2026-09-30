@@ -29,7 +29,8 @@
   },
   "files": [
     "bin.js",
-    "dist"
+    "dist",
+    "templates"
   ],
   "scripts": {
     "build": "tsdown",

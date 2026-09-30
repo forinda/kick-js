@@ -70,6 +70,17 @@ describe('kick new --yes (non-interactive)', () => {
     // Default repo — inmemory
     expect(config).toContain(`repo: 'inmemory'`)
 
+    // The base layer's files, dotfiles included (stored as `_dot_*`).
+    for (const file of [
+      '.gitignore',
+      '.env',
+      '.env.test',
+      'tsconfig.json',
+      'src/modules/index.ts',
+    ]) {
+      expect(existsSync(join(projectDir, file)), file).toBe(true)
+    }
+
     // Sanity: no prompt strings leaked into stdout
     expect(result.stdout).not.toContain('Project template')
     expect(result.stdout).not.toContain('Default repository/ORM')
@@ -99,6 +110,61 @@ describe('kick new --yes (non-interactive)', () => {
     expect(config).toContain(`pattern: 'rest'`)
     // Any non-inmemory repo name is emitted as a custom `{ name }` repo.
     expect(config).toContain(`repo: { name: 'postgres' }`)
+  })
+
+  it('applies runtime, schema, packages and package manager flags over --yes', () => {
+    const result = runNew(cwd, [
+      'my-api',
+      '--yes',
+      '--runtime',
+      'fastify',
+      '--schema',
+      'valibot',
+      '--packages',
+      'swagger,devtools',
+      '--pm',
+      'npm',
+      '--no-install',
+      '--no-git',
+    ])
+    expect(result.exitCode).toBe(0)
+    const dir = join(cwd, 'my-api')
+    const entry = readFileSync(join(dir, 'src/index.ts'), 'utf-8')
+    expect(entry).toContain(`from '@forinda/kickjs/fastify'`)
+    expect(entry).toContain('SwaggerAdapter(')
+    expect(entry).toContain('DevToolsAdapter(')
+    expect(readFileSync(join(dir, 'src/config/index.ts'), 'utf-8')).toContain(`from 'valibot'`)
+    const config = readFileSync(join(dir, 'kick.config.ts'), 'utf-8')
+    expect(config).toContain(`runtime: 'fastify'`)
+    expect(config).toContain(`packageManager: 'npm'`)
+    // Unset flags keep their --yes defaults.
+    expect(config).toContain(`pattern: 'minimal'`)
+    expect(config).toContain(`repo: 'inmemory'`)
+  })
+
+  it('wires --packages into the fullstack server and approves their scripts at the root', () => {
+    const result = runNew(cwd, [
+      'my-app',
+      '--yes',
+      '--template',
+      'fullstack',
+      '--pm',
+      'pnpm',
+      '--packages',
+      'swagger,queue',
+      '--no-install',
+      '--no-git',
+    ])
+    expect(result.exitCode).toBe(0)
+    const dir = join(cwd, 'my-app')
+    const entry = readFileSync(join(dir, 'server/src/index.ts'), 'utf-8')
+    expect(entry).toContain('SwaggerAdapter(')
+    expect(entry).toContain('QueueAdapter(')
+    expect(entry).toContain('SpaAdapter(')
+    // The root installs the workspace, so the root records the answers.
+    const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf-8')
+    expect(workspace).toContain(`'@scarf/scarf': true`)
+    expect(workspace).toContain('msgpackr-extract: false')
   })
 
   it('aborts cleanly when target dir is non-empty and --force is missing', () => {

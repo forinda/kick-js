@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { KickCliPlugin } from './plugin/types'
 
@@ -809,6 +810,26 @@ const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'ki
  * silently dropping the config (which is what the previous bare-catch
  * did).
  */
+/**
+ * When the project can't resolve `@forinda/kickjs-cli` itself — a fresh
+ * `kick new` before install, or a global `kick` in a project whose deps
+ * aren't installed — map it to this CLI, so `import { defineConfig } from
+ * '@forinda/kickjs-cli'` in kick.config.ts still loads. The config is read by
+ * this CLI either way; an installed copy is left to normal resolution.
+ */
+function selfAlias(root: string): Record<string, string> {
+  for (let dir = root; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, 'node_modules', '@forinda', 'kickjs-cli', 'package.json'))) return {}
+    if (dirname(dir) === dir) break
+  }
+  // One level below the package root in source (src/) and in the bundle (dist/).
+  const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const entry = [join(pkgRoot, 'dist', 'index.mjs'), join(pkgRoot, 'src', 'index.ts')].find(
+    existsSync,
+  )
+  return entry ? { '@forinda/kickjs-cli': entry } : {}
+}
+
 export async function loadKickConfig(startDir: string): Promise<KickConfig | null> {
   const { findProjectRoot } = await import('./utils/project-root')
   const root = findProjectRoot(startDir)
@@ -856,7 +877,11 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
       }
 
       try {
-        const jiti = jitiModule.createJiti(root, { interopDefault: true, fsCache: false })
+        const jiti = jitiModule.createJiti(root, {
+          interopDefault: true,
+          fsCache: false,
+          alias: selfAlias(root),
+        })
         const config = (await jiti.import(filepath, { default: true })) as KickConfig
         const warnings = validateAssetMap(config, root)
         for (const warning of warnings) console.warn(`  Warning: ${warning}`)

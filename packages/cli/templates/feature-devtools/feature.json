@@ -1,0 +1,13 @@
+{
+  "dependencies": ["@forinda/kickjs-devtools"],
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs-devtools",
+        "names": ["DevToolsAdapter"]
+      },
+      "slot": "adapter",
+      "code": "DevToolsAdapter()"
+    }
+  ]
+}

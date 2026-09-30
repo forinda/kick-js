@@ -1,0 +1,20 @@
+{
+  "dependencies": [
+    "@forinda/kickjs-swagger"
+  ],
+  "builds": {
+    "@scarf/scarf": true
+  },
+  "integrations": [
+    {
+      "import": {
+        "from": "@forinda/kickjs-swagger",
+        "names": [
+          "SwaggerAdapter"
+        ]
+      },
+      "slot": "adapter",
+      "code": "SwaggerAdapter({ info: { title: '{{name}}', version: '{{version}}' } })"
+    }
+  ]
+}
