@@ -5,6 +5,8 @@
  */
 import 'reflect-metadata'
 import diagnostics from 'node:diagnostics_channel'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import {
@@ -12,6 +14,8 @@ import {
   Controller,
   Get,
   HttpException,
+  Logger,
+  type LoggerProvider,
   RequestContext,
   reportError,
   settleBackgroundWork,
@@ -90,6 +94,88 @@ describe('reportError()', () => {
     expect(() => reportError(new Error('x'), { source: 'job' })).not.toThrow()
     await new Promise((r) => setTimeout(r, 0))
     expect(seen).toEqual(['job'])
+  })
+})
+
+describe('reportError() with a broken logger', () => {
+  it('still never throws, and never produces an unhandled rejection', async () => {
+    const throwing: LoggerProvider = {
+      info() {},
+      warn() {},
+      debug() {},
+      error() {
+        throw new Error('logger down')
+      },
+      child() {
+        return throwing
+      },
+    }
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => void unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    Logger.setProvider(throwing)
+    try {
+      setObservers([
+        {
+          name: 'sync',
+          onError: () => {
+            throw new Error('observer bug')
+          },
+        },
+        {
+          name: 'async',
+          onError: async () => {
+            throw new Error('async observer bug')
+          },
+        },
+      ])
+      expect(() => reportError(new Error('x'), { source: 'job' })).not.toThrow()
+      await new Promise((r) => setTimeout(r, 20))
+      expect(unhandled).toEqual([])
+    } finally {
+      Logger.resetProvider()
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+})
+
+describe('aborted requests', () => {
+  it('are not reported as responses, and still leave the in-flight count', async () => {
+    const rec = recorder()
+    @Controller()
+    class SlowController {
+      @Get('/')
+      async slow(ctx: RequestContext) {
+        await new Promise((r) => setTimeout(r, 300))
+        ctx.json({ late: true })
+      }
+    }
+    app = new Application({
+      modules: [{ routes: () => ({ path: '/slow', controller: SlowController }) } as never],
+      adapters: [rec.adapter],
+    })
+    await app.setup()
+    const server = createServer((req, res) => app!.handle(req, res))
+    await new Promise<void>((r) => server.listen(0, r))
+    try {
+      const abort = new AbortController()
+      const pending = fetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1/slow`,
+        {
+          signal: abort.signal,
+        },
+      ).catch(() => 'aborted')
+      await new Promise((r) => setTimeout(r, 50))
+      abort.abort()
+      expect(await pending).toBe('aborted')
+      await new Promise((r) => setTimeout(r, 400))
+
+      expect(rec.responses).toEqual([])
+      expect(app.inFlightRequests).toBe(0)
+    } finally {
+      server.closeAllConnections()
+      await new Promise((r) => server.close(r))
+    }
   })
 })
 

@@ -1748,10 +1748,16 @@ export class Application {
       // Timed only while something observes responses — checked per request,
       // since a diagnostics channel can gain a subscriber at any time.
       const started = hasResponseObservers() ? performance.now() : undefined
-      const onFinish = () => {
+      // `finish` means the response went out; a bare `close` means the client
+      // gave up first. Only the first is a response to report — on an abort
+      // `res.statusCode` still holds its default (200) and would read as a
+      // success. Both still leave the in-flight count.
+      const onFinish = () => settle(true)
+      const onClose = () => settle(false)
+      const settle = (finished: boolean) => {
         res.removeListener('finish', onFinish)
-        res.removeListener('close', onFinish)
-        if (started !== undefined) {
+        res.removeListener('close', onClose)
+        if (finished && started !== undefined) {
           const matched = (req as unknown as Record<symbol, MatchedRoute | undefined>)[ROUTE_SLOT]
           reportResponse({
             method: req.method,
@@ -1772,7 +1778,7 @@ export class Application {
         }
       }
       res.on('finish', onFinish)
-      res.on('close', onFinish)
+      res.on('close', onClose)
       next()
     }
   }

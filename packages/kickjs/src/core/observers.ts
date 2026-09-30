@@ -97,8 +97,15 @@ function notify(pick: (o: Observer) => void | Promise<void> | undefined, what: s
 
 function failed(observer: Observer, what: string, err: unknown): void {
   // Logged directly, never re-reported: an observer failing inside onError
-  // must not loop back into onError.
-  log.error({ err }, `${observer.name ?? 'observer'}.${what} threw — skipped`)
+  // must not loop back into onError. Guarded too: a custom LoggerProvider that
+  // throws would otherwise escape reportError() — or, from an async
+  // observer, become an unhandled rejection that bootstrap reports right back
+  // here.
+  try {
+    log.error({ err }, `${observer.name ?? 'observer'}.${what} threw — skipped`)
+  } catch {
+    // Nothing left to tell; reportError's "never throws" contract wins.
+  }
 }
 
 /**
