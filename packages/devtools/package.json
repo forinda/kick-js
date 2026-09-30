@@ -44,7 +44,7 @@
   "peerDependencies": {
     "express": "^5.1.0",
     "ws": "^8.0.0",
-    "@forinda/kickjs": ">=5.18.0"
+    "@forinda/kickjs": ">=8.2.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
