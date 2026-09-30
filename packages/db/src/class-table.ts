@@ -67,9 +67,47 @@ function build(
   schema?: string,
   constraints?: (refs: never) => Record<string, IndexDecl>,
 ) {
-  return schema
+  const decl = schema
     ? pgSchema(schema).table(name, columns, constraints as never)
     : table(name, columns, constraints as never)
+  bindSelfRefs(name, columns, decl as unknown as Record<string, ColumnRef>)
+  return decl
+}
+
+// ── Self-references without an annotation ──────────────────────────────
+//
+// `parentId: uuid().references(() => categories.id)` inside `table(...)` is
+// TS7022: the const's type depends on its own initializer. The usual fix,
+// `(): ColumnRef => categories.id`, is the step people don't know about.
+// `selfRef('id')` names the column instead of reaching for the const; the
+// form binds it to its own table once that exists.
+
+const SELF = Symbol.for('@forinda/kickjs-db/self-ref')
+
+/** A foreign key to a column of the table being declared. */
+export function selfRef(column: string): () => ColumnRef {
+  const thunk = () => {
+    throw new Error(`selfRef('${column}') used outside a class-table form`)
+  }
+  return Object.assign(thunk, { [SELF]: column })
+}
+
+function bindSelfRefs(
+  tableName: string,
+  columns: Record<string, ColumnBuilder>,
+  decl: Record<string, ColumnRef>,
+): void {
+  for (const builder of Object.values(columns)) {
+    const fkSpec = builder.__state().references as {
+      thunk: (() => ColumnRef) & { [SELF]?: string }
+    } | null
+    const target = fkSpec?.thunk[SELF]
+    if (target === undefined) continue
+    if (!(target in columns)) {
+      throw new Error(`selfRef('${target}'): table '${tableName}' has no column '${target}'`)
+    }
+    fkSpec!.thunk = () => decl[target]!
+  }
 }
 
 /**
@@ -185,12 +223,18 @@ const CLASS_TABLE = Symbol.for('@forinda/kickjs-db/class-field-table')
 export function tableFromClass<C extends TableClass>(
   cls: C,
 ): TableDecl<
-  C['tableName'],
+  // Re-stated as a template literal: a `static readonly x = 'users'` is a
+  // *widening* literal, which turns into `string` the moment the table goes
+  // through a generic function (relations(), the client) — losing the key.
+  `${C['tableName']}`,
   BuilderFields<InstanceType<C>>,
-  C extends { schema: infer S extends string } ? (S extends 'public' ? undefined : S) : undefined
-> & {
-  [K in keyof BuilderFields<InstanceType<C>>]: ColumnRef
-} {
+  C extends { schema: infer S extends string }
+    ? S extends 'public'
+      ? undefined
+      : `${S}`
+    : undefined
+> &
+  TypedRefs<BuilderFields<InstanceType<C>>> {
   const meta = cls as unknown as Record<symbol, unknown>
   if (!Object.hasOwn(meta, CLASS_TABLE)) {
     // One instance, to read the initializers. The builders are the column
@@ -251,7 +295,8 @@ export function TableBase<
     N,
     C,
     S extends 'public' ? undefined : S
-  > & { [K in keyof C]: ColumnRef }
+  > &
+    TypedRefs<C>
 
   abstract class Base {
     static readonly table = decl
@@ -289,19 +334,28 @@ class TableDefinition<N extends string, C extends ColumnsRecord, S extends strin
     private readonly columns: C,
     private readonly columnRules: Record<string, ColumnRule | SchemaLike>,
     private readonly constraints?: (refs: never) => Record<string, IndexDecl>,
+    /** Shared by every step of one chain — `build()` fills it in. */
+    private readonly built: { decl?: Record<string, ColumnRef> } = {},
   ) {}
 
+  /**
+   * Add a column. `builder` may be a function of the columns declared so
+   * far — how a column references its own table without an annotation:
+   * `.column('parentId', (t) => fk(uuid(), () => t.id))`.
+   */
   column<const K extends string, B extends ColumnBuilder>(
     key: K extends keyof C ? never : K,
-    builder: B,
+    builder: B | ((refs: TypedRefs<C>) => B),
     rule?: RuleFor<B>,
   ): TableDefinition<N, C & { [P in K]: B }, S> {
+    const resolved = typeof builder === 'function' ? builder(this.refs as TypedRefs<C>) : builder
     return new TableDefinition(
       this.name,
       this.schema,
-      { ...this.columns, [key]: builder } as C & { [P in K]: B },
+      { ...this.columns, [key]: resolved } as C & { [P in K]: B },
       rule ? { ...this.columnRules, [key]: rule as ColumnRule | SchemaLike } : this.columnRules,
       this.constraints,
+      this.built,
     )
   }
 
@@ -314,11 +368,38 @@ class TableDefinition<N extends string, C extends ColumnsRecord, S extends strin
       this.columns,
       this.columnRules,
       constraints as never,
+      this.built,
     )
   }
 
-  build(): TableDecl<N, C, S extends 'public' ? undefined : S> & { [K in keyof C]: ColumnRef } {
-    return build(this.name, this.columns, this.schema, this.constraints) as never
+  build(): TableDecl<N, C, S extends 'public' ? undefined : S> & TypedRefs<C> {
+    const decl = build(this.name, this.columns, this.schema, this.constraints)
+    this.built.decl = decl as unknown as Record<string, ColumnRef>
+    return decl as never
+  }
+
+  /**
+   * Refs for `.column(key, (t) => ...)` callbacks. The table doesn't exist
+   * yet, so each ref resolves when a foreign-key thunk runs — after `build()`.
+   */
+  private get refs(): Record<string, ColumnRef> {
+    const built = this.built
+    const name = this.name
+    return new Proxy({} as Record<string, ColumnRef>, {
+      get: (_, key: string) =>
+        ({
+          get __tableName() {
+            return name
+          },
+          get __name() {
+            return key
+          },
+          get __builder() {
+            return built.decl![key]!.__builder
+          },
+          __state: () => built.decl![key]!.__state(),
+        }) as ColumnRef,
+    })
   }
 
   /** The `.column(..., rule)` rules, for `insertSchema`'s `columns` option. */
@@ -332,4 +413,33 @@ export function defineTable<const N extends string, const S extends string | und
   options: { schema?: S } = {},
 ): TableDefinition<N, {}, S> {
   return new TableDefinition(name, options.schema as S, {}, {})
+}
+
+// ── Typed foreign keys ──────────────────────────────────────────────────
+//
+// `integer().references(() => users.id)` compiles whatever `users.id` is —
+// a column ref carries no value type. The class / fluent forms can hand out
+// refs that do, and `fk()` checks the two sides agree:
+//
+//   authorId: fk(integer().notNull(), () => Author.table.id)  // ✓ integer → serial
+//   authorId: fk(uuid().notNull(),    () => Author.table.id)  // ✗ uuid → serial
+//
+// `table()`'s refs are untyped, so `fk()` accepts them — the check needs the
+// value type on the ref, which only these forms supply today.
+
+/** A column ref that knows its column's value type. */
+export type TypedRef<T> = ColumnRef & { readonly __valueType?: T }
+
+/** Typed refs for a column record. */
+export type TypedRefs<C> = {
+  [K in keyof C]: TypedRef<C[K] extends ColumnBuilder<infer T> ? T : never>
+}
+
+/** A foreign key whose target column must hold the same type as this one. */
+export function fk<T, B extends ColumnBuilder<T>>(
+  builder: B & ColumnBuilder<T>,
+  target: () => TypedRef<NoInfer<T>>,
+  options: Parameters<ColumnBuilder['references']>[1] = {},
+): B {
+  return builder.references(target, options) as B
 }
