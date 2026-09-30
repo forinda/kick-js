@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { RoutesTreeProvider } from '../src/providers/routes'
+import { RoutesTreeProvider, formatFlags } from '../src/providers/routes'
 
 describe('RoutesTreeProvider', () => {
   const originalFetch = globalThis.fetch
@@ -86,5 +86,38 @@ describe('RoutesTreeProvider', () => {
     expect(route.tooltip).toContain('GET /users')
     expect(route.tooltip).toContain('UserController')
     expect(route.tooltip).toContain('auth, rateLimit')
+  })
+
+  it('shows route flags in the description and tooltip', async () => {
+    ;(globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        routes: [
+          {
+            method: 'GET',
+            path: '/health',
+            controller: 'HealthController',
+            handler: 'live',
+            flags: { 'auth.public': true, 'rate.limit': { rpm: 10 } },
+          },
+        ],
+      }),
+    })
+
+    const provider = new RoutesTreeProvider('http://localhost/_debug')
+    provider.refresh()
+    await new Promise((r) => setTimeout(r, 10))
+
+    const [group] = provider.getChildren()
+    const [route] = provider.getChildren(group as any) as any[]
+    expect(route.description).toBe('live · auth.public, rate.limit={"rpm":10}')
+    expect(route.tooltip).toContain('Flags: auth.public, rate.limit={"rpm":10}')
+  })
+})
+
+describe('formatFlags', () => {
+  it('returns empty for missing or empty flags (older devtools)', () => {
+    expect(formatFlags(undefined)).toBe('')
+    expect(formatFlags({})).toBe('')
   })
 })
