@@ -1,212 +1,166 @@
-# Scheduled Tasks (BYO Cron)
+# Scheduled Tasks
 
-KickJS doesn't ship a first-party cron package — scheduling libraries are tiny, opinionated, and adopters consistently swap the wrapper for direct upstream usage. This guide shows how to mount **your own** cron adapter using `defineAdapter` plus a scheduling library of your choice.
+`@Cron` marks a service method as a scheduled job. What runs it depends on where the app is deployed:
 
-::: tip Pick any scheduler
-The recipe below uses [`croner`](https://github.com/Hexagon/croner) (zero deps, tiny, supports timezones). Swap in `node-cron`, `cron`, `node-schedule`, or raw `setInterval` — only the line that constructs the timer changes.
-:::
+| Where                  | What runs the job                                                      |
+| ---------------------- | ---------------------------------------------------------------------- |
+| Node server            | `KickCronAdapter()` — opt-in, uses the optional peer `croner`          |
+| Vercel                 | a Vercel cron that `kick build:vercel` writes, calling the app         |
+| Cloudflare Workers     | the web entry's `scheduled()` handler                                  |
+| Netlify                | nothing — `kick build:netlify` warns (use Netlify scheduled functions) |
+| Your own adapter (BYO) | whatever you write — `@Cron` only records metadata                     |
 
-## Setup
-
-<PmCommand add="croner" />
-
-## Decorator + adapter
-
-::: tip Use the framework's metadata helpers, not raw `Reflect`
-KickJS exports `setClassMeta` / `pushClassMeta` / `getClassMeta` / `getMethodMeta` from `@forinda/kickjs`. They wrap `Reflect.defineMetadata` / `Reflect.getMetadata` with typed returns, sensible defaults, and the framework's `'kick/<area>/<key>'` key convention. Use them in adopter code so your decorator metadata round-trips through the same store the framework uses (DevTools introspection, typegen, etc. can pick it up). Don't import `reflect-metadata` directly — the framework already does at startup.
-:::
+## Declare a job
 
 ```ts
-// src/decorators/cron.decorator.ts
-import { pushClassMeta, getClassMeta } from '@forinda/kickjs'
-
-const CRON_META = 'app/cron' // adopter scope — first-party would be 'kick/cron'
-
-export interface CronJobMeta {
-  expression: string
-  handlerName: string
-  description?: string
-  timezone?: string
-  runOnInit?: boolean
-}
-
-export function Cron(
-  expression: string,
-  options?: { description?: string; timezone?: string; runOnInit?: boolean },
-): MethodDecorator {
-  return (target, propertyKey) => {
-    pushClassMeta<CronJobMeta>(CRON_META, target.constructor, {
-      expression,
-      handlerName: propertyKey as string,
-      description: options?.description,
-      timezone: options?.timezone,
-      runOnInit: options?.runOnInit,
-    })
-  }
-}
-
-export function getCronJobs(target: object): CronJobMeta[] {
-  return getClassMeta<CronJobMeta[]>(CRON_META, target, [])
-}
-```
-
-```ts
-// src/adapters/cron.adapter.ts
-import { Cron as CronJob } from 'croner'
-import { Logger, defineAdapter, type AdapterContext, type Constructor } from '@forinda/kickjs'
-import { getCronJobs } from '../decorators/cron.decorator'
-
-const log = Logger.for('CronAdapter')
-
-export interface CronAdapterOptions {
-  /** Service classes containing `@Cron`-decorated methods. */
-  services: Constructor[]
-  /** Disable all scheduled jobs (e.g. on a worker process that shouldn't run cron). */
-  enabled?: boolean
-}
-
-export const CronAdapter = defineAdapter<CronAdapterOptions>({
-  name: 'CronAdapter',
-  defaults: { enabled: true },
-  build: (config) => {
-    const jobs: CronJob[] = []
-
-    return {
-      async beforeStart({ container }: AdapterContext) {
-        if (!config.enabled) return
-
-        for (const ServiceClass of config.services) {
-          const instance = container.resolve(ServiceClass)
-          for (const meta of getCronJobs(ServiceClass)) {
-            const job = new CronJob(meta.expression, { timezone: meta.timezone }, async () => {
-              try {
-                await instance[meta.handlerName]()
-              } catch (err) {
-                log.error(err as Error, `Cron job ${ServiceClass.name}.${meta.handlerName} failed`)
-              }
-            })
-            jobs.push(job)
-            log.info(`Scheduled ${ServiceClass.name}.${meta.handlerName} (${meta.expression})`)
-            if (meta.runOnInit) instance[meta.handlerName]().catch(() => {})
-          }
-        }
-      },
-
-      async shutdown() {
-        for (const job of jobs) job.stop()
-        log.info(`Stopped ${jobs.length} cron job(s)`)
-      },
-    }
-  },
-})
-```
-
-## Usage
-
-```ts
-// src/services/cleanup.service.ts
-import { Service } from '@forinda/kickjs'
-import { Cron } from '../decorators/cron.decorator'
+import { Cron, Service, type CronRun } from '@forinda/kickjs'
 
 @Service()
-export class CleanupService {
-  @Cron('0 2 * * *', { description: 'Daily DB vacuum at 2am' })
+export class ReportJobs {
+  @Cron('0 2 * * *', { name: 'nightly-vacuum', description: 'Daily DB vacuum at 2am' })
   async vacuum() {
     // ...
   }
 
-  @Cron('*/5 * * * *', { runOnInit: true })
-  async heartbeat() {
-    // ...
+  @Cron('*/15 * * * *', { meta: { batch: 500 } })
+  async sendDigests(run: CronRun<{ batch: number }>) {
+    await this.mailer.flush(run.meta.batch)
   }
 }
 ```
 
+The class must be resolvable from the container (`@Service()` in a module), so jobs get the same singletons requests do.
+
+### Options
+
+| Option        | Default            | What it does                                                                                 |
+| ------------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `name`        | `ClassName.method` | Stable name for logs, error reports and `runCronJobs({ name })`                              |
+| `description` | —                  | Label for logs and DevTools                                                                  |
+| `timezone`    | server time        | IANA zone (`'Africa/Nairobi'`). Node runner and Workers only — Vercel crons are UTC          |
+| `runOnInit`   | `false`            | Node runner: run once at startup, before the first tick                                      |
+| `overlap`     | `false`            | Allow a run to start while the previous one is still going. Off: a busy tick is skipped      |
+| `enabled`     | `true`             | `false`, or a function checked on every tick (`() => process.env.JOBS === 'on'`)             |
+| `meta`        | `{}`               | Free-form data: handler arguments (`run.meta`), or anything a custom runner or DevTools read |
+
+### The run context
+
+The handler receives a `CronRun`:
+
 ```ts
-// src/index.ts
-import { bootstrap } from '@forinda/kickjs'
-import { CronAdapter } from './adapters/cron.adapter'
-import { CleanupService } from './services/cleanup.service'
+interface CronRun<Meta> {
+  name: string
+  expression: string
+  meta: Meta
+  firedAt: Date
+  trigger: 'schedule' | 'init' | 'http' | 'workers' | 'manual'
+}
+```
+
+A job that throws is logged and reported to the [error observers](./observability.md) with `source: 'cron'` and `context: { job, expression, trigger }`.
+
+## Node server
+
+Install the scheduler and register the adapter once:
+
+<PmCommand add="croner" />
+
+```ts
+import { bootstrap, KickCronAdapter } from '@forinda/kickjs'
 
 export const app = await bootstrap({
   modules,
-  adapters: [CronAdapter({ services: [CleanupService] })],
+  adapters: [KickCronAdapter()],
 })
 ```
 
-## DevTools integration
+It's opt-in so an app that already schedules `@Cron` jobs with its own adapter doesn't run them twice. It's named `KickCronAdapter` so it never clashes with such an adapter's name or logger.
 
-Even with the BYO adapter you keep the DevTools dashboard. Implement the optional `introspect()` and `devtoolsTabs()` slots `defineAdapter()` exposes — DevTools auto-discovers them and surfaces the data without any further wiring:
+Jobs stop on shutdown and on every HMR reload, and a reload replaces a class's old jobs rather than adding to them.
+
+`overlap: false` is per process: it stops a job stacking up within one server, not across instances.
+
+**Several processes.** With `bootstrap({ cluster })`, only one worker schedules jobs (the primary sets `KICK_CRON_WORKER=1` on it, and hands the role to its replacement if it dies). Separate instances behind a load balancer each schedule every job: pass `KickCronAdapter({ enabled: false })` on all but one, or have the job take a lock.
+
+## Vercel
+
+`kick build:vercel` reads the `@Cron` decorators in `src/` and writes one Vercel cron per distinct expression into `.vercel/output/config.json`. Each calls `GET /_kick/cron/<id>` on the function, which runs every job on that schedule.
+
+Set `CRON_SECRET` in the Vercel project. Vercel sends it as `Authorization: Bearer $CRON_SECRET`, and the app only mounts the trigger when it's set, rejecting any request without it.
+
+The build warns about what can't be scheduled:
+
+- an expression that isn't a string literal (`@Cron(EVERY_HOUR)`) — the build reads source, it doesn't run it;
+- a `timezone` — Vercel crons run in UTC;
+- a six-field expression with seconds — Vercel takes five fields only, so it gets no entry.
+
+The trigger path is fixed at `/_kick/cron/...`, outside `apiPrefix`, so the build and the app always agree on it.
+
+## Cloudflare Workers
+
+`createFetchHandler` returns `scheduled()` beside `fetch`, and runs the jobs whose expression equals the trigger's. List the same expressions in `wrangler.toml`:
 
 ```ts
-import { defineAdapter } from '@forinda/kickjs'
-import type { IntrospectionSnapshot } from '@forinda/kickjs-devtools-kit'
-import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
+// src/worker.ts
+export default createFetchHandler((env) => ({ h3, modules, env }))
+```
 
-export const CronAdapter = defineAdapter<CronAdapterOptions>({
+```toml
+[triggers]
+crons = ["0 2 * * *", "*/15 * * * *"]
+```
+
+The expression must match exactly (whitespace aside) — Workers passes the one it fired for.
+
+## Netlify
+
+Netlify has no cron the build can target, so `@Cron` jobs don't run there, and `kick build:netlify` says so. Use a [Netlify scheduled function](https://docs.netlify.com/build/functions/scheduled-functions/) that calls `runCronJobs`, or deploy the jobs elsewhere.
+
+## Running jobs yourself
+
+```ts
+import { Container, runCronJobs } from '@forinda/kickjs'
+
+await runCronJobs(Container.getInstance(), { name: 'nightly-vacuum' }, 'manual')
+// → { ran: 1, failed: 0 }
+```
+
+Filter by `name`, `scheduleId` or `expression`. It respects `enabled` and `overlap`, and never rejects. `listCronJobs(container)` returns every job with its resolved name and class.
+
+## Bring your own runner
+
+`@Cron` only records metadata, so your own adapter can schedule jobs however it likes. Read them with `listCronJobs`, and run each with `runCronJob` to keep `enabled`, `overlap`, the run context and error reporting:
+
+```ts
+import { Cron as Croner } from 'croner'
+import { defineAdapter, listCronJobs, runCronJob, type Container } from '@forinda/kickjs'
+
+export const CronAdapter = defineAdapter({
   name: 'CronAdapter',
-  build: (config) => {
-    const jobs: { name: string; expression: string; running: boolean; lastRunMs?: number }[] = []
-    let runs = 0
-    let failures = 0
-
+  build: () => {
+    const timers: Croner[] = []
     return {
-      // ... beforeStart / shutdown as above, but record metrics in the
-      // closures: `jobs.push(...)`, `runs++`, `failures++ on catch`.
-
-      /** DevTools polls this on the topology endpoint — keep it cheap. */
-      introspect(): IntrospectionSnapshot {
-        return {
-          protocolVersion: 1,
-          name: 'CronAdapter',
-          kind: 'adapter',
-          state: { jobs },
-          metrics: {
-            scheduled: jobs.length,
-            running: jobs.filter((j) => j.running).length,
-            runs,
-            failures,
-          },
+      afterStart({ container }) {
+        for (const job of listCronJobs(container)) {
+          timers.push(
+            new Croner(job.expression, { timezone: job.timezone }, () =>
+              runCronJob(job, container as Container, 'schedule').catch(() => {}),
+            ),
+          )
         }
       },
-
-      /** Optional dedicated tab in the DevTools sidebar. */
-      devtoolsTabs() {
-        return [
-          defineDevtoolsTab({
-            id: 'cron',
-            title: 'Cron',
-            icon: 'mdi:clock-outline',
-            category: 'observability',
-            view: {
-              type: 'launch',
-              actions: jobs.map((j) => ({
-                id: `run:${j.name}`,
-                label: `Run ${j.name} now`,
-                description: j.expression,
-              })),
-            },
-          }),
-        ]
+      shutdown() {
+        for (const timer of timers.splice(0)) timer.stop()
       },
     }
   },
 })
 ```
 
-`introspect()` is for the topology view (numbers + small JSON state). `devtoolsTabs()` ships a dedicated panel — three view types: `iframe` (embed your own URL), `launch` (button list that POSTs to your handlers), `html` (trusted inline string). See `@forinda/kickjs-devtools-kit` for the full type surface.
-
-## What you give up by going BYO
-
-The previous `@forinda/kickjs-cron` package added two niceties on top of this recipe:
-
-1. **`croner` was an optional peer dep** with a `setInterval` fallback — keep this if you care; branch on `try { require('croner') } catch { fallback }`.
-2. **DevTools panel was pre-wired** — the `introspect()` / `devtoolsTabs()` recipe above gives you the same panel back in ~20 lines.
-
-Everything else was thin glue.
+Add `introspect()` and `devtoolsTabs()` to show the jobs in DevTools — see [Adapters](./adapters.md) and `@forinda/kickjs-devtools-kit`.
 
 ## Related
 
-- [Adapters](./adapters.md) — `defineAdapter` factory reference
-- [Custom Decorators](./custom-decorators.md)
-- [croner docs](https://github.com/Hexagon/croner)
+- [Serverless](./serverless.md)
+- [Observing Errors and Responses](./observability.md)
+- [croner](https://github.com/Hexagon/croner)

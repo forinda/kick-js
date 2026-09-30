@@ -419,4 +419,4 @@ Without a proxy, set the client's `baseUrl` to the API's full URL and enable [`c
 | Response body | 6 MB buffered, 20 MB streamed | 4.5 MB                       |
 | WebSockets    | Not supported                 | Beta; closes at max duration |
 
-In-memory state does not survive between instances: use a hosted database instead of in-memory repositories, and a shared store (Redis, KV) for rate limiting and sessions. Cron and queue adapters need the platform's scheduled or background functions.
+In-memory state does not survive between instances: use a hosted database instead of in-memory repositories, and a shared store (Redis, KV) for rate limiting and sessions. `@Cron` jobs run from Vercel crons and the Workers `scheduled()` handler, not on Netlify — see [Scheduled Tasks](./cron.md). Queue adapters need the platform's background functions.

@@ -1,4 +1,7 @@
 import http from 'node:http'
+import { timingSafeEqual } from 'node:crypto'
+import { HttpException } from '../core/errors'
+import { runCronJobs } from '../core/cron'
 import https from 'node:https'
 import http2 from 'node:http2'
 import tls from 'node:tls'
@@ -574,6 +577,8 @@ export class Application {
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: KickServer | null = null
+  /** Set by startWithoutServer() — the serverless path, where cron runs over HTTP. */
+  private handlerMode = false
   /** The observer set this app installed — released on shutdown only if still current. */
   private observers: readonly Observer[] = []
   /**
@@ -820,6 +825,9 @@ export class Application {
     for (const adapter of this.adapters) {
       await this.callHook(adapter.beforeMount?.bind(adapter), ctx)
     }
+
+    // ── 1a. Cron trigger (serverless) ─────────────────────────────────
+    if (this.handlerMode) this.mountCronTrigger()
 
     // ── 2. Hardened defaults ──────────────────────────────────────────
     // x-powered-by disable + trust proxy now live in `runtime.createApp()`.
@@ -1226,6 +1234,7 @@ export class Application {
    * (it receives the `http.Server`), and no process signal handlers.
    */
   async startWithoutServer(): Promise<void> {
+    this.handlerMode = true
     await this.setup()
 
     const needServer = this.adapters.filter((adapter) => adapter.afterStart)
@@ -1750,6 +1759,32 @@ export class Application {
     }
   }
 
+  /**
+   * `GET /_kick/cron/:scheduleId` — how a serverless platform
+   * (Vercel crons) runs `@Cron` jobs: `kick build:vercel` emits one cron entry
+   * per schedule pointing here. Mounted only in handler mode and only when
+   * `CRON_SECRET` is set; the request must carry `Authorization: Bearer
+   * $CRON_SECRET` (Vercel sends it). Runs every job on that schedule.
+   */
+  private mountCronTrigger(): void {
+    const secret = process.env.CRON_SECRET
+    if (!secret) return
+    // Fixed and outside `apiPrefix` (like /health): `kick build:vercel` writes
+    // the exact path, and can't see the app's `apiPrefix`.
+    const path = '/_kick/cron/:scheduleId'
+    this.adapterHttp().route('GET', path, async (ctx) => {
+      if (!matchesBearer(ctx.headers.authorization, secret)) {
+        throw new HttpException(401, 'Missing or invalid CRON_SECRET bearer token')
+      }
+      const result = await runCronJobs(
+        this.container,
+        { scheduleId: ctx.params.scheduleId },
+        'http',
+      )
+      ctx.json(result, result.failed > 0 ? 500 : 200)
+    })
+  }
+
   /** Middleware that tracks in-flight requests for graceful draining */
   private requestTrackingMiddleware(): RequestHandler {
     return (req, res, next) => {
@@ -1836,4 +1871,12 @@ function observeErrors<H extends (err: any, req: any, res: any, next: any) => un
     })
     return handler(err, req, res, next)
   }) as H
+}
+
+/** Constant-time check of an `Authorization: Bearer <secret>` header. */
+function matchesBearer(header: unknown, secret: string): boolean {
+  if (typeof header !== 'string') return false
+  const given = Buffer.from(header)
+  const expected = Buffer.from(`Bearer ${secret}`)
+  return given.length === expected.length && timingSafeEqual(given, expected)
 }

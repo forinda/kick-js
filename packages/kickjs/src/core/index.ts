@@ -96,7 +96,20 @@ export { type KickPlugin } from './plugin'
 export { type IntrospectionSnapshot, type IntrospectionKind, type IntrospectFn } from './introspect'
 
 // Cron
-export { Cron, getCronJobs, type CronJobMeta, CRON_META } from './cron'
+export {
+  Cron,
+  getCronJobs,
+  listCronJobs,
+  runCronJob,
+  runCronJobs,
+  cronScheduleId,
+  isCronJobEnabled,
+  type CronJob,
+  type CronJobMeta,
+  type CronOptions,
+  type CronRun,
+  CRON_META,
+} from './cron'
 
 // Cache
 export {

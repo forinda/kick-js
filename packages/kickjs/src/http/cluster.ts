@@ -1,4 +1,5 @@
 import cluster from 'node:cluster'
+import { CRON_WORKER_ENV } from './cron-adapter'
 import os from 'node:os'
 import { createLogger } from '../core'
 import { reactive, ref } from '../core/reactivity'
@@ -53,9 +54,19 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
 
   log.info(`Primary ${process.pid} starting ${numWorkers} worker(s)`)
 
+  // Exactly one worker runs `KickCronAdapter` jobs, so a job fires once per
+  // cluster rather than once per worker. The primary marks it with
+  // KICK_CRON_WORKER=1; when it dies, the next fork inherits the role.
+  let cronWorkerId: number | undefined
+  const forkWorker = (): void => {
+    const takesCron = cronWorkerId === undefined
+    const worker = cluster.fork(takesCron ? { [CRON_WORKER_ENV]: '1' } : undefined)
+    if (takesCron) cronWorkerId = worker.id
+  }
+
   // Initial fork
   for (let i = 0; i < numWorkers; i++) {
-    cluster.fork()
+    forkWorker()
   }
 
   // Detect stuck workers (no 'listening' event within timeout)
@@ -96,6 +107,7 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
 
     // Don't restart if worker was intentionally disconnected
     activeWorkers.value--
+    if (worker.id === cronWorkerId) cronWorkerId = undefined
 
     if (worker.exitedAfterDisconnect) {
       log.info(`Worker ${worker.process.pid} exited gracefully (id=${worker.id})`)
@@ -133,7 +145,7 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
     setTimeout(() => {
       // Only restart if we still need more workers
       if (activeWorkers.value < numWorkers) {
-        cluster.fork()
+        forkWorker()
       }
     }, restartDelay)
   })
