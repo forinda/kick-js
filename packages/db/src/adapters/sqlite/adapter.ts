@@ -3,6 +3,7 @@ import {
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
+  type MigrationBookkeeping,
   type MigrationRow,
   type SchemaSnapshot,
 } from '../../index'
@@ -135,12 +136,27 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
     },
 
     async applySqlInTx(sql: string) {
+      await this.applyMigrationInTx!(sql, null)
+    },
+
+    async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       // BEGIN / COMMIT around a multi-statement batch gives us
       // atomicity. SQLite rolls back to pre-BEGIN on any error
       // inside the block.
       runBatch('BEGIN')
       try {
         runBatch(sql)
+        if (bookkeeping && 'record' in bookkeeping) {
+          const r = bookkeeping.record
+          database
+            .prepare(
+              `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+               VALUES (?, ?, ?, ?, ?)`,
+            )
+            .run(r.id, r.name, r.hash, r.batch, r.direction)
+        } else if (bookkeeping) {
+          database.prepare(`DELETE FROM kick_migrations WHERE id = ?`).run(bookkeeping.remove)
+        }
         // A table rebuild copies rows into a fresh table; check no row now
         // points at a parent that isn't there before committing it.
         // The tables this migration rebuilt, read from the rebuild's final rename.

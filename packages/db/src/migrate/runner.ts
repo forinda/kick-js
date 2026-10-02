@@ -93,22 +93,29 @@ async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptio
   // a destructive migration without partial application.
   enforceEnumDropGate(entry.id, upSql, opts.confirmEnumDrop ?? false)
 
-  try {
-    if (useTx) {
-      await opts.adapter.applySqlInTx(upSql)
-    } else {
-      await opts.adapter.applySqlNoTx(upSql)
-    }
-  } catch (err) {
-    throw new MigrationFailedError(entry.id, err)
-  }
-  await opts.adapter.recordApplied({
+  const record = {
     id: entry.id,
     name: entry.tag,
     hash: entry.hash,
     batch,
-    direction: 'up',
-  })
+    direction: 'up' as const,
+  }
+  const { adapter } = opts
+  try {
+    if (useTx && adapter.applyMigrationInTx) {
+      // The row commits with the migration — a crash can't leave one without the other.
+      await adapter.applyMigrationInTx(upSql, { record })
+      return
+    }
+    if (useTx) {
+      await adapter.applySqlInTx(upSql)
+    } else {
+      await adapter.applySqlNoTx(upSql)
+    }
+  } catch (err) {
+    throw new MigrationFailedError(entry.id, err)
+  }
+  await adapter.recordApplied(record)
 }
 
 async function runForward(opts: RunnerOptions, pending: PreparedEntry[]): Promise<AppliedSummary> {
@@ -191,12 +198,17 @@ async function applyReverse(id: string, opts: RunnerOptions): Promise<void> {
     throw new UnreviewedMigrationError(id)
   }
   const useTx = meta.transaction !== false
-  if (useTx) {
-    await opts.adapter.applySqlInTx(downSql)
-  } else {
-    await opts.adapter.applySqlNoTx(downSql)
+  const { adapter } = opts
+  if (useTx && adapter.applyMigrationInTx) {
+    await adapter.applyMigrationInTx(downSql, { remove: id })
+    return
   }
-  await opts.adapter.removeApplied(id)
+  if (useTx) {
+    await adapter.applySqlInTx(downSql)
+  } else {
+    await adapter.applySqlNoTx(downSql)
+  }
+  await adapter.removeApplied(id)
 }
 
 export async function migrateDown(opts: RunnerOptions): Promise<ReversedSummary> {

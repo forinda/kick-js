@@ -5,6 +5,7 @@ import {
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
+  type MigrationBookkeeping,
   type MigrationRow,
   type SchemaSnapshot,
 } from '../../index'
@@ -149,10 +150,24 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
     },
 
     async applySqlInTx(sql: string) {
+      await this.applyMigrationInTx!(sql, null)
+    },
+
+    async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       const client = await pool.connect()
       try {
         await client.query('BEGIN')
         await client.query(sql)
+        if (bookkeeping && 'record' in bookkeeping) {
+          const r = bookkeeping.record
+          await client.query(
+            `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [r.id, r.name, r.hash, r.batch, r.direction],
+          )
+        } else if (bookkeeping) {
+          await client.query(`DELETE FROM kick_migrations WHERE id = $1`, [bookkeeping.remove])
+        }
         await client.query('COMMIT')
       } catch (err) {
         await client.query('ROLLBACK').catch(() => {

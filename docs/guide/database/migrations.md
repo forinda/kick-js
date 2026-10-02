@@ -101,9 +101,15 @@ kick db migrate status
 1. Acquire the single-row migration lock (`kick_migrations_lock`). A collision means another process is mid-migration — the command throws `MigrationLockError`.
 2. **Drift check** — introspect the live DB and compare against the last applied migration's `snapshot.json`. A mismatch throws `MigrationDriftError`. Behavior is `error` (default), `warn`, or `ignore`.
 3. Compute the pending set (journal entries not yet recorded as applied).
-4. Verify each pending migration's content hash matches the journal, and (outside dev) that it's reviewed.
+4. Verify each pending migration: outside development it must be reviewed, and a reviewed one must still match the hash `review` recorded.
 5. Allocate the next batch number.
-6. Apply each `up.sql` in order — each in its own transaction unless `meta.json.transaction === false` (for cases like PG `CREATE INDEX CONCURRENTLY`) — and record it.
+6. Apply each `up.sql` in order, each in its own transaction, and record it in `kick_migrations` in that same transaction — on Postgres and SQLite, so a crash can't leave a migration applied but unrecorded. Exceptions, where the record is written after the SQL and a crash in between leaves the migration applied but unrecorded:
+   - MySQL, for a migration with DDL — MySQL commits `CREATE` / `ALTER` / `DROP` as they run;
+   - a migration with `meta.json.transaction === false` (for cases like PG `CREATE INDEX CONCURRENTLY`), which runs outside a transaction;
+   - a custom adapter without `applyMigrationInTx`.
+
+   If that happens, the retry fails on "already exists": check the schema, then record the migration as applied without running it ([the baseline script](./adopting.md#_3-baseline-the-migration-history)), or undo its changes and run it again.
+
 7. Release the lock.
 
 ### Batches and rollback

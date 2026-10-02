@@ -4,6 +4,7 @@ import {
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
+  type MigrationBookkeeping,
   type MigrationRow,
   type SchemaSnapshot,
 } from '../../index'
@@ -445,10 +446,29 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async applySqlInTx(sql: string) {
+      await this.applyMigrationInTx!(sql, null)
+    },
+
+    // MySQL commits DDL as it runs (an implicit COMMIT that ends this
+    // transaction), so for a migration with DDL this is not atomic: the
+    // schema change is committed before the bookkeeping row is written, and a
+    // crash in between leaves it applied but unrecorded. Only a migration of
+    // plain DML statements commits with its row.
+    async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       const conn = await pool.getConnection()
       try {
         await conn.query('START TRANSACTION')
         await runStatementsOnConn(conn, sql)
+        if (bookkeeping && 'record' in bookkeeping) {
+          const r = bookkeeping.record
+          await conn.query(
+            `INSERT INTO \`kick_migrations\` (id, name, hash, batch, direction)
+             VALUES (?, ?, ?, ?, ?)`,
+            [r.id, r.name, r.hash, r.batch, r.direction],
+          )
+        } else if (bookkeeping) {
+          await conn.query(`DELETE FROM \`kick_migrations\` WHERE id = ?`, [bookkeeping.remove])
+        }
         await conn.query('COMMIT')
       } catch (err) {
         await conn.query('ROLLBACK').catch(() => {

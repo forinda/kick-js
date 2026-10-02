@@ -32,6 +32,14 @@ export interface MigrationAdapter {
   releaseLock(): Promise<void>
   /** Run arbitrary SQL inside a transaction. Used to apply up.sql / down.sql. */
   applySqlInTx(sql: string): Promise<void>
+  /**
+   * Run a migration's SQL and its bookkeeping — insert its `kick_migrations`
+   * row on the way up, delete it on the way down — in one transaction, so a
+   * crash between the two can't leave a migration applied but unrecorded (or
+   * reverted but still recorded). Optional: without it the runner calls
+   * `applySqlInTx` and then `recordApplied` / `removeApplied`.
+   */
+  applyMigrationInTx?(sql: string, bookkeeping: MigrationBookkeeping | null): Promise<void>
   /** Apply SQL outside any transaction — for migrations with `meta.transaction: false` (CREATE INDEX CONCURRENTLY etc). */
   applySqlNoTx(sql: string): Promise<void>
   /** Introspect the live schema; returns the canonical SchemaSnapshot. Used by drift detection and `kick db introspect`. */
@@ -39,3 +47,6 @@ export interface MigrationAdapter {
   /** Close any underlying pool / connection. Caller-owned resources may keep the no-op. */
   close(): Promise<void>
 }
+
+/** What `applyMigrationInTx` writes to `kick_migrations` with the migration's SQL. */
+export type MigrationBookkeeping = { record: Omit<MigrationRow, 'appliedAt'> } | { remove: string }
