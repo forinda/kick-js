@@ -172,7 +172,19 @@ kick db migrate status
 
 ### Batches and rollback
 
-`migrate latest` stamps everything it applies with the same batch number. `migrate rollback` reverses that whole batch as a unit (in reverse-applied order, so FKs drop before tables); `migrate down` reverses just the single most recent migration.
+`migrate latest` stamps everything it applies with the same batch number. `migrate rollback` reverses that whole batch as a unit (in reverse-applied order, so FKs drop before tables); `migrate down` reverses just the single most recent migration. To go to a particular point instead, `migrate up --to <migration>` applies through that migration, `migrate down --to <migration>` reverses everything after it, and `migrate rollback --all` reverses every migration. A migration is named by its id or its name.
+
+### The migrations table and several folders
+
+Applied migrations are recorded in `kick_migrations` (with a `kick_migrations_lock` table). To use another name, set `migrationsTable` in the `db` block, or pass it to an adapter you build: `pgAdapter({ pool, migrationsTable: 'meta.schema_history' })`. On Postgres the name may include a schema, which is created if missing. Either way, the tables are left out of introspection and drift checks.
+
+`migrationsDirs` adds more folders to the runner, for a package that ships its own migrations:
+
+```ts
+db: { migrationsDir: 'db/migrations', migrationsDirs: ['node_modules/@acme/audit/migrations'] }
+```
+
+The folders run as one history, ordered by migration id. Each keeps its own journal and snapshots, so each should own its tables. Drift is checked against the latest applied snapshot of every folder together. `kick db generate` writes to `migrationsDir`. In code, pass an array: `migrateLatest({ adapter, migrationsDir: [app, pkg] })`.
 
 ## Running migrations from code
 
@@ -180,7 +192,7 @@ Everything the CLI does is exported, for a deploy script, a job, or an admin end
 
 ```ts
 import pg from 'pg'
-import { migrateLatest, migrateRollback, migrateStatus } from '@forinda/kickjs-db'
+import { migrateLatest, migrateRollback, migrateStatus, migrateUp } from '@forinda/kickjs-db'
 import { pgAdapter } from '@forinda/kickjs-db/pg'
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
@@ -189,7 +201,8 @@ const migrationsDir = 'db/migrations'
 
 const { applied, batch } = await migrateLatest({ adapter, migrationsDir })
 const status = await migrateStatus({ adapter, migrationsDir }) // [{ id, state, batch, reviewed, … }]
-await migrateRollback({ adapter, migrationsDir }) // the last batch
+await migrateRollback({ adapter, migrationsDir }) // the last batch; { all: true } for every one
+await migrateUp({ adapter, migrationsDir, to: 'add_users' }) // through a named migration
 ```
 
 | Function                                   | Same as                             |

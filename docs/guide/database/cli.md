@@ -13,9 +13,9 @@ The `kick db` commands — migrations, schema diffs, introspection — ship with
 | [`generate <name>`](#generate)           | Diff the schema against the last migration and write a new one            |       no ¹       |
 | [`check`](#check)                        | Fail if the schema, the migrations and their review state are out of step |        no        |
 | [`migrate latest`](#migrate-latest)      | Apply every pending migration as one batch                                |       yes        |
-| [`migrate up`](#migrate-up)              | Apply the next pending migration                                          |       yes        |
-| [`migrate down`](#migrate-down)          | Reverse the most recently applied migration                               |       yes        |
-| [`migrate rollback`](#migrate-rollback)  | Reverse the whole last batch                                              |       yes        |
+| [`migrate up`](#migrate-up)              | Apply the next pending migration, or up to `--to`                         |       yes        |
+| [`migrate down`](#migrate-down)          | Reverse the most recent migration, or back to `--to`                      |       yes        |
+| [`migrate rollback`](#migrate-rollback)  | Reverse the whole last batch, or `--all`                                  |       yes        |
 | [`migrate status`](#migrate-status)      | List applied and pending migrations                                       |       yes        |
 | [`migrate review <id>`](#migrate-review) | Mark a migration reviewed                                                 |        no        |
 | [`migrate unlock`](#migrate-unlock)      | Release a migration lock a killed run left behind                         |       yes        |
@@ -192,10 +192,10 @@ No pending migrations.
 ## migrate up
 
 ```text
-kick db migrate up [--confirm-enum-drop]
+kick db migrate up [--to <migration>] [--confirm-enum-drop]
 ```
 
-Applies only the next pending migration, as its own batch. Same checks and flag as `migrate latest`.
+Applies only the next pending migration, as its own batch. With `--to`, applies every pending migration up to and including that one, named by its id (`20261002_180007_create_notes`) or its name (`create_notes`). Same checks and flag as `migrate latest`.
 
 ```text
 Applied 20261002_180007_create_notes (batch 1)
@@ -204,10 +204,10 @@ Applied 20261002_180007_create_notes (batch 1)
 ## migrate down
 
 ```text
-kick db migrate down
+kick db migrate down [--to <migration>]
 ```
 
-Runs the most recently applied migration's `down.sql` and marks it pending again.
+Runs the most recently applied migration's `down.sql` and marks it pending again. With `--to`, reverses every migration applied after that one, newest first; the one named stays applied.
 
 ```text
 Reversed 20261002_180018_seed_notes.
@@ -220,10 +220,10 @@ Nothing to reverse.
 ## migrate rollback
 
 ```text
-kick db migrate rollback
+kick db migrate rollback [--all]
 ```
 
-Reverses the whole last batch — everything one `migrate latest` applied — newest first.
+Reverses the whole last batch — everything one `migrate latest` applied — newest first. `--all` reverses every applied migration, back to an empty history.
 
 ```text
 Rolled back batch 2: 20261002_180017_add_pinned

@@ -77,5 +77,17 @@ describe('casing on MySQL', () => {
     })
     expect(posts[0].author!.createdAt).toBeInstanceOf(Date)
     await expect(checkDrift(await introspectMysql(pool), target, 'error')).resolves.toBeUndefined()
+
+    // D.22: a read-only transaction reads, and refuses a write.
+    await expect(
+      db.transaction({ readOnly: true }, () =>
+        db.selectFrom('users').select('firstName').execute(),
+      ),
+    ).resolves.toEqual([{ firstName: 'Ada' }])
+    await expect(
+      db.transaction({ readOnly: true }, () =>
+        db.insertInto('users').values({ firstName: 'x' }).execute(),
+      ),
+    ).rejects.toThrow(/READ ONLY transaction/i)
   }, 60_000)
 })

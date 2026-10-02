@@ -3,6 +3,9 @@ import { mysqlDialect } from './dialect'
 import {
   KickDbError,
   lockTableDdl,
+  lockTableName,
+  quoteTable,
+  KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
@@ -41,6 +44,11 @@ export interface MysqlPoolLike {
 }
 
 export interface MysqlAdapterOptions {
+  /**
+   * The table migrations are recorded in. Default `kick_migrations`; its lock
+   * table is the same name plus `_lock`.
+   */
+  migrationsTable?: string
   /**
    * mysql2-compatible Pool. Caller-owned — `close()` on the adapter
    * does NOT end the pool because adopters typically share a single
@@ -382,14 +390,21 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     }
   }
 
+  const table = opts.migrationsTable ?? KICK_MIGRATIONS_TABLE
+  const T = quoteTable(dialect, table)
+  const L = quoteTable(dialect, lockTableName(table))
+  // Introspection must not report the bookkeeping tables as schema.
+  const bookkeepingTables = [table, lockTableName(table)].map((t) =>
+    t.slice(t.lastIndexOf('.') + 1),
+  )
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,
 
     async ensureMigrationTables() {
       await assertVersion()
-      await runStatements(migrationsTableDdl(dialect))
-      await runStatements(lockTableDdl(dialect))
+      await runStatements(migrationsTableDdl(dialect, table))
+      await runStatements(lockTableDdl(dialect, table))
     },
 
     async listApplied(): Promise<MigrationRow[]> {
@@ -404,7 +419,7 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
         }>
       >(
         `SELECT id, name, hash, batch, applied_at, direction
-         FROM \`kick_migrations\`
+         FROM ${T}
          ORDER BY applied_at ASC, id ASC`,
       )
       return rows.map((row) => ({
@@ -420,19 +435,19 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
 
     async recordApplied(row) {
       await pool.query(
-        `INSERT INTO \`kick_migrations\` (id, name, hash, batch, direction)
+        `INSERT INTO ${T} (id, name, hash, batch, direction)
          VALUES (?, ?, ?, ?, ?)`,
         [row.id, row.name, row.hash, row.batch, row.direction],
       )
     },
 
     async removeApplied(id: string) {
-      await pool.query(`DELETE FROM \`kick_migrations\` WHERE id = ?`, [id])
+      await pool.query(`DELETE FROM ${T} WHERE id = ?`, [id])
     },
 
     async acquireLock(owner: string): Promise<boolean> {
       const [result] = await pool.query<{ affectedRows: number }>(
-        `UPDATE \`kick_migrations_lock\`
+        `UPDATE ${L}
          SET locked_at = CURRENT_TIMESTAMP, locked_by = ?
          WHERE id = 1 AND locked_at IS NULL`,
         [owner],
@@ -442,7 +457,7 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
 
     async releaseLock() {
       await pool.query(
-        `UPDATE \`kick_migrations_lock\`
+        `UPDATE ${L}
          SET locked_at = NULL, locked_by = NULL
          WHERE id = 1`,
       )
@@ -465,12 +480,12 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
         if (bookkeeping && 'record' in bookkeeping) {
           const r = bookkeeping.record
           await conn.query(
-            `INSERT INTO \`kick_migrations\` (id, name, hash, batch, direction)
+            `INSERT INTO ${T} (id, name, hash, batch, direction)
              VALUES (?, ?, ?, ?, ?)`,
             [r.id, r.name, r.hash, r.batch, r.direction],
           )
         } else if (bookkeeping) {
-          await conn.query(`DELETE FROM \`kick_migrations\` WHERE id = ?`, [bookkeeping.remove])
+          await conn.query(`DELETE FROM ${T} WHERE id = ?`, [bookkeeping.remove])
         }
         await conn.query('COMMIT')
       } catch (err) {
@@ -492,8 +507,10 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
       // back as the declared COLUMN_TYPE (a code-first `uuid()` reads as
       // `char(36)`), so this powers `kick db introspect`; byte-exact drift
       // against a code-first snapshot needs a dialect-normalised compare.
-      return introspectMysql(pool)
+      return introspectMysql(pool, { excludeTables: bookkeepingTables })
     },
+
+    migrationsTable: table,
 
     kysely() {
       // Built once, on the same connection. Never destroyed here: the pool or

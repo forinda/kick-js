@@ -73,6 +73,8 @@ export {
 export type { MigrationAdapter, MigrationBookkeeping, MigrationRow } from './migrate/adapter'
 export {
   migrationsTableDdl,
+  lockTableName,
+  quoteTable,
   lockTableDdl,
   KICK_MIGRATIONS_TABLE,
   KICK_LOCK_TABLE,

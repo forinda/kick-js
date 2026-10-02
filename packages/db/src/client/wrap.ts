@@ -188,6 +188,9 @@ export function wrap<DB>(
     opts: TransactionOptions,
     fn: (tx: KickDbClient<DB>) => Promise<T>,
   ): Promise<T> => {
+    if (opts.readOnly && ctx.dialect === 'sqlite') {
+      throw new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly')
+    }
     const isolation = opts.isolation
     const plan = retryPlan(opts.retry)
     for (let attempt = 1; ; attempt++) {
@@ -195,7 +198,9 @@ export function wrap<DB>(
       ctx.events?.emit('transactionStart', { isolation })
       let result: T
       try {
-        result = await ctx.root.transaction().execute(async (trx) => {
+        let builder = ctx.root.transaction()
+        if (opts.readOnly) builder = builder.setAccessMode('read only')
+        result = await builder.execute(async (trx) => {
           if (isolation) {
             await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`).execute(trx)
           }

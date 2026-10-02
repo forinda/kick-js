@@ -2,6 +2,9 @@ import { Kysely } from 'kysely'
 import { sqliteDialect } from './dialect'
 import {
   lockTableDdl,
+  lockTableName,
+  quoteTable,
+  KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
@@ -41,6 +44,11 @@ export interface SqliteDatabaseLike {
 
 export interface SqliteAdapterOptions {
   /**
+   * The table migrations are recorded in. Default `kick_migrations`; its lock
+   * table is the same name plus `_lock`.
+   */
+  migrationsTable?: string
+  /**
    * better-sqlite3 (or compatible) Database handle. Caller-owned —
    * the adapter's `close()` does NOT close the database because
    * adopters typically share a single handle across the migration
@@ -70,20 +78,27 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
   // handles `;`-separated batches natively).
   const runBatch = (sql: string) => database.exec(sql)
 
+  const table = opts.migrationsTable ?? KICK_MIGRATIONS_TABLE
+  const T = quoteTable(dialect, table)
+  const L = quoteTable(dialect, lockTableName(table))
+  // Introspection must not report the bookkeeping tables as schema.
+  const bookkeepingTables = [table, lockTableName(table)].map((t) =>
+    t.slice(t.lastIndexOf('.') + 1),
+  )
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,
 
     async ensureMigrationTables() {
-      runBatch(migrationsTableDdl(dialect))
-      runBatch(lockTableDdl(dialect))
+      runBatch(migrationsTableDdl(dialect, table))
+      runBatch(lockTableDdl(dialect, table))
     },
 
     async listApplied(): Promise<MigrationRow[]> {
       const rows = database
         .prepare(
           `SELECT id, name, hash, batch, applied_at, direction
-           FROM kick_migrations
+           FROM ${T}
            ORDER BY applied_at ASC, id ASC`,
         )
         .all() as {
@@ -107,20 +122,20 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
     async recordApplied(row) {
       database
         .prepare(
-          `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+          `INSERT INTO ${T} (id, name, hash, batch, direction)
            VALUES (?, ?, ?, ?, ?)`,
         )
         .run(row.id, row.name, row.hash, row.batch, row.direction)
     },
 
     async removeApplied(id: string) {
-      database.prepare(`DELETE FROM kick_migrations WHERE id = ?`).run(id)
+      database.prepare(`DELETE FROM ${T} WHERE id = ?`).run(id)
     },
 
     async acquireLock(owner: string): Promise<boolean> {
       const r = database
         .prepare(
-          `UPDATE kick_migrations_lock
+          `UPDATE ${L}
            SET locked_at = datetime('now'), locked_by = ?
            WHERE id = 1 AND locked_at IS NULL`,
         )
@@ -131,7 +146,7 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
     async releaseLock() {
       database
         .prepare(
-          `UPDATE kick_migrations_lock
+          `UPDATE ${L}
            SET locked_at = NULL, locked_by = NULL
            WHERE id = 1`,
         )
@@ -153,12 +168,12 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
           const r = bookkeeping.record
           database
             .prepare(
-              `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+              `INSERT INTO ${T} (id, name, hash, batch, direction)
                VALUES (?, ?, ?, ?, ?)`,
             )
             .run(r.id, r.name, r.hash, r.batch, r.direction)
         } else if (bookkeeping) {
-          database.prepare(`DELETE FROM kick_migrations WHERE id = ?`).run(bookkeeping.remove)
+          database.prepare(`DELETE FROM ${T} WHERE id = ?`).run(bookkeeping.remove)
         }
         // A table rebuild copies rows into a fresh table; check no row now
         // points at a parent that isn't there before committing it.
@@ -205,8 +220,10 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
       // Types come back as SQLite affinities (a code-first `uuid()` reads as
       // `text`), so this powers `kick db introspect`; byte-exact drift
       // against a code-first snapshot needs a dialect-normalised compare.
-      return introspectSqlite(database)
+      return introspectSqlite(database, { excludeTables: bookkeepingTables })
     },
+
+    migrationsTable: table,
 
     kysely() {
       // Built once, on the same connection. Never destroyed here: the pool or

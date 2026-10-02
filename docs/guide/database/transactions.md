@@ -26,6 +26,14 @@ await this.db.transaction({ isolation: 'serializable' }, async (tx) => {
 })
 ```
 
+`readOnly: true` starts it read-only (Postgres, MySQL): every read sees one consistent view, and a write fails. It suits reports and exports that must not change anything. SQLite has no read-only transactions, so it's refused there.
+
+```ts
+const report = await this.db.transaction({ readOnly: true, isolation: 'repeatable read' }, () =>
+  buildReport(this.db),
+)
+```
+
 ## Savepoints
 
 Inside a transaction, `savepoint(fn)` creates a nested rollback boundary — a throw inside rolls back only the savepoint:

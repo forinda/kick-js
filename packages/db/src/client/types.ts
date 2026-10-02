@@ -58,6 +58,12 @@ export interface TransactionOptions extends TransactionEvent {
    */
   nested?: 'reuse' | 'savepoint' | 'separate'
   /**
+   * Start the transaction read-only (Postgres, MySQL): a write inside it fails.
+   * For reports that must see one consistent view and must not change it.
+   * SQLite has no read-only transactions, so it's refused there.
+   */
+  readOnly?: boolean
+  /**
    * Run the whole transaction again when it fails with a retryable error —
    * a serialization failure or deadlock (`err.retryable`). `true` is three
    * attempts; waits between them back off exponentially with jitter.

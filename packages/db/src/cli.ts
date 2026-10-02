@@ -14,6 +14,7 @@
  * @module @forinda/kickjs-db/cli
  */
 
+import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Command } from 'commander'
@@ -24,6 +25,19 @@ import { checkMigrations } from './cli/check'
 import { runSeeds } from './cli/seed'
 import { removeCasing } from './snapshot/casing'
 import { askRenamesInTerminal, parseRenameFlags } from './cli/renames'
+
+/** Every folder the runner reads: `migrationsDir`, then `migrationsDirs`. */
+function runDirs(config: DbConfig): string | string[] {
+  return config.migrationsDirs?.length
+    ? [config.migrationsDir, ...config.migrationsDirs]
+    : config.migrationsDir
+}
+
+/** The folder holding a migration, among every folder the runner reads. */
+function folderOf(config: DbConfig, id: string): string {
+  const dirs = [config.migrationsDir, ...(config.migrationsDirs ?? [])]
+  return dirs.find((d) => existsSync(path.join(d, id))) ?? config.migrationsDir
+}
 
 interface GenerateFlags {
   empty?: boolean
@@ -73,6 +87,16 @@ export interface KickDbConfigInput {
    * so SQLite/MySQL's lossy introspection doesn't false-positive.
    */
   driftCheck?: DriftBehavior
+  /** `'snake_case'`: snake_case tables and columns under camelCase keys. Match the client's `casing`. */
+  casing?: 'snake_case'
+  /** The table migrations are recorded in. Default `kick_migrations`. */
+  migrationsTable?: string
+  /**
+   * More migration folders, run with `migrationsDir` as one history ordered by
+   * migration id — a package's own migrations, say. `generate` writes to
+   * `migrationsDir`.
+   */
+  migrationsDirs?: string[]
 }
 
 /**
@@ -107,6 +131,9 @@ export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbCon
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,
     driftCheck: db.driftCheck,
+    casing: db.casing,
+    migrationsTable: db.migrationsTable,
+    migrationsDirs: db.migrationsDirs,
   }
 }
 
@@ -138,7 +165,7 @@ async function resolveAdapter(config: DbConfig): Promise<{
   // Dynamic import so we don't hard-require pg unless this path runs.
   const [{ pgAdapter }, pg] = await Promise.all([import('./pg'), import('pg')])
   const pool = new pg.default.Pool({ connectionString: config.connectionString })
-  const adapter = pgAdapter({ pool })
+  const adapter = pgAdapter({ pool, migrationsTable: config.migrationsTable })
   return {
     adapter,
     cleanup: async () => {
@@ -337,7 +364,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       try {
         const r = await migrateLatest({
           adapter,
-          migrationsDir: config.migrationsDir,
+          migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
           confirmEnumDrop: opts.confirmEnumDrop,
         })
@@ -353,26 +380,31 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
 
   migrate
     .command('up')
-    .description('Apply the next single pending migration')
+    .description('Apply the next single pending migration, or every one up to --to')
+    .option(
+      '--to <migration>',
+      'Apply pending migrations up to and including this one (id or name)',
+    )
     .option(
       '--confirm-enum-drop',
       'Allow migrations carrying the `-- KICK ENUM REMOVE` header to apply',
       false,
     )
-    .action(async (opts: { confirmEnumDrop?: boolean }) => {
+    .action(async (opts: { confirmEnumDrop?: boolean; to?: string }) => {
       const config = await getConfig()
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
         const r = await migrateUp({
           adapter,
-          migrationsDir: config.migrationsDir,
+          migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
           confirmEnumDrop: opts.confirmEnumDrop,
+          to: opts.to,
         })
         console.log(
           r.applied.length === 0
             ? 'No pending migrations.'
-            : `Applied ${r.applied[0]} (batch ${r.batch})`,
+            : `Applied ${r.applied.join(', ')} (batch ${r.batch})`,
         )
       } finally {
         await cleanup()
@@ -381,17 +413,26 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
 
   migrate
     .command('down')
-    .description('Reverse the most recent applied migration')
-    .action(async () => {
+    .description('Reverse the most recent applied migration, or every one after --to')
+    .option(
+      '--to <migration>',
+      'Reverse every migration applied after this one (id or name), which stays',
+    )
+    .action(async (opts: { to?: string }) => {
       const config = await getConfig()
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
         const r = await migrateDown({
           adapter,
-          migrationsDir: config.migrationsDir,
+          migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          to: opts.to,
         })
-        console.log(r.reversed ? `Reversed ${r.reversed}.` : 'Nothing to reverse.')
+        console.log(
+          r.reversedAll.length > 0
+            ? `Reversed ${r.reversedAll.join(', ')}.`
+            : 'Nothing to reverse.',
+        )
       } finally {
         await cleanup()
       }
@@ -399,20 +440,24 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
 
   migrate
     .command('rollback')
-    .description('Reverse the entire last batch as a single unit')
-    .action(async () => {
+    .description('Reverse the entire last batch as a single unit, or with --all every migration')
+    .option('--all', 'Reverse every applied migration, newest first')
+    .action(async (opts: { all?: boolean }) => {
       const config = await getConfig()
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
         const r = await migrateRollback({
           adapter,
-          migrationsDir: config.migrationsDir,
+          migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          all: opts.all,
         })
         console.log(
           r.reversed.length === 0
             ? 'Nothing to roll back.'
-            : `Rolled back batch ${r.batch}: ${r.reversed.join(', ')}`,
+            : opts.all
+              ? `Rolled back every migration: ${r.reversed.join(', ')}`
+              : `Rolled back batch ${r.batch}: ${r.reversed.join(', ')}`,
         )
       } finally {
         await cleanup()
@@ -426,7 +471,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       const config = await getConfig()
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
-        printStatusTable(await migrateStatus({ adapter, migrationsDir: config.migrationsDir }))
+        printStatusTable(await migrateStatus({ adapter, migrationsDir: runDirs(config) }))
       } finally {
         await cleanup()
       }
@@ -454,7 +499,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
     .action(async (id: string) => {
       // No adapter/DB needed — review only touches the migration files.
       const config = await getConfig()
-      const r = await reviewMigration(config.migrationsDir, id)
+      const r = await reviewMigration(folderOf(config, id), id)
       console.log(
         r.alreadyReviewed
           ? `${r.id} was already reviewed — recorded its current contents as reviewed.`

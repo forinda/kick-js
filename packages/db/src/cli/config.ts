@@ -26,6 +26,14 @@ export interface DbConfig {
    */
   casing?: 'snake_case'
   /**
+   * The table migrations are recorded in (default `kick_migrations`) — for
+   * the built-in Postgres adapter. An `adapter()` factory passes it itself:
+   * `pgAdapter({ pool, migrationsTable })`.
+   */
+  migrationsTable?: string
+  /** More migration folders, run with `migrationsDir` as one history. */
+  migrationsDirs?: string[]
+  /**
    * Postgres connection string for the built-in pgAdapter path. Read from
    * `db.connectionString` in kick.config.ts, or falls back to the
    * DATABASE_URL env var. The CLI uses this when no `adapter` factory is
