@@ -249,7 +249,7 @@ For a web app in the same repo, publish its build and let the function take `/ap
 
 Write the [Build Output API](https://vercel.com/docs/build-output-api) tree. Vercel serves it either way you deploy:
 
-- **Git-connected project:** the build command writes the tree on Vercel, which then uses `.vercel/output` as the deployment. Set the command in `vercel.json` at the repo root, with `framework: null` so Vercel doesn't treat the repo as a plain Vite app. `build:vercel` is a root script that runs `pnpm build` and then writes the tree — the [CLI plugin](#build-with-a-cli-plugin-optional) ships the writer as `kick build:vercel`:
+- **Git-connected project:** the build command writes the tree on Vercel, which then uses `.vercel/output` as the deployment. Set the command in `vercel.json` at the repo root, with `framework: null` so Vercel doesn't treat the repo as a plain Vite app. `build:vercel` is a root script that runs `pnpm build` and then writes the tree — the CLI ships the writer as `kick build:vercel` ([Build it with one command](#build-it-with-one-command)):
 
   ```json
   {
