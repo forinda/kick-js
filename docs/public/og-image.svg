@@ -20,7 +20,8 @@
 
   <!-- Name and tagline -->
   <text x="80" y="310" font-family="DejaVu Sans, sans-serif" font-size="104" font-weight="700" fill="#FFFFFF" letter-spacing="-3">KickJS</text>
-  <text x="80" y="372" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">The Adaptive Node.js Framework</text>
+  <text x="80" y="372" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">Build backends you're</text>
+  <text x="80" y="418" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">not afraid to change.</text>
 
   <!-- Decorator code card -->
   <rect x="660" y="96" width="460" height="196" rx="18" fill="#0F0D2E" fill-opacity="0.55" stroke="#A5B4FC" stroke-opacity="0.25"/>
