@@ -37,6 +37,7 @@ export interface PgPoolLike {
     params?: readonly unknown[],
   ): Promise<{ rows: R[]; rowCount: number | null }>
   connect(): Promise<PgClientLike>
+  end?(): Promise<void>
 }
 
 export interface PgAdapterOptions {
@@ -47,6 +48,13 @@ export interface PgAdapterOptions {
   pool: PgPoolLike
   /** PG schema name to scope the introspector and validate at construction. Default 'public'. */
   schema?: string
+  /**
+   * End the pool when the adapter closes. Set it when the adapter owns its
+   * pool — a `kick.config.ts` `db.adapter()` factory that opens one for the
+   * CLI — or the `kick db` command waits for idle clients to time out.
+   * Default `false`: an app usually shares one pool with its client.
+   */
+  endPoolOnClose?: boolean
 }
 
 const SAFE_SCHEMA_NAME = /^[a-z_][a-z0-9_]*$/i
@@ -158,9 +166,9 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
     },
 
     async close() {
-      // Caller owns the pool. kickDbAdapter's shutdown lifecycle calls this so
-      // future adapter-internal teardown (e.g. cancelling pending observers)
-      // has a hook, but we deliberately don't end() the shared pool.
+      // The caller owns the pool unless it said otherwise — adopters
+      // typically share it with the KickDbClient.
+      if (opts.endPoolOnClose) await opts.pool.end?.()
     },
   }
 }

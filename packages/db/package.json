@@ -95,6 +95,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@forinda/kickjs-schema": "workspace:*",
+    "@testcontainers/mysql": "^12.2.0",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.2",

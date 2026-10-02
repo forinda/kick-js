@@ -4,15 +4,14 @@
 // is a pinned internal dep of the framework.
 
 import { MysqlDialect, type Dialect as KyselyDialect } from 'kysely'
-import { markDialect } from '../../dialect-marker'
+import { KICK_DIALECT_TIMEZONE, markDialect } from '../../dialect-marker'
 
 import type { MysqlPoolLike } from './adapter'
 
 export interface MysqlDialectOptions {
   /**
-   * mysql2-compatible pool. Both `mysql.createPool(...)` from
-   * `mysql2/promise` and `mysql2.createPool(...)` (callback API
-   * wrapped in a promise) match structurally.
+   * mysql2-compatible pool — `createPool(...)` from `mysql2/promise`, the
+   * same pool `mysqlAdapter` takes. A callback-API pool works too.
    */
   pool: MysqlPoolLike
 }
@@ -48,5 +47,18 @@ export function mysqlDialect(opts: MysqlDialectOptions): KyselyDialect {
   // newer Kysely versions; casting through `unknown` keeps adopters
   // using compatible drivers (e.g. mysql-mariadb forks) working
   // without pulling mysql2's typings into our public surface.
-  return markDialect(new MysqlDialect({ pool: opts.pool as unknown as never }), 'mysql')
+  // Kysely's MysqlDialect drives the callback API (`getConnection(cb)`). A
+  // `mysql2/promise` pool ignores the callback, so every query hung; its
+  // callback-API core is `pool.pool` — hand Kysely that.
+  const raw = opts.pool as unknown as { pool?: { getConnection?: unknown } }
+  const callbackPool = typeof raw.pool?.getConnection === 'function' ? raw.pool : opts.pool
+  const dialect = markDialect(new MysqlDialect({ pool: callbackPool as unknown as never }), 'mysql')
+  // Rows nested by `db.query` carry dates as strings; read them in the
+  // pool's session time zone, as mysql2 reads top-level ones.
+  const config = (callbackPool as { config?: { connectionConfig?: { timezone?: string } } }).config
+  Object.defineProperty(dialect, KICK_DIALECT_TIMEZONE, {
+    value: config?.connectionConfig?.timezone ?? 'local',
+    enumerable: false,
+  })
+  return dialect
 }

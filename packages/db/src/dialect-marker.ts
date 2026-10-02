@@ -53,3 +53,6 @@ export function readDialectMark(dialect: object): DialectTag | undefined {
   const raw = (dialect as Record<symbol, unknown>)[KICK_DIALECT]
   return isDialectTag(raw) ? raw : undefined
 }
+
+/** The session time zone a MySQL dialect's pool uses (mysql2's `timezone` option). */
+export const KICK_DIALECT_TIMEZONE = Symbol.for('@forinda/kickjs-db/dialect-timezone')

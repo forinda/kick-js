@@ -14,12 +14,13 @@ import {
   buildComparisonEncoderMap,
   buildDecoderMap,
   buildEncoderMap,
+  buildNestedDecoderMap,
   collectRelationKeys,
 } from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
-import { readDialectMark } from '../dialect-marker'
+import { KICK_DIALECT_TIMEZONE, readDialectMark } from '../dialect-marker'
 import { pickCompiler } from '../query/compilers'
 import { extractSnapshot } from '../snapshot/extract'
 
@@ -64,13 +65,18 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const dialectTag = detectDialect(opts.dialect)
   const decoders = buildDecoderMap(opts.schema, dialectTag)
   const encoders = buildEncoderMap(opts.schema, dialectTag)
+  const timezone = (opts.dialect as { [KICK_DIALECT_TIMEZONE]?: string } | undefined)?.[
+    KICK_DIALECT_TIMEZONE
+  ]
+  const nestedDecoders = buildNestedDecoderMap(opts.schema, dialectTag, timezone)
   const codecPlugin =
-    decoders.size > 0 || encoders.size > 0
+    decoders.size > 0 || encoders.size > 0 || nestedDecoders.size > 0
       ? new CodecPlugin(
           encoders,
           decoders,
           collectRelationKeys(opts.schema),
           buildComparisonEncoderMap(opts.schema, dialectTag),
+          nestedDecoders,
         )
       : null
 
