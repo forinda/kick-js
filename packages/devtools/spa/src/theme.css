@@ -266,13 +266,19 @@
     @apply px-2 py-0.5 rounded text-xs font-semibold;
   }
   .badge-ok {
-    @apply bg-emerald-900/50 text-emerald-300;
+    --tone: #10b981;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 15%, transparent);
   }
   .badge-warn {
-    @apply bg-amber-900/50 text-amber-300;
+    --tone: #f59e0b;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 15%, transparent);
   }
   .badge-critical {
-    @apply bg-red-900/50 text-red-300;
+    --tone: #ef4444;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 15%, transparent);
   }
 
   /* Empty + tree fragments used by Topology */
@@ -401,11 +407,9 @@
 .dt-tip-pop {
   position: absolute;
   z-index: 100;
-  visibility: hidden;
-  opacity: 0;
-  transition:
-    opacity 120ms ease,
-    visibility 120ms ease;
+  /* display, not visibility: a hidden popover near the right edge would
+     still widen the scroll area and add a horizontal scrollbar. */
+  display: none;
   width: max-content;
   max-width: 240px;
   padding: 6px 10px;
@@ -432,8 +436,7 @@
 }
 .dt-tip:hover .dt-tip-pop,
 .dt-tip:focus-within .dt-tip-pop {
-  visibility: visible;
-  opacity: 1;
+  display: block;
 }
 
 /* ── Runtime tab: process-identity strip ─────────────────────── */
@@ -825,4 +828,37 @@ html[data-density='lg'] {
   border: 1px solid var(--color-border-strong);
   border-radius: 4px;
   color: var(--color-text-muted);
+}
+
+/* ── Tones: a hue on a 15% tint of itself, readable in both themes ── */
+.dt-tone {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 15%, transparent);
+}
+.dt-tone-violet {
+  --tone: #8b5cf6;
+}
+.dt-tone-blue {
+  --tone: #3b82f6;
+}
+.dt-tone-teal {
+  --tone: #14b8a6;
+}
+.dt-tone-green {
+  --tone: #10b981;
+}
+.dt-tone-amber {
+  --tone: #d97706;
+}
+.dt-tone-red {
+  --tone: #ef4444;
+}
+.dt-tone-gray {
+  --tone: var(--color-text-secondary);
 }

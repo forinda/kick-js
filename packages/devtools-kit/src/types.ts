@@ -260,6 +260,12 @@ export interface MemoryHealth {
    */
   heapGrowthSeverity: 'ok' | 'warn' | 'critical'
   /**
+   * `true` while there's too little settled history to judge growth —
+   * the first seconds after boot, when allocation is expected. Growth
+   * reads `0` and severity `ok` until then.
+   */
+  sampling?: boolean
+  /**
    * Average GC reclaim ratio over the recent window — `(before - after) / before`.
    * Trending toward zero suggests GC can't free anything (leak).
    */

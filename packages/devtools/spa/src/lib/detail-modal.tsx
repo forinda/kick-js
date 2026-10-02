@@ -22,6 +22,7 @@
 
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type ContainerRegistration } from './store'
+import { kindTone, severityTone } from './format'
 
 const [activeToken, setActiveToken] = createSignal<string | null>(null)
 const [historyStack, setHistoryStack] = createSignal<string[]>([])
@@ -125,9 +126,7 @@ export const DetailModalHost: Component = () => {
                   </h2>
                 </div>
                 <div class="flex flex-wrap gap-2 mt-2">
-                  <span
-                    class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(reg().kind)}`}
-                  >
+                  <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindTone(reg().kind)}`}>
                     {reg().kind ?? 'unknown'}
                   </span>
                   <span class="bg-border-strong/50 text-text-strong px-2 py-0.5 rounded text-xs font-semibold">
@@ -249,17 +248,8 @@ const Row: Component<{ label: string; value: string }> = (props) => (
   </div>
 )
 
-function kindBadge(kind: string | undefined): string {
-  if (kind === 'controller') return 'bg-violet-900/50 text-violet-300'
-  if (kind === 'service') return 'bg-blue-900/50 text-blue-300'
-  if (kind === 'repository') return 'bg-teal-900/50 text-teal-300'
-  return 'bg-border-strong/50 text-text-strong'
-}
-
 function statusBadge(r: ContainerRegistration): string {
-  if (r.postConstructStatus === 'failed') return 'bg-red-900/50 text-red-300'
-  if (r.instantiated) return 'bg-emerald-900/50 text-emerald-300'
-  return 'bg-amber-900/50 text-amber-300'
+  return severityTone(r.postConstructStatus === 'failed' ? 'err' : r.instantiated ? 'ok' : 'warn')
 }
 
 function statusLabel(r: ContainerRegistration): string {

@@ -596,7 +596,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         })
 
         router.get('/container', (ctx: RequestContext) => {
-          const registrations = container?.getRegistrations() ?? []
+          // `__hmr__` entries are the dev server's shadow registrations — the
+          // topology and graph endpoints leave them out too.
+          const registrations = (container?.getRegistrations() ?? []).filter(
+            (r) => !r.token.startsWith('__hmr__'),
+          )
           ctx.json({ registrations, count: registrations.length })
         })
 

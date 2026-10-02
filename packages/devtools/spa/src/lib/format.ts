@@ -56,3 +56,24 @@ export function statusPill(status: number): string {
   const tone = status >= 500 ? 'err' : status >= 400 ? 'warn' : status >= 300 ? 'redir' : 'ok'
   return `dt-pill dt-pill-${tone}`
 }
+
+/**
+ * Tinted label colour for a DI kind (`.dt-tone` + hue). Mid-tone hues on a
+ * 15% tint of themselves, so the label reads in both themes.
+ */
+export function kindTone(kind: string | undefined): string {
+  const hue =
+    kind === 'controller'
+      ? 'violet'
+      : kind === 'service'
+        ? 'blue'
+        : kind === 'repository'
+          ? 'teal'
+          : 'gray'
+  return `dt-tone dt-tone-${hue}`
+}
+
+/** Tinted label colour for a severity. */
+export function severityTone(level: 'ok' | 'warn' | 'err' | 'idle'): string {
+  return `dt-tone dt-tone-${{ ok: 'green', warn: 'amber', err: 'red', idle: 'gray' }[level]}`
+}

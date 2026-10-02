@@ -289,18 +289,14 @@ export const App: Component = () => {
       icon: 'routes',
       run: () => openApiRunner(r),
     })),
-    // `__hmr__` entries are the dev server's shadow registrations, not the app's tokens.
-    ...store
-      .container()
-      .filter((c) => !c.token.startsWith('__hmr__'))
-      .map((c) => ({
-        id: `token:${c.token}`,
-        title: c.token,
-        description: [c.kind, c.scope].filter(Boolean).join(' · '),
-        group: 'DI tokens',
-        icon: 'container',
-        run: () => openDetailModal(c.token),
-      })),
+    ...store.container().map((c) => ({
+      id: `token:${c.token}`,
+      title: c.token,
+      description: [c.kind, c.scope].filter(Boolean).join(' · '),
+      group: 'DI tokens',
+      icon: 'container',
+      run: () => openDetailModal(c.token),
+    })),
     ...(['system', 'light', 'dark'] as const).map((mode) => ({
       id: `theme:${mode}`,
       title: `Theme: ${mode}`,
