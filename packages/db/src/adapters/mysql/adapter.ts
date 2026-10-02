@@ -449,9 +449,11 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
       await this.applyMigrationInTx!(sql, null)
     },
 
-    // MySQL commits DDL as it runs, so the transaction can't take a failed
-    // migration's DDL back; it still keeps the bookkeeping row with the
-    // statements that follow the last DDL.
+    // MySQL commits DDL as it runs (an implicit COMMIT that ends this
+    // transaction), so for a migration with DDL this is not atomic: the
+    // schema change is committed before the bookkeeping row is written, and a
+    // crash in between leaves it applied but unrecorded. Only a migration of
+    // plain DML statements commits with its row.
     async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       const conn = await pool.getConnection()
       try {
