@@ -5,7 +5,15 @@ import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync } from 'node:fs'
 
 import { extractSnapshot } from '../snapshot/extract'
-import { diff } from '../diff/engine'
+import { snapshotTableName } from '../snapshot/name'
+import {
+  diff,
+  findRenameCandidates,
+  withTableRenames,
+  type DiffOptions,
+  type RenameCandidates,
+  type RenameHints,
+} from '../diff/engine'
 import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
 import { CompositeEnumReferenceError, type CompositeRef } from '../diff/composite-detect'
 import { emitPg } from '../emit/pg'
@@ -62,6 +70,22 @@ export interface GenerateOptions {
    * required). The CLI wires this for `dialect=postgres` workflows.
    */
   detectCompositeRefs?: (enumName: string) => Promise<readonly CompositeRef[]>
+  /** Renames known up front — `--rename-table` / `--rename-column`. */
+  renames?: RenameHints
+  /**
+   * Asked which dropped tables and columns are really renames, when the diff
+   * has a drop and an add that could be one. Called first with table
+   * candidates, then with column candidates (inside renamed tables too). What
+   * it doesn't name is dropped. Without it, only `renames` and the
+   * one-drop-one-add guess pair them.
+   */
+  askRenames?: (candidates: RenameCandidates) => Promise<RenameHints>
+  /**
+   * Told about each table or column the migration drops that could have been
+   * a rename, when `askRenames` isn't given — so a non-interactive run can
+   * still warn. `flag` is the `--rename-…` that would keep it.
+   */
+  onPossibleRename?: (drop: { what: string; flag: string }) => void
 }
 
 export interface GenerateResult {
@@ -97,7 +121,10 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const schemaAbs = path.resolve(opts.cwd, opts.config.schemaPath)
   const schemaModule = await loadModule(schemaAbs)
   const target = extractSnapshot(schemaModule, opts.config.dialect)
-  const changes = diff(prev, target)
+  const renames = await resolveRenames(prev, target, opts)
+  const changes = diff(prev, target, renames)
+  if (!opts.askRenames && opts.onPossibleRename)
+    warnPossibleRenames(prev, target, changes, renames, opts.onPossibleRename)
 
   if (changes.length === 0) {
     return { status: 'no-changes', changeCount: 0 }
@@ -106,18 +133,135 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   await assertNoCompositeReferences(changes, opts.detectCompositeRefs)
 
   const dialect = opts.config.dialect
-  return await writeMigration({
-    opts,
-    migrationsAbs,
-    previousId,
+  // CONCURRENTLY can't run in a transaction, nor beside another statement
+  // (Postgres runs a multi-statement query as one implicit transaction). So
+  // each concurrent index change gets a migration of its own, after one
+  // holding everything else; each migration records the schema as it leaves it.
+  const concurrent = changes.filter(isConcurrentIndexChange)
+  const rest = changes.filter((c) => !concurrent.includes(c))
+  const stages = [
+    ...(rest.length > 0 ? [{ changes: rest, pending: concurrent }] : []),
+    ...concurrent.map((c, i) => ({ changes: [c], pending: concurrent.slice(i + 1) })),
+  ]
+
+  let from = prev
+  let previous = previousId
+  let result: GenerateResult | undefined
+  for (const [n, { changes: stage, pending }] of stages.entries()) {
+    const to = snapshotAfter(target, pending)
+    result = await writeMigration({
+      opts: n === 0 ? opts : withStageName(opts, n),
+      migrationsAbs,
+      previousId: previous,
+      target: to,
+      // up: from -> to. down: invert applied to to -> from.
+      upBody: emitDdl(dialect, stage, from, to),
+      downBody: emitDdl(dialect, invertChanges(stage), to, from),
+      changeCount: stage.length,
+      draft: hasAmbiguousReverse(stage),
+      empty: false,
+      transaction: isConcurrentIndexChange(stage[0]) ? false : undefined,
+    })
+    from = to
+    previous = path.basename(result.migrationDir!)
+  }
+  return { ...result!, changeCount: changes.length }
+}
+
+function warnPossibleRenames(
+  prev: SchemaSnapshot,
+  target: SchemaSnapshot,
+  changes: ChangeSet,
+  { renames = {} }: DiffOptions,
+  warn: NonNullable<GenerateOptions['onPossibleRename']>,
+): void {
+  const options = (to: string[]) => (to.length === 1 ? to[0] : `<${to.join('|')}>`)
+  const candidates = findRenameCandidates(
+    withTableRenames(prev, target, renames.tables ?? {}),
     target,
-    // up: prev -> target. down: invert applied to target -> prev.
-    upBody: emitDdl(dialect, changes, prev, target),
-    downBody: emitDdl(dialect, invertChanges(changes), target, prev),
-    changeCount: changes.length,
-    draft: hasAmbiguousReverse(changes),
-    empty: false,
-  })
+  )
+  for (const c of candidates.tables) {
+    if (!changes.some((x) => x.kind === 'dropTable' && snapshotTableName(x.table) === c.from))
+      continue
+    warn({ what: `table ${c.from}`, flag: `--rename-table ${c.from}=${options(c.to)}` })
+  }
+  for (const c of candidates.columns) {
+    const dropped = changes.some(
+      (x) => x.kind === 'dropColumn' && x.table === c.table && x.column.name === c.from,
+    )
+    if (!dropped) continue
+    warn({
+      what: `column ${c.table}.${c.from}`,
+      flag: `--rename-column ${c.table}.${c.from}=${options(c.to)}`,
+    })
+  }
+}
+
+async function resolveRenames(
+  prev: SchemaSnapshot,
+  target: SchemaSnapshot,
+  opts: GenerateOptions,
+): Promise<DiffOptions> {
+  const given = opts.renames ?? {}
+  if (!opts.askRenames) return { renames: given }
+
+  // A name a flag already claimed isn't offered again; a drop is only left
+  // out when a flag named it or nothing is left for it to become.
+  const tables = { ...given.tables }
+  const claimedTables = new Set(Object.values(tables))
+  const tableCandidates = findRenameCandidates(prev, target)
+    .tables.filter((c) => !(c.from in tables))
+    .map((c) => Object.assign(c, { to: c.to.filter((t) => !claimedTables.has(t)) }))
+    .filter((c) => c.to.length > 0)
+  if (tableCandidates.length > 0) {
+    Object.assign(tables, (await opts.askRenames({ tables: tableCandidates, columns: [] })).tables)
+  }
+
+  const columns = { ...given.columns }
+  const claimedColumns = new Set(
+    Object.entries(columns).map(([key, to]) => `${key.slice(0, key.lastIndexOf('.'))}.${to}`),
+  )
+  const renamed = withTableRenames(prev, target, tables)
+  const columnCandidates = findRenameCandidates(renamed, target)
+    .columns.filter((c) => !(`${c.table}.${c.from}` in columns))
+    .map((c) =>
+      Object.assign(c, { to: c.to.filter((t) => !claimedColumns.has(`${c.table}.${t}`)) }),
+    )
+    .filter((c) => c.to.length > 0)
+  if (columnCandidates.length > 0) {
+    Object.assign(
+      columns,
+      (await opts.askRenames({ tables: [], columns: columnCandidates })).columns,
+    )
+  }
+  return { renames: { tables, columns }, explicitRenames: true }
+}
+
+function isConcurrentIndexChange(c: Change): boolean {
+  return (c.kind === 'addIndex' || c.kind === 'dropIndex') && c.index.concurrently === true
+}
+
+/**
+ * `target` with the given concurrent index changes not yet applied: their
+ * added indexes taken out, their dropped ones put back.
+ */
+function snapshotAfter(target: SchemaSnapshot, pending: Change[]): SchemaSnapshot {
+  if (pending.length === 0) return target
+  const tables = structuredClone(target.tables)
+  // Undone latest first, so a rebuild (drop, then add, of one name) ends on the old index.
+  for (const c of pending.toReversed()) {
+    if (c.kind !== 'addIndex' && c.kind !== 'dropIndex') continue
+    const t = tables[c.table]
+    const others = t.indexes.filter((i) => i.name !== c.index.name)
+    t.indexes = c.kind === 'addIndex' ? others : [...others, c.index]
+  }
+  return { ...target, tables }
+}
+
+/** A later migration from the same generate: one second on, so ids stay ordered. */
+function withStageName(opts: GenerateOptions, n: number): GenerateOptions {
+  const at = (opts.now?.() ?? new Date()).getTime() + n * 1000
+  return { ...opts, name: `${opts.name}_concurrently_${n}`, now: () => new Date(at) }
 }
 
 interface WriteMigrationParams {
@@ -130,6 +274,8 @@ interface WriteMigrationParams {
   changeCount: number
   draft: boolean
   empty: boolean
+  /** `false` runs the migration outside a transaction. */
+  transaction?: false
 }
 
 /**
@@ -201,6 +347,7 @@ async function writeMigration(p: WriteMigrationParams): Promise<GenerateResult> 
         previousId: p.previousId,
         downIsDraft: p.draft,
         empty: p.empty,
+        ...(p.transaction === false ? { transaction: false } : {}),
       },
       null,
       2,

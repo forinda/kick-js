@@ -12,6 +12,11 @@ const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
 
 interface ColumnRow {
   column_name: string
+  is_identity: 'YES' | 'NO'
+  identity_generation: 'ALWAYS' | 'BY DEFAULT' | null
+  generation_expression: string | null
+  /** pg_attribute.attgenerated: 's' stored, 'v' virtual, '' not generated. */
+  attgenerated: string
   data_type: string
   udt_name: string
   is_nullable: 'YES' | 'NO'
@@ -43,9 +48,15 @@ interface EnumRow {
 
 interface IndexRow {
   index_name: string
-  column_name: string
+  /** The column, or for an expression key part its SQL text. */
+  key: string
+  is_expression: boolean
+  /** True for an INCLUDE column rather than a key part. */
+  is_included: boolean
   is_unique: boolean
   is_primary: boolean
+  method: string
+  predicate: string | null
 }
 
 interface FkRow {
@@ -138,7 +149,11 @@ async function readColumns(
               ::regclass::text AS owned_sequence,
             to_regclass(
               (regexp_match(column_default, 'nextval\\(''([^'']+)''(::regclass)?\\)'))[1]
-            )::text AS default_sequence
+            )::text AS default_sequence,
+            is_identity, identity_generation, generation_expression,
+            (SELECT a.attgenerated FROM pg_attribute a
+              WHERE a.attrelid = format('%I.%I', table_schema, table_name)::regclass
+                AND a.attname = column_name) AS attgenerated
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -168,6 +183,15 @@ async function readColumns(
       // trips (DSL → emit → introspect) idempotent.
       default: isSerial ? null : normalizeDefault(r.column_default),
       primaryKey: pkSet.has(r.column_name),
+    }
+    if (r.is_identity === 'YES') {
+      out[r.column_name].identity = r.identity_generation === 'ALWAYS' ? 'always' : 'byDefault'
+    }
+    if (r.attgenerated && r.generation_expression) {
+      out[r.column_name].generated = {
+        expression: r.generation_expression,
+        stored: r.attgenerated === 's',
+      }
     }
   }
   return out
@@ -296,35 +320,38 @@ async function readIndexes(
 ): Promise<IndexSnapshot[]> {
   const rows = await client.query<IndexRow>(
     `SELECT i.relname AS index_name,
-            a.attname AS column_name,
+            COALESCE(a.attname, pg_get_indexdef(ix.indexrelid, k.ord::int, true)) AS key,
+            k.attnum = 0 AS is_expression,
+            k.ord > ix.indnkeyatts AS is_included,
             ix.indisunique AS is_unique,
-            ix.indisprimary AS is_primary
+            ix.indisprimary AS is_primary,
+            am.amname AS method,
+            pg_get_expr(ix.indpred, ix.indrelid, true) AS predicate
      FROM pg_class t
      JOIN pg_namespace n ON n.oid = t.relnamespace
      JOIN pg_index ix ON ix.indrelid = t.oid
      JOIN pg_class i ON i.oid = ix.indexrelid
+     JOIN pg_am am ON am.oid = i.relam
      JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-     JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+     LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum AND k.attnum <> 0
      WHERE n.nspname = $1 AND t.relname = $2 AND t.relkind = 'r'
      ORDER BY i.relname, k.ord`,
     [schema, table],
   )
 
-  // Group rows by index_name, preserve column order.
+  // Group rows by index_name, preserve key order.
   type Tagged = IndexSnapshot & { _isPrimary: boolean }
   const byIndex = new Map<string, Tagged>()
   for (const r of rows.rows) {
     let entry = byIndex.get(r.index_name)
     if (!entry) {
-      entry = {
-        name: r.index_name,
-        columns: [],
-        unique: r.is_unique,
-        _isPrimary: r.is_primary,
-      }
+      entry = { name: r.index_name, columns: [], unique: r.is_unique, _isPrimary: r.is_primary }
+      if (r.method !== 'btree') entry.using = r.method
+      if (r.predicate) entry.where = r.predicate
       byIndex.set(r.index_name, entry)
     }
-    entry.columns.push(r.column_name)
+    if (r.is_included) entry.include = [...(entry.include ?? []), r.key]
+    else entry.columns.push(r.is_expression ? `(${r.key})` : r.key)
   }
 
   // Drop PK-backing indexes — primaryKey is recorded on the column itself.

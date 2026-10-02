@@ -1,4 +1,11 @@
-import type { Insertable, Kysely, Dialect as KyselyDialect, KyselyPlugin, Selectable } from 'kysely'
+import type {
+  CommonTableExpression,
+  Insertable,
+  Kysely,
+  Dialect as KyselyDialect,
+  KyselyPlugin,
+  Selectable,
+} from 'kysely'
 
 import type { RegisteredDB } from './register'
 import type { QueryNamespace } from '../query/types'
@@ -108,6 +115,19 @@ export interface KickDbClient<DB = RegisteredDB> {
   readonly dialect: 'postgres' | 'sqlite' | 'mysql'
 
   selectFrom: Kysely<DB>['selectFrom']
+  /**
+   * Start a query with a common table expression. Takes Kysely's
+   * `(name, query)`, or a CTE made once with `cte()` and spread in:
+   * `db.with(...recent).selectFrom('recent')`. Runs on the primary.
+   */
+  with: Kysely<DB>['with']
+  withRecursive: Kysely<DB>['withRecursive']
+  /**
+   * A named CTE to reuse across queries: `const recent = db.cte('recent', (q) =>
+   * q.selectFrom('posts').where(…))`, then `db.with(...recent)`. Typed from
+   * the query; works with any client of the same schema.
+   */
+  cte<N extends string, E extends CommonTableExpression<DB, N>>(name: N, query: E): readonly [N, E]
   insertInto: Kysely<DB>['insertInto']
   updateTable: Kysely<DB>['updateTable']
   deleteFrom: Kysely<DB>['deleteFrom']

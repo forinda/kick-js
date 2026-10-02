@@ -6,7 +6,7 @@ description: Coming to kick/db from Drizzle — how pgTable, relations, db.query
 
 Of the established ORMs, Drizzle is closest to kick/db. Both are code-first — the schema is TypeScript, the types come from it with no generate step — both sit on a SQL-shaped query builder, and both offer a relational `db.query` API with `with`. `relations()` is even spelled the same way.
 
-The differences are in the details: kick/db's builder is [Kysely](https://kysely.dev), so columns are named with strings (`where('email', '=', x)`) rather than imported operators (`eq(users.email, x)`); migrations are reviewed before they run and can be rolled back; database errors arrive as typed classes; and the client plugs into KickJS's DI, transactions and lifecycle.
+The differences are in the details: kick/db's builder is [Kysely](https://kysely.dev), so columns are usually named with strings (`where('email', '=', x)`), though the same imported operators work too (`eq(users.email, x)`); migrations are reviewed before they run and can be rolled back; database errors arrive as typed classes; and the client plugs into KickJS's DI, transactions and lifecycle.
 
 The examples use Postgres. Everything kick/db shown here runs as written.
 
@@ -106,21 +106,22 @@ export const postsRelations = relations(posts, ({ one }) => ({
 
 :::
 
-| Drizzle                                            | kick/db                                                                                       |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `pgTable` / `mysqlTable` / `sqliteTable`           | one `table()` for every dialect — the dialect is picked at generate time and in the client    |
-| `varchar('email', { length: 255 })`, `casing`      | `varchar(255)` — the key is the column name; there is no name override or casing option       |
-| extra config `(t) => [index(…).on(…)]`             | `(t) => ({ name: index(…).on(…) })` — an object, each constraint keyed                        |
-| `primaryKey({ columns: [t.a, t.b] })`              | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                          |
-| `check('name', sql\`…\`)`                          | `check('name', 'sql as a string')`                                                            |
-| `.default(false)`                                  | `.default('false')` — the SQL default as written                                              |
-| `.defaultRandom()`, `.defaultNow()`                | the same                                                                                      |
-| `.$defaultFn(() => …)`, `.$onUpdate(() => …)`      | no equivalent — set the value in your insert or update                                        |
-| `.references(() => t.id, { onDelete })`            | the same; actions are `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'` |
-| `pgEnum('role', ['admin', 'member'])`              | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg` — values as arguments        |
-| `customType<{ data: T }>({ … })`                   | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))       |
-| `relations(…)` with `one` / `many`, `relationName` | the same                                                                                      |
-| —                                                  | a [class or fluent form](../db-table-forms.md) of the same table, if you prefer               |
+| Drizzle                                                   | kick/db                                                                                       |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pgTable` / `mysqlTable` / `sqliteTable`                  | one `table()` for every dialect — the dialect is picked at generate time and in the client    |
+| `varchar('email', { length: 255 })`, `casing`             | `varchar(255)` — the key is the column name; there is no name override or casing option       |
+| extra config `(t) => [index(…).on(…)]`                    | `(t) => ({ name: index(…).on(…) })` — an object, each constraint keyed                        |
+| `.generatedAlwaysAs(sql)`, `.generatedAlwaysAsIdentity()` | the same names — [Generated columns](./schema.md#generated-columns)                           |
+| `primaryKey({ columns: [t.a, t.b] })`                     | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                          |
+| `check('name', sql\`…\`)`                                 | `check('name', 'sql as a string')`                                                            |
+| `.default(false)`                                         | `.default('false')` — the SQL default as written                                              |
+| `.defaultRandom()`, `.defaultNow()`                       | the same                                                                                      |
+| `.$defaultFn(() => …)`, `.$onUpdate(() => …)`             | no equivalent — set the value in your insert or update                                        |
+| `.references(() => t.id, { onDelete })`                   | the same; actions are `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'` |
+| `pgEnum('role', ['admin', 'member'])`                     | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg` — values as arguments        |
+| `customType<{ data: T }>({ … })`                          | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))       |
+| `relations(…)` with `one` / `many`, `relationName`        | the same                                                                                      |
+| —                                                         | a [class or fluent form](../db-table-forms.md) of the same table, if you prefer               |
 
 Every column type is on [Tables & Columns](./schema.md).
 
@@ -179,14 +180,14 @@ const user = await db.query.users.findFirst({
 
 :::
 
-| Drizzle `db.query`                   | kick/db `db.query`                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `findMany`, `findFirst`              | the same, plus `findUnique`                                                                                  |
-| `where: (t, { eq, and, or }) => …`   | `where: (t, eb) => eb('col', '=', v)`, `eb.and([…])`, `eb.or([…])`                                           |
-| `orderBy: (t, { asc, desc }) => […]` | `orderBy: (t, eb) => [desc(eb.ref('col')), asc(eb.ref('other'))]` — `asc` / `desc` from `@forinda/kickjs-db` |
-| `limit`, `offset`, nested `with`     | the same                                                                                                     |
-| `columns: { id: true }`, `extras`    | not supported — select columns with the query builder                                                        |
-| —                                    | `maxDepth` guards runaway nesting; `signal` cancels the query                                                |
+| Drizzle `db.query`                   | kick/db `db.query`                                                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `findMany`, `findFirst`              | the same, plus `findUnique`                                                                                                   |
+| `where: (t, { eq, and, or }) => …`   | `where: (t) => and(eq(t.col, v), …)` with the operators imported from `@forinda/kickjs-db`, or `(t, eb) => eb('col', '=', v)` |
+| `orderBy: (t, { asc, desc }) => […]` | `orderBy: (t, eb) => [desc(eb.ref('col')), asc(eb.ref('other'))]` — `asc` / `desc` from `@forinda/kickjs-db`                  |
+| `limit`, `offset`, nested `with`     | the same                                                                                                                      |
+| `columns: { id: true }`, `extras`    | the same, at every level of `with` — [Choosing fields](../db-relational-query.md#choosing-fields)                             |
+| —                                    | `maxDepth` guards runaway nesting; `signal` cancels the query                                                                 |
 
 [Relational Queries](../db-relational-query.md) has the details.
 
@@ -194,21 +195,23 @@ const user = await db.query.users.findFirst({
 
 Drizzle's core API imports a column object and an operator for each condition; Kysely names the column and the operator as strings, checked against the schema:
 
-| Drizzle                                           | kick/db                                                                                |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `db.select().from(posts)`                         | `db.selectFrom('posts').selectAll()`                                                   |
-| `db.select({ id: posts.id }).from(posts)`         | `db.selectFrom('posts').select(['id'])`                                                |
-| `.where(eq(posts.id, id))`                        | `.where('id', '=', id)`                                                                |
-| `and(…)`, `or(…)`, `inArray`, `isNull`, `like`    | chained `.where`, `eb.or([…])`, `'in'`, `'is', null`, `'like'`                         |
-| `.orderBy(desc(posts.createdAt))`                 | `.orderBy('createdAt', 'desc')`                                                        |
-| `.innerJoin(users, eq(posts.authorId, users.id))` | `.innerJoin('users', 'users.id', 'posts.authorId')`                                    |
-| `db.insert(users).values({…}).returning()`        | `db.insertInto('users').values({…}).returningAll()`                                    |
-| `db.update(users).set({…}).where(…)`              | `db.updateTable('users').set({…}).where(…)`                                            |
-| `db.delete(users).where(…)`                       | `db.deleteFrom('users').where(…)`                                                      |
-| `.onConflictDoUpdate({ target, set })`            | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control  |
-| `db.$count(posts)`                                | `select((eb) => eb.fn.countAll().as('n'))`                                             |
-| `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `kysely`                                  |
-| results run with `await`                          | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()` |
+| Drizzle                                           | kick/db                                                                                               |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `db.select().from(posts)`                         | `db.selectFrom('posts').selectAll()`                                                                  |
+| `db.select({ id: posts.id }).from(posts)`         | `db.selectFrom('posts').select(['id'])`                                                               |
+| `.where(eq(posts.id, id))`                        | the same, or `.where('id', '=', id)` — [Condition helpers](./queries.md#condition-helpers)            |
+| `and(…)`, `or(…)`, `inArray`, `isNull`, `like`    | the same names                                                                                        |
+| `.orderBy(desc(posts.createdAt))`                 | `.orderBy('createdAt', 'desc')`                                                                       |
+| `.innerJoin(users, eq(posts.authorId, users.id))` | `.innerJoin('users', 'users.id', 'posts.authorId')`, or `(j) => j.on(eq(…))`                          |
+| `alias(users, 'manager')`                         | `alias(users, 'manager')`, joined through `manager.$from`                                             |
+| `db.$with('sq').as(…)`, `db.with(sq)`             | `const sq = db.cte('sq', (q) => …)`, `db.with(...sq)` — [CTEs](./raw-sql.md#common-table-expressions) |
+| `db.insert(users).values({…}).returning()`        | `db.insertInto('users').values({…}).returningAll()`                                                   |
+| `db.update(users).set({…}).where(…)`              | `db.updateTable('users').set({…}).where(…)`                                                           |
+| `db.delete(users).where(…)`                       | `db.deleteFrom('users').where(…)`                                                                     |
+| `.onConflictDoUpdate({ target, set })`            | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control                 |
+| `db.$count(posts)`                                | `select((eb) => eb.fn.countAll().as('n'))`                                                            |
+| `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `kysely`                                                 |
+| results run with `await`                          | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()`                |
 
 [Queries](./queries.md) and [Raw SQL & Recipes](./raw-sql.md) cover the rest.
 
@@ -349,7 +352,6 @@ try {
 ## Not there (yet)
 
 - **`$defaultFn`, `$onUpdate` with a function** — set the value yourself. For the common cases there are [maintained columns](./schema.md#columns-kick-db-maintains): `onUpdateNow()`, `version()`, `softDelete()`.
-- **`columns` / `extras` in `db.query`** — use the query builder when you need a narrower select.
 - **A name or casing override for columns** — the key is the column name.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
 - **`drizzle-seed`** (generated fake data) — no generator; write seed files for [`kick db seed`](./cli.md#seed) by hand or with a faker library.

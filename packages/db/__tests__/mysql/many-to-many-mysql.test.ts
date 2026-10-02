@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { createPool, type Pool } from 'mysql2/promise'
+import { sql } from 'kysely'
 import {
   createDbClient,
   diff,
@@ -73,6 +74,20 @@ describe('many-to-many on MySQL', () => {
       ['Second', ['sql']],
     ])
     expect(rows[1]!.tags[0]!.posts.map((p) => p.title).toSorted()).toEqual(['First', 'Second'])
+  }, 30_000)
+
+  it('columns and extras shape relational reads', async () => {
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+    const rows = await db.query.posts.findMany({
+      columns: { title: true },
+      extras: { loud: () => sql<string>`upper(title)` },
+      orderBy: (_p, eb) => eb.ref('id'),
+      with: { tags: { columns: { name: true }, orderBy: (_t, eb) => eb.ref('name') } },
+    })
+    expect(rows).toEqual([
+      { title: 'First', loud: 'FIRST', tags: [{ name: 'db' }, { name: 'sql' }] },
+      { title: 'Second', loud: 'SECOND', tags: [{ name: 'sql' }] },
+    ])
   }, 30_000)
 
   it('findManyAndCount pages and totals', async () => {

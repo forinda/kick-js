@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
+import { sql } from 'kysely'
 import {
   createDbClient,
   diff,
@@ -17,6 +18,10 @@ import {
   text,
   timestamptz,
   version,
+  and,
+  ilike,
+  inArray,
+  like,
 } from '@forinda/kickjs-db'
 import { pgDialect, pgSchema } from '@forinda/kickjs-db/pg'
 
@@ -130,6 +135,47 @@ describe('managed columns on Postgres', () => {
     // pg returns count(*) as a bigint string; it comes back a number.
     expect(total).toBe(3)
     expect(rows.map((r) => r.slug)).toEqual(['page-2'])
+  }, 30_000)
+
+  it('columns and extras shape relational reads at every level', async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    const doc = await db.upsert('docs', {
+      values: { slug: 'shaped', title: 'Shaped' },
+      target: ['slug'],
+    })
+    await db.insertInto('comments').values({ docId: doc.id, body: 'first' }).execute()
+    const row = await db.query.docs.findFirst({
+      where: (_d, eb) => eb('slug', '=', 'shaped'),
+      columns: { slug: true },
+      extras: { loud: () => sql<string>`upper(title)` },
+      with: {
+        comments: {
+          columns: { body: true },
+          extras: { size: () => sql<number>`length(body)` },
+        },
+      },
+    })
+    expect(row).toEqual({ slug: 'shaped', loud: 'SHAPED', comments: [{ body: 'first', size: 5 }] })
+  }, 30_000)
+
+  it('condition helpers and reusable CTEs run on Postgres', async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    await db.upsert('docs', { values: { slug: 'ops-a', title: 'Alpha' }, target: ['slug'] })
+    await db.upsert('docs', { values: { slug: 'ops-b', title: 'Beta' }, target: ['slug'] })
+    const rows = await db.query.docs.findMany({
+      where: (d) => and(ilike(d.title, 'al%'), inArray(d.slug, ['ops-a', 'ops-b'])),
+      columns: { slug: true },
+    })
+    expect(rows).toEqual([{ slug: 'ops-a' }])
+    const ops = db.cte('ops', (q) =>
+      q.selectFrom('docs').select('slug').where(like(docs.slug, 'ops-%')),
+    )
+    const n = await db
+      .with(...ops)
+      .selectFrom('ops')
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .executeTakeFirstOrThrow()
+    expect(Number(n.n)).toBe(2)
   }, 30_000)
 
   it('works for a table in a named schema', async () => {

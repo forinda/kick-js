@@ -36,7 +36,23 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
     tables: Object.fromEntries(
       Object.entries(snap.tables).map(([n, t]) => {
         const { primaryKey: _key, ...rest } = t
-        return [n, { ...rest, checks: [] }]
+        // A generated column's expression comes back rewritten by the
+        // database, and only Postgres reports identity, so drift compares the
+        // columns without either. ponytail: compare normalised expressions.
+        const columns = Object.fromEntries(
+          Object.entries(t.columns).map(([cn, { generated: _g, identity: _i, ...c }]) => [cn, c]),
+        )
+        // Indexes compare on name, uniqueness and plain key columns. A
+        // predicate or expression comes back rewritten by the database
+        // (Postgres re-quotes and re-parenthesises it; SQLite and MySQL
+        // introspection don't read them), so comparing their text would flag
+        // drift on every run. ponytail: normalise via pg_get_expr on both sides.
+        const indexes = t.indexes.map((i) => ({
+          name: i.name,
+          columns: i.columns.filter((c) => !c.startsWith('(')),
+          unique: i.unique,
+        }))
+        return [n, { ...rest, columns, indexes, checks: [] }]
       }),
     ),
   }

@@ -28,7 +28,12 @@
  * Unknown keys are dropped from the parsed value, like a Zod object.
  */
 import { CustomColumnBuilder } from './custom-type'
-import type { ColumnBuilder, GeneratedBrand, NotNullBrand } from './dsl/columns/types'
+import type {
+  ColumnBuilder,
+  GeneratedAlwaysBrand,
+  GeneratedBrand,
+  NotNullBrand,
+} from './dsl/columns/types'
 import { PgEnumColumnBuilder } from './dsl/columns/pg'
 import type { TableDecl } from './dsl/table'
 
@@ -53,9 +58,19 @@ type OptionalOnInsert<T> = {
       : K
 }[keyof ColumnsOf<T>]
 
-/** A row to insert: generated, defaulted and nullable columns may be left out. */
-export type InferInsert<T extends TableDecl> = Omit<InferSelect<T>, OptionalOnInsert<T>> &
-  Partial<Pick<InferSelect<T>, OptionalOnInsert<T>>>
+/** Columns the database always computes: never written. */
+type ComputedColumns<T> = {
+  [K in keyof ColumnsOf<T>]: ColumnsOf<T>[K] extends GeneratedAlwaysBrand ? K : never
+}[keyof ColumnsOf<T>]
+
+/**
+ * A row to insert: generated, defaulted and nullable columns may be left out;
+ * computed ones (`generatedAlwaysAs`, identity `ALWAYS`) aren't there at all.
+ */
+export type InferInsert<T extends TableDecl> = Omit<
+  Omit<InferSelect<T>, OptionalOnInsert<T>> & Partial<Pick<InferSelect<T>, OptionalOnInsert<T>>>,
+  ComputedColumns<T>
+>
 
 /** Extra rules for one column — what a SQL type can't say. */
 export interface ColumnRule {
@@ -424,7 +439,18 @@ type Mode = 'select' | 'insert' | 'update'
 /** Whether a column may be left out of an insert: the database fills it. */
 function optionalOnInsert(builder: ColumnBuilder): boolean {
   const state = builder.__state()
-  return state.nullable || state.default !== null || /^(small|big)?serial$/.test(state.type)
+  return (
+    state.nullable ||
+    state.default !== null ||
+    state.identity === 'byDefault' ||
+    /^(small|big)?serial$/.test(state.type)
+  )
+}
+
+/** Computed by the database on every write, so never part of one. */
+function computed(builder: ColumnBuilder): boolean {
+  const state = builder.__state()
+  return state.generated !== undefined || state.identity === 'always'
 }
 
 function buildSchema<TOutput>(
@@ -434,7 +460,7 @@ function buildSchema<TOutput>(
 ): TableSchema<TOutput> {
   const omitted = new Set<string>((options.omit ?? []) as string[])
   const columns = Object.entries(table.__columns)
-    .filter(([name]) => !omitted.has(name))
+    .filter(([name, builder]) => !omitted.has(name) && (mode === 'select' || !computed(builder)))
     .map(([name, builder]) => ({
       name,
       nullable: builder.__state().nullable,

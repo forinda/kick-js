@@ -56,11 +56,19 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
   // Tables that need a rebuild (an ALTER SQLite can't express). A table
   // created in this same change set is never rebuilt — its FKs inline into
   // CREATE TABLE directly.
+  // A table renamed in this change set is rebuilt under its new name: the
+  // RENAME TO runs first, with the other direct statements.
+  const renamedTo = new Map<string, string>()
+  for (const c of changes) if (c.kind === 'renameTable') renamedTo.set(c.from, c.to)
+  const current = (t: string) => renamedTo.get(t) ?? t
+
   const rebuildTables = new Set<string>()
   for (const c of changes) {
     const t = perTableName(c)
     if (!t || createdTables.has(t)) continue
     if (
+      // SQLite can't ADD COLUMN a stored generated column.
+      (c.kind === 'addColumn' && c.column.generated?.stored) ||
       c.kind === 'alterColumn' ||
       c.kind === 'dropForeignKey' ||
       c.kind === 'addForeignKey' ||
@@ -68,7 +76,7 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
       c.kind === 'addCheck' ||
       c.kind === 'dropCheck'
     ) {
-      rebuildTables.add(t)
+      rebuildTables.add(current(t))
     }
   }
 
@@ -77,14 +85,14 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
   // 1. Emit every change that isn't subsumed by a rebuild.
   for (const c of changes) {
     const t = perTableName(c)
-    if (t && rebuildTables.has(t)) continue // folded into the rebuild below
+    if (t && rebuildTables.has(current(t))) continue // folded into the rebuild below
     const sql = emitChange(c)
     if (sql) out.push(sql)
   }
 
   // 2. Emit one rebuild per affected table, from the resolved `to` snapshot.
   for (const table of rebuildTables) {
-    out.push(emitRebuild(table, ctx))
+    out.push(emitRebuild(table, ctx, changes))
   }
 
   return out.join('\n')
@@ -167,24 +175,43 @@ function emitChange(change: Change): string {
  * tables' FKs would need `PRAGMA foreign_keys=OFF` outside the migration
  * transaction — out of scope here.
  */
-function emitRebuild(table: string, ctx: SqliteEmitContext): string {
+function emitRebuild(table: string, ctx: SqliteEmitContext, changes: ChangeSet): string {
   const next = ctx.to?.tables[table]
   if (!next) {
     throw new SqliteRebuildRequiredError(`no resolved snapshot for table '${table}'`)
   }
-  const prev = ctx.from?.tables[table]
+  // A renamed table is found under its old name in `from`. Its RENAME TO has
+  // already run; a column rename is folded in here, so the copy reads the
+  // old column into the new one.
+  const renamedFrom = changes.find((c) => c.kind === 'renameTable' && c.to === table)
+  const prev =
+    ctx.from?.tables[table] ??
+    (renamedFrom?.kind === 'renameTable' ? ctx.from?.tables[renamedFrom.from] : undefined)
+  const oldName = new Map<string, string>()
+  for (const c of changes) {
+    if (c.kind !== 'renameColumn') continue
+    const owner =
+      c.table === table ||
+      changes.some((r) => r.kind === 'renameTable' && r.from === c.table && r.to === table)
+    if (owner) oldName.set(c.to, c.from)
+  }
 
   // Copy columns present in BOTH old and new (added columns get their
   // default; dropped columns are simply not selected).
   const newCols = Object.keys(next.columns)
-  const common = prev ? newCols.filter((c) => c in prev.columns) : newCols
+  const source = (c: string) => oldName.get(c) ?? c
+  // A generated column can't be written; the new table computes it.
+  const common = (prev ? newCols.filter((c) => source(c) in prev.columns) : newCols).filter(
+    (c) => !next.columns[c].generated,
+  )
   const colList = common.map(quoteIdent).join(', ')
+  const selectList = common.map((c) => quoteIdent(source(c))).join(', ')
 
   const tmp = `_kick_new_${table}`
   const lines: string[] = [
     emitCreateTable(tmp, next),
     common.length > 0
-      ? `INSERT INTO ${quoteIdent(tmp)} (${colList})\n  SELECT ${colList} FROM ${quoteIdent(table)};`
+      ? `INSERT INTO ${quoteIdent(tmp)} (${colList})\n  SELECT ${selectList} FROM ${quoteIdent(table)};`
       : `-- (no columns survive the rebuild; nothing to copy)`,
     `DROP TABLE ${quoteIdent(table)};`,
     `ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${quoteIdent(table)};`,
@@ -214,6 +241,9 @@ function emitCreateTable(name: string, t: TableSnapshot): string {
 
 function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
   let s = `${quoteIdent(c.name)} ${sqliteType(c.type)}`
+  if (c.generated) {
+    s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
+  }
   if (inlinePk) {
     s += ' PRIMARY KEY'
     if (/serial/i.test(c.type)) s += ' AUTOINCREMENT'
@@ -224,8 +254,10 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
 }
 
 function emitAddIndex(table: string, i: IndexSnapshot): string {
-  const cols = i.columns.map(quoteIdent).join(', ')
-  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols});`
+  // An expression key is stored in its parentheses, which is how SQL takes it.
+  const cols = i.columns.map((k) => (k.startsWith('(') ? k : quoteIdent(k))).join(', ')
+  const where = i.where ? ` WHERE ${i.where}` : ''
+  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols})${where};`
 }
 
 const FK_ACTIONS: Record<string, string> = {

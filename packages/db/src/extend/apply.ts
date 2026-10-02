@@ -42,7 +42,10 @@ export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
   //    sides only call into each other inside functions.
   let baseClient: KickDbClient<DB> = client
   if (hasResultExtensions(ext.result)) {
-    const plugin = new ResultExtensionPlugin(ext.result as ResultExtensions<unknown>)
+    const plugin = new ResultExtensionPlugin(
+      ext.result as ResultExtensions<unknown>,
+      ctx.query.relations,
+    )
     baseClient = rewrap<DB>(client, ctx, plugin)
   }
 

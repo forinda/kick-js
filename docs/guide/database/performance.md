@@ -70,7 +70,7 @@ export const posts = table(
 - **Columns you filter on** in hot paths — `where('status', '=', …)`, `where('authorId', '=', …)`.
 - **Your sort order**, with its tiebreaker — `(createdAt, id)` for a feed sorted newest first.
 
-[Keys & Constraints](./constraints.md) has the syntax for unique and multi-column indexes.
+[Keys & Constraints](./constraints.md) has the syntax for unique and multi-column indexes, and for [partial, expression, GIN and vector indexes](./constraints.md#partial-expression-and-other-indexes): index only the rows a query reads, or the expression it filters on.
 
 ## Paginate with keys, not offsets
 

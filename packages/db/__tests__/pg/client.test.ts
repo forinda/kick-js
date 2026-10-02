@@ -49,7 +49,7 @@ afterAll(async () => {
   // must not call pool.end() again here.
   await db?.destroy()
   await container?.stop()
-})
+}, 60_000)
 
 describe('KickDbClient over Kysely (PG)', () => {
   it('round-trips an insert + select', async () => {

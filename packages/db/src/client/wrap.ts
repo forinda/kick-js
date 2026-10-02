@@ -268,6 +268,14 @@ export function wrap<DB>(
       (reader().selectFrom as (...a: unknown[]) => unknown)(
         ...args,
       )) as KickDbClient<DB>['selectFrom'],
+    // A CTE may write (`with x as (delete … returning …)`), so it starts on the primary.
+    with: ((...args: unknown[]) =>
+      (active().with as (...a: unknown[]) => unknown)(...args)) as KickDbClient<DB>['with'],
+    withRecursive: ((...args: unknown[]) =>
+      (active().withRecursive as (...a: unknown[]) => unknown)(
+        ...args,
+      )) as KickDbClient<DB>['withRecursive'],
+    cte: ((name: string, query: unknown) => [name, query] as const) as KickDbClient<DB>['cte'],
     insertInto: ((...args: unknown[]) =>
       (active().insertInto as (...a: unknown[]) => unknown)(
         ...args,

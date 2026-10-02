@@ -175,10 +175,10 @@ await db
 
 ### Common table expressions
 
-`with` lives on the underlying builder:
+`db.with(name, query)` starts a query with a CTE:
 
 ```ts
-await db.qb
+await db
   .with('recent', (q) =>
     q.selectFrom('posts').select(['authorId', 'title']).where('createdAt', '>=', since),
   )
@@ -186,6 +186,23 @@ await db.qb
   .selectAll()
   .execute()
 ```
+
+To reuse one, define it once with `db.cte()` and spread it in. It's typed from its query and works with any client of the same schema, transactions included:
+
+```ts
+const prolific = db.cte('prolific', (q) =>
+  q
+    .selectFrom('posts')
+    .select(['authorId', (eb) => eb.fn.countAll<number>().as('n')])
+    .groupBy('authorId')
+    .having((eb) => eb.fn.countAll(), '>', 1),
+)
+
+await db.with(...prolific).selectFrom('prolific').innerJoin('users', 'users.id', 'prolific.authorId').selectAll().execute()
+await db.with(...prolific).with(...another).selectFrom('prolific')…
+```
+
+`db.withRecursive` takes the same arguments for a recursive CTE. Both run on the primary, since a CTE may write.
 
 ### Union
 

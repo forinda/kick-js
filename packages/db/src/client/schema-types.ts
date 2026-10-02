@@ -1,5 +1,10 @@
-import type { Generated } from 'kysely'
-import type { ColumnBuilder, GeneratedBrand, NotNullBrand } from '../dsl/columns/types'
+import type { Generated, GeneratedAlways } from 'kysely'
+import type {
+  ColumnBuilder,
+  GeneratedAlwaysBrand,
+  GeneratedBrand,
+  NotNullBrand,
+} from '../dsl/columns/types'
 import type { TableDecl } from '../dsl/table'
 
 /**
@@ -22,13 +27,15 @@ type IsNullable<C> = C extends NotNullBrand ? false : true
 
 type ColumnTSType<C> =
   C extends ColumnBuilder<infer T>
-    ? IsNullable<C> extends true
-      ? C extends GeneratedBrand
-        ? Generated<T> | null
-        : T | null
-      : C extends GeneratedBrand
-        ? Generated<T>
-        : T
+    ? C extends GeneratedAlwaysBrand
+      ? GeneratedAlways<IsNullable<C> extends true ? T | null : T>
+      : IsNullable<C> extends true
+        ? C extends GeneratedBrand
+          ? Generated<T> | null
+          : T | null
+        : C extends GeneratedBrand
+          ? Generated<T>
+          : T
     : never
 
 /**

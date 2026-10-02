@@ -125,28 +125,28 @@ Two things Prisma doesn't do: the runner refuses a migration nobody marked revie
 
 `db` below is the client from `createDbClient({ schema, dialect })`. In a KickJS app you inject it by token ([Getting started](./index.md)).
 
-| Prisma                                          | kick/db                                                                                                           |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `findMany({ where, orderBy, take, skip })`      | `selectFrom(t).selectAll().where(…).orderBy(…).limit(n).offset(n).execute()`                                      |
-| `findUnique({ where: { email } })`              | `….where('email', '=', email).executeTakeFirst()` → row or `undefined`                                            |
-| `findUniqueOrThrow`                             | `….executeTakeFirstOrThrow()`                                                                                     |
-| `select: { id: true, title: true }`             | `.select(['id', 'title'])`                                                                                        |
-| `include: { posts: true }`                      | `db.query.users.findMany({ with: { posts: true } })` — one query                                                  |
-| `equals`, `not`, `in`, `notIn`                  | `'='`, `'<>'`, `'in'`, `'not in'`                                                                                 |
-| `lt`, `lte`, `gt`, `gte`                        | `'<'`, `'<='`, `'>'`, `'>='`                                                                                      |
-| `contains`, `startsWith`, `mode: 'insensitive'` | `'like'` / `'ilike'` with `%` — escape user input with `escapeLike` ([Raw SQL](./raw-sql.md#searching-with-like)) |
-| `OR: [...]`, `AND`, `NOT`                       | `where((eb) => eb.or([...]))`, `eb.and`, `eb.not`                                                                 |
-| relation filters `some` / `none`                | `eb.exists(…)` subqueries ([recipes](./raw-sql.md#count-exists-group-by))                                         |
-| `create({ data })`                              | `insertInto(t).values({…}).returningAll().executeTakeFirstOrThrow()`                                              |
-| nested `create` / `connect`                     | separate inserts inside one `transaction()`                                                                       |
-| `update`, `updateMany`                          | `updateTable(t).set({…}).where(…)` — one form for both                                                            |
-| `delete`, `deleteMany`                          | `deleteFrom(t).where(…)`                                                                                          |
-| `increment: 1`                                  | `.set((eb) => ({ views: eb('views', '+', 1) }))`                                                                  |
-| `upsert`                                        | `db.upsert(table, { values, target })` ([Upsert](./queries.md#upsert-and-find-or-create))                         |
-| `count`, `aggregate`, `groupBy`                 | `eb.fn.countAll()`, `eb.fn.sum(…)`, `.groupBy(…)`                                                                 |
-| `$queryRaw\`…\``                                | ``sql`…`.execute(db.qb)`` — values become parameters                                                              |
-| `$transaction(async (tx) => …)`                 | `db.transaction(async (tx) => …)`                                                                                 |
-| `$transaction([a, b])`                          | the same callback form                                                                                            |
+| Prisma                                          | kick/db                                                                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `findMany({ where, orderBy, take, skip })`      | `selectFrom(t).selectAll().where(…).orderBy(…).limit(n).offset(n).execute()`                                              |
+| `findUnique({ where: { email } })`              | `….where('email', '=', email).executeTakeFirst()` → row or `undefined`                                                    |
+| `findUniqueOrThrow`                             | `….executeTakeFirstOrThrow()`                                                                                             |
+| `select: { id: true, title: true }`, `omit`     | `.select(['id', 'title'])`, or `columns: { id: true, title: true }` / `{ password: false }` in `db.query`, at every level |
+| `include: { posts: true }`                      | `db.query.users.findMany({ with: { posts: true } })` — one query                                                          |
+| `equals`, `not`, `in`, `notIn`                  | `'='`, `'<>'`, `'in'`, `'not in'`                                                                                         |
+| `lt`, `lte`, `gt`, `gte`                        | `'<'`, `'<='`, `'>'`, `'>='`                                                                                              |
+| `contains`, `startsWith`, `mode: 'insensitive'` | `'like'` / `'ilike'` with `%` — escape user input with `escapeLike` ([Raw SQL](./raw-sql.md#searching-with-like))         |
+| `OR: [...]`, `AND`, `NOT`                       | `where((eb) => eb.or([...]))`, `eb.and`, `eb.not`                                                                         |
+| relation filters `some` / `none`                | `eb.exists(…)` subqueries ([recipes](./raw-sql.md#count-exists-group-by))                                                 |
+| `create({ data })`                              | `insertInto(t).values({…}).returningAll().executeTakeFirstOrThrow()`                                                      |
+| nested `create` / `connect`                     | separate inserts inside one `transaction()`                                                                               |
+| `update`, `updateMany`                          | `updateTable(t).set({…}).where(…)` — one form for both                                                                    |
+| `delete`, `deleteMany`                          | `deleteFrom(t).where(…)`                                                                                                  |
+| `increment: 1`                                  | `.set((eb) => ({ views: eb('views', '+', 1) }))`                                                                          |
+| `upsert`                                        | `db.upsert(table, { values, target })` ([Upsert](./queries.md#upsert-and-find-or-create))                                 |
+| `count`, `aggregate`, `groupBy`                 | `eb.fn.countAll()`, `eb.fn.sum(…)`, `.groupBy(…)`                                                                         |
+| `$queryRaw\`…\``                                | ``sql`…`.execute(db.qb)`` — values become parameters                                                                      |
+| `$transaction(async (tx) => …)`                 | `db.transaction(async (tx) => …)`                                                                                         |
+| `$transaction([a, b])`                          | the same callback form                                                                                                    |
 
 [Queries](./queries.md) and [Relational Queries](../db-relational-query.md) have the full surface.
 

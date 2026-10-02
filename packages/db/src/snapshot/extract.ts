@@ -82,6 +82,18 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
   }
 
   assertSchemasSupported(dialect, schemaNames)
+  for (const t of Object.values(tables)) assertIndexesSupported(dialect, t)
+  if (dialect !== 'postgres') {
+    for (const t of Object.values(tables)) {
+      for (const c of Object.values(t.columns)) {
+        if (c.identity) {
+          throw new Error(
+            `kickjs-db: column '${t.name}.${c.name}' is an identity column, which only Postgres has — use serial()`,
+          )
+        }
+      }
+    }
+  }
 
   const relations = extractRelations(schema, tables)
 
@@ -155,4 +167,29 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
   // every existing migration hash.
   if (t.__schema !== undefined) snapshot.schema = t.__schema
   return snapshot
+}
+
+/** Index options a dialect can't express — refused at extract, before any SQL is written. */
+const UNSUPPORTED_INDEX_OPTIONS: Record<Dialect, (keyof IndexSnapshot)[]> = {
+  postgres: [],
+  mysql: ['where', 'include', 'opclasses', 'concurrently'],
+  sqlite: ['using', 'include', 'opclasses', 'concurrently'],
+}
+
+function assertIndexesSupported(dialect: Dialect, t: TableSnapshot): void {
+  for (const idx of t.indexes) {
+    for (const option of UNSUPPORTED_INDEX_OPTIONS[dialect]) {
+      if (idx[option] !== undefined) {
+        const call = option === 'opclasses' ? 'op' : option
+        throw new Error(
+          `kickjs-db: index '${idx.name}' on '${t.name}' uses ${call}(), which ${dialect} doesn't support`,
+        )
+      }
+    }
+    if (dialect === 'mysql' && idx.using && !['btree', 'hash'].includes(idx.using.toLowerCase())) {
+      throw new Error(
+        `kickjs-db: index '${idx.name}' on '${t.name}' uses using('${idx.using}'); MySQL takes 'btree' or 'hash'`,
+      )
+    }
+  }
 }

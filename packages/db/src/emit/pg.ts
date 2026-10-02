@@ -56,7 +56,7 @@ function emitChange(change: Change): string {
       // the schema from the qualified table it targets.
       const schema = schemaOf(change.table)
       const name = schema ? `${schema}.${change.index.name}` : change.index.name
-      return `DROP INDEX ${quoteIdent(name)};`
+      return `DROP INDEX${change.index.concurrently ? ' CONCURRENTLY' : ''} ${quoteIdent(name)};`
     }
     case 'addForeignKey':
       return emitAddFk(change.table, change.fk)
@@ -272,6 +272,24 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
   const t = quoteIdent(table)
   const c = quoteIdent(after.name)
 
+  // A generated column changes in place where Postgres can: a new
+  // expression (17+), or back to a plain column keeping its values. Anything
+  // else — becoming generated, stored ↔ virtual — re-creates the column,
+  // which holds only computed values anyway. ponytail: an index on it is
+  // dropped with it and not re-created; declare it again under a new name.
+  const g = before.generated
+  const h = after.generated
+  if (g?.expression !== h?.expression || g?.stored !== h?.stored) {
+    if (g && h && g.stored === h.stored) {
+      stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} SET EXPRESSION AS (${h.expression});`)
+    } else if (g && !h) {
+      stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} DROP EXPRESSION;`)
+      before = { ...before, generated: undefined }
+    } else {
+      return `ALTER TABLE ${t} DROP COLUMN ${c};\n${emitAddColumn(table, after)}`
+    }
+  }
+
   const typeChanged = before.type !== after.type
   const nullChanged = before.nullable !== after.nullable
   const defaultChanged = before.default !== after.default
@@ -279,6 +297,17 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
 
   if (typeChanged) {
     stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} TYPE ${after.type} USING ${c}::${after.type};`)
+  }
+
+  if (before.identity !== after.identity) {
+    const kind = after.identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'
+    stmts.push(
+      !after.identity
+        ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP IDENTITY;`
+        : before.identity
+          ? `ALTER TABLE ${t} ALTER COLUMN ${c} SET GENERATED ${kind};`
+          : `ALTER TABLE ${t} ALTER COLUMN ${c} ADD GENERATED ${kind} AS IDENTITY;`,
+    )
   }
 
   // Default precedes nullable when loosening (DROP DEFAULT before DROP NOT NULL keeps
@@ -311,8 +340,20 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
 }
 
 function emitAddIndex(table: string, i: import('../snapshot/types').IndexSnapshot): string {
-  const cols = i.columns.map(quoteIdent).join(', ')
-  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols});`
+  // An expression key is stored in its parentheses, which is how SQL takes it.
+  const keys = i.columns
+    .map((k) => {
+      const key = k.startsWith('(') ? k : quoteIdent(k)
+      const op = i.opclasses?.[k]
+      return op ? `${key} ${op}` : key
+    })
+    .join(', ')
+  let sql = `CREATE${i.unique ? ' UNIQUE' : ''} INDEX${i.concurrently ? ' CONCURRENTLY' : ''} ${quoteIdent(i.name)} ON ${quoteIdent(table)}`
+  if (i.using) sql += ` USING ${i.using}`
+  sql += ` (${keys})`
+  if (i.include?.length) sql += ` INCLUDE (${i.include.map(quoteIdent).join(', ')})`
+  if (i.where) sql += ` WHERE ${i.where}`
+  return `${sql};`
 }
 
 const FK_ACTIONS: Record<string, string> = {
@@ -353,6 +394,10 @@ function bareName(qualified: string): string {
 
 function emitColumnDecl(c: ColumnSnapshot): string {
   let s = `${quoteIdent(c.name)} ${c.type}`
+  if (c.generated) {
+    s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
+  }
+  if (c.identity) s += ` GENERATED ${c.identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'} AS IDENTITY`
   if (!c.nullable) s += ' NOT NULL'
   if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type)}`
   return s

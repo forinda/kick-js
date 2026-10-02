@@ -130,6 +130,9 @@ function emitCreateTable(t: TableSnapshot): string {
 
 function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
   let s = `${ident(c.name)} ${mysqlType(c.type)}`
+  if (c.generated) {
+    s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
+  }
   if (!c.nullable) s += ' NOT NULL'
   if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default)}`
   if (inlinePk) s += ' AUTO_INCREMENT PRIMARY KEY'
@@ -137,8 +140,10 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
 }
 
 function emitAddIndex(table: string, i: IndexSnapshot): string {
-  const cols = i.columns.map(ident).join(', ')
-  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${ident(i.name)} ON ${ident(table)} (${cols});`
+  // An expression key is stored in its parentheses — a functional key part.
+  const cols = i.columns.map((k) => (k.startsWith('(') ? k : ident(k))).join(', ')
+  const using = i.using ? ` USING ${i.using.toUpperCase()}` : ''
+  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${ident(i.name)} ON ${ident(table)} (${cols})${using};`
 }
 
 const FK_ACTIONS: Record<string, string> = {
