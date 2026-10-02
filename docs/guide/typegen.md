@@ -82,6 +82,7 @@ export class UserController {
 | ----------------------- | ---------------------------------------------------------------------------- |
 | `kick typegen`          | One-shot — runs the scan and writes the types                                |
 | `kick typegen --watch`  | Re-runs on every source file change (Ctrl-C to exit)                         |
+| `kick typegen --fix`    | Also patches module globs to load the classes they miss (see below)          |
 | `kick dev`              | Runs once at startup, then re-runs whenever Vite's watcher fires             |
 | bare `vite`             | The `kickjs:typegen` vite plugin wires the same watcher + a startup catch-up |
 | `kick g module ...`     | Runs after the new files are written                                         |
@@ -90,6 +91,10 @@ export class UserController {
 | `kick init`             | Runs once after the project is scaffolded                                    |
 
 You almost never need to run it manually — the dev loop keeps `.kickjs/types/` up to date for you. (`kick dev` is the recommended entry; if something boots Vite directly, the `@forinda/kickjs-vite` plugin runs the identical watcher, resolving `@forinda/kickjs-cli` from your project — exactly one of the two ever owns the pipeline per process.)
+
+### Classes no module loads
+
+A decorated class registers when its file is imported. Modules load their files with `import.meta.glob(...)`, so a class in a file no glob matches never registers, and resolving it fails at runtime. Typegen checks every decorated class against its module's globs and warns about the ones left out, with the patterns that would cover them. `kick typegen --fix` adds those patterns to the module's `import.meta.glob(...)` call for you. A module without a glob call is listed for you to edit by hand.
 
 ### Watch-mode failure surfacing
 

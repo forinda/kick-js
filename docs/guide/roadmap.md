@@ -475,7 +475,7 @@ From this one class:
 
 ### C.2 TS compiler plugin for runtime types
 
-**Status:** `not planned` as a compiler plugin. `kick typegen` covers the types-at-runtime need by scanning source and emitting types the user's `tsc` checks, and uses the TypeScript checker where it has to (the client route map). Injecting interfaces without tokens needs whole-program knowledge a per-file transform doesn't have, and the build-tool gaps (esbuild, tsx) are handled by the SWC build and explicit `@Inject`. The pain that remains is smaller — a class that is never imported never registers — and belongs to typegen: emit a registration manifest from the classes its scanner already finds. The original sketch below is kept for context.
+**Status:** `not planned` as a compiler plugin. `kick typegen` covers the types-at-runtime need by scanning source and emitting types the user's `tsc` checks, and uses the TypeScript checker where it has to (the client route map). Injecting interfaces without tokens needs whole-program knowledge a per-file transform doesn't have, and the build-tool gaps (esbuild, tsx) are handled by the SWC build and explicit `@Inject`. The pain that remains is smaller — a class that is never imported never registers — and belongs to typegen. Typegen now warns about decorated classes no module glob loads, and `kick typegen --fix` adds the missing patterns (see [Type Generation](./typegen.md#classes-no-module-loads)), which covers it without a separate registration manifest. The original sketch below is kept for context.
 **Effort:** 3–6 months
 
 **Why it matters.** TypeScript's types are erased at runtime. That's why we need decorators in the first place — to recover the type info at runtime. A `ts-patch` / `swc` plugin (like `ts-runtime-checks`, `typia`, or `tspl`) preserves the type info, making decorators in some cases unnecessary.
@@ -841,7 +841,6 @@ above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** 
 Rough order if we were optimizing for **impact-per-effort**:
 
 1. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-2. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
 
 Open for redirection — these are starting points, not commitments.
 
