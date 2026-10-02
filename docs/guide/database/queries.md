@@ -133,7 +133,7 @@ The options, nesting, self-references, dialect notes and cancellation are on [Re
 
 ## Pagination with `ctx.paginate`
 
-KickJS's HTTP layer already parses `page` / `limit` / filters / sort off the query string. `ctx.paginate()` wraps a fetcher that returns `{ data, total }` and emits a standardized paginated response. Use `parsed.pagination.limit` / `parsed.pagination.offset` to bound the query:
+KickJS's HTTP layer already parses `page` / `limit` / filters / sort off the query string. `ctx.paginate()` wraps a fetcher that returns `{ data, total }` and emits a standardized paginated response. Use `parsed.pagination.limit` / `parsed.pagination.offset` to bound the query. `findManyAndCount` returns that shape, the page plus the total before paging:
 
 ```ts
 import { Controller, Get, type RequestContext } from '@forinda/kickjs'
@@ -144,29 +144,17 @@ export class UsersController {
 
   @Get('/')
   list(ctx: RequestContext) {
-    return ctx.paginate(
-      async (parsed) => {
-        const data = await this.db
-          .selectFrom('users')
-          .selectAll()
-          .limit(parsed.pagination.limit)
-          .offset(parsed.pagination.offset)
-          .execute()
-
-        const totalRow = await this.db
-          .selectFrom('users')
-          .select((eb) => eb.fn.countAll<number>().as('count'))
-          .executeTakeFirstOrThrow()
-
-        return { data, total: Number(totalRow.count) }
-      },
-      { sortable: ['createdAt'], filterable: ['name'] },
+    return ctx.paginate((parsed) =>
+      this.db.query.users.findManyAndCount({
+        limit: parsed.pagination.limit,
+        offset: parsed.pagination.offset,
+      }),
     )
   }
 }
 ```
 
-The response includes `meta: { page, limit, total, totalPages, hasNext, hasPrev }`. See [Query Parsing](../query-parsing) for the full `ctx.qs` / `ctx.paginate` surface, and [Repositories](./repositories) for wrapping these queries behind a repository interface.
+To honour `?filter=` and `?sort=` too, pass a field config as the second argument and map `parsed.filters` / `parsed.sort` into `where` / `orderBy`; the same `where` then also bounds `total`. With the query builder instead, run the page and a `count(*)` with the same `where`, and return `{ data, total: Number(count) }`. The response includes `meta: { page, limit, total, totalPages, hasNext, hasPrev }`. See [Query Parsing](../query-parsing) for the full `ctx.qs` / `ctx.paginate` surface, and [Repositories](./repositories) for wrapping these queries behind a repository interface.
 
 ## More
 

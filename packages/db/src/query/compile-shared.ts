@@ -22,7 +22,8 @@ import { RelationalQueryDepthError, RelationalQueryUnknownRelationError } from '
 import type { ResolvedRelation, ResolvedRelations } from './relations'
 import type { TableSnapshot } from '../snapshot/types'
 
-export type CompileMode = 'many' | 'first' | 'unique'
+/** `count` selects `count(*) as total` under the same filters, ignoring `with`, order and paging. */
+export type CompileMode = 'many' | 'first' | 'unique' | 'count'
 
 export interface CompileOptions {
   where?: (table: any, ops: ExpressionBuilder<any, any>) => Expression<unknown>
@@ -104,6 +105,13 @@ export function runCompile<DB>(
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH
 
   const outerAlias = makeAlias(table, 0)
+  if (mode === 'count') {
+    const count = (db.selectFrom(`${table} as ${outerAlias}` as any) as any).select(
+      (eb: ExpressionBuilder<any, any>) => eb.fn.countAll().as('total'),
+    )
+    const filtered = skipDeleted(count, outerAlias, tables[table], options)
+    return applyWhereOrderLimit(filtered, outerAlias, { where: options.where }, mode).compile()
+  }
   // Outer `.selectAll()` is fine — the helpers only restrict inner
   // subqueries passed to jsonArrayFrom / jsonObjectFrom.
   let query: any = (db.selectFrom(`${table} as ${outerAlias}` as any) as any).selectAll()

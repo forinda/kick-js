@@ -74,4 +74,15 @@ describe('many-to-many on MySQL', () => {
     ])
     expect(rows[1]!.tags[0]!.posts.map((p) => p.title).toSorted()).toEqual(['First', 'Second'])
   }, 30_000)
+
+  it('findManyAndCount pages and totals', async () => {
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+    const { data: rows, total } = await db.query.tags.findManyAndCount({
+      orderBy: (_t, eb) => eb.ref('name'),
+      limit: 1,
+      with: { posts: true },
+    })
+    expect(total).toBe(2)
+    expect(rows.map((t) => [t.name, t.posts.length])).toEqual([['db', 1]])
+  }, 30_000)
 })
