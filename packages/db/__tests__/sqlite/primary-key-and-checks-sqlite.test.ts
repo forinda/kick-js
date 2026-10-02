@@ -90,4 +90,55 @@ describe('primary-key and CHECK migrations (sqlite)', () => {
     ).sql
     expect(ddl).not.toContain('id_positive')
   })
+
+  it('checks only rows touching the rebuilt table — an old orphan elsewhere does not block it', async () => {
+    const database = new Database(':memory:')
+    const adapter = sqliteAdapter({ database })
+    const parents = table('parents', { id: integer().primaryKey() })
+    const others = table('others', {
+      id: integer().primaryKey(),
+      parentId: integer().references(() => parents.id),
+    })
+    const before = {
+      parents,
+      others,
+      prices: table('prices', { id: integer().primaryKey(), n: integer() }),
+    }
+    const after = {
+      parents,
+      others,
+      prices: table('prices', { id: integer().primaryKey(), n: integer() }, () => ({
+        c: check('n_positive', 'n > 0'),
+      })),
+    }
+    await adapter.applySqlInTx(migrate({}, before))
+    database.pragma('foreign_keys = OFF')
+    database.exec('INSERT INTO others (id, parentId) VALUES (1, 99)') // unrelated orphan
+    await adapter.applySqlInTx(migrate(before, after)) // rebuilds prices only — commits
+    const ddl = (
+      database.prepare("SELECT sql FROM sqlite_master WHERE name = 'prices'").get() as {
+        sql: string
+      }
+    ).sql
+    expect(ddl).toContain('n_positive')
+  })
+
+  it('catches a child whose rebuilt parent no longer has its row', async () => {
+    const database = new Database(':memory:')
+    const adapter = sqliteAdapter({ database })
+    const v1parents = table('parents', { id: integer().primaryKey(), code: integer() })
+    const kids = table('kids', {
+      id: integer().primaryKey(),
+      parentId: integer().references(() => v1parents.id),
+    })
+    const v2parents = table('parents', { id: integer().primaryKey(), code: integer() }, () => ({
+      c: check('code_positive', 'code > 0'),
+    }))
+    await adapter.applySqlInTx(migrate({}, { parents: v1parents, kids }))
+    database.pragma('foreign_keys = OFF')
+    database.exec('INSERT INTO kids (id, parentId) VALUES (1, 7)') // parent 7 doesn't exist
+    await expect(
+      adapter.applySqlInTx(migrate({ parents: v1parents, kids }, { parents: v2parents, kids })),
+    ).rejects.toThrow(/kids → parents/)
+  })
 })

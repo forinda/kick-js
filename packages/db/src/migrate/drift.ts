@@ -121,6 +121,10 @@ function summarize(changes: Change[]): SchemaDiffSummary {
       case 'alterColumn':
         changed.push(`${c.table}.${c.column}`)
         break
+      case 'alterPrimaryKey':
+        // A key change arrives as a drop-then-add pair; name the table once.
+        if (!changed.includes(`${c.table}#primaryKey`)) changed.push(`${c.table}#primaryKey`)
+        break
       case 'renameColumn':
         changed.push(`${c.table}.${c.from}→${c.to}`)
         break
