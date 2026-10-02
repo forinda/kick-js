@@ -7,7 +7,7 @@ description: Taskboard Part 4 — project memberships with a composite primary k
 At the end of [Part 3](./3-authentication.md) every signed-in user could see and change every project. This part makes projects belong to people:
 
 - a `project_members` table — who is in which project, as `owner` or `member`;
-- access checks as context contributors: outsiders get a `404`, members can work, only the owner can delete or invite;
+- access checks as context contributors: outsiders get a `404`, members can work, only the owner can delete or invite (a body that fails validation still gets its `422` first — validation runs before contributors);
 - creating a project and its owner membership in one transaction;
 - a duplicate invite answered `409` by the database's primary key, with no code to detect it.
 
@@ -133,7 +133,9 @@ async listMembers(projectId: string) {
     .innerJoin('users', 'users.id', 'project_members.userId')
     .select(['users.id', 'users.email', 'users.name', 'project_members.role', 'project_members.joinedAt'])
     .where('project_members.projectId', '=', projectId)
+    // Earliest first; email breaks a same-millisecond tie so the order is stable.
     .orderBy('project_members.joinedAt')
+    .orderBy('users.email')
     .execute()
 },
 ```
@@ -584,15 +586,18 @@ describe('who can see and change a project', () => {
   it('lists members with their roles', async () => {
     const { member, url } = await scene()
     const res = await member.get(`${url}/members`)
-    expect(res.body.map((m: { email: string; role: string }) => [m.email, m.role])).toEqual([
-      ['owner@example.com', 'owner'],
-      ['member@example.com', 'member'],
-    ])
+    expect(res.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ email: 'owner@example.com', role: 'owner' }),
+        expect.objectContaining({ email: 'member@example.com', role: 'member' }),
+      ]),
+    )
+    expect(res.body).toHaveLength(2)
   })
 })
 ```
 
-The last test depends on `orderBy('project_members.joinedAt')`. That's reliable because `defaultNow()` on SQLite stores milliseconds, so two rows inserted in the same second still sort in the order they were written.
+The last test checks who is listed, not the order: two rows can share a millisecond, so `joinedAt` alone doesn't fix their order — the query's `orderBy('users.email')` is what makes it stable, and the test doesn't lean on either.
 
 <PmCommand exec="kick test" />
 

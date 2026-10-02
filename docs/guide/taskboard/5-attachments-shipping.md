@@ -4,7 +4,7 @@ description: Taskboard part 5 — attach files to tasks with @FileUpload, keep d
 
 # Taskboard, Part 5: Attachments and Shipping
 
-Tasks get files: upload, list, download and delete them. Members can reach a task's files and nobody else can, and a stored file never exists without its row, or a row without its file. Then you ship: build the app, apply migrations as a deploy step, and boot it in production.
+Tasks get files: upload, list, download and delete them. Members can reach a task's files and nobody else can, and a row never points at a missing file. Then you ship: build the app, apply migrations as a deploy step, and boot it in production.
 
 ## Install the upload driver
 
@@ -204,7 +204,7 @@ There are two stores, the database and the files, and no transaction spans both.
 - **Upload**: insert the row, then write the file, both inside `transaction()`. If the write throws, the transaction rolls back and the row is gone.
 - **Delete**: delete the row, and remove the file in [`afterCommit`](../database/transactions.md#after-commit). If the delete rolls back, the file is never touched.
 
-At worst a crash between commit and removal leaves an orphan file, which is harmless. You never get a row pointing at a missing file.
+You never get a row pointing at a missing file. The reverse can happen: if the commit itself fails after the upload's write, or the process dies between a delete's commit and its `afterCommit`, a file is left with no row. An orphan wastes space but serves nothing — no route reaches a file without its row. If that matters at your scale, sweep now and then: list the storage keys, and remove the ones with no `attachments` row that are older than an hour.
 
 ```ts
 // src/modules/tasks/attachment.service.ts
@@ -325,6 +325,8 @@ async download(ctx: Ctx<KickRoutes.TaskController['download']>) {
     ctx.params.attachmentId,
     ctx.require('user').id,
   )
+  // Private to the project's members — no shared cache may keep a copy.
+  ctx.setHeader('Cache-Control', 'no-store')
   return ctx.download(bytes, attachment.fileName, attachment.contentType)
 }
 
@@ -336,7 +338,8 @@ async removeAttachment(ctx: Ctx<KickRoutes.TaskController['removeAttachment']>) 
 ```
 
 - `@FileUpload` buffers the file in memory and puts it on `ctx.file` in the Multer shape. A file over `maxSize` is rejected before your handler runs ([what a rejected upload returns](../file-uploads.md#what-a-rejected-upload-returns)). Add `allowedTypes` to restrict the kinds of file.
-- [`ctx.download()`](../controllers.md#returning-a-generated-file) sets `Content-Disposition` and `Content-Type` and sends the bytes, the same way on every runtime.
+- [`ctx.download()`](../controllers.md#returning-a-generated-file) sets `Content-Disposition` and `Content-Type` and sends the bytes, the same way on every runtime. It encodes the file name, so an uploaded name with quotes or non-Latin characters can't break the header.
+- `Cache-Control: no-store` keeps proxies and CDNs from storing the file and handing it to someone else — the download is only for members.
 - These routes need no `@Public`. `LoadUser` from Part 3 already requires a signed-in user.
 
 Try it with a signed-in cookie jar from Part 3:
@@ -404,6 +407,7 @@ describe('task attachments', () => {
     const file = await ada.get(`${url}/attachments/${uploaded.body.id}`)
     expect(file.status).toBe(200)
     expect(file.headers['content-disposition']).toContain('notes.txt')
+    expect(file.headers['cache-control']).toBe('no-store')
     expect(file.text).toBe('hello')
   })
 
@@ -443,13 +447,14 @@ describe('task attachments', () => {
 
 Production reads its settings from the environment. Everything the app needs:
 
-| Variable         | Read by                                 | Notes                                                              |
-| ---------------- | --------------------------------------- | ------------------------------------------------------------------ |
-| `NODE_ENV`       | `src/index.ts`, the migration runner    | `production`; `kick start` sets it for you                         |
-| `PORT`           | the env schema                          | defaults to `3000`                                                 |
-| `SESSION_SECRET` | the env schema → `session()`            | required, 32+ characters: `openssl rand -hex 32`                   |
-| `UPLOAD_DIR`     | the env schema → `diskStorage()`        | defaults to `uploads`; put it on a persistent volume               |
-| `DB_FILE`        | `src/db/client.ts` and `kick.config.ts` | defaults to `taskboard.db`; the app and `kick db` must agree on it |
+| Variable          | Read by                                 | Notes                                                              |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------ |
+| `NODE_ENV`        | `src/index.ts`, the migration runner    | `production`; `kick start` sets it for you                         |
+| `PORT`            | the env schema                          | defaults to `3000`                                                 |
+| `SESSION_SECRET`  | the env schema → `session()`            | required, 32+ characters: `openssl rand -hex 32`                   |
+| `UPLOAD_DIR`      | the env schema → `diskStorage()`        | defaults to `uploads`; put it on a persistent volume               |
+| `AUTH_RATE_LIMIT` | the env schema → the auth controller    | defaults to `10` attempts per IP per 15 minutes                    |
+| `DB_FILE`         | `src/db/client.ts` and `kick.config.ts` | defaults to `taskboard.db`; the app and `kick db` must agree on it |
 
 The env schema validates at boot, so a missing or short `SESSION_SECRET` stops the app before it serves anything. Keep `.env.example` listing every key with placeholder values. See [Configuration](../configuration.md).
 

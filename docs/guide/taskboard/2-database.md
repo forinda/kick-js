@@ -129,7 +129,7 @@ A few things worth noticing:
 
 <PmCommand exec="kick db generate init" />
 
-kick/db diffs the schema against the last migration (here: nothing) and writes `db/migrations/<timestamp>_init/` — `up.sql`, `down.sql`, `snapshot.json` and `meta.json`. Read `up.sql`; this is what will run:
+kick/db diffs the schema against the last migration (here: nothing) and writes `db/migrations/<timestamp>_init/` — `up.sql`, `down.sql`, `snapshot.json` and `meta.json`. Read `up.sql`; it is what will run. It creates `projects`, then `tasks` — the `tasks` half:
 
 ```sql
 CREATE TABLE "tasks" (
@@ -147,9 +147,9 @@ CREATE TABLE "tasks" (
 
 SQLite has no UUID function, so `defaultRandom()` becomes an expression that builds a version-4 UUID, and `defaultNow()` stores milliseconds so rows created in the same second still sort.
 
-A generated migration is a draft until someone has read it. Mark it reviewed — the id is the folder name — then apply it:
+A generated migration is a draft until someone has read it. Mark it reviewed, then apply it. `<id>` is the folder name your `generate` printed, such as `20261002_155913_init`:
 
-<PmCommand exec="kick db migrate review 20261002_155913_init" />
+<PmCommand exec="kick db migrate review <id>" />
 
 <PmCommand exec="kick db migrate latest" />
 

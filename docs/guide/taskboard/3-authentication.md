@@ -145,6 +145,8 @@ const envSchema = fromZod(
     LOG_LEVEL: z.string().default('info'),
     // Signs the session cookie. Generate one: openssl rand -hex 32
     SESSION_SECRET: z.string().min(32),
+    // Register / login attempts per IP per 15 minutes.
+    AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   }),
 )
 ```
@@ -156,11 +158,15 @@ const envSchema = fromZod(
 SESSION_SECRET=<output of: openssl rand -hex 32>
 
 # .env.example — committed, a placeholder
-SESSION_SECRET=change-me-openssl-rand-hex-32
+SESSION_SECRET=replace-with-output-of-openssl-rand-hex-32
 
 # .env.test — read instead of .env under vitest
 SESSION_SECRET=test-secret-at-least-32-characters-long
+# The suite registers many users from one address.
+AUTH_RATE_LIMIT=10000
 ```
+
+`AUTH_RATE_LIMIT` caps sign-in attempts; the auth controller below uses it.
 
 See [Configuration](../configuration.md) for how the env files are read.
 
@@ -281,20 +287,38 @@ export class AuthService {
 - A duplicate email surfaces as the unique index's `UniqueViolationError` — kick/db turns the driver's error into a typed one ([Errors](../database/errors.md)) — and becomes a `409`.
 - `.returning(['id', 'email', 'name'])` never selects the hash, so it can't leak into a response.
 - Login answers the same `401` for an unknown email and a wrong password. Different answers would tell an attacker which emails have accounts.
+- Registration still tells: a taken email gets `409`. Hiding that takes email confirmation — answer "check your inbox" either way, and mail either a sign-up link or a "you already have an account" note. That's beyond this tutorial; the rate limit below at least slows anyone probing for accounts.
 
 The controller, `src/modules/auth/auth.controller.ts`:
 
 ```ts
-import { Autowired, Controller, Get, Post, reply, type Ctx } from '@forinda/kickjs'
+import {
+  Autowired,
+  Controller,
+  Get,
+  Middleware,
+  Post,
+  rateLimitGuard,
+  reply,
+  type Ctx,
+} from '@forinda/kickjs'
+import { env } from '../../config'
 import { Public } from '../../auth/current-user'
 import { AuthService } from './auth.service'
 import { loginSchema, registerSchema } from './dtos/auth.dto'
+
+/**
+ * One limiter for both public routes: each attempt runs scrypt on purpose,
+ * so unthrottled it is a cheap way to burn CPU, and a password-guessing aid.
+ */
+const authAttempts = rateLimitGuard({ max: env.AUTH_RATE_LIMIT, windowMs: 15 * 60_000 })
 
 @Controller()
 export class AuthController {
   @Autowired() private readonly auth!: AuthService
 
   @Public
+  @Middleware(authAttempts)
   @Post('/register', { body: registerSchema })
   async register(ctx: Ctx<KickRoutes.AuthController['register']>) {
     const user = await this.auth.register(ctx.body)
@@ -303,6 +327,7 @@ export class AuthController {
   }
 
   @Public
+  @Middleware(authAttempts)
   @Post('/login', { body: loginSchema })
   async login(ctx: Ctx<KickRoutes.AuthController['login']>) {
     const user = await this.auth.login(ctx.body)
@@ -331,6 +356,7 @@ async function signIn(ctx: Ctx<KickRoutes.AuthController['login']>, userId: stri
 ```
 
 - `register` and `login` are `@Public` — you can't be signed in before you sign in. `logout` and `me` aren't, so `LoadUser` has already rejected anyone signed out.
+- Both public routes share one [rate limit](../rate-limiting.md): `AUTH_RATE_LIMIT` attempts per IP per 15 minutes, then `429`. Each attempt hashes with scrypt — slow by design — so without a limit they are a cheap way to load the server, and to guess passwords. The limiter keeps counts in memory; with several instances, give it a shared `store`.
 - `session.regenerate()` issues a new session id at sign-in. Without it, an attacker who planted a session id in a victim's browser before they signed in would share the signed-in session (session fixation).
 - `ctx.require('user')` returns the user typed as `CurrentUser`, or throws if it isn't set. `ctx.get('user')` is `CurrentUser | undefined`, because TypeScript can't know `LoadUser` ran. Use `require` in handlers that can only run signed in.
 
