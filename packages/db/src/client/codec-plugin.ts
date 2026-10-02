@@ -41,6 +41,7 @@ import {
 } from 'kysely'
 
 import { CustomColumnBuilder } from '../custom-type'
+import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS } from './sqlite-dates'
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { unwrapTable, type TableDecl } from '../dsl/table'
 
@@ -196,19 +197,28 @@ export class CodecPlugin implements KyselyPlugin {
  * Walk a schema record and collect decoders from every column whose
  * builder is a `CustomColumnBuilder` with a `fromDriver` codec set.
  */
-export function buildDecoderMap(schema: unknown): CodecMap {
-  return collectCodecs(schema, 'fromDriver')
+export function buildDecoderMap(schema: unknown, dialect?: string): CodecMap {
+  return collectCodecs(
+    schema,
+    'fromDriver',
+    dialect === 'sqlite' ? SQLITE_DATE_DECODERS : undefined,
+  )
 }
 
 /**
  * Walk a schema record and collect encoders from every column whose
  * builder is a `CustomColumnBuilder` with a `toDriver` codec set.
  */
-export function buildEncoderMap(schema: unknown): CodecMap {
-  return collectCodecs(schema, 'toDriver')
+export function buildEncoderMap(schema: unknown, dialect?: string): CodecMap {
+  return collectCodecs(schema, 'toDriver', dialect === 'sqlite' ? SQLITE_DATE_ENCODERS : undefined)
 }
 
-function collectCodecs(schema: unknown, key: 'toDriver' | 'fromDriver'): CodecMap {
+function collectCodecs(
+  schema: unknown,
+  key: 'toDriver' | 'fromDriver',
+  /** Codecs for built-in column types this dialect's driver doesn't convert, by column type. */
+  builtins?: Record<string, (value: unknown) => unknown>,
+): CodecMap {
   const out: CodecMap = new Map()
   if (!schema || typeof schema !== 'object') return out
 
@@ -225,8 +235,10 @@ function collectCodecs(schema: unknown, key: 'toDriver' | 'fromDriver'): CodecMa
     if (!value || !isTableDecl(value)) continue
     const tableName = value.__name
     for (const [colName, col] of Object.entries(value.__columns)) {
-      if (!(col instanceof CustomColumnBuilder)) continue
-      const fn = col[key] as ((v: unknown) => unknown) | undefined
+      const fn =
+        col instanceof CustomColumnBuilder
+          ? (col[key] as ((v: unknown) => unknown) | undefined)
+          : builtins?.[col.toJSON(colName).type]
       if (!fn) continue
 
       const existing = out.get(colName)
