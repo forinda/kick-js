@@ -144,19 +144,17 @@ export class UsersController {
 
   @Get('/')
   list(ctx: RequestContext) {
-    return ctx.paginate(
-      (parsed) =>
-        this.db.query.users.findManyAndCount({
-          limit: parsed.pagination.limit,
-          offset: parsed.pagination.offset,
-        }),
-      { sortable: ['createdAt'], filterable: ['name'] },
+    return ctx.paginate((parsed) =>
+      this.db.query.users.findManyAndCount({
+        limit: parsed.pagination.limit,
+        offset: parsed.pagination.offset,
+      }),
     )
   }
 }
 ```
 
-With the query builder instead, run the page and a `count(*)` with the same `where`, and return `{ data, total: Number(count) }`. The response includes `meta: { page, limit, total, totalPages, hasNext, hasPrev }`. See [Query Parsing](../query-parsing) for the full `ctx.qs` / `ctx.paginate` surface, and [Repositories](./repositories) for wrapping these queries behind a repository interface.
+To honour `?filter=` and `?sort=` too, pass a field config as the second argument and map `parsed.filters` / `parsed.sort` into `where` / `orderBy`; the same `where` then also bounds `total`. With the query builder instead, run the page and a `count(*)` with the same `where`, and return `{ data, total: Number(count) }`. The response includes `meta: { page, limit, total, totalPages, hasNext, hasPrev }`. See [Query Parsing](../query-parsing) for the full `ctx.qs` / `ctx.paginate` surface, and [Repositories](./repositories) for wrapping these queries behind a repository interface.
 
 ## More
 
