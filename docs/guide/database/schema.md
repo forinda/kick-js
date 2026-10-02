@@ -183,6 +183,45 @@ const tasks = table('tasks', {
 // db.selectFrom('tasks').select('meta') → meta: { tags: string[]; pinned: boolean } | null
 ```
 
+## Column names: `casing`
+
+By default a key is the column's name: `firstName` is the `firstName` column. To keep camelCase keys in TypeScript over a snake_case database, set `casing` in both places that need to agree, the client and `kick.config.ts`:
+
+```ts
+// src/db/client.ts
+export const db = createDbClient({ schema, dialect: pgDialect({ pool }), casing: 'snake_case' })
+
+// kick.config.ts
+export default defineConfig({
+  db: {
+    schemaPath: 'src/db/schema.ts',
+    migrationsDir: 'db/migrations',
+    dialect: 'postgres',
+    casing: 'snake_case',
+  },
+})
+```
+
+```ts
+export const blogPosts = table('blogPosts', {
+  id: serial().primaryKey(),
+  authorId: integer()
+    .notNull()
+    .references(() => users.id), // column author_id
+  postTitle: text().notNull(), // column post_title
+})
+// → CREATE TABLE "blog_posts" ("id" serial, "author_id" integer, "post_title" text, …)
+```
+
+- **Migrations** name tables, columns, keys and foreign keys in snake_case. Names kick/db derives (`blog_posts_author_id_fk`) follow; names you write (`index('posts_by_author')`) are kept as written.
+- **Queries** convert both ways: `db.selectFrom('blogPosts').select('postTitle')` runs `select "post_title" from "blog_posts"`, and every row (raw SQL results and `db.query` nested rows included) comes back with camelCase keys. It's Kysely's `CamelCasePlugin`, applied after kick/db's own plugins on the way out and before them on the way back.
+- **SQL you write stays SQL.** CHECK expressions, `where` predicates of partial indexes, `generatedAlwaysAs` and `sql` templates name columns as the database does: `check('positive', 'post_count >= 0')`.
+- **Keys must be camelCase.** A key that is already snake_case (`created_at`) comes back from the database as `createdAt`.
+- **Test helpers and introspection follow.** `createTestDb({ schema, casing })` takes the same option, and `kick db introspect` with `casing` set renders camelCase keys.
+- **Migrating an existing project** to `casing` renames every camelCase table and column. Generate that migration on its own and read it: it's a rename per column, which [rename prompts](./migrations.md#renames) let you confirm.
+
+A name override for a single column isn't supported; `casing` applies to all of them.
+
 ## Keys and constraints
 
 Foreign keys, indexes, unique constraints, composite primary keys and CHECK constraints are on [Keys and Constraints](./constraints).

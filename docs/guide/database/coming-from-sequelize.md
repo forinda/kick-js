@@ -292,7 +292,7 @@ Sequelize validates inside `create`; kick/db validates at the edge, before the h
 ## Moving an existing Sequelize app
 
 1. Point `kick db introspect` at the database to get a schema file, and baseline the migration history so kick/db sees the current schema as applied — [Adopting on an Existing DB](./adopting.md). Sequelize's `SequelizeMeta` table and kick/db's `kick_migrations` don't interact.
-2. Check the timestamp columns. Sequelize names them `createdAt` / `updatedAt` (or `created_at` with `underscored: true`); the introspected schema keeps whatever is in the database.
+2. Check the timestamp columns. Sequelize names them `createdAt` / `updatedAt`, or `created_at` with `underscored: true`. With `underscored`, set `casing: 'snake_case'` ([Column names](./schema.md#column-names-casing)) so the keys stay camelCase as they were.
 3. Convert models to tables one at a time. Keep instance-method code by moving it into a `TableBase` subclass and calling `X.from(row)` where you need it; move hooks and scopes into the services and repositories that used them.
 4. Run both side by side: keep the `Sequelize` instance for unported modules and inject the kick/db client into new ones. Behind [repositories](./repositories.md), a service doesn't care which one answers.
 5. Move schema changes to `kick db generate` once the first table is ported, so there is one source of migrations — and you stop writing migration bodies by hand.

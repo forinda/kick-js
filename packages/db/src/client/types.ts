@@ -325,4 +325,10 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * inline. Tracked upstream at <https://github.com/forinda/kick-js/issues/220>.
    */
   plugins?: KyselyPlugin[]
+  /**
+   * `'snake_case'`: tables and columns are snake_case in the database and
+   * camelCase in TypeScript — `firstName` is the `first_name` column. Set the
+   * same `casing` in `kick.config.ts` so migrations use those names.
+   */
+  casing?: 'snake_case'
 }

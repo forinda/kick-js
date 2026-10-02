@@ -106,22 +106,22 @@ export const postsRelations = relations(posts, ({ one }) => ({
 
 :::
 
-| Drizzle                                                   | kick/db                                                                                       |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `pgTable` / `mysqlTable` / `sqliteTable`                  | one `table()` for every dialect — the dialect is picked at generate time and in the client    |
-| `varchar('email', { length: 255 })`, `casing`             | `varchar(255)` — the key is the column name; there is no name override or casing option       |
-| extra config `(t) => [index(…).on(…)]`                    | `(t) => ({ name: index(…).on(…) })` — an object, each constraint keyed                        |
-| `.generatedAlwaysAs(sql)`, `.generatedAlwaysAsIdentity()` | the same names — [Generated columns](./schema.md#generated-columns)                           |
-| `primaryKey({ columns: [t.a, t.b] })`                     | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                          |
-| `check('name', sql\`…\`)`                                 | `check('name', 'sql as a string')`                                                            |
-| `.default(false)`                                         | `.default('false')` — the SQL default as written                                              |
-| `.defaultRandom()`, `.defaultNow()`                       | the same                                                                                      |
-| `.$defaultFn(() => …)`, `.$onUpdate(() => …)`             | no equivalent — set the value in your insert or update                                        |
-| `.references(() => t.id, { onDelete })`                   | the same; actions are `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'` |
-| `pgEnum('role', ['admin', 'member'])`                     | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg` — values as arguments        |
-| `customType<{ data: T }>({ … })`                          | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))       |
-| `relations(…)` with `one` / `many`, `relationName`        | the same                                                                                      |
-| —                                                         | a [class or fluent form](../db-table-forms.md) of the same table, if you prefer               |
+| Drizzle                                                   | kick/db                                                                                                                                                                       |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pgTable` / `mysqlTable` / `sqliteTable`                  | one `table()` for every dialect — the dialect is picked at generate time and in the client                                                                                    |
+| `varchar('email', { length: 255 })`, `casing`             | `varchar(255)`; the key is the column name, or `casing: 'snake_case'` on the client and config ([Column names](./schema.md#column-names-casing)). No per-column name override |
+| extra config `(t) => [index(…).on(…)]`                    | `(t) => ({ name: index(…).on(…) })` — an object, each constraint keyed                                                                                                        |
+| `.generatedAlwaysAs(sql)`, `.generatedAlwaysAsIdentity()` | the same names — [Generated columns](./schema.md#generated-columns)                                                                                                           |
+| `primaryKey({ columns: [t.a, t.b] })`                     | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                                                                                                          |
+| `check('name', sql\`…\`)`                                 | `check('name', 'sql as a string')`                                                                                                                                            |
+| `.default(false)`                                         | `.default('false')` — the SQL default as written                                                                                                                              |
+| `.defaultRandom()`, `.defaultNow()`                       | the same                                                                                                                                                                      |
+| `.$defaultFn(() => …)`, `.$onUpdate(() => …)`             | no equivalent — set the value in your insert or update                                                                                                                        |
+| `.references(() => t.id, { onDelete })`                   | the same; actions are `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'`                                                                                 |
+| `pgEnum('role', ['admin', 'member'])`                     | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg` — values as arguments                                                                                        |
+| `customType<{ data: T }>({ … })`                          | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))                                                                                       |
+| `relations(…)` with `one` / `many`, `relationName`        | the same                                                                                                                                                                      |
+| —                                                         | a [class or fluent form](../db-table-forms.md) of the same table, if you prefer                                                                                               |
 
 Every column type is on [Tables & Columns](./schema.md).
 
@@ -352,7 +352,7 @@ try {
 ## Not there (yet)
 
 - **`$defaultFn`, `$onUpdate` with a function** — set the value yourself. For the common cases there are [maintained columns](./schema.md#columns-kick-db-maintains): `onUpdateNow()`, `version()`, `softDelete()`.
-- **A name or casing override for columns** — the key is the column name.
+- **A name override for one column** — use `casing: 'snake_case'` for all of them, or name the key after the column.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
 - **`drizzle-seed`** (generated fake data) — no generator; write seed files for [`kick db seed`](./cli.md#seed) by hand or with a faker library.
 

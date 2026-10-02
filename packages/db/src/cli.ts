@@ -22,6 +22,7 @@ import { defineCliPlugin, type KickCliPlugin } from '@forinda/kickjs-cli-kit'
 import { kickDbTypegen } from './cli-typegen'
 import { checkMigrations } from './cli/check'
 import { runSeeds } from './cli/seed'
+import { removeCasing } from './snapshot/casing'
 import { askRenamesInTerminal, parseRenameFlags } from './cli/renames'
 
 interface GenerateFlags {
@@ -467,7 +468,9 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           return
         }
         const out = opts.out ?? config.schemaPath
-        await writeFile(out, renderSchemaSource(snapshot), 'utf8')
+        // With casing, the database's snake_case names become camelCase keys.
+        const source = config.casing === 'snake_case' ? removeCasing(snapshot) : snapshot
+        await writeFile(out, renderSchemaSource(source), 'utf8')
         const n = Object.keys(snapshot.tables).length
         console.log(`Wrote ${out} (${n} table${n === 1 ? '' : 's'}).`)
       } finally {

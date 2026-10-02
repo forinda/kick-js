@@ -20,7 +20,7 @@ export default defineConfig({
 })
 ```
 
-`connectionString` (or the `DATABASE_URL` env var) powers the built-in Postgres adapter the CLI uses for `kick db migrate*`. For other dialects — or a custom pool / serverless driver — supply an `adapter` factory instead (see [Non-Postgres dialects](#non-postgres-dialects)).
+Set `casing: 'snake_case'` here and on the client to keep camelCase keys over snake_case tables and columns ([Column names](./schema.md#column-names-casing)). `connectionString` (or the `DATABASE_URL` env var) powers the built-in Postgres adapter the CLI uses for `kick db migrate*`. For other dialects — or a custom pool / serverless driver — supply an `adapter` factory instead (see [Non-Postgres dialects](#non-postgres-dialects)).
 
 ## File layout
 

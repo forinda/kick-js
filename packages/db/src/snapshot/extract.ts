@@ -2,6 +2,7 @@ import type { ColumnBuilder } from '../dsl/columns/types'
 import { derivedFkName, derivedUniqueName } from './name'
 import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
 import { extractRelations } from '../query/extract-relations'
+import { applyCasing, type Casing } from './casing'
 import type {
   Dialect,
   EnumSnapshot,
@@ -63,7 +64,11 @@ function isPgEnum(v: unknown): v is { enumName: string; values: readonly string[
   return typeof f.enumName === 'string' && Array.isArray(f.values)
 }
 
-export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialect): SchemaSnapshot {
+export function extractSnapshot(
+  schema: Record<string, unknown>,
+  dialect: Dialect,
+  options: { casing?: Casing } = {},
+): SchemaSnapshot {
   const tables: Record<string, TableSnapshot> = {}
   const enums: Record<string, EnumSnapshot> = {}
 
@@ -114,7 +119,7 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
   if (relations) {
     snapshot.relations = relations
   }
-  return snapshot
+  return options.casing === 'snake_case' ? applyCasing(snapshot) : snapshot
 }
 
 function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): TableSnapshot {

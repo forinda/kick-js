@@ -21,6 +21,11 @@ export interface DbConfig {
    */
   driftCheck?: DriftBehavior
   /**
+   * `'snake_case'`: migrations name tables and columns in snake_case while
+   * the schema's keys stay camelCase. Pass the same `casing` to `createDbClient`.
+   */
+  casing?: 'snake_case'
+  /**
    * Postgres connection string for the built-in pgAdapter path. Read from
    * `db.connectionString` in kick.config.ts, or falls back to the
    * DATABASE_URL env var. The CLI uses this when no `adapter` factory is
