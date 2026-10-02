@@ -106,7 +106,7 @@ describe('checkDrift — MySQL foreign-key indexes', () => {
     refTable: 'users',
     refColumns: ['id'],
     onDelete: 'cascade' as const,
-    onUpdate: 'no action' as const,
+    onUpdate: 'no_action' as const,
   }
   const posts = (indexes: SchemaSnapshot['tables'][string]['indexes']): SchemaSnapshot => ({
     version: 1,
