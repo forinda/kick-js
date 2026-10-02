@@ -194,6 +194,49 @@ function anySpec(): ColumnSpec {
   return { json: {}, parse: ok }
 }
 
+/**
+ * A decimal the column can store exactly. The column's TS type is string —
+ * exact decimals don't survive a float. With a precision, `decimal(12, 2)`
+ * takes at most 10 digits before the point and 2 after: more digits after it
+ * would be rounded away by the database, more before it rejected with a
+ * server error — here both are validation issues instead.
+ */
+function decimalSpec(type: string): ColumnSpec {
+  const [precision, scale = 0] = (/\(([^)]*)\)/.exec(type)?.[1] ?? '')
+    .split(',')
+    .filter((part) => part.trim() !== '')
+    .map(Number)
+  if (precision === undefined) {
+    return {
+      json: { type: 'string', pattern: DECIMAL.source },
+      parse: (v) => {
+        const str = typeof v === 'number' && Number.isFinite(v) ? String(v) : v
+        return typeof str === 'string' && DECIMAL.test(str)
+          ? ok(str)
+          : fail('Expected a decimal number or string')
+      },
+    }
+  }
+  const whole = precision - scale
+  // `decimal(2, 2)` stores only 0.xx — its whole part is a single 0.
+  const wholePattern = whole > 0 ? `\\d{1,${whole}}` : '0'
+  const pattern = new RegExp(`^-?${wholePattern}${scale > 0 ? `(\\.\\d{1,${scale}})?` : ''}$`)
+  return {
+    json: { type: 'string', pattern: pattern.source },
+    parse: (v) => {
+      const str = typeof v === 'number' && Number.isFinite(v) ? String(v) : v
+      if (typeof str !== 'string' || !DECIMAL.test(str)) {
+        return fail('Expected a decimal number or string')
+      }
+      if (pattern.test(str)) return ok(str)
+      const fraction = str.split('.')[1] ?? ''
+      return fraction.length > scale
+        ? fail(`At most ${scale} digit(s) after the decimal point`, 'invalid_format')
+        : fail(`At most ${whole} digit(s) before the decimal point`, 'too_big')
+    },
+  }
+}
+
 function arraySpec(item: ColumnSpec, length?: number): ColumnSpec {
   return {
     json: {
@@ -260,16 +303,7 @@ function specForType(type: string): ColumnSpec {
     case 'decimal':
     case 'numeric':
     case 'money':
-      // The column's TS type is string — exact decimals don't survive a float.
-      return {
-        json: { type: 'string', pattern: DECIMAL.source },
-        parse: (v) =>
-          typeof v === 'number' && Number.isFinite(v)
-            ? ok(String(v))
-            : typeof v === 'string' && DECIMAL.test(v)
-              ? ok(v)
-              : fail('Expected a decimal number or string'),
-      }
+      return decimalSpec(type)
     case 'varchar':
     case 'character varying':
     case 'char':

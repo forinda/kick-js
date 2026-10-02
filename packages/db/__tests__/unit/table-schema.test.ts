@@ -12,6 +12,7 @@ import {
   customType,
   date,
   decimal,
+  numeric,
   integer,
   jsonb,
   serial,
@@ -100,6 +101,36 @@ describe('insertSchema', () => {
       tags: '[1]: Expected a string',
       embedding: 'Expected 3 items',
     })
+  })
+
+  it('holds a decimal to its precision and scale', () => {
+    const prices = table('prices', {
+      amount: decimal(12, 2).notNull(),
+      rate: decimal(2, 2),
+      count: numeric(5),
+      any: numeric(),
+    })
+    const parse = (row: Record<string, unknown>) => {
+      const r = insertSchema(prices).safeParse({ amount: '1', ...row })
+      return r.success ? r.data : r.issues.map((i) => `${String(i.path[0])}: ${i.message}`)
+    }
+
+    expect(
+      parse({ amount: '9999999999.99', rate: '0.25', count: '-12345', any: '1.23456789' }),
+    ).toEqual({ amount: '9999999999.99', rate: '0.25', count: '-12345', any: '1.23456789' })
+    expect(parse({ amount: 19.99 })).toEqual({ amount: '19.99' })
+    expect(parse({ amount: '1.234' })).toEqual([
+      'amount: At most 2 digit(s) after the decimal point',
+    ])
+    expect(parse({ amount: '12345678901' })).toEqual([
+      'amount: At most 10 digit(s) before the decimal point',
+    ])
+    expect(parse({ rate: '1.5' })).toEqual(['rate: At most 0 digit(s) before the decimal point'])
+    expect(parse({ count: '1.5' })).toEqual(['count: At most 0 digit(s) after the decimal point'])
+    // 0.1 + 0.2 is 0.30000000000000004 — send exact amounts as strings.
+    expect(parse({ amount: 0.1 + 0.2 })).toEqual([
+      'amount: At most 2 digit(s) after the decimal point',
+    ])
   })
 
   it('accepts null only for nullable columns, and drops unknown keys', () => {
