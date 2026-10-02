@@ -1,3 +1,4 @@
+import type { Kysely } from 'kysely'
 import type { Dialect, SchemaSnapshot } from '../snapshot/types'
 
 export interface MigrationRow {
@@ -44,6 +45,12 @@ export interface MigrationAdapter {
   applySqlNoTx(sql: string): Promise<void>
   /** Introspect the live schema; returns the canonical SchemaSnapshot. Used by drift detection and `kick db introspect`. */
   introspect(): Promise<SchemaSnapshot>
+  /**
+   * A Kysely instance on the adapter's connection — what a migration written
+   * in TypeScript (`migration.ts`) runs with. Optional: an adapter without it
+   * can't run those migrations.
+   */
+  kysely?(): Kysely<any>
   /** Close any underlying pool / connection. Caller-owned resources may keep the no-op. */
   close(): Promise<void>
 }

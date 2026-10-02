@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 import type { Dialect } from '../snapshot/types'
+import { codeMigrationFile } from './code-migration'
 
 export interface JournalEntry {
   id: string
@@ -47,14 +48,12 @@ export async function computeMigrationHash(migrationDir: string): Promise<string
   const up = await readFile(path.join(migrationDir, 'up.sql'), 'utf8')
   const down = await readFile(path.join(migrationDir, 'down.sql'), 'utf8')
   const snap = await readFile(path.join(migrationDir, 'snapshot.json'), 'utf8')
-  const h = createHash('sha256')
-    .update(up)
-    .update('|')
-    .update(down)
-    .update('|')
-    .update(snap)
-    .digest('hex')
-  return `sha256:${h}`
+  const h = createHash('sha256').update(up).update('|').update(down).update('|').update(snap)
+  // A migration written in TypeScript is hashed with its code too. Only when
+  // there is some, so every SQL migration keeps the hash it was recorded with.
+  const code = codeMigrationFile(migrationDir)
+  if (code) h.update('|').update(await readFile(code, 'utf8'))
+  return `sha256:${h.digest('hex')}`
 }
 
 export async function verifyMigrationHash(
