@@ -59,7 +59,7 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
  *   dtos/                   — Request/response schemas
  *
  * The repository is backed by an in-memory Map so this module works as
- * generated. Swap in ${repoLabel(repo)} by replacing the factory body in
+ * generated. Swap in ${repo === 'inmemory' ? 'a database' : repoLabel(repo)} by replacing the factory body in
  * ${kebab}.repository.ts — the contract is whatever that factory returns, so
  * nothing else has to change.
  */`

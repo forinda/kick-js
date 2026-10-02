@@ -262,6 +262,18 @@ export function sqliteType(pgType: string): string {
   return 'TEXT'
 }
 
+/** A random version-4 UUID in canonical 8-4-4-4-12 form — SQLite has no uuid function. */
+const SQLITE_UUID_V4 =
+  "(lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || " +
+  "substr('89ab', 1 + (abs(random()) % 4), 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))))"
+
+/**
+ * The current time with milliseconds — CURRENT_TIMESTAMP has whole seconds,
+ * so rows inserted within one second tied on `ORDER BY createdAt`. Same
+ * `YYYY-MM-DD HH:MM:SS.SSS` shape kick/db writes for a `Date`.
+ */
+const SQLITE_NOW = "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+
 /** Map a Postgres default expression to its SQLite equivalent. */
 function sqliteDefault(value: unknown): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
@@ -270,9 +282,9 @@ function sqliteDefault(value: unknown): string {
 
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
-  if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return '(lower(hex(randomblob(16))))'
-  if (/^now\(\)$/i.test(str)) return 'CURRENT_TIMESTAMP'
-  if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
+  if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return SQLITE_UUID_V4
+  if (/^(now\(\)|CURRENT_TIMESTAMP)$/i.test(str)) return SQLITE_NOW
+  if (/^(CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
   if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
   return quoteLiteral(str)

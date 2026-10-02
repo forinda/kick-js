@@ -787,19 +787,27 @@ export class Application {
     }
   }
 
-  /** Call an adapter hook, awaiting async hooks and catching errors */
+  /**
+   * Call an adapter hook, awaiting async hooks.
+   *
+   * A setup hook (`beforeMount`, `beforeStart`) that throws aborts boot: the
+   * adapter didn't finish wiring itself — a database adapter refusing to
+   * start with pending migrations, say — and serving anyway runs on a
+   * half-built app. `afterStart` runs once the server is already listening,
+   * so its failure is logged and the server keeps going.
+   */
   private async callHook(
     hook: ((ctx: AdapterContext) => void | Promise<void>) | undefined,
     ctx: AdapterContext,
+    adapterName = 'adapter',
+    phase: 'setup' | 'afterStart' = 'setup',
   ): Promise<void> {
     if (!hook) return
     try {
-      const result = hook(ctx)
-      if (result && typeof (result as Promise<void>).then === 'function') {
-        await result
-      }
+      await hook(ctx)
     } catch (err) {
-      log.error(err, 'Adapter hook failed')
+      if (phase === 'setup') throw err
+      log.error(err, `${adapterName} afterStart hook failed`)
     }
   }
 
@@ -823,7 +831,7 @@ export class Application {
 
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
-      await this.callHook(adapter.beforeMount?.bind(adapter), ctx)
+      await this.callHook(adapter.beforeMount?.bind(adapter), ctx, adapter.name)
     }
 
     // ── 1a. Cron trigger (serverless) ─────────────────────────────────
@@ -1198,7 +1206,7 @@ export class Application {
     // catch-all that never calls next() — would pre-empt anything an
     // adapter adds afterwards and adapter-mounted endpoints would 404.
     for (const adapter of this.adapters) {
-      await this.callHook(adapter.beforeStart?.bind(adapter), ctx)
+      await this.callHook(adapter.beforeStart?.bind(adapter), ctx, adapter.name)
     }
 
     // ── 11. Error handlers ───────────────────────────────────────────
@@ -1297,7 +1305,7 @@ export class Application {
 
       for (const adapter of this.adapters) {
         const ctx = this.adapterCtx(this.httpServer!)
-        await this.callHook(adapter.afterStart?.bind(adapter), ctx)
+        await this.callHook(adapter.afterStart?.bind(adapter), ctx, adapter.name, 'afterStart')
       }
 
       for (const plugin of this.plugins) {
@@ -1334,7 +1342,12 @@ export class Application {
 
           for (const adapter of this.adapters) {
             const afterCtx = this.adapterCtx(this.httpServer!)
-            await this.callHook(adapter.afterStart?.bind(adapter), afterCtx)
+            await this.callHook(
+              adapter.afterStart?.bind(adapter),
+              afterCtx,
+              adapter.name,
+              'afterStart',
+            )
           }
 
           // Plugin onReady hooks

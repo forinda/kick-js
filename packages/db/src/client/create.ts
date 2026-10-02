@@ -9,7 +9,13 @@ import {
 import type { CreateDbClientOptions, KickDbClient } from './types'
 import type { SchemaToTypes } from './schema-types'
 import { KickDbEventEmitter } from './events'
-import { CodecPlugin, buildDecoderMap, buildEncoderMap } from './codec-plugin'
+import {
+  CodecPlugin,
+  buildComparisonEncoderMap,
+  buildDecoderMap,
+  buildEncoderMap,
+  collectRelationKeys,
+} from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
@@ -55,10 +61,18 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // when their map is empty so the plugin is free of per-row /
   // per-query cost when no customType is in play. Plugin only
   // attached when at least one side has work to do.
-  const decoders = buildDecoderMap(opts.schema)
-  const encoders = buildEncoderMap(opts.schema)
+  const dialectTag = detectDialect(opts.dialect)
+  const decoders = buildDecoderMap(opts.schema, dialectTag)
+  const encoders = buildEncoderMap(opts.schema, dialectTag)
   const codecPlugin =
-    decoders.size > 0 || encoders.size > 0 ? new CodecPlugin(encoders, decoders) : null
+    decoders.size > 0 || encoders.size > 0
+      ? new CodecPlugin(
+          encoders,
+          decoders,
+          collectRelationKeys(opts.schema),
+          buildComparisonEncoderMap(opts.schema, dialectTag),
+        )
+      : null
 
   // Detect dialect early — needed both to pick the relational query
   // compiler (below) and to decide whether the JSON-results plugin
@@ -68,7 +82,6 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // kysely/helpers/<dialect> jsonArrayFrom / jsonObjectFrom won't
   // round-trip without ParseJSONResultsPlugin. PG decodes JSON
   // natively — skip the plugin there to keep the chain minimal.
-  const dialectTag = detectDialect(opts.dialect)
 
   // Unified per-query stream for the DevTools "Database" tab — every
   // successful query republished as `db:query` with the dialect tag so

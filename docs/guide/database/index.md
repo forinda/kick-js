@@ -20,13 +20,13 @@ The deeper references — every column type, the relational query layer, the ful
 
 <PmCommand exec="kick add sqlite" />
 
-| Dialect         | `kick add` | Packages installed                      |
-| --------------- | ---------- | --------------------------------------- |
-| SQLite          | `sqlite`   | `@forinda/kickjs-db` + `better-sqlite3` |
-| PostgreSQL      | `pg`       | `@forinda/kickjs-db` + `pg`             |
-| MySQL / MariaDB | `mysql`    | `@forinda/kickjs-db` + `mysql2`         |
+| Dialect         | `kick add` | Packages installed                                               |
+| --------------- | ---------- | ---------------------------------------------------------------- |
+| SQLite          | `sqlite`   | `@forinda/kickjs-db` + `better-sqlite3`, `@types/better-sqlite3` |
+| PostgreSQL      | `pg`       | `@forinda/kickjs-db` + `pg`, `@types/pg`                         |
+| MySQL / MariaDB | `mysql`    | `@forinda/kickjs-db` + `mysql2`                                  |
 
-Everything ships from the one package — the dialects are subpath exports (`@forinda/kickjs-db/sqlite`), not separate installs.
+`better-sqlite3` is a native module; with pnpm, `kick add sqlite` also approves its build script. Everything ships from the one package — the dialects are subpath exports (`@forinda/kickjs-db/sqlite`), not separate installs.
 
 ## 2. Mount the db CLI
 
@@ -131,7 +131,7 @@ The client is a value you own — register it under **your own token**:
 import { createToken } from '@forinda/kickjs'
 import type { db } from './client'
 
-export const APP_DB = createToken<typeof db>('app/db')
+export const APP_DB = createToken<typeof db>('app/Db')
 ```
 
 ```ts
@@ -146,6 +146,8 @@ export const DbModule = defineModule({
     register(container) {
       container.registerFactory(APP_DB, () => db)
     },
+    // No HTTP surface — this module only registers the client.
+    routes: () => null,
   }),
 })
 ```
@@ -155,7 +157,7 @@ Typing the token with `typeof db` means `@Inject(APP_DB)` hands back your exact 
 ::: tip The shipped tokens are a shortcut, not a requirement
 `@forinda/kickjs-db` also exports `DB_PRIMARY`, `DB_REPLICA` and `DB_CLIENT`. Nothing in the framework resolves them — the db adapter registers only what you hand it — so they are pre-made tokens for the common primary/replica shape, not an interface you have to adopt.
 
-Use them if that shape fits. Define your own when it doesn't: sharding, per-tenant clients, an analytics connection, or simply a name that reads better in your codebase. The `kick/` prefix is reserved for first-party tokens, so name yours under your own scope (`app/db/tenants`).
+Use them if that shape fits. Define your own when it doesn't: sharding, per-tenant clients, an analytics connection, or simply a name that reads better in your codebase. The `kick/` prefix is reserved for first-party tokens, so name yours under your own scope, PascalCase key first (`app/Db/tenants`).
 :::
 
 ## 7. Query

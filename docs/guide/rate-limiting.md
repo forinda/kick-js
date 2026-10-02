@@ -39,15 +39,15 @@ When `headers` is enabled (default), the middleware sets:
 
 ## Per-Route Rate Limiting
 
-Apply different limits to specific routes using the `@Middleware` decorator:
+Apply different limits to specific routes with `rateLimitGuard()` — the route-level form of `rateLimit()`, which is app-wide middleware — and the `@Middleware` decorator:
 
 ```ts
-import { rateLimit } from '@forinda/kickjs'
+import { rateLimitGuard } from '@forinda/kickjs'
 
 @Controller()
 class AuthController {
   @Post('/login')
-  @Middleware(rateLimit({ max: 5, windowMs: 15 * 60_000 }))
+  @Middleware(rateLimitGuard({ max: 5, windowMs: 15 * 60_000 }))
   async login(ctx: RequestContext) {
     // 5 attempts per 15 minutes
   }

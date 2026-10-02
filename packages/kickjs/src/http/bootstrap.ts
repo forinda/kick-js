@@ -82,14 +82,20 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
 
   if (!g.__kickBootstrapped) {
     if (processHooks !== 'manual') {
+      // A listener here replaces Node's own handling, which exits with code
+      // 1. Keep the failure in the exit code: a boot that throws — a top-level
+      // `await bootstrap()` rejecting — must not end the process with 0, or a
+      // deploy reads the crash as success.
       process.on('uncaughtException', (err) => {
         log.error(err, 'Uncaught exception')
         reportError(err, { source: 'uncaught' })
+        process.exitCode = 1
       })
 
       process.on('unhandledRejection', (reason) => {
         log.error(reason as any, 'Unhandled rejection')
         reportError(reason, { source: 'unhandled-rejection' })
+        process.exitCode = 1
       })
     }
 

@@ -868,8 +868,13 @@ export class RequestContext<
     return this._response.status(status).type('text/html; charset=utf-8').send(content)
   }
 
+  /**
+   * Send `buffer` as a file download named `filename`. The name is written
+   * per RFC 6266 — an ASCII fallback plus `filename*` in UTF-8 — so a name
+   * from an upload (quotes, line breaks, non-Latin text) can't break the header.
+   */
   download(buffer: Buffer, filename: string, contentType = 'application/octet-stream') {
-    this._response.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    this._response.setHeader('Content-Disposition', contentDisposition(filename))
     this._response.setHeader('Content-Type', contentType)
     return this._response.send(buffer)
   }
@@ -1165,4 +1170,14 @@ export type Ctx<TRoute extends RouteShape = RouteShape> = RequestContext<
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace KickRoutes {}
+}
+
+/** `attachment; filename="…"; filename*=UTF-8''…` for any file name (RFC 6266 / RFC 8187). */
+export function contentDisposition(filename: string): string {
+  const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, '_')
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  )
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`
 }

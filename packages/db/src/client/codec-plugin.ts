@@ -28,8 +28,11 @@ import type {
   UnknownRow,
 } from 'kysely'
 import {
+  BinaryOperationNode,
   ColumnNode,
   ColumnUpdateNode,
+  OperationNodeTransformer,
+  ReferenceNode,
   InsertQueryNode,
   PrimitiveValueListNode,
   UpdateQueryNode,
@@ -41,6 +44,8 @@ import {
 } from 'kysely'
 
 import { CustomColumnBuilder } from '../custom-type'
+import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS } from './sqlite-dates'
+import { sqliteDecimalDecoder } from './sqlite-decimals'
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { unwrapTable, type TableDecl } from '../dsl/table'
 
@@ -51,11 +56,18 @@ export class CodecPlugin implements KyselyPlugin {
   constructor(
     private encoders: CodecMap,
     private decoders: CodecMap,
+    /** Names of `relations()` keys — where `db.query` nests related rows. */
+    private relationKeys: ReadonlySet<string> = new Set(),
+    /** Built-in encoders applied to comparisons too — see {@link ComparisonEncoder}. */
+    private comparisonEncoders: CodecMap = new Map(),
   ) {}
 
   transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
-    if (this.encoders.size === 0) return args.node
-    const node = args.node
+    let node = args.node
+    if (this.comparisonEncoders.size > 0) {
+      node = new ComparisonEncoder(this.comparisonEncoders).transformNode(node)
+    }
+    if (this.encoders.size === 0) return node
     if (InsertQueryNode.is(node)) return this.transformInsert(node)
     if (UpdateQueryNode.is(node)) return this.transformUpdate(node)
     return node
@@ -184,31 +196,138 @@ export class CodecPlugin implements KyselyPlugin {
       if (decoder && value !== null && value !== undefined) {
         out[key] = decoder(value)
         mutated = true
+      } else if (this.relationKeys.has(key) && value !== null && value !== undefined) {
+        out[key] = this.decodeNested(value)
+        mutated = true
       } else {
         out[key] = value
       }
     }
     return (mutated ? out : row) as UnknownRow
   }
+
+  /**
+   * Rows `db.query` nested under a relation key: an array (`many`) or an
+   * object (`one`) — JSON text on SQLite and MySQL, which the JSON-results
+   * plugin would parse later, but the codecs have to run on the parsed rows.
+   */
+  private decodeNested(value: unknown): unknown {
+    let parsed = value
+    if (typeof value === 'string') {
+      try {
+        parsed = JSON.parse(value)
+      } catch {
+        return value
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => (isPlainObject(item) ? this.decodeRow(item as UnknownRow) : item))
+    }
+    // Not a relation payload — an ordinary column that happens to share a
+    // relation's name. Leave its value exactly as stored.
+    return isPlainObject(parsed) ? this.decodeRow(parsed as UnknownRow) : value
+  }
+}
+
+const COMPARISONS = new Set(['=', '==', '!=', '<>', '<', '<=', '>', '>=', 'in', 'not in'])
+
+/**
+ * Encodes the value side of `column <op> value` comparisons with the
+ * column's encoder — so on SQLite `where('day', '=', someDate)` on a
+ * `date()` column compares against `'YYYY-MM-DD'`, not a full timestamp.
+ * Only the dialect's built-in encoders run here: a custom `toDriver` was
+ * never applied to comparisons, and callers pass its driver form there.
+ */
+class ComparisonEncoder extends OperationNodeTransformer {
+  constructor(private readonly encoders: CodecMap) {
+    super()
+  }
+
+  protected override transformBinaryOperation(node: BinaryOperationNode): BinaryOperationNode {
+    const out = super.transformBinaryOperation(node)
+    const op = (out.operator as { operator?: string }).operator
+    if (!op || !COMPARISONS.has(op.toLowerCase())) return out
+    const left = out.leftOperand
+    const column =
+      ReferenceNode.is(left) && ColumnNode.is(left.column) ? left.column.column.name : undefined
+    const encoder = column ? this.encoders.get(column) : undefined
+    if (!encoder) return out
+    const right = encodeOperand(out.rightOperand, encoder)
+    return right === out.rightOperand ? out : BinaryOperationNode.create(left, out.operator, right)
+  }
+}
+
+function encodeOperand(node: OperationNode, encoder: (v: unknown) => unknown): OperationNode {
+  const encode = (v: unknown) => (v === null || v === undefined ? v : encoder(v))
+  if (ValueNode.is(node)) {
+    const value = encode(node.value)
+    return value === node.value ? node : ValueNode.create(value)
+  }
+  if (PrimitiveValueListNode.is(node)) return PrimitiveValueListNode.create(node.values.map(encode))
+  if (ValueListNode.is(node)) {
+    return ValueListNode.create(node.values.map((v) => encodeOperand(v, encoder)))
+  }
+  return node
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  )
+}
+
+/** Every relation name declared with `relations()` in a schema record. */
+export function collectRelationKeys(schema: unknown): Set<string> {
+  const keys = new Set<string>()
+  if (!schema || typeof schema !== 'object') return keys
+  for (const exported of Object.values(schema as Record<string, unknown>)) {
+    const decl = exported as { __isRelations?: boolean; __relations?: Record<string, unknown> }
+    if (decl?.__isRelations === true && decl.__relations) {
+      for (const name of Object.keys(decl.__relations)) keys.add(name)
+    }
+  }
+  return keys
 }
 
 /**
  * Walk a schema record and collect decoders from every column whose
  * builder is a `CustomColumnBuilder` with a `fromDriver` codec set.
  */
-export function buildDecoderMap(schema: unknown): CodecMap {
-  return collectCodecs(schema, 'fromDriver')
+export function buildDecoderMap(schema: unknown, dialect?: string): CodecMap {
+  return collectCodecs(
+    schema,
+    'fromDriver',
+    dialect === 'sqlite'
+      ? (type) => SQLITE_DATE_DECODERS[type] ?? sqliteDecimalDecoder(type)
+      : undefined,
+  )
 }
 
 /**
  * Walk a schema record and collect encoders from every column whose
  * builder is a `CustomColumnBuilder` with a `toDriver` codec set.
  */
-export function buildEncoderMap(schema: unknown): CodecMap {
-  return collectCodecs(schema, 'toDriver')
+export function buildEncoderMap(schema: unknown, dialect?: string): CodecMap {
+  return collectCodecs(
+    schema,
+    'toDriver',
+    dialect === 'sqlite' ? (type) => SQLITE_DATE_ENCODERS[type] : undefined,
+  )
 }
 
-function collectCodecs(schema: unknown, key: 'toDriver' | 'fromDriver'): CodecMap {
+/** Encoders for comparisons: the dialect's built-ins only, never a custom `toDriver`. */
+export function buildComparisonEncoderMap(schema: unknown, dialect?: string): CodecMap {
+  if (dialect !== 'sqlite') return new Map()
+  return collectCodecs(schema, 'toDriver', (type) => SQLITE_DATE_ENCODERS[type], true)
+}
+
+function collectCodecs(
+  schema: unknown,
+  key: 'toDriver' | 'fromDriver',
+  /** The codec for a built-in column type this dialect's driver doesn't convert, by column type. */
+  builtins?: (type: string) => ((value: unknown) => unknown) | undefined,
+  builtinsOnly = false,
+): CodecMap {
   const out: CodecMap = new Map()
   if (!schema || typeof schema !== 'object') return out
 
@@ -225,8 +344,12 @@ function collectCodecs(schema: unknown, key: 'toDriver' | 'fromDriver'): CodecMa
     if (!value || !isTableDecl(value)) continue
     const tableName = value.__name
     for (const [colName, col] of Object.entries(value.__columns)) {
-      if (!(col instanceof CustomColumnBuilder)) continue
-      const fn = col[key] as ((v: unknown) => unknown) | undefined
+      const fn =
+        col instanceof CustomColumnBuilder
+          ? builtinsOnly
+            ? undefined
+            : (col[key] as ((v: unknown) => unknown) | undefined)
+          : builtins?.(col.toJSON(colName).type)
       if (!fn) continue
 
       const existing = out.get(colName)

@@ -56,11 +56,13 @@ export const MyAdapter = defineAdapter<MyAdapterConfig>({
      *  building OpenAPI specs, dependency graphs, route inventories. */
     onRouteMount(controllerClass: any, mountPath: string): void {},
 
-    /** Runs after modules + routes are wired, before the server starts. */
+    /** Runs after modules + routes are wired, before the server starts.
+     *  Throwing here (or in beforeMount) stops the app from booting. */
     beforeStart({ container }: AdapterContext): void | Promise<void> {},
 
     /** Runs after the HTTP server is listening — attach upgrade handlers
-     *  (Socket.IO, gRPC), warm caches, log a banner. */
+     *  (Socket.IO, gRPC), warm caches, log a banner. A throw here is
+     *  logged; the server keeps running. */
     afterStart({ server }: AdapterContext): void | Promise<void> {},
 
     /** Runs on graceful shutdown. Close connections, flush buffers,

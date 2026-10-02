@@ -26,6 +26,8 @@ interface PackageEntry {
   enginePeers?: boolean
   description: string
   dev?: boolean
+  /** Type packages for peers that ship without their own types — installed as dev dependencies. */
+  typePeers?: string[]
   /**
    * `true` for packages every project needs (framework + Vite plugin +
    * CLI). `kick new` installs these regardless of options chosen, and
@@ -121,11 +123,16 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   pg: {
     pkg: '@forinda/kickjs-db',
     peers: ['pg'],
+    typePeers: ['@types/pg'],
     description: 'kick/db + PostgreSQL driver (use @forinda/kickjs-db/pg)',
   },
   sqlite: {
     pkg: '@forinda/kickjs-db',
     peers: ['better-sqlite3'],
+    // A native addon — its install script compiles or downloads the binary,
+    // and pnpm 10+ fails the install (ERR_PNPM_IGNORED_BUILDS) until it's allowed.
+    builds: { 'better-sqlite3': true },
+    typePeers: ['@types/better-sqlite3'],
     description: 'kick/db + SQLite driver (use @forinda/kickjs-db/sqlite)',
   },
   mysql: {
@@ -624,6 +631,7 @@ export function planAddPackages(
     for (const peer of entry.peers) {
       target.add(peer)
     }
+    for (const types of entry.typePeers ?? []) devDeps.add(types)
     if (entry.enginePeers) {
       const enginePeers = ENGINE_PEERS[runtime]
       for (const peer of enginePeers) target.add(peer)
@@ -815,6 +823,11 @@ export function registerAddCommand(program: Command): void {
         }
       }
 
-      console.log('  Done!\n')
+      if (installed) {
+        console.log('  Done!\n')
+      } else {
+        console.log('  Finished with errors — the install above did not complete.\n')
+        process.exitCode = 1
+      }
     })
 }

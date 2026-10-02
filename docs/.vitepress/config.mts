@@ -22,6 +22,17 @@ const guideSidebar = [
     ],
   },
   {
+    text: 'Tutorial: Build Taskboard',
+    collapsed: false,
+    items: [
+      { text: '1. Your First Module', link: '/guide/taskboard/1-first-module' },
+      { text: '2. A Real Database', link: '/guide/taskboard/2-database' },
+      { text: '3. Authentication', link: '/guide/taskboard/3-authentication' },
+      { text: '4. Teams & Permissions', link: '/guide/taskboard/4-teams-permissions' },
+      { text: '5. Attachments & Shipping', link: '/guide/taskboard/5-attachments-shipping' },
+    ],
+  },
+  {
     text: 'Core Concepts',
     items: [
       { text: 'Decorators', link: '/guide/decorators' },

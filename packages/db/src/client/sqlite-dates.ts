@@ -1,0 +1,47 @@
+/**
+ * Dates on SQLite. better-sqlite3 binds no `Date` and returns `TEXT` as
+ * text, so without these a `timestamp()` column — typed `Date` — failed to
+ * write a `Date` and read back a string.
+ *
+ * Stored format: `YYYY-MM-DD HH:MM:SS.SSS`, UTC — the shape SQLite's own
+ * `CURRENT_TIMESTAMP` default writes (plus milliseconds), so stored values
+ * compare and sort correctly against each other as text. `date()` columns
+ * store `YYYY-MM-DD`.
+ */
+
+/** A `Date` as SQLite stores a timestamp. */
+export const sqliteTimestamp = (d: Date): string =>
+  d.toISOString().replace('T', ' ').replace('Z', '')
+
+/** A `Date` as SQLite stores a calendar date. */
+export const sqliteDate = (d: Date): string => d.toISOString().slice(0, 10)
+
+/** Read a stored timestamp or date back as a `Date` (UTC unless it names a zone). */
+export function fromSqliteDate(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T00:00:00Z`)
+  const iso = value.replace(' ', 'T')
+  const parsed = new Date(/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(iso) ? iso : `${iso}Z`)
+  return Number.isNaN(parsed.getTime()) ? value : parsed
+}
+
+/** Encoders for insert / update values, by column type. */
+export const SQLITE_DATE_ENCODERS: Record<string, (v: unknown) => unknown> = {
+  timestamp: (v) => (v instanceof Date ? sqliteTimestamp(v) : v),
+  timestamptz: (v) => (v instanceof Date ? sqliteTimestamp(v) : v),
+  date: (v) => (v instanceof Date ? sqliteDate(v) : v),
+}
+
+/** Decoders for result rows, by column type. */
+export const SQLITE_DATE_DECODERS: Record<string, (v: unknown) => unknown> = {
+  timestamp: fromSqliteDate,
+  timestamptz: fromSqliteDate,
+  date: fromSqliteDate,
+}
+
+/** Any `Date` left among a query's parameters — a `where`, raw SQL — becomes a stored timestamp. */
+export function encodeDateParameters(parameters: readonly unknown[]): readonly unknown[] {
+  return parameters.some((p) => p instanceof Date)
+    ? parameters.map((p) => (p instanceof Date ? sqliteTimestamp(p) : p))
+    : parameters
+}

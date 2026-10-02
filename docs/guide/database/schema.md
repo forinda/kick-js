@@ -66,6 +66,8 @@ All cross-dialect builders are imported from the package root. Each carries a ph
 | `jsonb<T>()`            | `jsonb`            | `T`                            |
 | `bytea()`               | `bytea`            | `Uint8Array`                   |
 
+`decimal` and `numeric` are strings so no digit is lost — `decimal(12, 2)` reads back as `'0.10'`, not `0.1`. Do arithmetic on them with a decimal library, or in SQL. SQLite has no exact decimal type: it stores a float, which kick/db reads back as the same string at the column's scale, exact up to 15 significant digits. An aggregate such as `sum(amount)` has no column to decode and comes back as a number on SQLite.
+
 ### Modifiers
 
 Every builder supports a chainable set of modifiers:
@@ -88,7 +90,7 @@ text().array() // text[]  → TS type becomes T[]
 
 ```ts
 uuid().defaultRandom() // DEFAULT gen_random_uuid()
-timestamp().defaultNow() // DEFAULT CURRENT_TIMESTAMP
+timestamp().defaultNow() // DEFAULT CURRENT_TIMESTAMP (milliseconds on SQLite)
 timestamptz().defaultNow()
 ```
 
