@@ -125,6 +125,15 @@ describe('translateDbError — mysql', () => {
       SerializationFailureError,
     )
     expect(translateDbError(my(2013, 'Lost connection'), 'mysql')).toBeInstanceOf(ConnectionError)
+    // mysql2's own connection errors have an errno but no SQLSTATE.
+    const lost = Object.assign(new Error('Lost connection to MySQL server during query'), {
+      errno: 2013,
+      code: 'CR_SERVER_LOST',
+    })
+    expect(translateDbError(lost, 'mysql')).toBeInstanceOf(ConnectionError)
+    // Without a SQLSTATE, anything else isn't a server error — left as is.
+    const other = Object.assign(new Error('x'), { errno: 9999 })
+    expect(translateDbError(other, 'mysql')).toBe(other)
   })
 })
 

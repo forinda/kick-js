@@ -190,11 +190,17 @@ function fromPostgres(e: Raw, err: unknown): unknown {
   return new DatabaseError('database_error', e.message ?? 'Database error', info, err)
 }
 
+/** Too many connections, access denied, server shutdown, and the client's can't-connect / lost-connection errnos. */
+const MYSQL_CONNECTION_ERRNOS = new Set([1040, 1045, 1053, 2002, 2003, 2006, 2013])
+
 // ── MySQL (mysql2) ────────────────────────────────────────────────────────
 // Numeric `errno`, the name in `code`, and everything else only in the message.
 function fromMysql(e: Raw, err: unknown): unknown {
   const errno = typeof e.errno === 'number' ? e.errno : undefined
-  if (errno === undefined || !e.sqlState) return err
+  if (errno === undefined) return err
+  // Client-side connection failures (2002 can't connect, 2013 lost connection, …)
+  // come from mysql2 itself with an errno but no SQLSTATE.
+  if (!e.sqlState && !MYSQL_CONNECTION_ERRNOS.has(errno)) return err
   const msg = str(e.sqlMessage) ?? e.message ?? ''
   const info: DatabaseErrorInfo = {
     dialect: 'mysql',
@@ -233,15 +239,8 @@ function fromMysql(e: Raw, err: unknown): unknown {
       return new DeadlockError(info, err)
     case 1205: // lock wait timeout — the same retry fixes it
       return new SerializationFailureError(info, err)
-    case 1040:
-    case 1045:
-    case 1053:
-    case 2002:
-    case 2003:
-    case 2006:
-    case 2013:
-      return new ConnectionError(info, err)
   }
+  if (MYSQL_CONNECTION_ERRNOS.has(errno)) return new ConnectionError(info, err)
   return new DatabaseError('database_error', msg || 'Database error', info, err)
 }
 
