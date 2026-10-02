@@ -4,7 +4,7 @@
 // is a pinned internal dep of the framework.
 
 import { MysqlDialect, type Dialect as KyselyDialect } from 'kysely'
-import { KICK_DIALECT_TIMEZONE, markDialect } from '../../dialect-marker'
+import { KICK_DIALECT_DATES, markDialect, type DialectDateOptions } from '../../dialect-marker'
 
 import type { MysqlPoolLike } from './adapter'
 
@@ -53,12 +53,15 @@ export function mysqlDialect(opts: MysqlDialectOptions): KyselyDialect {
   const raw = opts.pool as unknown as { pool?: { getConnection?: unknown } }
   const callbackPool = typeof raw.pool?.getConnection === 'function' ? raw.pool : opts.pool
   const dialect = markDialect(new MysqlDialect({ pool: callbackPool as unknown as never }), 'mysql')
-  // Rows nested by `db.query` carry dates as strings; read them in the
-  // pool's session time zone, as mysql2 reads top-level ones.
-  const config = (callbackPool as { config?: { connectionConfig?: { timezone?: string } } }).config
-  Object.defineProperty(dialect, KICK_DIALECT_TIMEZONE, {
-    value: config?.connectionConfig?.timezone ?? 'local',
-    enumerable: false,
-  })
+  // Rows nested by `db.query` carry dates as strings; read them the way
+  // mysql2 reads top-level ones — in the pool's time zone, and not at all
+  // for the types `dateStrings` keeps as strings.
+  type Cfg = { timezone?: string; dateStrings?: boolean | string[] }
+  const config = (callbackPool as { config?: { connectionConfig?: Cfg } }).config?.connectionConfig
+  const dates: DialectDateOptions = {
+    timezone: config?.timezone ?? 'local',
+    dateStrings: config?.dateStrings ?? false,
+  }
+  Object.defineProperty(dialect, KICK_DIALECT_DATES, { value: dates, enumerable: false })
   return dialect
 }

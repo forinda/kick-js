@@ -182,6 +182,12 @@ describe('db.query.X.findMany({ with }) — real better-sqlite3 round trip', () 
     expect(rows[1]!.posts.map((p) => p.title)).toEqual(['second', 'first'])
   })
 
+  it('an empty orderBy array sorts nothing instead of failing', async () => {
+    await seed()
+    const rows = await db.query.users.findMany({ orderBy: () => [] })
+    expect(rows).toHaveLength(2)
+  })
+
   it('findFirst returns null on empty table', async () => {
     const u = await db.query.users.findFirst()
     expect(u).toBeNull()

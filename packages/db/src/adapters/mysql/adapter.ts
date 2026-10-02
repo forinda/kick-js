@@ -331,6 +331,12 @@ export function splitMysqlStatements(sql: string): string[] {
  * in a follow-up that walks `information_schema`.
  */
 export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
+  if (opts.endPoolOnClose && typeof opts.pool.end !== 'function') {
+    throw new KickDbError(
+      'KICK_DB_POOL_NOT_CLOSABLE',
+      'mysqlAdapter({ endPoolOnClose: true }) needs a pool with an end() method to close',
+    )
+  }
   const dialect: Dialect = 'mysql'
   const { pool } = opts
   let versionVerified = false

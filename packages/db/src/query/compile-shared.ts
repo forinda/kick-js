@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
-  sql,
+  expressionBuilder,
   type Kysely,
   type ExpressionBuilder,
   type Expression,
@@ -248,12 +248,10 @@ function applyWhereOrderLimit(
   }
 
   if (options.orderBy) {
-    q = q.orderBy((eb: ExpressionBuilder<any, any>) => {
-      const order = options.orderBy!(makeTableRefProxy(eb, alias), eb)
-      // Kysely's callback form takes one expression; an array becomes one
-      // comma-separated ORDER BY list.
-      return Array.isArray(order) ? sql`${sql.join(order)}` : order
-    })
+    const eb = expressionBuilder<any, any>()
+    const order = options.orderBy(makeTableRefProxy(eb, alias), eb)
+    // An array is several sort keys; an empty one sorts nothing.
+    for (const key of Array.isArray(order) ? order : [order]) q = q.orderBy(key)
   }
 
   if (typeof options.limit === 'number') {

@@ -45,15 +45,26 @@ function mysqlDate(timezone: string): Decoder {
 
 const DATE_TYPES = new Set(['timestamp', 'timestamptz', 'date'])
 
+/** The MySQL type kick/db emits for each date column type — the names `dateStrings` lists. */
+const MYSQL_TYPE: Record<string, string> = {
+  timestamp: 'TIMESTAMP',
+  timestamptz: 'TIMESTAMP',
+  date: 'DATE',
+}
+
 /** The nested-row decoder for a column type, or `undefined` when the dialect needs none. */
 export function nestedDateDecoder(
   dialect: string | undefined,
-  timezone = 'local',
+  dates?: { timezone: string; dateStrings: boolean | readonly string[] },
 ): ((type: string) => Decoder | undefined) | undefined {
   if (dialect === 'postgres') return (type) => (DATE_TYPES.has(type) ? pgDate : undefined)
   if (dialect === 'mysql') {
-    const decode = mysqlDate(timezone)
-    return (type) => (DATE_TYPES.has(type) ? decode : undefined)
+    const decode = mysqlDate(dates?.timezone ?? 'local')
+    const asStrings = dates?.dateStrings ?? false
+    // mysql2's `dateStrings` keeps these types as strings at the top level.
+    const kept = (type: string) =>
+      asStrings === true || (Array.isArray(asStrings) && asStrings.includes(MYSQL_TYPE[type]!))
+    return (type) => (DATE_TYPES.has(type) && !kept(type) ? decode : undefined)
   }
   return undefined
 }

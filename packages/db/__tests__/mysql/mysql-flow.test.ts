@@ -152,6 +152,24 @@ describe('MySQL, end to end', () => {
     expect(post.day).toEqual(top.day)
   }, 60_000)
 
+  it('with dateStrings, nested dates stay strings like top-level ones', async () => {
+    const strings = createPool({
+      host: container.getHost(),
+      port: container.getPort(),
+      user: 'root',
+      password: container.getRootPassword(),
+      database: container.getDatabase(),
+      timezone: 'Z',
+      dateStrings: true,
+    })
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool: strings }) })
+    const top = await db.selectFrom('posts').selectAll().executeTakeFirstOrThrow()
+    const nested = (await db.query.users.findFirst({ with: { posts: true } }))!.posts[0]!
+    expect(typeof top.publishedAt).toBe('string')
+    expect(typeof nested.publishedAt).toBe('string')
+    await strings.end()
+  }, 60_000)
+
   it('endPoolOnClose ends a pool the adapter owns', async () => {
     const own = createPool({
       host: container.getHost(),

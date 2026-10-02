@@ -1,5 +1,6 @@
 import {
   introspectPg,
+  KickDbError,
   lockTableDdl,
   migrationsTableDdl,
   type Dialect,
@@ -70,6 +71,12 @@ const SAFE_SCHEMA_NAME = /^[a-z_][a-z0-9_]*$/i
  * (we won) or matches zero rows (someone else holds it).
  */
 export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
+  if (opts.endPoolOnClose && typeof opts.pool.end !== 'function') {
+    throw new KickDbError(
+      'KICK_DB_POOL_NOT_CLOSABLE',
+      'pgAdapter({ endPoolOnClose: true }) needs a pool with an end() method to close',
+    )
+  }
   const dialect: Dialect = 'postgres'
   const { pool } = opts
   const schema = opts.schema ?? 'public'

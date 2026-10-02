@@ -65,4 +65,20 @@ describe('booleans on SQLite', () => {
     }>`select count(*) as n from posts where pinned = ${true}`.execute(db.qb)
     expect(raw.rows[0]!.n).toBe(1)
   })
+
+  it('reads any non-zero integer as true, as SQLite does', async () => {
+    const db = make()
+    await sql`insert into posts (title, published, pinned) values ('x', 2, -1), ('y', 0, 0)`.execute(
+      db.qb,
+    )
+    const rows = await db
+      .selectFrom('posts')
+      .select(['published', 'pinned'])
+      .orderBy('id')
+      .execute()
+    expect(rows).toEqual([
+      { published: true, pinned: true },
+      { published: false, pinned: false },
+    ])
+  })
 })

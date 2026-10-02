@@ -52,5 +52,10 @@ export function encodeSqliteParameters(parameters: readonly unknown[]): readonly
     : parameters
 }
 
-/** A `boolean()` column reads back as `true` / `false`, not SQLite's `1` / `0`. */
-export const fromSqliteBoolean = (v: unknown): unknown => (v === 1 ? true : v === 0 ? false : v)
+/**
+ * A `boolean()` column reads back as `true` / `false`, not SQLite's `1` / `0`.
+ * Any other integer a hand-written row holds reads as SQLite itself reads it
+ * in `WHERE flag` — non-zero is true.
+ */
+export const fromSqliteBoolean = (v: unknown): unknown =>
+  typeof v === 'number' || typeof v === 'bigint' ? Number(v) !== 0 : v

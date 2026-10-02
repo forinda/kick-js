@@ -47,6 +47,7 @@ import { CustomColumnBuilder } from '../custom-type'
 import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS, fromSqliteBoolean } from './sqlite-dates'
 import { sqliteDecimalDecoder } from './sqlite-decimals'
 import { nestedDateDecoder } from './nested-dates'
+import type { DialectDateOptions } from '../dialect-marker'
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { unwrapTable, type TableDecl } from '../dsl/table'
 
@@ -327,9 +328,9 @@ export function buildEncoderMap(schema: unknown, dialect?: string): CodecMap {
 export function buildNestedDecoderMap(
   schema: unknown,
   dialect?: string,
-  timezone?: string,
+  dates?: DialectDateOptions,
 ): CodecMap {
-  const builtins = nestedDateDecoder(dialect, timezone)
+  const builtins = nestedDateDecoder(dialect, dates)
   return builtins ? collectCodecs(schema, 'fromDriver', builtins, true) : new Map()
 }
 
