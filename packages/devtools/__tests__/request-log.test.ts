@@ -18,6 +18,9 @@ describe('RequestLog', () => {
     log.record(res('c'))
     expect(log.after().map((e) => e.requestId)).toEqual(['b', 'c'])
     expect(log.after(2).map((e) => e.requestId)).toEqual(['c'])
+    // A fresh log (the app restarted) reports a latest seq below a client's last one.
+    expect(log.latest()).toBe(3)
+    expect(new RequestLog(2).latest()).toBe(0)
   })
 
   it('attaches an error whichever hook fires first', () => {

@@ -636,7 +636,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // so the Requests tab polls cheaply.
         router.get('/requests', (ctx: RequestContext) => {
           const since = Number((ctx.query as Record<string, unknown> | undefined)?.since ?? 0)
-          ctx.json({ requests: requestLog.after(Number.isFinite(since) ? since : 0) })
+          ctx.json({
+            requests: requestLog.after(Number.isFinite(since) ? since : 0),
+            // A client holding a higher `seq` than this knows the app restarted.
+            latest: requestLog.latest(),
+          })
         })
 
         router.get('/metrics', (ctx: RequestContext) => {

@@ -12,10 +12,14 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
   const [query, setQuery] = createSignal('')
   const [index, setIndex] = createSignal(0)
   let input: HTMLInputElement | undefined
+  let dialog: HTMLDivElement | undefined
+  /** What had focus before the palette opened — it gets it back on close. */
+  let restoreFocus: HTMLElement | null = null
 
   const results = createMemo(() => filterItems(props.items(), query()).slice(0, 50))
 
   const show = (): void => {
+    restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setQuery('')
     setIndex(0)
     setOpen(true)
@@ -23,6 +27,8 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
   }
   const close = (): void => {
     setOpen(false)
+    restoreFocus?.focus()
+    restoreFocus = null
   }
   const run = (item: PaletteItem | undefined): void => {
     if (!item) return
@@ -32,6 +38,12 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
 
   onMount(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // Escape closes from anywhere in the palette, not just the input.
+      if (e.key === 'Escape' && open()) {
+        e.preventDefault()
+        close()
+        return
+      }
       const typing =
         e.target instanceof HTMLElement &&
         (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))
@@ -56,10 +68,20 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
     } else if (e.key === 'Enter') {
       e.preventDefault()
       run(results()[index()])
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      close()
     }
+  }
+
+  /** Keep Tab inside the palette: cycle through the input and the results. */
+  const onDialogKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Tab' || !dialog) return
+    const stops = [input, ...dialog.querySelectorAll<HTMLElement>('[role="option"]')].filter(
+      (el): el is HTMLElement => !!el,
+    )
+    if (stops.length === 0) return
+    const at = stops.indexOf(document.activeElement as HTMLElement)
+    const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at + 1) % stops.length
+    e.preventDefault()
+    stops[next]!.focus()
   }
 
   return (
@@ -70,6 +92,8 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
       >
         <div
           class="flex max-h-[60vh] w-[min(640px,calc(100vw-32px))] flex-col overflow-hidden rounded-md border border-border-strong bg-surface-1 shadow-2xl"
+          ref={(el) => (dialog = el)}
+          onKeyDown={onDialogKey}
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"

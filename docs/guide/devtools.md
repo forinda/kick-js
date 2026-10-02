@@ -307,6 +307,8 @@ Because the state is reactive, the computed values (error rate, uptime) are alwa
 
 ## Browser Dashboard
 
+The dashboard needs a browser from 2023 or later (Chrome / Edge 110, Firefox 115, Safari 16).
+
 When you visit `/_debug` in a browser, the DevTools adapter serves a single-page dashboard built with Solid + Tailwind. It connects to the JSON endpoints documented above and adds live UI on top — there's nothing to install client-side.
 
 ### Connection state

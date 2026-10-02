@@ -722,16 +722,15 @@ uncompressed JS unless a CDN sits in front.
 **Status:** `shipped` — `@Job` / `@Process` in `@forinda/kickjs` with `listJobHandlers` / `listJobQueues` / `runJob` and a `JOB_DISPATCHER` token; `QueueAdapter` runs every job through `runJob` and honours `provider`; the web entry's `queue()` consumes Cloudflare Queues. See [Background Jobs](./jobs.md).
 **Effort:** 1–2 weeks
 
-**What we have.** `@forinda/kickjs-queue` provides `@Job` / `@Process` and `QueueService`, and ships BullMQ, RabbitMQ, Kafka and Redis pub/sub providers behind a `QueueProvider` interface. But `QueueAdapter` takes Redis options and builds BullMQ queues directly — it never reads a provider, so the other three can't be used and the interface's own example (`QueueAdapter({ provider })`) doesn't compile. Using any other tool (pg-boss, SQS, Inngest, Cloudflare Queues) means rebuilding discovery and error handling by hand.
+**What shipped.** The same shape `@Cron` took in E.5:
 
-**What it looks like.** The same shape `@Cron` took in E.5:
+- `@Job(queue)` / `@Process(name)` live in `@forinda/kickjs` and only record metadata. `listJobHandlers(container)` / `listJobQueues(container)` return them for any runner, and `runJob(container, queue, job)` runs one — failures go to the error observers (`source: 'job'`) and are rethrown so the tool's retries still apply; a job nothing handles fails with `NoJobHandlerError`.
+- A `JOB_DISPATCHER` token with `dispatch(queue, name, data, options)`, so application code enqueues without naming the tool.
+- `QueueAdapter` takes Redis options (BullMQ) or a `provider` (RabbitMQ, Kafka, Redis pub/sub, or your own `QueueProvider`) and runs every job through `runJob`. Any other tool is a few lines over `listJobQueues` + `runJob` — the guide has a pg-boss example.
+- The web entry's `queue()` consumes Cloudflare Queues, next to `scheduled()`.
+- The DevTools **Queues** tab browses and manages jobs through a `JobInspector` an adapter exposes from `jobInspector()`; `QueueAdapter` provides one for BullMQ.
 
-- `@Job(queue)` / `@Process(name)` move into `@forinda/kickjs` and only record metadata. `listJobHandlers(container)` returns them for any runner; `runJobHandler(handler, job)` runs one with the shared behaviour — an `enabled` switch, a run context, and failures reported to the error observers (`source: 'job'`).
-- A `JOB_DISPATCHER` token with `dispatch(queue, name, data, options)`, so application code enqueues without knowing the backend.
-- Each tool is a thin adapter that receives jobs and calls `runJobHandler`: BullMQ stays built in, RabbitMQ and Kafka become real adapters, and pg-boss / SQS / Inngest get short recipes.
-- A `queue()` handler on the web entry for Cloudflare Queues, next to `scheduled()`.
-
-Existing `@Job` / `@Process` code keeps working.
+Existing `@Job` / `@Process` code kept working.
 
 ---
 

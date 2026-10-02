@@ -39,16 +39,27 @@ export const RequestsTab: Component = () => {
   const [status, setStatus] = createSignal<StatusFilter>('ALL')
   const [paused, setPaused] = createSignal(false)
   let lastSeq = 0
+  let polling = false
 
   const poll = async (): Promise<void> => {
-    if (paused()) return
+    if (paused() || polling) return // overlapping polls would add the same entries twice
+    polling = true
     try {
-      const { requests } = await rpc.requests(lastSeq)
+      const { requests, latest } = await rpc.requests(lastSeq)
+      // The app restarted and its log began again — start over from its first entry.
+      if (latest < lastSeq) {
+        lastSeq = 0
+        setEntries([])
+        setSelected(null)
+        return // the next poll fetches from the start
+      }
       if (requests.length === 0) return
       lastSeq = requests[requests.length - 1]!.seq
       setEntries((prev) => [...requests.toReversed(), ...prev].slice(0, KEEP))
     } catch {
       // The connection banner covers an unreachable app.
+    } finally {
+      polling = false
     }
   }
   onMount(() => {

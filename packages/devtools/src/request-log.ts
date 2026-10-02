@@ -68,6 +68,11 @@ export class RequestLog {
     }
   }
 
+  /** The newest entry's `seq` — lower than a client's last one means the app restarted. */
+  latest(): number {
+    return this.seq
+  }
+
   /** Entries after `since`, oldest first. */
   after(since = 0): RequestLogEntry[] {
     return this.entries.filter((e) => e.seq > since)

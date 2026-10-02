@@ -223,7 +223,8 @@ export const rpc = {
       count?: number | null
     },
   /** Requests logged after `since` (a `seq`), oldest first. */
-  requests: (since = 0) => get<{ requests: RequestLogEntry[] }>(`/requests?since=${since}`),
+  requests: (since = 0) =>
+    get<{ requests: RequestLogEntry[]; latest: number }>(`/requests?since=${since}`),
   runtime: () =>
     get<{
       latest: RuntimeSnapshot

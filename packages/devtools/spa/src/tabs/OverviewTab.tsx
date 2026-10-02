@@ -34,18 +34,33 @@ export const OverviewTab: Component = () => {
   const [recent, setRecent] = createSignal<RequestLogEntry[]>([])
   const [heap, setHeap] = createSignal<number[] | null>(null)
   let lastSeq = 0
+  let polling = false
 
   const poll = async (): Promise<void> => {
-    const [reqs, runtime] = await Promise.allSettled([rpc.requests(lastSeq), rpc.runtime()])
-    if (reqs.status === 'fulfilled' && reqs.value.requests.length) {
-      const fresh = reqs.value.requests
-      lastSeq = fresh[fresh.length - 1]!.seq
-      setRecent((prev) => [...prev, ...fresh].slice(-RECENT))
+    if (polling) return // a slow response must not let two polls append the same entries
+    polling = true
+    try {
+      const [reqs, runtime] = await Promise.allSettled([rpc.requests(lastSeq), rpc.runtime()])
+      if (reqs.status === 'fulfilled') {
+        // The app restarted and its log began again — start over from its first entry.
+        if (reqs.value.latest < lastSeq) {
+          lastSeq = 0
+          setRecent([])
+          return // the next poll fetches from the start
+        }
+        const fresh = reqs.value.requests
+        if (fresh.length) {
+          lastSeq = fresh[fresh.length - 1]!.seq
+          setRecent((prev) => [...prev, ...fresh].slice(-RECENT))
+        }
+      }
+      // The runtime sampler can be turned off (404) — then there's no heap tile.
+      setHeap(
+        runtime.status === 'fulfilled' ? runtime.value.history.map((s) => s.memory.heapUsed) : null,
+      )
+    } finally {
+      polling = false
     }
-    // The runtime sampler can be turned off (404) — then there's no heap tile.
-    setHeap(
-      runtime.status === 'fulfilled' ? runtime.value.history.map((s) => s.memory.heapUsed) : null,
-    )
   }
   onMount(() => {
     void poll()
