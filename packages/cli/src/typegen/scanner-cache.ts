@@ -43,7 +43,6 @@ const EXTRACT_ARRAY_KEYS = [
   'tokens',
   'injects',
   'pluginsAndAdapters',
-  'augmentations',
   'contextKeys',
   'routeFlags',
   'routes',

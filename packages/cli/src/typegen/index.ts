@@ -29,7 +29,6 @@ export type {
   DiscoveredInject,
   DiscoveredEnv,
   DiscoveredPluginOrAdapter,
-  DiscoveredAugmentation,
   ClassCollision,
   ScanResult,
 } from './scanner'
@@ -53,8 +52,6 @@ export interface GenerateResult {
   routeEntries: number
   /** Number of unique plugin/adapter names */
   pluginEntries: number
-  /** Number of unique `defineAugmentation` calls */
-  augmentationEntries: number
   /** Number of typed asset entries */
   assetEntries: number
   /** Whether a typed env augmentation will be emitted */
@@ -246,11 +243,9 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
       result.resolvedCollisions > 0 ? `, ${result.resolvedCollisions} collisions namespaced` : ''
     const envNote = result.envWritten ? ', env typed' : ''
     const pluginNote = result.pluginEntries > 0 ? `, ${result.pluginEntries} plugins/adapters` : ''
-    const augNote =
-      result.augmentationEntries > 0 ? `, ${result.augmentationEntries} augmentations` : ''
     const assetNote = result.assetEntries > 0 ? `, ${result.assetEntries} assets` : ''
     console.log(
-      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${pluginNote}${augNote}${assetNote}${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
+      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${pluginNote}${assetNote}${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
     )
     if (tokenWarnings.length > 0) {
       console.warn(
@@ -373,7 +368,6 @@ function buildGenerateResult(
     moduleTokens: buildModuleTokens(scan.classes).length,
     routeEntries: scan.routes.length,
     pluginEntries: new Set(scan.pluginsAndAdapters.map((p) => p.name)).size,
-    augmentationEntries: new Set(scan.augmentations.map((a) => a.name)).size,
     assetEntries: assetCount,
     envWritten: scan.env !== null,
     written,
@@ -627,8 +621,10 @@ export async function sweepStaleTypegen(
  * - `registry.d.ts` / `services.d.ts` / `modules.d.ts` / `plugins.d.ts`
  *   / `augmentations.d.ts` / `index.d.ts` — this plugin-only refactor.
  *
- * None collide with any current plugin output (all `kick__*`), so the
- * sweep can never touch live output.
+ * - `kick__augmentations.d.ts` — the `defineAugmentation` catalogue, retired.
+ *
+ * None collide with any current plugin output, so the sweep can never touch
+ * live output.
  */
 const LEGACY_ORPHAN_FILES: ReadonlySet<string> = new Set([
   'assets.d.ts',
@@ -640,4 +636,6 @@ const LEGACY_ORPHAN_FILES: ReadonlySet<string> = new Set([
   'plugins.d.ts',
   'augmentations.d.ts',
   'index.d.ts',
+  // The `defineAugmentation` catalogue, retired with the function.
+  'kick__augmentations.d.ts',
 ])

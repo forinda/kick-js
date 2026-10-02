@@ -26,7 +26,6 @@ import { parseSync } from 'oxc-parser'
 import {
   DECORATOR_NAMES,
   type DecoratorName,
-  type DiscoveredAugmentation,
   type DiscoveredClass,
   type DiscoveredContextKey,
   type DiscoveredRouteFlag,
@@ -450,7 +449,6 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
   const tokens: DiscoveredToken[] = []
   const injects: DiscoveredInject[] = []
   const pluginsAndAdapters: DiscoveredPluginOrAdapter[] = []
-  const augmentations: DiscoveredAugmentation[] = []
   const contextKeys: DiscoveredContextKey[] = []
   const routeFlags: DiscoveredRouteFlag[] = []
   const seenRouteFlags = new Set<string>()
@@ -608,23 +606,6 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           seenHelperNames.add(dedupeKey)
           pluginsAndAdapters.push({ kind, name: literal, filePath, relativePath: relPath })
         }
-      }
-      return
-    }
-
-    // defineAugmentation('Name', { description, example })
-    if (name === 'defineAugmentation') {
-      const args = (node.arguments as Node[] | undefined) ?? []
-      const augName = stringValue(args[0])
-      if (augName !== null) {
-        const meta = isNode(args[1]) && args[1].type === 'ObjectExpression' ? args[1] : null
-        augmentations.push({
-          name: augName,
-          description: stringValue(getProp(meta, 'description')),
-          example: stringValue(getProp(meta, 'example')),
-          filePath,
-          relativePath: relPath,
-        })
       }
       return
     }
@@ -895,7 +876,6 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     tokens,
     injects,
     pluginsAndAdapters,
-    augmentations,
     contextKeys,
     routeFlags,
     routes,

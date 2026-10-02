@@ -284,24 +284,6 @@ export interface DiscoveredContextKey {
 }
 
 /**
- * A `defineAugmentation('Name', meta)` call discovered in source. Plugins
- * call this to advertise an augmentable interface so the typegen can list
- * every augmentation surface in one generated file.
- */
-export interface DiscoveredAugmentation {
-  /** The literal string passed as the first arg to `defineAugmentation` */
-  name: string
-  /** Optional `description` extracted from the second-arg object literal */
-  description: string | null
-  /** Optional `example` extracted from the second-arg object literal */
-  example: string | null
-  /** Absolute file path */
-  filePath: string
-  /** Path relative to scan root, with forward slashes */
-  relativePath: string
-}
-
-/**
  * A decorated class whose file sits inside a module directory but
  * isn't picked up by any of the module's `import.meta.glob(...)`
  * patterns. Surfaced as a typegen warning per forinda/kick-js#235 §4
@@ -332,8 +314,6 @@ export interface ScanResult {
   env: DiscoveredEnv | null
   /** Plugins/adapters discovered via `defineAdapter`/`definePlugin`/`implements AppAdapter` */
   pluginsAndAdapters: DiscoveredPluginOrAdapter[]
-  /** Augmentation interfaces declared via `defineAugmentation('Name', meta)` */
-  augmentations: DiscoveredAugmentation[]
   /** Context keys from `define(Http)ContextDecorator({ key })` calls */
   contextKeys: DiscoveredContextKey[]
   /** Route flags from `defineRouteFlag('name')` calls. */
@@ -468,13 +448,6 @@ const APP_ADAPTER_CLASS_REGEX = new RegExp(
 
 /** Match a string-literal `name = '...'` field on a class body. */
 const CLASS_NAME_FIELD_REGEX = /\bname\s*(?::\s*[^=]+)?=\s*['"`]([^'"`]+)['"`]/
-
-/**
- * Match the start of a `defineAugmentation('Name', ...)` call. Captures
- * the literal name. The optional second-arg object is parsed forward so
- * `description` / `example` can be pulled out.
- */
-const DEFINE_AUGMENTATION_START = /\bdefineAugmentation\s*\(\s*['"`]([^'"`]+)['"`]\s*(,\s*\{)?/g
 
 /** HTTP route decorator names recognised by the scanner */
 const HTTP_DECORATORS = ['Get', 'Post', 'Put', 'Delete', 'Patch'] as const
@@ -1252,93 +1225,6 @@ export function extractContextKeysFromSource(
 }
 
 /**
- * Extract `defineAugmentation('Name', { description, example })` calls
- * from a source file. The metadata object is optional — when absent both
- * `description` and `example` resolve to `null`.
- */
-export function extractAugmentationsFromSource(
-  source: string,
-  filePath: string,
-  cwd: string,
-): DiscoveredAugmentation[] {
-  const out: DiscoveredAugmentation[] = []
-  const relPath = toRelative(filePath, cwd)
-
-  DEFINE_AUGMENTATION_START.lastIndex = 0
-  let match: RegExpExecArray | null
-  while ((match = DEFINE_AUGMENTATION_START.exec(source)) !== null) {
-    const name = match[1]
-    let description: string | null = null
-    let example: string | null = null
-
-    // If the regex matched a metadata object opening (`, {`), parse it
-    if (match[2]) {
-      const bracePos = source.indexOf('{', match.index + match[0].length - 1)
-      if (bracePos >= 0) {
-        const closeBrace = findBalancedBrace(source, bracePos)
-        if (closeBrace >= 0) {
-          const body = source.slice(bracePos + 1, closeBrace)
-          description = readStringField(body, 'description')
-          example = readStringField(body, 'example')
-        }
-      }
-    }
-
-    out.push({ name, description, example, filePath, relativePath: relPath })
-  }
-
-  return out
-}
-
-/**
- * Pull a string-valued field out of a JS object-literal body, respecting
- * the opening quote so the value isn't truncated at the first foreign
- * quote character. Handles backslash escapes inside the literal.
- *
- * Why a custom parser instead of one regex per delimiter: real-world
- * `defineAugmentation` calls embed all three quote characters at once
- * — backtick template literals carrying TS shapes like
- * `'free' | 'pro'` (single quotes) AND `\`ctx.get(...)\`` (escaped
- * backticks). A character-class regex like `[^'"`]+` truncates on the
- * first foreign quote it sees. This walker scans char-by-char from
- * the matched delimiter and only stops on the matching one.
- */
-function readStringField(body: string, field: string): string | null {
-  // Locate `field:` followed by an opening quote. Tolerate any whitespace.
-  const fieldRe = new RegExp(`\\b${field}\\s*:\\s*(['"\`])`, 'g')
-  const m = fieldRe.exec(body)
-  if (!m) return null
-  const quote = m[1]
-  const start = m.index + m[0].length
-  let i = start
-  let raw: string | null = null
-  while (i < body.length) {
-    const ch = body[i]
-    if (ch === '\\') {
-      // Skip the escaped char — supports \`, \', \", \n, \\ etc.
-      i += 2
-      continue
-    }
-    if (ch === quote) {
-      raw = body.slice(start, i)
-      break
-    }
-    i++
-  }
-  if (raw === null) return null
-  // Unescape JS string-literal escapes so the JSDoc renderer sees the
-  // value the source author actually intended (`\`` → `` ` ``, `\'` →
-  // `'`, etc). Without this, escaped backticks in a backtick template
-  // literal would surface as literal backslashes in the catalogue.
-  return raw.replace(/\\(.)/g, (_m, c) => {
-    if (c === 'n') return '\n'
-    if (c === 't') return '\t'
-    if (c === 'r') return '\r'
-    return c
-  })
-}
-
-/**
  * Default search order for the env schema file. Newer projects keep
  * the schema under `src/config/` so the framework's "config" concept
  * has a single home; older scaffolds dropped it at `src/env.ts` (kept
@@ -1720,7 +1606,6 @@ export interface FileExtract {
   tokens: DiscoveredToken[]
   injects: DiscoveredInject[]
   pluginsAndAdapters: DiscoveredPluginOrAdapter[]
-  augmentations: DiscoveredAugmentation[]
   contextKeys: DiscoveredContextKey[]
   routeFlags: DiscoveredRouteFlag[]
   /** Routes with own-path `pathParams` only — mount prefix applied at join. */
@@ -1806,7 +1691,6 @@ export function extractFileRegex(source: string, filePath: string, cwd: string):
     pluginsAndAdapters: extractPluginsAndAdaptersFromSource(source, filePath, cwd),
     // The regex fallback does not scan flags — the AST extractor owns that.
     routeFlags: [],
-    augmentations: extractAugmentationsFromSource(source, filePath, cwd),
     contextKeys: extractContextKeysFromSource(source, filePath, cwd),
     // Empty mount map → own-path params only; prefix re-applied at join.
     routes: extractRoutesFromSource(source, filePath, cwd, classes, new Map()),
@@ -2003,7 +1887,6 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
   const tokens: DiscoveredToken[] = []
   const injects: DiscoveredInject[] = []
   const pluginsAndAdapters: DiscoveredPluginOrAdapter[] = []
-  const augmentations: DiscoveredAugmentation[] = []
   const contextKeys: DiscoveredContextKey[] = []
   const routeFlags: DiscoveredRouteFlag[] = []
 
@@ -2032,7 +1915,6 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
     tokens.push(...extract.tokens)
     injects.push(...extract.injects)
     pluginsAndAdapters.push(...extract.pluginsAndAdapters)
-    augmentations.push(...extract.augmentations)
     contextKeys.push(...extract.contextKeys)
     routeFlags.push(...extract.routeFlags)
     if (extract.globPatterns.length > 0) globPatternsByFile.set(files[i], extract.globPatterns)
@@ -2114,9 +1996,6 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
   pluginsAndAdapters.sort(
     (a, b) => a.name.localeCompare(b.name) || a.relativePath.localeCompare(b.relativePath),
   )
-  augmentations.sort(
-    (a, b) => a.name.localeCompare(b.name) || a.relativePath.localeCompare(b.relativePath),
-  )
   contextKeys.sort(
     (a, b) => a.key.localeCompare(b.key) || a.relativePath.localeCompare(b.relativePath),
   )
@@ -2135,7 +2014,6 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
     injects,
     collisions,
     pluginsAndAdapters,
-    augmentations,
     contextKeys,
     routeFlags,
     orphanedClasses,

@@ -3,7 +3,7 @@
  *
  * The monolithic `generator.ts` is gone — every `.kickjs/types/*` file
  * is now emitted by an isolated typegen plugin (`kick/registry`,
- * `kick/services`, `kick/modules`, `kick/plugins`, `kick/augmentations`,
+ * `kick/services`, `kick/modules`, `kick/plugins`,
  * plus the carved `kick/routes`/`kick/env`/`kick/assets`/`kick/db`).
  * This file covers:
  *
@@ -30,7 +30,6 @@ import { sweepStaleTypegen } from '../src/typegen'
 import {
   buildModuleTokens,
   buildServiceTokens,
-  renderAugmentations,
   renderPlugins,
   renderRegistry,
   renderUnion,
@@ -102,13 +101,6 @@ describe('render/manifest renderers', () => {
     expect(out).toContain('interface KickJsPluginRegistry')
     expect(out).toContain("'TenantAdapter': 'adapter'")
   })
-
-  it('renderAugmentations catalogues defineAugmentation calls', () => {
-    const out = renderAugmentations([
-      { name: 'FeatureFlags', relativePath: 'src/flags.ts' },
-    ] as never)
-    expect(out).toContain('export interface FeatureFlagsAugmentation {}')
-  })
 })
 
 describe('sweepStaleTypegen — plugin-only migration', () => {
@@ -122,13 +114,13 @@ describe('sweepStaleTypegen — plugin-only migration', () => {
     'plugins.d.ts',
     'augmentations.d.ts',
     'index.d.ts',
+    'kick__augmentations.d.ts',
   ]
   const CURRENT = [
     'kick__registry.d.ts',
     'kick__services.d.ts',
     'kick__modules.d.ts',
     'kick__plugins.d.ts',
-    'kick__augmentations.d.ts',
     'kick__routes.ts',
     'kick__env.ts',
     'kick__assets.d.ts',

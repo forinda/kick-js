@@ -295,14 +295,8 @@ export {
   type AdapterFactory,
 } from './define-adapter'
 
-// Augmentation registry (architecture.md §21.3.3) and typegen-narrowed
-// `dependsOn` (architecture.md §21.2.1).
-export {
-  defineAugmentation,
-  type KickJsPluginRegistry,
-  type KickJsPluginName,
-  type AugmentationMeta,
-} from './augmentation'
+// Typegen-narrowed `dependsOn` (architecture.md §21.2.1).
+export { type KickJsPluginRegistry, type KickJsPluginName } from './augmentation'
 
 // Asset manager. Three accessor variants over one
 // resolver engine — the typed `assets` Proxy, the `useAssets()` hook,

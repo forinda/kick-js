@@ -949,8 +949,7 @@ declare module '@forinda/kickjs' {
   }
 }
 
-// The \`declare module\` block above is all you need. \`defineAugmentation\` is
-// DEPRECATED — it only added a typegen catalogue entry, never any types.
+// The \`declare module\` block above is all you need for typed \`ctx.get\`.
 
 const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
@@ -1004,7 +1003,6 @@ Same-key collisions WITHIN a precedence level throw \`DuplicateContributorError\
 - A \`paramDefaults\` value that every call site overrides (\`action: 'settings:read'\`) — drop it and let the compiler require the field at each site.
 - \`defineContextDecorator<'k', Deps, Params>(spec)\` positional form for a parameterised contributor — use \`.withParams<Params>()(spec)\` or \`deps\` inference is lost.
 - \`ctx.tenant = x\` instead of returning the value from \`resolve\` — sticks to one instance only.
-- Reaching for \`defineAugmentation\` — deprecated, and it never affected types. The \`declare module\` block alone is what makes \`ctx.get('tenant')\` typed.
 - Plugin / adapter authors using bare keys (\`'state'\`) instead of namespaced (\`'@my-plugin/state'\`) — collides with adopter keys.
 - \`getRequestValue<string>('traceId')\` — generic is the **key** type, not value type.`,
     },
@@ -1572,7 +1570,7 @@ Customisation goes in \`.local.md\` siblings (\`AGENTS.local.md\`, \`skills/<slu
 
 **Context contributors**:
 - \`ctx.tenant = x\` from a contributor — only sticks to one \`RequestContext\` instance. **Return the value** so the runner writes it via \`ctx.set(key, value)\`.
-- Omitting the \`declare module '@forinda/kickjs'\` block — without it \`ctx.get('tenant')\` is \`unknown\`. (\`defineAugmentation\` is deprecated and was never a substitute for it.)
+- Omitting the \`declare module '@forinda/kickjs'\` block — without it \`ctx.get('tenant')\` is \`unknown\`.
 - \`getRequestValue<string>('traceId')\` — generic is the **key** type, not value type.
 
 **Env / config**:
