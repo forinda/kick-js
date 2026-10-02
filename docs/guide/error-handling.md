@@ -71,7 +71,9 @@ The handler reads `err.status` and returns the appropriate status code. If valid
 
 ### 3. Unexpected Errors
 
-Anything else falls through to a generic handler that reads `err.status` or `err.statusCode`, defaulting to **500**. For 500 errors the original message is hidden from the client and replaced with `"Internal Server Error"`, because it can carry table names, SQL, connection strings, or user data.
+Any other error that declares a client-error status — `err.status` or `err.statusCode` from 400 to 499, like kick/db's `UniqueViolationError` (409) or an auth check that throws with `status: 401` — is answered like an `HttpException`: `application/problem+json`, its message as `detail`, logged as a warning.
+
+Everything else falls through to a generic handler: status 500, or the error's own 5xx status if it declares one. The original message is hidden from the client and replaced with `"Internal Server Error"`, because it can carry table names, SQL, connection strings, or user data.
 
 The body is not bare, though. Every unexpected error response carries a **`requestId`** — the correlation handle back to the log line — and outside production it also carries the error summary and stack:
 

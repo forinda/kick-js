@@ -183,7 +183,7 @@ describe('errorHandler — unexpected 500s', () => {
     expect(res.body.error).toContain('relation "users" does not exist')
   })
 
-  it('still passes non-500 statuses through with their own message', () => {
+  it('still passes a 4xx status through with its own message, as problem detail', () => {
     process.env.NODE_ENV = 'production'
     const res = mockRes()
     const err: any = new Error('teapot')
@@ -191,7 +191,7 @@ describe('errorHandler — unexpected 500s', () => {
     errorHandler()(err, mockReq(), res, () => {})
 
     expect(res.statusCode).toBe(418)
-    expect(res.body.message).toBe('teapot')
+    expect(res.body).toMatchObject({ status: 418, detail: 'teapot' })
   })
 
   it('logs the error object, not just a sentence', () => {
