@@ -26,6 +26,19 @@ export {
 
 export { KickDbError, RemovedValueAsDefaultError } from './errors'
 export {
+  ConnectionError,
+  DatabaseError,
+  DeadlockError,
+  ForeignKeyViolationError,
+  CheckViolationError,
+  NotNullViolationError,
+  SerializationFailureError,
+  UniqueViolationError,
+  translateDbError,
+  type DatabaseErrorInfo,
+  type DbDialect,
+} from './db-errors'
+export {
   MigrationError,
   MigrationLockError,
   MigrationDriftError,
