@@ -56,7 +56,7 @@ export const RoutesTab: Component = () => {
 
   const list = (
     <>
-      <div class="dt-list-bar">
+      <div class="flex flex-col gap-1.5 border-b border-border p-2">
         <input
           type="text"
           placeholder="Search path, controller, handler…"
@@ -82,12 +82,12 @@ export const RoutesTab: Component = () => {
             )}
           </For>
         </div>
-        <div class="text-xs dt-dim">
+        <div class="text-xs text-text-muted">
           <Show when={search() || method() !== 'ALL'}>{filtered().length} matched · </Show>
           {store.routes().length} routes
         </div>
       </div>
-      <div class="dt-list">
+      <div class="min-h-0 flex-1 overflow-y-auto">
         <Show
           when={groups().length > 0}
           fallback={
@@ -99,24 +99,34 @@ export const RoutesTab: Component = () => {
           <For each={groups()}>
             {([controller, routes]) => (
               <>
-                <div class="dt-list-group">
+                <div class="sticky top-0 z-1 border-b border-border bg-surface-2 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-wide text-text-muted">
                   {controller} <span class="font-normal">({routes.length})</span>
                 </div>
                 <For each={routes}>
                   {(r) => (
                     <button
                       type="button"
-                      class={`dt-list-row ${isSelected(r) ? 'selected' : ''}`}
+                      class={`flex w-full cursor-pointer items-center gap-2 border-0 border-b border-border/50 px-2.5 py-1 text-left text-[0.78rem] text-text-body ${
+                        isSelected(r)
+                          ? 'bg-accent/12 shadow-[inset_2px_0_0_0_var(--color-accent)]'
+                          : 'bg-transparent hover:bg-surface-hover'
+                      }`}
                       onClick={() => openApiRunner(r)}
                       title={`${r.controller}.${r.handler}${
                         r.middleware.length ? ` · middleware: ${r.middleware.join(', ')}` : ''
                       }`}
                     >
-                      <span class={`dt-method ${methodColor(r.method)}`}>{r.method}</span>
-                      <span class="dt-mono-trunc flex-1">{r.path}</span>
+                      <span
+                        class={`w-[3.4rem] shrink-0 font-mono text-[0.68rem] font-bold ${methodColor(r.method)}`}
+                      >
+                        {r.method}
+                      </span>
+                      <span class="min-w-0 flex-1 truncate font-mono">{r.path}</span>
                       <Show when={formatFlags(r.flags)}>
                         {(f) => (
-                          <span class="text-[0.66rem] dt-dim truncate max-w-[40%]">{f()}</span>
+                          <span class="max-w-[40%] truncate text-[0.66rem] text-text-muted">
+                            {f()}
+                          </span>
                         )}
                       </Show>
                     </button>

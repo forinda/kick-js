@@ -31,4 +31,14 @@ describe('command palette matching', () => {
     const items = [item('GET /x', 'UsersController.list'), item('Users')]
     expect(filterItems(items, 'users').map((i) => i.title)).toEqual(['Users', 'GET /x'])
   })
+
+  it('keeps a group together, ordered by its best match', () => {
+    const tab = (t: string): PaletteItem => ({ ...item(t), group: 'Tabs' })
+    const items = [tab('Runtime'), { ...item('Theme: system'), group: 'Actions' }, tab('Memory')]
+    expect(filterItems(items, 'me').map((i) => i.title)).toEqual([
+      'Memory',
+      'Runtime',
+      'Theme: system',
+    ])
+  })
 })

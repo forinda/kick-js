@@ -64,11 +64,20 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
 
   return (
     <Show when={open()}>
-      <div class="dt-palette-backdrop" onClick={(e) => e.target === e.currentTarget && close()}>
-        <div class="dt-palette" role="dialog" aria-modal="true" aria-label="Command palette">
-          <div class="dt-palette-input">
+      <div
+        class="fixed inset-0 z-70 flex items-start justify-center bg-black/45 pt-[12vh]"
+        onClick={(e) => e.target === e.currentTarget && close()}
+      >
+        <div
+          class="flex max-h-[60vh] w-[min(640px,calc(100vw-32px))] flex-col overflow-hidden rounded-md border border-border-strong bg-surface-1 shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Command palette"
+        >
+          <div class="flex items-center gap-2.5 border-b border-border px-3.5 py-2.5 text-text-muted">
             <Icon name="search" size={16} />
             <input
+              class="flex-1 border-none bg-transparent text-sm text-text-body outline-none"
               ref={(el) => (input = el)}
               value={query()}
               placeholder="Jump to a tab, route or DI token…"
@@ -79,31 +88,41 @@ export const CommandPalette: Component<{ items: () => PaletteItem[] }> = (props)
               }}
               onKeyDown={onInputKey}
             />
-            <kbd>Esc</kbd>
+            <kbd class="dt-kbd">Esc</kbd>
           </div>
-          <div class="dt-palette-list" role="listbox">
+          <div class="overflow-y-auto p-1.5" role="listbox">
             <Show
               when={results().length > 0}
-              fallback={<div class="dt-palette-empty">No results for “{query()}”</div>}
+              fallback={
+                <div class="p-6 text-center text-text-muted">No results for “{query()}”</div>
+              }
             >
               <For each={results()}>
                 {(item, i) => (
                   <>
                     <Show when={i() === 0 || results()[i() - 1]!.group !== item.group}>
-                      <div class="dt-palette-group">{item.group}</div>
+                      <div class="px-2 pt-2 pb-1 text-[0.64rem] font-bold uppercase tracking-wider text-text-muted">
+                        {item.group}
+                      </div>
                     </Show>
                     <button
                       type="button"
                       role="option"
                       aria-selected={i() === index()}
-                      class={`dt-palette-item ${i() === index() ? 'active' : ''}`}
+                      class={`flex w-full cursor-pointer items-center gap-2.5 rounded-md border-none px-2 py-1.5 text-left text-[0.82rem] ${
+                        i() === index()
+                          ? 'bg-accent/15 text-text-strong'
+                          : 'bg-transparent text-text-secondary'
+                      }`}
                       onMouseMove={() => setIndex(i())}
                       onClick={() => run(item)}
                     >
                       <Icon name={item.icon} size={16} />
-                      <span class="dt-palette-title">{item.title}</span>
+                      <span class="whitespace-nowrap">{item.title}</span>
                       <Show when={item.description}>
-                        <span class="dt-palette-desc">{item.description}</span>
+                        <span class="min-w-0 truncate text-xs text-text-muted">
+                          {item.description}
+                        </span>
                       </Show>
                     </button>
                   </>

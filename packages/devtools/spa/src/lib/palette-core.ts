@@ -42,10 +42,10 @@ export function matchScore(query: string, text: string): number | null {
   return 500 - gaps
 }
 
-/** Items matching `query`, best first; every item, in order, for an empty query. */
+/** Items matching `query`, best first within groups that are ordered by their best match; every item, in order, for an empty query. */
 export function filterItems(items: readonly PaletteItem[], query: string): PaletteItem[] {
   if (!query.trim()) return [...items]
-  return items
+  const ranked = items
     .map((item) => {
       const title = matchScore(query, item.title)
       const description = item.description ? matchScore(query, item.description) : null
@@ -58,4 +58,7 @@ export function filterItems(items: readonly PaletteItem[], query: string): Palet
     .filter((x) => x.score > -Infinity)
     .toSorted((a, b) => b.score - a.score)
     .map((x) => x.item)
+  // Keep each group together, groups ordered by their best match.
+  const order = [...new Set(ranked.map((i) => i.group))]
+  return ranked.toSorted((a, b) => order.indexOf(a.group) - order.indexOf(b.group))
 }

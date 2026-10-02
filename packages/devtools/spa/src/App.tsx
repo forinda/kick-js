@@ -283,14 +283,18 @@ export const App: Component = () => {
       icon: 'routes',
       run: () => openApiRunner(r),
     })),
-    ...store.container().map((c) => ({
-      id: `token:${c.token}`,
-      title: c.token,
-      description: [c.kind, c.scope].filter(Boolean).join(' · '),
-      group: 'DI tokens',
-      icon: 'container',
-      run: () => openDetailModal(c.token),
-    })),
+    // `__hmr__` entries are the dev server's shadow registrations, not the app's tokens.
+    ...store
+      .container()
+      .filter((c) => !c.token.startsWith('__hmr__'))
+      .map((c) => ({
+        id: `token:${c.token}`,
+        title: c.token,
+        description: [c.kind, c.scope].filter(Boolean).join(' · '),
+        group: 'DI tokens',
+        icon: 'container',
+        run: () => openDetailModal(c.token),
+      })),
     ...(['system', 'light', 'dark'] as const).map((mode) => ({
       id: `theme:${mode}`,
       title: `Theme: ${mode}`,
@@ -320,7 +324,11 @@ export const App: Component = () => {
           <h1>KickJS DevTools</h1>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-          <button type="button" class="dt-search-hint" onClick={openCommandPalette}>
+          <button
+            type="button"
+            class="flex cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-2.5 py-1 text-xs text-text-muted hover:text-text-strong"
+            onClick={openCommandPalette}
+          >
             <Icon name="search" size={13} />
             Search
             <kbd class="dt-kbd">⌘K</kbd>
@@ -521,7 +529,10 @@ export const App: Component = () => {
       <DetailModalHost />
       <AuthGate />
       <Show when={store.connectionStatus() === 'disconnected' && !store.authRequired()}>
-        <div class="dt-disconnect" role="status">
+        <div
+          class="fixed bottom-4 left-1/2 z-60 flex -translate-x-1/2 items-center gap-2.5 rounded-md border border-red-500/40 bg-surface-1 px-3.5 py-2 text-[0.8rem] shadow-xl"
+          role="status"
+        >
           <span class="dt-pulse dt-pulse-disconnected" aria-hidden="true" />
           Can't reach the app — retrying every few seconds…
         </div>
