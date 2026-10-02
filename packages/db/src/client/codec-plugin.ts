@@ -53,6 +53,8 @@ export class CodecPlugin implements KyselyPlugin {
   constructor(
     private encoders: CodecMap,
     private decoders: CodecMap,
+    /** Names of `relations()` keys — where `db.query` nests related rows. */
+    private relationKeys: ReadonlySet<string> = new Set(),
   ) {}
 
   transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
@@ -186,12 +188,54 @@ export class CodecPlugin implements KyselyPlugin {
       if (decoder && value !== null && value !== undefined) {
         out[key] = decoder(value)
         mutated = true
+      } else if (this.relationKeys.has(key) && value !== null && value !== undefined) {
+        out[key] = this.decodeNested(value)
+        mutated = true
       } else {
         out[key] = value
       }
     }
     return (mutated ? out : row) as UnknownRow
   }
+
+  /**
+   * Rows `db.query` nested under a relation key: an array (`many`) or an
+   * object (`one`) — JSON text on SQLite and MySQL, which the JSON-results
+   * plugin would parse later, but the codecs have to run on the parsed rows.
+   */
+  private decodeNested(value: unknown): unknown {
+    let parsed = value
+    if (typeof value === 'string') {
+      try {
+        parsed = JSON.parse(value)
+      } catch {
+        return value
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => (isPlainObject(item) ? this.decodeRow(item as UnknownRow) : item))
+    }
+    return isPlainObject(parsed) ? this.decodeRow(parsed as UnknownRow) : parsed
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  )
+}
+
+/** Every relation name declared with `relations()` in a schema record. */
+export function collectRelationKeys(schema: unknown): Set<string> {
+  const keys = new Set<string>()
+  if (!schema || typeof schema !== 'object') return keys
+  for (const exported of Object.values(schema as Record<string, unknown>)) {
+    const decl = exported as { __isRelations?: boolean; __relations?: Record<string, unknown> }
+    if (decl?.__isRelations === true && decl.__relations) {
+      for (const name of Object.keys(decl.__relations)) keys.add(name)
+    }
+  }
+  return keys
 }
 
 /**
