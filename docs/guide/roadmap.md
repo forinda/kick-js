@@ -717,6 +717,22 @@ uncompressed JS unless a CDN sits in front.
 - Edge-safe KV stores (`KvRateLimitStore`, `KvSessionStore`); a full storage layer is YAGNI for now.
 - Request logging and W3C trace propagation.
 
+### E.9 Background jobs, bring your own runner {#e-9-background-jobs-bring-your-own-runner}
+
+**Status:** `proposed`
+**Effort:** 1–2 weeks
+
+**What we have.** `@forinda/kickjs-queue` provides `@Job` / `@Process` and `QueueService`, and ships BullMQ, RabbitMQ, Kafka and Redis pub/sub providers behind a `QueueProvider` interface. But `QueueAdapter` takes Redis options and builds BullMQ queues directly — it never reads a provider, so the other three can't be used and the interface's own example (`QueueAdapter({ provider })`) doesn't compile. Using any other tool (pg-boss, SQS, Inngest, Cloudflare Queues) means rebuilding discovery and error handling by hand.
+
+**What it looks like.** The same shape `@Cron` took in E.5:
+
+- `@Job(queue)` / `@Process(name)` move into `@forinda/kickjs` and only record metadata. `listJobHandlers(container)` returns them for any runner; `runJobHandler(handler, job)` runs one with the shared behaviour — an `enabled` switch, a run context, and failures reported to the error observers (`source: 'job'`).
+- A `JOB_DISPATCHER` token with `dispatch(queue, name, data, options)`, so application code enqueues without knowing the backend.
+- Each tool is a thin adapter that receives jobs and calls `runJobHandler`: BullMQ stays built in, RabbitMQ and Kafka become real adapters, and pg-boss / SQS / Inngest get short recipes.
+- A `queue()` handler on the web entry for Cloudflare Queues, next to `scheduled()`.
+
+Existing `@Job` / `@Process` code keeps working.
+
 ---
 
 ## Quick wins
@@ -761,18 +777,27 @@ Registries die without a maintainer. Lean on npm's existing naming convention (`
 
 ---
 
-## DB-related proposals (deferred)
+## Track D — Database {#track-d-database}
 
-These are valid but we're not working on them yet — focus is the non-DB tracks above.
+kick/db already does code-first tables in four forms, snapshot → diff → migrations for Postgres / MySQL / SQLite, a typed Kysely client, nested reads without JOIN row explosion (`json_agg` subqueries), and request validators projected from tables. These items come from comparing it with a long-lived ORM (Sequelize) for the resilience a production app relies on. Ordered by value for effort.
 
-| #   | Idea                                                                     | Status                                                                       |
-| --- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| D.1 | First-class migrations CLI (`kick db:migrate dev/deploy/rollback`)       | `shipped` in part — `kickjs-db generate` + `migrate latest/up/down/rollback` |
-| D.2 | `kick db:seed` first-class command                                       | `deferred` — today: `kickjs-db generate --empty` for a seed migration        |
-| D.3 | Auto-generated repository methods from `@Schema()` class (C.1 follow-on) | `deferred`                                                                   |
-| D.4 | DB connection pool observability (auto-instrumented)                     | `deferred`                                                                   |
+| #    | Idea                                                                                                                                                                                                                                                                                                                                        | Status                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| D.1  | First-class migrations CLI (`kick db:migrate dev/deploy/rollback`)                                                                                                                                                                                                                                                                          | `shipped` in part — `kickjs-db generate` + `migrate latest/up/down/rollback` |
+| D.2  | `kick db:seed` first-class command                                                                                                                                                                                                                                                                                                          | `deferred` — today: `kickjs-db generate --empty` for a seed migration        |
+| D.3  | Auto-generated repository methods (C.1 follow-on)                                                                                                                                                                                                                                                                                           | `deferred`                                                                   |
+| D.4  | DB connection pool observability (auto-instrumented)                                                                                                                                                                                                                                                                                        | `deferred`                                                                   |
+| D.5  | **Typed database errors** — unique, foreign-key, check, not-null, serialization, deadlock and connection errors as classes, with the constraint and columns parsed; driver errors no longer leak raw. Unlocks D.7, D.11 and automatic `409` responses                                                                                       | `proposed` — next                                                            |
+| D.6  | **Transactions that follow the call chain** — `AsyncLocalStorage` so code inside `db.transaction(async () => …)` joins it without passing `trx`; `afterCommit` hooks; nesting modes (reuse / savepoint / separate)                                                                                                                          | `proposed` — next                                                            |
+| D.7  | **Retry a whole transaction** on serialization failure or deadlock (`40001`, `40P01`, MySQL `1213`, `SQLITE_BUSY`) with backoff                                                                                                                                                                                                             | `proposed`                                                                   |
+| D.8  | **Primary-key and CHECK changes in migrations** — changing or adding a column to a primary key emits nothing on Postgres and the wrong statement on MySQL today. Add primary-key and CHECK change kinds; SQLite rebuilds the table and verifies with `foreign_key_check`. Also an explicit composite key: `primaryKey('name').on(t.a, t.b)` | `proposed`                                                                   |
+| D.9  | **Richer indexes** — partial (`where`), `using gin / gist`, operator classes, `concurrently`, `include`                                                                                                                                                                                                                                     | `proposed`                                                                   |
+| D.10 | **Auto-managed columns** — `updatedAt` that updates itself, a `version()` column for optimistic locking, soft delete honoured by relational reads                                                                                                                                                                                           | `proposed`                                                                   |
+| D.11 | **`upsert` and a race-safe `findOrCreate`** — conflict target and partial-index `where`; re-read on a unique violation                                                                                                                                                                                                                      | `proposed`                                                                   |
+| D.12 | **Read-replica routing** — reads outside a transaction go to the replica, with an override                                                                                                                                                                                                                                                  | `proposed`                                                                   |
+| D.13 | **Many-to-many relations** — `many(target, { through: junction })` in relational reads                                                                                                                                                                                                                                                      | `proposed`                                                                   |
 
-These will get their own track once we have a clearer picture from the non-DB work.
+Not planned, after the same comparison: per-row lifecycle hooks (an extra query and rows in memory per bulk statement), app-side validators separate from the schema, scopes and virtual attributes — plugins, schema-projected validators and Kysely expressions already cover them.
 
 ---
 
@@ -781,13 +806,15 @@ These will get their own track once we have a clearer picture from the non-DB wo
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, and **C.1** re-scoped (validation from tables, and table forms). The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **C.1 (re-scoped) — kick/db table → validation + OpenAPI** (1–2 weeks)
-2. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-3. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
+1. **E.9 — Background jobs, bring your own runner** (1–2 weeks)
+2. **D.5–D.7 — typed database errors, call-chain transactions, transaction retry** (about 1 week together)
+3. **D.8 — primary-key and CHECK changes in migrations** (fixes a silent migration bug)
+4. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+5. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
 
 Open for redirection — these are starting points, not commitments.
 

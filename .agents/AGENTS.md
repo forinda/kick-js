@@ -243,6 +243,10 @@ gh pr create --title "feat: print route table on startup" --body-file /tmp/pr-bo
 # 4. After review, merge via GitHub (squash or merge commit)
 ```
 
+### No AI co-author trailers in commits
+
+Commit messages carry no `Co-Authored-By:` trailer naming an AI assistant (Claude, Copilot, Codex, Gemini, …) — this applies to every agent working in this repo. A PR body may say it was generated with an assistant (e.g. `🤖 Generated with Claude Code`); the commits stay clean.
+
 ### PR / issue bodies with markdown — always via a temp file
 
 Anything richer than a single-line description (code fences, lists, tables, backticks, `$`, multi-paragraph) goes through a temp file. **Never** inline a multi-line body in `gh pr create --body "$(cat <<'EOF' ... EOF)"` or `gh pr edit --body "..."` — the shell escapes backticks and dollar signs, fenced code blocks lose their language hint, and the body lands on GitHub with literal `\`` everywhere.
