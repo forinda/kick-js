@@ -89,6 +89,14 @@ describe('PACKAGE_REGISTRY catalog health', () => {
 })
 
 describe('planAddPackages', () => {
+  it('installs the driver as a dependency and its types as a dev dependency', () => {
+    const sqlite = planAddPackages(['sqlite'], false)
+    expect(sqlite.prodDeps).toEqual(['@forinda/kickjs-db', 'better-sqlite3'])
+    expect(sqlite.devDeps).toEqual(['@types/better-sqlite3'])
+    expect(planAddPackages(['pg'], false).devDeps).toEqual(['@types/pg'])
+    expect(planAddPackages(['mysql'], false).devDeps).toEqual([]) // mysql2 ships its own types
+  })
+
   it('resolves a known package with its peers', () => {
     const plan = planAddPackages(['ws'], false)
     expect(plan.prodDeps).toContain('@forinda/kickjs-ws')

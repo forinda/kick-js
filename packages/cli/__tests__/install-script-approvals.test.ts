@@ -96,6 +96,10 @@ describe('buildsFor', () => {
   it("approves swagger-ui-dist's @scarf/scarf when swagger is added", () => {
     expect(buildsFor(['swagger', 'nope'])).toEqual({ '@scarf/scarf': true })
   })
+
+  it("approves better-sqlite3's native build when sqlite is added", () => {
+    expect(buildsFor(['sqlite'])).toEqual({ 'better-sqlite3': true })
+  })
 })
 
 describe('approveInstallScripts', () => {
