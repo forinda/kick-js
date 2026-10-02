@@ -14,7 +14,7 @@ export interface CheckResult {
   unmigratedChanges: number
   /** Migrations not marked reviewed — the runner refuses them outside development. */
   unreviewed: string[]
-  /** Migrations whose files changed after they were journaled — the runner refuses them. */
+  /** Reviewed migrations whose files changed after review — the runner refuses them. */
   modified: string[]
   ok: boolean
 }
@@ -22,8 +22,7 @@ export interface CheckResult {
 /**
  * Everything `migrate latest` would refuse, found without a database — for
  * CI, before a deploy reaches one: the schema has changes no migration
- * covers, a migration is unreviewed, or a migration was edited after it was
- * generated.
+ * covers, a migration is unreviewed, or a migration was edited after review.
  */
 export async function checkMigrations(opts: {
   config: DbConfig
@@ -41,11 +40,12 @@ export async function checkMigrations(opts: {
   if (existsSync(migrationsAbs)) {
     for (const entry of (await readJournal(migrationsAbs, opts.config.dialect)).entries) {
       const dir = path.join(migrationsAbs, entry.id)
-      if ((await computeMigrationHash(dir)) !== entry.hash) modified.push(entry.id)
       const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8')) as {
         reviewed?: boolean
       }
+      // An unreviewed migration is a draft — edits are expected until review.
       if (meta.reviewed !== true) unreviewed.push(entry.id)
+      else if ((await computeMigrationHash(dir)) !== entry.hash) modified.push(entry.id)
     }
   }
 

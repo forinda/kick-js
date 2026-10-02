@@ -235,7 +235,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       }
       for (const id of r.modified) {
         console.error(
-          `${id} was edited after it was generated — its hash no longer matches the journal.`,
+          `${id} was edited after it was reviewed — review it again, or revert the edit.`,
         )
       }
       if (r.ok) console.log('Migrations are in step with the schema.')
@@ -379,7 +379,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       const r = await reviewMigration(config.migrationsDir, id)
       console.log(
         r.alreadyReviewed
-          ? `${r.id} was already reviewed.`
+          ? `${r.id} was already reviewed — recorded its current contents as reviewed.`
           : `Reviewed ${r.id} — it can now be applied.`,
       )
     })

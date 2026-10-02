@@ -53,9 +53,11 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
 }
 
 /**
- * Verify pending entries: hash matches stored, meta.reviewed is true (if
- * requireReviewed). Throws MigrationHashError or UnreviewedMigrationError on
- * the first failure.
+ * Verify pending entries. A reviewed migration must still match the hash
+ * `review` recorded — an edit after review is refused (MigrationHashError).
+ * An unreviewed one is refused when `requireReviewed` (UnreviewedMigrationError);
+ * otherwise — development — it applies as it stands, edits included, and is
+ * recorded with its current hash.
  */
 async function verifyPending(
   pending: PreparedEntry[],
@@ -64,15 +66,14 @@ async function verifyPending(
 ): Promise<void> {
   for (const entry of pending) {
     const dir = path.join(migrationsDir, entry.id)
+    const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
     const actualHash = await computeMigrationHash(dir)
-    if (actualHash !== entry.hash) {
-      throw new MigrationHashError(entry.id, entry.hash, actualHash)
-    }
-    if (requireReviewed) {
-      const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
-      if (meta.reviewed !== true) {
-        throw new UnreviewedMigrationError(entry.id)
-      }
+    if (meta.reviewed === true) {
+      if (actualHash !== entry.hash) throw new MigrationHashError(entry.id, entry.hash, actualHash)
+    } else if (requireReviewed) {
+      throw new UnreviewedMigrationError(entry.id)
+    } else {
+      entry.hash = actualHash
     }
   }
 }
