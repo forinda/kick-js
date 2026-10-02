@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import {
   Kysely,
   ParseJSONResultsPlugin,
@@ -132,13 +133,15 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     events,
     dialect: dialectTag,
     savepointCounter: { value: 0 },
+    root: kysely,
+    transactions: new AsyncLocalStorage(),
     query: {
       relations,
       tables,
       compile: pickCompiler(dialectTag),
     },
   }
-  return wrap<DB>(kysely, ctx)
+  return wrap<DB>(kysely, ctx, { root: true })
 }
 
 function detectDialect(dialect: KyselyDialect): KickDbClient['dialect'] {

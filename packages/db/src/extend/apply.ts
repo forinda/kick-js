@@ -27,7 +27,7 @@
 import type { KickDbClient } from '../client/types'
 import type { ExtendedClient, ExtensionDefinition, ResultExtensions } from './types'
 import { ResultExtensionPlugin } from './result-plugin'
-import { wrap, type InternalContext } from '../client/wrap'
+import { rewrap, type InternalContext } from '../client/wrap'
 
 export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
   client: KickDbClient<DB>,
@@ -43,8 +43,7 @@ export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
   let baseClient: KickDbClient<DB> = client
   if (hasResultExtensions(ext.result)) {
     const plugin = new ResultExtensionPlugin(ext.result as ResultExtensions<unknown>)
-    const newQb = client.qb.withPlugin(plugin)
-    baseClient = wrap<DB>(newQb, ctx)
+    baseClient = rewrap<DB>(client, ctx, plugin)
   }
 
   // 2. Model proxy — layered on top of whichever base client we got

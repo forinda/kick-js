@@ -97,6 +97,8 @@ export type {
   QueryErrorEvent,
   BeforeQueryEvent,
   TransactionEvent,
+  TransactionOptions,
+  TransactionRetryEvent,
   TransactionRollbackEvent,
   CreateDbClientOptions,
 } from './client/types'
