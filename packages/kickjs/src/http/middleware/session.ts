@@ -236,7 +236,9 @@ export function session(options: SessionOptions) {
         destroyed = true
         currentData = {}
         sessionObj.data = currentData
-        res.clearCookie(cookieName, { path: cookieDefaults.path })
+        // Expire the cookie the same way it was set — `res.clearCookie` is
+        // Express-only and threw under Fastify and h3.
+        setCookie(res, cookieName, '', { ...cookieDefaults, maxAge: 0, expires: new Date(0) })
       },
 
       async save() {

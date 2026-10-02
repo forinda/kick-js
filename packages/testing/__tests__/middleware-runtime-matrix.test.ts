@@ -54,6 +54,21 @@ class ProbeController {
     session.data.count = (session.data.count ?? 0) + 1
     return { count: session.data.count }
   }
+
+  @Post('/session/regenerate')
+  async regenerate(ctx: RequestContext) {
+    // A sign-in: new session id, then data set on it.
+    await ctx.session.regenerate()
+    ctx.session.data.count = 100
+    await ctx.session.save()
+    return { id: ctx.session.id }
+  }
+
+  @Post('/session/destroy')
+  async destroy(ctx: RequestContext) {
+    await ctx.session.destroy()
+    return { ok: true }
+  }
 }
 
 const ProbeModule = createTestModule({
@@ -155,6 +170,46 @@ describe.each(runtimes)('middleware on $name', ({ make }) => {
 
       const second = await agent.get('/api/v1/probe/visit')
       expect(second.body).toEqual({ count: 2 })
+    })
+
+    async function sessionAgent() {
+      const { app } = await createTestApp({
+        modules: [ProbeModule],
+        runtime: make(),
+        middlewares: [session({ secret: 'test-secret-value' })] as never,
+        isolated: true,
+      })
+      return request.agent(app.handle.bind(app))
+    }
+    const sid = (res: { headers: Record<string, unknown> }) =>
+      ([] as string[])
+        .concat((res.headers['set-cookie'] as string[]) ?? [])
+        .find((c) => c.startsWith('kick.sid='))
+
+    it('regenerate() issues a new id and keeps what was set after it', async () => {
+      const agent = await sessionAgent()
+      const first = await agent.get('/api/v1/probe/visit')
+      const regenerated = await agent.post('/api/v1/probe/session/regenerate')
+      expect(regenerated.status).toBe(200)
+      expect(sid(regenerated), 'regenerate issued no new cookie').toBeTruthy()
+      expect(sid(regenerated)).not.toBe(sid(first))
+
+      const after = await agent.get('/api/v1/probe/visit')
+      expect(after.body).toEqual({ count: 101 })
+    })
+
+    it('destroy() clears the cookie and the data', async () => {
+      const agent = await sessionAgent()
+      await agent.get('/api/v1/probe/visit')
+      await agent.get('/api/v1/probe/visit')
+      const destroyed = await agent.post('/api/v1/probe/session/destroy')
+      expect(destroyed.status).toBe(200)
+      expect(sid(destroyed), 'destroy did not clear the cookie').toMatch(
+        /kick\.sid=;|Max-Age=0|Expires=Thu, 01 Jan 1970/i,
+      )
+
+      const fresh = await agent.get('/api/v1/probe/visit')
+      expect(fresh.body).toEqual({ count: 1 })
     })
   })
 
