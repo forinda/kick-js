@@ -99,7 +99,7 @@ export const db = createDbClient({
 export const migrationAdapter = mysqlAdapter({ pool })
 ```
 
-Both factories take a `mysql2` pool (or any structurally compatible runtime).
+Both factories take the same `mysql2/promise` pool (or any structurally compatible runtime). Pass `timezone: 'Z'` to `createPool` unless your server runs in UTC: mysql2 otherwise reads and writes dates in the Node process's zone.
 
 Notes:
 

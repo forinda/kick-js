@@ -120,7 +120,7 @@ The reason for the first row: if both tools write their own journal tables, each
 
 ## Coming from a specific ORM
 
-The mechanics above are the same regardless; these are the mapping notes that catch people out.
+The mechanics above are the same regardless; these are the mapping notes that catch people out. For concept tables and side-by-side code, see the guides for [Prisma](./coming-from-prisma.md), [Drizzle](./coming-from-drizzle.md), [TypeORM](./coming-from-typeorm.md) and [Sequelize](./coming-from-sequelize.md).
 
 **Prisma.** `schema.prisma` names are the ORM's, not the database's — `@map`/`@@map` mean your introspected names may differ from the model names you are used to. Prisma's `_prisma_migrations` table is unrelated to `kick_migrations`; leave it until cutover is done.
 

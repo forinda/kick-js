@@ -200,3 +200,15 @@ export default defineConfig({
 ```
 
 The `adapter` factory takes precedence over `connectionString` when both are set. See [Drivers](./drivers) for the per-dialect adapter factories and their connection options.
+
+A factory that opens a pool — MySQL, or Postgres through your own `pg.Pool` — should pass `endPoolOnClose: true`, so the pool closes when the command finishes and `kick db` exits:
+
+```ts
+adapter: async () => {
+  const { createPool } = await import('mysql2/promise')
+  const { mysqlAdapter } = await import('@forinda/kickjs-db/mysql')
+  return mysqlAdapter({ pool: createPool({ uri: process.env.DATABASE_URL! }), endPoolOnClose: true })
+},
+```
+
+Leave it off for the adapter your app builds: there the pool is shared with the query client.
