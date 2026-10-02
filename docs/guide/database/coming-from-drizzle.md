@@ -353,7 +353,6 @@ try {
 - **A name or casing override for columns** — the key is the column name.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
 - **`drizzle-seed`** (generated fake data) — no generator; write seed files for [`kick db seed`](./cli.md#seed) by hand or with a faker library.
-- **Read replicas** (`withReplicas`) — planned (D.12).
 
 ## Testing
 

@@ -79,8 +79,9 @@ export async function upsert<DB, T extends keyof DB & string>(
       ? Object.fromEntries(columns.map((c) => [c, sql`VALUES(${sql.ref(c)})`]))
       : update
     await insert.onDuplicateKeyUpdate(set).execute()
-    // No RETURNING on MySQL: read the rows back by their target values.
-    return (await (db.selectFrom as (t: string) => any)(table)
+    // No RETURNING on MySQL: read the rows back by their target values — from
+    // the primary, which has them; a replica may not yet.
+    return (await (db.primary.selectFrom as (t: string) => any)(table)
       .selectAll()
       .where((eb: ExpressionBuilder<any, any>) =>
         eb.or(rows.map((r) => eb.and(target.map((c) => eb(c, '=', r[c]))))),
@@ -122,7 +123,10 @@ export async function findOrCreate<DB, T extends keyof DB & string>(
       .where((eb: ExpressionBuilder<any, any>) => eb.and(where.map(([c, v]) => eb(c, '=', v))))
       .executeTakeFirst()) as Selectable<DB[T]> | undefined
 
-  const found = await find(db)
+  // Read from the primary: after losing the race, the winner's row is there
+  // — a lagging replica may not have it yet.
+  const primary = db.primary
+  const found = await find(primary)
   if (found) return { row: found, created: false }
 
   const values = { ...(opts.where as Row), ...(opts.create as Row) }
@@ -142,7 +146,7 @@ export async function findOrCreate<DB, T extends keyof DB & string>(
   } catch (err) {
     if (!(err instanceof UniqueViolationError)) throw err
     // Someone else created it first.
-    const raced = await find(db)
+    const raced = await find(primary)
     if (raced) return { row: raced, created: false }
     throw err
   }

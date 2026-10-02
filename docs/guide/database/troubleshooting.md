@@ -233,7 +233,7 @@ Put seed files in `db/seeds` and run [`kick db seed`](./cli.md#seed). Make them 
 Yes: `.softDelete()`, `.onUpdateNow()` and `version()` — [columns kick/db maintains](./schema.md#columns-kick-db-maintains). Soft delete is honoured by relational reads; the plain query builder sees every row.
 
 **Can I use several databases?**
-Yes. Create a client per database and register each under its own [token](./index.md#_6-make-it-injectable) — `app/Db`, `app/Db/analytics`. Read-replica routing within one client is planned (D.12).
+Yes. Create a client per database and register each under its own [token](./index.md#_6-make-it-injectable) — `app/Db`, `app/Db/analytics`. Read replicas are an option on one client — [`replica`](./pooling.md#read-replicas).
 
 **Can I edit a migration?**
 Not once it has run anywhere: write a new one. Before that, yes — edit it, then review it; if it was already reviewed, reviewing again records the change ([above](#hash-mismatch-for-migration)).

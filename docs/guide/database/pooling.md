@@ -84,6 +84,28 @@ database.pragma('foreign_keys = ON') // SQLite leaves foreign keys off by defaul
 
 WAL and `busy_timeout` matter when another process opens the same file — `kick db migrate` while the app runs, or a second app instance. `foreign_keys = ON` is per connection and needed for `references()` and `onDelete: 'cascade'` to do anything.
 
+## Read replicas
+
+Give the client a replica — or several — and reads outside a transaction go there:
+
+```ts
+export const db = createDbClient({
+  schema,
+  dialect: pgDialect({ pool }),
+  replica: pgDialect({ pool: replicaPool }), // or [pgDialect(...), pgDialect(...)], used in turn
+})
+```
+
+| Query                                               | Goes to     |
+| --------------------------------------------------- | ----------- |
+| `selectFrom`, `db.query` — outside a transaction    | a replica   |
+| `insertInto`, `updateTable`, `deleteFrom`, `upsert` | the primary |
+| anything inside `transaction()`                     | the primary |
+| `db.qb`, raw ``sql`…`.execute(db.qb)``              | the primary |
+| anything through `db.primary`                       | the primary |
+
+Replicas lag behind the primary. A read that must see a write made a moment ago — the redirect after a form post, the response that returns what was just saved — goes through `db.primary`: `db.primary.query.posts.findFirst(…)`. `db.findOrCreate()` and `db.upsert()` already read the primary. `db.destroy()` closes the replicas too.
+
 ## Transactions hold a connection
 
 A `db.transaction()` keeps one connection for its whole duration — every query inside it, including those made by services holding the plain client, runs on that connection. While it's open, the connection serves nobody else.

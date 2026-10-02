@@ -118,33 +118,36 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     plugins.push(...opts.plugins)
   }
 
-  const kysely = new Kysely<DB>({
-    // Driver failures surface as typed errors (UniqueViolationError, …).
-    dialect: translatingDialect(opts.dialect, dialectTag),
-    plugins: plugins.length > 0 ? plugins : undefined,
-    log: events
-      ? (event) => {
-          if (event.level === 'query') {
-            const durationMs = event.queryDurationMillis
-            const payload = {
-              sql: event.query.sql,
-              parameters: event.query.parameters,
-              durationMs,
+  const makeKysely = (dialect: KyselyDialect) =>
+    new Kysely<DB>({
+      // Driver failures surface as typed errors (UniqueViolationError, …).
+      dialect: translatingDialect(dialect, dialectTag),
+      plugins: plugins.length > 0 ? plugins : undefined,
+      log: events
+        ? (event) => {
+            if (event.level === 'query') {
+              const durationMs = event.queryDurationMillis
+              const payload = {
+                sql: event.query.sql,
+                parameters: event.query.parameters,
+                durationMs,
+              }
+              events.emit('query', payload)
+              if (slowThreshold != null && durationMs >= slowThreshold) {
+                events.emit('slowQuery', { ...payload, thresholdMs: slowThreshold })
+              }
+            } else if (event.level === 'error') {
+              events.emit('queryError', {
+                sql: event.query.sql,
+                parameters: event.query.parameters,
+                error: event.error,
+              })
             }
-            events.emit('query', payload)
-            if (slowThreshold != null && durationMs >= slowThreshold) {
-              events.emit('slowQuery', { ...payload, thresholdMs: slowThreshold })
-            }
-          } else if (event.level === 'error') {
-            events.emit('queryError', {
-              sql: event.query.sql,
-              parameters: event.query.parameters,
-              error: event.error,
-            })
           }
-        }
-      : undefined,
-  })
+        : undefined,
+    })
+  const kysely = makeKysely(opts.dialect)
+  const replicas = (opts.replica === undefined ? [] : [opts.replica].flat()).map(makeKysely)
 
   // Resolve `relations()` declarations into the JSON-serializable
   // sidecar consumed by the query compiler. Schemas without any
@@ -165,6 +168,8 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     dialect: dialectTag,
     savepointCounter: { value: 0 },
     root: kysely,
+    replicas,
+    nextReplica: 0,
     transactions: new AsyncLocalStorage(),
     query: {
       relations,

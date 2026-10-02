@@ -336,7 +336,6 @@ Each error names the `constraint`, `table` and `columns`, the same on Postgres, 
 
 ## Not there (yet)
 
-- **Read replicas** — planned (D.12).
 - **Prisma Studio** — the KickJS [DevTools](../devtools.md) Database tab shows the queries your app runs; there is no data editor.
 - **`db push`** — deliberately absent; every change goes through a reviewed migration.
 

@@ -182,6 +182,12 @@ export interface KickDbClient<DB = RegisteredDB> {
   readonly inTransaction: boolean
 
   /**
+   * This client with every read on the primary — for reading what you just
+   * wrote when replicas lag. The same client when there are no replicas.
+   */
+  readonly primary: KickDbClient<DB>
+
+  /**
    * Returns a wrapped client carrying adopter-defined per-table
    * methods. Inside each method, `this` is the extended client so
    * call-chains stay clean:
@@ -216,6 +222,13 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
   schema: TSchema
   /** A Kysely Dialect — typically PostgresDialect from db-pg. */
   dialect: KyselyDialect
+  /**
+   * Read replicas — a dialect, or several used in turn. Reads outside a
+   * transaction (`selectFrom`, `db.query`) go to a replica; writes, raw
+   * `db.qb`, and everything inside a transaction go to `dialect`. Read your
+   * own writes through `db.primary`.
+   */
+  replica?: KyselyDialect | readonly KyselyDialect[]
   /**
    * Enable lifecycle event emission for `query` / `queryError` /
    * `slowQuery` / `transactionStart` / `transactionCommit` /
