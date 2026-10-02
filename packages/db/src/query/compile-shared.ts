@@ -37,6 +37,8 @@ export interface CompileOptions {
   with?: Record<string, true | CompileOptions>
   /** Include soft-deleted rows — on this level only. */
   withDeleted?: boolean
+  columns?: Record<string, boolean | undefined>
+  extras?: Record<string, (table: any, ops: ExpressionBuilder<any, any>) => Expression<unknown>>
 }
 
 /** A table as the compiler sees it: its snapshot, plus its soft-delete column if any. */
@@ -114,7 +116,10 @@ export function runCompile<DB>(
   }
   // Outer `.selectAll()` is fine — the helpers only restrict inner
   // subqueries passed to jsonArrayFrom / jsonObjectFrom.
-  let query: any = (db.selectFrom(`${table} as ${outerAlias}` as any) as any).selectAll()
+  let query: any = db.selectFrom(`${table} as ${outerAlias}` as any)
+  const picked = pickColumns(table, tables[table], options)
+  query = picked ? query.select(picked.map((c) => `${outerAlias}.${c}`)) : query.selectAll()
+  query = applyExtras(query, outerAlias, options)
 
   if (options.with) {
     query = applyWithSelects(
@@ -202,7 +207,9 @@ function buildInnerSelect(
   // keeps a single dialect-agnostic code path here.
   const targetTable = tables[rel.target]
   const columns = targetTable
-    ? Object.keys(targetTable.columns).map((c) => `${innerAlias}.${c}`)
+    ? (pickColumns(rel.target, targetTable, subOptions) ?? Object.keys(targetTable.columns)).map(
+        (c) => `${innerAlias}.${c}`,
+      )
     : null
 
   let sub: any = eb.selectFrom(`${rel.target} as ${innerAlias}` as any) as any
@@ -248,6 +255,8 @@ function buildInnerSelect(
     }
   }
 
+  sub = applyExtras(sub, innerAlias, subOptions)
+
   const nextTrace = [...trace, innerAlias]
 
   if (subOptions.with) {
@@ -272,6 +281,43 @@ function buildInnerSelect(
   }
 
   return sub
+}
+
+/**
+ * The columns `options.columns` selects, or null to select them all. Either
+ * every value is `true` (only those) or every value is `false` (all but
+ * those); a mix is refused, as is a column the table doesn't have.
+ */
+function pickColumns(
+  name: string,
+  table: CompileTable | undefined,
+  options: CompileOptions,
+): string[] | null {
+  const spec = Object.entries(options.columns ?? {}).filter(([, v]) => v !== undefined)
+  if (spec.length === 0 || !table) return null
+  for (const [c] of spec) {
+    if (!(c in table.columns)) {
+      throw new Error(`kickjs-db: columns names '${c}', which table '${name}' doesn't have`)
+    }
+  }
+  const included = spec.filter(([, v]) => v).map(([c]) => c)
+  if (included.length > 0 && included.length < spec.length) {
+    throw new Error(
+      `kickjs-db: columns on '${name}' mixes true and false — name the columns to keep, or the ones to leave out`,
+    )
+  }
+  if (included.length > 0) return Object.keys(table.columns).filter((c) => included.includes(c))
+  const excluded = new Set(spec.map(([c]) => c))
+  return Object.keys(table.columns).filter((c) => !excluded.has(c))
+}
+
+/** Select each extra's expression under its name. */
+function applyExtras(query: any, alias: string, options: CompileOptions): any {
+  const extras = Object.entries(options.extras ?? {})
+  if (extras.length === 0) return query
+  return query.select((eb: ExpressionBuilder<any, any>) =>
+    extras.map(([name, build]) => (build(makeTableRefProxy(eb, alias), eb) as any).as(name)),
+  )
 }
 
 /** Leave out rows whose soft-delete column is set, unless the caller asked for them. */

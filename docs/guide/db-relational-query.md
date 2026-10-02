@@ -95,6 +95,38 @@ Each clause scopes only to the inner relation — outer filters keep working ind
 
 `orderBy` returns an expression, ascending by default. Wrap it in `desc()` (or `asc()`, both from `@forinda/kickjs-db`) for a direction, and return an array to sort by several: `[desc(eb.ref('priority')), asc(eb.ref('title'))]`.
 
+## Choosing fields
+
+`columns` picks which columns come back, and `extras` adds computed fields. Both work at every level of `with`:
+
+```ts
+import { sql } from 'kysely'
+
+const user = await this.db.query.users.findFirst({
+  where: (_u, eb) => eb('id', '=', id),
+  columns: { passwordHash: false }, // everything but this
+  extras: {
+    postCount: (_u, eb) =>
+      eb
+        .selectFrom('posts')
+        .select(eb.fn.countAll<number>().as('n'))
+        .whereRef('posts.authorId', '=', 'users_0.id'),
+  },
+  with: {
+    posts: {
+      columns: { id: true, title: true }, // only these
+      extras: { titleLength: () => sql<number>`length(title)` },
+    },
+  },
+})
+// { id, email, postCount, posts: { id, title, titleLength }[] }
+```
+
+- **`columns`:** either name the columns you want (`true`) or the ones you don't (`false`); a mix of both is refused. Leaving it out returns every column.
+- **`extras`:** each one is an SQL expression over the row, and its type comes from the expression (`sql<number>`, `eb.fn.countAll<number>()`). To refer to the row in a correlated subquery, use its alias: the table name, then `_` and the nesting depth (`users_0` at the top, `posts_1` one level down).
+- **The row type follows both.** Excluded columns aren't on it, and each extra is.
+- **Counts on Postgres:** at the top level, `count(*)` comes back as a string (a `bigint`). Cast it in SQL (`count(*)::int`) or with `Number()`. Inside `with` it comes back as JSON, so it's a number.
+
 ## Many-to-many
 
 Declare the junction table as a table, and point a `many` through it:
@@ -204,6 +236,8 @@ The options bag:
 | `limit`       | `number`                                    |                                                                                                                        |
 | `offset`      | `number`                                    |                                                                                                                        |
 | `with`        | `{ [relation]: true \| FindManyOptions }`   | `true` eager-loads; an object form filters the relation                                                                |
+| `columns`     | `{ [column]: boolean }`                     | the columns to return: all `true` (only these) or all `false` (all but these) — [Choosing fields](#choosing-fields)    |
+| `extras`      | `{ [name]: (table, eb) => Expression }`     | computed fields, typed from each expression                                                                            |
 | `withDeleted` | `boolean`                                   | include rows a [`softDelete()`](./database/schema.md#columns-kick-db-maintains) column marks deleted — this level only |
 | `maxDepth`    | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError`                                                            |
 | `signal`      | `AbortSignal`                               | cancels the in-flight query — bind to `ctx.signal`                                                                     |

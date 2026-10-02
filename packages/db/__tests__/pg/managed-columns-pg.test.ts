@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
+import { sql } from 'kysely'
 import {
   createDbClient,
   diff,
@@ -130,6 +131,27 @@ describe('managed columns on Postgres', () => {
     // pg returns count(*) as a bigint string; it comes back a number.
     expect(total).toBe(3)
     expect(rows.map((r) => r.slug)).toEqual(['page-2'])
+  }, 30_000)
+
+  it('columns and extras shape relational reads at every level', async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    const doc = await db.upsert('docs', {
+      values: { slug: 'shaped', title: 'Shaped' },
+      target: ['slug'],
+    })
+    await db.insertInto('comments').values({ docId: doc.id, body: 'first' }).execute()
+    const row = await db.query.docs.findFirst({
+      where: (_d, eb) => eb('slug', '=', 'shaped'),
+      columns: { slug: true },
+      extras: { loud: () => sql<string>`upper(title)` },
+      with: {
+        comments: {
+          columns: { body: true },
+          extras: { size: () => sql<number>`length(body)` },
+        },
+      },
+    })
+    expect(row).toEqual({ slug: 'shaped', loud: 'SHAPED', comments: [{ body: 'first', size: 5 }] })
   }, 30_000)
 
   it('works for a table in a named schema', async () => {

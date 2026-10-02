@@ -186,7 +186,7 @@ const user = await db.query.users.findFirst({
 | `where: (t, { eq, and, or }) => …`   | `where: (t, eb) => eb('col', '=', v)`, `eb.and([…])`, `eb.or([…])`                                           |
 | `orderBy: (t, { asc, desc }) => […]` | `orderBy: (t, eb) => [desc(eb.ref('col')), asc(eb.ref('other'))]` — `asc` / `desc` from `@forinda/kickjs-db` |
 | `limit`, `offset`, nested `with`     | the same                                                                                                     |
-| `columns: { id: true }`, `extras`    | not supported — select columns with the query builder                                                        |
+| `columns: { id: true }`, `extras`    | the same, at every level of `with` — [Choosing fields](../db-relational-query.md#choosing-fields)            |
 | —                                    | `maxDepth` guards runaway nesting; `signal` cancels the query                                                |
 
 [Relational Queries](../db-relational-query.md) has the details.
@@ -350,7 +350,6 @@ try {
 ## Not there (yet)
 
 - **`$defaultFn`, `$onUpdate` with a function** — set the value yourself. For the common cases there are [maintained columns](./schema.md#columns-kick-db-maintains): `onUpdateNow()`, `version()`, `softDelete()`.
-- **`columns` / `extras` in `db.query`** — use the query builder when you need a narrower select.
 - **A name or casing override for columns** — the key is the column name.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
 - **`drizzle-seed`** (generated fake data) — no generator; write seed files for [`kick db seed`](./cli.md#seed) by hand or with a faker library.
