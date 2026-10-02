@@ -99,6 +99,56 @@ export const posts = table(
 
 Keeping constraints in one callback means every constraint name lives in a single place, which keeps migration diffing simple.
 
+### Partial, expression and other indexes
+
+Chain options onto `.on(…)`. A string key is an SQL expression; the other options take SQL or a method name as written:
+
+```ts
+import { index, table, text, timestamp, unique, uuid } from '@forinda/kickjs-db'
+import { vector } from '@forinda/kickjs-db/pg'
+
+export const users = table(
+  'users',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    email: text().notNull(),
+    bio: text(),
+    embedding: vector(1536),
+    deletedAt: timestamp(),
+  },
+  (t) => ({
+    // Unique among live rows only: a deleted user's email can be reused.
+    emailLive: unique('users_email_live').on(t.email).where('"deletedAt" IS NULL'),
+    // An expression key: case-insensitive lookups use it.
+    emailLower: unique('users_email_lower').on('lower(email)'),
+    // Method and operator class: fuzzy text search, vector similarity.
+    bioTrgm: index('users_bio_trgm').on(t.bio).using('gin').op(t.bio, 'gin_trgm_ops'),
+    embeddingHnsw: index('users_embedding')
+      .on(t.embedding)
+      .using('hnsw')
+      .op(t.embedding, 'vector_cosine_ops'),
+    // Covering index, built without blocking writes.
+    emailCover: index('users_email_cover').on(t.email).include(t.id).concurrently(),
+  }),
+)
+```
+
+| Option                | Does                                                        | Postgres | SQLite | MySQL            |
+| --------------------- | ----------------------------------------------------------- | -------- | ------ | ---------------- |
+| `.on('lower(email)')` | an expression key                                           | yes      | yes    | yes (8.0.13+)    |
+| `.where(sql)`         | a partial index over the matching rows                      | yes      | yes    | —                |
+| `.using(method)`      | the index method: `gin`, `gist`, `brin`, `hash`, `hnsw`, …  | yes      | —      | `btree` / `hash` |
+| `.op(key, opclass)`   | an operator class for one key, like `gin_trgm_ops`          | yes      | —      | —                |
+| `.include(...cols)`   | columns stored in the index but not part of its key         | yes      | —      | —                |
+| `.concurrently()`     | build and drop with `CONCURRENTLY`, without blocking writes | yes      | —      | —                |
+
+An option the dialect can't express fails as soon as `kick db generate` or `kick db check` reads the schema, before any SQL is written. InnoDB accepts `using('hash')` but builds a B-tree.
+
+- **SQL is passed through.** A `where` or expression names columns as the database knows them, so quote mixed-case names on Postgres (`"deletedAt"`). Extensions an operator class or method needs (`pg_trgm`, `vector`) must exist first: create them in an [empty migration](./migrations.md#empty-migrations).
+- **Changing an index rebuilds it.** A changed key, predicate, method, operator class or `include` makes `kick db generate` drop the index and create it again under the same name. Adding or removing `.concurrently()` changes how it's built, not what it is, so it isn't a change.
+- **`CONCURRENTLY` gets its own migration.** Postgres can't run it inside a transaction, or next to another statement. So `kick db generate` writes each concurrent index change as a migration of its own, with `"transaction": false` in its `meta.json`, after one holding the rest of the changes. An index on a table created in the same migration is built normally: the table is empty.
+- **Introspection** reads expressions, predicates, methods and `INCLUDE` columns back on Postgres, and predicates on SQLite. Operator classes aren't read back. Drift checks compare an index's name, uniqueness and plain columns only, because the database rewrites predicates and expressions in its own form.
+
 ### Derived names and the 63-character limit
 
 A single-column `.unique()` or `.references()` derives its constraint name as

@@ -56,7 +56,7 @@ function emitChange(change: Change): string {
       // the schema from the qualified table it targets.
       const schema = schemaOf(change.table)
       const name = schema ? `${schema}.${change.index.name}` : change.index.name
-      return `DROP INDEX ${quoteIdent(name)};`
+      return `DROP INDEX${change.index.concurrently ? ' CONCURRENTLY' : ''} ${quoteIdent(name)};`
     }
     case 'addForeignKey':
       return emitAddFk(change.table, change.fk)
@@ -311,8 +311,20 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
 }
 
 function emitAddIndex(table: string, i: import('../snapshot/types').IndexSnapshot): string {
-  const cols = i.columns.map(quoteIdent).join(', ')
-  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols});`
+  // An expression key is stored in its parentheses, which is how SQL takes it.
+  const keys = i.columns
+    .map((k) => {
+      const key = k.startsWith('(') ? k : quoteIdent(k)
+      const op = i.opclasses?.[k]
+      return op ? `${key} ${op}` : key
+    })
+    .join(', ')
+  let sql = `CREATE${i.unique ? ' UNIQUE' : ''} INDEX${i.concurrently ? ' CONCURRENTLY' : ''} ${quoteIdent(i.name)} ON ${quoteIdent(table)}`
+  if (i.using) sql += ` USING ${i.using}`
+  sql += ` (${keys})`
+  if (i.include?.length) sql += ` INCLUDE (${i.include.map(quoteIdent).join(', ')})`
+  if (i.where) sql += ` WHERE ${i.where}`
+  return `${sql};`
 }
 
 const FK_ACTIONS: Record<string, string> = {

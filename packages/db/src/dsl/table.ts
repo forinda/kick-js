@@ -1,5 +1,6 @@
 import type { ColumnBuilder, ColumnRef, TypedColumnRefs } from './columns/types'
 import type { CheckDecl, IndexDecl, PrimaryKeyDecl, TableConstraint } from './constraints'
+import type { IndexSnapshot } from '../snapshot/types'
 import { resolveSelfRefs } from './self-ref'
 
 export type { ColumnRef }
@@ -12,7 +13,7 @@ export interface TableDecl<
   __isTable: true
   __name: TName
   __columns: C
-  __indexes: IndexDecl[]
+  __indexes: IndexSnapshot[]
   /** Declared with `primaryKey(...)` — absent when columns carry `.primaryKey()`. */
   __primaryKey?: PrimaryKeyDecl
   __checks?: CheckDecl[]
@@ -123,7 +124,7 @@ export function buildTable<
 
   if (constraints) {
     const declared = Object.values(constraints(refs))
-    decl.__indexes = declared.filter((c): c is IndexDecl => !('kind' in c))
+    decl.__indexes = declared.filter((c): c is IndexDecl => '__index' in c).map((c) => c.__index)
     const checks = declared.filter((c): c is CheckDecl => 'kind' in c && c.kind === 'check')
     if (checks.length > 0) decl.__checks = checks
     const keys = declared.filter((c): c is PrimaryKeyDecl => 'kind' in c && c.kind === 'primaryKey')

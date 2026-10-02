@@ -1,25 +1,84 @@
-export interface IndexDecl {
-  name: string
-  columns: string[]
-  unique: boolean
-}
+import type { IndexSnapshot } from '../snapshot/types'
 
 interface ColRef {
   __name: string
 }
 
+/** An index key part: a column, or an SQL expression such as `'lower(email)'`. */
+export type IndexKey = ColRef | string
+
+function keyName(key: IndexKey): string {
+  return typeof key === 'string' ? `(${key})` : key.__name
+}
+
+/**
+ * An index declared in a table's constraint builder. Chain the options;
+ * each returns the same declaration:
+ *
+ *   index('users_active_email').on(t.email).where('"deletedAt" IS NULL')
+ *   index('users_email_lower').on('lower(email)')
+ *   index('docs_embedding').on(t.embedding).using('hnsw').op(t.embedding, 'vector_cosine_ops')
+ *   index('orders_customer').on(t.customerId).include(t.total).concurrently()
+ */
+export class IndexDecl {
+  /** The index as recorded in the snapshot. */
+  readonly __index: IndexSnapshot
+
+  constructor(name: string, keys: IndexKey[], unique: boolean) {
+    this.__index = { name, columns: keys.map(keyName), unique }
+  }
+
+  /** Make it a partial index over the rows matching `predicate` (Postgres, SQLite). */
+  where(predicate: string): this {
+    this.__index.where = predicate
+    return this
+  }
+
+  /** The index method: `gin`, `gist`, `brin`, `hash`, `hnsw`, `ivfflat` … (MySQL: `btree` / `hash`). */
+  using(method: string): this {
+    this.__index.using = method
+    return this
+  }
+
+  /** Store these columns in the index without making them part of the key (Postgres). */
+  include(...cols: ColRef[]): this {
+    this.__index.include = cols.map((c) => c.__name)
+    return this
+  }
+
+  /** The operator class for one key part, e.g. `vector_cosine_ops` or `gin_trgm_ops` (Postgres). */
+  op(key: IndexKey, opclass: string): this {
+    const name = keyName(key)
+    if (!this.__index.columns.includes(name)) {
+      throw new Error(`kickjs-db: index '${this.__index.name}' has no key ${name} to give op()`)
+    }
+    this.__index.opclasses = { ...this.__index.opclasses, [name]: opclass }
+    return this
+  }
+
+  /**
+   * Build and drop it with `CONCURRENTLY`, without blocking writes (Postgres).
+   * `kick db generate` puts each such change in a migration of its own that
+   * runs outside a transaction, as `CONCURRENTLY` requires.
+   */
+  concurrently(): this {
+    this.__index.concurrently = true
+    return this
+  }
+}
+
 export function index(name: string) {
   return {
-    on(...cols: ColRef[]): IndexDecl {
-      return { name, columns: cols.map((c) => c.__name), unique: false }
+    on(...keys: IndexKey[]): IndexDecl {
+      return new IndexDecl(name, keys, false)
     },
   }
 }
 
 export function unique(name: string) {
   return {
-    on(...cols: ColRef[]): IndexDecl {
-      return { name, columns: cols.map((c) => c.__name), unique: true }
+    on(...keys: IndexKey[]): IndexDecl {
+      return new IndexDecl(name, keys, true)
     },
   }
 }

@@ -224,8 +224,10 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
 }
 
 function emitAddIndex(table: string, i: IndexSnapshot): string {
-  const cols = i.columns.map(quoteIdent).join(', ')
-  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols});`
+  // An expression key is stored in its parentheses, which is how SQL takes it.
+  const cols = i.columns.map((k) => (k.startsWith('(') ? k : quoteIdent(k))).join(', ')
+  const where = i.where ? ` WHERE ${i.where}` : ''
+  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols})${where};`
 }
 
 const FK_ACTIONS: Record<string, string> = {

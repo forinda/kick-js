@@ -269,8 +269,17 @@ function extractParens(t: string): string {
 
 function renderIndexCall(idx: IndexSnapshot): string {
   const helper = idx.unique ? 'unique' : 'index'
-  const cols = idx.columns.map((c) => `t.${jsIdent(c)}`).join(', ')
-  return `${helper}(${strLit(idx.name)}).on(${cols})`
+  // An expression key renders as the SQL string `on()` takes, without the
+  // parentheses the snapshot stores it in.
+  const key = (c: string) => (c.startsWith('(') ? strLit(c.slice(1, -1)) : `t.${jsIdent(c)}`)
+  let call = `${helper}(${strLit(idx.name)}).on(${idx.columns.map(key).join(', ')})`
+  if (idx.using) call += `.using(${strLit(idx.using)})`
+  for (const [k, op] of Object.entries(idx.opclasses ?? {})) call += `.op(${key(k)}, ${strLit(op)})`
+  if (idx.include?.length)
+    call += `.include(${idx.include.map((c) => `t.${jsIdent(c)}`).join(', ')})`
+  if (idx.where) call += `.where(${strLit(idx.where)})`
+  if (idx.concurrently) call += '.concurrently()'
+  return call
 }
 
 function isAutoUniqueName(tableName: string, idx: IndexSnapshot): boolean {

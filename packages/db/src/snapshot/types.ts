@@ -12,8 +12,19 @@ export interface ColumnSnapshot {
 
 export interface IndexSnapshot {
   name: string
+  /** Key parts in order: a column name, or an SQL expression wrapped in parentheses. */
   columns: string[]
   unique: boolean
+  /** Partial index predicate (Postgres, SQLite), as SQL. */
+  where?: string
+  /** Index method, e.g. `gin`, `gist`, `hnsw` (Postgres) or `hash` (MySQL). Absent means the default. */
+  using?: string
+  /** Non-key columns stored in the index (Postgres `INCLUDE`). */
+  include?: string[]
+  /** Operator class per key part, keyed by the entry in `columns` (Postgres). */
+  opclasses?: Record<string, string>
+  /** Build and drop without locking writes (Postgres). Doesn't change the index itself. */
+  concurrently?: boolean
 }
 
 export interface ForeignKeySnapshot {

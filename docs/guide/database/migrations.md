@@ -105,7 +105,7 @@ kick db migrate status
 5. Allocate the next batch number.
 6. Apply each `up.sql` in order, each in its own transaction, and record it in `kick_migrations` in that same transaction — on Postgres and SQLite, so a crash can't leave a migration applied but unrecorded. Exceptions, where the record is written after the SQL and a crash in between leaves the migration applied but unrecorded:
    - MySQL, for a migration with DDL — MySQL commits `CREATE` / `ALTER` / `DROP` as they run;
-   - a migration with `meta.json.transaction === false` (for cases like PG `CREATE INDEX CONCURRENTLY`), which runs outside a transaction;
+   - a migration with `meta.json.transaction === false`, which runs outside a transaction — `generate` writes one for each [`.concurrently()`](./constraints.md#partial-expression-and-other-indexes) index change;
    - a custom adapter without `applyMigrationInTx`.
 
    If that happens, the retry fails on "already exists": check the schema, then record the migration as applied without running it ([the baseline script](./adopting.md#_3-baseline-the-migration-history)), or undo its changes and run it again.

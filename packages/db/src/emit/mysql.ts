@@ -137,8 +137,10 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
 }
 
 function emitAddIndex(table: string, i: IndexSnapshot): string {
-  const cols = i.columns.map(ident).join(', ')
-  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${ident(i.name)} ON ${ident(table)} (${cols});`
+  // An expression key is stored in its parentheses — a functional key part.
+  const cols = i.columns.map((k) => (k.startsWith('(') ? k : ident(k))).join(', ')
+  const using = i.using ? ` USING ${i.using.toUpperCase()}` : ''
+  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${ident(i.name)} ON ${ident(table)} (${cols})${using};`
 }
 
 const FK_ACTIONS: Record<string, string> = {

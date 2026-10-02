@@ -30,9 +30,12 @@ interface ColumnRow {
 
 interface IndexRow {
   INDEX_NAME: string
-  COLUMN_NAME: string
+  /** Null for a functional key part. */
+  COLUMN_NAME: string | null
+  EXPRESSION: string | null
   NON_UNIQUE: number
   SEQ_IN_INDEX: number
+  INDEX_TYPE: string
 }
 
 interface FkRow {
@@ -113,19 +116,24 @@ async function readColumns(
 async function readIndexes(db: MysqlIntrospectDb, table: string): Promise<IndexSnapshot[]> {
   const stats = await rows<IndexRow>(
     db,
-    `SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE, SEQ_IN_INDEX
+    `SELECT INDEX_NAME, COLUMN_NAME, EXPRESSION, NON_UNIQUE, SEQ_IN_INDEX, INDEX_TYPE
      FROM information_schema.STATISTICS
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME <> 'PRIMARY'
      ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
     [table],
   )
-  const byName = new Map<string, { cols: string[]; unique: boolean }>()
+  const byName = new Map<string, IndexSnapshot>()
   for (const r of stats) {
-    const e = byName.get(r.INDEX_NAME) ?? { cols: [], unique: r.NON_UNIQUE === 0 }
-    e.cols.push(r.COLUMN_NAME)
-    byName.set(r.INDEX_NAME, e)
+    let e = byName.get(r.INDEX_NAME)
+    if (!e) {
+      e = { name: r.INDEX_NAME, columns: [], unique: r.NON_UNIQUE === 0 }
+      if (r.INDEX_TYPE === 'HASH') e.using = 'hash'
+      byName.set(r.INDEX_NAME, e)
+    }
+    // A functional key part has no column; its expression is in EXPRESSION.
+    e.columns.push(r.COLUMN_NAME ?? `(${r.EXPRESSION})`)
   }
-  return [...byName].map(([name, e]) => ({ name, columns: e.cols, unique: e.unique }))
+  return [...byName.values()]
 }
 
 async function readForeignKeys(

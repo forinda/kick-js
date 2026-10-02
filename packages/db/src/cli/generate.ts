@@ -106,18 +106,66 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   await assertNoCompositeReferences(changes, opts.detectCompositeRefs)
 
   const dialect = opts.config.dialect
-  return await writeMigration({
-    opts,
-    migrationsAbs,
-    previousId,
-    target,
-    // up: prev -> target. down: invert applied to target -> prev.
-    upBody: emitDdl(dialect, changes, prev, target),
-    downBody: emitDdl(dialect, invertChanges(changes), target, prev),
-    changeCount: changes.length,
-    draft: hasAmbiguousReverse(changes),
-    empty: false,
-  })
+  // CONCURRENTLY can't run in a transaction, nor beside another statement
+  // (Postgres runs a multi-statement query as one implicit transaction). So
+  // each concurrent index change gets a migration of its own, after one
+  // holding everything else; each migration records the schema as it leaves it.
+  const concurrent = changes.filter(isConcurrentIndexChange)
+  const rest = changes.filter((c) => !concurrent.includes(c))
+  const stages = [
+    ...(rest.length > 0 ? [{ changes: rest, pending: concurrent }] : []),
+    ...concurrent.map((c, i) => ({ changes: [c], pending: concurrent.slice(i + 1) })),
+  ]
+
+  let from = prev
+  let previous = previousId
+  let result: GenerateResult | undefined
+  for (const [n, { changes: stage, pending }] of stages.entries()) {
+    const to = snapshotAfter(target, pending)
+    result = await writeMigration({
+      opts: n === 0 ? opts : withStageName(opts, n),
+      migrationsAbs,
+      previousId: previous,
+      target: to,
+      // up: from -> to. down: invert applied to to -> from.
+      upBody: emitDdl(dialect, stage, from, to),
+      downBody: emitDdl(dialect, invertChanges(stage), to, from),
+      changeCount: stage.length,
+      draft: hasAmbiguousReverse(stage),
+      empty: false,
+      transaction: isConcurrentIndexChange(stage[0]) ? false : undefined,
+    })
+    from = to
+    previous = path.basename(result.migrationDir!)
+  }
+  return { ...result!, changeCount: changes.length }
+}
+
+function isConcurrentIndexChange(c: Change): boolean {
+  return (c.kind === 'addIndex' || c.kind === 'dropIndex') && c.index.concurrently === true
+}
+
+/**
+ * `target` with the given concurrent index changes not yet applied: their
+ * added indexes taken out, their dropped ones put back.
+ */
+function snapshotAfter(target: SchemaSnapshot, pending: Change[]): SchemaSnapshot {
+  if (pending.length === 0) return target
+  const tables = structuredClone(target.tables)
+  // Undone latest first, so a rebuild (drop, then add, of one name) ends on the old index.
+  for (const c of pending.toReversed()) {
+    if (c.kind !== 'addIndex' && c.kind !== 'dropIndex') continue
+    const t = tables[c.table]
+    const others = t.indexes.filter((i) => i.name !== c.index.name)
+    t.indexes = c.kind === 'addIndex' ? others : [...others, c.index]
+  }
+  return { ...target, tables }
+}
+
+/** A later migration from the same generate: one second on, so ids stay ordered. */
+function withStageName(opts: GenerateOptions, n: number): GenerateOptions {
+  const at = (opts.now?.() ?? new Date()).getTime() + n * 1000
+  return { ...opts, name: `${opts.name}_concurrently_${n}`, now: () => new Date(at) }
 }
 
 interface WriteMigrationParams {
@@ -130,6 +178,8 @@ interface WriteMigrationParams {
   changeCount: number
   draft: boolean
   empty: boolean
+  /** `false` runs the migration outside a transaction. */
+  transaction?: false
 }
 
 /**
@@ -201,6 +251,7 @@ async function writeMigration(p: WriteMigrationParams): Promise<GenerateResult> 
         previousId: p.previousId,
         downIsDraft: p.draft,
         empty: p.empty,
+        ...(p.transaction === false ? { transaction: false } : {}),
       },
       null,
       2,

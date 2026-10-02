@@ -121,7 +121,16 @@ function readIndexes(db: SqliteIntrospectDb, table: string): IndexSnapshot[] {
     const cols = (db.prepare(`PRAGMA index_info(${quote(idx.name)})`).all() as IndexInfoRow[])
       .filter((c) => c.name !== null)
       .map((c) => c.name as string)
-    out.push({ name: idx.name, columns: cols, unique: idx.unique === 1 })
+    const entry: IndexSnapshot = { name: idx.name, columns: cols, unique: idx.unique === 1 }
+    if (idx.partial === 1) {
+      // SQLite keeps only the statement; WHERE is its last clause.
+      const row = db
+        .prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`)
+        .all(idx.name)[0] as { sql: string | null } | undefined
+      const where = row?.sql?.match(/\bWHERE\b([\s\S]*)$/i)?.[1].trim()
+      if (where) entry.where = where
+    }
+    out.push(entry)
   }
   return out
 }

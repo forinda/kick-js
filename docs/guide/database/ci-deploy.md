@@ -158,7 +158,7 @@ During a rolling deploy the old version keeps serving while the new one starts, 
 
 **Adding a `NOT NULL` column:** add it nullable or with a default, backfill, then tighten it in a later migration.
 
-Adding a table, a nullable column or an index is safe in one step. On a large Postgres table, prefer a hand-written `CREATE INDEX CONCURRENTLY` in an [empty migration](./migrations.md#empty-migrations) with `"transaction": false` in its `meta.json` — `CONCURRENTLY` can't run inside a transaction.
+Adding a table, a nullable column or an index is safe in one step. On a large Postgres table, declare it with `.concurrently()`: `kick db generate` builds it with `CREATE INDEX CONCURRENTLY` in a migration of its own that runs outside a transaction, so writes aren't blocked while it builds — [Partial, expression and other indexes](./constraints.md#partial-expression-and-other-indexes).
 
 ## When a deploy goes wrong
 

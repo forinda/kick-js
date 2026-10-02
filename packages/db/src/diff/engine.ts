@@ -43,7 +43,10 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
   }
   for (const name of newTableNames) {
     for (const i of next.tables[name].indexes) {
-      changes.push({ kind: 'addIndex', table: name, index: i })
+      // A new table is empty and nothing writes to it yet: nothing to gain
+      // from CONCURRENTLY, which also can't share the table's transaction.
+      const { concurrently: _concurrently, ...index } = i
+      changes.push({ kind: 'addIndex', table: name, index })
     }
   }
   for (const name of newTableNames) {
@@ -293,12 +296,24 @@ function diffTable(
     }
   }
 
-  diffByName(
-    prev.indexes,
-    next.indexes,
-    (i) => changes.push({ kind: 'dropIndex', table: tableRef, index: i }),
-    (i) => changes.push({ kind: 'addIndex', table: tableRef, index: i }),
-  )
+  // An index whose definition changed is dropped and created again — there
+  // is no ALTER for its keys, predicate or method.
+  const prevIndexes = new Map(prev.indexes.map((i) => [i.name, i]))
+  const nextIndexes = new Map(next.indexes.map((i) => [i.name, i]))
+  for (const [n, i] of prevIndexes) {
+    const after = nextIndexes.get(n)
+    if (!after || indexDefinition(after) !== indexDefinition(i)) {
+      // A rebuild of a concurrently-built index drops it concurrently too.
+      const index = after?.concurrently && !i.concurrently ? { ...i, concurrently: true } : i
+      changes.push({ kind: 'dropIndex', table: tableRef, index })
+    }
+  }
+  for (const [n, i] of nextIndexes) {
+    const before = prevIndexes.get(n)
+    if (!before || indexDefinition(before) !== indexDefinition(i)) {
+      changes.push({ kind: 'addIndex', table: tableRef, index: i })
+    }
+  }
 
   diffByName(
     prev.foreignKeys,
@@ -306,6 +321,19 @@ function diffTable(
     (f) => changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f }),
     (f) => changes.push({ kind: 'addForeignKey', table: tableRef, fk: f }),
   )
+}
+
+/** What makes two indexes the same index. `concurrently` is how it is built, not what it is. */
+function indexDefinition(i: import('../snapshot/types').IndexSnapshot): string {
+  return JSON.stringify([
+    i.columns,
+    i.unique,
+    i.where ?? null,
+    // btree is the default everywhere, so naming it changes nothing.
+    i.using && i.using.toLowerCase() !== 'btree' ? i.using.toLowerCase() : null,
+    i.include ?? [],
+    Object.entries(i.opclasses ?? {}).toSorted(([a], [b]) => a.localeCompare(b)),
+  ])
 }
 
 function diffByName<T extends { name: string }>(
