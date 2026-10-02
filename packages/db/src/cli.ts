@@ -27,6 +27,7 @@ import { askRenamesInTerminal, parseRenameFlags } from './cli/renames'
 
 interface GenerateFlags {
   empty?: boolean
+  ts?: boolean
   renameTable?: string[]
   renameColumn?: string[]
   interactive?: boolean
@@ -213,6 +214,10 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       (v: string, all: string[] = []) => [...all, v],
     )
     .option('--no-interactive', "Don't ask which drops are renames, even in a terminal")
+    .option(
+      '--ts',
+      'Write the migration in TypeScript — a migration.ts with up(db) / down(db) — for data changes that need code',
+    )
     .action(async (name: string, opts: GenerateFlags) => {
       const cwd = process.cwd()
       const config = await getConfig()
@@ -232,6 +237,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           config,
           cwd,
           empty: opts.empty,
+          typescript: opts.ts,
           detectCompositeRefs,
           renames,
           askRenames,
@@ -248,7 +254,11 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           return
         }
         if (result.empty) {
-          console.log(`Created empty migration ${result.migrationDir} (author up.sql + down.sql).`)
+          console.log(
+            opts.ts
+              ? `Created migration ${result.migrationDir} (write up() and down() in migration.ts).`
+              : `Created empty migration ${result.migrationDir} (author up.sql + down.sql).`,
+          )
           return
         }
         const plural = result.changeCount === 1 ? '' : 's'

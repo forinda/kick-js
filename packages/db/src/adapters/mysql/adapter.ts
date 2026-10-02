@@ -1,3 +1,5 @@
+import { Kysely } from 'kysely'
+import { mysqlDialect } from './dialect'
 import {
   KickDbError,
   lockTableDdl,
@@ -380,6 +382,7 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     }
   }
 
+  let migrationDb: Kysely<any> | undefined
   return {
     dialect,
 
@@ -490,6 +493,14 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
       // `char(36)`), so this powers `kick db introspect`; byte-exact drift
       // against a code-first snapshot needs a dialect-normalised compare.
       return introspectMysql(pool)
+    },
+
+    kysely() {
+      // Built once, on the same connection. Never destroyed here: the pool or
+      // handle belongs to the caller (or to close()).
+      return (migrationDb ??= new Kysely<any>({
+        dialect: mysqlDialect({ pool: opts.pool as never }),
+      }))
     },
 
     async close() {

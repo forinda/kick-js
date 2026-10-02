@@ -110,7 +110,7 @@ The examples below run against SQLite.
 ## generate
 
 ```text
-kick db generate <name> [-e, --empty] [--rename-table <old=new>] [--rename-column <table.old=new>] [--no-interactive]
+kick db generate <name> [-e, --empty] [--rename-table <old=new>] [--rename-column <table.old=new>] [--no-interactive] [--ts]
 ```
 
 Diffs `schemaPath` against the last migration's `snapshot.json` and writes `db/migrations/<YYYYMMDD_HHMMSS>_<name>/` — `up.sql`, `down.sql`, `snapshot.json`, `meta.json` — plus an entry in `_journal.json`. The new migration starts unreviewed.
@@ -127,12 +127,13 @@ With nothing to do:
 No schema changes detected.
 ```
 
-| Flag                              | Effect                                                                                                                        |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `-e, --empty`                     | Skip the diff and write an empty migration for SQL you write yourself — a backfill, a seed. The snapshot is the previous one. |
-| `--rename-table <old=new>`        | Treat a dropped table as renamed to a new one. Repeatable.                                                                    |
-| `--rename-column <table.old=new>` | Treat a dropped column as renamed; `table` is the new table name. Repeatable.                                                 |
-| `--no-interactive`                | Don't ask which drops are renames, even in a terminal.                                                                        |
+| Flag                              | Effect                                                                                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-e, --empty`                     | Skip the diff and write an empty migration for SQL you write yourself — a backfill, a seed. The snapshot is the previous one.                                                                                |
+| `--rename-table <old=new>`        | Treat a dropped table as renamed to a new one. Repeatable.                                                                                                                                                   |
+| `--rename-column <table.old=new>` | Treat a dropped column as renamed; `table` is the new table name. Repeatable.                                                                                                                                |
+| `--no-interactive`                | Don't ask which drops are renames, even in a terminal.                                                                                                                                                       |
+| `--ts`                            | Write the migration in TypeScript: a `migration.ts` with `up(db)` / `down(db)`. The snapshot is carried over, as with `--empty` — [TypeScript migrations](./migrations.md#migrations-written-in-typescript). |
 
 In a terminal, a dropped table or column that a new one could replace is asked about — [Renames](./migrations.md#renames).
 

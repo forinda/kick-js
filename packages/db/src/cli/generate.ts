@@ -60,6 +60,12 @@ export interface GenerateOptions {
    */
   empty?: boolean
   /**
+   * Write the migration in TypeScript: a `migration.ts` exporting
+   * `up(db)` / `down(db)` instead of SQL, for data changes that need code.
+   * Like `empty`, the schema diff is skipped and the snapshot carried over.
+   */
+  typescript?: boolean
+  /**
    * M4.C — generate-time gate for `removeEnumValue` changes. When the
    * diff produces one or more, this callback is invoked once per
    * affected enum to surface PG composite-type references. A non-empty
@@ -102,7 +108,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     opts.config.dialect,
   )
 
-  if (opts.empty) {
+  if (opts.empty || opts.typescript) {
     return await writeMigration({
       opts,
       migrationsAbs,
@@ -115,6 +121,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
       changeCount: 0,
       draft: false,
       empty: true,
+      code: opts.typescript ? CODE_MIGRATION_TEMPLATE : undefined,
     })
   }
 
@@ -276,7 +283,23 @@ interface WriteMigrationParams {
   empty: boolean
   /** `false` runs the migration outside a transaction. */
   transaction?: false
+  /** The `migration.ts` source, for a migration written in TypeScript. */
+  code?: string
 }
+
+const CODE_MIGRATION_TEMPLATE = `import type { MigrationDb } from '@forinda/kickjs-db'
+
+// Runs inside the migration's transaction. \`db\` is Kysely over the live
+// schema — untyped on purpose, since the schema keeps changing after this
+// migration is written.
+export async function up(db: MigrationDb): Promise<void> {
+  // await db.updateTable('users').set({ status: 'active' }).where('status', 'is', null).execute()
+}
+
+export async function down(db: MigrationDb): Promise<void> {
+  // Reverse up(), or throw if it can't be.
+}
+`
 
 /**
  * Immutable provenance banner for generated SQL files. Replaces the old
@@ -319,9 +342,11 @@ async function writeMigration(p: WriteMigrationParams): Promise<GenerateResult> 
   await mkdir(dir, { recursive: true })
 
   const upHeader = generatedBanner()
-  const upHint = p.empty
-    ? '-- Empty migration — author SQL below (data migration, seed, etc).\n'
-    : ''
+  const upHint = p.code
+    ? '-- Written in TypeScript: migration.ts runs instead of this file.\n'
+    : p.empty
+      ? '-- Empty migration — author SQL below (data migration, seed, etc).\n'
+      : ''
   const upSql = upHeader + upHint + p.upBody + (p.upBody ? '\n' : '')
   await writeFile(path.join(dir, 'up.sql'), upSql, 'utf8')
 
@@ -329,11 +354,16 @@ async function writeMigration(p: WriteMigrationParams): Promise<GenerateResult> 
   const downDraft = p.draft
     ? '-- DRAFT: ambiguous reverses present (drop column / drop table / type change). Audit before applying.\n'
     : ''
-  const downHint = p.empty ? '-- Empty migration — author the reverse SQL here.\n' : ''
+  const downHint = p.code
+    ? '-- Written in TypeScript: migration.ts runs instead of this file.\n'
+    : p.empty
+      ? '-- Empty migration — author the reverse SQL here.\n'
+      : ''
   const downSql = downHeader + downDraft + downHint + p.downBody + (p.downBody ? '\n' : '')
   await writeFile(path.join(dir, 'down.sql'), downSql, 'utf8')
 
   await writeFile(path.join(dir, 'snapshot.json'), JSON.stringify(p.target, null, 2) + '\n', 'utf8')
+  if (p.code) await writeFile(path.join(dir, 'migration.ts'), p.code, 'utf8')
 
   await writeFile(
     path.join(dir, 'meta.json'),
