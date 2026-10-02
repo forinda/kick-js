@@ -161,6 +161,8 @@ export {
   type TableClass,
 } from './dsl/table-forms'
 export * from './dsl/constraints'
+export { alias, type AliasedTable } from './dsl/alias'
+export * from './query/operators'
 export * from './dsl/relations'
 
 // Adopter-defined column types (M2.F-T16) — lets projects introduce
