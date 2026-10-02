@@ -16,7 +16,7 @@ The closest thing to an entity class is the [base-class table form](../db-table-
 | `@Column('varchar', { length: 255 })`, `@Column('decimal', …)` | `varchar(255)`, `decimal(12, 2)`, `timestamp()`, `json<T>()` — [Tables & Columns](./schema.md)                                                 |
 | `@PrimaryGeneratedColumn()` / `('uuid')`                       | `serial().primaryKey()` / `uuid().primaryKey().defaultRandom()`                                                                                |
 | `@CreateDateColumn()`                                          | `timestamp().notNull().defaultNow()`                                                                                                           |
-| `@UpdateDateColumn()`                                          | `defaultNow()` on insert; set it yourself on update (auto-update is [D.10](../roadmap.md))                                                     |
+| `@UpdateDateColumn()`                                          | `timestamp().notNull().defaultNow().onUpdateNow()`                                                                                             |
 | `@OneToMany` / `@ManyToOne`                                    | a foreign key with `.references()`, plus `relations()` with `many` / `one` — [Keys & Constraints](./constraints.md)                            |
 | `@ManyToMany` + `@JoinTable`                                   | an explicit junction table; `through` in relational reads is [D.13](../roadmap.md)                                                             |
 | `relations: { posts: true }`, `eager: true`                    | `db.query.users.findMany({ with: { posts: true } })` — one query — [Relational Queries](../db-relational-query.md)                             |
@@ -31,8 +31,8 @@ The closest thing to an entity class is the [base-class table form](../db-table-
 | `QueryRunner` (manual begin/commit)                            | none — `transaction(fn)` commits on return, rolls back on throw; `savepoint(fn)` nests                                                         |
 | `@BeforeInsert`, subscribers                                   | no per-row hooks: put the logic in the service, a [custom column codec](../db-extensions.md), or query [events / plugins](./events-plugins.md) |
 | `afterTransactionCommit` subscriber                            | `db.afterCommit(fn)` inside the transaction                                                                                                    |
-| `@DeleteDateColumn()`, `softDelete()`                          | a nullable `deletedAt` you filter yourself; built-in soft delete is [D.10](../roadmap.md)                                                      |
-| `@VersionColumn()`                                             | none yet — optimistic locking is [D.10](../roadmap.md)                                                                                         |
+| `@DeleteDateColumn()`, `softDelete()`                          | `deletedAt: timestamp().softDelete()` — relational reads skip deleted rows; delete by setting it                                               |
+| `@VersionColumn()`                                             | `version()` — incremented on every update; guard with `.where('version', '=', read)`                                                           |
 | class-validator on entities                                    | `insertSchema(User.table)` derives request validation from the table — [Validation from Tables](../db-table-schemas.md)                        |
 | `QueryFailedError` + `driverError.code`                        | typed `UniqueViolationError`, `ForeignKeyViolationError`, … the same on every dialect — [Errors](./errors.md)                                  |
 | `dataSource.query(sql, params)`                                | ``sql`…${param}`.execute(db.qb)`` — [Raw SQL](./raw-sql.md)                                                                                    |
@@ -268,7 +268,6 @@ Left unhandled in a KickJS route, a `UniqueViolationError` answers `409`. Pass `
 - **A unit of work.** No change tracking, no `save()` that inserts or updates for you, no cascading saves of related objects. Every statement is one you wrote.
 - **Lazy relations and `eager: true`.** Ask for related rows with `with` on the query that needs them.
 - **Entity listeners and subscribers.** There are no per-row lifecycle hooks; use service code, [`afterCommit`](./transactions.md#after-commit), a [`customType`](../db-extensions.md) codec to transform a value on write and read, or [query events](./events-plugins.md) to observe every statement.
-- **Self-updating `updatedAt`, `@VersionColumn`, soft delete** — planned as [D.10](../roadmap.md). Until then, set `updatedAt` in your update and filter on `deletedAt` yourself.
 - **`@ManyToMany` in relational reads** — [D.13](../roadmap.md). Declare the junction table and nest through it: `with: { memberships: { with: { project: true } } }`.
 - **`synchronize`.** Deliberately absent — schema changes ship as migrations someone has read.
 

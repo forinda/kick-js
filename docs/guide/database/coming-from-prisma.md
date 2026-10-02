@@ -90,7 +90,7 @@ export const postsRelations = relations(posts, ({ one }) => ({
 | `@id @default(uuid())`                    | `uuid().primaryKey().defaultRandom()`                                                        |
 | `@id @default(autoincrement())`           | `serial().primaryKey()` (`bigSerial()` for `BigInt`)                                         |
 | `@default(now())`                         | `.defaultNow()`                                                                              |
-| `@updatedAt`                              | no equivalent yet — set `updatedAt: new Date()` in the update                                |
+| `@updatedAt`                              | `.onUpdateNow()` — [maintained columns](./schema.md#columns-kick-db-maintains)               |
 | `@unique`, `@@unique([a, b])`             | `.unique()`, `unique(name).on(t.a, t.b)` in the third argument                               |
 | `@@index([a])`                            | `index(name).on(t.a)`                                                                        |
 | `@@id([a, b])`                            | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                         |
@@ -336,7 +336,6 @@ Each error names the `constraint`, `table` and `columns`, the same on Postgres, 
 
 ## Not there (yet)
 
-- **`@updatedAt`, soft delete, optimistic locking** — set the column in your update for now; auto-managed columns are planned ([D.10](../roadmap.md)).
 - **`prisma db seed`** — write a seed as an empty migration (`kick db generate seed_roles --empty`) or a script using the client; a seed command is deferred (D.2).
 - **Read replicas** — planned (D.12).
 - **Prisma Studio** — the KickJS [DevTools](../devtools.md) Database tab shows the queries your app runs; there is no data editor.

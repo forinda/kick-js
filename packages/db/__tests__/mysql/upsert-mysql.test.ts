@@ -13,7 +13,9 @@ import {
   serial,
   table,
   text,
+  timestamp,
   varchar,
+  version,
 } from '@forinda/kickjs-db'
 import { mysqlDialect } from '@forinda/kickjs-db/mysql'
 
@@ -22,7 +24,14 @@ const users = table('users', {
   email: varchar(255).notNull().unique(),
   name: text().notNull(),
 })
-const schema = { users }
+const docs = table('docs', {
+  id: serial().primaryKey(),
+  slug: varchar(100).notNull().unique(),
+  title: text().notNull(),
+  version: version(),
+  updatedAt: timestamp().notNull().defaultNow().onUpdateNow(),
+})
+const schema = { users, docs }
 
 let container: StartedMySqlContainer
 let pool: Pool
@@ -89,5 +98,16 @@ describe('upsert and findOrCreate on MySQL', () => {
         where: (eb) => eb('name', '=', 'C'),
       }),
     ).rejects.toThrow(/MySQL/)
+  }, 30_000)
+
+  it('maintains version and updatedAt in updates and upserts', async () => {
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+    const first = await db.upsert('docs', { values: { slug: 'a', title: 'A' }, target: ['slug'] })
+    expect(first.version).toBe(0)
+    await new Promise((r) => setTimeout(r, 1100)) // DATETIME has whole seconds by default
+    await db.updateTable('docs').set({ title: 'A2' }).where('id', '=', first.id).execute()
+    const second = await db.upsert('docs', { values: { slug: 'a', title: 'A3' }, target: ['slug'] })
+    expect(second.version).toBe(2)
+    expect(second.updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime())
   }, 30_000)
 })

@@ -84,6 +84,41 @@ text().array() // text[]  → TS type becomes T[]
 - `.default(value)` sets a SQL default and marks the column generated, so you can omit it on insert. Pass the SQL literal as a string: `.default('true')`, `.default('0')`, `.default("'pending'")`.
 - `.array()` wraps the SQL type in `[]` and the TS type in `T[]`.
 
+### Columns kick/db maintains
+
+Three markers hand a column's upkeep to kick/db. They change the queries it sends, not the schema — no migration involved.
+
+```ts
+import { table, serial, text, timestamp, version } from '@forinda/kickjs-db'
+
+export const docs = table('docs', {
+  id: serial().primaryKey(),
+  title: text().notNull(),
+  version: version(), // integer, not null, starts at 0, +1 on every update
+  createdAt: timestamp().notNull().defaultNow(),
+  updatedAt: timestamp().notNull().defaultNow().onUpdateNow(), // now() on every update
+  deletedAt: timestamp().softDelete(), // set = deleted; db.query skips the row
+})
+```
+
+- **`.onUpdateNow()`** — every `updateTable('docs')` that doesn't set the column itself sets it to the current time; so does an [upsert](./queries.md#upsert-and-find-or-create)'s update branch. Set it explicitly and your value wins.
+- **`version()`** — every update adds 1. For optimistic locking, read the row, then update with `.where('version', '=', read.version)`: `numUpdatedRows === 0n` means someone saved first.
+
+  ```ts
+  const { numUpdatedRows } = await db
+    .updateTable('docs')
+    .set({ title })
+    .where('id', '=', doc.id)
+    .where('version', '=', doc.version)
+    .executeTakeFirst()
+  if (numUpdatedRows === 0n)
+    throw HttpException.conflict('Changed by someone else — reload and retry')
+  ```
+
+- **`.softDelete()`** — on a nullable timestamp. [Relational reads](../db-relational-query.md) (`db.query`) skip rows where it's set, at the top level and in every `with`; pass `withDeleted: true` at a level to include them there. Soft-delete by setting it — `updateTable('docs').set({ deletedAt: new Date() })` — and restore by setting it back to `null`. The query builder (`selectFrom`) is plain SQL and sees every row; add `.where('deletedAt', 'is', null)` there yourself.
+
+These apply to queries kick/db builds: raw `sql` and a hand-written `UPDATE` don't maintain them.
+
 ### Generated columns
 
 `serial()` / `bigSerial()` / `smallSerial()` are always generated and not-null. The date and uuid builders expose expression-default helpers:

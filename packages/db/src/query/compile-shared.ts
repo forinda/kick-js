@@ -34,7 +34,12 @@ export interface CompileOptions {
   offset?: number
   maxDepth?: number
   with?: Record<string, true | CompileOptions>
+  /** Include soft-deleted rows — on this level only. */
+  withDeleted?: boolean
 }
+
+/** A table as the compiler sees it: its snapshot, plus its soft-delete column if any. */
+export type CompileTable = TableSnapshot & { softDelete?: string }
 
 const DEFAULT_MAX_DEPTH = 5
 
@@ -90,7 +95,7 @@ export function runCompile<DB>(
   table: string,
   options: CompileOptions,
   relations: ResolvedRelations,
-  tables: Record<string, TableSnapshot>,
+  tables: Record<string, CompileTable>,
   mode: CompileMode,
   helpers: JsonHelpers,
 ): CompiledQuery {
@@ -115,6 +120,7 @@ export function runCompile<DB>(
     )
   }
 
+  query = skipDeleted(query, outerAlias, tables[table], options)
   query = applyWhereOrderLimit(query, outerAlias, options, mode)
 
   return query.compile() as CompiledQuery
@@ -126,7 +132,7 @@ function applyWithSelects(
   sourceAlias: string,
   withClause: Record<string, true | CompileOptions>,
   relations: ResolvedRelations,
-  tables: Record<string, TableSnapshot>,
+  tables: Record<string, CompileTable>,
   maxDepth: number,
   trace: readonly string[],
   helpers: JsonHelpers,
@@ -175,7 +181,7 @@ function buildInnerSelect(
   innerAlias: string,
   subOptions: CompileOptions,
   relations: ResolvedRelations,
-  tables: Record<string, TableSnapshot>,
+  tables: Record<string, CompileTable>,
   maxDepth: number,
   trace: readonly string[],
   helpers: JsonHelpers,
@@ -224,6 +230,7 @@ function buildInnerSelect(
     )
   }
 
+  sub = skipDeleted(sub, innerAlias, targetTable, subOptions)
   sub = applyWhereOrderLimit(sub, innerAlias, subOptions, 'many')
 
   if (rel.kind === 'one') {
@@ -231,6 +238,17 @@ function buildInnerSelect(
   }
 
   return sub
+}
+
+/** Leave out rows whose soft-delete column is set, unless the caller asked for them. */
+function skipDeleted(
+  query: any,
+  alias: string,
+  table: CompileTable | undefined,
+  options: CompileOptions,
+): any {
+  if (!table?.softDelete || options.withDeleted) return query
+  return query.where(`${alias}.${table.softDelete}`, 'is', null)
 }
 
 function applyWhereOrderLimit(

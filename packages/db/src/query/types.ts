@@ -142,6 +142,11 @@ export interface FindManyOptions<
   offset?: number
   /** Override the spec's default depth guard (5). Throws `RelationalQueryDepthError` on excess. */
   maxDepth?: number
+  /**
+   * Include rows a `softDelete()` column marks as deleted. Applies to this
+   * level only — set it inside a `with` entry for related rows.
+   */
+  withDeleted?: boolean
   with?: WithClause<DB, TableRelations<Table>>
   /**
    * Cancellation handle. When the signal aborts, the in-flight

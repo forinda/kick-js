@@ -145,15 +145,16 @@ Without the tags, `users.sentMessages` can't tell which of the two `messages →
 
 The options bag:
 
-| Field      | Type                                        | Notes                                                        |
-| ---------- | ------------------------------------------- | ------------------------------------------------------------ |
-| `where`    | `(table, eb) => Expression`                 | `eb` is Kysely's expression builder — `eb('col', '=', v)`    |
-| `orderBy`  | `(table, eb) => Expression \| Expression[]` | `eb.ref('col')`, wrapped in `desc()` / `asc()` for direction |
-| `limit`    | `number`                                    |                                                              |
-| `offset`   | `number`                                    |                                                              |
-| `with`     | `{ [relation]: true \| FindManyOptions }`   | `true` eager-loads; an object form filters the relation      |
-| `maxDepth` | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError`  |
-| `signal`   | `AbortSignal`                               | cancels the in-flight query — bind to `ctx.signal`           |
+| Field         | Type                                        | Notes                                                                                                                  |
+| ------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `where`       | `(table, eb) => Expression`                 | `eb` is Kysely's expression builder — `eb('col', '=', v)`                                                              |
+| `orderBy`     | `(table, eb) => Expression \| Expression[]` | `eb.ref('col')`, wrapped in `desc()` / `asc()` for direction                                                           |
+| `limit`       | `number`                                    |                                                                                                                        |
+| `offset`      | `number`                                    |                                                                                                                        |
+| `with`        | `{ [relation]: true \| FindManyOptions }`   | `true` eager-loads; an object form filters the relation                                                                |
+| `withDeleted` | `boolean`                                   | include rows a [`softDelete()`](./database/schema.md#columns-kick-db-maintains) column marks deleted — this level only |
+| `maxDepth`    | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError`                                                            |
+| `signal`      | `AbortSignal`                               | cancels the in-flight query — bind to `ctx.signal`                                                                     |
 
 The `with` keys are constrained to the relations declared for that table; a relation slot resolves to `Related | null` for `one` and `Related[]` for `many`.
 

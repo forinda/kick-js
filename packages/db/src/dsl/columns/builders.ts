@@ -52,6 +52,20 @@ export function smallint(): ColumnBuilder<number> {
   return new ColumnBuilder<number>('smallint')
 }
 
+/**
+ * An optimistic-locking counter: an integer, not null, starting at 0, that
+ * every update increments. Read it with the row, then update
+ * `.where('version', '=', read)` — no row updated means someone else changed
+ * it first.
+ */
+export function version(): ColumnBuilder<number> & NotNullBrand & GeneratedBrand {
+  const col = integer().notNull().default(0) as ColumnBuilder<number> &
+    NotNullBrand &
+    GeneratedBrand
+  ;(col as unknown as { state: { managed: string } }).state.managed = 'version'
+  return col
+}
+
 export function decimal(precision?: number, scale?: number): ColumnBuilder<string> {
   return new ColumnBuilder<string>(formatNumeric('decimal', precision, scale))
 }

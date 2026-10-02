@@ -230,7 +230,7 @@ Yes — `` sql`…` `` from `kysely`, executed with `.execute(db.qb)`, with valu
 There's no seed command yet (roadmap D.2). Write a seed migration with `kick db generate seed_<name> --empty`, or a script that uses the client.
 
 **Is there soft delete, or an `updatedAt` that updates itself?**
-Not yet (D.10). Set `updatedAt` in your update, and filter deleted rows in your queries.
+Yes: `.softDelete()`, `.onUpdateNow()` and `version()` — [columns kick/db maintains](./schema.md#columns-kick-db-maintains). Soft delete is honoured by relational reads; the plain query builder sees every row.
 
 **Can I use several databases?**
 Yes. Create a client per database and register each under its own [token](./index.md#_6-make-it-injectable) — `app/Db`, `app/Db/analytics`. Read-replica routing within one client is planned (D.12).

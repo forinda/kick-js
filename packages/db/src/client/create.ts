@@ -20,6 +20,8 @@ import {
 import { wrap, type InternalContext } from './wrap'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
+import { ManagedColumnsPlugin, collectManaged } from './managed'
+import type { CompileTable } from '../query/compile-shared'
 import { KICK_DIALECT_DATES, readDialectMark, type DialectDateOptions } from '../dialect-marker'
 import { pickCompiler } from '../query/compilers'
 import { extractSnapshot } from '../snapshot/extract'
@@ -100,7 +102,10 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     })
   }
 
+  const managed = collectManaged(opts.schema)
   const plugins: KyselyPlugin[] = []
+  // Before the codec plugin, so a managed value it adds gets encoded too.
+  if (managed.size > 0) plugins.push(new ManagedColumnsPlugin(managed))
   if (codecPlugin) plugins.push(codecPlugin)
   if (dialectTag === 'sqlite' || dialectTag === 'mysql') {
     plugins.push(new ParseJSONResultsPlugin())
@@ -145,7 +150,14 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // sidecar consumed by the query compiler. Schemas without any
   // `relations()` get an empty record — the compiler still works
   // (errors clearly on `with` keys when nothing is declared).
-  const tables = extractSnapshot(opts.schema as Record<string, unknown>, dialectTag).tables
+  const tables: Record<string, CompileTable> = extractSnapshot(
+    opts.schema as Record<string, unknown>,
+    dialectTag,
+  ).tables
+  // The compiler skips soft-deleted rows; tell it which column marks them.
+  for (const [name, m] of managed) {
+    if (m.softDelete && tables[name]) tables[name] = { ...tables[name], softDelete: m.softDelete }
+  }
   const relations = extractRelations(opts.schema as Record<string, unknown>, tables) ?? {}
 
   const ctx: InternalContext = {

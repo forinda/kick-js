@@ -348,7 +348,7 @@ try {
 
 ## Not there (yet)
 
-- **`$defaultFn`, `$onUpdate`, soft delete** — set the value yourself; auto-managed columns are planned ([D.10](../roadmap.md)).
+- **`$defaultFn`, `$onUpdate` with a function** — set the value yourself. For the common cases there are [maintained columns](./schema.md#columns-kick-db-maintains): `onUpdateNow()`, `version()`, `softDelete()`.
 - **`columns` / `extras` in `db.query`** — use the query builder when you need a narrower select.
 - **A name or casing override for columns** — the key is the column name.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
