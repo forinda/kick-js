@@ -336,9 +336,31 @@ Each tab subscribes to a slice of the shared store; nothing owns its own polling
 | **Metrics**   | One row per route: calls, share of 5xx, p50 / p95 / p99 and max, sortable by any column. Pick a percentile to bar it against the slowest route; durations turn amber, orange and red past 200 ms, 500 ms and 1 s. Expand a row for its latency histogram, ok / 4xx / 5xx counts, and **Try in runner**.                                                                                                                                                                     |
 | **Container** | Every DI registration — search, and filter by kind and scope (each chip shows how many it would match). Rows show a status dot, kind, resolve count and when the token was last resolved. Selecting one shows its dependencies and dependents (click to follow), resolve stats and `@PostConstruct` outcome beside the list.                                                                                                                                                |
 | **Database**  | The queries kick/db reports while DevTools is installed. **Slowest** groups statements that differ only in their values (calls, failures, mean, p95 with a bar, total time — sortable); **Recent** is the raw log. Select either for the full SQL, numbered parameters and the error. Durations turn amber past 50 ms.                                                                                                                                                      |
-| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                                                                                                                                                                                                                                                                                         |
+| **Queues**    | Background jobs, through whatever runs them. Pick a queue, then a state (each with its count) to page through its jobs; select one for its data, result, failure reason, stack traces and attempts. **Retry**, **Remove**, **Retry all failed**, **Clean** a state and **Pause** / **Resume** appear when the job tool supports them — destructive ones take a second click. See [Job management](#job-management).                                                         |
 | **Graph**     | The DI dependency graph on a canvas, in columns from what nothing depends on (usually controllers) to leaves. Drag tokens to arrange them (remembered per browser; **Reset layout** undoes it), drag the background or scroll to pan, ⌘/Ctrl + scroll or pinch to zoom, **Fit** to frame everything. Select a token to keep its whole chain in focus with its details beside the graph; type a name and press Enter to jump to it. Edges that close a cycle are dashed red. |
 | **Activity**  | The live event-bus stream, newest first: kick/db queries, queue jobs, and anything emitted on `DEVTOOLS_BUS`. Toggle namespaces (the part of the type before `:`, each chip with its count) or search type and payload; error and warning events are tinted. Scrolling down holds the list still, and **N new** jumps back to the latest. Select an event for its full payload.                                                                                             |
+
+### Job management
+
+The **Queues** tab works with any job tool that exposes a `JobInspector` from its adapter or plugin as `jobInspector()`. `QueueAdapter` from `@forinda/kickjs-queue` does for BullMQ; RabbitMQ, Kafka and Redis pub/sub have no job store, so their queues are listed without jobs.
+
+A bring-your-own runner implements the same few methods over its own API — only `queues`, `jobs` and `job` are required, and each optional action shows up as a button when present:
+
+```ts
+import type { JobInspector } from '@forinda/kickjs-devtools-kit'
+
+const inspector: JobInspector = {
+  queues: async () => [{ name: 'email', counts: { failed: await boss.getQueueSize('email') } }],
+  jobs: async (queue, state, { start, end }) => /* jobs in `state`, newest first */ [],
+  job: async (queue, id) => /* one job, or null */ null,
+  retry: async (queue, id) => boss.retry(queue, id),
+}
+
+// In your adapter:
+build: () => ({ jobInspector: () => inspector /* , … */ })
+```
+
+The tab reads `GET /_debug/jobs`, `/_debug/jobs/list`, `/_debug/jobs/job` and runs actions through `POST /_debug/jobs/action`, all behind the DevTools token.
 
 ### Custom tabs
 

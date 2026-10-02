@@ -336,3 +336,68 @@ export interface RpcError {
 export function defineDevtoolsTab(spec: DevtoolsTabDescriptor): DevtoolsTabDescriptor {
   return spec
 }
+
+/** The states a job moves through. Tools without one of these simply never report it. */
+export type JobState = 'waiting' | 'active' | 'delayed' | 'completed' | 'failed' | 'paused'
+
+/** A queue as the Queues tab lists it. */
+export interface JobQueueInfo {
+  name: string
+  /** Jobs per state; omitted states are unknown, not zero. */
+  counts: Partial<Record<JobState, number>>
+  paused?: boolean
+}
+
+/** One job in a list — enough for a row. */
+export interface JobSummary {
+  id: string
+  name: string
+  state: JobState
+  /** Attempts so far. */
+  attempts: number
+  /** Attempts allowed, when the tool has a limit. */
+  maxAttempts?: number
+  /** ms since epoch. */
+  createdAt?: number
+  finishedAt?: number
+  /** Why the last attempt failed. */
+  failedReason?: string
+}
+
+/** Everything about one job. */
+export interface JobDetail extends JobSummary {
+  data: unknown
+  result?: unknown
+  /** One entry per failed attempt, newest last. */
+  stacktrace?: string[]
+  processedAt?: number
+  delayMs?: number
+  progress?: unknown
+  options?: Record<string, unknown>
+}
+
+/**
+ * Lets DevTools browse and manage jobs — whatever runs them. An adapter or
+ * plugin exposes one from a `jobInspector()` method; the Queues tab lists
+ * its queues, pages through jobs by state, and offers whichever of the
+ * optional actions it implements.
+ *
+ * `@forinda/kickjs-queue` implements it for BullMQ. A bring-your-own runner
+ * (pg-boss, Graphile Worker, …) implements the same few methods over its
+ * own API.
+ */
+export interface JobInspector {
+  queues(): Promise<JobQueueInfo[]>
+  /** Jobs in `state`, newest first, `start`–`end` inclusive (0-based). */
+  jobs(queue: string, state: JobState, range: { start: number; end: number }): Promise<JobSummary[]>
+  job(queue: string, id: string): Promise<JobDetail | null>
+  /** Run a failed job again. */
+  retry?(queue: string, id: string): Promise<void>
+  remove?(queue: string, id: string): Promise<void>
+  /** Run every failed job again. Returns how many were retried, when known. */
+  retryAll?(queue: string): Promise<number | void>
+  /** Delete every job in `state`. Returns how many were removed. */
+  clean?(queue: string, state: JobState): Promise<number>
+  pause?(queue: string): Promise<void>
+  resume?(queue: string): Promise<void>
+}

@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { bullmqInspector } from '../src/inspector'
 import { Job, Process, QueueService, QueueAdapter, QUEUE_MANAGER } from '@forinda/kickjs-queue'
 import { QUEUE_METADATA } from '../src/types'
 import {
@@ -394,34 +395,83 @@ describe('QueueAdapter', () => {
   })
 })
 
-describe('QueueAdapter panel routes', () => {
-  const redis = { host: 'localhost', port: 6379 }
-  const mountedPaths = (adapter: ReturnType<typeof QueueAdapter>) => {
-    const paths: string[] = []
-    adapter.beforeMount!({
-      http: { route: (_m: string, path: string) => paths.push(path) },
-    } as never)
-    return paths
-  }
+describe('QueueAdapter — DevTools', () => {
+  it('mounts no routes of its own and contributes no tab — the Queues tab covers it', () => {
+    const adapter = QueueAdapter({ redis: { host: 'localhost', port: 6379 }, panel: true })
+    expect(adapter.beforeMount).toBeUndefined()
+    expect(adapter.devtoolsTabs).toBeUndefined()
+    expect(typeof adapter.jobInspector).toBe('function')
+  })
+})
 
-  it('serves the DevTools panel outside production', () => {
-    const adapter = QueueAdapter({ redis })
-    expect(mountedPaths(adapter)).toEqual(['/_kick/queue/panel', '/_kick/queue/data'])
-    expect(adapter.devtoolsTabs!()).toHaveLength(1)
+describe('bullmqInspector', () => {
+  const failedJob = {
+    id: '7',
+    name: 'welcome',
+    data: { to: 'a@b.c' },
+    opts: { attempts: 3 },
+    attemptsMade: 3,
+    failedReason: 'SMTP down',
+    stacktrace: ['Error: SMTP down'],
+    timestamp: 1,
+    finishedOn: 2,
+    getState: async () => 'failed',
+    retry: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+  }
+  const bull = {
+    getJobCounts: vi.fn(async () => ({ waiting: 2, failed: 1 })),
+    getJobs: vi.fn(async () => [failedJob]),
+    getJob: vi.fn(async (id: string) => (id === '7' ? failedJob : undefined)),
+    isPaused: async () => false,
+    pause: vi.fn(async () => {}),
+    resume: vi.fn(async () => {}),
+    retryJobs: vi.fn(async () => {}),
+    clean: vi.fn(async () => ['1', '2']),
+  }
+  const inspector = bullmqInspector(
+    () => ['email', 'events'],
+    (name) => (name === 'email' ? bull : { add: () => {} }),
+  )
+
+  it('lists queues — counts for BullMQ, none for a provider without a job store', async () => {
+    expect(await inspector.queues()).toEqual([
+      { name: 'email', counts: { waiting: 2, failed: 1 }, paused: false },
+      { name: 'events', counts: {} },
+    ])
+    await expect(inspector.jobs('events', 'failed', { start: 0, end: 9 })).rejects.toThrow(
+      /keeps no job history/,
+    )
   })
 
-  it('mounts no unauthenticated routes in production, or when turned off', () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    try {
-      const adapter = QueueAdapter({ redis })
-      expect(mountedPaths(adapter)).toEqual([])
-      expect(adapter.devtoolsTabs!()).toEqual([])
-      // Opting back in is explicit.
-      expect(mountedPaths(QueueAdapter({ redis, panel: true }))).toHaveLength(2)
-    } finally {
-      vi.unstubAllEnvs()
-    }
-    expect(mountedPaths(QueueAdapter({ redis, panel: false }))).toEqual([])
+  it('pages jobs newest first and reads one job in full', async () => {
+    const [row] = await inspector.jobs('email', 'failed', { start: 0, end: 9 })
+    expect(bull.getJobs).toHaveBeenCalledWith(['failed'], 0, 9, false)
+    expect(row).toMatchObject({
+      id: '7',
+      state: 'failed',
+      attempts: 3,
+      maxAttempts: 3,
+      failedReason: 'SMTP down',
+    })
+    expect(await inspector.job('email', '7')).toMatchObject({
+      data: { to: 'a@b.c' },
+      stacktrace: ['Error: SMTP down'],
+    })
+    expect(await inspector.job('email', 'nope')).toBeNull()
+  })
+
+  it('retries, removes, cleans with BullMQ state names, pauses', async () => {
+    await inspector.retry!('email', '7')
+    await inspector.remove!('email', '7')
+    expect(failedJob.retry).toHaveBeenCalled()
+    expect(failedJob.remove).toHaveBeenCalled()
+    expect(await inspector.clean!('email', 'waiting')).toBe(2)
+    expect(bull.clean).toHaveBeenCalledWith(0, 10_000, 'wait')
+    await inspector.retryAll!('email')
+    expect(bull.retryJobs).toHaveBeenCalledWith({ state: 'failed' })
+    await inspector.pause!('email')
+    expect(bull.pause).toHaveBeenCalled()
   })
 })
 

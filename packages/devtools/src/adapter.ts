@@ -35,6 +35,7 @@ import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
 import { RequestLog } from './request-log'
+import { findJobInspectors, getJob, listJobs, listJobSources, runJobAction } from './jobs'
 import { locateHandler } from './source-locator'
 import { createServerBus, type ServerBus } from './bus/server'
 
@@ -953,6 +954,29 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             String(action ?? ''),
           )
           ctx.json(body, status)
+        })
+
+        // ── Jobs: browse and manage via any adapter's / plugin's jobInspector() ──
+        const inspectors = () => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          return kickApp ? findJobInspectors(kickApp) : new Map()
+        }
+        const query = (ctx: RequestContext) => (ctx.query ?? {}) as Record<string, unknown>
+        router.get('/jobs', async (ctx: RequestContext) => {
+          const r = await listJobSources(inspectors())
+          ctx.json(r.body, r.status)
+        })
+        router.get('/jobs/list', async (ctx: RequestContext) => {
+          const r = await listJobs(inspectors(), query(ctx))
+          ctx.json(r.body, r.status)
+        })
+        router.get('/jobs/job', async (ctx: RequestContext) => {
+          const r = await getJob(inspectors(), query(ctx))
+          ctx.json(r.body, r.status)
+        })
+        router.post('/jobs/action', async (ctx: RequestContext) => {
+          const r = await runJobAction(inspectors(), query(ctx))
+          ctx.json(r.body, r.status)
         })
 
         // ── Topology RPC (architecture.md §23) ──────────────────────

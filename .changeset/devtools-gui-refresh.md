@@ -19,3 +19,4 @@ A denser dashboard layout.
 - **Activity:** namespace chips with counts, tinted error and warning rows, a held list with **N new** while you read, and the selected event's full payload beside the stream. Replaces the paginated table.
 - **Database:** a **Slowest** view grouping statements by shape (calls, failures, mean, p95, total) next to the **Recent** log, with the full SQL, parameters and error beside them.
 - **Scrollbars:** thin and theme-coloured everywhere.
+- **Queues:** browse jobs by queue and state, see a job's data, result, failure and stack traces, and retry, remove, retry all failed, clean a state, or pause / resume a queue. Served from new `/_debug/jobs*` endpoints over any `jobInspector()` an adapter or plugin exposes.

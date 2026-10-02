@@ -27,10 +27,8 @@ interface QueueAdapterCommon {
   /** Default worker concurrency (default: 1) */
   concurrency?: number
   /**
-   * Serve the DevTools "Queue" panel at `/_kick/queue/panel` and its data at
-   * `/_kick/queue/data`. The routes carry no auth and list every queue with
-   * its job counts, so they follow DevTools' own default: on, except when
-   * `NODE_ENV` is `production`.
+   * @deprecated No effect. Queues and their jobs are in the DevTools
+   * **Queues** tab, which needs nothing from this adapter but itself.
    */
   panel?: boolean
 }

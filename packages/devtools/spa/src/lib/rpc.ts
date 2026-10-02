@@ -6,6 +6,10 @@
  */
 
 import type {
+  JobDetail,
+  JobQueueInfo,
+  JobState,
+  JobSummary,
   DevtoolsTabDescriptor,
   MemoryHealth,
   RuntimeSnapshot,
@@ -188,7 +192,36 @@ export interface MetricsResponse {
   latencyBucketsMs: number[]
 }
 
+/** One job tool's queues, as `/_debug/jobs` reports them. */
+export interface JobSource {
+  source: string
+  /** Optional actions this tool supports. */
+  actions: Array<'retry' | 'remove' | 'retryAll' | 'clean' | 'pause' | 'resume'>
+  queues: JobQueueInfo[]
+  error?: string
+}
+
+const qs = (params: Record<string, string | number | undefined>): string =>
+  new URLSearchParams(
+    Object.entries(params).flatMap(([k, v]) => (v === undefined ? [] : [[k, String(v)]])),
+  ).toString()
+
 export const rpc = {
+  jobs: () => get<{ sources: JobSource[] }>('/jobs'),
+  jobList: (p: { source: string; queue: string; state: JobState; start: number; end: number }) =>
+    get<{ jobs: JobSummary[] }>(`/jobs/list?${qs(p)}`),
+  job: (p: { source: string; queue: string; id: string }) => get<JobDetail>(`/jobs/job?${qs(p)}`),
+  jobAction: async (p: {
+    source: string
+    queue: string
+    action: JobSource['actions'][number]
+    id?: string
+    state?: JobState
+  }) =>
+    (await (await post(`/jobs/action?${qs(p)}`)).json()) as {
+      ok: true
+      count?: number | null
+    },
   /** Requests logged after `since` (a `seq`), oldest first. */
   requests: (since = 0) => get<{ requests: RequestLogEntry[] }>(`/requests?since=${since}`),
   runtime: () =>
