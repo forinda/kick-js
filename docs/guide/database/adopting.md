@@ -27,7 +27,7 @@ Introspection recovers what the database knows, which is less than what you know
 - **Names.** Column and table names come back exactly as they are in SQL. If your old ORM mapped `created_at` to `createdAt`, that mapping lived in the ORM, not the database.
 - **Enums.** Postgres enums come through; a `varchar` with a `CHECK` constraint, or an int-backed enum, comes back as its storage type.
 - **Defaults.** A default expression the differ cannot represent is dropped with a comment rather than guessed at.
-- **Relations.** Foreign keys are recovered; the `relations()` declarations that drive `db.query` are not — the database has no idea you call them "author's posts". Add those by hand ([Schema](./schema#relations)).
+- **Relations.** Foreign keys are recovered; the `relations()` declarations that drive `db.query` are not — the database has no idea you call them "author's posts". Add those by hand ([Schema](./schema#relations-for-db-query)).
 
 Do this now rather than later: everything below treats this file as the truth.
 

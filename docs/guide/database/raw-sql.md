@@ -13,7 +13,7 @@ const { rows } = await sql<{ name: string }>`select name from users where email 
 )
 ```
 
-`${email}` becomes a bound parameter (`$1` / `?`), never text spliced into the SQL. Run it against `db.qb`: inside a [transaction](./queries#transactions-follow-the-call-chain), `db.qb` is that transaction, so raw SQL joins it like any other query.
+`${email}` becomes a bound parameter (`$1` / `?`), never text spliced into the SQL. Run it against `db.qb`: inside a [transaction](./transactions#transactions-follow-the-call-chain), `db.qb` is that transaction, so raw SQL joins it like any other query.
 
 ### Inside the builder
 

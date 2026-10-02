@@ -97,7 +97,7 @@ The typed client keys it `'billing.invoices'`, as with `pgSchema`.
 
 ## Foreign keys
 
-`fk(builder, () => target)` is `.references()` that checks both sides hold the same type, in every form. `link(column, () => target)` adds a foreign key after both tables exist — how two tables reference each other without an annotation. `selfRef('column')` points a foreign key at the table's own column. See [Schema → Foreign keys](./database/schema.md#foreign-keys).
+`fk(builder, () => target)` is `.references()` that checks both sides hold the same type, in every form. `link(column, () => target)` adds a foreign key after both tables exist — how two tables reference each other without an annotation. `selfRef('column')` points a foreign key at the table's own column. See [Schema → Foreign keys](./database/constraints.md#foreign-keys).
 
 ## Related
 

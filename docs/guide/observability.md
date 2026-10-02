@@ -114,7 +114,7 @@ db.on('transactionRetry', ({ attempt, error }) =>
 )
 ```
 
-A failed query inside a request also reaches `onError` through the request it failed in, as a [typed error](./database/errors.md). Pass the DevTools event bus as `createDbClient({ bus })` and the DevTools **Database** tab shows the same stream. Event payloads: [Queries → Lifecycle events](./database/queries.md#lifecycle-events).
+A failed query inside a request also reaches `onError` through the request it failed in, as a [typed error](./database/errors.md). Pass the DevTools event bus as `createDbClient({ bus })` and the DevTools **Database** tab shows the same stream. Event payloads: [Queries → Lifecycle events](./database/events-plugins.md#lifecycle-events).
 
 ## Not covered
 

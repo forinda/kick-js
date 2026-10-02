@@ -72,7 +72,7 @@ this.db.query.tasks.findUnique({
 })
 ```
 
-Each level pushes another nested `LATERAL` (PG) / correlated subquery (SQLite/MySQL). Default depth limit is 3; raise it with `maxDepth` on the call options when you need deeper nesting.
+Each level pushes another nested `LATERAL` (PG) / correlated subquery (SQLite/MySQL). Default depth limit is 5; raise it with `maxDepth` on the call options when you need deeper nesting.
 
 ## Per-relation `where`, `orderBy`, `limit`
 
@@ -133,6 +133,46 @@ relations(users, ({ many }) => ({
 
 Without the tags, `users.sentMessages` can't tell which of the two `messages → users` relations is its inverse.
 
+## Options
+
+`findMany(options?)` → `Row[]`, `findFirst(options?)` → `Row | null`, `findUnique(options)` → `Row | null`.
+
+- `findMany(options?)` → `Row[]`
+- `findFirst(options?)` → `Row | null`
+- `findUnique(options)` → `Row | null`
+
+The options bag:
+
+| Field      | Type                                        | Notes                                                       |
+| ---------- | ------------------------------------------- | ----------------------------------------------------------- |
+| `where`    | `(table, eb) => Expression`                 | `eb` is Kysely's expression builder — `eb('col', '=', v)`   |
+| `orderBy`  | `(table, eb) => Expression \| Expression[]` | use `eb.ref('col')`                                         |
+| `limit`    | `number`                                    |                                                             |
+| `offset`   | `number`                                    |                                                             |
+| `with`     | `{ [relation]: true \| FindManyOptions }`   | `true` eager-loads; an object form filters the relation     |
+| `maxDepth` | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError` |
+| `signal`   | `AbortSignal`                               | cancels the in-flight query — bind to `ctx.signal`          |
+
+The `with` keys are constrained to the relations declared for that table; a relation slot resolves to `Related | null` for `one` and `Related[]` for `many`.
+
+`db.query` is read-only — use `insertInto` / `updateTable` / `deleteFrom` for writes.
+
+## Cancellation
+
+Bind the query to the request's `AbortSignal` so it is cancelled at the dialect level when the client disconnects or the request times out:
+
+```ts
+@Get('/')
+list(ctx: RequestContext) {
+  return this.db.query.users.findMany({
+    with: { posts: true },
+    signal: ctx.signal,
+  })
+}
+```
+
+A cancelled query rejects with `RelationalQueryCancelledError`.
+
 ## Dialect notes
 
 PG uses `json_agg` / `to_json` (single LATERAL per `with` key, empty arrays return `[]`).
@@ -144,7 +184,7 @@ MySQL 8+ uses `JSON_ARRAYAGG(JSON_OBJECT(...))` for `many`. MySQL's `JSON_ARRAYA
 ## Errors you might hit
 
 - **`RelationalQueryUnknownRelationError`** — the `with` key isn't in the relations registry. Run `kick typegen` (or `kick dev`); this almost always means the typegen output is stale.
-- **`RelationalQueryDepthError`** — the request exceeds `maxDepth` (default 3). Raise the limit on the call or restructure the query.
+- **`RelationalQueryDepthError`** — the request exceeds `maxDepth` (default 5). Raise the limit on the call or restructure the query.
 - **`RelationalQueryAmbiguousRelationNameError`** — two relations share the same name in the registry. Disambiguate via `relationName: 'foo'` on both sides.
 - **`RelationalQueryMissingInverseError`** — a `many` relation can't find its inverse `one`. Either add the inverse in the relations file or tag both sides with `relationName: 'foo'`.
 

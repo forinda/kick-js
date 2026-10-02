@@ -79,7 +79,7 @@ it('creates a user', () =>
   }))
 ```
 
-Because [transactions follow the call chain](./queries#transactions-follow-the-call-chain), code that only holds the injected client — a service, a repository — runs inside the test's transaction without being handed `tx`, and everything it wrote disappears afterwards. Two things to know:
+Because [transactions follow the call chain](./transactions#transactions-follow-the-call-chain), code that only holds the injected client — a service, a repository — runs inside the test's transaction without being handed `tx`, and everything it wrote disappears afterwards. Two things to know:
 
 - `afterCommit` hooks never run in a rolled-back test — assert on what was queued, or test the hook on its own.
 - A `transaction({ nested: 'separate' })` inside the code under test commits on its own connection (and isn't possible on SQLite at all).
@@ -152,5 +152,5 @@ await expect(service.create('taken@b.c')).rejects.toMatchObject({ columns: ['ema
 ## Related
 
 - [Testing](../testing) — `createTestApp`, modules, environment isolation
-- [Queries → Transactions](./queries#transactions)
+- [Queries → Transactions](./transactions)
 - [Errors](./errors)

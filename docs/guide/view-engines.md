@@ -256,7 +256,7 @@ export default defineConfig({
 })
 ```
 
-When you run `kick build`, the CLI copies these directories automatically after Vite finishes. See the [CLI Commands](./cli-commands.md#kickconfigts-reference) page for the full `kick.config.ts` reference.
+When you run `kick build`, the CLI copies these directories automatically after Vite finishes. See the [CLI Commands](./cli-commands.md#kick-config-ts-reference) page for the full `kick.config.ts` reference.
 
 ## Related
 

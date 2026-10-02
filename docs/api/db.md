@@ -184,7 +184,7 @@ db.on('queryError', ({ error, sql, parameters }) =>
 
 ### Transactions + savepoints
 
-Inside `transaction(fn)` the plain client joins the transaction too — code holding the injected `db` takes part without being handed `tx`. Full guide: [Queries → Transactions](../guide/database/queries.md#transactions).
+Inside `transaction(fn)` the plain client joins the transaction too — code holding the injected `db` takes part without being handed `tx`. Full guide: [Queries → Transactions](../guide/database/transactions.md).
 
 ```ts
 await db.transaction(async () => {
@@ -237,7 +237,7 @@ const posts = table(
 )
 ```
 
-The constraints builder returns any mix of `index()`, `unique()`, `check(name, expression)` and one `primaryKey(name?).on(...)` — a composite or named key, in key order (use it or a column's `.primaryKey()`, not both). See [Schema → Primary keys and CHECK constraints](../guide/database/schema.md#primary-keys-and-check-constraints).
+The constraints builder returns any mix of `index()`, `unique()`, `check(name, expression)` and one `primaryKey(name?).on(...)` — a composite or named key, in key order (use it or a column's `.primaryKey()`, not both). See [Schema → Primary keys and CHECK constraints](../guide/database/constraints.md#primary-keys-and-check-constraints).
 
 The same table can be declared as a class or with a fluent builder — `tableFromClass`, `TableBase`, `defineTable` ([Table Forms](../guide/db-table-forms.md)) — and validated with `insertSchema` / `selectSchema` / `updateSchema` from `@forinda/kickjs-db/schema` ([Validation from Tables](../guide/db-table-schemas.md)).
 
@@ -593,7 +593,7 @@ KickDbError                         base
     └── MigrationEnumDropError      missing --confirm-enum-drop on a KICK ENUM REMOVE migration
 ```
 
-`translateDbError(err, dialect)` turns a raw driver error into one of the `DatabaseError` classes — for drivers you call directly; the client already does it. `SqliteRebuildRequiredError` (not a `KickDbError`) means `emitSqlite` was asked for a table rebuild without the snapshots to build it. Guide: [Queries → Errors](../guide/database/queries.md#errors).
+`translateDbError(err, dialect)` turns a raw driver error into one of the `DatabaseError` classes — for drivers you call directly; the client already does it. `SqliteRebuildRequiredError` (not a `KickDbError`) means `emitSqlite` was asked for a table rebuild without the snapshots to build it. Guide: [Queries → Errors](../guide/database/errors.md).
 
 ## Snapshot types
 

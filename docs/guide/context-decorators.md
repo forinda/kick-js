@@ -353,7 +353,7 @@ const RequireAdmin = defineHttpContextDecorator({
 })
 ```
 
-Both answer `application/problem+json`; see [Error Handling](./error-handling.md#rfc-9457-problem-details) for which to pick. There is no shape penalty for rejecting from a contributor rather than a guard — which there was before v8, and which pushed authorisation checks back into `@Middleware()` for the wrong reason.
+Both answer `application/problem+json`; see [Error Handling](./error-handling.md#rfc-9457-—-problem-details) for which to pick. There is no shape penalty for rejecting from a contributor rather than a guard — which there was before v8, and which pushed authorisation checks back into `@Middleware()` for the wrong reason.
 
 When a `resolve()` throws, the runner consults two flags before deciding what to do:
 

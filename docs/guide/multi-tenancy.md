@@ -159,7 +159,7 @@ list(ctx: RequestContext) {
 }
 ```
 
-`NotesRepository` needs no tenant parameter: [transactions follow the call chain](./database/queries#transactions-follow-the-call-chain), so every query it runs on the injected client lands in the transaction that set `app.tenant_id`. Concurrent requests each get their own transaction and connection, so tenants can't see each other's setting even on a shared pool.
+`NotesRepository` needs no tenant parameter: [transactions follow the call chain](./database/transactions#transactions-follow-the-call-chain), so every query it runs on the injected client lands in the transaction that set `app.tenant_id`. Concurrent requests each get their own transaction and connection, so tenants can't see each other's setting even on a shared pool.
 
 Three things to get right:
 
