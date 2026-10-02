@@ -75,6 +75,8 @@ class AuthController {
 
 ```ts
 // src/types/session.d.ts — or next to the code that sets them
+export {} // keeps the file a module, so this augments the package instead of replacing it
+
 declare module '@forinda/kickjs' {
   interface SessionData {
     userId?: string

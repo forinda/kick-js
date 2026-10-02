@@ -56,6 +56,45 @@ Key takeaways:
 - JSON serialization is the main cost for large responses
 - KickJS's decorator/DI layer adds negligible overhead over raw Express 5
 
+## Boot time
+
+Time from starting the process to the first HTTP response, for a production build. Measured on a fresh `kick new my-api --template rest` app (KickJS 8.7, Express, Node 24, Linux), seven runs:
+
+| App                                | Median | Range     |
+| ---------------------------------- | ------ | --------- |
+| `kick new --template rest`         | 182ms  | 177–191ms |
+| A larger app (auth, DB, 6 modules) | ~350ms | 337–371ms |
+
+To measure your own app, run `kick build`, then this script from the project root:
+
+```js
+// boot.mjs — node boot.mjs
+import { spawn } from 'node:child_process'
+
+const runs = []
+for (let i = 0; i < 7; i++) {
+  const start = performance.now()
+  const app = spawn(process.execPath, ['dist/index.js'], {
+    env: { ...process.env, PORT: '3311', NODE_ENV: 'production' },
+    stdio: 'ignore',
+  })
+  for (;;) {
+    try {
+      await fetch('http://127.0.0.1:3311/')
+      break
+    } catch {
+      await new Promise((r) => setTimeout(r, 5))
+    }
+  }
+  runs.push(Math.round(performance.now() - start))
+  app.kill()
+  await new Promise((r) => app.once('exit', r))
+}
+console.log(runs.join(' '), 'median', runs.toSorted((a, b) => a - b)[3])
+```
+
+Any response counts, including a 404, so the route doesn't matter. Database connections opened at startup are part of the time.
+
 ## WebSockets
 
 `@forinda/kickjs-ws` ships a load test in `packages/ws/bench/`. It starts one or more server instances and several client processes, so clients never share the server's event loop. Each run has two phases:

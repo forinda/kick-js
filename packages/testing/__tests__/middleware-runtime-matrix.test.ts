@@ -204,8 +204,9 @@ describe.each(runtimes)('middleware on $name', ({ make }) => {
       await agent.get('/api/v1/probe/visit')
       const destroyed = await agent.post('/api/v1/probe/session/destroy')
       expect(destroyed.status).toBe(200)
-      expect(sid(destroyed), 'destroy did not clear the cookie').toMatch(
-        /kick\.sid=;|Max-Age=0|Expires=Thu, 01 Jan 1970/i,
+      expect(sid(destroyed), 'destroy did not clear the cookie').toMatch(/^kick\.sid=;/)
+      expect(sid(destroyed), 'destroy did not expire the cookie').toMatch(
+        /Max-Age=0|Expires=Thu, 01 Jan 1970/i,
       )
 
       const fresh = await agent.get('/api/v1/probe/visit')
