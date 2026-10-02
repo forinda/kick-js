@@ -152,24 +152,6 @@
   .app {
     @apply min-h-screen flex flex-col bg-app-bg text-app-text font-sans;
   }
-  .tabs {
-    @apply flex gap-1 px-4 pt-3 border-b border-border bg-surface-2
-           overflow-x-auto whitespace-nowrap;
-    /* Thin scrollbar so the bar height stays consistent on Linux/Win
-       (where the default ~12px scrollbar would offset the divider). */
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
-  }
-  .tabs::-webkit-scrollbar {
-    height: 6px;
-  }
-  .tabs::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .tabs::-webkit-scrollbar-thumb {
-    background: var(--color-border-strong);
-    border-radius: 3px;
-  }
   .tab {
     @apply px-4 py-2 text-sm font-medium rounded-t-lg cursor-pointer border border-transparent
            text-text-secondary transition-colors flex-shrink-0;
@@ -548,7 +530,6 @@ html[data-density='lg'] {
   padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2);
   border-right: 1px solid var(--color-border);
   background: var(--color-surface-2);
-  scrollbar-width: thin;
 }
 .dt-main {
   flex: 1;
@@ -814,4 +795,28 @@ html[data-density='lg'] {
 }
 .dt-tone-gray {
   --tone: var(--color-text-secondary);
+}
+
+/* ── Scrollbars: thin, theme-coloured, transparent track ───────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+/* Safari reads only these (Chrome and Firefox use the two lines above). */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
 }
