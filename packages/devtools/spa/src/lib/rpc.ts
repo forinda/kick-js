@@ -118,6 +118,23 @@ async function get<T>(path: string): Promise<T> {
   return (await res.json()) as T
 }
 
+/**
+ * POST to a dashboard endpoint. Throws the server's `{ error }` message
+ * (or the status line) on a non-2xx; the caller reads the body it expects.
+ */
+export async function post(path: string): Promise<Response> {
+  const res = await fetch(withToken(`${getBasePath()}${path}`), {
+    method: 'POST',
+    headers: tokenHeaders(),
+  })
+  if (res.status === 401 || res.status === 403) throw new AuthRequiredError()
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? `${res.status} ${res.statusText}`)
+  }
+  return res
+}
+
 function tokenHeaders(): Record<string, string> {
   const t = getToken()
   return t ? { 'x-devtools-token': t } : {}

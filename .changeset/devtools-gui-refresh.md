@@ -11,3 +11,4 @@ A denser dashboard layout.
 - **Command palette:** ⌘K / Ctrl+K (or `/`) finds a tab, route or DI token and jumps to it, and switches theme or density.
 - **Requests tab:** the app's recent requests (status, method, path, duration, and the error a failed one threw), filterable by status, with a detail pane and **Replay in runner**. Served from the new `GET /_debug/requests`; `requestLog` sets how many are kept (default 200).
 - **Overview:** a strip of headline numbers (requests, server errors, p95 latency, heap) with last-minute sparklines, the latest failed requests with their errors, and app status with adapter status dots. Replaces the three cards.
+- **Runtime:** the Memory tab is folded into Runtime — four charts (heap, process memory, event-loop delay with GC ticks, CPU) over the last minute, memory health, and the heap-snapshot / force-GC actions in the header.

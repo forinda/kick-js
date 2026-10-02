@@ -6,9 +6,13 @@ import { createSignal } from 'solid-js'
 
 const KEY = 'kickjs-devtools-tab'
 
+/** Tabs that were merged into another — a remembered old id opens the new one. */
+const MERGED: Record<string, string> = { memory: 'runtime' }
+
 function initialTab(): string {
   try {
-    return localStorage.getItem(KEY) ?? 'overview'
+    const saved = localStorage.getItem(KEY) ?? 'overview'
+    return MERGED[saved] ?? saved
   } catch {
     return 'overview'
   }

@@ -4,7 +4,6 @@ import { densityMode, setDensity, mountDensityEffect, type DensityMode } from '.
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
 import { OverviewTab } from './tabs/OverviewTab'
 import { RuntimeTab } from './tabs/RuntimeTab'
-import { MemoryTab } from './tabs/MemoryTab'
 import { TopologyTab } from './tabs/TopologyTab'
 import { RoutesTab } from './tabs/RoutesTab'
 import { RequestsTab } from './tabs/RequestsTab'
@@ -32,7 +31,6 @@ import { openDetailModal } from './lib/detail-modal'
 type BuiltInTabId =
   | 'overview'
   | 'runtime'
-  | 'memory'
   | 'topology'
   | 'routes'
   | 'requests'
@@ -59,7 +57,6 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
   return [
     { id: 'overview', label: 'Overview' },
     { id: 'runtime', label: 'Runtime' },
-    { id: 'memory', label: 'Memory' },
     { id: 'topology', label: 'Topology' },
     { id: 'routes', label: 'Routes', count: () => store.routes().length || undefined },
     { id: 'metrics', label: 'Metrics' },
@@ -108,7 +105,7 @@ interface TabGroup {
 }
 const TAB_GROUPS: readonly TabGroup[] = [
   { label: null, ids: ['overview'] },
-  { label: 'Runtime', ids: ['runtime', 'memory', 'topology', 'metrics', 'requests'] },
+  { label: 'Runtime', ids: ['runtime', 'topology', 'metrics', 'requests'] },
   { label: 'Architecture', ids: ['routes', 'container', 'graph'] },
   { label: 'Data & Jobs', ids: ['database', 'queues'] },
   { label: null, ids: ['activity'] },
@@ -480,9 +477,6 @@ export const App: Component = () => {
           </Show>
           <Show when={active() === 'runtime'}>
             <RuntimeTab />
-          </Show>
-          <Show when={active() === 'memory'}>
-            <MemoryTab />
           </Show>
           <Show when={active() === 'topology'}>
             <TopologyTab />
