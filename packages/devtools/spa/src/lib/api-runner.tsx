@@ -20,7 +20,6 @@ import {
   createSignal,
   For,
   Index,
-  onCleanup,
   Show,
   untrack,
   type Component,
@@ -28,7 +27,8 @@ import {
 } from 'solid-js'
 import { store, type RouteEntry } from './store'
 import { rpc } from './rpc'
-import { methodColor } from './format'
+import { methodColor, statusPill } from './format'
+import { switchTab } from './nav'
 import {
   DEFAULT_SETTINGS,
   acceptsBody,
@@ -96,10 +96,25 @@ function loadSpec(url: string): void {
     .then((spec) => setSpecs((prev) => ({ ...prev, [url]: spec })))
 }
 
-/** Open the runner for a route. */
-export function openApiRunner(route: RouteEntry): void {
+/** Bumped on every open, so reopening the open route reloads its inputs too. */
+const [openCount, setOpenCount] = createSignal(0)
+
+/**
+ * Open the runner for a route: select it and show the Routes tab. `params`
+ * fills its path params over the saved inputs — a replayed request.
+ */
+export function openApiRunner(route: RouteEntry, params?: Record<string, string>): void {
+  if (params) {
+    const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
+    pendingInputs = { ...saved, params: { ...saved.params, ...params } }
+  }
   setActiveRoute(route)
+  setOpenCount((n) => n + 1)
+  switchTab('routes')
 }
+
+/** The route the runner shows — the Routes list highlights it. */
+export { activeRoute as runnerRoute }
 
 function load<T>(storage: () => Storage, key: string, fallback: T): T {
   try {
@@ -157,7 +172,7 @@ interface RunResult {
 
 const enabledCount = (rows: KeyValueRow[]) => rows.filter((r) => r.enabled && r.key).length
 
-export const ApiRunnerHost: Component = () => {
+export const ApiRunnerPanel: Component = () => {
   const [inputs, setInputs] = createSignal<RouteInputs | null>(null)
   // Default headers and variables live in sessionStorage unless the user asks to
   // remember them: they usually hold credentials.
@@ -200,6 +215,7 @@ export const ApiRunnerHost: Component = () => {
   // Load the route's saved inputs whenever a route is opened.
   createEffect(() => {
     const route = activeRoute()
+    openCount()
     generation++
     if (!route) return
     let isNew = false
@@ -247,16 +263,6 @@ export const ApiRunnerHost: Component = () => {
     if (!h || !awaitingPrefill()) return
     setAwaitingPrefill(false)
     setInputs((prev) => (prev ? applyHints(prev, h) : prev))
-  })
-
-  // Escape closes the sheet wherever focus is.
-  createEffect(() => {
-    if (!activeRoute()) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-    document.addEventListener('keydown', onKey)
-    onCleanup(() => document.removeEventListener('keydown', onKey))
   })
 
   const prepared = createMemo(() => {
@@ -416,19 +422,19 @@ export const ApiRunnerHost: Component = () => {
   }
 
   return (
-    <Show when={activeRoute()}>
+    <Show
+      when={activeRoute()}
+      fallback={
+        <div class="dt-panel-grid">
+          <div class="card text-sm text-text-muted">Select a route to try it</div>
+        </div>
+      }
+    >
       {(route) => (
-        <div
-          class="fixed inset-0 z-50 bg-black/50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) close()
-          }}
-        >
-          <aside
-            role="dialog"
-            aria-modal="true"
+        <div class="h-full flex flex-col min-h-0">
+          <section
             aria-label={`Try ${route().method} ${route().path}`}
-            class="absolute right-0 top-0 h-full w-full max-w-2xl bg-surface-1 border-l border-border-strong shadow-2xl flex flex-col"
+            class="h-full bg-surface-1 flex flex-col min-h-0"
           >
             {/* Header */}
             <header class="px-5 py-4 border-b border-border">
@@ -467,8 +473,30 @@ export const ApiRunnerHost: Component = () => {
                   ✕
                 </button>
               </div>
-              <div class="font-mono text-xs bg-surface-2 border border-border rounded-lg px-3 py-2 mt-3 break-all text-text-secondary">
-                {prepared()?.url}
+              {/* Send bar: method, the resolved URL, and Send — the request at a glance. */}
+              <div class="flex items-stretch gap-2 mt-3">
+                <div class="flex-1 min-w-0 flex items-center gap-2 font-mono text-xs bg-surface-2 border border-border rounded-lg px-3 py-2 text-text-secondary">
+                  <span class={`font-bold ${methodColor(route().method)}`}>
+                    {route().method.toUpperCase()}
+                  </span>
+                  <span class="break-all">{prepared()?.url}</span>
+                </div>
+                <button
+                  type="button"
+                  disabled={sending()}
+                  onClick={send}
+                  class={`shrink-0 px-4 text-sm font-semibold rounded-lg border transition-colors ${
+                    armed()
+                      ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                      : 'bg-kick-500/20 text-kick-500 border-kick-500/30 hover:bg-kick-500/30'
+                  }`}
+                >
+                  {sending()
+                    ? 'Sending…'
+                    : armed()
+                      ? `Confirm ${route().method.toUpperCase()}`
+                      : 'Send'}
+                </button>
               </div>
               <Show when={prepared() && unresolvedVariables(prepared()!).length > 0}>
                 <p class="text-xs text-amber-400 mt-2">
@@ -735,7 +763,7 @@ export const ApiRunnerHost: Component = () => {
                     title={
                       <span class="flex items-center gap-3">
                         Response
-                        <span class={`font-bold ${statusColor(res().status)}`}>
+                        <span class={statusPill(res().status)}>
                           {res().status} {res().statusText}
                         </span>
                         <span class="text-text-muted text-xs font-normal">{res().ms} ms</span>
@@ -815,7 +843,11 @@ export const ApiRunnerHost: Component = () => {
                               {entry.method}
                             </span>
                             <span class="font-mono truncate flex-1">{historyLabel(entry)}</span>
-                            <span class={entry.status ? statusColor(entry.status) : 'text-red-400'}>
+                            <span
+                              class={
+                                entry.status ? statusPill(entry.status) : 'dt-pill dt-pill-err'
+                              }
+                            >
                               {entry.status ?? 'failed'}
                             </span>
                             <span class="text-text-muted w-16 text-right">{entry.ms} ms</span>
@@ -837,27 +869,7 @@ export const ApiRunnerHost: Component = () => {
                 </Show>
               </Section>
             </div>
-
-            {/* Footer actions */}
-            <footer class="px-5 py-3 border-t border-border flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={sending()}
-                onClick={send}
-                class={`px-4 py-2 text-sm font-semibold rounded-lg border transition-colors ${
-                  armed()
-                    ? 'bg-red-500/20 text-red-400 border-red-500/40'
-                    : 'bg-kick-500/20 text-kick-500 border-kick-500/30 hover:bg-kick-500/30'
-                }`}
-              >
-                {sending()
-                  ? 'Sending…'
-                  : armed()
-                    ? `Click again to send ${route().method.toUpperCase()}`
-                    : 'Send'}
-              </button>
-            </footer>
-          </aside>
+          </section>
         </div>
       )}
     </Show>
@@ -1010,10 +1022,3 @@ const inputClass =
   'w-full min-w-0 bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500'
 const secondaryButton =
   'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
-
-function statusColor(status: number): string {
-  if (status >= 500) return 'text-red-400'
-  if (status >= 400) return 'text-amber-400'
-  if (status >= 300) return 'text-cyan-400'
-  return 'text-emerald-400'
-}

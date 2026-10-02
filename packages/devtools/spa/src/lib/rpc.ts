@@ -6,6 +6,10 @@
  */
 
 import type {
+  JobDetail,
+  JobQueueInfo,
+  JobState,
+  JobSummary,
   DevtoolsTabDescriptor,
   MemoryHealth,
   RuntimeSnapshot,
@@ -118,6 +122,23 @@ async function get<T>(path: string): Promise<T> {
   return (await res.json()) as T
 }
 
+/**
+ * POST to a dashboard endpoint. Throws the server's `{ error }` message
+ * (or the status line) on a non-2xx; the caller reads the body it expects.
+ */
+export async function post(path: string): Promise<Response> {
+  const res = await fetch(withToken(`${getBasePath()}${path}`), {
+    method: 'POST',
+    headers: tokenHeaders(),
+  })
+  if (res.status === 401 || res.status === 403) throw new AuthRequiredError()
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(body?.error ?? `${res.status} ${res.statusText}`)
+  }
+  return res
+}
+
 function tokenHeaders(): Record<string, string> {
   const t = getToken()
   return t ? { 'x-devtools-token': t } : {}
@@ -132,7 +153,78 @@ export interface ProcessInfo {
   runtime: { name: string; capabilities: Record<string, boolean> } | null
 }
 
+/** One logged request — `RequestLogEntry` on the server. */
+export interface RequestLogEntry {
+  seq: number
+  at: number
+  method: string
+  path: string
+  route?: string
+  status: number
+  durationMs: number
+  requestId?: string
+  error?: { name: string; message: string }
+}
+
+/** Latency and outcome counts for one route (`'GET /users/:id'`). */
+export interface RouteLatency {
+  count: number
+  totalMs: number
+  minMs: number
+  maxMs: number
+  serverErrors: number
+  clientErrors: number
+  p50: number
+  p95: number
+  p99: number
+  /** Recent samples per `latencyBucketsMs` bucket, plus one for everything slower. */
+  histogram: number[]
+}
+
+export interface MetricsResponse {
+  requests: number
+  serverErrors: number
+  clientErrors: number
+  errorRate: number
+  uptimeSeconds: number
+  startedAt: string
+  routeLatency: Record<string, RouteLatency>
+  latencyBucketsMs: number[]
+}
+
+/** One job tool's queues, as `/_debug/jobs` reports them. */
+export interface JobSource {
+  source: string
+  /** Optional actions this tool supports. */
+  actions: Array<'retry' | 'remove' | 'retryAll' | 'clean' | 'pause' | 'resume'>
+  queues: JobQueueInfo[]
+  error?: string
+}
+
+const qs = (params: Record<string, string | number | undefined>): string =>
+  new URLSearchParams(
+    Object.entries(params).flatMap(([k, v]) => (v === undefined ? [] : [[k, String(v)]])),
+  ).toString()
+
 export const rpc = {
+  jobs: () => get<{ sources: JobSource[] }>('/jobs'),
+  jobList: (p: { source: string; queue: string; state: JobState; start: number; end: number }) =>
+    get<{ jobs: JobSummary[] }>(`/jobs/list?${qs(p)}`),
+  job: (p: { source: string; queue: string; id: string }) => get<JobDetail>(`/jobs/job?${qs(p)}`),
+  jobAction: async (p: {
+    source: string
+    queue: string
+    action: JobSource['actions'][number]
+    id?: string
+    state?: JobState
+  }) =>
+    (await (await post(`/jobs/action?${qs(p)}`)).json()) as {
+      ok: true
+      count?: number | null
+    },
+  /** Requests logged after `since` (a `seq`), oldest first. */
+  requests: (since = 0) =>
+    get<{ requests: RequestLogEntry[]; latest: number }>(`/requests?since=${since}`),
   runtime: () =>
     get<{
       latest: RuntimeSnapshot
@@ -141,50 +233,8 @@ export const rpc = {
       process?: ProcessInfo
     }>('/runtime'),
   topology: () => get<TopologySnapshot>('/topology'),
-  /** Per-route latency table — separate concept from the route registry below. */
-  metrics: () =>
-    get<{
-      requests: number
-      serverErrors: number
-      clientErrors: number
-      errorRate: number
-      uptimeSeconds: number
-      startedAt: string
-      routeLatency: Record<
-        string,
-        {
-          count: number
-          totalMs: number
-          minMs: number
-          maxMs: number
-          p50: number
-          p95: number
-          p99: number
-        }
-      >
-    }>('/metrics'),
-  /** Backwards-compatible alias for `metrics()` — pre-existing callers. */
-  routes: () =>
-    get<{
-      requests: number
-      serverErrors: number
-      clientErrors: number
-      errorRate: number
-      uptimeSeconds: number
-      startedAt: string
-      routeLatency: Record<
-        string,
-        {
-          count: number
-          totalMs: number
-          minMs: number
-          maxMs: number
-          p50: number
-          p95: number
-          p99: number
-        }
-      >
-    }>('/metrics'),
+  /** Request counters and per-route latency. */
+  metrics: () => get<MetricsResponse>('/metrics'),
   /** Where a route's handler is declared — for "open in editor". */
   source: (controller: string, handler: string) =>
     get<{ file: string; relative: string; line: number }>(
@@ -210,8 +260,8 @@ export const rpc = {
         scope?: string
         instantiated?: boolean
         resolveCount?: number
-        firstResolved?: number
-        lastResolved?: number
+        firstResolvedAt?: number
+        lastResolvedAt?: number
         resolveDurationMs?: number
         postConstructStatus?: 'done' | 'failed' | 'none'
         dependencies?: string[]

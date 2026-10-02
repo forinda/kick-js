@@ -17,7 +17,7 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, '..', 'public', 'spa'),
     emptyOutDir: true,
-    target: 'es2022',
+    target: 'es2023',
     cssCodeSplit: false,
     sourcemap: false,
     minify: 'esbuild',

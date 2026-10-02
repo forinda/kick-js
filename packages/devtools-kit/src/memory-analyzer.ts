@@ -33,6 +33,13 @@ export interface MemoryAnalyzerOptions {
    * smooth out one-off spikes without lagging on real degradation.
    */
   gcWindow?: number
+  /**
+   * Startup allocation isn't a leak: samples from the first `skipFirstSec`
+   * seconds of process uptime are ignored, and severity stays `ok` (with
+   * `sampling: true`) until the rest span at least `minSpanSec`.
+   * Default: `{ skipFirstSec: 30, minSpanSec: 20 }`.
+   */
+  warmup?: { skipFirstSec: number; minSpanSec: number }
 }
 
 /** One entry in the GC reclaim history. */
@@ -52,6 +59,7 @@ interface GcReclaim {
 export class MemoryAnalyzer {
   private readonly thresholds: { warnBytesPerSec: number; criticalBytesPerSec: number }
   private readonly gcWindow: number
+  private readonly warmup: { skipFirstSec: number; minSpanSec: number }
   private readonly gcReclaims: GcReclaim[] = []
   private gcObserver: PerformanceObserver | null = null
   private heapBeforeGc = 0
@@ -64,6 +72,7 @@ export class MemoryAnalyzer {
       criticalBytesPerSec: 349_525,
     }
     this.gcWindow = opts.gcWindow ?? 20
+    this.warmup = opts.warmup ?? { skipFirstSec: 30, minSpanSec: 20 }
   }
 
   /**
@@ -128,9 +137,16 @@ export class MemoryAnalyzer {
    * active-handles inventory.
    */
   health(window: readonly RuntimeSnapshot[]): MemoryHealth {
-    const heapGrowthBytesPerSec = MemoryAnalyzer.heapGrowthBytesPerSec(window)
-    const heapGrowthSeverity =
-      heapGrowthBytesPerSec >= this.thresholds.criticalBytesPerSec
+    const settled = window.filter((s) => s.uptimeSec >= this.warmup.skipFirstSec)
+    const spanSec =
+      settled.length > 1
+        ? (settled[settled.length - 1]!.timestamp - settled[0]!.timestamp) / 1000
+        : 0
+    const sampling = spanSec < this.warmup.minSpanSec
+    const heapGrowthBytesPerSec = sampling ? 0 : MemoryAnalyzer.heapGrowthBytesPerSec(settled)
+    const heapGrowthSeverity = sampling
+      ? 'ok'
+      : heapGrowthBytesPerSec >= this.thresholds.criticalBytesPerSec
         ? 'critical'
         : heapGrowthBytesPerSec >= this.thresholds.warnBytesPerSec
           ? 'warn'
@@ -147,6 +163,7 @@ export class MemoryAnalyzer {
       protocolVersion: PROTOCOL_VERSION,
       heapGrowthBytesPerSec,
       heapGrowthSeverity,
+      sampling,
       gcReclaimRatio: this.gcReclaimRatio(),
       activeHandles,
       handlesByType: handles,

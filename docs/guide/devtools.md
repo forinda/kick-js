@@ -120,6 +120,28 @@ Shows all DI container registrations with their scope and instantiation status.
 }
 ```
 
+### `GET /_debug/requests`
+
+The last `requestLog` requests (default 200), oldest first. `?since=<seq>` returns only the newer ones. The dashboard's own `/_debug` calls aren't logged. Query strings, headers and bodies aren't recorded.
+
+```json
+{
+  "requests": [
+    {
+      "seq": 41,
+      "at": 1790000000000,
+      "method": "GET",
+      "path": "/api/v1/users/42",
+      "route": "/api/v1/users/:id",
+      "status": 500,
+      "durationMs": 6.6,
+      "requestId": "6dda727c-…",
+      "error": { "name": "TypeError", "message": "users store unavailable" }
+    }
+  ]
+}
+```
+
 ### `GET /_debug/metrics`
 
 Live request metrics powered by reactive refs and computed values.
@@ -243,6 +265,9 @@ DevToolsAdapter({
   onErrorRateExceeded: (rate) => {
     slackWebhook.send(`Error rate: ${(rate * 100).toFixed(1)}%`)
   },
+
+  // Recent requests the Requests tab keeps (default: 200; 0 keeps none)
+  requestLog: 200,
 })
 ```
 
@@ -282,18 +307,20 @@ Because the state is reactive, the computed values (error rate, uptime) are alwa
 
 ## Browser Dashboard
 
+The dashboard needs a browser from 2023 or later (Chrome / Edge 110, Firefox 115, Safari 16).
+
 When you visit `/_debug` in a browser, the DevTools adapter serves a single-page dashboard built with Solid + Tailwind. It connects to the JSON endpoints documented above and adds live UI on top — there's nothing to install client-side.
 
 ### Connection state
 
 A pill in the global header shows what the dashboard is doing:
 
-| State                     | Meaning                                                                     |
-| ------------------------- | --------------------------------------------------------------------------- |
-| **Live** (green pulse)    | Subscribed to `/stream` SSE — metrics + container changes push in real time |
-| **Polling** (amber pulse) | SSE dropped, falling back to a 5-second `/health` + `/metrics` poll         |
-| **Connecting…** (grey)    | First request hasn't returned yet                                           |
-| **Disconnected** (red)    | Teardown — open the dashboard again to reconnect                            |
+| State                     | Meaning                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Live** (green pulse)    | Subscribed to `/stream` SSE — metrics + container changes push in real time                     |
+| **Polling** (amber pulse) | SSE dropped, falling back to a 5-second `/health` + `/metrics` poll                             |
+| **Connecting…** (grey)    | First request hasn't returned yet                                                               |
+| **Disconnected** (red)    | The app isn't answering (restarting, crashed) — a banner shows and the dashboard keeps retrying |
 
 The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you can tell at a glance the page isn't frozen.
 
@@ -301,23 +328,125 @@ The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you
 
 Each tab subscribes to a slice of the shared store; nothing owns its own polling loop.
 
-| Tab           | What it shows                                                                                                                                                                                                          |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**  | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit.           |
-| **Runtime**   | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`.                                                                                                                                |
-| **Memory**    | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button.                                                                                              |
-| **Topology**  | Plugin / adapter / contributor / DI-token introspection from `/topology`.                                                                                                                                              |
-| **Routes**    | Method / path / controller / handler / middleware / flags registry. Search input + method filter pills (ALL / GET / POST / PUT / DELETE / PATCH) + paginated. **Try** opens the [API runner](#api-runner) for a route. |
-| **Metrics**   | Per-route latency table (avg / p50 / p95 / p99 / max).                                                                                                                                                                 |
-| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status.      |
-| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                                    |
-| **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                        |
+| Tab           | What it shows                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**  | Requests, server errors, p95 latency and heap, each with the last minute as a sparkline; the latest failed requests with their errors (click one to open it in **Requests**); app status, uptime, WebSocket and adapters with status dots. Default tab on first visit.                                                                                                                                                                                                      |
+| **Runtime**   | The Node process: engine, Node version, PID and uptime; heap, process memory, event-loop delay (with GC ticks) and CPU over the last minute; memory health — heap growth per minute, GC reclaim, share of the heap limit, open handles by type — and **Heap snapshot** / **Run GC**. Growth is judged after startup settles, so a fresh process reads `sampling`, not a leak.                                                                                               |
+| **Topology**  | Plugins, adapters and context contributors side by side. Each plugin / adapter card shows its version, the counters and state its `introspect()` reports, and the DI tokens it provides and requires — hover a token to light up every card that touches it, click it to open it in **Container**. Contributors show their `ctx` key, source and what they run after.                                                                                                       |
+| **Routes**    | Every route, grouped by controller, with its flags — searchable, filterable by method. Selecting one opens the [API runner](#api-runner) beside the list.                                                                                                                                                                                                                                                                                                                   |
+| **Requests**  | The app's recent requests, newest first — status, method, path, duration, and the error a failed one threw. Filter by status class; select one for its route and request ID, and **Replay in runner** to reopen it with the same path params.                                                                                                                                                                                                                               |
+| **Metrics**   | One row per route: calls, share of 5xx, p50 / p95 / p99 and max, sortable by any column. Pick a percentile to bar it against the slowest route; durations turn amber, orange and red past 200 ms, 500 ms and 1 s. Expand a row for its latency histogram, ok / 4xx / 5xx counts, and **Try in runner**.                                                                                                                                                                     |
+| **Container** | Every DI registration — search, and filter by kind and scope (each chip shows how many it would match). Rows show a status dot, kind, resolve count and when the token was last resolved. Selecting one shows its dependencies and dependents (click to follow), resolve stats and `@PostConstruct` outcome beside the list.                                                                                                                                                |
+| **Database**  | The queries kick/db reports while DevTools is installed. **Slowest** groups statements that differ only in their values (calls, failures, mean, p95 with a bar, total time — sortable); **Recent** is the raw log. Select either for the full SQL, numbered parameters and the error. Durations turn amber past 50 ms.                                                                                                                                                      |
+| **Queues**    | Background jobs, through whatever runs them. Pick a queue, then a state (each with its count) to page through its jobs; select one for its data, result, failure reason, stack traces and attempts. **Retry**, **Remove**, **Retry all failed**, **Clean** a state and **Pause** / **Resume** appear when the job tool supports them — destructive ones take a second click. See [Job management](#job-management).                                                         |
+| **Graph**     | The DI dependency graph on a canvas, in columns from what nothing depends on (usually controllers) to leaves. Drag tokens to arrange them (remembered per browser; **Reset layout** undoes it), drag the background or scroll to pan, ⌘/Ctrl + scroll or pinch to zoom, **Fit** to frame everything. Select a token to keep its whole chain in focus with its details beside the graph; type a name and press Enter to jump to it. Edges that close a cycle are dashed red. |
+| **Activity**  | The live event-bus stream, newest first: kick/db queries, queue jobs, and anything emitted on `DEVTOOLS_BUS`. Toggle namespaces (the part of the type before `:`, each chip with its count) or search type and payload; error and warning events are tinted. Scrolling down holds the list still, and **N new** jumps back to the latest. Select an event for its full payload.                                                                                             |
 
-The tab nav scrolls horizontally when there are too many tabs to fit; switching to a tab via localStorage restore scrolls it into view automatically.
+### Job management
+
+The **Queues** tab works with any job tool that exposes a `JobInspector` from its adapter or plugin as `jobInspector()`. `QueueAdapter` from `@forinda/kickjs-queue` does for BullMQ; RabbitMQ, Kafka and Redis pub/sub have no job store, so their queues are listed without jobs.
+
+A bring-your-own runner implements the same few methods over its own API — only `queues`, `jobs` and `job` are required, and each optional action shows up as a button when present:
+
+```ts
+import type { JobInspector } from '@forinda/kickjs-devtools-kit'
+
+const inspector: JobInspector = {
+  queues: async () => [{ name: 'email', counts: { failed: await boss.getQueueSize('email') } }],
+  jobs: async (queue, state, { start, end }) => /* jobs in `state`, newest first */ [],
+  job: async (queue, id) => /* one job, or null */ null,
+  retry: async (queue, id) => boss.retry(queue, id),
+}
+
+// In your adapter:
+build: () => ({ jobInspector: () => inspector /* , … */ })
+```
+
+The tab reads `GET /_debug/jobs`, `/_debug/jobs/list`, `/_debug/jobs/job` and runs actions through `POST /_debug/jobs/action`, all behind the DevTools token.
+
+### Custom tabs
+
+An adapter or plugin adds its own sidebar tab with `devtoolsTabs()`. The descriptor type and `defineDevtoolsTab` come from the kit, which `@forinda/kickjs` doesn't depend on — add it to the package that declares the tab:
+
+<PmCommand add="@forinda/kickjs-devtools-kit" />
+
+```ts
+import { defineAdapter } from '@forinda/kickjs'
+import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
+
+export const AuditAdapter = defineAdapter({
+  name: 'AuditAdapter',
+  build: () => ({
+    devtoolsTabs() {
+      return [
+        defineDevtoolsTab({
+          id: 'audit',
+          title: 'Audit',
+          // Or an iframe of a page the app serves: { type: 'iframe', src: '/_audit/panel' }
+          view: { type: 'html', html: '<p>12 events today</p>' },
+        }),
+      ]
+    },
+  }),
+})
+```
+
+The tab appears at the bottom of the sidebar. `kick g adapter` and `kick g plugin` write this hook commented out. A tab's `view` is one of:
+
+| `view.type` | Shows                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `html`      | Markup, injected as-is — only markup you control                                                                                  |
+| `iframe`    | A page at `src`. On the app's own origin it gets the dashboard token as `?token=`, so it can call `/_debug`; elsewhere it doesn't |
+| `launch`    | Buttons; each runs its `run()` on the server and shows what it returns                                                            |
+| `module`    | A browser module from the app's own origin, mounted into the tab                                                                  |
+
+Buttons — `run()` executes in the app process, behind the DevTools token:
+
+```ts
+view: {
+  type: 'launch',
+  actions: [
+    { id: 'flush', label: 'Flush cache', run: async () => ({ removed: await cache.clear() }) },
+  ],
+}
+```
+
+A module tab is for live content. Serve a file and point the tab at it:
+
+```ts
+build: () => ({
+  beforeMount({ http }) {
+    http.serveStatic('/_audit', new URL('./panel', import.meta.url).pathname)
+  },
+  devtoolsTabs: () => [
+    defineDevtoolsTab({ id: 'audit', title: 'Audit', view: { type: 'module', src: '/_audit/tab.js' } }),
+  ],
+}),
+```
+
+```js
+// panel/tab.js — the default export is a defineDevtoolsRenderTab(...) spec, or just a render function
+export default {
+  render(el, { bus, config }) {
+    const list = document.createElement('ul')
+    el.append(list)
+    const off = bus.on('audit:entry', (entry) => {
+      const li = document.createElement('li')
+      li.textContent = `${entry.actor} ${entry.action}`
+      list.prepend(li)
+    })
+    return off // runs when the tab closes
+  },
+}
+```
+
+The server emits `audit:entry` on the same bus — `@Inject(DEVTOOLS_BUS) bus` (from `@forinda/kickjs-devtools-kit/bus/token`), then `bus.emit('audit:entry', { actor, action })`.
+
+`render(el, props)` gets the dashboard's event `bus`, `config` (`theme`, `panelHeight`) and the page's `query`; what it returns runs when the tab unmounts. A module from another origin is refused — it would run with the dashboard's token.
 
 ### API runner
 
-**Try** on a row of the Routes tab opens a side sheet that sends a request to that route, from the browser, on the same origin — so it behaves the same on Express, Fastify and h3, and needs no extra endpoint. Each part of the request is a collapsible section:
+Selecting a route on the Routes tab opens the runner beside the list — drag the divider to resize; the width is remembered. The bar at its top shows the method and resolved URL with **Send**. It sends a request to that route, from the browser, on the same origin — so it behaves the same on Express, Fastify and h3, and needs no extra endpoint. Each part of the request is a collapsible section:
 
 - **Path params** — one field per `:param`; the resolved URL updates as you type.
 - **Query** and **Headers** — key/value rows you can switch off without deleting.
@@ -355,17 +484,17 @@ It handles the framework's conventions for you:
 
 Per-route inputs are saved in `localStorage`. Routes mounted through a hand-built `router` carry no route metadata, so they aren't listed.
 
-### Detail modal
+### Layout
 
-Click a token row in **Container** (or the "View full details" button), or any node in **Graph** — opens a modal with:
+The sidebar is a column of icons — hover for the tab's name, and the small numbers are counts (routes, DI tokens). The arrow at its foot shows labels instead; the choice is remembered. When the app stops answering (a restart, a crash), a banner says so and the dashboard keeps retrying until it's back.
 
-- Token + kind/scope/status badges
-- Dependencies (outgoing edges) as clickable chips
-- Dependents (incoming edges) as clickable chips
-- Resolve stats (count / first / last / duration)
-- PostConstruct status
+### Command palette
 
-Clicking a dependency or dependent navigates to that token's modal in place. The in-modal Back arrow pops one level; Escape or outside-click closes the whole stack.
+Press <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> (or <kbd>/</kbd> outside a text field), or click **Search** in the header. Type to find a tab, a route (opens it in the API runner), or a DI token (opens its detail), or to switch theme and density. Arrow keys move, Enter runs, Escape closes.
+
+### Token details
+
+Selecting a token — in **Container**, from the command palette, or in **Graph** — shows its kind, scope and status, what it depends on and what uses it (click either to follow the chain), how often and when it was resolved, and its `@PostConstruct` outcome.
 
 ### Beginner-friendly tooltips
 

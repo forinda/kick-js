@@ -69,8 +69,10 @@ export async function startUnifiedStream(): Promise<() => void> {
     },
     () => {
       if (_disposed) return
-      // SSE dropped — fall back to polling.
-      storeActions.setConnectionStatus('polling')
+      // SSE dropped — fall back to polling. EventSource keeps retrying and
+      // errors on every attempt, so don't let that mask "disconnected":
+      // polling decides that, and clears it once the app answers again.
+      if (store.connectionStatus() !== 'disconnected') storeActions.setConnectionStatus('polling')
       startPolling()
     },
   )
@@ -105,6 +107,14 @@ async function refetchSnapshots(): Promise<void> {
     storeActions.setConnectionStatus('disconnected')
     return
   }
+  // Nothing answered: the app is down or restarting. Keep polling, and say
+  // so — the dashboard shows a reconnecting banner instead of stale data.
+  if (results.every((r) => r.status === 'rejected')) {
+    storeActions.setConnectionStatus('disconnected')
+    startPolling()
+    return
+  }
+  if (store.connectionStatus() === 'disconnected') storeActions.setConnectionStatus('polling')
   // Lower the gate as soon as any endpoint succeeds — covers the
   // case where the user just pasted a valid token via the modal.
   if (store.authRequired()) {

@@ -22,7 +22,7 @@ export interface DevtoolsTabsResult {
   errors: ReadonlyArray<{ source: string; reason: string }>
 }
 
-const VALID_VIEW_TYPES = new Set(['iframe', 'launch', 'html'])
+const VALID_VIEW_TYPES = new Set(['iframe', 'launch', 'html', 'module'])
 
 /**
  * Walk every plugin + adapter, call `devtoolsTabs?()`, validate each
@@ -119,7 +119,7 @@ function validateTab(raw: unknown): ValidationOk | ValidationFail {
   if (typeof view.type !== 'string' || !VALID_VIEW_TYPES.has(view.type)) {
     return {
       ok: false,
-      reason: `tab '${obj.id}': view.type must be one of iframe / launch / html`,
+      reason: `tab '${obj.id}': view.type must be one of iframe / launch / html / module`,
     }
   }
   switch (view.type) {
@@ -133,6 +133,11 @@ function validateTab(raw: unknown): ValidationOk | ValidationFail {
         return { ok: false, reason: `tab '${obj.id}': html view requires html string` }
       }
       break
+    case 'module':
+      if (typeof view.src !== 'string' || view.src.length === 0) {
+        return { ok: false, reason: `tab '${obj.id}': module view requires a non-empty src` }
+      }
+      break
     case 'launch':
       if (!Array.isArray(view.actions)) {
         return { ok: false, reason: `tab '${obj.id}': launch view requires actions array` }
@@ -140,4 +145,27 @@ function validateTab(raw: unknown): ValidationOk | ValidationFail {
       break
   }
   return { ok: true, tab: obj as unknown as DevtoolsTabDescriptor }
+}
+
+/**
+ * Run a `launch` tab's button. The tabs are collected again rather than
+ * cached, so an HMR-reloaded adapter's new `run()` is the one called.
+ */
+export async function runTabAction(
+  app: TopologyApplicationLike,
+  tabId: string,
+  actionId: string,
+): Promise<{ status: number; body: { result?: unknown; error?: string } }> {
+  const tab = collectDevtoolsTabs(app).tabs.find((t) => t.id === tabId)
+  const action =
+    tab?.view.type === 'launch' ? tab.view.actions.find((a) => a.id === actionId) : undefined
+  if (!action) return { status: 404, body: { error: `no action '${actionId}' on tab '${tabId}'` } }
+  if (typeof action.run !== 'function') {
+    return { status: 404, body: { error: `action '${actionId}' has no run()` } }
+  }
+  try {
+    return { status: 200, body: { result: (await action.run()) ?? null } }
+  } catch (err) {
+    return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } }
+  }
 }

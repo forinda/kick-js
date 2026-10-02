@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { generateAdapter } from '../src/generators/adapter'
+import { generatePlugin } from '../src/generators/plugin'
 
 /** Every optional hook on `AppAdapter`. Add to this when the interface grows. */
 const HOOKS = [
@@ -67,6 +68,27 @@ describe('kick g adapter', () => {
     try {
       expect(source).not.toMatch(/Express middleware entries/)
       expect(source).toMatch(/Connect-style middleware/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('DevTools hooks in kick g adapter / kick g plugin', () => {
+  it('uses the real tab and snapshot shapes, and says where the imports come from', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-devtools-hooks-'))
+    try {
+      const [adapter] = await generateAdapter({ name: 'metrics', outDir: dir })
+      const [plugin] = await generatePlugin({ name: 'audit', outDir: dir })
+      for (const file of [adapter!, plugin!]) {
+        const source = readFileSync(file, 'utf8')
+        expect(source).toMatch(/\bintrospect\(/)
+        expect(source).toMatch(/\bdevtoolsTabs\(/)
+        expect(source).toContain("view: { type: 'html'")
+        expect(source).toContain('tokens: { provides: [], requires: [] }')
+        expect(source).toContain("import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'")
+        expect(source).toContain("import type { IntrospectionSnapshot } from '@forinda/kickjs'")
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

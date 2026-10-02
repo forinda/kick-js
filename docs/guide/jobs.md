@@ -132,6 +132,10 @@ export const PgBossAdapter = defineAdapter<{ url: string }>({
 
 `runJob(container, queue, job, extra?)` picks the handler, runs it, reports a failure (with `extra` added to the report's context — an attempt count, say) and rethrows. `listJobHandlers(container)` returns every handler with its queue, job name, class and method, for tools that subscribe per job name.
 
+## In DevTools
+
+The DevTools **Queues** tab lists each queue's jobs by state, shows a job's data, error and attempts, and retries, removes or cleans jobs — for BullMQ through `QueueAdapter`, and for your own runner once its adapter returns a `JobInspector` from `jobInspector()`. See [DevTools → Job management](./devtools.md#job-management).
+
 ## Related
 
 - [Scheduled Tasks](./cron.md)

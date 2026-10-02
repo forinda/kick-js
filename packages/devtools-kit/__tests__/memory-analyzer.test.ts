@@ -14,7 +14,8 @@ function makeSnap(timestamp: number, heapUsed: number): RuntimeSnapshot {
   return {
     protocolVersion: PROTOCOL_VERSION,
     timestamp,
-    uptimeSec: 0,
+    // Past the default 30s warm-up, so growth is judged.
+    uptimeSec: 60 + timestamp / 1000,
     memory: {
       rss: 0,
       heapTotal: heapUsed * 2,
@@ -128,7 +129,7 @@ describe('MemoryAnalyzer.health', () => {
     })
     analyzer.start()
     // 5KB/s → warn (above 1KB/s, below 10KB/s)
-    const window = [makeSnap(0, 0), makeSnap(1000, 5000)]
+    const window = [makeSnap(0, 0), makeSnap(30_000, 150_000)]
     expect(analyzer.health(window).heapGrowthSeverity).toBe('warn')
   })
 })
@@ -160,5 +161,25 @@ describe('MemoryAnalyzer.activeHandlesByType (static)', () => {
       expect(Number.isInteger(count)).toBe(true)
       expect(count).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('MemoryAnalyzer.health — warm-up', () => {
+  it('stays ok while sampling — ignores startup growth and short windows', () => {
+    const analyzer = new MemoryAnalyzer()
+    const boot = (ms: number, heap: number) => ({ ...makeSnap(ms, heap), uptimeSec: ms / 1000 })
+    // A steep climb during the first 30s of uptime is startup, not a leak.
+    const startup = analyzer.health([boot(0, 0), boot(25_000, 60_000_000)])
+    expect(startup).toMatchObject({
+      sampling: true,
+      heapGrowthSeverity: 'ok',
+      heapGrowthBytesPerSec: 0,
+    })
+    // Settled, but only 10s of it — still sampling.
+    const short = analyzer.health([makeSnap(0, 0), makeSnap(10_000, 60_000_000)])
+    expect(short.sampling).toBe(true)
+    // 60s settled at 0.5MB/s → critical.
+    const leak = analyzer.health([makeSnap(0, 0), makeSnap(60_000, 30_000_000)])
+    expect(leak).toMatchObject({ sampling: false, heapGrowthSeverity: 'critical' })
   })
 })

@@ -4,9 +4,9 @@ import { densityMode, setDensity, mountDensityEffect, type DensityMode } from '.
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
 import { OverviewTab } from './tabs/OverviewTab'
 import { RuntimeTab } from './tabs/RuntimeTab'
-import { MemoryTab } from './tabs/MemoryTab'
 import { TopologyTab } from './tabs/TopologyTab'
 import { RoutesTab } from './tabs/RoutesTab'
+import { RequestsTab } from './tabs/RequestsTab'
 import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
 import { QueuesTab } from './tabs/QueuesTab'
@@ -16,18 +16,23 @@ import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
+import { startTrafficSampler } from './lib/traffic'
 import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
-import { DetailModalHost } from './lib/detail-modal'
-import { ApiRunnerHost } from './lib/api-runner'
+import { activeTab, switchTab } from './lib/nav'
+import { Icon } from './lib/icons'
 import { AuthGate } from './lib/auth-gate'
+import { CommandPalette, openCommandPalette } from './lib/command-palette'
+import type { PaletteItem } from './lib/palette-core'
+import { openApiRunner } from './lib/api-runner'
+import { openToken } from './lib/token-detail'
 
 type BuiltInTabId =
   | 'overview'
   | 'runtime'
-  | 'memory'
   | 'topology'
   | 'routes'
+  | 'requests'
   | 'metrics'
   | 'container'
   | 'queues'
@@ -51,10 +56,10 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
   return [
     { id: 'overview', label: 'Overview' },
     { id: 'runtime', label: 'Runtime' },
-    { id: 'memory', label: 'Memory' },
     { id: 'topology', label: 'Topology' },
     { id: 'routes', label: 'Routes', count: () => store.routes().length || undefined },
     { id: 'metrics', label: 'Metrics' },
+    { id: 'requests', label: 'Requests' },
     {
       id: 'container',
       label: 'Container',
@@ -99,13 +104,24 @@ interface TabGroup {
 }
 const TAB_GROUPS: readonly TabGroup[] = [
   { label: null, ids: ['overview'] },
-  { label: 'Runtime', ids: ['runtime', 'memory', 'topology', 'metrics'] },
+  { label: 'Runtime', ids: ['runtime', 'topology', 'metrics', 'requests'] },
   { label: 'Architecture', ids: ['routes', 'container', 'graph'] },
   { label: 'Data & Jobs', ids: ['database', 'queues'] },
   { label: null, ids: ['activity'] },
 ]
 
 const SIDEBAR_WIDTH_KEY = 'kickjs-devtools-sidebar-w'
+const RAIL_KEY = 'kickjs-devtools-sidebar-mode'
+/** Tabs that lay out their own panes and fill the main area. */
+const FLUSH_TABS: ReadonlySet<string> = new Set([
+  'routes',
+  'requests',
+  'container',
+  'graph',
+  'activity',
+  'database',
+  'queues',
+])
 const SIDEBAR_COLLAPSED_KEY = 'kickjs-devtools-sidebar-collapsed'
 const SIDEBAR_MIN = 150
 const SIDEBAR_MAX = 360
@@ -131,17 +147,26 @@ function readCollapsedGroups(): string[] {
 }
 
 export const App: Component = () => {
-  const initial = (() => {
+  const active = activeTab
+  // Icon rail by default — labels on demand. Remembered per browser.
+  const [rail, setRail] = createSignal(
+    (() => {
+      try {
+        return localStorage.getItem(RAIL_KEY) !== 'full'
+      } catch {
+        return true
+      }
+    })(),
+  )
+  const toggleRail = (): void => {
+    const next = !rail()
+    setRail(next)
     try {
-      const saved = localStorage.getItem('kickjs-devtools-tab')
-      if (saved) return saved
+      localStorage.setItem(RAIL_KEY, next ? 'rail' : 'full')
     } catch {
-      // localStorage may throw in private mode — ignore
+      // storage unavailable
     }
-    return 'overview'
-  })()
-
-  const [active, setActive] = createSignal<string>(initial)
+  }
   const [customTabs, setCustomTabs] = createSignal<DevtoolsTabDescriptor[]>([])
   const [tabErrors, setTabErrors] = createSignal<ReadonlyArray<{ source: string; reason: string }>>(
     [],
@@ -221,9 +246,11 @@ export const App: Component = () => {
     // Boot the singleton browser bus too — eager so the activity log
     // captures events emitted before the user opens the tab.
     const disposeBus = bootBus()
+    const stopSampler = startTrafficSampler()
     onCleanup(() => {
       dispose?.()
       disposeBus()
+      stopSampler()
     })
 
     // Apply data-theme + data-density to <html> on change.
@@ -232,12 +259,7 @@ export const App: Component = () => {
   })
 
   const switchTo = (id: string): void => {
-    setActive(id)
-    try {
-      localStorage.setItem('kickjs-devtools-tab', id)
-    } catch {
-      // ignore
-    }
+    switchTab(id)
     // Scroll the activated tab into view — important on narrow
     // viewports where the tab bar overflows; otherwise a programmatic
     // switch (or a localStorage restore) lands on a tab the user
@@ -247,6 +269,53 @@ export const App: Component = () => {
       el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
     })
   }
+
+  const paletteItems = (): PaletteItem[] => [
+    ...BUILT_INS.map((t) => ({
+      id: `tab:${t.id}`,
+      title: t.label,
+      group: 'Tabs',
+      icon: t.id,
+      run: () => switchTo(t.id),
+    })),
+    ...customTabs().map((t) => ({
+      id: `tab:${t.id}`,
+      title: t.title,
+      group: 'Tabs',
+      icon: 'custom',
+      run: () => switchTo(t.id),
+    })),
+    ...store.routes().map((r) => ({
+      id: `route:${r.method} ${r.path}`,
+      title: `${r.method} ${r.path}`,
+      description: `${r.controller}.${r.handler}`,
+      group: 'Routes',
+      icon: 'routes',
+      run: () => openApiRunner(r),
+    })),
+    ...store.container().map((c) => ({
+      id: `token:${c.token}`,
+      title: c.token,
+      description: [c.kind, c.scope].filter(Boolean).join(' · '),
+      group: 'DI tokens',
+      icon: 'container',
+      run: () => openToken(c.token),
+    })),
+    ...(['system', 'light', 'dark'] as const).map((mode) => ({
+      id: `theme:${mode}`,
+      title: `Theme: ${mode}`,
+      group: 'Actions',
+      icon: 'action',
+      run: () => setTheme(mode),
+    })),
+    ...(['sm', 'md', 'lg'] as const).map((d) => ({
+      id: `density:${d}`,
+      title: `Density: ${d}`,
+      group: 'Actions',
+      icon: 'action',
+      run: () => setDensity(d),
+    })),
+  ]
 
   const activeCustom = (): DevtoolsTabDescriptor | undefined =>
     customTabs().find((t) => t.id === active())
@@ -261,13 +330,26 @@ export const App: Component = () => {
           <h1>KickJS DevTools</h1>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
+          <button
+            type="button"
+            class="flex cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-2.5 py-1 text-xs text-text-muted hover:text-text-strong"
+            onClick={openCommandPalette}
+          >
+            <Icon name="search" size={13} />
+            Search
+            <kbd class="dt-kbd">⌘K</kbd>
+          </button>
           <ConnectionPill />
           <ThemeToggle />
           <SettingsMenu />
         </div>
       </header>
       <div class="dt-shell">
-        <aside class="dt-sidebar" role="tablist" style={`width:${sidebarWidth()}px`}>
+        <aside
+          class={`dt-sidebar ${rail() ? 'rail' : ''}`}
+          role="tablist"
+          style={`width:${sidebarWidth()}px`}
+        >
           <For each={TAB_GROUPS}>
             {(group) => (
               <Show
@@ -285,9 +367,13 @@ export const App: Component = () => {
                               data-tab-id={id}
                               class={`dt-nav-item ${active() === id ? 'active' : ''}`}
                               aria-selected={active() === id}
+                              title={t().label}
                               onClick={() => switchTo(id)}
                             >
-                              <span class="dt-nav-label">{t().label}</span>
+                              <span class="dt-nav-main">
+                                <Icon name={id} />
+                                <span class="dt-nav-label">{t().label}</span>
+                              </span>
                               <Show when={t().count?.()}>
                                 {(n) => <span class="tab-badge">{n()}</span>}
                               </Show>
@@ -301,7 +387,11 @@ export const App: Component = () => {
               >
                 {(label) => (
                   <div class="dt-nav-group">
+                    <Show when={rail()}>
+                      <div class="dt-nav-sep" />
+                    </Show>
                     <button
+                      hidden={rail()}
                       type="button"
                       class="dt-nav-group-header"
                       aria-expanded={!collapsed().includes(label())}
@@ -312,7 +402,7 @@ export const App: Component = () => {
                       </span>
                       {label()}
                     </button>
-                    <Show when={!collapsed().includes(label())}>
+                    <Show when={rail() || !collapsed().includes(label())}>
                       <For each={group.ids}>
                         {(id) => {
                           const tab = byId.get(id)
@@ -325,9 +415,13 @@ export const App: Component = () => {
                                   data-tab-id={id}
                                   class={`dt-nav-item nested ${active() === id ? 'active' : ''}`}
                                   aria-selected={active() === id}
+                                  title={t().label}
                                   onClick={() => switchTo(id)}
                                 >
-                                  <span class="dt-nav-label">{t().label}</span>
+                                  <span class="dt-nav-main">
+                                    <Icon name={id} />
+                                    <span class="dt-nav-label">{t().label}</span>
+                                  </span>
                                   <Show when={t().count?.()}>
                                     {(n) => <span class="tab-badge">{n()}</span>}
                                   </Show>
@@ -356,33 +450,49 @@ export const App: Component = () => {
                   onClick={() => switchTo(tab.id)}
                   title={tab.title}
                 >
-                  <span class="dt-nav-label">{tab.title}</span>
+                  <span class="dt-nav-main">
+                    <Icon name="custom" />
+                    <span class="dt-nav-label">{tab.title}</span>
+                  </span>
                 </button>
               )}
             </For>
           </Show>
+          <div class="dt-sidebar-foot">
+            <button
+              type="button"
+              class="dt-rail-toggle"
+              onClick={toggleRail}
+              title={rail() ? 'Show labels' : 'Icons only'}
+              aria-label={rail() ? 'Show labels' : 'Icons only'}
+            >
+              <Icon name={rail() ? 'expand' : 'collapse'} size={16} />
+            </button>
+          </div>
         </aside>
-        <div
-          class="dt-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          onMouseDown={startResize}
-        />
-        <main class="dt-main" role="tabpanel">
+        <Show when={!rail()}>
+          <div
+            class="dt-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={startResize}
+          />
+        </Show>
+        <main class={`dt-main ${FLUSH_TABS.has(active()) ? 'flush' : ''}`} role="tabpanel">
           <Show when={active() === 'overview'}>
             <OverviewTab />
           </Show>
           <Show when={active() === 'runtime'}>
             <RuntimeTab />
           </Show>
-          <Show when={active() === 'memory'}>
-            <MemoryTab />
-          </Show>
           <Show when={active() === 'topology'}>
             <TopologyTab />
           </Show>
           <Show when={active() === 'routes'}>
             <RoutesTab />
+          </Show>
+          <Show when={active() === 'requests'}>
+            <RequestsTab />
           </Show>
           <Show when={active() === 'metrics'}>
             <MetricsTab />
@@ -421,9 +531,17 @@ export const App: Component = () => {
           </Show>
         </main>
       </div>
-      <DetailModalHost />
-      <ApiRunnerHost />
+      <CommandPalette items={paletteItems} />
       <AuthGate />
+      <Show when={store.connectionStatus() === 'disconnected' && !store.authRequired()}>
+        <div
+          class="fixed bottom-4 left-1/2 z-60 flex -translate-x-1/2 items-center gap-2.5 rounded-md border border-red-500/40 bg-surface-1 px-3.5 py-2 text-[0.8rem] shadow-xl"
+          role="status"
+        >
+          <span class="dt-pulse dt-pulse-disconnected" aria-hidden="true" />
+          Can't reach the app — retrying every few seconds…
+        </div>
+      </Show>
     </div>
   )
 }

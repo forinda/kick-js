@@ -1,34 +1,25 @@
 /**
- * Route registry tab — method/path/controller/handler/middleware/flags
- * listing with search + method-filter + pagination. "Try" opens the API
- * runner for a route.
+ * Routes — a searchable list on the left, grouped by controller, and the API
+ * runner for the selected route on the right. The divider position is
+ * remembered.
  *
- * Sources its data from the shared store (`store.routes()`), which
- * is populated by the unified /stream consumer. Filters are local
- * (per-tab signals); the unified store is the source of truth for
- * the unfiltered list.
- *
- * Mirrors the legacy Vue dashboard's Routes tab exactly so adopters
- * who used the old dashboard see the same affordances.
+ * Reads the shared store (`store.routes()`, fed by the unified stream).
  */
 
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type RouteEntry } from '../lib/store'
-import { Pagination, usePagination } from '../lib/pagination'
-import { openApiRunner } from '../lib/api-runner'
+import { ApiRunnerPanel, openApiRunner, runnerRoute } from '../lib/api-runner'
 import { methodColor } from '../lib/format'
+import { SplitPane } from '../lib/split-pane'
 
-const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const
+const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 type MethodFilter = (typeof METHODS)[number]
 
-/**
- * Render resolved route flags. A flag whose value is `true` carries no more
- * information than its name, so only valued flags show one.
- */
+/** Resolved route flags; a `true` flag carries no more than its name. */
 function formatFlags(flags?: Record<string, unknown>): string {
-  const entries = Object.entries(flags ?? {})
-  if (!entries.length) return '—'
-  return entries.map(([k, v]) => (v === true ? k : `${k}=${JSON.stringify(v)}`)).join(', ')
+  return Object.entries(flags ?? {})
+    .map(([k, v]) => (v === true ? k : `${k}=${JSON.stringify(v)}`))
+    .join(', ')
 }
 
 export const RoutesTab: Component = () => {
@@ -36,59 +27,51 @@ export const RoutesTab: Component = () => {
   const [method, setMethod] = createSignal<MethodFilter>('ALL')
 
   const filtered = createMemo<RouteEntry[]>(() => {
-    let rows = store.routes() as RouteEntry[]
-    if (method() !== 'ALL') {
-      rows = rows.filter((r) => r.method.toUpperCase() === method())
-    }
     const q = search().trim().toLowerCase()
-    if (q) {
-      rows = rows.filter(
-        (r) =>
+    return (store.routes() as RouteEntry[]).filter(
+      (r) =>
+        (method() === 'ALL' || r.method.toUpperCase() === method()) &&
+        (!q ||
           r.path.toLowerCase().includes(q) ||
           r.controller.toLowerCase().includes(q) ||
-          r.handler.toLowerCase().includes(q),
-      )
-    }
-    return rows
+          r.handler.toLowerCase().includes(q)),
+    )
   })
 
-  const pager = usePagination<RouteEntry>(() => filtered())
+  /** Routes grouped by controller, in first-seen order. */
+  const groups = createMemo(() => {
+    const byController = new Map<string, RouteEntry[]>()
+    for (const r of filtered()) {
+      const list = byController.get(r.controller) ?? []
+      list.push(r)
+      byController.set(r.controller, list)
+    }
+    return [...byController]
+  })
 
-  return (
-    <div class="bg-surface-1 rounded-xl border border-border p-5">
-      {/* Toolbar — search + method pills */}
-      <div class="flex flex-col sm:flex-row gap-3 mb-4">
-        <div class="relative flex-1">
-          <svg
-            class="absolute left-3 top-2.5 w-4 h-4 text-text-muted"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search routes (path, controller, handler)…"
-            value={search()}
-            onInput={(e) => setSearch(e.currentTarget.value)}
-            class="w-full bg-surface-2 border border-border-strong rounded-lg pl-10 pr-4 py-2 text-sm
-                   text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
-          />
-        </div>
-        <div class="flex gap-1">
+  const isSelected = (r: RouteEntry) => {
+    const s = runnerRoute()
+    return !!s && s.method === r.method && s.path === r.path
+  }
+
+  const list = (
+    <>
+      <div class="flex flex-col gap-1.5 border-b border-border p-2">
+        <input
+          type="text"
+          placeholder="Search path, controller, handler…"
+          value={search()}
+          onInput={(e) => setSearch(e.currentTarget.value)}
+          class="w-full bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
+        />
+        <div class="flex items-center gap-1 flex-wrap">
           <For each={METHODS}>
             {(m) => (
               <button
                 type="button"
                 onClick={() => setMethod(m)}
-                class={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors border ${
+                aria-pressed={method() === m}
+                class={`px-2 py-0.5 text-[0.68rem] font-semibold rounded-md border ${
                   method() === m
                     ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
                     : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
@@ -99,65 +82,63 @@ export const RoutesTab: Component = () => {
             )}
           </For>
         </div>
-      </div>
-
-      {/* Table */}
-      <Show
-        when={pager.page().length > 0}
-        fallback={
-          <div class="empty">
-            {search() || method() !== 'ALL'
-              ? 'No routes match the current filter'
-              : 'No routes registered'}
-          </div>
-        }
-      >
-        <div class="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Method</th>
-                <th>Path</th>
-                <th>Controller</th>
-                <th>Handler</th>
-                <th>Middleware</th>
-                <th>Flags</th>
-                <th>
-                  <span class="sr-only">Try</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={pager.page()}>
-                {(r) => (
-                  <tr>
-                    <td>
-                      <span class={`text-xs font-bold ${methodColor(r.method)}`}>{r.method}</span>
-                    </td>
-                    <td class="font-mono text-sm">{r.path}</td>
-                    <td>{r.controller}</td>
-                    <td class="text-text-secondary">{r.handler}</td>
-                    <td class="text-text-muted text-xs">
-                      {r.middleware.length ? r.middleware.join(', ') : '—'}
-                    </td>
-                    <td class="text-text-muted text-xs">{formatFlags(r.flags)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => openApiRunner(r)}
-                        class="px-2.5 py-1 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-kick-500 hover:border-kick-500/40"
-                      >
-                        Try
-                      </button>
-                    </td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
+        <div class="text-xs text-text-muted">
+          <Show when={search() || method() !== 'ALL'}>{filtered().length} matched · </Show>
+          {store.routes().length} routes
         </div>
-        <Pagination pager={pager} />
-      </Show>
-    </div>
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <Show
+          when={groups().length > 0}
+          fallback={
+            <div class="empty">
+              {store.routes().length ? 'No routes match' : 'No routes registered'}
+            </div>
+          }
+        >
+          <For each={groups()}>
+            {([controller, routes]) => (
+              <>
+                <div class="sticky top-0 z-1 border-b border-border bg-surface-2 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-wide text-text-muted">
+                  {controller} <span class="font-normal">({routes.length})</span>
+                </div>
+                <For each={routes}>
+                  {(r) => (
+                    <button
+                      type="button"
+                      class={`flex w-full cursor-pointer items-center gap-2 border-0 border-b border-border/50 px-2.5 py-1 text-left text-[0.78rem] text-text-body ${
+                        isSelected(r)
+                          ? 'bg-accent/12 shadow-[inset_2px_0_0_0_var(--color-accent)]'
+                          : 'bg-transparent hover:bg-surface-hover'
+                      }`}
+                      onClick={() => openApiRunner(r)}
+                      title={`${r.controller}.${r.handler}${
+                        r.middleware.length ? ` · middleware: ${r.middleware.join(', ')}` : ''
+                      }`}
+                    >
+                      <span
+                        class={`w-[3.4rem] shrink-0 font-mono text-[0.68rem] font-bold ${methodColor(r.method)}`}
+                      >
+                        {r.method}
+                      </span>
+                      <span class="min-w-0 flex-1 truncate font-mono">{r.path}</span>
+                      <Show when={formatFlags(r.flags)}>
+                        {(f) => (
+                          <span class="max-w-[40%] truncate text-[0.66rem] text-text-muted">
+                            {f()}
+                          </span>
+                        )}
+                      </Show>
+                    </button>
+                  )}
+                </For>
+              </>
+            )}
+          </For>
+        </Show>
+      </div>
+    </>
   )
+
+  return <SplitPane storageKey="routes" left={list} right={<ApiRunnerPanel />} />
 }

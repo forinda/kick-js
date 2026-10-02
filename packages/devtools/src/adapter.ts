@@ -33,7 +33,9 @@ import {
 } from '@forinda/kickjs-devtools-kit'
 import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
-import { collectDevtoolsTabs } from './devtools-tabs'
+import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
+import { RequestLog } from './request-log'
+import { findJobInspectors, getJob, listJobs, listJobSources, runJobAction } from './jobs'
 import { locateHandler } from './source-locator'
 import { createServerBus, type ServerBus } from './bus/server'
 
@@ -78,8 +80,25 @@ interface RouteStats {
   totalMs: number
   minMs: number
   maxMs: number
+  /** Responses with status >= 500. */
+  serverErrors: number
+  /** Responses with status 400–499. */
+  clientErrors: number
   /** Ring buffer of last N samples for percentile computation */
   samples: number[]
+}
+
+/** Upper bounds (ms) of the latency histogram's buckets; the last bucket is everything above. */
+const LATENCY_BUCKETS_MS = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000] as const
+
+/** How many recent samples fall in each {@link LATENCY_BUCKETS_MS} bucket (plus one overflow bucket). */
+function latencyHistogram(samples: readonly number[]): number[] {
+  const counts = Array.from({ length: LATENCY_BUCKETS_MS.length + 1 }, () => 0)
+  for (const ms of samples) {
+    const i = LATENCY_BUCKETS_MS.findIndex((bound) => ms <= bound)
+    counts[i === -1 ? LATENCY_BUCKETS_MS.length : i]!++
+  }
+  return counts
 }
 
 const MAX_SAMPLES = 1000
@@ -202,6 +221,11 @@ export interface DevToolsOptions {
     /** Ring-buffer size — number of past samples retained. Default: 60. */
     bufferSize?: number
   }
+  /**
+   * How many recent requests the Requests tab keeps (method, path, status,
+   * duration, error). Default: 200. `0` keeps none.
+   */
+  requestLog?: number
 }
 
 /**
@@ -280,6 +304,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     const configPrefixes = options.configPrefixes!
     const errorRateThreshold = options.errorRateThreshold!
     const peerAdapters = options.adapters ?? []
+    const requestLog = new RequestLog(options.requestLog ?? 200)
+    // The dashboard's own polling would otherwise push the app's requests out.
+    const logRequest = (info: Parameters<RequestLog['record']>[0]): void => {
+      if (info.path !== basePath && !info.path.startsWith(`${basePath}/`)) requestLog.record(info)
+    }
 
     // Secret token guard
     let secret: string | false
@@ -394,10 +423,20 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
       const routeKey = `${method} ${route ?? '<unmatched>'}`
       if (!routeLatency[routeKey]) {
-        routeLatency[routeKey] = { count: 0, totalMs: 0, minMs: Infinity, maxMs: 0, samples: [] }
+        routeLatency[routeKey] = {
+          count: 0,
+          totalMs: 0,
+          minMs: Infinity,
+          maxMs: 0,
+          serverErrors: 0,
+          clientErrors: 0,
+          samples: [],
+        }
       }
       const stats = routeLatency[routeKey]
       stats.count++
+      if (status >= 500) stats.serverErrors++
+      else if (status >= 400) stats.clientErrors++
       stats.totalMs += elapsedMs
       stats.minMs = Math.min(stats.minMs, elapsedMs)
       stats.maxMs = Math.max(stats.maxMs, elapsedMs)
@@ -585,16 +624,35 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         })
 
         router.get('/container', (ctx: RequestContext) => {
-          const registrations = container?.getRegistrations() ?? []
+          // `__hmr__` entries are the dev server's shadow registrations — the
+          // topology and graph endpoints leave them out too.
+          const registrations = (container?.getRegistrations() ?? []).filter(
+            (r) => !r.token.startsWith('__hmr__'),
+          )
           ctx.json({ registrations, count: registrations.length })
+        })
+
+        // Recent requests, oldest first. `?since=<seq>` returns only newer ones,
+        // so the Requests tab polls cheaply.
+        router.get('/requests', (ctx: RequestContext) => {
+          const since = Number((ctx.query as Record<string, unknown> | undefined)?.since ?? 0)
+          ctx.json({
+            requests: requestLog.after(Number.isFinite(since) ? since : 0),
+            // A client holding a higher `seq` than this knows the app restarted.
+            latest: requestLog.latest(),
+          })
         })
 
         router.get('/metrics', (ctx: RequestContext) => {
           // Build latency with percentiles, omitting raw samples from response
           const latency: Record<string, any> = {}
           for (const [key, stats] of Object.entries(routeLatency)) {
-            const { samples: _, ...rest } = stats
-            latency[key] = { ...rest, ...computePercentiles(stats) }
+            const { samples, ...rest } = stats
+            latency[key] = {
+              ...rest,
+              ...computePercentiles(stats),
+              histogram: latencyHistogram(samples),
+            }
           }
           ctx.json({
             requests: requestCount.value,
@@ -604,6 +662,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             uptimeSeconds: uptimeSeconds.value,
             startedAt: new Date(startedAt.value).toISOString(),
             routeLatency: latency,
+            latencyBucketsMs: LATENCY_BUCKETS_MS,
           })
         })
 
@@ -885,6 +944,45 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           ctx.json(collectDevtoolsTabs(kickApp))
         })
 
+        // A `launch` tab's button — runs the action's `run()` on the server.
+        router.post('/tabs/run', async (ctx: RequestContext) => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          if (!kickApp) {
+            ctx.json({ error: 'tabs unavailable — application surface not exposed' }, 503)
+            return
+          }
+          const { tab, action } = (ctx.query ?? {}) as { tab?: string; action?: string }
+          const { status, body } = await runTabAction(
+            kickApp,
+            String(tab ?? ''),
+            String(action ?? ''),
+          )
+          ctx.json(body, status)
+        })
+
+        // ── Jobs: browse and manage via any adapter's / plugin's jobInspector() ──
+        const inspectors = () => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          return kickApp ? findJobInspectors(kickApp) : new Map()
+        }
+        const query = (ctx: RequestContext) => (ctx.query ?? {}) as Record<string, unknown>
+        router.get('/jobs', async (ctx: RequestContext) => {
+          const r = await listJobSources(inspectors())
+          ctx.json(r.body, r.status)
+        })
+        router.get('/jobs/list', async (ctx: RequestContext) => {
+          const r = await listJobs(inspectors(), query(ctx))
+          ctx.json(r.body, r.status)
+        })
+        router.get('/jobs/job', async (ctx: RequestContext) => {
+          const r = await getJob(inspectors(), query(ctx))
+          ctx.json(r.body, r.status)
+        })
+        router.post('/jobs/action', async (ctx: RequestContext) => {
+          const r = await runJobAction(inspectors(), query(ctx))
+          ctx.json(r.body, r.status)
+        })
+
         // ── Topology RPC (architecture.md §23) ──────────────────────
         // Aggregates plugins + adapters + contributors + DI tokens
         // into one snapshot; calls each primitive's introspect() in
@@ -1054,6 +1152,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       onResponse(info) {
         if (!enabled) return
         recordResponse(info.method, info.route, info.status, info.durationMs)
+        logRequest(info)
+      },
+
+      /** Attaches a failed request's error to its Requests-tab entry. */
+      onError(err, info) {
+        if (!enabled || info.source !== 'request') return
+        requestLog.recordError(info.requestId, err)
       },
 
       middleware(): AdapterMiddleware[] {
@@ -1070,12 +1175,16 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
                 const matched = (req as unknown as Record<symbol, MatchedRoute | undefined>)[
                   MATCHED_ROUTE_SLOT
                 ]
-                recordResponse(
-                  req.method ?? 'GET',
-                  matched?.pattern ?? matched?.path,
-                  res.statusCode,
-                  Date.now() - start,
-                )
+                const route = matched?.pattern ?? matched?.path
+                const durationMs = Date.now() - start
+                recordResponse(req.method ?? 'GET', route, res.statusCode, durationMs)
+                logRequest({
+                  method: req.method ?? 'GET',
+                  path: (req.url ?? '/').split('?')[0]!,
+                  route,
+                  status: res.statusCode,
+                  durationMs,
+                })
               })
               next()
             },

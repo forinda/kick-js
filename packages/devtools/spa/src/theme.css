@@ -152,24 +152,6 @@
   .app {
     @apply min-h-screen flex flex-col bg-app-bg text-app-text font-sans;
   }
-  .tabs {
-    @apply flex gap-1 px-4 pt-3 border-b border-border bg-surface-2
-           overflow-x-auto whitespace-nowrap;
-    /* Thin scrollbar so the bar height stays consistent on Linux/Win
-       (where the default ~12px scrollbar would offset the divider). */
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
-  }
-  .tabs::-webkit-scrollbar {
-    height: 6px;
-  }
-  .tabs::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .tabs::-webkit-scrollbar-thumb {
-    background: var(--color-border-strong);
-    border-radius: 3px;
-  }
   .tab {
     @apply px-4 py-2 text-sm font-medium rounded-t-lg cursor-pointer border border-transparent
            text-text-secondary transition-colors flex-shrink-0;
@@ -266,13 +248,19 @@
     @apply px-2 py-0.5 rounded text-xs font-semibold;
   }
   .badge-ok {
-    @apply bg-emerald-900/50 text-emerald-300;
+    --tone: #10b981;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 15%, transparent);
   }
   .badge-warn {
-    @apply bg-amber-900/50 text-amber-300;
+    --tone: #f59e0b;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 15%, transparent);
   }
   .badge-critical {
-    @apply bg-red-900/50 text-red-300;
+    --tone: #ef4444;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 15%, transparent);
   }
 
   /* Empty + tree fragments used by Topology */
@@ -401,11 +389,9 @@
 .dt-tip-pop {
   position: absolute;
   z-index: 100;
-  visibility: hidden;
-  opacity: 0;
-  transition:
-    opacity 120ms ease,
-    visibility 120ms ease;
+  /* display, not visibility: a hidden popover near the right edge would
+     still widen the scroll area and add a horizontal scrollbar. */
+  display: none;
   width: max-content;
   max-width: 240px;
   padding: 6px 10px;
@@ -432,55 +418,7 @@
 }
 .dt-tip:hover .dt-tip-pop,
 .dt-tip:focus-within .dt-tip-pop {
-  visibility: visible;
-  opacity: 1;
-}
-
-/* ── Runtime tab: process-identity strip ─────────────────────── */
-.proc-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface-1);
-  font-size: 0.85rem;
-}
-.proc-label {
-  color: var(--color-text-secondary);
-}
-.proc-label strong {
-  color: var(--color-text-strong);
-}
-.proc-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.proc-pill {
-  padding: 2px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-app-bg);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--color-text-secondary);
-}
-.proc-pill.rt-express {
-  color: #3b82f6;
-  border-color: #3b82f6;
-}
-.proc-pill.rt-fastify {
-  color: #8b5cf6;
-  border-color: #8b5cf6;
-}
-.proc-pill.rt-h3 {
-  color: #10b981;
-  border-color: #10b981;
+  display: block;
 }
 
 /* ── Density (sm/md/lg) — root font-size drives rem-based spacing+type ── */
@@ -592,7 +530,6 @@ html[data-density='lg'] {
   padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2);
   border-right: 1px solid var(--color-border);
   background: var(--color-surface-2);
-  scrollbar-width: thin;
 }
 .dt-main {
   flex: 1;
@@ -689,4 +626,197 @@ html[data-density='lg'] {
 .app {
   height: 100vh;
   overflow: hidden;
+}
+
+/* ── Icon rail sidebar ───────────────────────────────────────────── */
+.dt-sidebar.rail {
+  width: 52px !important;
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 1.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.dt-sidebar.rail .dt-nav-item {
+  justify-content: center;
+  position: relative;
+  padding: calc(var(--spacing) * 2) 0;
+  width: 38px;
+}
+.dt-sidebar.rail .dt-nav-label {
+  display: none;
+}
+.dt-sidebar.rail .tab-badge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  font-size: 0.55rem;
+  padding: 0 3px;
+  min-width: 0;
+  line-height: 1.3;
+}
+.dt-sidebar.rail .dt-nav-sep {
+  width: 24px;
+  margin: calc(var(--spacing) * 1.5) auto;
+}
+.dt-nav-item svg {
+  flex-shrink: 0;
+}
+.dt-nav-item .dt-nav-main {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  min-width: 0;
+}
+.dt-sidebar-foot {
+  margin-top: auto;
+  padding-top: calc(var(--spacing) * 2);
+  display: flex;
+  justify-content: center;
+}
+.dt-sidebar:not(.rail) {
+  display: flex;
+  flex-direction: column;
+}
+.dt-rail-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: calc(var(--spacing) * 1);
+  border-radius: var(--radius-md);
+}
+.dt-rail-toggle:hover {
+  color: var(--color-text-strong);
+  background: var(--color-surface-hover);
+}
+
+/* Tabs that lay out their own panes take the whole main area. */
+.dt-main.flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── Split pane ─────────────────────────────────────────────────── */
+.dt-split {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+.dt-split-left {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--color-border);
+}
+.dt-split-right {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* Dotted background for an empty detail pane. */
+.dt-panel-grid {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* ── Compact list rows ──────────────────────────────────────────── */
+/* ── Status pills ───────────────────────────────────────────────── */
+.dt-pill {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.dt-pill-ok {
+  color: #10b981;
+  background: color-mix(in srgb, #10b981 15%, transparent);
+}
+.dt-pill-redir {
+  color: #06b6d4;
+  background: color-mix(in srgb, #06b6d4 15%, transparent);
+}
+.dt-pill-warn {
+  color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 15%, transparent);
+}
+.dt-pill-err {
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 15%, transparent);
+}
+
+.dt-kbd {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+}
+
+/* ── Tones: a hue on a 15% tint of itself, readable in both themes ── */
+.dt-tone {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 15%, transparent);
+}
+.dt-tone-violet {
+  --tone: #8b5cf6;
+}
+.dt-tone-blue {
+  --tone: #3b82f6;
+}
+.dt-tone-teal {
+  --tone: #14b8a6;
+}
+.dt-tone-green {
+  --tone: #10b981;
+}
+.dt-tone-amber {
+  --tone: #d97706;
+}
+.dt-tone-red {
+  --tone: #ef4444;
+}
+.dt-tone-gray {
+  --tone: var(--color-text-secondary);
+}
+
+/* ── Scrollbars: thin, theme-coloured, transparent track ───────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+/* Safari reads only these (Chrome and Firefox use the two lines above). */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-muted);
 }
