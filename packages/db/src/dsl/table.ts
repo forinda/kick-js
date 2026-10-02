@@ -1,5 +1,5 @@
 import type { ColumnBuilder, ColumnRef, TypedColumnRefs } from './columns/types'
-import type { IndexDecl } from './constraints'
+import type { CheckDecl, IndexDecl, PrimaryKeyDecl, TableConstraint } from './constraints'
 import { resolveSelfRefs } from './self-ref'
 
 export type { ColumnRef }
@@ -13,6 +13,9 @@ export interface TableDecl<
   __name: TName
   __columns: C
   __indexes: IndexDecl[]
+  /** Declared with `primaryKey(...)` — absent when columns carry `.primaryKey()`. */
+  __primaryKey?: PrimaryKeyDecl
+  __checks?: CheckDecl[]
   /**
    * Named SQL schema this table lives in, from `pgSchema('x').table(...)`.
    * `undefined` means the connection's default search_path (`public` on PG),
@@ -58,7 +61,7 @@ type TableRefs<
 
 type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (
   refs: TypedColumnRefs<C>,
-) => Record<string, IndexDecl>
+) => Record<string, TableConstraint>
 
 /**
  * Declare a typed table. The `TName extends string` generic narrows to the
@@ -119,8 +122,30 @@ export function buildTable<
   Object.assign(selfRefs, refs)
 
   if (constraints) {
-    const declared = constraints(refs)
-    decl.__indexes = Object.values(declared)
+    const declared = Object.values(constraints(refs))
+    decl.__indexes = declared.filter((c): c is IndexDecl => !('kind' in c))
+    const checks = declared.filter((c): c is CheckDecl => 'kind' in c && c.kind === 'check')
+    if (checks.length > 0) decl.__checks = checks
+    const keys = declared.filter((c): c is PrimaryKeyDecl => 'kind' in c && c.kind === 'primaryKey')
+    if (keys.length > 1) {
+      throw new Error(`kickjs-db: table '${name}' declares primaryKey() more than once`)
+    }
+    if (keys[0]) {
+      const flagged = Object.entries(columns)
+        .filter(([, b]) => b.__state().primaryKey)
+        .map(([k]) => k)
+      if (flagged.length > 0) {
+        throw new Error(
+          `kickjs-db: table '${name}' declares its primary key twice — primaryKey() and ` +
+            `.primaryKey() on ${flagged.join(', ')}. Keep one.`,
+        )
+      }
+      const unknown = keys[0].columns.filter((c) => !(c in columns))
+      if (unknown.length > 0 || keys[0].columns.length === 0) {
+        throw new Error(`kickjs-db: table '${name}' primaryKey() needs columns of this table`)
+      }
+      decl.__primaryKey = keys[0]
+    }
   }
 
   return Object.assign(decl, refs)

@@ -1,6 +1,6 @@
 import type { Change, ChangeSet } from '../diff/types'
 import type { ColumnSnapshot, TableSnapshot } from '../snapshot/types'
-import { snapshotTableName } from '../snapshot/name'
+import { primaryKeyOf, snapshotTableName } from '../snapshot/name'
 import { quoteIdent, quoteLiteral } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
 
@@ -74,6 +74,24 @@ function emitChange(change: Change): string {
       )
     case 'removeEnumValue':
       return emitRemoveEnumValueRecreate(change)
+    case 'alterPrimaryKey': {
+      const t = quoteIdent(change.table)
+      const out: string[] = []
+      if (change.before.columns.length > 0) {
+        const name = change.before.name ?? `${bareName(change.table)}_pkey`
+        out.push(`ALTER TABLE ${t} DROP CONSTRAINT ${quoteIdent(name)};`)
+      }
+      if (change.after.columns.length > 0) {
+        const name = change.after.name ?? `${bareName(change.table)}_pkey`
+        const cols = change.after.columns.map(quoteIdent).join(', ')
+        out.push(`ALTER TABLE ${t} ADD CONSTRAINT ${quoteIdent(name)} PRIMARY KEY (${cols});`)
+      }
+      return out.join('\n')
+    }
+    case 'addCheck':
+      return `ALTER TABLE ${quoteIdent(change.table)} ADD CONSTRAINT ${quoteIdent(change.check.name)} CHECK (${change.check.expression});`
+    case 'dropCheck':
+      return `ALTER TABLE ${quoteIdent(change.table)} DROP CONSTRAINT ${quoteIdent(change.check.name)};`
   }
 }
 
@@ -317,11 +335,13 @@ function emitAddFk(table: string, fk: import('../snapshot/types').ForeignKeySnap
 
 function emitCreateTable(t: TableSnapshot): string {
   const cols = Object.values(t.columns).map(emitColumnDecl)
-  const pk = Object.values(t.columns)
-    .filter((c) => c.primaryKey)
-    .map((c) => quoteIdent(c.name))
+  const pk = primaryKeyOf(t).columns.map(quoteIdent)
   const lines = [...cols]
-  if (pk.length > 0) lines.push(`PRIMARY KEY (${pk.join(', ')})`)
+  if (pk.length > 0) {
+    const named = t.primaryKey?.name ? `CONSTRAINT ${quoteIdent(t.primaryKey.name)} ` : ''
+    lines.push(`${named}PRIMARY KEY (${pk.join(', ')})`)
+  }
+  for (const c of t.checks) lines.push(`CONSTRAINT ${quoteIdent(c.name)} CHECK (${c.expression})`)
   return `CREATE TABLE ${tableIdent(t)} (\n  ${lines.join(',\n  ')}\n);`
 }
 

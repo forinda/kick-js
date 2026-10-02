@@ -230,6 +230,34 @@ the limit are untouched, so existing schemas keep the constraint names they
 already have. Names you write yourself — in `index()` / `unique()` — are used
 exactly as given; keeping them under 63 bytes is up to you.
 
+## Primary keys and CHECK constraints
+
+A single-column key goes on the column — `.primaryKey()`. A composite key, or a key with a name of your choosing, goes in the constraints with `primaryKey(name?).on(...)`, columns in key order:
+
+```ts
+import { check, integer, primaryKey, table } from '@forinda/kickjs-db'
+
+export const memberships = table(
+  'memberships',
+  {
+    teamId: integer().notNull(),
+    userId: integer().notNull(),
+    seats: integer().notNull(),
+  },
+  (t) => ({
+    pk: primaryKey('memberships_pk').on(t.teamId, t.userId),
+    seatsPositive: check('seats_positive', 'seats > 0'),
+  }),
+)
+```
+
+- Declare the key one way — `primaryKey()` together with a column's `.primaryKey()` throws.
+- Key columns are NOT NULL in the database either way. Mark them `.notNull()` so the row type says so too.
+- Only Postgres keeps the key's name (otherwise `<table>_pkey`); MySQL and SQLite ignore it.
+- `check(name, expression)` takes SQL as written, for the dialect you target.
+
+Changing the key or a CHECK generates a migration for it — see [Migrations → Primary keys and CHECKs](./migrations#primary-keys-and-checks). The class and fluent [table forms](../db-table-forms.md) take the same constraints.
+
 ## Postgres enums
 
 `pgEnum()` is imported from the `@forinda/kickjs-db/pg` subpath. It returns a column factory whose phantom type narrows to the union of declared values:

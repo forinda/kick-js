@@ -43,7 +43,7 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
     ordered.filter((c) => c.kind === 'dropTable').map((c) => snapshotTableName(c.table)),
   )
   return ordered.filter((c) => {
-    if (c.kind === 'dropForeignKey' || c.kind === 'dropIndex') {
+    if (c.kind === 'dropForeignKey' || c.kind === 'dropIndex' || c.kind === 'dropCheck') {
       return !droppedTables.has(c.table)
     }
     return true
@@ -97,6 +97,17 @@ function invert(change: Exclude<Change, CreateSchema>): Change {
       // forward change verbatim; the operator gets a draft + a clear
       // signal that the down won't auto-revert.
       return change
+    case 'alterPrimaryKey':
+      return {
+        kind: 'alterPrimaryKey',
+        table: change.table,
+        before: change.after,
+        after: change.before,
+      }
+    case 'addCheck':
+      return { kind: 'dropCheck', table: change.table, check: change.check }
+    case 'dropCheck':
+      return { kind: 'addCheck', table: change.table, check: change.check }
     case 'removeEnumValue':
       // The forward direction of a value removal is itself an
       // advisory + manual operation; the reverse is symmetric. Carry

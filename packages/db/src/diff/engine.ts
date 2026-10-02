@@ -1,7 +1,7 @@
 import { RemovedValueAsDefaultError } from '../errors'
-import { snapshotTableName } from '../snapshot/name'
+import { pgPrimaryKeyName, primaryKeyOf, snapshotTableName } from '../snapshot/name'
 import type { SchemaSnapshot, TableSnapshot } from '../snapshot/types'
-import type { Change, ChangeSet } from './types'
+import type { Change, ChangeSet, PrimaryKeyShape } from './types'
 
 export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
   const changes: Change[] = []
@@ -55,7 +55,7 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
   // Common tables — column/index/fk diff comes in Tasks 10-12
   for (const name of nextTables) {
     if (!prevTables.has(name)) continue
-    diffTable(prev.tables[name], next.tables[name], changes)
+    diffTable(prev.tables[name], next.tables[name], changes, next.dialect)
   }
 
   // Drop enums after every dependent table change has been emitted.
@@ -206,7 +206,12 @@ function diffEnumsDropPhase(prev: SchemaSnapshot, next: SchemaSnapshot, changes:
   }
 }
 
-function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) {
+function diffTable(
+  prev: TableSnapshot,
+  next: TableSnapshot,
+  changes: Change[],
+  dialect: SchemaSnapshot['dialect'],
+) {
   // Every `table:` field on a Change carries the QUALIFIED name — that is what
   // the emitters quote and what `invertChanges` matches dropTable against.
   // Using the bare `next.name` here emitted `ALTER TABLE "invoices"` for a
@@ -232,6 +237,22 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
     }
   }
 
+  // The primary key is compared as a whole (columns in key order, and the
+  // name on Postgres, the only dialect that keeps one) and changed in two
+  // steps: the old key goes before any column is dropped (Postgres drops a
+  // key with its column, so a later DROP CONSTRAINT would fail), the new one
+  // comes after columns are added and altered. Column alters ignore the
+  // per-column flag.
+  const pk = primaryKeyChange(prev, next, dialect)
+  if (pk && pk.before.columns.length > 0) {
+    changes.push({
+      kind: 'alterPrimaryKey',
+      table: tableRef,
+      before: pk.before,
+      after: { columns: [] },
+    })
+  }
+
   for (const c of drops) {
     changes.push({ kind: 'dropColumn', table: tableRef, column: prevCols.get(c)! })
   }
@@ -246,6 +267,29 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
     const after = nextCols.get(c)!
     if (!columnsEqual(before, after)) {
       changes.push({ kind: 'alterColumn', table: tableRef, column: c, before, after })
+    }
+  }
+
+  if (pk && pk.after.columns.length > 0) {
+    changes.push({
+      kind: 'alterPrimaryKey',
+      table: tableRef,
+      before: { columns: [] },
+      after: pk.after,
+    })
+  }
+
+  // A CHECK whose expression changed is dropped and added again.
+  const prevChecks = new Map(prev.checks.map((c) => [c.name, c]))
+  const nextChecks = new Map(next.checks.map((c) => [c.name, c]))
+  for (const [n, c] of prevChecks) {
+    if (nextChecks.get(n)?.expression !== c.expression) {
+      changes.push({ kind: 'dropCheck', table: tableRef, check: c })
+    }
+  }
+  for (const [n, c] of nextChecks) {
+    if (prevChecks.get(n)?.expression !== c.expression) {
+      changes.push({ kind: 'addCheck', table: tableRef, check: c })
     }
   }
 
@@ -280,12 +324,28 @@ function columnsEqual(
   a: import('../snapshot/types').ColumnSnapshot,
   b: import('../snapshot/types').ColumnSnapshot,
 ): boolean {
-  return (
-    a.type === b.type &&
-    a.nullable === b.nullable &&
-    a.default === b.default &&
-    a.primaryKey === b.primaryKey
-  )
+  // `primaryKey` is left to `alterPrimaryKey`: an alterColumn for it made
+  // Postgres emit nothing for the key and MySQL a MODIFY COLUMN that neither
+  // added nor dropped it.
+  return a.type === b.type && a.nullable === b.nullable && a.default === b.default
+}
+
+function primaryKeyChange(
+  prev: TableSnapshot,
+  next: TableSnapshot,
+  dialect: SchemaSnapshot['dialect'],
+): { before: PrimaryKeyShape; after: PrimaryKeyShape } | null {
+  const shape = (t: TableSnapshot): PrimaryKeyShape => {
+    const pk = primaryKeyOf(t)
+    // Only Postgres keeps a primary key's name; elsewhere it's not part of the key.
+    return dialect === 'postgres' && pk.columns.length > 0
+      ? { name: pgPrimaryKeyName(t), columns: pk.columns }
+      : { columns: pk.columns }
+  }
+  const before = shape(prev)
+  const after = shape(next)
+  const same = before.name === after.name && before.columns.join('\0') === after.columns.join('\0')
+  return same ? null : { before, after }
 }
 
 function columnAttrsEqual(

@@ -88,3 +88,25 @@ export function derivedFkName(table: string, column: string): string {
 export function derivedUniqueName(table: string, column: string): string {
   return fitIdentifier(`${table}_${column}_unique`)
 }
+
+/** A table's primary key: the declared one, else the columns marked `primaryKey`, in column order. */
+export function primaryKeyOf(t: {
+  columns: Record<string, { primaryKey: boolean }>
+  primaryKey?: { name?: string; columns: string[] }
+}): { name?: string; columns: string[] } {
+  if (t.primaryKey) return t.primaryKey
+  return {
+    columns: Object.entries(t.columns)
+      .filter(([, c]) => c.primaryKey)
+      .map(([k]) => k),
+  }
+}
+
+/**
+ * The name Postgres gives a primary key: the declared one, else `<table>_pkey`.
+ * ponytail: doesn't reproduce PG's truncation of a 60+ byte table name; declare
+ * the name explicitly on a table that long.
+ */
+export function pgPrimaryKeyName(t: { name: string; primaryKey?: { name?: string } }): string {
+  return t.primaryKey?.name ?? `${t.name}_pkey`
+}

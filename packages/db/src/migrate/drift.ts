@@ -27,6 +27,19 @@ import { MigrationDriftError, type SchemaDiffSummary } from './errors'
  * compared raw and keeps default-level drift detection.
  */
 function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
+  // Introspection reads neither CHECK constraints (Postgres also rewrites
+  // their expressions) nor a primary key's name and declared order, so drift
+  // compares key columns only and leaves CHECKs out. ponytail: introspect
+  // pg_constraint / information_schema.check_constraints to cover them.
+  snap = {
+    ...snap,
+    tables: Object.fromEntries(
+      Object.entries(snap.tables).map(([n, t]) => {
+        const { primaryKey: _key, ...rest } = t
+        return [n, { ...rest, checks: [] }]
+      }),
+    ),
+  }
   if (snap.dialect === 'postgres') return snap
 
   const tables: Record<string, TableSnapshot> = {}
