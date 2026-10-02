@@ -18,7 +18,7 @@ The closest thing to an entity class is the [base-class table form](../db-table-
 | `@CreateDateColumn()`                                          | `timestamp().notNull().defaultNow()`                                                                                                           |
 | `@UpdateDateColumn()`                                          | `timestamp().notNull().defaultNow().onUpdateNow()`                                                                                             |
 | `@OneToMany` / `@ManyToOne`                                    | a foreign key with `.references()`, plus `relations()` with `many` / `one` — [Keys & Constraints](./constraints.md)                            |
-| `@ManyToMany` + `@JoinTable`                                   | an explicit junction table; `through` in relational reads is [D.13](../roadmap.md)                                                             |
+| `@ManyToMany` + `@JoinTable`                                   | a junction table, and `many(target, { through: junction })` — [Many-to-many](../db-relational-query.md#many-to-many)                           |
 | `relations: { posts: true }`, `eager: true`                    | `db.query.users.findMany({ with: { posts: true } })` — one query — [Relational Queries](../db-relational-query.md)                             |
 | lazy relations (`Promise<Post[]>`)                             | none — query the related rows when you need them                                                                                               |
 | `DataSource.getRepository(User)`                               | the typed client (`db.selectFrom('users')`), behind your own repository — [Repositories](./repositories.md)                                    |
@@ -268,7 +268,6 @@ Left unhandled in a KickJS route, a `UniqueViolationError` answers `409`. Pass `
 - **A unit of work.** No change tracking, no `save()` that inserts or updates for you, no cascading saves of related objects. Every statement is one you wrote.
 - **Lazy relations and `eager: true`.** Ask for related rows with `with` on the query that needs them.
 - **Entity listeners and subscribers.** There are no per-row lifecycle hooks; use service code, [`afterCommit`](./transactions.md#after-commit), a [`customType`](../db-extensions.md) codec to transform a value on write and read, or [query events](./events-plugins.md) to observe every statement.
-- **`@ManyToMany` in relational reads** — [D.13](../roadmap.md). Declare the junction table and nest through it: `with: { memberships: { with: { project: true } } }`.
 - **`synchronize`.** Deliberately absent — schema changes ship as migrations someone has read.
 
 ## Moving an existing TypeORM app

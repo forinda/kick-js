@@ -206,12 +206,36 @@ function buildInnerSelect(
     sub = sub.selectAll()
   }
 
-  for (let i = 0; i < rel.sourceColumns.length; i++) {
-    sub = sub.whereRef(
-      `${innerAlias}.${rel.targetColumns[i]}`,
-      '=',
-      `${sourceAlias}.${rel.sourceColumns[i]}`,
-    )
+  if (rel.through) {
+    // Many-to-many: target rows joined to the junction rows that point at the source.
+    const through = rel.through
+    const junctionAlias = `${innerAlias}_j`
+    sub = sub.innerJoin(`${through.table} as ${junctionAlias}`, (join: any) => {
+      let on = join
+      for (let i = 0; i < through.targetColumns.length; i++) {
+        on = on.onRef(
+          `${junctionAlias}.${through.targetColumns[i]}`,
+          '=',
+          `${innerAlias}.${rel.targetColumns[i]}`,
+        )
+      }
+      return on
+    })
+    for (let i = 0; i < through.sourceColumns.length; i++) {
+      sub = sub.whereRef(
+        `${junctionAlias}.${through.sourceColumns[i]}`,
+        '=',
+        `${sourceAlias}.${rel.sourceColumns[i]}`,
+      )
+    }
+  } else {
+    for (let i = 0; i < rel.sourceColumns.length; i++) {
+      sub = sub.whereRef(
+        `${innerAlias}.${rel.targetColumns[i]}`,
+        '=',
+        `${sourceAlias}.${rel.sourceColumns[i]}`,
+      )
+    }
   }
 
   const nextTrace = [...trace, innerAlias]

@@ -19,7 +19,7 @@ The closest thing to a model class is the [base-class table form](../db-table-fo
 | `timestamps: true` (`createdAt`, `updatedAt`)                  | `createdAt: timestamp().notNull().defaultNow()`, `updatedAt: timestamp().notNull().defaultNow().onUpdateNow()` — [maintained columns](./schema.md#columns-kick-db-maintains) |
 | `paranoid: true`                                               | `deletedAt: timestamp().softDelete()` — relational reads skip deleted rows; you delete by setting it ([maintained columns](./schema.md#columns-kick-db-maintains))           |
 | `hasMany` / `belongsTo` / `hasOne`                             | a foreign key with `.references()`, plus `relations()` with `many` / `one` — [Keys & Constraints](./constraints.md)                                                          |
-| `belongsToMany(Tag, { through })`                              | an explicit junction table; `through` in relational reads is [D.13](../roadmap.md)                                                                                           |
+| `belongsToMany(Tag, { through })`                              | a junction table, and `many(tags, { through: postTags })` — [Many-to-many](../db-relational-query.md#many-to-many)                                                           |
 | `include: [{ model: Post, where, limit }]`                     | `db.query.users.findMany({ with: { posts: { where, limit } } })` — one query — [Relational Queries](../db-relational-query.md)                                               |
 | `user.getPosts()` (lazy association getters)                   | none — query the related rows                                                                                                                                                |
 | `findAll` / `findOne` / `findByPk` / `findAndCountAll`         | `selectFrom(…).where(…).execute()` / `.executeTakeFirst()`, plus a count query — [Queries](./queries.md)                                                                     |
@@ -287,7 +287,6 @@ Sequelize validates inside `create`; kick/db validates at the edge, before the h
 - **Active-record instances.** No `save()`, `reload()`, `increment()` or `getPosts()` on a row. Rows are plain data; writes are statements. An atomic counter is one update — [Increment a counter](./raw-sql.md#increment-a-counter).
 - **Hooks.** No `beforeCreate` / `afterUpdate`. Put the logic in the service that writes, use [`afterCommit`](./transactions.md#after-commit) for side effects, a [`customType`](../db-extensions.md) codec to transform a value on write and read, or [query events](./events-plugins.md) to observe every statement.
 - **Scopes.** No `defaultScope` applied behind your back. Name the query in a repository function instead.
-- **`belongsToMany` in relational reads** — [D.13](../roadmap.md). Declare the junction table and nest through it: `with: { memberships: { with: { project: true } } }`.
 - **`sync()`.** Deliberately absent — schema changes ship as migrations someone has read.
 
 ## Moving an existing Sequelize app

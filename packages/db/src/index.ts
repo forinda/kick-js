@@ -185,6 +185,7 @@ export {
   RelationalQueryAliasCollisionError,
   RelationalQueryAmbiguousRelationNameError,
   RelationalQueryMissingInverseError,
+  RelationalQueryThroughError,
   RelationalQueryNotSupportedError,
   RelationalQueryCancelledError,
 } from './query/errors'

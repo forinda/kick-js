@@ -95,6 +95,59 @@ Each clause scopes only to the inner relation — outer filters keep working ind
 
 `orderBy` returns an expression, ascending by default. Wrap it in `desc()` (or `asc()`, both from `@forinda/kickjs-db`) for a direction, and return an array to sort by several: `[desc(eb.ref('priority')), asc(eb.ref('title'))]`.
 
+## Many-to-many
+
+Declare the junction table as a table, and point a `many` through it:
+
+```ts
+export const posts = table('posts', { id: serial().primaryKey(), title: text().notNull() })
+export const tags = table('tags', { id: serial().primaryKey(), name: text().notNull() })
+export const postTags = table(
+  'post_tags',
+  {
+    postId: integer()
+      .notNull()
+      .references(() => posts.id),
+    tagId: integer()
+      .notNull()
+      .references(() => tags.id),
+  },
+  (t) => ({ pk: primaryKey().on(t.postId, t.tagId) }),
+)
+
+export const postRelations = relations(posts, ({ many }) => ({
+  tags: many(tags, { through: postTags }),
+}))
+export const tagRelations = relations(tags, ({ many }) => ({
+  posts: many(posts, { through: postTags }),
+}))
+```
+
+```ts
+const post = await db.query.posts.findFirst({
+  where: (_p, eb) => eb('id', '=', id),
+  with: { tags: { orderBy: (_t, eb) => eb.ref('name') } },
+})
+// post.tags: Tag[] — the junction rows themselves aren't returned
+```
+
+The junction's foreign keys decide the join — one to each side. A `through` relation takes `where`, `orderBy`, `limit` and nested `with` like any `many`, and still compiles to one query.
+
+When the junction has more than one key to a side — a table joined to itself, like `follows` between users — name the junction columns:
+
+```ts
+export const userRelations = relations(users, ({ many }) => ({
+  following: many(users, {
+    through: { table: follows, from: [follows.followerId], to: [follows.followeeId] },
+  }),
+  followers: many(users, {
+    through: { table: follows, from: [follows.followeeId], to: [follows.followerId] },
+  }),
+}))
+```
+
+`from` holds the source's key, `to` the target's. Reading a junction's own columns (a `role` on a membership, a `createdAt` on a follow) needs the junction as a table in between: `with: { memberships: { with: { project: true } } }`.
+
 ## Self-references and cycles
 
 Aliases are depth-suffixed under the hood (`tasks_0`, `tasks_1`, `tasks_2`…) so self-referencing relations don't collide:
@@ -190,6 +243,7 @@ MySQL 8+ uses `JSON_ARRAYAGG(JSON_OBJECT(...))` for `many`. MySQL's `JSON_ARRAYA
 - **`RelationalQueryDepthError`** — the request exceeds `maxDepth` (default 5). Raise the limit on the call or restructure the query.
 - **`RelationalQueryAmbiguousRelationNameError`** — two relations share the same name in the registry. Disambiguate via `relationName: 'foo'` on both sides.
 - **`RelationalQueryMissingInverseError`** — a `many` relation can't find its inverse `one`. Either add the inverse in the relations file or tag both sides with `relationName: 'foo'`.
+- **`RelationalQueryThroughError`** — a `through` junction doesn't have exactly one foreign key to each side, or the `from` / `to` columns given aren't a foreign key to that side. Name the columns, or fix the junction's `references()`.
 
 ## Reference: `task-kickdb-api`
 

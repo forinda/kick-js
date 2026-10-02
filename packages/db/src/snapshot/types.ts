@@ -92,6 +92,11 @@ export interface RelationSnapshot {
    * the relation. Disambiguates multi-FK schemas.
    */
   relationName?: string
+  /**
+   * For a many-to-many: the junction table, and its columns that hold the
+   * source's `sourceColumns` and the target's `targetColumns`.
+   */
+  through?: { table: string; sourceColumns: readonly string[]; targetColumns: readonly string[] }
 }
 
 export interface SchemaSnapshot {
