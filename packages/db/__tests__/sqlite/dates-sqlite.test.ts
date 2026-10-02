@@ -21,7 +21,7 @@ import {
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
 
 // A custom codec on a timestamp-typed column still wins over the built-in one.
-const epoch = customType<{ data: Date; driverData: number }>({
+const epoch = customType<Date>({
   dataType: () => 'integer',
   toDriver: (d) => d.getTime(),
   fromDriver: (n) => new Date(Number(n)),
