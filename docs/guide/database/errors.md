@@ -65,7 +65,7 @@ try {
 
 Left unhandled, a `UniqueViolationError` answers `409` rather than `500` — it carries `status: 409`. Its message names the table and columns, never the duplicate value. Other database errors answer `500` and are logged.
 
-**Retryable errors** — serialization failures and deadlocks — mean "run the transaction again". Let the transaction do it with [`retry`](./queries#retrying) rather than catching them yourself.
+**Retryable errors** — serialization failures and deadlocks — mean "run the transaction again". Let the transaction do it with [`retry`](./transactions#retrying) rather than catching them yourself.
 
 **Calling a driver directly?** `translateDbError(err, dialect)` turns its error into one of these classes:
 
@@ -97,15 +97,15 @@ try {
 
 ### Relational queries (`db.query.*`)
 
-| Error / `code`                                                                             | Cause                                                                          | Fix                                                                        |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `RelationalQueryUnknownRelationError` · `KICK_DB_RELATIONAL_UNKNOWN_RELATION`              | a `with` key that isn't declared                                               | declare it in `relations()` ([Relational Queries](../db-relational-query)) |
-| `RelationalQueryDepthError` · `KICK_DB_RELATIONAL_DEPTH_EXCEEDED`                          | `with` nested deeper than `maxDepth` (default 5)                               | nest less, or pass `{ maxDepth: N }` if it's intended                      |
-| `RelationalQueryAliasCollisionError` · `KICK_DB_RELATIONAL_ALIAS_COLLISION`                | a relation has the same name as a column                                       | rename the relation or the column                                          |
-| `RelationalQueryMissingInverseError` · `KICK_DB_RELATIONAL_MISSING_INVERSE`                | a `many` with no `one` pointing back, and zero or several foreign keys to pair | declare the inverse `one`, or tag both sides with the same `relationName`  |
-| `RelationalQueryAmbiguousRelationNameError` · `KICK_DB_RELATIONAL_AMBIGUOUS_RELATION_NAME` | several `one` relations share a `relationName`                                 | make each `relationName` unique per pair of tables                         |
-| `RelationalQueryCancelledError` · `relational_query_cancelled`                             | the `signal` passed to the query aborted                                       | expected when a request is cancelled; `err.cause` holds the abort reason   |
-| `RelationalQueryNotSupportedError`                                                         | not thrown by current versions — kept for compatibility                        |                                                                            |
+| Error / `code`                                                                             | Cause                                                                                                                       | Fix                                                                        |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `RelationalQueryUnknownRelationError` · `KICK_DB_RELATIONAL_UNKNOWN_RELATION`              | a `with` key that isn't declared                                                                                            | declare it in `relations()` ([Relational Queries](../db-relational-query)) |
+| `RelationalQueryDepthError` · `KICK_DB_RELATIONAL_DEPTH_EXCEEDED`                          | `with` nested deeper than `maxDepth` (default 5)                                                                            | nest less, or pass `{ maxDepth: N }` if it's intended                      |
+| `RelationalQueryAliasCollisionError` · `KICK_DB_RELATIONAL_ALIAS_COLLISION`                | a relation has the same name as a column                                                                                    | rename the relation or the column                                          |
+| `RelationalQueryMissingInverseError` · `KICK_DB_RELATIONAL_MISSING_INVERSE`                | a `many` with no `one` pointing back, and zero or several foreign keys to pair                                              | declare the inverse `one`, or tag both sides with the same `relationName`  |
+| `RelationalQueryAmbiguousRelationNameError` · `KICK_DB_RELATIONAL_AMBIGUOUS_RELATION_NAME` | several `one` relations share a `relationName`                                                                              | make each `relationName` unique per pair of tables                         |
+| `RelationalQueryCancelledError` · `relational_query_cancelled`                             | the `signal` passed to the query aborted                                                                                    | expected when a request is cancelled; `err.cause` holds the abort reason   |
+| `KICK_DB_RELATIONAL_NOT_SUPPORTED` (a `KickDbError`)                                       | the MySQL migration adapter found MySQL older than 8.0 or MariaDB older than 10.5 — relational queries need `JSON_ARRAYAGG` | upgrade the server, or use the query builder instead of `db.query`         |
 
 ### Migrations
 
@@ -128,6 +128,6 @@ UPDATE kick_migrations_lock SET locked_at = NULL, locked_by = NULL WHERE id = 1;
 
 ## Related
 
-- [Queries → Transactions](./queries#transactions) — `retry` for retryable errors
+- [Queries → Transactions](./transactions) — `retry` for retryable errors
 - [Migrations](./migrations)
 - [Testing with kick/db](./testing#asserting-database-errors)

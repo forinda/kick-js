@@ -1,4 +1,4 @@
-# Schema
+# Tables and Columns
 
 A `@forinda/kickjs-db` schema is a plain TypeScript module that exports `table()` declarations. The same file is the source of truth for runtime SQL, TypeScript inference, and migration diffing — there is no second declaration to drift against.
 
@@ -34,7 +34,7 @@ export const posts = table(
 )
 ```
 
-The third argument receives a `refs` object — one `ColumnRef` per column — for declaring multi-column indexes and unique constraints. See [Indexes & unique constraints](#indexes-unique-constraints).
+The third argument receives a `refs` object — one `ColumnRef` per column — for declaring multi-column indexes and unique constraints. See [Keys and Constraints → Indexes & unique constraints](./constraints#indexes-unique-constraints).
 
 ## Column builders
 
@@ -111,152 +111,9 @@ const tasks = table('tasks', {
 // db.selectFrom('tasks').select('meta') → meta: { tags: string[]; pinned: boolean } | null
 ```
 
-## Foreign keys
+## Keys and constraints
 
-Declare a foreign key with `.references()` on the column. The target is passed as a **thunk** so self-referencing and forward-referencing tables work without tripping over declaration order:
-
-```ts
-import { table, uuid, varchar, type ColumnRef } from '@forinda/kickjs-db'
-
-export const users = table('users', {
-  id: uuid().primaryKey().defaultRandom(),
-  email: varchar(255).notNull().unique(),
-})
-
-export const posts = table('posts', {
-  id: uuid().primaryKey().defaultRandom(),
-  authorId: uuid()
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-})
-```
-
-`onDelete` / `onUpdate` accept the standard FK actions (`'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'`). Both default to `'no_action'`.
-
-### Constraint names
-
-By default the constraint is named `<table>_<column>_fk`. Pass `name` when the
-constraint already exists in the database under a different one:
-
-```ts
-userId: uuid().references(() => users.id, { name: 'orders_user_id_fkey' }),
-```
-
-You rarely write this by hand — `kick db introspect` emits it. A database names
-its own constraints (Postgres' default is `<table>_<column>_fkey`), and keeping
-the real name is what stops the next diff from proposing a rename of every
-foreign key in the schema.
-
-For a self-reference, name the column with `selfRef` — the table binds it to its own column:
-
-```ts
-import { selfRef } from '@forinda/kickjs-db'
-
-export const categories = table('categories', {
-  id: uuid().primaryKey().defaultRandom(),
-  parentId: uuid().references(selfRef('id')),
-})
-```
-
-Written as `() => categories.id`, the const would reference itself in its own initializer, which TypeScript rejects (TS7022) unless the thunk is annotated `(): ColumnRef => categories.id`. `selfRef` needs no annotation, and a column name that doesn't exist fails when the table is declared.
-
-### Typed foreign keys and cycles
-
-`fk(builder, () => target)` is `.references()` that checks both sides hold the same type — a `uuid()` column pointing at a `serial()` key is a type error:
-
-```ts
-import { fk } from '@forinda/kickjs-db'
-
-authorId: fk(uuid().notNull(), () => users.id, { onDelete: 'cascade' }),
-```
-
-Two tables that reference each other hit the same TS7022 — each const waits on the other. `link()` adds the foreign key once both exist, so neither initializer names the other:
-
-```ts
-import { link } from '@forinda/kickjs-db'
-
-export const users = table('users', { id: uuid().primaryKey(), featuredPostId: integer() })
-export const posts = table('posts', {
-  id: serial().primaryKey(),
-  authorId: fk(uuid().notNull(), () => users.id),
-})
-link(users.featuredPostId, () => posts.id)
-```
-
-Tables can also be declared as classes or column by column — see [Table Forms](../db-table-forms.md).
-
-## Indexes & unique constraints
-
-Multi-column indexes and unique constraints live in the third argument to `table()`. The `index()` and `unique()` helpers take a name and an `.on(...columns)` list:
-
-```ts
-import { table, uuid, varchar, integer, index, unique } from '@forinda/kickjs-db'
-
-export const posts = table(
-  'posts',
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    authorId: integer().notNull(),
-    slug: varchar(200).notNull(),
-  },
-  (t) => ({
-    authorIdx: index('posts_author_idx').on(t.authorId),
-    slugUnique: unique('posts_slug_unique').on(t.authorId, t.slug),
-  }),
-)
-```
-
-Keeping constraints in one callback means every constraint name lives in a single place, which keeps migration diffing simple.
-
-### Derived names and the 63-character limit
-
-A single-column `.unique()` or `.references()` derives its constraint name as
-`<table>_<column>_unique` / `<table>_<column>_fk`. Postgres caps identifiers at
-63 bytes and **truncates silently** rather than erroring, so two derived names
-sharing a long prefix would become the same name and the migration would fail
-part-way through with `constraint … already exists`.
-
-Derived names that would exceed the limit are shortened deterministically —
-truncated, with a short hash of the full name inserted before the `_fk` /
-`_unique` marker:
-
-```
-finance_vote_head_account_reference_ledgers_fin_a3f19c_fk
-```
-
-The hash is taken over the untruncated name, so the result is stable across
-regenerations and two names that differ anywhere still differ here. Names within
-the limit are untouched, so existing schemas keep the constraint names they
-already have. Names you write yourself — in `index()` / `unique()` — are used
-exactly as given; keeping them under 63 bytes is up to you.
-
-## Primary keys and CHECK constraints
-
-A single-column key goes on the column — `.primaryKey()`. A composite key, or a key with a name of your choosing, goes in the constraints with `primaryKey(name?).on(...)`, columns in key order:
-
-```ts
-import { check, integer, primaryKey, table } from '@forinda/kickjs-db'
-
-export const memberships = table(
-  'memberships',
-  {
-    teamId: integer().notNull(),
-    userId: integer().notNull(),
-    seats: integer().notNull(),
-  },
-  (t) => ({
-    pk: primaryKey('memberships_pk').on(t.teamId, t.userId),
-    seatsPositive: check('seats_positive', 'seats > 0'),
-  }),
-)
-```
-
-- Declare the key one way — `primaryKey()` together with a column's `.primaryKey()` throws.
-- Key columns are NOT NULL in the database either way. Mark them `.notNull()` so the row type says so too.
-- Only Postgres keeps the key's name (otherwise `<table>_pkey`); MySQL and SQLite ignore it.
-- `check(name, expression)` takes SQL as written, for the dialect you target.
-
-Changing the key or a CHECK generates a migration for it — see [Migrations → Primary keys and CHECKs](./migrations#primary-keys-and-checks). The class and fluent [table forms](../db-table-forms.md) take the same constraints.
+Foreign keys, indexes, unique constraints, composite primary keys and CHECK constraints are on [Keys and Constraints](./constraints).
 
 ## Postgres enums
 
@@ -363,7 +220,7 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 }))
 ```
 
-Export the relations alongside the tables (`export * from './schema'`) so the client picks them up. They power `db.query.users.findMany({ with: { posts: true } })` — see [Queries](./queries#relational-queries).
+Export the relations alongside the tables (`export * from './schema'`) so the client picks them up. They power `db.query.users.findMany({ with: { posts: true } })` — see [Queries](../db-relational-query).
 
 ## Type inference
 

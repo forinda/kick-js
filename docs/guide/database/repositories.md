@@ -187,11 +187,11 @@ await this.db.transaction(async () => {
 })
 ```
 
-No `tx` parameter to thread through. Nesting, `afterCommit` and retrying are in [Queries → Transactions](./queries#transactions).
+No `tx` parameter to thread through. Nesting, `afterCommit` and retrying are in [Queries → Transactions](./transactions).
 
 ## Repositories vs `$extends`
 
-For simple, table-local query helpers you can also reach for `db.$extends({ model })` (see [Queries → Per-table methods](./queries#per-table-methods-with-extends)). The repository-interface approach is the right fit when you want:
+For simple, table-local query helpers you can also reach for `db.$extends({ model })` (see [Queries → Per-table methods](../db-extensions#db-extends-model)). The repository-interface approach is the right fit when you want:
 
 - a stable contract the rest of the app depends on (the interface + token),
 - DTO mapping at the persistence boundary,
