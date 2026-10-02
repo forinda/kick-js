@@ -93,4 +93,22 @@ describe('nested rows from db.query on SQLite', () => {
     expect(comment!.post!.tags).toEqual(['db', 'sqlite'])
     expect(comment!.post!.publishedAt).toBeInstanceOf(Date)
   })
+
+  it("leave a column that shares a relation's name alone", async () => {
+    // `notes.author` is plain text; `posts.author` is a relation.
+    const notes = table('notes', { id: serial().primaryKey(), author: text().notNull() })
+    const database = new Database(':memory:')
+    const all = { ...schema, notes }
+    const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
+    const target = extractSnapshot(all, 'sqlite')
+    database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
+    const db = createDbClient({ schema: all, dialect: sqliteDialect({ database }) })
+
+    await db
+      .insertInto('notes')
+      .values([{ author: '42' }, { author: 'true' }])
+      .execute()
+    const rows = await db.selectFrom('notes').select('author').orderBy('id').execute()
+    expect(rows.map((r) => r.author)).toEqual(['42', 'true'])
+  })
 })

@@ -127,6 +127,11 @@ describe('insertSchema', () => {
     ])
     expect(parse({ rate: '1.5' })).toEqual(['rate: At most 0 digit(s) before the decimal point'])
     expect(parse({ count: '1.5' })).toEqual(['count: At most 0 digit(s) after the decimal point'])
+    // A scale outside 0…precision gets the plain decimal check; the database enforces the range.
+    const odd = insertSchema(
+      table('odd', { tiny: numeric(3, 5).notNull(), round: numeric(2, -3).notNull() }),
+    )
+    expect(odd.safeParse({ tiny: '0.00123', round: '12000' }).success).toBe(true)
     // 0.1 + 0.2 is 0.30000000000000004 — send exact amounts as strings.
     expect(parse({ amount: 0.1 + 0.2 })).toEqual([
       'amount: At most 2 digit(s) after the decimal point',

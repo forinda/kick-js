@@ -9,7 +9,13 @@ import {
 import type { CreateDbClientOptions, KickDbClient } from './types'
 import type { SchemaToTypes } from './schema-types'
 import { KickDbEventEmitter } from './events'
-import { CodecPlugin, buildDecoderMap, buildEncoderMap, collectRelationKeys } from './codec-plugin'
+import {
+  CodecPlugin,
+  buildComparisonEncoderMap,
+  buildDecoderMap,
+  buildEncoderMap,
+  collectRelationKeys,
+} from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
@@ -60,7 +66,12 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const encoders = buildEncoderMap(opts.schema, dialectTag)
   const codecPlugin =
     decoders.size > 0 || encoders.size > 0
-      ? new CodecPlugin(encoders, decoders, collectRelationKeys(opts.schema))
+      ? new CodecPlugin(
+          encoders,
+          decoders,
+          collectRelationKeys(opts.schema),
+          buildComparisonEncoderMap(opts.schema, dialectTag),
+        )
       : null
 
   // Detect dialect early — needed both to pick the relational query

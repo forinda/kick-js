@@ -86,6 +86,25 @@ describe('dates on SQLite', () => {
     expect(rows[0]!.n).toBe(1)
   })
 
+  it('compares a date() column with a Date by calendar day', async () => {
+    await db
+      .insertInto('events')
+      .values({ name: 'dayed', at: new Date(), day: new Date('2026-07-09T00:00:00Z') })
+      .execute()
+    const day = new Date('2026-07-09T00:00:00Z')
+    const eq = await db.selectFrom('events').select('name').where('day', '=', day).execute()
+    expect(eq.map((r) => r.name)).toEqual(['dayed'])
+    const range = await db
+      .selectFrom('events')
+      .select('name')
+      .where('day', '>=', day)
+      .where('day', '<=', day)
+      .execute()
+    expect(range.map((r) => r.name)).toEqual(['dayed'])
+    const within = await db.selectFrom('events').select('name').where('day', 'in', [day]).execute()
+    expect(within.map((r) => r.name)).toEqual(['dayed'])
+  })
+
   it('defaultNow() stores milliseconds, so rows inserted together still sort', async () => {
     await db.insertInto('events').values({ name: 'first', at: new Date() }).execute()
     const [{ stored }] = await sql<{

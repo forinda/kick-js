@@ -206,7 +206,11 @@ function decimalSpec(type: string): ColumnSpec {
     .split(',')
     .filter((part) => part.trim() !== '')
     .map(Number)
-  if (precision === undefined) {
+  // Postgres also allows a scale above the precision (`numeric(3, 5)`: only
+  // values under 0.001) or below zero (`numeric(2, -3)`: rounds to thousands).
+  // ponytail: those keep the plain decimal check and leave the bounds to the
+  // database; model them here if a schema ever needs them.
+  if (precision === undefined || scale < 0 || scale > precision) {
     return {
       json: { type: 'string', pattern: DECIMAL.source },
       parse: (v) => {
