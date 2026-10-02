@@ -24,7 +24,9 @@ import pg from 'pg'
 import { PostgresDialect, type Generated } from 'kysely'
 
 import {
+  asc,
   createDbClient,
+  desc,
   integer,
   relations,
   serial,
@@ -187,6 +189,16 @@ describe('db.query.X.findMany({ with }) — real PG round trip', () => {
     // Empty inner set — must be [] not null per spec §4.1 COALESCE.
     expect(p3.comments).toEqual([])
   }, 60_000)
+
+  it('asc() / desc() order the top level and a nested relation', async () => {
+    await seed()
+    const rows = await db.query.users.findMany({
+      orderBy: (_u, eb) => desc(eb.ref('id')),
+      with: { posts: { orderBy: (_p, eb) => [desc(eb.ref('title')), asc(eb.ref('id'))] } },
+    })
+    expect(rows.map((r) => r.email)).toEqual(['c@d.com', 'a@b.com'])
+    expect(rows[1]!.posts.map((p) => p.title)).toEqual(['second', 'first'])
+  })
 
   it('one-relation returns null when no matching row', async () => {
     // Insert a comment first, then orphan it by removing its post —

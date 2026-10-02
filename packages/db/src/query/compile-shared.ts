@@ -11,7 +11,13 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { type Kysely, type ExpressionBuilder, type Expression, type CompiledQuery } from 'kysely'
+import {
+  sql,
+  type Kysely,
+  type ExpressionBuilder,
+  type Expression,
+  type CompiledQuery,
+} from 'kysely'
 import { RelationalQueryDepthError, RelationalQueryUnknownRelationError } from './errors'
 import type { ResolvedRelation, ResolvedRelations } from './relations'
 import type { TableSnapshot } from '../snapshot/types'
@@ -242,9 +248,12 @@ function applyWhereOrderLimit(
   }
 
   if (options.orderBy) {
-    q = q.orderBy((eb: ExpressionBuilder<any, any>) =>
-      options.orderBy!(makeTableRefProxy(eb, alias), eb),
-    )
+    q = q.orderBy((eb: ExpressionBuilder<any, any>) => {
+      const order = options.orderBy!(makeTableRefProxy(eb, alias), eb)
+      // Kysely's callback form takes one expression; an array becomes one
+      // comma-separated ORDER BY list.
+      return Array.isArray(order) ? sql`${sql.join(order)}` : order
+    })
   }
 
   if (typeof options.limit === 'number') {
