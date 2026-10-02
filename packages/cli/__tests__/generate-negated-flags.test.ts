@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Command } from 'commander'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -38,6 +38,12 @@ describe('kick g — negated flags after the subcommand', () => {
     expect(existsSync(join(dir, 'src/modules/auth/auth.module.ts'))).toBe(true)
     expect(existsSync(join(dir, 'src/modules/auths'))).toBe(false)
     expect(existsSync(join(dir, 'src/modules/auth/__tests__'))).toBe(false)
+  })
+
+  it('module points an in-memory repository at a database, not at itself', async () => {
+    await run('module', 'note', '--no-tests')
+    const index = readFileSync(join(dir, 'src/modules/notes/note.module.ts'), 'utf8')
+    expect(index).toContain('Swap in a database by replacing')
   })
 
   it('scaffold --no-pluralize keeps the name singular', async () => {
