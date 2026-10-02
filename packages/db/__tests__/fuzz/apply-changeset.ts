@@ -143,6 +143,32 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       snapshot.schemas = [...schemas].toSorted()
       return
     }
+    case 'alterPrimaryKey': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      // The diff splits a key change: before-only drops, after-only adds.
+      for (const c of change.before.columns) if (t.columns[c]) t.columns[c].primaryKey = false
+      if (change.before.columns.length > 0) delete t.primaryKey
+      for (const c of change.after.columns) if (t.columns[c]) t.columns[c].primaryKey = true
+      // Only a non-default name survives as a table-level key; the fuzzer's
+      // snapshots declare keys on columns, so column order needs no record.
+      if (change.after.name && change.after.name !== `${t.name}_pkey`) {
+        t.primaryKey = { name: change.after.name, columns: [...change.after.columns] }
+      }
+      return
+    }
+    case 'addCheck': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      t.checks.push(deepClone(change.check))
+      return
+    }
+    case 'dropCheck': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      t.checks = t.checks.filter((c) => c.name !== change.check.name)
+      return
+    }
     default: {
       // Exhaustiveness guard: a new Change variant added without
       // an applier case here would silently no-op and make the
