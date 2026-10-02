@@ -340,7 +340,58 @@ export const AuditAdapter = defineAdapter({
 })
 ```
 
-The tab appears at the bottom of the sidebar. An iframe `src` on the app's own origin gets the dashboard token as `?token=`, so the panel can call `/_debug` endpoints; a `src` on another origin doesn't. Use `html` only for markup you control — it's injected as-is. `kick g adapter` and `kick g plugin` write this hook commented out.
+The tab appears at the bottom of the sidebar. `kick g adapter` and `kick g plugin` write this hook commented out. A tab's `view` is one of:
+
+| `view.type` | Shows                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `html`      | Markup, injected as-is — only markup you control                                                                                  |
+| `iframe`    | A page at `src`. On the app's own origin it gets the dashboard token as `?token=`, so it can call `/_debug`; elsewhere it doesn't |
+| `launch`    | Buttons; each runs its `run()` on the server and shows what it returns                                                            |
+| `module`    | A browser module from the app's own origin, mounted into the tab                                                                  |
+
+Buttons — `run()` executes in the app process, behind the DevTools token:
+
+```ts
+view: {
+  type: 'launch',
+  actions: [
+    { id: 'flush', label: 'Flush cache', run: async () => ({ removed: await cache.clear() }) },
+  ],
+}
+```
+
+A module tab is for live content. Serve a file and point the tab at it:
+
+```ts
+build: () => ({
+  beforeMount({ http }) {
+    http.serveStatic('/_audit', new URL('./panel', import.meta.url).pathname)
+  },
+  devtoolsTabs: () => [
+    defineDevtoolsTab({ id: 'audit', title: 'Audit', view: { type: 'module', src: '/_audit/tab.js' } }),
+  ],
+}),
+```
+
+```js
+// panel/tab.js — the default export is a defineDevtoolsRenderTab(...) spec, or just a render function
+export default {
+  render(el, { bus, config }) {
+    const list = document.createElement('ul')
+    el.append(list)
+    const off = bus.on('audit:entry', (entry) => {
+      const li = document.createElement('li')
+      li.textContent = `${entry.actor} ${entry.action}`
+      list.prepend(li)
+    })
+    return off // runs when the tab closes
+  },
+}
+```
+
+The server emits `audit:entry` on the same bus — `@Inject(DEVTOOLS_BUS) bus` (from `@forinda/kickjs-devtools-kit/bus/token`), then `bus.emit('audit:entry', { actor, action })`.
+
+`render(el, props)` gets the dashboard's event `bus`, `config` (`theme`, `panelHeight`) and the page's `query`; what it returns runs when the tab unmounts. A module from another origin is refused — it would run with the dashboard's token.
 
 ### API runner
 

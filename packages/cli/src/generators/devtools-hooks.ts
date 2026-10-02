@@ -32,7 +32,7 @@ export function devtoolsHooks(
 
 /**
  * DevTools panels this ${kind} contributes — a sidebar tab showing HTML,
- * an iframe (\`view: { type: 'iframe', src: '/your-panel' }\`), or buttons.
+ * an iframe, buttons that run server code, or a browser module.
  *
  * Uncomment with: import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
  * and add the kit as a dependency: \`pnpm add @forinda/kickjs-devtools-kit\`.

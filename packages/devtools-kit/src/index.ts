@@ -9,6 +9,7 @@
 export {
   PROTOCOL_VERSION,
   defineDevtoolsTab,
+  type DevtoolsTabAction,
   type DevtoolsTabDescriptor,
   type DevtoolsTabView,
   type IntrospectFn,

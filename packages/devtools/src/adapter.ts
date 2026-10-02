@@ -33,7 +33,7 @@ import {
 } from '@forinda/kickjs-devtools-kit'
 import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
-import { collectDevtoolsTabs } from './devtools-tabs'
+import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
 import { locateHandler } from './source-locator'
 import { createServerBus, type ServerBus } from './bus/server'
 
@@ -883,6 +883,22 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             return
           }
           ctx.json(collectDevtoolsTabs(kickApp))
+        })
+
+        // A `launch` tab's button — runs the action's `run()` on the server.
+        router.post('/tabs/run', async (ctx: RequestContext) => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          if (!kickApp) {
+            ctx.json({ error: 'tabs unavailable — application surface not exposed' }, 503)
+            return
+          }
+          const { tab, action } = (ctx.query ?? {}) as { tab?: string; action?: string }
+          const { status, body } = await runTabAction(
+            kickApp,
+            String(tab ?? ''),
+            String(action ?? ''),
+          )
+          ctx.json(body, status)
         })
 
         // ── Topology RPC (architecture.md §23) ──────────────────────

@@ -90,7 +90,19 @@ export interface DevtoolsTabDescriptor {
   view: DevtoolsTabView
 }
 
-/** The three ways a tab's content can be sourced. */
+/** One button of a `launch` view. */
+export interface DevtoolsTabAction {
+  id: string
+  label: string
+  description?: string
+  /**
+   * Runs on the server when the button is clicked. Whatever it returns
+   * (JSON-serialisable) is shown under the buttons; a throw shows the error.
+   */
+  run?: () => unknown
+}
+
+/** The ways a tab's content can be sourced. */
 export type DevtoolsTabView =
   | {
       /** Embed an external URL. The plugin serves the panel HTML itself. */
@@ -98,9 +110,19 @@ export type DevtoolsTabView =
       src: string
     }
   | {
-      /** Render a button list — each button posts to its server handler. */
+      /** Render a button list — each button runs its `run()` on the server. */
       type: 'launch'
-      actions: ReadonlyArray<{ id: string; label: string; description?: string }>
+      actions: ReadonlyArray<DevtoolsTabAction>
+    }
+  | {
+      /**
+       * A browser ES module the app serves, on the app's own origin. Its
+       * default export is a `defineDevtoolsRenderTab(...)` spec or a bare
+       * `render(el, props)` function; the dashboard imports it and mounts
+       * it into the tab.
+       */
+      type: 'module'
+      src: string
     }
   | {
       /** Inline HTML string the panel injects. Trusted source only. */

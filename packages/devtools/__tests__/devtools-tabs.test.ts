@@ -7,7 +7,7 @@ import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 import { defineAdapter } from '@forinda/kickjs'
 import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
-import { collectDevtoolsTabs } from '../src/devtools-tabs'
+import { collectDevtoolsTabs, runTabAction } from '../src/devtools-tabs'
 import type { TopologyApplicationLike } from '../src/topology'
 import type { AppAdapter, KickPlugin } from '@forinda/kickjs'
 
@@ -176,5 +176,67 @@ describe('collectDevtoolsTabs — validation', () => {
     })
     const result = collectDevtoolsTabs(fakeApp([Wrong()]))
     expect(result.errors[0].reason).toMatch(/did not return an array/)
+  })
+})
+
+describe('module tabs and launch actions', () => {
+  let runs = 0
+  const Tabs = defineAdapter({
+    name: 'ActionsAdapter',
+    build: () => ({
+      devtoolsTabs: () => [
+        defineDevtoolsTab({ id: 'mod', title: 'Mod', view: { type: 'module', src: '/tab.js' } }),
+        defineDevtoolsTab({
+          id: 'ops',
+          title: 'Ops',
+          view: {
+            type: 'launch',
+            actions: [
+              { id: 'flush', label: 'Flush', run: () => ({ flushed: ++runs }) },
+              {
+                id: 'boom',
+                label: 'Boom',
+                run: () => {
+                  throw new Error('nope')
+                },
+              },
+              { id: 'inert', label: 'Inert' },
+            ],
+          },
+        }),
+      ],
+    }),
+  })
+  const app = fakeApp([Tabs()])
+
+  it('accepts a module view and serialises launch actions without run()', () => {
+    const { tabs, errors } = collectDevtoolsTabs(app)
+    expect(errors).toEqual([])
+    expect(tabs.map((t) => t.id)).toEqual(['mod', 'ops'])
+    expect(JSON.stringify(tabs)).not.toContain('run')
+  })
+
+  it('rejects a module view without src', () => {
+    const Bad = defineAdapter({
+      name: 'Bad',
+      build: () => ({ devtoolsTabs: () => [{ id: 'm', title: 'M', view: { type: 'module' } }] }),
+    })
+    expect(collectDevtoolsTabs(fakeApp([Bad()])).errors[0]!.reason).toMatch(
+      /requires a non-empty src/,
+    )
+  })
+
+  it('runs an action and returns its result', async () => {
+    expect(await runTabAction(app, 'ops', 'flush')).toEqual({
+      status: 200,
+      body: { result: { flushed: 1 } },
+    })
+  })
+
+  it('reports a throw as 500, and a missing action or run() as 404', async () => {
+    expect(await runTabAction(app, 'ops', 'boom')).toEqual({ status: 500, body: { error: 'nope' } })
+    expect((await runTabAction(app, 'ops', 'inert')).status).toBe(404)
+    expect((await runTabAction(app, 'ops', 'missing')).status).toBe(404)
+    expect((await runTabAction(app, 'mod', 'flush')).status).toBe(404)
   })
 })
