@@ -802,7 +802,7 @@ Not planned, after the same comparison: per-row lifecycle hooks (an extra query 
 
 ### D.14 Database documentation {#d-14-database-documentation}
 
-**Status:** `proposed` — next.
+**Status:** `in progress` — phase 1 done.
 
 **Why.** Compared against Drizzle, Prisma, Sequelize, TypeORM, MikroORM and Kysely, kick/db's features are ahead of its documentation. Topics peers give their own page sit inside long pages (`queries.md` holds the builder, relational reads, transactions, errors, events and extensions), the API reference predates typed errors, `check()` and the transaction options, and testing, multi-tenancy and observability guides don't mention the database. A few topics are thinly covered even by established ORMs — testing with a database, an error reference, row-level security, CTEs and set operations — which makes them the cheapest places to stand out.
 
@@ -822,7 +822,7 @@ Conventions: per-dialect code tabs, copyable one-problem recipes, every error li
 
 **Phases:**
 
-1. [ ] **Clean-up** — refresh the API reference (typed errors, `check()`, `primaryKey().on()`, table forms, `/schema` helpers, `afterCommit` / `retry` / `nested`, `$extends`, `escapeLike`, SQLite / MySQL introspection and emit); retire the design notes under `docs/db/`, which describe features that never shipped.
+1. [x] **Clean-up** — refresh the API reference (typed errors, `check()`, `primaryKey().on()`, table forms, `/schema` helpers, `afterCommit` / `retry` / `nested`, `$extends`, `escapeLike`, SQLite / MySQL introspection and emit); retire the design notes under `docs/db/`, which describe features that never shipped.
 2. [ ] **Stand-out pages** — testing with kick/db, errors and an error reference, raw SQL and recipes, multi-tenancy and row-level security; database sections in the testing, multi-tenancy, observability and DevTools guides.
 3. [ ] **Restructure** — split `queries.md` and `schema.md` along the target structure; concepts page; sidebar.
 4. [ ] **Onboarding** — start-here page, get-started per dialect, coming-from guides with concept-mapping tables.
