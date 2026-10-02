@@ -142,7 +142,7 @@ Two things Prisma doesn't do: the runner refuses a migration nobody marked revie
 | `update`, `updateMany`                          | `updateTable(t).set({…}).where(…)` — one form for both                                                            |
 | `delete`, `deleteMany`                          | `deleteFrom(t).where(…)`                                                                                          |
 | `increment: 1`                                  | `.set((eb) => ({ views: eb('views', '+', 1) }))`                                                                  |
-| `upsert`                                        | `insertInto(…).onConflict(…)` ([recipe](./raw-sql.md#upsert))                                                     |
+| `upsert`                                        | `db.upsert(table, { values, target })` ([Upsert](./queries.md#upsert-and-find-or-create))                         |
 | `count`, `aggregate`, `groupBy`                 | `eb.fn.countAll()`, `eb.fn.sum(…)`, `.groupBy(…)`                                                                 |
 | `$queryRaw\`…\``                                | ``sql`…`.execute(db.qb)`` — values become parameters                                                              |
 | `$transaction(async (tx) => …)`                 | `db.transaction(async (tx) => …)`                                                                                 |
@@ -258,11 +258,10 @@ await prisma.post.update({ where: { id }, data: { views: { increment: 1 } } })
 ```
 
 ```ts [kick/db]
-await db
-  .insertInto('users')
-  .values({ email: 'ada@example.com', name: 'Ada Lovelace' })
-  .onConflict((oc) => oc.column('email').doUpdateSet({ name: (eb) => eb.ref('excluded.name') }))
-  .execute()
+await db.upsert('users', {
+  values: { email: 'ada@example.com', name: 'Ada Lovelace' },
+  target: ['email'],
+})
 
 await db
   .updateTable('posts')
@@ -273,7 +272,7 @@ await db
 
 :::
 
-Both are single statements, so they're safe under concurrency. MySQL uses `onDuplicateKeyUpdate` instead of `onConflict`.
+Both are single statements, so they're safe under concurrency; `upsert` works the same on Postgres, MySQL and SQLite ([Upsert and find-or-create](./queries.md#upsert-and-find-or-create)). For `connectOrCreate`-style lookups, `db.findOrCreate('tags', { where: { name } })` is race-safe.
 
 ### A duplicate
 
@@ -338,7 +337,6 @@ Each error names the `constraint`, `table` and `columns`, the same on Postgres, 
 ## Not there (yet)
 
 - **`@updatedAt`, soft delete, optimistic locking** — set the column in your update for now; auto-managed columns are planned ([D.10](../roadmap.md)).
-- **`upsert` / `findOrCreate` as methods** — use `onConflict` as above; a dedicated API is planned (D.11).
 - **`prisma db seed`** — write a seed as an empty migration (`kick db generate seed_roles --empty`) or a script using the client; a seed command is deferred (D.2).
 - **Read replicas** — planned (D.12).
 - **Prisma Studio** — the KickJS [DevTools](../devtools.md) Database tab shows the queries your app runs; there is no data editor.

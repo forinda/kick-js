@@ -191,6 +191,7 @@ export {
 // LIKE/ILIKE pattern safety
 export { escapeLike, likePattern, type LikeMatchMode } from './query/like'
 export { asc, desc } from './query/order'
+export type { FindOrCreateOptions, UpsertOptions } from './client/upsert'
 
 // Explicit dialect tagging (used by detectDialect; exported for adopters
 // who wrap a raw Kysely dialect and want exact detection).

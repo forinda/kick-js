@@ -10,35 +10,35 @@ The closest thing to an entity class is the [base-class table form](../db-table-
 
 ## Concepts at a glance
 
-| TypeORM                                                        | kick/db                                                                                                                                              |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@Entity()` class with `@Column()` fields                      | `TableBase('users', { … })` class, or `table()` — [Table Forms](../db-table-forms.md)                                                                |
-| `@Column('varchar', { length: 255 })`, `@Column('decimal', …)` | `varchar(255)`, `decimal(12, 2)`, `timestamp()`, `json<T>()` — [Tables & Columns](./schema.md)                                                       |
-| `@PrimaryGeneratedColumn()` / `('uuid')`                       | `serial().primaryKey()` / `uuid().primaryKey().defaultRandom()`                                                                                      |
-| `@CreateDateColumn()`                                          | `timestamp().notNull().defaultNow()`                                                                                                                 |
-| `@UpdateDateColumn()`                                          | `defaultNow()` on insert; set it yourself on update (auto-update is [D.10](../roadmap.md))                                                           |
-| `@OneToMany` / `@ManyToOne`                                    | a foreign key with `.references()`, plus `relations()` with `many` / `one` — [Keys & Constraints](./constraints.md)                                  |
-| `@ManyToMany` + `@JoinTable`                                   | an explicit junction table; `through` in relational reads is [D.13](../roadmap.md)                                                                   |
-| `relations: { posts: true }`, `eager: true`                    | `db.query.users.findMany({ with: { posts: true } })` — one query — [Relational Queries](../db-relational-query.md)                                   |
-| lazy relations (`Promise<Post[]>`)                             | none — query the related rows when you need them                                                                                                     |
-| `DataSource.getRepository(User)`                               | the typed client (`db.selectFrom('users')`), behind your own repository — [Repositories](./repositories.md)                                          |
-| `find` / `findOneBy` / `findAndCount`                          | `selectFrom(…).where(…).execute()` / `.executeTakeFirst()`, plus a count query                                                                       |
-| `save()` / `insert()` / `update()` / `delete()`                | `insertInto` / `updateTable` / `deleteFrom` — [Queries](./queries.md)                                                                                |
-| `upsert(values, ['email'])`                                    | `.onConflict((oc) => oc.column('email').doUpdateSet(…))` — [Raw SQL & Recipes](./raw-sql.md#upsert); a first-class `upsert` is [D.11](../roadmap.md) |
-| `MoreThanOrEqual`, `In`, `Like`, `IsNull`, `Not`               | `where('col', '>=', v)`, `'in'`, `'like'`, `'is', null`, `'!='`                                                                                      |
-| `createQueryBuilder()`                                         | the client _is_ a query builder ([Kysely](https://kysely.dev)), typed from the schema                                                                |
-| `dataSource.transaction(async (manager) => …)`                 | `db.transaction(async () => …)` — code holding the plain client joins it — [Transactions](./transactions.md)                                         |
-| `QueryRunner` (manual begin/commit)                            | none — `transaction(fn)` commits on return, rolls back on throw; `savepoint(fn)` nests                                                               |
-| `@BeforeInsert`, subscribers                                   | no per-row hooks: put the logic in the service, a [custom column codec](../db-extensions.md), or query [events / plugins](./events-plugins.md)       |
-| `afterTransactionCommit` subscriber                            | `db.afterCommit(fn)` inside the transaction                                                                                                          |
-| `@DeleteDateColumn()`, `softDelete()`                          | a nullable `deletedAt` you filter yourself; built-in soft delete is [D.10](../roadmap.md)                                                            |
-| `@VersionColumn()`                                             | none yet — optimistic locking is [D.10](../roadmap.md)                                                                                               |
-| class-validator on entities                                    | `insertSchema(User.table)` derives request validation from the table — [Validation from Tables](../db-table-schemas.md)                              |
-| `QueryFailedError` + `driverError.code`                        | typed `UniqueViolationError`, `ForeignKeyViolationError`, … the same on every dialect — [Errors](./errors.md)                                        |
-| `dataSource.query(sql, params)`                                | ``sql`…${param}`.execute(db.qb)`` — [Raw SQL](./raw-sql.md)                                                                                          |
-| `migration:generate` / `migration:run` / `migration:revert`    | `kick db generate <name>` / `kick db migrate latest` / `kick db migrate rollback` — [Migrations](./migrations.md)                                    |
-| `synchronize: true`                                            | none on purpose — every change is a reviewed migration                                                                                               |
-| seeds (third-party)                                            | a hand-written migration: `kick db generate seed_x --empty`; a seed command is [D.2](../roadmap.md)                                                  |
+| TypeORM                                                        | kick/db                                                                                                                                        |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@Entity()` class with `@Column()` fields                      | `TableBase('users', { … })` class, or `table()` — [Table Forms](../db-table-forms.md)                                                          |
+| `@Column('varchar', { length: 255 })`, `@Column('decimal', …)` | `varchar(255)`, `decimal(12, 2)`, `timestamp()`, `json<T>()` — [Tables & Columns](./schema.md)                                                 |
+| `@PrimaryGeneratedColumn()` / `('uuid')`                       | `serial().primaryKey()` / `uuid().primaryKey().defaultRandom()`                                                                                |
+| `@CreateDateColumn()`                                          | `timestamp().notNull().defaultNow()`                                                                                                           |
+| `@UpdateDateColumn()`                                          | `defaultNow()` on insert; set it yourself on update (auto-update is [D.10](../roadmap.md))                                                     |
+| `@OneToMany` / `@ManyToOne`                                    | a foreign key with `.references()`, plus `relations()` with `many` / `one` — [Keys & Constraints](./constraints.md)                            |
+| `@ManyToMany` + `@JoinTable`                                   | an explicit junction table; `through` in relational reads is [D.13](../roadmap.md)                                                             |
+| `relations: { posts: true }`, `eager: true`                    | `db.query.users.findMany({ with: { posts: true } })` — one query — [Relational Queries](../db-relational-query.md)                             |
+| lazy relations (`Promise<Post[]>`)                             | none — query the related rows when you need them                                                                                               |
+| `DataSource.getRepository(User)`                               | the typed client (`db.selectFrom('users')`), behind your own repository — [Repositories](./repositories.md)                                    |
+| `find` / `findOneBy` / `findAndCount`                          | `selectFrom(…).where(…).execute()` / `.executeTakeFirst()`, plus a count query                                                                 |
+| `save()` / `insert()` / `update()` / `delete()`                | `insertInto` / `updateTable` / `deleteFrom` — [Queries](./queries.md)                                                                          |
+| `upsert(values, ['email'])`                                    | `db.upsert(table, { values, target: ['email'] })` — [Upsert and find-or-create](./queries.md#upsert-and-find-or-create)                        |
+| `MoreThanOrEqual`, `In`, `Like`, `IsNull`, `Not`               | `where('col', '>=', v)`, `'in'`, `'like'`, `'is', null`, `'!='`                                                                                |
+| `createQueryBuilder()`                                         | the client _is_ a query builder ([Kysely](https://kysely.dev)), typed from the schema                                                          |
+| `dataSource.transaction(async (manager) => …)`                 | `db.transaction(async () => …)` — code holding the plain client joins it — [Transactions](./transactions.md)                                   |
+| `QueryRunner` (manual begin/commit)                            | none — `transaction(fn)` commits on return, rolls back on throw; `savepoint(fn)` nests                                                         |
+| `@BeforeInsert`, subscribers                                   | no per-row hooks: put the logic in the service, a [custom column codec](../db-extensions.md), or query [events / plugins](./events-plugins.md) |
+| `afterTransactionCommit` subscriber                            | `db.afterCommit(fn)` inside the transaction                                                                                                    |
+| `@DeleteDateColumn()`, `softDelete()`                          | a nullable `deletedAt` you filter yourself; built-in soft delete is [D.10](../roadmap.md)                                                      |
+| `@VersionColumn()`                                             | none yet — optimistic locking is [D.10](../roadmap.md)                                                                                         |
+| class-validator on entities                                    | `insertSchema(User.table)` derives request validation from the table — [Validation from Tables](../db-table-schemas.md)                        |
+| `QueryFailedError` + `driverError.code`                        | typed `UniqueViolationError`, `ForeignKeyViolationError`, … the same on every dialect — [Errors](./errors.md)                                  |
+| `dataSource.query(sql, params)`                                | ``sql`…${param}`.execute(db.qb)`` — [Raw SQL](./raw-sql.md)                                                                                    |
+| `migration:generate` / `migration:run` / `migration:revert`    | `kick db generate <name>` / `kick db migrate latest` / `kick db migrate rollback` — [Migrations](./migrations.md)                              |
+| `synchronize: true`                                            | none on purpose — every change is a reviewed migration                                                                                         |
+| seeds (third-party)                                            | a hand-written migration: `kick db generate seed_x --empty`; a seed command is [D.2](../roadmap.md)                                            |
 
 ## Side by side
 
@@ -270,7 +270,6 @@ Left unhandled in a KickJS route, a `UniqueViolationError` answers `409`. Pass `
 - **Entity listeners and subscribers.** There are no per-row lifecycle hooks; use service code, [`afterCommit`](./transactions.md#after-commit), a [`customType`](../db-extensions.md) codec to transform a value on write and read, or [query events](./events-plugins.md) to observe every statement.
 - **Self-updating `updatedAt`, `@VersionColumn`, soft delete** — planned as [D.10](../roadmap.md). Until then, set `updatedAt` in your update and filter on `deletedAt` yourself.
 - **`@ManyToMany` in relational reads** — [D.13](../roadmap.md). Declare the junction table and nest through it: `with: { memberships: { with: { project: true } } }`.
-- **First-class `upsert` / race-safe `findOrCreate`** — [D.11](../roadmap.md). `onConflict` covers upsert today.
 - **`synchronize`.** Deliberately absent — schema changes ship as migrations someone has read.
 
 ## Moving an existing TypeORM app

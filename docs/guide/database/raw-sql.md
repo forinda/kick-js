@@ -78,7 +78,7 @@ await db
 
 ### Upsert
 
-Insert, or update the existing row on a unique conflict — Postgres and SQLite:
+[`db.upsert()`](./queries.md#upsert-and-find-or-create) covers the usual case on every dialect. For more control — a conflict on a constraint name, a `DO NOTHING`, an update that depends on the old row — use the builder directly. Postgres and SQLite:
 
 ```ts
 await db

@@ -28,6 +28,7 @@ import * as kick from '@forinda/kickjs'
 
 import type { KickDbClient, TransactionOptions } from './types'
 import { applyExtensions } from '../extend/apply'
+import { findOrCreate, upsert, type FindOrCreateOptions, type UpsertOptions } from './upsert'
 import type { KickDbEventEmitter } from './events'
 import type { CompileFn } from '../query/builder'
 import { buildQueryNamespace } from '../query/builder'
@@ -283,6 +284,14 @@ export function wrap<DB>(
       }
       return startTransaction(opts, fn)
     }) as KickDbClient<DB>['transaction'],
+
+    upsert: (async (table: string, opts: UpsertOptions<DB, any>) => {
+      const rows = await upsert(client, table as never, opts)
+      return Array.isArray(opts.values) ? rows : rows[0]
+    }) as KickDbClient<DB>['upsert'],
+
+    findOrCreate: ((table: string, opts: FindOrCreateOptions<DB, any>) =>
+      findOrCreate(client, table as never, opts)) as KickDbClient<DB>['findOrCreate'],
 
     $extends(ext) {
       return applyExtensions(client, ctx, ext)

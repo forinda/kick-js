@@ -205,7 +205,7 @@ Drizzle's core API imports a column object and an operator for each condition; K
 | `db.insert(users).values({…}).returning()`        | `db.insertInto('users').values({…}).returningAll()`                                    |
 | `db.update(users).set({…}).where(…)`              | `db.updateTable('users').set({…}).where(…)`                                            |
 | `db.delete(users).where(…)`                       | `db.deleteFrom('users').where(…)`                                                      |
-| `.onConflictDoUpdate({ target, set })`            | `.onConflict((oc) => oc.column('email').doUpdateSet({…}))`                             |
+| `.onConflictDoUpdate({ target, set })`            | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control  |
 | `db.$count(posts)`                                | `select((eb) => eb.fn.countAll().as('n'))`                                             |
 | `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `kysely`                                  |
 | results run with `await`                          | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()` |
@@ -259,11 +259,10 @@ await db
 ```
 
 ```ts [kick/db]
-await db
-  .insertInto('users')
-  .values({ email: 'ada@example.com', name: 'Ada Lovelace' })
-  .onConflict((oc) => oc.column('email').doUpdateSet({ name: (eb) => eb.ref('excluded.name') }))
-  .execute()
+await db.upsert('users', {
+  values: { email: 'ada@example.com', name: 'Ada Lovelace' },
+  target: ['email'],
+})
 
 await db
   .updateTable('posts')

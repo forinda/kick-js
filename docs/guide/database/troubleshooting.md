@@ -213,7 +213,7 @@ The error's code is `KICK_DB_RELATIONAL_NOT_SUPPORTED`. Upgrade to MySQL 8.0 or 
 Duplicate value for users (email)
 ```
 
-That's a `UniqueViolationError`: the row repeats a unique or primary key. Left unhandled it answers `409`, which is often what you want. To answer something else — or to insert-or-update instead — catch it by class or use an upsert. [Errors](./errors.md) lists every typed error.
+That's a `UniqueViolationError`: the row repeats a unique or primary key. Left unhandled it answers `409`, which is often what you want. To answer something else, catch it by class; to insert-or-update instead, use [`db.upsert()`](./queries.md#upsert-and-find-or-create), or `db.findOrCreate()` to reuse the existing row. [Errors](./errors.md) lists every typed error.
 
 ## FAQ
 
