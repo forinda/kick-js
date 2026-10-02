@@ -48,7 +48,21 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
     for (const [cn, c] of Object.entries(t.columns)) {
       columns[cn] = { ...c, type: canonicalType(c.type, snap.dialect), default: null }
     }
-    tables[name] = { ...t, columns, foreignKeys: t.foreignKeys.map(canonicalFk) }
+    // InnoDB creates a non-unique index for a foreign key whose columns no
+    // index leads with, named after the constraint. It isn't in the schema,
+    // so it isn't drift. A unique index is always the schema's, so it stays
+    // and a change to its uniqueness is still caught.
+    const indexes =
+      snap.dialect === 'mysql'
+        ? t.indexes.filter(
+            (ix) =>
+              ix.unique ||
+              !t.foreignKeys.some(
+                (fk) => fk.name === ix.name && fk.columns.join() === ix.columns.join(),
+              ),
+          )
+        : t.indexes
+    tables[name] = { ...t, columns, indexes, foreignKeys: t.foreignKeys.map(canonicalFk) }
   }
   return { ...snap, tables }
 }

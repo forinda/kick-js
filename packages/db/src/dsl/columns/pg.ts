@@ -23,10 +23,9 @@ import { ColumnBuilder } from './types'
  *
  * Schema-level state (the enum name + values) is attached to every
  * column the factory produces so introspection / drift / emit can pick
- * it up. The snapshot + emit pipeline learns about enum types in the
- * follow-up commit; for now adopters must run the
- * `CREATE TYPE <name> AS ENUM (...)` DDL manually before any column
- * referencing the type is created.
+ * it up: `kick db generate` emits the `CREATE TYPE <name> AS ENUM (...)`
+ * before the first table that uses it, and later value changes as
+ * migrations.
  */
 export interface PgEnumBuilder<TName extends string, TValues extends readonly string[]> {
   (): PgEnumColumnBuilder<TName, TValues>

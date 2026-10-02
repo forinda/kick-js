@@ -19,7 +19,7 @@ The relational layer is read-only. Inserts, updates, deletes, and any non-trivia
 
 ```ts
 import { Service, Inject } from '@forinda/kickjs'
-import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
+import { DB_PRIMARY, desc, type KickDbClient } from '@forinda/kickjs-db'
 
 @Service()
 export class WorkspacesRepository {
@@ -27,7 +27,7 @@ export class WorkspacesRepository {
 
   recentWorkspaces() {
     return this.db.query.workspaces.findMany({
-      orderBy: (_w, eb) => eb.ref('createdAt'),
+      orderBy: (_w, eb) => desc(eb.ref('createdAt')),
       limit: 20,
     })
   }
@@ -83,8 +83,8 @@ this.db.query.users.findUnique({
   where: (_u, eb) => eb('id', '=', userId),
   with: {
     posts: {
-      where: (p, eb) => eb.isNotNull(p.publishedAt),
-      orderBy: (_p, eb) => eb.ref('publishedAt').desc(),
+      where: (_p, eb) => eb('publishedAt', 'is not', null),
+      orderBy: (_p, eb) => desc(eb.ref('publishedAt')),
       limit: 5,
     },
   },
@@ -92,6 +92,8 @@ this.db.query.users.findUnique({
 ```
 
 Each clause scopes only to the inner relation — outer filters keep working independently.
+
+`orderBy` returns an expression, ascending by default. Wrap it in `desc()` (or `asc()`, both from `@forinda/kickjs-db`) for a direction, and return an array to sort by several: `[desc(eb.ref('priority')), asc(eb.ref('title'))]`.
 
 ## Self-references and cycles
 
@@ -143,15 +145,15 @@ Without the tags, `users.sentMessages` can't tell which of the two `messages →
 
 The options bag:
 
-| Field      | Type                                        | Notes                                                       |
-| ---------- | ------------------------------------------- | ----------------------------------------------------------- |
-| `where`    | `(table, eb) => Expression`                 | `eb` is Kysely's expression builder — `eb('col', '=', v)`   |
-| `orderBy`  | `(table, eb) => Expression \| Expression[]` | use `eb.ref('col')`                                         |
-| `limit`    | `number`                                    |                                                             |
-| `offset`   | `number`                                    |                                                             |
-| `with`     | `{ [relation]: true \| FindManyOptions }`   | `true` eager-loads; an object form filters the relation     |
-| `maxDepth` | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError` |
-| `signal`   | `AbortSignal`                               | cancels the in-flight query — bind to `ctx.signal`          |
+| Field      | Type                                        | Notes                                                        |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------ |
+| `where`    | `(table, eb) => Expression`                 | `eb` is Kysely's expression builder — `eb('col', '=', v)`    |
+| `orderBy`  | `(table, eb) => Expression \| Expression[]` | `eb.ref('col')`, wrapped in `desc()` / `asc()` for direction |
+| `limit`    | `number`                                    |                                                              |
+| `offset`   | `number`                                    |                                                              |
+| `with`     | `{ [relation]: true \| FindManyOptions }`   | `true` eager-loads; an object form filters the relation      |
+| `maxDepth` | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError`  |
+| `signal`   | `AbortSignal`                               | cancels the in-flight query — bind to `ctx.signal`           |
 
 The `with` keys are constrained to the relations declared for that table; a relation slot resolves to `Related | null` for `one` and `Related[]` for `many`.
 

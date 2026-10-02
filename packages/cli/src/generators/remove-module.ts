@@ -156,7 +156,12 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
 
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
-  const plural = shouldPluralize ? pluralize(kebab) : kebab
+  // A folder that was never pluralized — the scaffold's `hello`, or one made
+  // with --no-pluralize — is found under its singular name too.
+  let plural = shouldPluralize ? pluralize(kebab) : kebab
+  if (plural !== kebab && !(await fileExists(join(modulesDir, plural)))) {
+    if (await fileExists(join(modulesDir, kebab))) plural = kebab
+  }
   const moduleDir = join(modulesDir, plural)
 
   // Check if module exists

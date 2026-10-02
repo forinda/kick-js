@@ -51,7 +51,7 @@ export interface KickDbAdapterConfig {
  *     - 'apply': run migrateLatest() automatically. Useful for dev / preview
  *       environments where convenience matters more than safety.
  *     - 'ignore': boot regardless. Last-resort escape hatch.
- *  2. On shutdown, close the migrationAdapter (drains the pool, etc).
+ *  2. On shutdown, close the migrationAdapter (ends its pool only when created with `endPoolOnClose`).
  *  3. Register the migrationAdapter under an optional DI token so adopters
  *     can pull it for ad-hoc tooling. The KickDbClient (Task 19b) registers
  *     separately under DB_PRIMARY.

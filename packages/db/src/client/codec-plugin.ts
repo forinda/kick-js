@@ -44,8 +44,10 @@ import {
 } from 'kysely'
 
 import { CustomColumnBuilder } from '../custom-type'
-import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS } from './sqlite-dates'
+import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS, fromSqliteBoolean } from './sqlite-dates'
 import { sqliteDecimalDecoder } from './sqlite-decimals'
+import { nestedDateDecoder } from './nested-dates'
+import type { DialectDateOptions } from '../dialect-marker'
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { unwrapTable, type TableDecl } from '../dsl/table'
 
@@ -60,6 +62,8 @@ export class CodecPlugin implements KyselyPlugin {
     private relationKeys: ReadonlySet<string> = new Set(),
     /** Built-in encoders applied to comparisons too — see {@link ComparisonEncoder}. */
     private comparisonEncoders: CodecMap = new Map(),
+    /** Decoders for nested rows only — dates the driver parses at the top level. */
+    private nestedDecoders: CodecMap = new Map(),
   ) {}
 
   transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
@@ -74,7 +78,7 @@ export class CodecPlugin implements KyselyPlugin {
   }
 
   async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
-    if (this.decoders.size === 0) return args.result
+    if (this.decoders.size === 0 && this.nestedDecoders.size === 0) return args.result
     const rows = args.result.rows.map((row) => this.decodeRow(row))
     return { ...args.result, rows }
   }
@@ -187,12 +191,12 @@ export class CodecPlugin implements KyselyPlugin {
 
   // ---------------------------- result side ----------------------------
 
-  private decodeRow(row: UnknownRow): UnknownRow {
+  private decodeRow(row: UnknownRow, nested = false): UnknownRow {
     let mutated = false
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(row)) {
       const value = (row as Record<string, unknown>)[key]
-      const decoder = this.decoders.get(key)
+      const decoder = this.decoders.get(key) ?? (nested ? this.nestedDecoders.get(key) : undefined)
       if (decoder && value !== null && value !== undefined) {
         out[key] = decoder(value)
         mutated = true
@@ -221,11 +225,13 @@ export class CodecPlugin implements KyselyPlugin {
       }
     }
     if (Array.isArray(parsed)) {
-      return parsed.map((item) => (isPlainObject(item) ? this.decodeRow(item as UnknownRow) : item))
+      return parsed.map((item) =>
+        isPlainObject(item) ? this.decodeRow(item as UnknownRow, true) : item,
+      )
     }
     // Not a relation payload — an ordinary column that happens to share a
     // relation's name. Leave its value exactly as stored.
-    return isPlainObject(parsed) ? this.decodeRow(parsed as UnknownRow) : value
+    return isPlainObject(parsed) ? this.decodeRow(parsed as UnknownRow, true) : value
   }
 }
 
@@ -298,7 +304,10 @@ export function buildDecoderMap(schema: unknown, dialect?: string): CodecMap {
     schema,
     'fromDriver',
     dialect === 'sqlite'
-      ? (type) => SQLITE_DATE_DECODERS[type] ?? sqliteDecimalDecoder(type)
+      ? (type) =>
+          SQLITE_DATE_DECODERS[type] ??
+          sqliteDecimalDecoder(type) ??
+          (type === 'boolean' ? fromSqliteBoolean : undefined)
       : undefined,
   )
 }
@@ -313,6 +322,16 @@ export function buildEncoderMap(schema: unknown, dialect?: string): CodecMap {
     'toDriver',
     dialect === 'sqlite' ? (type) => SQLITE_DATE_ENCODERS[type] : undefined,
   )
+}
+
+/** Decoders for nested rows: dates the dialect's driver parses only at the top level. */
+export function buildNestedDecoderMap(
+  schema: unknown,
+  dialect?: string,
+  dates?: DialectDateOptions,
+): CodecMap {
+  const builtins = nestedDateDecoder(dialect, dates)
+  return builtins ? collectCodecs(schema, 'fromDriver', builtins, true) : new Map()
 }
 
 /** Encoders for comparisons: the dialect's built-ins only, never a custom `toDriver`. */

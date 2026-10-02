@@ -111,9 +111,18 @@ const guideSidebar = [
   {
     text: 'Database',
     items: [
-      { text: 'Overview & Getting Started', link: '/guide/database/' },
+      { text: 'Start Here', link: '/guide/database/start-here' },
+      {
+        text: 'Get Started',
+        collapsed: false,
+        items: [
+          { text: 'SQLite', link: '/guide/database/' },
+          { text: 'PostgreSQL', link: '/guide/database/get-started-postgres' },
+          { text: 'MySQL / MariaDB', link: '/guide/database/get-started-mysql' },
+          { text: 'An Existing Database', link: '/guide/database/adopting' },
+        ],
+      },
       { text: 'How kick/db Works', link: '/guide/database/concepts' },
-      { text: 'Adopting on an Existing DB', link: '/guide/database/adopting' },
       {
         text: 'Schema',
         collapsed: false,
@@ -155,6 +164,16 @@ const guideSidebar = [
         ],
       },
       { text: 'Drivers', link: '/guide/database/drivers' },
+      {
+        text: 'Coming From',
+        collapsed: true,
+        items: [
+          { text: 'Prisma', link: '/guide/database/coming-from-prisma' },
+          { text: 'Drizzle', link: '/guide/database/coming-from-drizzle' },
+          { text: 'TypeORM', link: '/guide/database/coming-from-typeorm' },
+          { text: 'Sequelize', link: '/guide/database/coming-from-sequelize' },
+        ],
+      },
     ],
   },
   {

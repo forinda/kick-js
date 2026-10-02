@@ -102,9 +102,9 @@ export type TableRelations<Table extends string> = Table extends keyof Registere
  *
  * Helpers like `eb.and(...)`, `eb.or(...)`, `eb.ref('col')`,
  * `eb.fn.count(...)` are Kysely's standard surface. There is no
- * `eb.eq` — that's the callable form. There is no `eb.desc` —
- * order direction lands as a separate Kysely call (e.g. wrap the
- * ref expression in `sql\`... desc\``) when needed in v1.
+ * `eb.eq` — that's the callable form. For a sort direction wrap the
+ * ref in `desc()` / `asc()` from `@forinda/kickjs-db`:
+ *   orderBy: (_u, eb) => [desc(eb.ref('createdAt')), asc(eb.ref('id'))]
  */
 export type QueryOps<DB, Table extends keyof DB & string> = ExpressionBuilder<DB, Table>
 

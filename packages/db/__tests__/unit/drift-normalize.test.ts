@@ -98,3 +98,38 @@ describe('checkDrift — dialect normalization (sqlite)', () => {
     await expect(checkDrift(typeChanged, stored, 'error')).rejects.toThrow(/drift/i)
   })
 })
+
+describe('checkDrift — MySQL foreign-key indexes', () => {
+  const fk = {
+    name: 'posts_authorId_fk',
+    columns: ['authorId'],
+    refTable: 'users',
+    refColumns: ['id'],
+    onDelete: 'cascade' as const,
+    onUpdate: 'no_action' as const,
+  }
+  const posts = (indexes: SchemaSnapshot['tables'][string]['indexes']): SchemaSnapshot => ({
+    version: 1,
+    dialect: 'mysql',
+    tables: {
+      posts: {
+        name: 'posts',
+        columns: { authorId: col({ name: 'authorId', type: 'integer', nullable: false }) },
+        indexes,
+        foreignKeys: [fk],
+        checks: [],
+      },
+    },
+  })
+
+  it('ignores the index InnoDB adds for a foreign key', async () => {
+    const live = posts([{ name: 'posts_authorId_fk', columns: ['authorId'], unique: false }])
+    await expect(checkDrift(live, posts([]), 'error')).resolves.toBeUndefined()
+  })
+
+  it('still compares a unique index that shares the foreign key name', async () => {
+    const declared = posts([{ name: 'posts_authorId_fk', columns: ['authorId'], unique: true }])
+    const live = posts([{ name: 'posts_authorId_fk', columns: ['authorId'], unique: false }])
+    await expect(checkDrift(live, declared, 'error')).rejects.toThrow(/drift/i)
+  })
+})

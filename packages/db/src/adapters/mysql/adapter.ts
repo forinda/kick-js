@@ -23,13 +23,18 @@ import { introspectMysql } from '../../migrate/introspect-mysql'
  * the row shape it expects via the type parameter.
  */
 export interface MysqlConnectionLike {
-  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R, unknown]>
+  // `any[]`, not `readonly unknown[]`: mysql2 declares its values parameter
+  // mutable, and a readonly one here made a real mysql2 Pool unassignable.
+  // oxlint-disable-next-line no-explicit-any
+  query<R = unknown>(sql: string, params?: any[]): Promise<[R, unknown]>
   release(): void
 }
 
 export interface MysqlPoolLike {
-  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R, unknown]>
+  // oxlint-disable-next-line no-explicit-any
+  query<R = unknown>(sql: string, params?: any[]): Promise<[R, unknown]>
   getConnection(): Promise<MysqlConnectionLike>
+  end?(): Promise<void>
 }
 
 export interface MysqlAdapterOptions {
@@ -39,6 +44,13 @@ export interface MysqlAdapterOptions {
    * pool across the migration adapter and the KickDbClient.
    */
   pool: MysqlPoolLike
+  /**
+   * End the pool when the adapter closes. Set it when the adapter owns its
+   * pool — a `kick.config.ts` `db.adapter()` factory that opens one for the
+   * CLI — or the `kick db` command never exits. Default `false`: an app
+   * usually shares one pool with its client.
+   */
+  endPoolOnClose?: boolean
 }
 
 /**
@@ -319,6 +331,12 @@ export function splitMysqlStatements(sql: string): string[] {
  * in a follow-up that walks `information_schema`.
  */
 export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
+  if (opts.endPoolOnClose && typeof opts.pool.end !== 'function') {
+    throw new KickDbError(
+      'KICK_DB_POOL_NOT_CLOSABLE',
+      'mysqlAdapter({ endPoolOnClose: true }) needs a pool with an end() method to close',
+    )
+  }
   const dialect: Dialect = 'mysql'
   const { pool } = opts
   let versionVerified = false
@@ -455,9 +473,9 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async close() {
-      // Caller owns the pool. The adapter doesn't end() it —
-      // adopters typically share the same pool with the
-      // KickDbClient.
+      // The caller owns the pool unless it said otherwise — adopters
+      // typically share it with the KickDbClient.
+      if (opts.endPoolOnClose) await pool.end?.()
     },
   }
 }

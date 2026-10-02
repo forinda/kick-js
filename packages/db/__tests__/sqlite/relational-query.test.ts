@@ -10,6 +10,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 
 import {
+  asc,
+  desc,
   createDbClient,
   integer,
   relations,
@@ -168,6 +170,22 @@ describe('db.query.X.findMany({ with }) — real better-sqlite3 round trip', () 
     expect(u2.posts).toHaveLength(1)
     // Empty inner set — must be [] not null, matching PG behavior.
     expect(u2.posts[0].comments).toEqual([])
+  })
+
+  it('asc() / desc() order the top level and a nested relation', async () => {
+    await seed()
+    const rows = await db.query.users.findMany({
+      orderBy: (_u, eb) => desc(eb.ref('id')),
+      with: { posts: { orderBy: (_p, eb) => [desc(eb.ref('title')), asc(eb.ref('id'))] } },
+    })
+    expect(rows.map((r) => r.email)).toEqual(['c@d.com', 'a@b.com'])
+    expect(rows[1]!.posts.map((p) => p.title)).toEqual(['second', 'first'])
+  })
+
+  it('an empty orderBy array sorts nothing instead of failing', async () => {
+    await seed()
+    const rows = await db.query.users.findMany({ orderBy: () => [] })
+    expect(rows).toHaveLength(2)
   })
 
   it('findFirst returns null on empty table', async () => {

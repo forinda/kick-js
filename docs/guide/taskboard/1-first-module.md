@@ -208,7 +208,11 @@ export const PROJECT_QUERY_CONFIG: QueryFieldConfig = {
 
 ## Remove the hello module
 
-The scaffold's `hello` module was only there to prove the app boots. Delete `src/modules/hello/` and its two lines in `src/modules/index.ts`:
+The scaffold's `hello` module was only there to prove the app boots. Remove it — this deletes `src/modules/hello/` and takes its import and `.mount(...)` out of `src/modules/index.ts`:
+
+<PmCommand exec="kick rm module hello" />
+
+which leaves:
 
 ```ts
 // src/modules/index.ts
