@@ -35,3 +35,6 @@ tutorials/
 # Throwaway consumer fixtures written inside the package by
 # dts-consumer-emit.test.ts (removed in `finally`; ignored in case a run dies).
 packages/kickjs/.dts-mw-*/
+
+# Playwright MCP screenshots and snapshots
+.playwright-mcp/
