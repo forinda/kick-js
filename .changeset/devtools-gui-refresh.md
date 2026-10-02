@@ -15,3 +15,4 @@ A denser dashboard layout.
 - **Metrics:** a sortable per-route table with 5xx share, percentile bars and a latency histogram per route. `/_debug/metrics` adds `serverErrors`, `clientErrors` and `histogram` to each route, and `latencyBucketsMs`.
 - **Container:** a list with kind and scope filters (with counts) and the selected token's dependencies, dependents and resolve stats beside it, replacing the paginated table and the detail modal. First and last resolve times now show — the dashboard read the wrong field names before.
 - **Graph:** a real dependency graph — tokens laid out in columns with arrows, focus on a token's whole chain, cycle edges in red, and token details beside it. Before, it was a list grouped by kind.
+- **Topology:** plugins, adapters and contributors as side-by-side cards with their counters, state and provided / required tokens (hover to highlight, click to open in Container). The duplicate DI table is gone — Container has it.
