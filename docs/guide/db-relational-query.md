@@ -190,11 +190,10 @@ Without the tags, `users.sentMessages` can't tell which of the two `messages →
 
 ## Options
 
-`findMany(options?)` → `Row[]`, `findFirst(options?)` → `Row | null`, `findUnique(options)` → `Row | null`.
-
 - `findMany(options?)` → `Row[]`
 - `findFirst(options?)` → `Row | null`
 - `findUnique(options)` → `Row | null`
+- `findManyAndCount(options?)` → `{ data: Row[]; total: number }`: one page, plus how many rows `where` matches before `limit` and `offset`. It runs a second, `count(*)` query with the same `where` and soft-delete filter, and returns the shape [`ctx.paginate`](./database/queries.md#pagination-with-ctx-paginate) takes.
 
 The options bag:
 

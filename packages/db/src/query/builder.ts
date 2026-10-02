@@ -101,6 +101,20 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
       return (rows[0] ?? null) as never
     },
 
+    async findManyAndCount(options?: unknown) {
+      const opts = (options ?? {}) as FindManyOptions
+      assertNotAlreadyAborted(opts.signal)
+      const compileAs = (mode: CompileMode) =>
+        compile(qb as Kysely<any>, table, opts as CompilePgOptions, relations, tables, mode)
+      const [rows, counted] = await Promise.all([
+        execute(qb, compileAs('many'), opts.signal),
+        execute(qb, compileAs('count'), opts.signal),
+      ])
+      // pg returns count(*) as a bigint string; SQLite and MySQL as a number.
+      const total = Number((counted[0] as { total: number | string | bigint }).total)
+      return { data: rows, total } as never
+    },
+
     async findUnique(options: unknown) {
       const opts = options as FindManyOptions
       assertNotAlreadyAborted(opts?.signal)

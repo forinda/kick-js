@@ -234,6 +234,14 @@ export interface TableQueryNamespace<DB, Table extends keyof DB & string> {
   findUnique<O extends FindManyOptions<DB, Table>>(
     options: O,
   ): Promise<FindManyRow<DB, Table, O> | null>
+  /**
+   * `findMany` plus the number of rows `where` matches before `limit` /
+   * `offset` — one page and the total, the `{ data, total }` shape `ctx.paginate` takes.
+   * Runs two queries.
+   */
+  findManyAndCount<O extends FindManyOptions<DB, Table>>(
+    options?: O,
+  ): Promise<{ data: Array<FindManyRow<DB, Table, O>>; total: number }>
 }
 
 /**

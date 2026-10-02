@@ -110,6 +110,28 @@ describe('managed columns on Postgres', () => {
     ).toMatchObject({ slug: 'gone' })
   }, 30_000)
 
+  it('findManyAndCount totals what where matches, skipping soft-deleted rows and paging', async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    await db
+      .insertInto('docs')
+      .values([
+        { slug: 'page-1', title: 'P1' },
+        { slug: 'page-2', title: 'P2' },
+        { slug: 'page-3', title: 'P3' },
+        { slug: 'page-4', title: 'P4', deletedAt: new Date() },
+      ])
+      .execute()
+    const { data: rows, total } = await db.query.docs.findManyAndCount({
+      where: (_d, eb) => eb('slug', 'like', 'page-%'),
+      orderBy: (_d, eb) => eb.ref('slug'),
+      limit: 1,
+      offset: 1,
+    })
+    // pg returns count(*) as a bigint string; it comes back a number.
+    expect(total).toBe(3)
+    expect(rows.map((r) => r.slug)).toEqual(['page-2'])
+  }, 30_000)
+
   it('works for a table in a named schema', async () => {
     const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
     const first = await db.upsert('billing.invoices', {
