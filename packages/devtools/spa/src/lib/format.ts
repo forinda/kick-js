@@ -50,3 +50,9 @@ export function methodColor(method: string): string {
   if (m === 'DELETE') return 'text-red-400'
   return 'text-text-secondary'
 }
+
+/** HTTP status → pill class (`.dt-pill` + tone), shared by the runner and the Requests tab. */
+export function statusPill(status: number): string {
+  const tone = status >= 500 ? 'err' : status >= 400 ? 'warn' : status >= 300 ? 'redir' : 'ok'
+  return `dt-pill dt-pill-${tone}`
+}

@@ -19,7 +19,8 @@ import { startUnifiedStream } from './lib/unified-stream'
 import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
-import { ApiRunnerHost } from './lib/api-runner'
+import { activeTab, switchTab } from './lib/nav'
+import { Icon } from './lib/icons'
 import { AuthGate } from './lib/auth-gate'
 
 type BuiltInTabId =
@@ -106,6 +107,9 @@ const TAB_GROUPS: readonly TabGroup[] = [
 ]
 
 const SIDEBAR_WIDTH_KEY = 'kickjs-devtools-sidebar-w'
+const RAIL_KEY = 'kickjs-devtools-sidebar-mode'
+/** Tabs that lay out their own panes and fill the main area. */
+const FLUSH_TABS: ReadonlySet<string> = new Set(['routes'])
 const SIDEBAR_COLLAPSED_KEY = 'kickjs-devtools-sidebar-collapsed'
 const SIDEBAR_MIN = 150
 const SIDEBAR_MAX = 360
@@ -131,17 +135,26 @@ function readCollapsedGroups(): string[] {
 }
 
 export const App: Component = () => {
-  const initial = (() => {
+  const active = activeTab
+  // Icon rail by default — labels on demand. Remembered per browser.
+  const [rail, setRail] = createSignal(
+    (() => {
+      try {
+        return localStorage.getItem(RAIL_KEY) !== 'full'
+      } catch {
+        return true
+      }
+    })(),
+  )
+  const toggleRail = (): void => {
+    const next = !rail()
+    setRail(next)
     try {
-      const saved = localStorage.getItem('kickjs-devtools-tab')
-      if (saved) return saved
+      localStorage.setItem(RAIL_KEY, next ? 'rail' : 'full')
     } catch {
-      // localStorage may throw in private mode — ignore
+      // storage unavailable
     }
-    return 'overview'
-  })()
-
-  const [active, setActive] = createSignal<string>(initial)
+  }
   const [customTabs, setCustomTabs] = createSignal<DevtoolsTabDescriptor[]>([])
   const [tabErrors, setTabErrors] = createSignal<ReadonlyArray<{ source: string; reason: string }>>(
     [],
@@ -232,12 +245,7 @@ export const App: Component = () => {
   })
 
   const switchTo = (id: string): void => {
-    setActive(id)
-    try {
-      localStorage.setItem('kickjs-devtools-tab', id)
-    } catch {
-      // ignore
-    }
+    switchTab(id)
     // Scroll the activated tab into view — important on narrow
     // viewports where the tab bar overflows; otherwise a programmatic
     // switch (or a localStorage restore) lands on a tab the user
@@ -267,7 +275,11 @@ export const App: Component = () => {
         </div>
       </header>
       <div class="dt-shell">
-        <aside class="dt-sidebar" role="tablist" style={`width:${sidebarWidth()}px`}>
+        <aside
+          class={`dt-sidebar ${rail() ? 'rail' : ''}`}
+          role="tablist"
+          style={`width:${sidebarWidth()}px`}
+        >
           <For each={TAB_GROUPS}>
             {(group) => (
               <Show
@@ -285,9 +297,13 @@ export const App: Component = () => {
                               data-tab-id={id}
                               class={`dt-nav-item ${active() === id ? 'active' : ''}`}
                               aria-selected={active() === id}
+                              title={t().label}
                               onClick={() => switchTo(id)}
                             >
-                              <span class="dt-nav-label">{t().label}</span>
+                              <span class="dt-nav-main">
+                                <Icon name={id} />
+                                <span class="dt-nav-label">{t().label}</span>
+                              </span>
                               <Show when={t().count?.()}>
                                 {(n) => <span class="tab-badge">{n()}</span>}
                               </Show>
@@ -301,7 +317,11 @@ export const App: Component = () => {
               >
                 {(label) => (
                   <div class="dt-nav-group">
+                    <Show when={rail()}>
+                      <div class="dt-nav-sep" />
+                    </Show>
                     <button
+                      hidden={rail()}
                       type="button"
                       class="dt-nav-group-header"
                       aria-expanded={!collapsed().includes(label())}
@@ -312,7 +332,7 @@ export const App: Component = () => {
                       </span>
                       {label()}
                     </button>
-                    <Show when={!collapsed().includes(label())}>
+                    <Show when={rail() || !collapsed().includes(label())}>
                       <For each={group.ids}>
                         {(id) => {
                           const tab = byId.get(id)
@@ -325,9 +345,13 @@ export const App: Component = () => {
                                   data-tab-id={id}
                                   class={`dt-nav-item nested ${active() === id ? 'active' : ''}`}
                                   aria-selected={active() === id}
+                                  title={t().label}
                                   onClick={() => switchTo(id)}
                                 >
-                                  <span class="dt-nav-label">{t().label}</span>
+                                  <span class="dt-nav-main">
+                                    <Icon name={id} />
+                                    <span class="dt-nav-label">{t().label}</span>
+                                  </span>
                                   <Show when={t().count?.()}>
                                     {(n) => <span class="tab-badge">{n()}</span>}
                                   </Show>
@@ -356,19 +380,35 @@ export const App: Component = () => {
                   onClick={() => switchTo(tab.id)}
                   title={tab.title}
                 >
-                  <span class="dt-nav-label">{tab.title}</span>
+                  <span class="dt-nav-main">
+                    <Icon name="custom" />
+                    <span class="dt-nav-label">{tab.title}</span>
+                  </span>
                 </button>
               )}
             </For>
           </Show>
+          <div class="dt-sidebar-foot">
+            <button
+              type="button"
+              class="dt-rail-toggle"
+              onClick={toggleRail}
+              title={rail() ? 'Show labels' : 'Icons only'}
+              aria-label={rail() ? 'Show labels' : 'Icons only'}
+            >
+              <Icon name={rail() ? 'expand' : 'collapse'} size={16} />
+            </button>
+          </div>
         </aside>
-        <div
-          class="dt-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          onMouseDown={startResize}
-        />
-        <main class="dt-main" role="tabpanel">
+        <Show when={!rail()}>
+          <div
+            class="dt-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={startResize}
+          />
+        </Show>
+        <main class={`dt-main ${FLUSH_TABS.has(active()) ? 'flush' : ''}`} role="tabpanel">
           <Show when={active() === 'overview'}>
             <OverviewTab />
           </Show>
@@ -422,8 +462,13 @@ export const App: Component = () => {
         </main>
       </div>
       <DetailModalHost />
-      <ApiRunnerHost />
       <AuthGate />
+      <Show when={store.connectionStatus() === 'disconnected' && !store.authRequired()}>
+        <div class="dt-disconnect" role="status">
+          <span class="dt-pulse dt-pulse-disconnected" aria-hidden="true" />
+          Can't reach the app — retrying every few seconds…
+        </div>
+      </Show>
     </div>
   )
 }
