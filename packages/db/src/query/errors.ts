@@ -174,3 +174,24 @@ export class RelationalQueryMissingInverseError extends KickDbError {
     this.targetTable = targetTable
   }
 }
+
+/**
+ * Thrown when a `many(target, { through })` relation can't be resolved: the
+ * junction table doesn't have exactly one foreign key to each side (or the
+ * columns given for `from` / `to` aren't a foreign key to that side).
+ */
+export class RelationalQueryThroughError extends KickDbError {
+  readonly sourceTable: string
+  readonly relationName: string
+  readonly junction: string
+  constructor(sourceTable: string, relationName: string, junction: string, problem: string) {
+    super(
+      'KICK_DB_RELATIONAL_THROUGH',
+      `Cannot resolve \`${sourceTable}.${relationName}\` through \`${junction}\`: ${problem}. ` +
+        `Name the junction columns: \`many(target, { through: { table: ${junction}, from: [${junction}.<col to ${sourceTable}>], to: [${junction}.<col to target>] } })\`.`,
+    )
+    this.sourceTable = sourceTable
+    this.relationName = relationName
+    this.junction = junction
+  }
+}

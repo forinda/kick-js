@@ -205,7 +205,7 @@ Drizzle's core API imports a column object and an operator for each condition; K
 | `db.insert(users).values({…}).returning()`        | `db.insertInto('users').values({…}).returningAll()`                                    |
 | `db.update(users).set({…}).where(…)`              | `db.updateTable('users').set({…}).where(…)`                                            |
 | `db.delete(users).where(…)`                       | `db.deleteFrom('users').where(…)`                                                      |
-| `.onConflictDoUpdate({ target, set })`            | `.onConflict((oc) => oc.column('email').doUpdateSet({…}))`                             |
+| `.onConflictDoUpdate({ target, set })`            | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control  |
 | `db.$count(posts)`                                | `select((eb) => eb.fn.countAll().as('n'))`                                             |
 | `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `kysely`                                  |
 | results run with `await`                          | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()` |
@@ -259,11 +259,10 @@ await db
 ```
 
 ```ts [kick/db]
-await db
-  .insertInto('users')
-  .values({ email: 'ada@example.com', name: 'Ada Lovelace' })
-  .onConflict((oc) => oc.column('email').doUpdateSet({ name: (eb) => eb.ref('excluded.name') }))
-  .execute()
+await db.upsert('users', {
+  values: { email: 'ada@example.com', name: 'Ada Lovelace' },
+  target: ['email'],
+})
 
 await db
   .updateTable('posts')
@@ -349,12 +348,11 @@ try {
 
 ## Not there (yet)
 
-- **`$defaultFn`, `$onUpdate`, soft delete** — set the value yourself; auto-managed columns are planned ([D.10](../roadmap.md)).
+- **`$defaultFn`, `$onUpdate` with a function** — set the value yourself. For the common cases there are [maintained columns](./schema.md#columns-kick-db-maintains): `onUpdateNow()`, `version()`, `softDelete()`.
 - **`columns` / `extras` in `db.query`** — use the query builder when you need a narrower select.
 - **A name or casing override for columns** — the key is the column name.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
-- **`drizzle-seed`** — write a seed as an empty migration or a script; a seed command is deferred (D.2).
-- **Read replicas** (`withReplicas`) — planned (D.12).
+- **`drizzle-seed`** (generated fake data) — no generator; write seed files for [`kick db seed`](./cli.md#seed) by hand or with a faker library.
 
 ## Testing
 

@@ -1,4 +1,4 @@
-import type { Kysely, Dialect as KyselyDialect, KyselyPlugin } from 'kysely'
+import type { Insertable, Kysely, Dialect as KyselyDialect, KyselyPlugin, Selectable } from 'kysely'
 
 import type { RegisteredDB } from './register'
 import type { QueryNamespace } from '../query/types'
@@ -136,6 +136,33 @@ export interface KickDbClient<DB = RegisteredDB> {
     listener: (e: KickDbClientEvents[E]) => void | Promise<void>,
   ): this
 
+  /**
+   * Insert, or update the rows whose `target` key already exists — one
+   * statement (`ON CONFLICT … DO UPDATE` / `ON DUPLICATE KEY UPDATE`).
+   * Returns the rows as stored.
+   *
+   *   await db.upsert('users', { values: { email, name }, target: ['email'] })
+   */
+  upsert<T extends keyof DB & string>(
+    table: T,
+    opts: import('./upsert').UpsertOptions<DB, T> & { values: Insertable<DB[T]> },
+  ): Promise<Selectable<DB[T]>>
+  upsert<T extends keyof DB & string>(
+    table: T,
+    opts: import('./upsert').UpsertOptions<DB, T> & { values: ReadonlyArray<Insertable<DB[T]>> },
+  ): Promise<Selectable<DB[T]>[]>
+
+  /**
+   * The row matching `where`, or a new one from `where` + `create`;
+   * `created` says which. Race-safe across concurrent requests.
+   *
+   *   const { row, created } = await db.findOrCreate('tags', { where: { name: 'urgent' } })
+   */
+  findOrCreate<T extends keyof DB & string>(
+    table: T,
+    opts: import('./upsert').FindOrCreateOptions<DB, T>,
+  ): Promise<{ row: Selectable<DB[T]>; created: boolean }>
+
   transaction<T>(fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
   transaction<T>(opts: TransactionOptions, fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
 
@@ -153,6 +180,12 @@ export interface KickDbClient<DB = RegisteredDB> {
 
   /** Whether this call chain is inside a transaction. */
   readonly inTransaction: boolean
+
+  /**
+   * This client with every read on the primary — for reading what you just
+   * wrote when replicas lag. The same client when there are no replicas.
+   */
+  readonly primary: KickDbClient<DB>
 
   /**
    * Returns a wrapped client carrying adopter-defined per-table
@@ -189,6 +222,13 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
   schema: TSchema
   /** A Kysely Dialect — typically PostgresDialect from db-pg. */
   dialect: KyselyDialect
+  /**
+   * Read replicas — a dialect, or several used in turn. Reads outside a
+   * transaction (`selectFrom`, `db.query`) go to a replica; writes, raw
+   * `db.qb`, and everything inside a transaction go to `dialect`. Read your
+   * own writes through `db.primary`.
+   */
+  replica?: KyselyDialect | readonly KyselyDialect[]
   /**
    * Enable lifecycle event emission for `query` / `queryError` /
    * `slowQuery` / `transactionStart` / `transactionCommit` /

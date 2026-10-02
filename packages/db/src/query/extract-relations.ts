@@ -13,13 +13,15 @@
  *    §7 R-5.
  */
 
-import type { Relation, RelationOne, RelationsDecl } from '../dsl/relations'
+import type { Relation, RelationOne, RelationsDecl, ThroughSpec } from '../dsl/relations'
+import type { ColumnRef } from '../dsl/table'
 import type { TableSnapshot } from '../snapshot/types'
-import type { ResolvedRelations } from './relations'
+import type { ResolvedRelation, ResolvedRelations } from './relations'
 import {
   RelationalQueryAliasCollisionError,
   RelationalQueryAmbiguousRelationNameError,
   RelationalQueryMissingInverseError,
+  RelationalQueryThroughError,
 } from './errors'
 
 interface MaybeRelations {
@@ -82,6 +84,17 @@ export function extractRelations(
           targetColumns: rel.references.map((r) => r.__name),
           ...(rel.relationName !== undefined ? { relationName: rel.relationName } : {}),
         }
+        continue
+      }
+
+      if (rel.through) {
+        out[sourceTable][relationName] = resolveThrough(
+          sourceTable,
+          relationName,
+          rel.target.__name,
+          rel.through,
+          tables,
+        )
         continue
       }
 
@@ -232,4 +245,49 @@ function resolveByForeignKey(
   if (matches.length !== 1) return null
   const fk = matches[0]!
   return { columns: fk.columns, refColumns: fk.refColumns }
+}
+
+/**
+ * A many-to-many: the junction's foreign key to the source and its foreign
+ * key to the target — given as `from` / `to` columns, or the only one to
+ * each side.
+ */
+function resolveThrough(
+  sourceTable: string,
+  relationName: string,
+  target: string,
+  through: ThroughSpec,
+  tables: Record<string, TableSnapshot>,
+): ResolvedRelation {
+  const explicit = 'table' in through && !('__isTable' in through) ? through : null
+  const junction = explicit ? explicit.table.__name : (through as { __name: string }).__name
+  const fail = (problem: string) =>
+    new RelationalQueryThroughError(sourceTable, relationName, junction, problem)
+  const snap = tables[junction]
+  if (!snap) throw fail('the junction table is not in the schema')
+
+  const fkTo = (side: string, refTable: string, columns?: ColumnRef[]) => {
+    const names = columns?.map((c) => c.__name)
+    const fks = snap.foreignKeys.filter(
+      (fk) => fk.refTable === refTable && (!names || fk.columns.join() === names.join()),
+    )
+    if (fks.length === 1) return fks[0]!
+    throw fail(
+      names
+        ? `[${names.join(', ')}] is not a foreign key to ${refTable} (the ${side})`
+        : `it has ${fks.length} foreign keys to ${refTable} (the ${side}), not one`,
+    )
+  }
+  if (!explicit && sourceTable === target) {
+    throw fail('it joins a table to itself, so which key is which is ambiguous')
+  }
+  const toSource = fkTo('source', sourceTable, explicit?.from)
+  const toTarget = fkTo('target', target, explicit?.to)
+  return {
+    kind: 'many',
+    target,
+    sourceColumns: toSource.refColumns,
+    targetColumns: toTarget.refColumns,
+    through: { table: junction, sourceColumns: toSource.columns, targetColumns: toTarget.columns },
+  }
 }

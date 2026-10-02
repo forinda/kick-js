@@ -28,6 +28,7 @@ import * as kick from '@forinda/kickjs'
 
 import type { KickDbClient, TransactionOptions } from './types'
 import { applyExtensions } from '../extend/apply'
+import { findOrCreate, upsert, type FindOrCreateOptions, type UpsertOptions } from './upsert'
 import type { KickDbEventEmitter } from './events'
 import type { CompileFn } from '../query/builder'
 import { buildQueryNamespace } from '../query/builder'
@@ -68,6 +69,9 @@ export interface InternalContext {
   savepointCounter: { value: number }
   /** The client's own Kysely, without `$extends` plugins — transactions start here. */
   root: Kysely<any>
+  /** Read replicas, used in turn for reads outside a transaction. Empty without any. */
+  replicas: Kysely<any>[]
+  nextReplica: number
   /** The transaction open on the current call chain, if any. */
   transactions: AsyncLocalStorage<TxFrame>
   /**
@@ -91,6 +95,8 @@ interface ClientShape {
   root: boolean
   /** `$extends` result plugins, re-applied to a transaction the client routes into. */
   plugins: KyselyPlugin[]
+  /** `db.primary`: reads stay on the primary even when replicas exist. */
+  readPrimary: boolean
 }
 const shapes = new WeakMap<object, ClientShape>()
 
@@ -119,16 +125,28 @@ const withPlugins = <DB>(qb: Kysely<any>, plugins: KyselyPlugin[]): Kysely<DB> =
 export function wrap<DB>(
   qb: Kysely<DB>,
   ctx: InternalContext,
-  shape: { root?: boolean; plugins?: KyselyPlugin[] } = {},
+  shape: { root?: boolean; plugins?: KyselyPlugin[]; readPrimary?: boolean } = {},
 ): KickDbClient<DB> {
   const root = shape.root ?? false
   const plugins = shape.plugins ?? []
+  const readPrimary = shape.readPrimary ?? false
 
   /** Where this client's queries go now: the open transaction for a root client, else its own. */
   const active = (): Kysely<DB> => {
     const frame = root ? ctx.transactions.getStore() : undefined
     if (frame?.done) throw new TransactionFinishedError()
     return frame ? withPlugins<DB>(frame.trx, plugins) : qb
+  }
+  /**
+   * Where this client's reads go: a replica, in turn, for a root client
+   * outside a transaction; otherwise wherever its writes go.
+   */
+  const reader = (): Kysely<DB> => {
+    if (!root || readPrimary || ctx.replicas.length === 0 || ctx.transactions.getStore()) {
+      return active()
+    }
+    const replica = ctx.replicas[ctx.nextReplica++ % ctx.replicas.length]!
+    return withPlugins<DB>(replica, plugins)
   }
   /** The open transaction on this call chain, ignoring one that has finished. */
   const openFrame = (): TxFrame | undefined => {
@@ -216,6 +234,7 @@ export function wrap<DB>(
     }
   }
 
+  let primaryView: KickDbClient<DB> | undefined
   const client: KickDbClient<DB> = {
     get qb() {
       return active()
@@ -224,21 +243,29 @@ export function wrap<DB>(
     get query() {
       const frame = root ? ctx.transactions.getStore() : undefined
       if (frame?.done) throw new TransactionFinishedError()
-      return frame
-        ? buildQueryNamespace<DB>(
-            withPlugins<DB>(frame.trx, plugins),
-            ctx.query.relations,
-            ctx.query.tables,
-            ctx.query.compile,
-          )
-        : ownQuery
+      if (frame) {
+        return buildQueryNamespace<DB>(
+          withPlugins<DB>(frame.trx, plugins),
+          ctx.query.relations,
+          ctx.query.tables,
+          ctx.query.compile,
+        )
+      }
+      const read = reader()
+      return read === qb
+        ? ownQuery
+        : buildQueryNamespace<DB>(read, ctx.query.relations, ctx.query.tables, ctx.query.compile)
+    },
+    get primary() {
+      if (!root || readPrimary || ctx.replicas.length === 0) return client
+      return (primaryView ??= wrap<DB>(qb, ctx, { root: true, plugins, readPrimary: true }))
     },
     get inTransaction() {
       return !root || openFrame() !== undefined
     },
 
     selectFrom: ((...args: unknown[]) =>
-      (active().selectFrom as (...a: unknown[]) => unknown)(
+      (reader().selectFrom as (...a: unknown[]) => unknown)(
         ...args,
       )) as KickDbClient<DB>['selectFrom'],
     insertInto: ((...args: unknown[]) =>
@@ -284,6 +311,14 @@ export function wrap<DB>(
       return startTransaction(opts, fn)
     }) as KickDbClient<DB>['transaction'],
 
+    upsert: (async (table: string, opts: UpsertOptions<DB, any>) => {
+      const rows = await upsert(client, table as never, opts)
+      return Array.isArray(opts.values) ? rows : rows[0]
+    }) as KickDbClient<DB>['upsert'],
+
+    findOrCreate: ((table: string, opts: FindOrCreateOptions<DB, any>) =>
+      findOrCreate(client, table as never, opts)) as KickDbClient<DB>['findOrCreate'],
+
     $extends(ext) {
       return applyExtensions(client, ctx, ext)
     },
@@ -303,9 +338,10 @@ export function wrap<DB>(
 
     async destroy() {
       await qb.destroy()
+      if (root) await Promise.all(ctx.replicas.map((r) => r.destroy()))
     },
   }
-  shapes.set(client, { qb, root, plugins })
+  shapes.set(client, { qb, root, plugins, readPrimary })
   return client
 }
 
@@ -319,6 +355,7 @@ export function rewrap<DB>(
   if (!shape) return wrap<DB>(client.qb.withPlugin(plugin), ctx)
   return wrap<DB>(shape.qb.withPlugin(plugin) as Kysely<DB>, ctx, {
     root: shape.root,
+    readPrimary: shape.readPrimary,
     plugins: [...shape.plugins, plugin],
   })
 }

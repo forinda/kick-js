@@ -9,6 +9,8 @@ export type MigrationAdapterFactory = () => MigrationAdapter | Promise<Migration
 export interface DbConfig {
   schemaPath: string
   migrationsDir: string
+  /** Where `kick db seed` finds seed files. Default `db/seeds`. */
+  seedsDir?: string
   dialect: Dialect
   /**
    * How `kick db migrate` reacts when the live DB has schema not recorded
@@ -41,6 +43,7 @@ export async function resolveDbConfig(opts: { configPath: string }): Promise<DbC
   return {
     schemaPath: db.schemaPath ?? 'src/db/schema.ts',
     migrationsDir: db.migrationsDir ?? 'db/migrations',
+    seedsDir: db.seedsDir ?? 'db/seeds',
     dialect: db.dialect ?? 'postgres',
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,

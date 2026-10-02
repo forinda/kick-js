@@ -172,6 +172,8 @@ export interface KickDbConfigBlock {
    * to `'db/migrations'`.
    */
   migrationsDir?: string
+  /** Where `kick db seed` finds seed files. Defaults to `'db/seeds'`. */
+  seedsDir?: string
   /** SQL dialect. Defaults to `'postgres'`. */
   dialect?: 'postgres' | 'sqlite' | 'mysql'
   /**

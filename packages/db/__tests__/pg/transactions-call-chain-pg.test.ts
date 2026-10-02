@@ -105,7 +105,9 @@ describe('call-chain transactions (postgres)', () => {
           .execute()
       })
     await Promise.all([run(1), run(2)]) // without retry, one of these rejects
-    expect(attempts).toBe(3)
+    // At least one retry. Under load the retried run can conflict again before
+    // the other commits, so the exact count isn't fixed.
+    expect(attempts).toBeGreaterThanOrEqual(3)
     const rows = await db.selectFrom('counters').select('n').execute()
     expect(rows.map((r) => r.n)).toEqual([1, 1])
   })

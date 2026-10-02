@@ -70,6 +70,13 @@ export interface ColumnState {
   primaryKey: boolean
   unique: boolean
   references: FkSpec | null
+  /**
+   * A column kick/db maintains itself: `'updatedAt'` (set on every update),
+   * `'version'` (incremented on every update), `'softDelete'` (rows with it
+   * set are skipped by relational reads). Never part of the snapshot — it
+   * changes queries, not the schema.
+   */
+  managed?: 'updatedAt' | 'version' | 'softDelete'
 }
 
 /**
@@ -193,6 +200,30 @@ export class ColumnBuilder<T = unknown> {
   default(value: string | number | boolean): this & GeneratedBrand {
     this.state.default = typeof value === 'string' ? value : String(value)
     return this as this & GeneratedBrand
+  }
+
+  /**
+   * Set this column to the current time on every update that doesn't set it
+   * itself — `updatedAt: timestamp().notNull().defaultNow().onUpdateNow()`.
+   */
+  onUpdateNow(): this {
+    this.state.managed = 'updatedAt'
+    return this
+  }
+
+  /**
+   * Mark this column — a nullable timestamp — as the soft-delete marker:
+   * relational reads (`db.query`) skip rows where it's set, at every level,
+   * unless asked `withDeleted: true`. Soft-delete by setting it.
+   */
+  softDelete(): this {
+    this.state.managed = 'softDelete'
+    return this
+  }
+
+  /** The role kick/db maintains this column in, if any. */
+  managedAs(): ColumnState['managed'] {
+    return this.state.managed
   }
 
   toJSON(name: string): ColumnSnapshot {

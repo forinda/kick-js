@@ -34,7 +34,12 @@ export interface CompileOptions {
   offset?: number
   maxDepth?: number
   with?: Record<string, true | CompileOptions>
+  /** Include soft-deleted rows — on this level only. */
+  withDeleted?: boolean
 }
+
+/** A table as the compiler sees it: its snapshot, plus its soft-delete column if any. */
+export type CompileTable = TableSnapshot & { softDelete?: string }
 
 const DEFAULT_MAX_DEPTH = 5
 
@@ -71,7 +76,9 @@ function makeTableRefProxy(eb: ExpressionBuilder<any, any>, alias: string): unkn
  * is `${name}_0`; nested levels increment.
  */
 function makeAlias(name: string, depth: number): string {
-  return `${name}_${depth}`
+  // No dots: `billing.invoices_0.col` would read as schema `billing`, table
+  // `invoices_0` — so a table in a named schema aliases as `billing_invoices_0`.
+  return `${name.replaceAll('.', '_')}_${depth}`
 }
 
 /**
@@ -90,7 +97,7 @@ export function runCompile<DB>(
   table: string,
   options: CompileOptions,
   relations: ResolvedRelations,
-  tables: Record<string, TableSnapshot>,
+  tables: Record<string, CompileTable>,
   mode: CompileMode,
   helpers: JsonHelpers,
 ): CompiledQuery {
@@ -115,6 +122,7 @@ export function runCompile<DB>(
     )
   }
 
+  query = skipDeleted(query, outerAlias, tables[table], options)
   query = applyWhereOrderLimit(query, outerAlias, options, mode)
 
   return query.compile() as CompiledQuery
@@ -126,7 +134,7 @@ function applyWithSelects(
   sourceAlias: string,
   withClause: Record<string, true | CompileOptions>,
   relations: ResolvedRelations,
-  tables: Record<string, TableSnapshot>,
+  tables: Record<string, CompileTable>,
   maxDepth: number,
   trace: readonly string[],
   helpers: JsonHelpers,
@@ -175,7 +183,7 @@ function buildInnerSelect(
   innerAlias: string,
   subOptions: CompileOptions,
   relations: ResolvedRelations,
-  tables: Record<string, TableSnapshot>,
+  tables: Record<string, CompileTable>,
   maxDepth: number,
   trace: readonly string[],
   helpers: JsonHelpers,
@@ -200,12 +208,36 @@ function buildInnerSelect(
     sub = sub.selectAll()
   }
 
-  for (let i = 0; i < rel.sourceColumns.length; i++) {
-    sub = sub.whereRef(
-      `${innerAlias}.${rel.targetColumns[i]}`,
-      '=',
-      `${sourceAlias}.${rel.sourceColumns[i]}`,
-    )
+  if (rel.through) {
+    // Many-to-many: target rows joined to the junction rows that point at the source.
+    const through = rel.through
+    const junctionAlias = `${innerAlias}_j`
+    sub = sub.innerJoin(`${through.table} as ${junctionAlias}`, (join: any) => {
+      let on = join
+      for (let i = 0; i < through.targetColumns.length; i++) {
+        on = on.onRef(
+          `${junctionAlias}.${through.targetColumns[i]}`,
+          '=',
+          `${innerAlias}.${rel.targetColumns[i]}`,
+        )
+      }
+      return on
+    })
+    for (let i = 0; i < through.sourceColumns.length; i++) {
+      sub = sub.whereRef(
+        `${junctionAlias}.${through.sourceColumns[i]}`,
+        '=',
+        `${sourceAlias}.${rel.sourceColumns[i]}`,
+      )
+    }
+  } else {
+    for (let i = 0; i < rel.sourceColumns.length; i++) {
+      sub = sub.whereRef(
+        `${innerAlias}.${rel.targetColumns[i]}`,
+        '=',
+        `${sourceAlias}.${rel.sourceColumns[i]}`,
+      )
+    }
   }
 
   const nextTrace = [...trace, innerAlias]
@@ -224,6 +256,7 @@ function buildInnerSelect(
     )
   }
 
+  sub = skipDeleted(sub, innerAlias, targetTable, subOptions)
   sub = applyWhereOrderLimit(sub, innerAlias, subOptions, 'many')
 
   if (rel.kind === 'one') {
@@ -231,6 +264,17 @@ function buildInnerSelect(
   }
 
   return sub
+}
+
+/** Leave out rows whose soft-delete column is set, unless the caller asked for them. */
+function skipDeleted(
+  query: any,
+  alias: string,
+  table: CompileTable | undefined,
+  options: CompileOptions,
+): any {
+  if (!table?.softDelete || options.withDeleted) return query
+  return query.where(`${alias}.${table.softDelete}`, 'is', null)
 }
 
 function applyWhereOrderLimit(

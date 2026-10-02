@@ -34,6 +34,13 @@ export interface RelationMany<
   kind: 'many'
   target: TTarget
   /**
+   * A many-to-many through a junction table: `many(tags, { through: postTags })`.
+   * The junction's foreign keys to each side decide the join; when it has
+   * more than one to a side (a self-referencing `follows`), name them:
+   * `{ table: follows, from: [follows.followerId], to: [follows.followeeId] }`.
+   */
+  through?: ThroughSpec
+  /**
    * Pairs with the matching `relationName` on the inverse `one`
    * declaration. Required when the source table has multiple FKs
    * to the same target; resolver throws
@@ -41,6 +48,10 @@ export interface RelationMany<
    */
   relationName?: string
 }
+
+export type ThroughSpec =
+  | TableDecl<string, Record<string, ColumnBuilder>>
+  | { table: TableDecl<string, Record<string, ColumnBuilder>>; from: ColumnRef[]; to: ColumnRef[] }
 
 export type Relation = RelationOne | RelationMany
 
@@ -66,7 +77,7 @@ interface Helpers {
   ) => RelationOne<T>
   many: <T extends TableDecl<string, Record<string, ColumnBuilder>>>(
     target: T,
-    opts?: { relationName?: string },
+    opts?: { relationName?: string; through?: ThroughSpec },
   ) => RelationMany<T>
 }
 
@@ -93,6 +104,7 @@ export function relations<
       kind: 'many',
       target,
       ...(opts?.relationName !== undefined ? { relationName: opts.relationName } : {}),
+      ...(opts?.through !== undefined ? { through: opts.through } : {}),
     }),
   }
   return {

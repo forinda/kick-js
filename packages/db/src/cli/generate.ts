@@ -1,6 +1,7 @@
 import path from 'node:path'
+import { loadModule } from './load-module'
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
-import { pathToFileURL, fileURLToPath } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync } from 'node:fs'
 
 import { extractSnapshot } from '../snapshot/extract'
@@ -94,7 +95,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   }
 
   const schemaAbs = path.resolve(opts.cwd, opts.config.schemaPath)
-  const schemaModule = await import(pathToFileURL(schemaAbs).href)
+  const schemaModule = await loadModule(schemaAbs)
   const target = extractSnapshot(schemaModule, opts.config.dialect)
   const changes = diff(prev, target)
 

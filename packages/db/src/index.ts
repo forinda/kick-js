@@ -135,6 +135,7 @@ export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
 export { checkMigrations, type CheckResult } from './cli/check'
+export { listSeeds, runSeeds, type SeedResult } from './cli/seed'
 
 export * from './dsl/columns'
 export * from './dsl/table'
@@ -184,6 +185,7 @@ export {
   RelationalQueryAliasCollisionError,
   RelationalQueryAmbiguousRelationNameError,
   RelationalQueryMissingInverseError,
+  RelationalQueryThroughError,
   RelationalQueryNotSupportedError,
   RelationalQueryCancelledError,
 } from './query/errors'
@@ -191,6 +193,7 @@ export {
 // LIKE/ILIKE pattern safety
 export { escapeLike, likePattern, type LikeMatchMode } from './query/like'
 export { asc, desc } from './query/order'
+export type { FindOrCreateOptions, UpsertOptions } from './client/upsert'
 
 // Explicit dialect tagging (used by detectDialect; exported for adopters
 // who wrap a raw Kysely dialect and want exact detection).

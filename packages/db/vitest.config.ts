@@ -51,6 +51,10 @@ export default defineConfig({
         find: '@forinda/kickjs-db/mysql',
         replacement: path.resolve(__dirname, 'src/mysql.ts'),
       },
+      {
+        find: '@forinda/kickjs-db/testing',
+        replacement: path.resolve(__dirname, 'src/testing.ts'),
+      },
       // M5.B — internal-only aliases so tests can reach helpers that
       // aren't part of the public `package.json` exports.
       {

@@ -52,7 +52,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool?.end()
   await container?.stop()
-})
+}, 60_000)
 
 describe('nested dates on Postgres', () => {
   it('decode like the top-level column', async () => {

@@ -10,6 +10,7 @@ export default defineConfig({
     sqlite: 'src/sqlite.ts',
     mysql: 'src/mysql.ts',
     schema: 'src/schema.ts',
+    testing: 'src/testing.ts',
     cli: 'src/cli.ts',
     'devtools-events': 'src/devtools-events.ts',
   },

@@ -71,6 +71,51 @@ await this.db.deleteFrom('posts').where('id', '=', id).execute()
 For anything not surfaced on the wrapper, `this.db.qb` is the underlying `Kysely<DB>`. You rarely need it — `selectFrom` / `insertInto` / `updateTable` / `deleteFrom` cover the common surface.
 :::
 
+## Upsert and find-or-create
+
+`upsert` inserts a row, or updates the one whose key already exists — one statement, safe under concurrency:
+
+```ts
+const user = await this.db.upsert('users', {
+  values: { email, name },
+  target: ['email'], // the unique key that decides insert vs update
+})
+// → the row as stored, inserted or updated
+```
+
+| Option   | What it does                                                                                                           |
+| -------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `values` | a row, or an array of rows — an array returns an array                                                                 |
+| `target` | the unique (or primary) key columns whose conflict means "update instead"                                              |
+| `update` | column names that take the incoming value (default: every inserted column outside `target`), or fixed `{ col: value }` |
+| `where`  | the predicate of a partial unique index `target` refers to — Postgres and SQLite                                       |
+
+```ts
+// Count a visit: insert with 1, or add to what's there.
+await this.db.upsert('page_views', {
+  values: { path, views: 1 },
+  target: ['path'],
+  update: { views: sql`page_views.views + 1` },
+})
+```
+
+`findOrCreate` returns the row matching `where`, creating it from `where` + `create` when there's none:
+
+```ts
+const { row, created } = await this.db.findOrCreate('tags', {
+  where: { name: 'urgent' },
+  create: { color: 'red' },
+})
+```
+
+It's race-safe: when two requests miss at the same moment, one inserts and the other hits the unique key, catches the `UniqueViolationError` and reads the winner's row — both get the same row, `created` is `true` for one. That holds outside a transaction and inside a `READ COMMITTED` one (Postgres's default). Inside a `REPEATABLE READ` or `serializable` transaction — MySQL's default — the re-read sees the transaction's snapshot, which can't contain the winner's row, so the `UniqueViolationError` is rethrown; catch it and run the whole transaction again. `where` should be a unique key; a conflict on a different key (the row can't be created and none matches `where`) is thrown. Inside a transaction, the insert runs in a savepoint, so a lost race doesn't abort it on Postgres.
+
+Per dialect:
+
+- **Postgres and SQLite** compile to `INSERT … ON CONFLICT (target) DO UPDATE … RETURNING *`.
+- **MySQL** compiles to `INSERT … ON DUPLICATE KEY UPDATE` and reads the rows back by their `target` values — MySQL has no `RETURNING`. It also ignores `target` when deciding: a conflict on any unique key updates. `where` isn't supported.
+- **A partial index's `where`** must be written as the index's own predicate, with literals — ``where: () => sql`active` `` for `… WHERE active` — because the database matches it to the index, and a bound parameter can't be matched.
+
 ## Relational queries
 
 `db.query.<table>.findMany` / `findFirst` / `findUnique` load rows together with their related rows in one query, driven by the `relations()` in your schema:

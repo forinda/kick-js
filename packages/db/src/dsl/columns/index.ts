@@ -16,6 +16,7 @@ export {
   bigint,
   smallint,
   decimal,
+  version,
   numeric,
   real,
   doublePrecision,

@@ -213,7 +213,7 @@ The error's code is `KICK_DB_RELATIONAL_NOT_SUPPORTED`. Upgrade to MySQL 8.0 or 
 Duplicate value for users (email)
 ```
 
-That's a `UniqueViolationError`: the row repeats a unique or primary key. Left unhandled it answers `409`, which is often what you want. To answer something else — or to insert-or-update instead — catch it by class or use an upsert. [Errors](./errors.md) lists every typed error.
+That's a `UniqueViolationError`: the row repeats a unique or primary key. Left unhandled it answers `409`, which is often what you want. To answer something else, catch it by class; to insert-or-update instead, use [`db.upsert()`](./queries.md#upsert-and-find-or-create), or `db.findOrCreate()` to reuse the existing row. [Errors](./errors.md) lists every typed error.
 
 ## FAQ
 
@@ -227,13 +227,13 @@ Postgres unless you have a reason not to; SQLite for local apps and tests; MySQL
 Yes — `` sql`…` `` from `kysely`, executed with `.execute(db.qb)`, with values bound as parameters — [Raw SQL & Recipes](./raw-sql.md). In a migration, use `kick db generate <name> --empty` (and record the hash — [above](#hash-mismatch-for-migration)).
 
 **How do I seed data?**
-There's no seed command yet (roadmap D.2). Write a seed migration with `kick db generate seed_<name> --empty`, or a script that uses the client.
+Put seed files in `db/seeds` and run [`kick db seed`](./cli.md#seed). Make them safe to run again with `db.upsert()` / `db.findOrCreate()`. Data a deploy depends on, that must run exactly once, belongs in a migration (`kick db generate <name> --empty`).
 
 **Is there soft delete, or an `updatedAt` that updates itself?**
-Not yet (D.10). Set `updatedAt` in your update, and filter deleted rows in your queries.
+Yes: `.softDelete()`, `.onUpdateNow()` and `version()` — [columns kick/db maintains](./schema.md#columns-kick-db-maintains). Soft delete is honoured by relational reads; the plain query builder sees every row.
 
 **Can I use several databases?**
-Yes. Create a client per database and register each under its own [token](./index.md#_6-make-it-injectable) — `app/Db`, `app/Db/analytics`. Read-replica routing within one client is planned (D.12).
+Yes. Create a client per database and register each under its own [token](./index.md#_6-make-it-injectable) — `app/Db`, `app/Db/analytics`. Read replicas are an option on one client — [`replica`](./pooling.md#read-replicas).
 
 **Can I edit a migration?**
 Not once it has run anywhere: write a new one. Before that, yes — edit it, then review it; if it was already reviewed, reviewing again records the change ([above](#hash-mismatch-for-migration)).
