@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { devtoolsHooks } from './devtools-hooks'
 import { writeFileSafe } from '../utils/fs'
 import { toPascalCase, toKebabCase } from '../utils/naming'
 
@@ -237,43 +238,7 @@ export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
         return { name: '${kebab}', status: 'up' }
       },
 
-      /**
-       * Snapshot for the DevTools topology view (\`/_debug\`).
-       *
-       * Must be CHEAP — the topology endpoint polls on a short interval, so
-       * \`state\` and \`metrics\` should be counters and flags already in memory,
-       * never a database round trip. Async is allowed for that reason, not as
-       * an invitation to do work.
-       *
-       * Delete this hook if the adapter has nothing worth showing.
-       */
-      // introspect(): IntrospectionSnapshot {
-      //   return {
-      //     protocolVersion: 1,
-      //     state: { connected: true },
-      //     metrics: { handled: 0 },
-      //     tokens: [],
-      //   }
-      // },
-
-      /**
-       * DevTools panels this adapter contributes.
-       *
-       * Import \`defineDevtoolsTab\` from \`@forinda/kickjs-devtools-kit\`;
-       * \`@forinda/kickjs\` deliberately does not depend on the kit at runtime.
-       *
-       * Delete this hook unless the adapter ships a panel.
-       */
-      // devtoolsTabs() {
-      //   return [
-      //     defineDevtoolsTab({
-      //       id: '${kebab}',
-      //       title: '${pascal}',
-      //       kind: 'html',
-      //       render: () => '<p>${pascal} adapter</p>',
-      //     }),
-      //   ]
-      // },
+${devtoolsHooks(kebab, pascal, 'adapter', '      ')}
     }
   },
 })

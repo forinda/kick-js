@@ -313,6 +313,35 @@ Each tab subscribes to a slice of the shared store; nothing owns its own polling
 | **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                               |
 | **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                   |
 
+### Custom tabs
+
+An adapter or plugin adds its own sidebar tab with `devtoolsTabs()`. The descriptor type and `defineDevtoolsTab` come from the kit, which `@forinda/kickjs` doesn't depend on — add it to the package that declares the tab:
+
+<PmCommand add="@forinda/kickjs-devtools-kit" />
+
+```ts
+import { defineAdapter } from '@forinda/kickjs'
+import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
+
+export const AuditAdapter = defineAdapter({
+  name: 'AuditAdapter',
+  build: () => ({
+    devtoolsTabs() {
+      return [
+        defineDevtoolsTab({
+          id: 'audit',
+          title: 'Audit',
+          // Or an iframe of a page the app serves: { type: 'iframe', src: '/_audit/panel' }
+          view: { type: 'html', html: '<p>12 events today</p>' },
+        }),
+      ]
+    },
+  }),
+})
+```
+
+The tab appears at the bottom of the sidebar. An iframe `src` on the app's own origin gets the dashboard token as `?token=`, so the panel can call `/_debug` endpoints; a `src` on another origin doesn't. Use `html` only for markup you control — it's injected as-is. `kick g adapter` and `kick g plugin` write this hook commented out.
+
 ### API runner
 
 Selecting a route on the Routes tab opens the runner beside the list — drag the divider to resize; the width is remembered. The bar at its top shows the method and resolved URL with **Send**. It sends a request to that route, from the browser, on the same origin — so it behaves the same on Express, Fastify and h3, and needs no extra endpoint. Each part of the request is a collapsible section:

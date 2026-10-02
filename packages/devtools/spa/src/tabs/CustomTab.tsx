@@ -41,17 +41,13 @@ export const CustomTab: Component<{ tab: DevtoolsTabDescriptor }> = (props) => {
 
 const IframeView: Component<{ view: Extract<DevtoolsTabView, { type: 'iframe' }> }> = (props) => {
   const src = (): string => {
-    // If src is a relative path, resolve it against the base path so a
-    // panel mounted at /_debug + an adapter serving its panel at
-    // /_kick/queue/panel just works without the adapter author having
-    // to compute a leading slash. Token propagates as a query param
-    // so the iframe inherits the dashboard's auth context.
-    const raw = props.view.src
-    const url = raw.startsWith('http') || raw.startsWith('//') ? raw : raw
+    // Relative srcs resolve against the dashboard page. The token rides along
+    // only to the app's own origin, so the iframe shares the dashboard's auth;
+    // a panel hosted elsewhere never sees it.
+    const url = new URL(props.view.src, location.href)
     const token = getToken()
-    if (!token) return url
-    const sep = url.includes('?') ? '&' : '?'
-    return `${url}${sep}token=${encodeURIComponent(token)}`
+    if (token && url.origin === location.origin) url.searchParams.set('token', token)
+    return url.href
   }
   return (
     <iframe

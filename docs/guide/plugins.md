@@ -121,8 +121,8 @@ interface KickPluginInstance {
   contributors?(): ContributorRegistrations
   onReady?(container: Container): void | Promise<void>
   shutdown?(): void | Promise<void>
-  introspect?(): unknown | Promise<unknown>
-  devtoolsTabs?(): readonly unknown[]
+  introspect?(): IntrospectionSnapshot | Promise<IntrospectionSnapshot>
+  devtoolsTabs?(): readonly unknown[] // DevtoolsTabDescriptor[] — see DevTools → Custom tabs
 }
 ```
 
@@ -138,7 +138,7 @@ interface KickPluginInstance {
 | `onReady()`      | After server starts              | Post-startup tasks                                                                        |
 | `shutdown()`     | On shutdown AND every HMR reload | Release what the plugin owns                                                              |
 | `introspect()`   | DevTools poll                    | Snapshot of plugin state for the DevTools dashboard (counters, flags, tokens)             |
-| `devtoolsTabs()` | DevTools mount                   | Plugin-owned tabs rendered inside the DevTools UI                                         |
+| `devtoolsTabs()` | DevTools mount                   | Plugin-owned tabs — see [Custom tabs](./devtools.md#custom-tabs)                          |
 
 ### Shutdown discipline
 

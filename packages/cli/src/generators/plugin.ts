@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { devtoolsHooks } from './devtools-hooks'
 import { writeFileSafe } from '../utils/fs'
 import { toPascalCase, toKebabCase } from '../utils/naming'
 
@@ -181,6 +182,8 @@ export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
     async shutdown(): Promise<void> {
       // Example: await this.connection?.close()
     },
+
+${devtoolsHooks(kebab, pascal, 'plugin', '    ')}
   }),
 })
 `,
