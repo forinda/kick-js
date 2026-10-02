@@ -17,6 +17,7 @@ import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
+import { startTrafficSampler } from './lib/traffic'
 import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
@@ -241,9 +242,11 @@ export const App: Component = () => {
     // Boot the singleton browser bus too — eager so the activity log
     // captures events emitted before the user opens the tab.
     const disposeBus = bootBus()
+    const stopSampler = startTrafficSampler()
     onCleanup(() => {
       dispose?.()
       disposeBus()
+      stopSampler()
     })
 
     // Apply data-theme + data-density to <html> on change.

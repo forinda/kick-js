@@ -11,6 +11,7 @@ import { openApiRunner } from '../lib/api-runner'
 import { paramsFromPath } from '../lib/api-runner-core'
 import { formatMs, methodColor, statusPill } from '../lib/format'
 import { SplitPane } from '../lib/split-pane'
+import { switchTab } from '../lib/nav'
 
 const POLL_MS = 1500
 /** Matches the server's default log size, with room for a bigger one. */
@@ -19,11 +20,21 @@ const KEEP = 500
 const STATUSES = ['ALL', '2xx', '3xx', '4xx', '5xx'] as const
 type StatusFilter = (typeof STATUSES)[number]
 
+/** A request to select when the tab next opens — set from the Overview. */
+let focusOnOpen: number | null = null
+
+/** Show the Requests tab with one request selected. */
+export function openRequest(seq: number): void {
+  focusOnOpen = seq
+  switchTab('requests')
+}
+
 const time = (at: number): string => new Date(at).toLocaleTimeString([], { hour12: false })
 
 export const RequestsTab: Component = () => {
   const [entries, setEntries] = createSignal<RequestLogEntry[]>([])
-  const [selected, setSelected] = createSignal<number | null>(null)
+  const [selected, setSelected] = createSignal<number | null>(focusOnOpen)
+  focusOnOpen = null
   const [search, setSearch] = createSignal('')
   const [status, setStatus] = createSignal<StatusFilter>('ALL')
   const [paused, setPaused] = createSignal(false)
