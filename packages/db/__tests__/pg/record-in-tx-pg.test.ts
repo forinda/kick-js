@@ -23,7 +23,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool?.end()
   await container?.stop()
-})
+}, 60_000)
 
 describe('a migration and its record commit together (Postgres)', () => {
   it('rolls the migration back when recording it fails', async () => {

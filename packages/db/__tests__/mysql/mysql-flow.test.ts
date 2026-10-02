@@ -99,7 +99,7 @@ afterAll(async () => {
   await pool?.end()
   await container?.stop()
   await rm(migrationsDir, { recursive: true, force: true })
-})
+}, 60_000)
 
 describe('MySQL, end to end', () => {
   it('applies migrations with a foreign key, twice, without false drift', async () => {
