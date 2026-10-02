@@ -17,3 +17,4 @@ A denser dashboard layout.
 - **Graph:** a real dependency graph on a canvas — tokens in columns with arrows, drag to rearrange (remembered), pan and zoom, focus on a token's whole chain, cycle edges in red, and token details beside it. Before, it was a list grouped by kind.
 - **Topology:** plugins, adapters and contributors as side-by-side cards with their counters, state and provided / required tokens (hover to highlight, click to open in Container). The duplicate DI table is gone — Container has it.
 - **Activity:** namespace chips with counts, tinted error and warning rows, a held list with **N new** while you read, and the selected event's full payload beside the stream. Replaces the paginated table.
+- **Database:** a **Slowest** view grouping statements by shape (calls, failures, mean, p95, total) next to the **Recent** log, with the full SQL, parameters and error beside them.

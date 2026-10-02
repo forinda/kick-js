@@ -119,6 +119,7 @@ const FLUSH_TABS: ReadonlySet<string> = new Set([
   'container',
   'graph',
   'activity',
+  'database',
 ])
 const SIDEBAR_COLLAPSED_KEY = 'kickjs-devtools-sidebar-collapsed'
 const SIDEBAR_MIN = 150
