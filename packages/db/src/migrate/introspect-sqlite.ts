@@ -33,6 +33,8 @@ interface TableInfoRow {
   notnull: 0 | 1
   dflt_value: string | null
   pk: number
+  /** table_xinfo: 2 a virtual generated column, 3 a stored one. */
+  hidden?: number
 }
 
 interface IndexListRow {
@@ -97,15 +99,29 @@ export function introspectSqlite(
 }
 
 function readColumns(db: SqliteIntrospectDb, table: string): Record<string, ColumnSnapshot> {
-  const rows = db.prepare(`PRAGMA table_info(${quote(table)})`).all() as TableInfoRow[]
+  // table_xinfo, unlike table_info, lists generated columns too.
+  const rows = db.prepare(`PRAGMA table_xinfo(${quote(table)})`).all() as TableInfoRow[]
   const out: Record<string, ColumnSnapshot> = {}
+  let createSql: string | undefined
   for (const r of rows) {
     out[r.name] = {
       name: r.name,
-      type: normalizeType(r.type),
+      // SQLite reports a generated column's type with the clause appended.
+      type: normalizeType(r.type.replace(/\s+GENERATED\s+ALWAYS\b.*$/i, '')),
       nullable: r.notnull === 0,
       default: r.dflt_value,
       primaryKey: r.pk > 0,
+    }
+    if (r.hidden === 2 || r.hidden === 3) {
+      createSql ??= (
+        db
+          .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
+          .all(table)[0] as { sql: string } | undefined
+      )?.sql
+      out[r.name].generated = {
+        expression: generatedExpression(createSql ?? '', r.name),
+        stored: r.hidden === 3,
+      }
     }
   }
   return out
@@ -184,4 +200,25 @@ function normalizeType(declared: string): string {
 /** Quote a SQLite identifier for interpolation into a PRAGMA (no binding). */
 function quote(name: string): string {
   return '"' + name.replace(/"/g, '""') + '"'
+}
+
+/**
+ * The expression of a generated column, read out of the table's CREATE
+ * statement: the balanced parentheses after `GENERATED ALWAYS AS` in that
+ * column's definition. Empty when it can't be found.
+ */
+function generatedExpression(createSql: string, column: string): string {
+  const name = column.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const start = new RegExp(
+    `["\`\\[]?${name}["\`\\]]?\\s[^,]*?GENERATED\\s+ALWAYS\\s+AS\\s*\\(`,
+    'i',
+  ).exec(createSql)
+  if (!start) return ''
+  let depth = 1
+  const from = start.index + start[0].length
+  for (let i = from; i < createSql.length; i++) {
+    if (createSql[i] === '(') depth++
+    else if (createSql[i] === ')' && --depth === 0) return createSql.slice(from, i).trim()
+  }
+  return ''
 }

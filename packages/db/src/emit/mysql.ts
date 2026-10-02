@@ -130,6 +130,9 @@ function emitCreateTable(t: TableSnapshot): string {
 
 function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
   let s = `${ident(c.name)} ${mysqlType(c.type)}`
+  if (c.generated) {
+    s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
+  }
   if (!c.nullable) s += ' NOT NULL'
   if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default)}`
   if (inlinePk) s += ' AUTO_INCREMENT PRIMARY KEY'

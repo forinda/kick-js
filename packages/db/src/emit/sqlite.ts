@@ -67,6 +67,8 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
     const t = perTableName(c)
     if (!t || createdTables.has(t)) continue
     if (
+      // SQLite can't ADD COLUMN a stored generated column.
+      (c.kind === 'addColumn' && c.column.generated?.stored) ||
       c.kind === 'alterColumn' ||
       c.kind === 'dropForeignKey' ||
       c.kind === 'addForeignKey' ||
@@ -198,7 +200,10 @@ function emitRebuild(table: string, ctx: SqliteEmitContext, changes: ChangeSet):
   // default; dropped columns are simply not selected).
   const newCols = Object.keys(next.columns)
   const source = (c: string) => oldName.get(c) ?? c
-  const common = prev ? newCols.filter((c) => source(c) in prev.columns) : newCols
+  // A generated column can't be written; the new table computes it.
+  const common = (prev ? newCols.filter((c) => source(c) in prev.columns) : newCols).filter(
+    (c) => !next.columns[c].generated,
+  )
   const colList = common.map(quoteIdent).join(', ')
   const selectList = common.map((c) => quoteIdent(source(c))).join(', ')
 
@@ -236,6 +241,9 @@ function emitCreateTable(name: string, t: TableSnapshot): string {
 
 function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
   let s = `${quoteIdent(c.name)} ${sqliteType(c.type)}`
+  if (c.generated) {
+    s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
+  }
   if (inlinePk) {
     s += ' PRIMARY KEY'
     if (/serial/i.test(c.type)) s += ' AUTOINCREMENT'

@@ -8,6 +8,10 @@ export interface ColumnSnapshot {
   nullable: boolean
   default: string | null
   primaryKey: boolean
+  /** A column the database computes from others: `GENERATED ALWAYS AS (expression)`. */
+  generated?: { expression: string; stored: boolean }
+  /** An identity column (Postgres): `GENERATED ALWAYS | BY DEFAULT AS IDENTITY`. */
+  identity?: 'always' | 'byDefault'
 }
 
 export interface IndexSnapshot {

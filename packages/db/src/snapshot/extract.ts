@@ -83,6 +83,17 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
 
   assertSchemasSupported(dialect, schemaNames)
   for (const t of Object.values(tables)) assertIndexesSupported(dialect, t)
+  if (dialect !== 'postgres') {
+    for (const t of Object.values(tables)) {
+      for (const c of Object.values(t.columns)) {
+        if (c.identity) {
+          throw new Error(
+            `kickjs-db: column '${t.name}.${c.name}' is an identity column, which only Postgres has — use serial()`,
+          )
+        }
+      }
+    }
+  }
 
   const relations = extractRelations(schema, tables)
 

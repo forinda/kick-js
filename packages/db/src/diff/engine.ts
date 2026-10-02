@@ -473,7 +473,14 @@ function columnsEqual(
   // `primaryKey` is left to `alterPrimaryKey`: an alterColumn for it made
   // Postgres emit nothing for the key and MySQL a MODIFY COLUMN that neither
   // added nor dropped it.
-  return a.type === b.type && a.nullable === b.nullable && a.default === b.default
+  return (
+    a.type === b.type &&
+    a.nullable === b.nullable &&
+    a.default === b.default &&
+    a.identity === b.identity &&
+    a.generated?.expression === b.generated?.expression &&
+    a.generated?.stored === b.generated?.stored
+  )
 }
 
 function primaryKeyChange(

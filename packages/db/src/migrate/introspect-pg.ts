@@ -12,6 +12,11 @@ const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
 
 interface ColumnRow {
   column_name: string
+  is_identity: 'YES' | 'NO'
+  identity_generation: 'ALWAYS' | 'BY DEFAULT' | null
+  generation_expression: string | null
+  /** pg_attribute.attgenerated: 's' stored, 'v' virtual, '' not generated. */
+  attgenerated: string
   data_type: string
   udt_name: string
   is_nullable: 'YES' | 'NO'
@@ -144,7 +149,11 @@ async function readColumns(
               ::regclass::text AS owned_sequence,
             to_regclass(
               (regexp_match(column_default, 'nextval\\(''([^'']+)''(::regclass)?\\)'))[1]
-            )::text AS default_sequence
+            )::text AS default_sequence,
+            is_identity, identity_generation, generation_expression,
+            (SELECT a.attgenerated FROM pg_attribute a
+              WHERE a.attrelid = format('%I.%I', table_schema, table_name)::regclass
+                AND a.attname = column_name) AS attgenerated
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -174,6 +183,15 @@ async function readColumns(
       // trips (DSL → emit → introspect) idempotent.
       default: isSerial ? null : normalizeDefault(r.column_default),
       primaryKey: pkSet.has(r.column_name),
+    }
+    if (r.is_identity === 'YES') {
+      out[r.column_name].identity = r.identity_generation === 'ALWAYS' ? 'always' : 'byDefault'
+    }
+    if (r.attgenerated && r.generation_expression) {
+      out[r.column_name].generated = {
+        expression: r.generation_expression,
+        stored: r.attgenerated === 's',
+      }
     }
   }
   return out

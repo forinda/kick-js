@@ -272,6 +272,24 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
   const t = quoteIdent(table)
   const c = quoteIdent(after.name)
 
+  // A generated column changes in place where Postgres can: a new
+  // expression (17+), or back to a plain column keeping its values. Anything
+  // else — becoming generated, stored ↔ virtual — re-creates the column,
+  // which holds only computed values anyway. ponytail: an index on it is
+  // dropped with it and not re-created; declare it again under a new name.
+  const g = before.generated
+  const h = after.generated
+  if (g?.expression !== h?.expression || g?.stored !== h?.stored) {
+    if (g && h && g.stored === h.stored) {
+      stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} SET EXPRESSION AS (${h.expression});`)
+    } else if (g && !h) {
+      stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} DROP EXPRESSION;`)
+      before = { ...before, generated: undefined }
+    } else {
+      return `ALTER TABLE ${t} DROP COLUMN ${c};\n${emitAddColumn(table, after)}`
+    }
+  }
+
   const typeChanged = before.type !== after.type
   const nullChanged = before.nullable !== after.nullable
   const defaultChanged = before.default !== after.default
@@ -279,6 +297,17 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
 
   if (typeChanged) {
     stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} TYPE ${after.type} USING ${c}::${after.type};`)
+  }
+
+  if (before.identity !== after.identity) {
+    const kind = after.identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'
+    stmts.push(
+      !after.identity
+        ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP IDENTITY;`
+        : before.identity
+          ? `ALTER TABLE ${t} ALTER COLUMN ${c} SET GENERATED ${kind};`
+          : `ALTER TABLE ${t} ALTER COLUMN ${c} ADD GENERATED ${kind} AS IDENTITY;`,
+    )
   }
 
   // Default precedes nullable when loosening (DROP DEFAULT before DROP NOT NULL keeps
@@ -365,6 +394,10 @@ function bareName(qualified: string): string {
 
 function emitColumnDecl(c: ColumnSnapshot): string {
   let s = `${quoteIdent(c.name)} ${c.type}`
+  if (c.generated) {
+    s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
+  }
+  if (c.identity) s += ` GENERATED ${c.identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'} AS IDENTITY`
   if (!c.nullable) s += ' NOT NULL'
   if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type)}`
   return s

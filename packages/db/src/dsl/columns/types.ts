@@ -77,6 +77,8 @@ export interface ColumnState {
    * changes queries, not the schema.
    */
   managed?: 'updatedAt' | 'version' | 'softDelete'
+  generated?: { expression: string; stored: boolean }
+  identity?: 'always' | 'byDefault'
 }
 
 /**
@@ -91,6 +93,14 @@ export interface ColumnState {
  */
 export const KICK_GENERATED = Symbol.for('@forinda/kickjs-db/Generated')
 export type GeneratedBrand = { readonly [KICK_GENERATED]?: true }
+
+/**
+ * Type-only brand for a column the database always computes — a generated
+ * column, or an identity `GENERATED ALWAYS`. `SchemaToTypes<S>` wraps it in
+ * Kysely's `GeneratedAlways<T>`, so it can't be inserted or updated.
+ */
+export const KICK_GENERATED_ALWAYS = Symbol.for('@forinda/kickjs-db/GeneratedAlways')
+export type GeneratedAlwaysBrand = { readonly [KICK_GENERATED_ALWAYS]?: true }
 
 /**
  * Type-only brand attached to a column when `.notNull()` or `.primaryKey()`
@@ -117,7 +127,8 @@ export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
  */
 export type PreserveBrands<Self, Out> = Out &
   (Self extends NotNullBrand ? NotNullBrand : unknown) &
-  (Self extends GeneratedBrand ? GeneratedBrand : unknown)
+  (Self extends GeneratedBrand ? GeneratedBrand : unknown) &
+  (Self extends GeneratedAlwaysBrand ? GeneratedAlwaysBrand : unknown)
 
 /**
  * Phantom-typed column builder. The `T` generic carries the column's TS
@@ -221,6 +232,38 @@ export class ColumnBuilder<T = unknown> {
     return this
   }
 
+  /**
+   * Computed by the database from other columns, on every write:
+   * `total: numeric(12, 2).generatedAlwaysAs('price * quantity')`. The SQL is
+   * passed through as written. Stored by default; `{ stored: false }` makes
+   * it virtual, computed on read (MySQL, SQLite, Postgres 18+). It can't be
+   * inserted or updated.
+   */
+  generatedAlwaysAs(
+    expression: string,
+    options: { stored?: boolean } = {},
+  ): this & GeneratedAlwaysBrand {
+    this.state.generated = { expression, stored: options.stored ?? true }
+    return this as this & GeneratedAlwaysBrand
+  }
+
+  /**
+   * An identity column the database numbers and won't let you set (Postgres)
+   * — the SQL-standard successor to `serial`.
+   */
+  generatedAlwaysAsIdentity(): this & NotNullBrand & GeneratedAlwaysBrand {
+    this.state.identity = 'always'
+    this.state.nullable = false
+    return this as this & NotNullBrand & GeneratedAlwaysBrand
+  }
+
+  /** An identity column the database numbers unless a value is given (Postgres). */
+  generatedByDefaultAsIdentity(): this & NotNullBrand & GeneratedBrand {
+    this.state.identity = 'byDefault'
+    this.state.nullable = false
+    return this as this & NotNullBrand & GeneratedBrand
+  }
+
   /** The role kick/db maintains this column in, if any. */
   managedAs(): ColumnState['managed'] {
     return this.state.managed
@@ -233,6 +276,9 @@ export class ColumnBuilder<T = unknown> {
       nullable: this.state.nullable,
       default: this.state.default,
       primaryKey: this.state.primaryKey,
+      // Only when set, so other columns serialize as they always have.
+      ...(this.state.generated ? { generated: { ...this.state.generated } } : {}),
+      ...(this.state.identity ? { identity: this.state.identity } : {}),
     }
   }
 

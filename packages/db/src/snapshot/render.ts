@@ -201,6 +201,12 @@ function chainSuffix(
   if (col.primaryKey) chain += '.primaryKey()'
   if (!col.primaryKey && !col.nullable) chain += '.notNull()'
   if (col.default !== null) chain += `.default(${JSON.stringify(col.default)})`
+  if (col.identity === 'always') chain += '.generatedAlwaysAsIdentity()'
+  if (col.identity === 'byDefault') chain += '.generatedByDefaultAsIdentity()'
+  if (col.generated) {
+    const virtual = col.generated.stored ? '' : ', { stored: false }'
+    chain += `.generatedAlwaysAs(${strLit(col.generated.expression)}${virtual})`
+  }
   if (inlineUnique) chain += '.unique()'
   if (fk) {
     const ref = `${jsIdent(fk.refTable)}.${jsIdent(fk.refColumns[0])}`
