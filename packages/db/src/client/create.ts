@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import {
   Kysely,
   ParseJSONResultsPlugin,
@@ -10,6 +11,7 @@ import type { SchemaToTypes } from './schema-types'
 import { KickDbEventEmitter } from './events'
 import { CodecPlugin, buildDecoderMap, buildEncoderMap } from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
+import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
 import { readDialectMark } from '../dialect-marker'
 import { pickCompiler } from '../query/compilers'
@@ -93,7 +95,8 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   }
 
   const kysely = new Kysely<DB>({
-    dialect: opts.dialect,
+    // Driver failures surface as typed errors (UniqueViolationError, …).
+    dialect: translatingDialect(opts.dialect, dialectTag),
     plugins: plugins.length > 0 ? plugins : undefined,
     log: events
       ? (event) => {
@@ -130,13 +133,15 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     events,
     dialect: dialectTag,
     savepointCounter: { value: 0 },
+    root: kysely,
+    transactions: new AsyncLocalStorage(),
     query: {
       relations,
       tables,
       compile: pickCompiler(dialectTag),
     },
   }
-  return wrap<DB>(kysely, ctx)
+  return wrap<DB>(kysely, ctx, { root: true })
 }
 
 function detectDialect(dialect: KyselyDialect): KickDbClient['dialect'] {

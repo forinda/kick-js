@@ -175,6 +175,89 @@ await this.db.transaction(async (tx) => {
 })
 ```
 
+### Transactions follow the call chain
+
+Inside `transaction(fn)`, the plain client joins the transaction too — a repository or service that only holds the injected `db` writes inside the transaction its caller opened, without being handed `tx`:
+
+```ts
+await this.db.transaction(async () => {
+  const user = await this.users.create({ email }) // uses this.db internally
+  await this.profiles.create({ userId: user.id }) // same transaction
+})
+```
+
+`db.inTransaction` says whether the current call chain is inside one. Concurrent requests each get their own — the transaction follows the async call chain, not the client.
+
+Calling `transaction()` while one is already open runs according to `nested`:
+
+| `nested`            | Behaviour                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `'reuse'` (default) | runs inside the open transaction; the outer one commits or rolls back                                         |
+| `'savepoint'`       | runs behind a savepoint, so a throw undoes only this part                                                     |
+| `'separate'`        | opens an independent transaction on another connection — commits even if the outer rolls back (not on SQLite) |
+
+```ts
+await this.db.transaction({ nested: 'separate' }, async () => {
+  await this.audit.record('login attempt') // kept even if the caller's transaction fails
+})
+```
+
+### After commit
+
+`afterCommit(fn)` runs `fn` once the transaction commits — send the email, publish the event — and drops it if the transaction (or the savepoint it was registered in) rolls back. Outside a transaction it runs right away. A hook that throws is reported to the error observers; the transaction stays committed.
+
+```ts
+await this.db.transaction(async () => {
+  const order = await this.orders.place(cart)
+  await this.db.afterCommit(() => this.mailer.sendReceipt(order))
+})
+```
+
+### Retrying
+
+Under `serializable` (and sometimes `repeatable read`) a transaction can fail because a concurrent one conflicted with it, and deadlocks cancel one side. Both are safe to run again — pass `retry`:
+
+```ts
+await this.db.transaction({ isolation: 'serializable', retry: true }, async () => {
+  // runs again, from the start, on SerializationFailureError or DeadlockError
+})
+```
+
+`retry: true` is three attempts; `retry: 5` sets the count, and `{ attempts, baseDelayMs, maxDelayMs }` the backoff (exponential with jitter, 20 ms up to 1 s by default). Only errors with `retryable: true` are retried; anything else throws at once. The callback runs once per attempt, so keep side effects outside the database in `afterCommit`. `retry` and `isolation` apply when a transaction starts — a nested `'reuse'` runs inside the outer one, and its failure retries the outer transaction if that one has `retry`. Each retry fires a `transactionRetry` event with the attempt, error and delay.
+
+## Errors
+
+A failed query throws a typed error instead of the driver's own, on every dialect and inside transactions too. Each carries what the database reported — `constraint`, `table`, `columns`, `detail` — and the driver's error as `cause`:
+
+| Error                       | When                                                     | Notes                    |
+| --------------------------- | -------------------------------------------------------- | ------------------------ |
+| `UniqueViolationError`      | a row duplicates a unique or primary key                 | `status: 409`            |
+| `ForeignKeyViolationError`  | a row references a missing row, or a referenced row goes |                          |
+| `CheckViolationError`       | a CHECK constraint rejects the row                       | `constraint` is its name |
+| `NotNullViolationError`     | a NOT NULL column gets null                              |                          |
+| `SerializationFailureError` | a transaction conflicted with a concurrent one           | `retryable: true`        |
+| `DeadlockError`             | the database cancelled a deadlocked transaction          | `retryable: true`        |
+| `ConnectionError`           | the database can't be reached or dropped the connection  |                          |
+| `DatabaseError`             | anything else the database reports — the base class      | `driverCode` = SQLSTATE  |
+
+```ts
+import { HttpException } from '@forinda/kickjs'
+import { UniqueViolationError } from '@forinda/kickjs-db'
+
+try {
+  await this.db.insertInto('users').values({ email }).execute()
+} catch (err) {
+  if (err instanceof UniqueViolationError && err.columns.includes('email')) {
+    throw HttpException.conflict('That email is taken')
+  }
+  throw err
+}
+```
+
+Left unhandled, a `UniqueViolationError` answers `409` rather than `500` — it carries `status: 409`. Its message names the table and columns, never the duplicate value.
+
+Postgres names every field; MySQL and SQLite only some (SQLite reports a CHECK constraint by name and a foreign key without columns). Errors that don't come from the database — a `TypeError` in your own code — pass through untouched.
+
 ## Lifecycle events
 
 Enable events on the client (`events: true`, or set `slowQueryThresholdMs`) and subscribe with `on()`:

@@ -29,6 +29,38 @@ export interface TransactionRollbackEvent extends TransactionEvent {
   error: unknown
 }
 
+/** Fired before a transaction is run again after a retryable failure. */
+export interface TransactionRetryEvent extends TransactionEvent {
+  /** The attempt about to run — `2` is the first retry. */
+  attempt: number
+  /** What failed the previous attempt (a serialization failure or deadlock). */
+  error: unknown
+  delayMs: number
+}
+
+/** Options for `transaction(opts, fn)`. */
+export interface TransactionOptions extends TransactionEvent {
+  /**
+   * What to do when a transaction is already open on this call chain:
+   *
+   * - `'reuse'` (default) — run inside it; the outer one commits or rolls back.
+   * - `'savepoint'` — run inside it behind a savepoint, so a throw undoes only this part.
+   * - `'separate'` — open an independent transaction on another connection.
+   *
+   * `isolation` and `retry` apply only when a transaction actually starts.
+   */
+  nested?: 'reuse' | 'savepoint' | 'separate'
+  /**
+   * Run the whole transaction again when it fails with a retryable error —
+   * a serialization failure or deadlock (`err.retryable`). `true` is three
+   * attempts; waits between them back off exponentially with jitter.
+   *
+   * The callback runs once per attempt, so keep side effects outside the
+   * database in `afterCommit`.
+   */
+  retry?: boolean | number | { attempts: number; baseDelayMs?: number; maxDelayMs?: number }
+}
+
 /**
  * Fired when a query exceeds `createDbClient({ slowQueryThresholdMs })`.
  * The `query` event ALSO fires for the same query — `slowQuery` is a
@@ -48,6 +80,7 @@ export interface KickDbClientEvents {
   transactionStart: TransactionEvent
   transactionCommit: TransactionEvent
   transactionRollback: TransactionRollbackEvent
+  transactionRetry: TransactionRetryEvent
 }
 
 /**
@@ -104,9 +137,22 @@ export interface KickDbClient<DB = RegisteredDB> {
   ): this
 
   transaction<T>(fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
-  transaction<T>(opts: TransactionEvent, fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
+  transaction<T>(opts: TransactionOptions, fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
 
   savepoint<T>(fn: (sp: KickDbClient<DB>) => Promise<T>): Promise<T>
+
+  /**
+   * Run `fn` once the current transaction commits — send the email, publish
+   * the event. Dropped if it rolls back (or the savepoint it was registered
+   * in does). Outside a transaction, runs right away.
+   *
+   * A hook that throws is reported to the error observers; the transaction
+   * stays committed.
+   */
+  afterCommit(fn: () => unknown): Promise<void>
+
+  /** Whether this call chain is inside a transaction. */
+  readonly inTransaction: boolean
 
   /**
    * Returns a wrapped client carrying adopter-defined per-table

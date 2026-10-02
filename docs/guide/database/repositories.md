@@ -178,21 +178,16 @@ Because the service only ever depends on the interface + token, no service or co
 
 ## Transactions across repositories
 
-When a use case spans multiple repositories, run them inside a single transaction. The transaction client (`tx`) is a fully-scoped `KickDbClient`, so a repository method can accept it instead of using the injected `this.db`:
+When a use case spans multiple repositories, run them inside one transaction. Repositories keep using the injected `this.db` — inside `transaction()` it joins the open transaction:
 
 ```ts
-await this.db.transaction(async (tx) => {
-  const user = await tx
-    .insertInto('users')
-    .values({ email, name })
-    .returningAll()
-    .executeTakeFirstOrThrow()
-
-  await tx.insertInto('profiles').values({ userId: user.id }).execute()
+await this.db.transaction(async () => {
+  const user = await this.users.create({ email, name })
+  await this.profiles.create({ userId: user.id })
 })
 ```
 
-A common pattern is to make repository methods accept an optional client (`db: KickDbClient = this.db`) so they can be called either standalone or inside a transaction. See [Queries → Transactions](./queries#transactions) for the full transaction and savepoint surface.
+No `tx` parameter to thread through. Nesting, `afterCommit` and retrying are in [Queries → Transactions](./queries#transactions).
 
 ## Repositories vs `$extends`
 
