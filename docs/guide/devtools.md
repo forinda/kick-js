@@ -334,7 +334,7 @@ Each tab subscribes to a slice of the shared store; nothing owns its own polling
 | **Routes**    | Every route, grouped by controller, with its flags — searchable, filterable by method. Selecting one opens the [API runner](#api-runner) beside the list.                                                                                                                                                                                                                     |
 | **Requests**  | The app's recent requests, newest first — status, method, path, duration, and the error a failed one threw. Filter by status class; select one for its route and request ID, and **Replay in runner** to reopen it with the same path params.                                                                                                                                 |
 | **Metrics**   | One row per route: calls, share of 5xx, p50 / p95 / p99 and max, sortable by any column. Pick a percentile to bar it against the slowest route; durations turn amber, orange and red past 200 ms, 500 ms and 1 s. Expand a row for its latency histogram, ok / 4xx / 5xx counts, and **Try in runner**.                                                                       |
-| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status.                                                                                                                                                             |
+| **Container** | Every DI registration — search, and filter by kind and scope (each chip shows how many it would match). Rows show a status dot, kind, resolve count and when the token was last resolved. Selecting one shows its dependencies and dependents (click to follow), resolve stats and `@PostConstruct` outcome beside the list.                                                  |
 | **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                                                                                                                                                                                           |
 | **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                                                                                                                                                                               |
 
@@ -466,17 +466,9 @@ The sidebar is a column of icons — hover for the tab's name, and the small num
 
 Press <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> (or <kbd>/</kbd> outside a text field), or click **Search** in the header. Type to find a tab, a route (opens it in the API runner), or a DI token (opens its detail), or to switch theme and density. Arrow keys move, Enter runs, Escape closes.
 
-### Detail modal
+### Token details
 
-Click a token row in **Container** (or the "View full details" button), or any node in **Graph** — opens a modal with:
-
-- Token + kind/scope/status badges
-- Dependencies (outgoing edges) as clickable chips
-- Dependents (incoming edges) as clickable chips
-- Resolve stats (count / first / last / duration)
-- PostConstruct status
-
-Clicking a dependency or dependent navigates to that token's modal in place. The in-modal Back arrow pops one level; Escape or outside-click closes the whole stack.
+Selecting a token — in **Container**, from the command palette, or in **Graph** — shows its kind, scope and status, what it depends on and what uses it (click either to follow the chain), how often and when it was resolved, and its `@PostConstruct` outcome.
 
 ### Beginner-friendly tooltips
 

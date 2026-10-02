@@ -47,8 +47,8 @@ export interface ContainerRegistration {
   scope?: string
   instantiated?: boolean
   resolveCount?: number
-  firstResolved?: number
-  lastResolved?: number
+  firstResolvedAt?: number
+  lastResolvedAt?: number
   resolveDurationMs?: number
   postConstructStatus?: 'done' | 'failed' | 'none'
   dependencies?: string[]

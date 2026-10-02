@@ -12,7 +12,7 @@
 
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type ContainerRegistration } from '../lib/store'
-import { openDetailModal } from '../lib/detail-modal'
+import { openToken } from '../lib/token-detail'
 import { Pagination, usePagination } from '../lib/pagination'
 
 const KIND_GROUPS = [
@@ -167,7 +167,7 @@ const NodeRow: Component<{ node: ContainerRegistration }> = (props) => {
     <button
       type="button"
       class="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-2/50 transition-colors group"
-      onClick={() => openDetailModal(props.node.token)}
+      onClick={() => openToken(props.node.token)}
     >
       <div class="flex items-center gap-2">
         <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(props.node.kind)}`}>
@@ -194,7 +194,7 @@ const NodeRow: Component<{ node: ContainerRegistration }> = (props) => {
                 class="flex items-center gap-2 text-xs text-text-muted hover:text-text-strong"
                 onClick={(e) => {
                   e.stopPropagation()
-                  openDetailModal(dep)
+                  openToken(dep)
                 }}
               >
                 <svg

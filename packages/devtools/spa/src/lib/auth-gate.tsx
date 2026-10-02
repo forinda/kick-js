@@ -5,7 +5,7 @@
  * doesn't have the cookie).
  *
  * Recovers the legacy Vue dashboard's auth gate. Mounted once in
- * App.tsx alongside DetailModalHost; renders nothing when
+ * App.tsx; renders nothing when
  * `store.authRequired()` is false so it's invisible in the happy
  * path.
  */

@@ -19,14 +19,13 @@ import { startUnifiedStream } from './lib/unified-stream'
 import { startTrafficSampler } from './lib/traffic'
 import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
-import { DetailModalHost } from './lib/detail-modal'
 import { activeTab, switchTab } from './lib/nav'
 import { Icon } from './lib/icons'
 import { AuthGate } from './lib/auth-gate'
 import { CommandPalette, openCommandPalette } from './lib/command-palette'
 import type { PaletteItem } from './lib/palette-core'
 import { openApiRunner } from './lib/api-runner'
-import { openDetailModal } from './lib/detail-modal'
+import { openToken } from './lib/token-detail'
 
 type BuiltInTabId =
   | 'overview'
@@ -114,7 +113,7 @@ const TAB_GROUPS: readonly TabGroup[] = [
 const SIDEBAR_WIDTH_KEY = 'kickjs-devtools-sidebar-w'
 const RAIL_KEY = 'kickjs-devtools-sidebar-mode'
 /** Tabs that lay out their own panes and fill the main area. */
-const FLUSH_TABS: ReadonlySet<string> = new Set(['routes', 'requests'])
+const FLUSH_TABS: ReadonlySet<string> = new Set(['routes', 'requests', 'container'])
 const SIDEBAR_COLLAPSED_KEY = 'kickjs-devtools-sidebar-collapsed'
 const SIDEBAR_MIN = 150
 const SIDEBAR_MAX = 360
@@ -292,7 +291,7 @@ export const App: Component = () => {
       description: [c.kind, c.scope].filter(Boolean).join(' · '),
       group: 'DI tokens',
       icon: 'container',
-      run: () => openDetailModal(c.token),
+      run: () => openToken(c.token),
     })),
     ...(['system', 'light', 'dark'] as const).map((mode) => ({
       id: `theme:${mode}`,
@@ -525,7 +524,6 @@ export const App: Component = () => {
         </main>
       </div>
       <CommandPalette items={paletteItems} />
-      <DetailModalHost />
       <AuthGate />
       <Show when={store.connectionStatus() === 'disconnected' && !store.authRequired()}>
         <div
