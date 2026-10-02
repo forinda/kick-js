@@ -151,7 +151,18 @@ const guideSidebar = [
         collapsed: false,
         items: [
           { text: 'Migrations', link: '/guide/database/migrations' },
-          { text: 'CLI', link: '/guide/database/cli' },
+          { text: 'When a Migration Goes Wrong', link: '/guide/database/migration-recovery' },
+          { text: 'CI & Deployment', link: '/guide/database/ci-deploy' },
+          { text: 'CLI Reference', link: '/guide/database/cli' },
+        ],
+      },
+      {
+        text: 'Operations',
+        collapsed: false,
+        items: [
+          { text: 'Connections & Pooling', link: '/guide/database/pooling' },
+          { text: 'Performance', link: '/guide/database/performance' },
+          { text: 'Troubleshooting & FAQ', link: '/guide/database/troubleshooting' },
         ],
       },
       {

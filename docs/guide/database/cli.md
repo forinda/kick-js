@@ -1,28 +1,38 @@
+---
+description: Every kick db command — generate, check, migrate latest / up / down / rollback / status / review / unlock, introspect — with flags, what each reads and writes, exit codes and real output.
+---
+
 # Database CLI
 
-The `kick db` command tree (migrations, schema generation, introspection)
-ships from **`@forinda/kickjs-db/cli`**. Use it two ways: mounted as a
-plugin inside the `kick` CLI, or as the standalone `kickjs-db` binary —
-no `@forinda/kickjs-cli` required.
+The `kick db` commands — migrations, schema diffs, introspection — ship with `@forinda/kickjs-db`. Run them through the `kick` CLI as a plugin, or through the standalone `kickjs-db` binary, which needs no `@forinda/kickjs-cli`.
 
 ## Commands
 
-| Command               | Does                                                                                                           |
-| --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `generate <name>`     | Diff the schema against the last snapshot, emit `up.sql` / `down.sql`. `-e/--empty` for a hand-authored shell. |
-| `migrate latest`      | Apply all pending migrations in one batch.                                                                     |
-| `migrate up` / `down` | Apply / reverse a single migration.                                                                            |
-| `migrate rollback`    | Reverse the entire last batch.                                                                                 |
-| `migrate status`      | Print applied + pending migrations.                                                                            |
-| `migrate review <id>` | Mark a migration reviewed (flips `meta.json` only — the SQL banner is immutable, so the hash stays valid).     |
-| `introspect`          | Generate a TypeScript schema file from a live database.                                                        |
+| Command                                  | Does                                                                      | Needs a database |
+| ---------------------------------------- | ------------------------------------------------------------------------- | :--------------: |
+| [`generate <name>`](#generate)           | Diff the schema against the last migration and write a new one            |       no ¹       |
+| [`check`](#check)                        | Fail if the schema, the migrations and their review state are out of step |        no        |
+| [`migrate latest`](#migrate-latest)      | Apply every pending migration as one batch                                |       yes        |
+| [`migrate up`](#migrate-up)              | Apply the next pending migration                                          |       yes        |
+| [`migrate down`](#migrate-down)          | Reverse the most recently applied migration                               |       yes        |
+| [`migrate rollback`](#migrate-rollback)  | Reverse the whole last batch                                              |       yes        |
+| [`migrate status`](#migrate-status)      | List applied and pending migrations                                       |       yes        |
+| [`migrate review <id>`](#migrate-review) | Mark a migration reviewed                                                 |        no        |
+| [`migrate unlock`](#migrate-unlock)      | Release a migration lock a killed run left behind                         |       yes        |
+| [`introspect`](#introspect)              | Write a schema file from a live database                                  |       yes        |
 
-## Option A — as a `kick` CLI plugin
+¹ On Postgres with a `connectionString` (and no `adapter` factory), `generate` connects to check enum changes against composite types; otherwise it reads only files.
 
-Mount `dbCliPlugin` in `kick.config.ts`. It reads config from the same
-file's `db` block, so there's nothing to wire twice:
+Every command exits `0` on success and `1` on failure, printing the error's message. [Troubleshooting](./troubleshooting.md) lists the messages and what to do about each.
+
+## Setup
+
+### As a `kick` plugin
+
+Add `dbCliPlugin` to `kick.config.ts`. The commands read the same file's `db` block:
 
 ```ts
+// kick.config.ts
 import { defineConfig } from '@forinda/kickjs-cli'
 import { dbCliPlugin } from '@forinda/kickjs-db/cli'
 
@@ -32,82 +42,275 @@ export default defineConfig({
     schemaPath: 'src/db/schema.ts',
     migrationsDir: 'db/migrations',
     dialect: 'sqlite',
-    adapter: () => sqliteAdapter({ database: new Database('dev.db') }),
+    adapter: async () => {
+      const Database = (await import('better-sqlite3')).default
+      const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
+      return sqliteAdapter({ database: new Database('app.db') })
+    },
   },
 })
 ```
 
-```bash
-kick db generate add_users
-kick db migrate review 20260610_..._add_users
-kick db migrate latest
-```
+The plugin is opt-in: without it `kick db` is an unknown command. It also adds the schema types to `kick typegen` (see [`kick typegen`](#kick-typegen)). `kick` loads `.env` before running a command, so `NODE_ENV=development` there lets unreviewed migrations apply locally.
 
-> The `db` commands are **opt-in** — they are not built into `kick` until
-> you add `dbCliPlugin`. (Zero-config db _type generation_ stays built-in;
-> only the commands are gated.)
+### Standalone `kickjs-db`
 
-## Option B — standalone `kickjs-db`
+The same commands without `@forinda/kickjs-cli`:
 
-Run the same tree without installing `@forinda/kickjs-cli`:
+<PmCommand exec="kickjs-db migrate status" />
 
-<PmCommand exec="kickjs-db migrate latest
-kickjs-db generate add_users" />
-
-Config resolves from a standalone `kickjs-db.config.ts` (or a
-`kick.config.ts` `db` block — the two merge, later wins):
+It reads the `db` block of `kick.config.ts` and a `kickjs-db.config.ts`, if either exists — the standalone file wins where both set a field:
 
 ```ts
 // kickjs-db.config.ts
 import { defineKickDbConfig } from '@forinda/kickjs-db/cli'
-import Database from 'better-sqlite3'
-import { sqliteAdapter } from '@forinda/kickjs-db/sqlite'
 
 export default defineKickDbConfig({
   dialect: 'sqlite',
   schemaPath: 'src/db/schema.ts',
   migrationsDir: 'db/migrations',
-  adapter: () => sqliteAdapter({ database: new Database('dev.db') }),
-  // How `migrate` reacts to out-of-band schema changes (drift):
-  // 'error' (default) | 'warn' | 'ignore'.
-  driftCheck: 'error',
+  adapter: async () => {
+    const Database = (await import('better-sqlite3')).default
+    const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
+    return sqliteAdapter({ database: new Database('app.db') })
+  },
 })
 ```
 
-`defineKickDbConfig` is the same shape as the `kick.config.ts` `db` block,
-so a config authored once drops into either place. `.ts` configs load via
-jiti; `.js` / `.mjs` / `.json` work without it.
+A `.ts` or `.mts` config loads through `jiti` (`npm i -D jiti`); `.js`, `.mjs` and `.json` don't need it. The standalone binary doesn't load `.env` — set `NODE_ENV` and `DATABASE_URL` in the environment.
 
-### Drift detection
+### Config fields
 
-`kick db migrate` introspects the live database and compares it to the
-last applied snapshot — if someone ran DDL out of band, it stops (`'error'`)
-or logs (`'warn'`). It works on all three dialects; SQLite/MySQL
-introspection is lossy against a code-first schema (`uuid()` reads back as
-`text` / `char(36)`), so the comparison normalises both sides and never
-false-positives on the type difference. Set `driftCheck: 'ignore'` to skip
-it entirely.
+The `kick.config.ts` `db` block and `kickjs-db.config.ts` share one shape:
 
-## Config fields
+| Field              | Type                                  | Default              | Description                                                                                                                          |
+| ------------------ | ------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `schemaPath`       | `string`                              | `'src/db/schema.ts'` | The schema module `generate` and `check` read.                                                                                       |
+| `migrationsDir`    | `string`                              | `'db/migrations'`    | Where migrations and `_journal.json` live.                                                                                           |
+| `dialect`          | `'postgres' \| 'sqlite' \| 'mysql'`   | `'postgres'`         | The SQL `generate` writes.                                                                                                           |
+| `connectionString` | `string`                              | `DATABASE_URL`       | Postgres only — the built-in adapter connects with it when there's no `adapter`.                                                     |
+| `adapter`          | `() => MigrationAdapter \| Promise<>` | —                    | Builds the connection the commands use. Required for SQLite and MySQL; wins over `connectionString`.                                 |
+| `driftCheck`       | `'error' \| 'warn' \| 'ignore'`       | `'error'`            | What `migrate` does when the live database has schema no migration recorded — see [Drift](./migrations.md#how-migrate-latest-works). |
 
-The same shape backs both the `kick.config.ts` `db` block (Option A) and a standalone `kickjs-db.config.ts` (Option B):
+An `adapter` factory that opens a pool — MySQL, or your own `pg.Pool` — should pass `endPoolOnClose: true`, so the command can exit when it's done ([Troubleshooting](./troubleshooting.md#kick-db-never-exits)).
 
-| Field              | Type                                  | Default              | Description                                                                                   |
-| ------------------ | ------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------- |
-| `schemaPath`       | `string`                              | `'src/db/schema.ts'` | Schema module (`table` / `pgEnum` declarations).                                              |
-| `migrationsDir`    | `string`                              | `'db/migrations'`    | Where `kick db generate` writes migration directories.                                        |
-| `dialect`          | `'postgres' \| 'sqlite' \| 'mysql'`   | `'postgres'`         | SQL dialect.                                                                                  |
-| `connectionString` | `string`                              | `DATABASE_URL` env   | Connection string for the built-in adapter path (`migrate*`, generate gate).                  |
-| `adapter`          | `() => MigrationAdapter \| Promise<>` | —                    | Escape hatch — a factory returning a constructed adapter. Wins over `connectionString`.       |
-| `driftCheck`       | `'error' \| 'warn' \| 'ignore'`       | `'error'`            | How `migrate` reacts to out-of-band schema changes (see [Drift detection](#drift-detection)). |
+### Config helpers
 
-> Related config lives elsewhere: app runtime options are in [`bootstrap()`](../../api/core.md#bootstrap-options); the wider `kick.config.ts` surface (pattern, runtime, typegen) is in [KickConfig](../../api/cli.md#kickconfig).
+| Helper                                  | Purpose                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------- |
+| `defineKickDbConfig(cfg)`               | Typed identity helper for `kickjs-db.config.ts`.                                 |
+| `mergeKickDbConfig(...cfgs)`            | Shallow-merge config layers; later wins.                                         |
+| `resolveKickDbConfig(block)`            | Apply the defaults above to a config block.                                      |
+| `registerDbCommands(parent, getConfig)` | Attach the command tree to any commander command — for building your own binary. |
 
-## Config helpers
+The examples below run against SQLite.
 
-| Helper                                  | Purpose                                                                       |
-| --------------------------------------- | ----------------------------------------------------------------------------- |
-| `defineKickDbConfig(cfg)`               | Typed identity helper (vite's `defineConfig` spirit).                         |
-| `mergeKickDbConfig(...cfgs)`            | Shallow-merge config layers, later wins.                                      |
-| `resolveKickDbConfig(block)`            | Apply defaults → a resolved `DbConfig`.                                       |
-| `registerDbCommands(parent, getConfig)` | Attach the command tree to any commander command (used to build custom bins). |
+## generate
+
+```text
+kick db generate <name> [-e, --empty]
+```
+
+Diffs `schemaPath` against the last migration's `snapshot.json` and writes `db/migrations/<YYYYMMDD_HHMMSS>_<name>/` — `up.sql`, `down.sql`, `snapshot.json`, `meta.json` — plus an entry in `_journal.json`. The new migration starts unreviewed.
+
+<PmCommand exec="kick db generate create_notes" />
+
+```text
+Created migration /app/db/migrations/20261002_180007_create_notes (1 change).
+```
+
+With nothing to do:
+
+```text
+No schema changes detected.
+```
+
+| Flag          | Effect                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `-e, --empty` | Skip the diff and write an empty migration for SQL you write yourself — a backfill, a seed. The snapshot is the previous one. |
+
+```text
+Created empty migration /app/db/migrations/20261002_180018_seed_notes (author up.sql + down.sql).
+```
+
+When a reverse can't be generated exactly — a dropped column, a dropped table, a type change — `down.sql` starts with `-- DRAFT: ambiguous reverses present …`; read it before you rely on it. [Migrations](./migrations.md#generating-a-migration) covers the output in detail.
+
+Write your SQL into the migration before you review it: `kick db migrate review` records a hash of the files as reviewed, and an edit after that is refused until it's reviewed again ([Troubleshooting](./troubleshooting.md#hash-mismatch-for-migration)).
+
+## check
+
+```text
+kick db check
+```
+
+Everything `migrate latest` would refuse, found from the files alone — no database. Run it in CI ([CI and deploy](./ci-deploy.md)) so a missing, unreviewed or edited migration fails the build, not the deploy. It fails when:
+
+- the schema has changes no migration covers;
+- a migration isn't reviewed;
+- a reviewed migration's files changed after review.
+
+```text
+Migrations are in step with the schema.
+```
+
+```text
+The schema has 1 change no migration covers — run `kick db generate <name>`.
+20261002_180017_add_pinned is not reviewed — read it, then `kick db migrate review 20261002_180017_add_pinned`.
+20261002_180017_add_pinned was edited after it was reviewed — review it again, or revert the edit.
+```
+
+Exit code `1` when anything is listed. The same check is exported as `checkMigrations({ config, cwd })`.
+
+## migrate latest
+
+```text
+kick db migrate latest [--confirm-enum-drop]
+```
+
+Applies every pending migration in one new batch. Before it applies anything it takes the migration lock, checks each pending migration's hash and — outside `NODE_ENV=development` — that it's reviewed, and compares the live database with the last applied snapshot ([drift](./migrations.md#how-migrate-latest-works)). Each migration runs in its own transaction where the dialect allows; MySQL commits DDL as it goes ([Recovering from a failed migration](./migration-recovery.md)).
+
+```text
+Applied batch 2: 20261002_180017_add_pinned, 20261002_180018_seed_notes
+```
+
+```text
+No pending migrations.
+```
+
+| Flag                  | Effect                                                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `--confirm-enum-drop` | Allow a migration that removes values from a Postgres enum (it carries a `-- KICK ENUM REMOVE` header). Read its `USING` casts first. |
+
+## migrate up
+
+```text
+kick db migrate up [--confirm-enum-drop]
+```
+
+Applies only the next pending migration, as its own batch. Same checks and flag as `migrate latest`.
+
+```text
+Applied 20261002_180007_create_notes (batch 1)
+```
+
+## migrate down
+
+```text
+kick db migrate down
+```
+
+Runs the most recently applied migration's `down.sql` and marks it pending again.
+
+```text
+Reversed 20261002_180018_seed_notes.
+```
+
+```text
+Nothing to reverse.
+```
+
+## migrate rollback
+
+```text
+kick db migrate rollback
+```
+
+Reverses the whole last batch — everything one `migrate latest` applied — newest first.
+
+```text
+Rolled back batch 2: 20261002_180017_add_pinned
+```
+
+```text
+Nothing to roll back.
+```
+
+## migrate status
+
+```text
+kick db migrate status
+```
+
+Every migration in the journal, with its state, batch and review flag:
+
+```text
+┌─────────┬────────────────────────────────┬───────────┬───────┬──────────┬───────────────────────┐
+│ (index) │ id                             │ state     │ batch │ reviewed │ applied               │
+├─────────┼────────────────────────────────┼───────────┼───────┼──────────┼───────────────────────┤
+│ 0       │ '20261002_180007_create_notes' │ 'applied' │ 1     │ true     │ '2026-10-02 18:00:09' │
+│ 1       │ '20261002_180017_add_pinned'   │ 'pending' │ '-'   │ true     │ '-'                   │
+└─────────┴────────────────────────────────┴───────────┴───────┴──────────┴───────────────────────┘
+```
+
+It exits `0` whether or not anything is pending; use `kick db check` and the app's boot policy to gate on that.
+
+## migrate review
+
+```text
+kick db migrate review <id>
+```
+
+Marks a migration reviewed by setting `reviewed: true` in its `meta.json` — the step that says someone read the SQL. Outside `NODE_ENV=development` the runner applies only reviewed migrations. Touches no database.
+
+```text
+Reviewed 20261002_180017_add_pinned — it can now be applied.
+```
+
+```text
+20261002_180017_add_pinned was already reviewed.
+```
+
+## migrate unlock
+
+```text
+kick db migrate unlock
+```
+
+Releases the migration lock. The runner holds it while it migrates and releases it when it finishes — even on failure — but a process that was killed (out of memory, a deploy timeout) never gets the chance, and every later run stops with `Another process holds the migration lock`. Run this only when you're sure no migration is running.
+
+```text
+Released the migration lock.
+```
+
+## introspect
+
+```text
+kick db introspect [--out <path>] [--json]
+```
+
+Reads the live database and writes a schema file for it — the first step of [adopting kick/db on an existing database](./adopting.md).
+
+| Flag           | Effect                                                                             |
+| -------------- | ---------------------------------------------------------------------------------- |
+| `--out <path>` | Where to write the file. Default: `schemaPath` — **which overwrites your schema**. |
+| `--json`       | Print the raw snapshot JSON instead of writing a file.                             |
+
+<PmCommand exec="kick db introspect --out src/db/introspected.ts" />
+
+```text
+Wrote src/db/introspected.ts (1 table).
+```
+
+```ts
+import { table, text } from '@forinda/kickjs-db'
+
+export const notes = table('notes', {
+  id: text().primaryKey().default('lower(hex(randomblob(4)) || …)'),
+  title: text().notNull(),
+  body: text(),
+  createdAt: text().notNull().default("strftime('%Y-%m-%d %H:%M:%f', 'now')"),
+})
+```
+
+SQLite and MySQL keep less type information than the schema had — `uuid()` comes back as `text`, `varchar(200)` as `text`, defaults as raw SQL — so read the result and put the types back before you use it.
+
+## kick typegen
+
+With `dbCliPlugin` mounted, `kick typegen` (which `kick dev` runs on every save) also writes `.kickjs/types/kick__db.d.ts`: the row types for an injected `KickDbClient`, and the relation names `db.query … { with }` accepts. Run it after changing `relations()` if the editor doesn't see the new relation — [Schema Types](../db-schema-types.md).
+
+## Related
+
+- [Migrations](./migrations.md) — how generating, reviewing and applying fit together
+- [CI and deploy](./ci-deploy.md) — where each command runs in a pipeline
+- [Recovering from a failed migration](./migration-recovery.md)
+- [Troubleshooting](./troubleshooting.md)

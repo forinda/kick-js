@@ -795,14 +795,14 @@ kick/db already does code-first tables in four forms, snapshot → diff → migr
 | D.11 | **`upsert` and a race-safe `findOrCreate`** — conflict target and partial-index `where`; re-read on a unique violation                                                                                                                                                                                                                                                                                   | `proposed`                                                                               |
 | D.12 | **Read-replica routing** — reads outside a transaction go to the replica, with an override                                                                                                                                                                                                                                                                                                               | `proposed`                                                                               |
 | D.13 | **Many-to-many relations** — `many(target, { through: junction })` in relational reads                                                                                                                                                                                                                                                                                                                   | `proposed`                                                                               |
-| D.14 | **Database documentation on par with established ORMs** — get-started per dialect, a concepts page, querying split into reading / writing / raw SQL / recipes, migration workflows, testing, errors, multi-tenancy, pooling and performance, troubleshooting, coming-from guides; see [D.14](#d-14-database-documentation)                                                                               | `in progress` — phases 1–4 done                                                          |
+| D.14 | **Database documentation on par with established ORMs** — get-started per dialect, a concepts page, querying split into reading / writing / raw SQL / recipes, migration workflows, testing, errors, multi-tenancy, pooling and performance, troubleshooting, coming-from guides; see [D.14](#d-14-database-documentation)                                                                               | `done`                                                                                   |
 | D.15 | **Test helpers** — a throwaway database per test file and a transaction per test rolled back afterwards, for SQLite in memory and Postgres                                                                                                                                                                                                                                                               | `proposed`                                                                               |
 
 Not planned, after the same comparison: per-row lifecycle hooks (an extra query and rows in memory per bulk statement), app-side validators separate from the schema, scopes and virtual attributes — plugins, schema-projected validators and Kysely expressions already cover them.
 
 ### D.14 Database documentation {#d-14-database-documentation}
 
-**Status:** `in progress` — phases 1–4 done.
+**Status:** `done` — all five phases.
 
 **Why.** Compared against Drizzle, Prisma, Sequelize, TypeORM, MikroORM and Kysely, kick/db's features are ahead of its documentation. Topics peers give their own page sit inside long pages (`queries.md` holds the builder, relational reads, transactions, errors, events and extensions), the API reference predates typed errors, `check()` and the transaction options, and testing, multi-tenancy and observability guides don't mention the database. A few topics are thinly covered even by established ORMs — testing with a database, an error reference, row-level security, CTEs and set operations — which makes them the cheapest places to stand out.
 
@@ -826,7 +826,7 @@ Conventions: per-dialect code tabs, copyable one-problem recipes, every error li
 2. [x] **Stand-out pages** — testing with kick/db, errors and an error reference, raw SQL and recipes, multi-tenancy and row-level security; database sections in the testing, multi-tenancy, observability and DevTools guides.
 3. [x] **Restructure** — split `queries.md` and `schema.md` along the target structure; concepts page; sidebar.
 4. [x] **Onboarding** — start-here page, get-started per dialect, coming-from guides with concept-mapping tables, and a five-part tutorial that builds one app from an empty folder to deployment — modules, the database, authentication, testing — as a story, so readers pick up the patterns by following one project. Done: [Start Here](./database/start-here.md), get-started pages for each dialect, guides for Prisma, Drizzle, TypeORM and Sequelize, and the [Taskboard tutorial](./taskboard/1-first-module.md).
-5. [ ] **Migrations and operations** — workflow pages, a page per CLI command, CI and deploy, troubleshooting and FAQ, pooling, performance.
+5. [x] **Migrations and operations** — [recovery](./database/migration-recovery.md), [CI and deployment](./database/ci-deploy.md), a [CLI reference](./database/cli.md) with a section per command, [troubleshooting and FAQ](./database/troubleshooting.md), [pooling](./database/pooling.md), [performance](./database/performance.md); `kick db check` and `kick db migrate unlock` added along the way.
 
 Features peers document that kick/db doesn't have yet are tracked as their own items: seeding (D.2), soft delete and optimistic locking (D.10), upsert (D.11), read replicas (D.12), test helpers (D.15).
 ---
@@ -836,13 +836,12 @@ Features peers document that kick/db doesn't have yet are tracked as their own i
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), **E.9** background jobs with any runner, and **D.5–D.8** typed database errors, call-chain transactions, transaction retry, and primary-key / CHECK migrations. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), **E.9** background jobs with any runner, **D.5–D.8** typed database errors, call-chain transactions, transaction retry, and primary-key / CHECK migrations, and **D.14** database documentation on par with established ORMs. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **D.14 — database documentation** (phases 1–2 first: clean-up, then testing / errors / recipes / multi-tenancy)
-2. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-3. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
+1. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+2. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
 
 Open for redirection — these are starting points, not commitments.
 

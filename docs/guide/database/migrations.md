@@ -211,4 +211,4 @@ adapter: async () => {
 },
 ```
 
-Leave it off for the adapter your app builds: there the pool is shared with the query client.
+The app's own adapter can take it too: `kickDbAdapter` closes the adapter when the app shuts down, so the shared pool ends with the app. See [Connections and Pooling](./pooling.md).
