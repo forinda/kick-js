@@ -43,6 +43,11 @@ async function boot(runtime: (() => unknown) | undefined, secret: string | false
       ctx.json({ id: ctx.params.id })
     }
 
+    @Get('/fail/now')
+    fail() {
+      throw new Error('ping exploded')
+    }
+
     @Post('/avatar')
     @FileUpload({ mode: 'single', fieldName: 'avatar', allowedTypes: () => true })
     avatar(ctx: RequestContext) {
@@ -150,6 +155,22 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     expect(metrics.body.routeLatency[matched[0]].count).toBe(2)
     expect(keys).toContain('GET <unmatched>')
     expect(metrics.body.clientErrors).toBeGreaterThanOrEqual(1)
+  })
+
+  it('logs recent requests with their matched route and error', async () => {
+    const http = await boot(runtime)
+    await http.get('/api/v1/ping/7').expect(200)
+    await http.get('/api/v1/ping/fail/now').expect(500)
+
+    const all = (await http.get('/_debug/requests').expect(200)).body.requests
+    expect(all.some((r: { path: string }) => r.path.startsWith('/_debug'))).toBe(false)
+    const ours = all.filter((r: { path: string }) => r.path.startsWith('/api/v1/ping'))
+    expect(ours.map((r: { status: number }) => r.status)).toEqual([200, 500])
+    expect(ours[0].route).toContain(':id')
+    expect(ours[1].error).toMatchObject({ message: 'ping exploded' })
+
+    const newer = await http.get(`/_debug/requests?since=${ours[0].seq}`).expect(200)
+    expect(newer.body.requests[0].seq).toBeGreaterThan(ours[0].seq)
   })
 
   it('reports 404 when the runtime sampler is off', async () => {

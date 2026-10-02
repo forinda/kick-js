@@ -120,6 +120,28 @@ Shows all DI container registrations with their scope and instantiation status.
 }
 ```
 
+### `GET /_debug/requests`
+
+The last `requestLog` requests (default 200), oldest first. `?since=<seq>` returns only the newer ones. The dashboard's own `/_debug` calls aren't logged. Query strings, headers and bodies aren't recorded.
+
+```json
+{
+  "requests": [
+    {
+      "seq": 41,
+      "at": 1790000000000,
+      "method": "GET",
+      "path": "/api/v1/users/42",
+      "route": "/api/v1/users/:id",
+      "status": 500,
+      "durationMs": 6.6,
+      "requestId": "6dda727c-…",
+      "error": { "name": "TypeError", "message": "users store unavailable" }
+    }
+  ]
+}
+```
+
 ### `GET /_debug/metrics`
 
 Live request metrics powered by reactive refs and computed values.
@@ -243,6 +265,9 @@ DevToolsAdapter({
   onErrorRateExceeded: (rate) => {
     slackWebhook.send(`Error rate: ${(rate * 100).toFixed(1)}%`)
   },
+
+  // Recent requests the Requests tab keeps (default: 200; 0 keeps none)
+  requestLog: 200,
 })
 ```
 
@@ -301,17 +326,18 @@ The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you
 
 Each tab subscribes to a slice of the shared store; nothing owns its own polling loop.
 
-| Tab           | What it shows                                                                                                                                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**  | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit.      |
-| **Runtime**   | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`.                                                                                                                           |
-| **Memory**    | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button.                                                                                         |
-| **Topology**  | Plugin / adapter / contributor / DI-token introspection from `/topology`.                                                                                                                                         |
-| **Routes**    | Every route, grouped by controller, with its flags — searchable, filterable by method. Selecting one opens the [API runner](#api-runner) beside the list.                                                         |
-| **Metrics**   | Per-route latency table (avg / p50 / p95 / p99 / max).                                                                                                                                                            |
-| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status. |
-| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                               |
-| **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                   |
+| Tab           | What it shows                                                                                                                                                                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**  | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit.                                  |
+| **Runtime**   | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`.                                                                                                                                                       |
+| **Memory**    | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button.                                                                                                                     |
+| **Topology**  | Plugin / adapter / contributor / DI-token introspection from `/topology`.                                                                                                                                                                     |
+| **Routes**    | Every route, grouped by controller, with its flags — searchable, filterable by method. Selecting one opens the [API runner](#api-runner) beside the list.                                                                                     |
+| **Requests**  | The app's recent requests, newest first — status, method, path, duration, and the error a failed one threw. Filter by status class; select one for its route and request ID, and **Replay in runner** to reopen it with the same path params. |
+| **Metrics**   | Per-route latency table (avg / p50 / p95 / p99 / max).                                                                                                                                                                                        |
+| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status.                             |
+| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                                                           |
+| **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                                               |
 
 ### Custom tabs
 

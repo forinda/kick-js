@@ -7,6 +7,7 @@ import { RuntimeTab } from './tabs/RuntimeTab'
 import { MemoryTab } from './tabs/MemoryTab'
 import { TopologyTab } from './tabs/TopologyTab'
 import { RoutesTab } from './tabs/RoutesTab'
+import { RequestsTab } from './tabs/RequestsTab'
 import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
 import { QueuesTab } from './tabs/QueuesTab'
@@ -33,6 +34,7 @@ type BuiltInTabId =
   | 'memory'
   | 'topology'
   | 'routes'
+  | 'requests'
   | 'metrics'
   | 'container'
   | 'queues'
@@ -60,6 +62,7 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
     { id: 'topology', label: 'Topology' },
     { id: 'routes', label: 'Routes', count: () => store.routes().length || undefined },
     { id: 'metrics', label: 'Metrics' },
+    { id: 'requests', label: 'Requests' },
     {
       id: 'container',
       label: 'Container',
@@ -104,7 +107,7 @@ interface TabGroup {
 }
 const TAB_GROUPS: readonly TabGroup[] = [
   { label: null, ids: ['overview'] },
-  { label: 'Runtime', ids: ['runtime', 'memory', 'topology', 'metrics'] },
+  { label: 'Runtime', ids: ['runtime', 'memory', 'topology', 'metrics', 'requests'] },
   { label: 'Architecture', ids: ['routes', 'container', 'graph'] },
   { label: 'Data & Jobs', ids: ['database', 'queues'] },
   { label: null, ids: ['activity'] },
@@ -113,7 +116,7 @@ const TAB_GROUPS: readonly TabGroup[] = [
 const SIDEBAR_WIDTH_KEY = 'kickjs-devtools-sidebar-w'
 const RAIL_KEY = 'kickjs-devtools-sidebar-mode'
 /** Tabs that lay out their own panes and fill the main area. */
-const FLUSH_TABS: ReadonlySet<string> = new Set(['routes'])
+const FLUSH_TABS: ReadonlySet<string> = new Set(['routes', 'requests'])
 const SIDEBAR_COLLAPSED_KEY = 'kickjs-devtools-sidebar-collapsed'
 const SIDEBAR_MIN = 150
 const SIDEBAR_MAX = 360
@@ -487,6 +490,9 @@ export const App: Component = () => {
           </Show>
           <Show when={active() === 'routes'}>
             <RoutesTab />
+          </Show>
+          <Show when={active() === 'requests'}>
+            <RequestsTab />
           </Show>
           <Show when={active() === 'metrics'}>
             <MetricsTab />

@@ -26,6 +26,7 @@ import {
   type KeyValueRow,
   type RouteInputs,
   type RunnerRoute,
+  paramsFromPath,
 } from '../spa/src/lib/api-runner-core'
 
 const row = (key: string, value: string, enabled = true): KeyValueRow => ({ key, value, enabled })
@@ -435,5 +436,21 @@ describe('editorLink', () => {
     expect(editorLink('cursor://file{file}:{line}', 'C:\\app\\src\\a.ts', 3)).toBe(
       'cursor://file/C:/app/src/a.ts:3',
     )
+  })
+})
+
+describe('paramsFromPath', () => {
+  it('reads each param from a concrete path', () => {
+    expect(
+      paramsFromPath('/api/v1/users/:id/posts/:postId', '/api/v1/users/7/posts/a%20b'),
+    ).toEqual({
+      id: '7',
+      postId: 'a b',
+    })
+  })
+
+  it('is empty when the path does not fit the pattern', () => {
+    expect(paramsFromPath('/users/:id', '/teams/7')).toEqual({})
+    expect(paramsFromPath('/a.b/:id', '/axb/1')).toEqual({})
   })
 })

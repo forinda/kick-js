@@ -122,6 +122,32 @@ export function pathParams(path: string): string[] {
 }
 
 /**
+ * The values a concrete path gives a route pattern's params —
+ * `('/users/:id', '/users/42')` → `{ id: '42' }`. Empty when it doesn't match.
+ */
+export function paramsFromPath(pattern: string, path: string): Record<string, string> {
+  const names: string[] = []
+  const source = pattern
+    .split(/(:[A-Za-z_$][\w$]*)/)
+    .map((part) => {
+      if (!part.startsWith(':')) return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      names.push(part.slice(1))
+      return '([^/]+)'
+    })
+    .join('')
+  const match = new RegExp(`^${source}/?$`).exec(path)
+  if (!match) return {}
+  const decode = (v: string): string => {
+    try {
+      return decodeURIComponent(v)
+    } catch {
+      return v // a stray `%` — keep it as sent
+    }
+  }
+  return Object.fromEntries(names.map((n, i) => [n, decode(match[i + 1]!)]))
+}
+
+/**
  * Substitute path params and append enabled query rows. Paths from
  * `/_debug/routes` already carry the API prefix and version, so they are used
  * as-is. A param left empty stays as `:name`, so the mistake is visible.

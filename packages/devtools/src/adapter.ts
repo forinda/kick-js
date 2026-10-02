@@ -34,6 +34,7 @@ import {
 import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
+import { RequestLog } from './request-log'
 import { locateHandler } from './source-locator'
 import { createServerBus, type ServerBus } from './bus/server'
 
@@ -202,6 +203,11 @@ export interface DevToolsOptions {
     /** Ring-buffer size — number of past samples retained. Default: 60. */
     bufferSize?: number
   }
+  /**
+   * How many recent requests the Requests tab keeps (method, path, status,
+   * duration, error). Default: 200. `0` keeps none.
+   */
+  requestLog?: number
 }
 
 /**
@@ -280,6 +286,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     const configPrefixes = options.configPrefixes!
     const errorRateThreshold = options.errorRateThreshold!
     const peerAdapters = options.adapters ?? []
+    const requestLog = new RequestLog(options.requestLog ?? 200)
+    // The dashboard's own polling would otherwise push the app's requests out.
+    const logRequest = (info: Parameters<RequestLog['record']>[0]): void => {
+      if (info.path !== basePath && !info.path.startsWith(`${basePath}/`)) requestLog.record(info)
+    }
 
     // Secret token guard
     let secret: string | false
@@ -587,6 +598,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         router.get('/container', (ctx: RequestContext) => {
           const registrations = container?.getRegistrations() ?? []
           ctx.json({ registrations, count: registrations.length })
+        })
+
+        // Recent requests, oldest first. `?since=<seq>` returns only newer ones,
+        // so the Requests tab polls cheaply.
+        router.get('/requests', (ctx: RequestContext) => {
+          const since = Number((ctx.query as Record<string, unknown> | undefined)?.since ?? 0)
+          ctx.json({ requests: requestLog.after(Number.isFinite(since) ? since : 0) })
         })
 
         router.get('/metrics', (ctx: RequestContext) => {
@@ -1070,6 +1088,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       onResponse(info) {
         if (!enabled) return
         recordResponse(info.method, info.route, info.status, info.durationMs)
+        logRequest(info)
+      },
+
+      /** Attaches a failed request's error to its Requests-tab entry. */
+      onError(err, info) {
+        if (!enabled || info.source !== 'request') return
+        requestLog.recordError(info.requestId, err)
       },
 
       middleware(): AdapterMiddleware[] {
@@ -1086,12 +1111,16 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
                 const matched = (req as unknown as Record<symbol, MatchedRoute | undefined>)[
                   MATCHED_ROUTE_SLOT
                 ]
-                recordResponse(
-                  req.method ?? 'GET',
-                  matched?.pattern ?? matched?.path,
-                  res.statusCode,
-                  Date.now() - start,
-                )
+                const route = matched?.pattern ?? matched?.path
+                const durationMs = Date.now() - start
+                recordResponse(req.method ?? 'GET', route, res.statusCode, durationMs)
+                logRequest({
+                  method: req.method ?? 'GET',
+                  path: (req.url ?? '/').split('?')[0]!,
+                  route,
+                  status: res.statusCode,
+                  durationMs,
+                })
               })
               next()
             },

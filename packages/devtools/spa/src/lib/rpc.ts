@@ -132,7 +132,22 @@ export interface ProcessInfo {
   runtime: { name: string; capabilities: Record<string, boolean> } | null
 }
 
+/** One logged request — `RequestLogEntry` on the server. */
+export interface RequestLogEntry {
+  seq: number
+  at: number
+  method: string
+  path: string
+  route?: string
+  status: number
+  durationMs: number
+  requestId?: string
+  error?: { name: string; message: string }
+}
+
 export const rpc = {
+  /** Requests logged after `since` (a `seq`), oldest first. */
+  requests: (since = 0) => get<{ requests: RequestLogEntry[] }>(`/requests?since=${since}`),
   runtime: () =>
     get<{
       latest: RuntimeSnapshot

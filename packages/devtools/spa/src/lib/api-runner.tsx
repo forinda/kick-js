@@ -96,10 +96,20 @@ function loadSpec(url: string): void {
     .then((spec) => setSpecs((prev) => ({ ...prev, [url]: spec })))
 }
 
-/** Open the runner for a route. */
-/** Open the runner for a route: select it and show the Routes tab. */
-export function openApiRunner(route: RouteEntry): void {
+/** Bumped on every open, so reopening the open route reloads its inputs too. */
+const [openCount, setOpenCount] = createSignal(0)
+
+/**
+ * Open the runner for a route: select it and show the Routes tab. `params`
+ * fills its path params over the saved inputs — a replayed request.
+ */
+export function openApiRunner(route: RouteEntry, params?: Record<string, string>): void {
+  if (params) {
+    const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
+    pendingInputs = { ...saved, params: { ...saved.params, ...params } }
+  }
   setActiveRoute(route)
+  setOpenCount((n) => n + 1)
   switchTab('routes')
 }
 
@@ -205,6 +215,7 @@ export const ApiRunnerPanel: Component = () => {
   // Load the route's saved inputs whenever a route is opened.
   createEffect(() => {
     const route = activeRoute()
+    openCount()
     generation++
     if (!route) return
     let isNew = false

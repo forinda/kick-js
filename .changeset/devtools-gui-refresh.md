@@ -9,3 +9,4 @@ A denser dashboard layout.
 - **Runner:** the method, resolved URL and **Send** sit in one bar at the top. Response and history statuses are colored pills.
 - **Disconnect banner:** when the app stops answering, a banner says so and the dashboard keeps retrying. Before, it quietly stayed on "Polling" with stale data.
 - **Command palette:** ⌘K / Ctrl+K (or `/`) finds a tab, route or DI token and jumps to it, and switches theme or density.
+- **Requests tab:** the app's recent requests (status, method, path, duration, and the error a failed one threw), filterable by status, with a detail pane and **Replay in runner**. Served from the new `GET /_debug/requests`; `requestLog` sets how many are kept (default 200).
