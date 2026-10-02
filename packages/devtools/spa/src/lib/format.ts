@@ -77,3 +77,15 @@ export function kindTone(kind: string | undefined): string {
 export function severityTone(level: 'ok' | 'warn' | 'err' | 'idle'): string {
   return `dt-tone dt-tone-${{ ok: 'green', warn: 'amber', err: 'red', idle: 'gray' }[level]}`
 }
+
+/**
+ * Text colour for a duration: amber above 200ms, orange above 500ms, red
+ * above 1s — scaled by `factor` for contexts with tighter budgets.
+ */
+export function durationTone(ms: number, factor = 1): string {
+  const v = ms * factor
+  if (v > 1000) return 'text-red-500'
+  if (v > 500) return 'text-orange-500'
+  if (v > 200) return 'text-amber-500'
+  return ''
+}

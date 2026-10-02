@@ -79,8 +79,25 @@ interface RouteStats {
   totalMs: number
   minMs: number
   maxMs: number
+  /** Responses with status >= 500. */
+  serverErrors: number
+  /** Responses with status 400–499. */
+  clientErrors: number
   /** Ring buffer of last N samples for percentile computation */
   samples: number[]
+}
+
+/** Upper bounds (ms) of the latency histogram's buckets; the last bucket is everything above. */
+const LATENCY_BUCKETS_MS = [1, 2, 5, 10, 25, 50, 100, 250, 500, 1000] as const
+
+/** How many recent samples fall in each {@link LATENCY_BUCKETS_MS} bucket (plus one overflow bucket). */
+function latencyHistogram(samples: readonly number[]): number[] {
+  const counts = Array.from({ length: LATENCY_BUCKETS_MS.length + 1 }, () => 0)
+  for (const ms of samples) {
+    const i = LATENCY_BUCKETS_MS.findIndex((bound) => ms <= bound)
+    counts[i === -1 ? LATENCY_BUCKETS_MS.length : i]!++
+  }
+  return counts
 }
 
 const MAX_SAMPLES = 1000
@@ -405,10 +422,20 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
       const routeKey = `${method} ${route ?? '<unmatched>'}`
       if (!routeLatency[routeKey]) {
-        routeLatency[routeKey] = { count: 0, totalMs: 0, minMs: Infinity, maxMs: 0, samples: [] }
+        routeLatency[routeKey] = {
+          count: 0,
+          totalMs: 0,
+          minMs: Infinity,
+          maxMs: 0,
+          serverErrors: 0,
+          clientErrors: 0,
+          samples: [],
+        }
       }
       const stats = routeLatency[routeKey]
       stats.count++
+      if (status >= 500) stats.serverErrors++
+      else if (status >= 400) stats.clientErrors++
       stats.totalMs += elapsedMs
       stats.minMs = Math.min(stats.minMs, elapsedMs)
       stats.maxMs = Math.max(stats.maxMs, elapsedMs)
@@ -615,8 +642,12 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           // Build latency with percentiles, omitting raw samples from response
           const latency: Record<string, any> = {}
           for (const [key, stats] of Object.entries(routeLatency)) {
-            const { samples: _, ...rest } = stats
-            latency[key] = { ...rest, ...computePercentiles(stats) }
+            const { samples, ...rest } = stats
+            latency[key] = {
+              ...rest,
+              ...computePercentiles(stats),
+              histogram: latencyHistogram(samples),
+            }
           }
           ctx.json({
             requests: requestCount.value,
@@ -626,6 +657,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             uptimeSeconds: uptimeSeconds.value,
             startedAt: new Date(startedAt.value).toISOString(),
             routeLatency: latency,
+            latencyBucketsMs: LATENCY_BUCKETS_MS,
           })
         })
 

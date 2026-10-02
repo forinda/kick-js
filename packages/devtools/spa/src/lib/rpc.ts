@@ -162,6 +162,32 @@ export interface RequestLogEntry {
   error?: { name: string; message: string }
 }
 
+/** Latency and outcome counts for one route (`'GET /users/:id'`). */
+export interface RouteLatency {
+  count: number
+  totalMs: number
+  minMs: number
+  maxMs: number
+  serverErrors: number
+  clientErrors: number
+  p50: number
+  p95: number
+  p99: number
+  /** Recent samples per `latencyBucketsMs` bucket, plus one for everything slower. */
+  histogram: number[]
+}
+
+export interface MetricsResponse {
+  requests: number
+  serverErrors: number
+  clientErrors: number
+  errorRate: number
+  uptimeSeconds: number
+  startedAt: string
+  routeLatency: Record<string, RouteLatency>
+  latencyBucketsMs: number[]
+}
+
 export const rpc = {
   /** Requests logged after `since` (a `seq`), oldest first. */
   requests: (since = 0) => get<{ requests: RequestLogEntry[] }>(`/requests?since=${since}`),
@@ -173,50 +199,8 @@ export const rpc = {
       process?: ProcessInfo
     }>('/runtime'),
   topology: () => get<TopologySnapshot>('/topology'),
-  /** Per-route latency table — separate concept from the route registry below. */
-  metrics: () =>
-    get<{
-      requests: number
-      serverErrors: number
-      clientErrors: number
-      errorRate: number
-      uptimeSeconds: number
-      startedAt: string
-      routeLatency: Record<
-        string,
-        {
-          count: number
-          totalMs: number
-          minMs: number
-          maxMs: number
-          p50: number
-          p95: number
-          p99: number
-        }
-      >
-    }>('/metrics'),
-  /** Backwards-compatible alias for `metrics()` — pre-existing callers. */
-  routes: () =>
-    get<{
-      requests: number
-      serverErrors: number
-      clientErrors: number
-      errorRate: number
-      uptimeSeconds: number
-      startedAt: string
-      routeLatency: Record<
-        string,
-        {
-          count: number
-          totalMs: number
-          minMs: number
-          maxMs: number
-          p50: number
-          p95: number
-          p99: number
-        }
-      >
-    }>('/metrics'),
+  /** Request counters and per-route latency. */
+  metrics: () => get<MetricsResponse>('/metrics'),
   /** Where a route's handler is declared — for "open in editor". */
   source: (controller: string, handler: string) =>
     get<{ file: string; relative: string; line: number }>(

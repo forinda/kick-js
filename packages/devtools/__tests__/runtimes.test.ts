@@ -153,6 +153,11 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     const matched = keys.filter((k) => k.startsWith('GET ') && k.includes(':id'))
     expect(matched).toHaveLength(1)
     expect(metrics.body.routeLatency[matched[0]].count).toBe(2)
+    expect(metrics.body.routeLatency[matched[0]].serverErrors).toBe(0)
+    expect(metrics.body.routeLatency['GET <unmatched>'].clientErrors).toBeGreaterThanOrEqual(1)
+    const histogram: number[] = metrics.body.routeLatency[matched[0]].histogram
+    expect(histogram).toHaveLength(metrics.body.latencyBucketsMs.length + 1)
+    expect(histogram.reduce((a, b) => a + b, 0)).toBe(2)
     expect(keys).toContain('GET <unmatched>')
     expect(metrics.body.clientErrors).toBeGreaterThanOrEqual(1)
   })
