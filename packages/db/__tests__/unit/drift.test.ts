@@ -62,3 +62,39 @@ describe('checkDrift()', () => {
     }
   })
 })
+
+describe('checkDrift — primary keys', () => {
+  it('names the table whose key drifted, once', async () => {
+    const t = (pk: 'a' | 'b'): SchemaSnapshot => ({
+      version: 1,
+      dialect: 'postgres',
+      tables: {
+        m: {
+          name: 'm',
+          columns: {
+            a: {
+              name: 'a',
+              type: 'integer',
+              nullable: false,
+              default: null,
+              primaryKey: pk === 'a',
+            },
+            b: {
+              name: 'b',
+              type: 'integer',
+              nullable: false,
+              default: null,
+              primaryKey: pk === 'b',
+            },
+          },
+          indexes: [],
+          foreignKeys: [],
+          checks: [],
+        },
+      },
+    })
+    const err = await checkDrift(t('a'), t('b'), 'error').catch((e) => e)
+    expect(err).toBeInstanceOf(MigrationDriftError)
+    expect((err as MigrationDriftError).diff.changed).toEqual(['m#primaryKey'])
+  })
+})

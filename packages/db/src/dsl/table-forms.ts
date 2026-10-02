@@ -30,12 +30,12 @@ import type {
   TypedColumnRefs,
 } from './columns/types'
 import { ColumnBuilder as ColumnBuilderClass } from './columns/types'
-import type { IndexDecl } from './constraints'
+import type { TableConstraint } from './constraints'
 import { pgSchema } from './pg-schema'
 import { table, type TableDecl } from './table'
 
 type ColumnsRecord = Record<string, ColumnBuilder>
-type Constraints = (refs: never) => Record<string, IndexDecl>
+type Constraints = (refs: never) => Record<string, TableConstraint>
 type Rules = Record<string, ColumnRule | SchemaLike>
 
 /** The Postgres schema of a table: `undefined` for none or `public`. */
@@ -93,8 +93,8 @@ export interface TableClass {
   readonly tableName: string
   /** Postgres schema the table lives in — `pgSchema(schema).table(...)`. */
   readonly schema?: string
-  /** Indexes / unique constraints, over {@link ClassRefs} of the class. */
-  readonly indexes?: (refs: never) => Record<string, IndexDecl>
+  /** Indexes, unique constraints, `primaryKey()` and `check()`, over {@link ClassRefs} of the class. */
+  readonly indexes?: (refs: never) => Record<string, TableConstraint>
 }
 
 /** Column refs of a builder-field class, for its `static indexes`. */
@@ -181,7 +181,7 @@ export function TableBase<
   options: {
     schema?: S
     rules?: { [K in keyof C]?: RuleFor<C[K]> }
-    indexes?: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>
+    indexes?: (refs: TypedColumnRefs<C>) => Record<string, TableConstraint>
   } = {},
 ) {
   const decl = build(
@@ -251,7 +251,7 @@ export class TableDefinition<
 
   /** Indexes / unique constraints over the columns declared so far. Calls add up. */
   index(
-    constraints: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>,
+    constraints: (refs: TypedColumnRefs<C>) => Record<string, TableConstraint>,
   ): TableDefinition<N, C, S> {
     const previous = this.constraints
     const next = constraints as Constraints

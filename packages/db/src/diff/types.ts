@@ -1,4 +1,5 @@
 import type {
+  CheckSnapshot,
   ColumnSnapshot,
   EnumSnapshot,
   ForeignKeySnapshot,
@@ -147,6 +148,36 @@ export interface RemoveEnumValue {
   affectedColumns: readonly { table: string; column: string; default: string | null }[]
 }
 
+/** A table's primary key as a change sees it. Empty `columns` = no key. */
+export interface PrimaryKeyShape {
+  name?: string
+  columns: string[]
+}
+
+/**
+ * The primary key changed: different columns, column order, or (Postgres)
+ * name. `before.columns` empty means one is added; `after.columns` empty,
+ * that it's dropped. Emitters drop the old key, then add the new one.
+ */
+export interface AlterPrimaryKey {
+  kind: 'alterPrimaryKey'
+  table: string
+  before: PrimaryKeyShape
+  after: PrimaryKeyShape
+}
+
+export interface AddCheck {
+  kind: 'addCheck'
+  table: string
+  check: CheckSnapshot
+}
+
+export interface DropCheck {
+  kind: 'dropCheck'
+  table: string
+  check: CheckSnapshot
+}
+
 export type Change =
   | CreateSchema
   | CreateTable
@@ -164,5 +195,8 @@ export type Change =
   | DropEnum
   | AddEnumValue
   | RemoveEnumValue
+  | AlterPrimaryKey
+  | AddCheck
+  | DropCheck
 
 export type ChangeSet = Change[]

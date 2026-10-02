@@ -789,15 +789,46 @@ kick/db already does code-first tables in four forms, snapshot → diff → migr
 | D.5  | **Typed database errors** — unique, foreign-key, check, not-null, serialization, deadlock and connection errors as classes, with the constraint and columns parsed; driver errors no longer leak raw. Unlocks D.7, D.11 and automatic `409` responses                                                                                                                                                    | `shipped` — see [Queries → Errors](./database/queries.md#errors)                    |
 | D.6  | **Transactions that follow the call chain** — `AsyncLocalStorage` so code inside `db.transaction(async () => …)` joins it without passing `trx`; `afterCommit` hooks; nesting modes (reuse / savepoint / separate)                                                                                                                                                                                       | `shipped` — see [Queries](./database/queries.md#transactions-follow-the-call-chain) |
 | D.7  | **Retry a whole transaction** on serialization failure or deadlock (`40001`, `40P01`, MySQL `1213`, `SQLITE_BUSY`) with backoff                                                                                                                                                                                                                                                                          | `shipped` — see [Queries](./database/queries.md#retrying)                           |
-| D.8  | **Primary-key and CHECK changes in migrations** — a primary-key change is detected only as a column change, so Postgres emits no primary-key operation and MySQL emits a `MODIFY COLUMN` that neither adds nor drops the key. Add primary-key and CHECK change kinds; SQLite rebuilds the table and verifies with `foreign_key_check`. Also an explicit composite key: `primaryKey('name').on(t.a, t.b)` | `proposed`                                                                          |
+| D.8  | **Primary-key and CHECK changes in migrations** — a primary-key change is detected only as a column change, so Postgres emits no primary-key operation and MySQL emits a `MODIFY COLUMN` that neither adds nor drops the key. Add primary-key and CHECK change kinds; SQLite rebuilds the table and verifies with `foreign_key_check`. Also an explicit composite key: `primaryKey('name').on(t.a, t.b)` | `shipped` — see [Migrations](./database/migrations.md#primary-keys-and-checks)      |
 | D.9  | **Richer indexes** — partial (`where`), `using gin / gist`, operator classes, `concurrently`, `include`                                                                                                                                                                                                                                                                                                  | `proposed`                                                                          |
 | D.10 | **Auto-managed columns** — `updatedAt` that updates itself, a `version()` column for optimistic locking, soft delete honoured by relational reads                                                                                                                                                                                                                                                        | `proposed`                                                                          |
 | D.11 | **`upsert` and a race-safe `findOrCreate`** — conflict target and partial-index `where`; re-read on a unique violation                                                                                                                                                                                                                                                                                   | `proposed`                                                                          |
 | D.12 | **Read-replica routing** — reads outside a transaction go to the replica, with an override                                                                                                                                                                                                                                                                                                               | `proposed`                                                                          |
 | D.13 | **Many-to-many relations** — `many(target, { through: junction })` in relational reads                                                                                                                                                                                                                                                                                                                   | `proposed`                                                                          |
+| D.14 | **Database documentation on par with established ORMs** — get-started per dialect, a concepts page, querying split into reading / writing / raw SQL / recipes, migration workflows, testing, errors, multi-tenancy, pooling and performance, troubleshooting, coming-from guides; see [D.14](#d-14-database-documentation)                                                                               | `proposed` — next                                                                   |
+| D.15 | **Test helpers** — a throwaway database per test file and a transaction per test rolled back afterwards, for SQLite in memory and Postgres                                                                                                                                                                                                                                                               | `proposed`                                                                          |
 
 Not planned, after the same comparison: per-row lifecycle hooks (an extra query and rows in memory per bulk statement), app-side validators separate from the schema, scopes and virtual attributes — plugins, schema-projected validators and Kysely expressions already cover them.
 
+### D.14 Database documentation {#d-14-database-documentation}
+
+**Status:** `proposed` — next.
+
+**Why.** Compared against Drizzle, Prisma, Sequelize, TypeORM, MikroORM and Kysely, kick/db's features are ahead of its documentation. Topics peers give their own page sit inside long pages (`queries.md` holds the builder, relational reads, transactions, errors, events and extensions), the API reference predates typed errors, `check()` and the transaction options, and testing, multi-tenancy and observability guides don't mention the database. A few topics are thinly covered even by established ORMs — testing with a database, an error reference, row-level security, CTEs and set operations — which makes them the cheapest places to stand out.
+
+**Target structure (Guide → Database):**
+
+- **Get started** — a start-here page (new project / existing database / coming from another ORM), then Postgres, MySQL, SQLite, existing database.
+- **Concepts** — how schema, snapshot, diff, migrations and the typed client fit together.
+- **Schema** — tables and columns, relations, indexes and constraints, Postgres types and enums, custom types, table forms, type registration.
+- **Querying** — reading, writing (incl. upsert), relational queries, raw SQL, recipes.
+- **Transactions and errors.**
+- **Migrations** — how they work, generating, reviewing, applying, rollback and recovery, CI and deploy, troubleshooting, one page per CLI command.
+- **Integrations** — validation, repositories and DI, extensions, testing, multi-tenancy and RLS, observability and DevTools.
+- **Operations** — connections and pooling, performance.
+- **Reference** — API, error reference, coming from Prisma / Drizzle / TypeORM / Sequelize, FAQ.
+
+Conventions: per-dialect code tabs, copyable one-problem recipes, every error linked to a fix.
+
+**Phases:**
+
+1. [ ] **Clean-up** — refresh the API reference (typed errors, `check()`, `primaryKey().on()`, table forms, `/schema` helpers, `afterCommit` / `retry` / `nested`, `$extends`, `escapeLike`, SQLite / MySQL introspection and emit); retire the design notes under `docs/db/`, which describe features that never shipped.
+2. [ ] **Stand-out pages** — testing with kick/db, errors and an error reference, raw SQL and recipes, multi-tenancy and row-level security; database sections in the testing, multi-tenancy, observability and DevTools guides.
+3. [ ] **Restructure** — split `queries.md` and `schema.md` along the target structure; concepts page; sidebar.
+4. [ ] **Onboarding** — start-here page, get-started per dialect, coming-from guides with concept-mapping tables.
+5. [ ] **Migrations and operations** — workflow pages, a page per CLI command, CI and deploy, troubleshooting and FAQ, pooling, performance.
+
+Features peers document that kick/db doesn't have yet are tracked as their own items: seeding (D.2), soft delete and optimistic locking (D.10), upsert (D.11), read replicas (D.12), test helpers (D.15).
 ---
 
 ## Prioritization — current thinking
@@ -805,11 +836,11 @@ Not planned, after the same comparison: per-row lifecycle hooks (an extra query 
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), **E.9** background jobs with any runner, and **D.5–D.7** typed database errors, call-chain transactions and transaction retry. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), **E.9** background jobs with any runner, and **D.5–D.8** typed database errors, call-chain transactions, transaction retry, and primary-key / CHECK migrations. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **D.8 — primary-key and CHECK changes in migrations** (fixes a silent migration bug)
+1. **D.14 — database documentation** (phases 1–2 first: clean-up, then testing / errors / recipes / multi-tenancy)
 2. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
 3. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
 

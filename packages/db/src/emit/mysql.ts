@@ -6,6 +6,7 @@ import type {
   TableSnapshot,
 } from '../snapshot/types'
 import { quoteLiteral } from './identifiers'
+import { primaryKeyOf } from '../snapshot/name'
 
 /** MySQL quotes identifiers with backticks, not double quotes. */
 function ident(name: string): string {
@@ -32,8 +33,28 @@ function ident(name: string): string {
  *   column types, not standalone objects).
  */
 export function emitMysql(changes: ChangeSet): string {
+  // A key being replaced is dropped and added in ONE statement: MySQL refuses
+  // `DROP PRIMARY KEY` alone while an AUTO_INCREMENT column depends on it.
+  // ponytail: if the old key's only column is itself dropped in between, the
+  // key is already gone and the combined DROP fails — edit that migration by hand.
+  const replaced = new Set(
+    changes
+      .filter((c) => c.kind === 'alterPrimaryKey' && c.after.columns.length > 0)
+      .map((c) => (c as { table: string }).table),
+  )
   return changes
-    .map(emitChange)
+    .map((c) => {
+      if (c.kind !== 'alterPrimaryKey') return emitChange(c)
+      const t = ident(c.table)
+      if (c.after.columns.length === 0) {
+        return replaced.has(c.table) ? '' : `ALTER TABLE ${t} DROP PRIMARY KEY;`
+      }
+      const add = `ADD PRIMARY KEY (${c.after.columns.map(ident).join(', ')})`
+      const hadKey = changes.some(
+        (d) => d.kind === 'alterPrimaryKey' && d.table === c.table && d.before.columns.length > 0,
+      )
+      return `ALTER TABLE ${t} ${hadKey ? 'DROP PRIMARY KEY, ' : ''}${add};`
+    })
     .filter((s) => s.length > 0)
     .join('\n')
 }
@@ -72,6 +93,12 @@ function emitChange(change: Change): string {
       return emitAddFk(change.table, change.fk)
     case 'dropForeignKey':
       return `ALTER TABLE ${ident(change.table)} DROP FOREIGN KEY ${ident(change.fk.name)};`
+    case 'alterPrimaryKey':
+      return '' // emitMysql renders the key as a pair
+    case 'addCheck':
+      return `ALTER TABLE ${ident(change.table)} ADD CONSTRAINT ${ident(change.check.name)} CHECK (${change.check.expression});`
+    case 'dropCheck':
+      return `ALTER TABLE ${ident(change.table)} DROP CHECK ${ident(change.check.name)};`
     case 'createEnum':
     case 'dropEnum':
     case 'addEnumValue':
@@ -86,7 +113,7 @@ function emitChange(change: Change): string {
 
 function emitCreateTable(t: TableSnapshot): string {
   const columns = Object.values(t.columns)
-  const pkCols = columns.filter((c) => c.primaryKey)
+  const pkCols = primaryKeyOf(t).columns.map((k) => t.columns[k]!)
 
   // A single integer PK is emitted inline with AUTO_INCREMENT (when the
   // column is serial) — MySQL requires an auto-increment column to be the
@@ -97,6 +124,7 @@ function emitCreateTable(t: TableSnapshot): string {
   if (!inlinePk && pkCols.length > 0) {
     lines.push(`PRIMARY KEY (${pkCols.map((c) => ident(c.name)).join(', ')})`)
   }
+  for (const c of t.checks) lines.push(`CONSTRAINT ${ident(c.name)} CHECK (${c.expression})`)
   return `CREATE TABLE ${ident(t.name)} (\n  ${lines.join(',\n  ')}\n);`
 }
 

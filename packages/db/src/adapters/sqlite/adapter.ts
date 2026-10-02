@@ -141,6 +141,31 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
       runBatch('BEGIN')
       try {
         runBatch(sql)
+        // A table rebuild copies rows into a fresh table; check no row now
+        // points at a parent that isn't there before committing it.
+        // The tables this migration rebuilt, read from the rebuild's final rename.
+        const rebuilt = new Set(
+          [...sql.matchAll(/ALTER TABLE "_kick_new_((?:[^"]|"")+)" RENAME TO/g)].map((m) =>
+            m[1]!.replace(/""/g, '"'),
+          ),
+        )
+        if (rebuilt.size > 0) {
+          // A rebuilt table can be the child or the parent of a broken key;
+          // orphans elsewhere predate this migration and aren't its to fail on.
+          const broken = (
+            database.prepare('PRAGMA foreign_key_check').all() as Array<{
+              table: string
+              parent: string
+            }>
+          ).filter((r) => rebuilt.has(r.table) || rebuilt.has(r.parent))
+          if (broken.length > 0) {
+            const where = [...new Set(broken.map((r) => `${r.table} → ${r.parent}`))].join(', ')
+            throw new Error(
+              `kickjs-db: the migration left ${broken.length} row(s) whose foreign key points ` +
+                `at a missing row (${where}); rolled back. Fix the data, then migrate again.`,
+            )
+          }
+        }
         runBatch('COMMIT')
       } catch (err) {
         try {

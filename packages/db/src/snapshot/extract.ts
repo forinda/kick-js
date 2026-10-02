@@ -139,7 +139,17 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
     }
   }
 
-  const snapshot: TableSnapshot = { name: t.__name, columns, indexes, foreignKeys, checks: [] }
+  const checks = (t.__checks ?? []).map((c) => ({ name: c.name, expression: c.expression }))
+  const snapshot: TableSnapshot = { name: t.__name, columns, indexes, foreignKeys, checks }
+  if (t.__primaryKey) {
+    for (const c of t.__primaryKey.columns) {
+      // A key column can't be null; the database enforces it either way.
+      columns[c] = { ...columns[c]!, primaryKey: true, nullable: false }
+    }
+    snapshot.primaryKey = t.__primaryKey.name
+      ? { name: t.__primaryKey.name, columns: [...t.__primaryKey.columns] }
+      : { columns: [...t.__primaryKey.columns] }
+  }
   // Only present the key when a schema was declared — an explicit
   // `schema: undefined` would change the serialized JSON and invalidate
   // every existing migration hash.

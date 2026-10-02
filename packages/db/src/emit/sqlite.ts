@@ -7,6 +7,7 @@ import type {
   TableSnapshot,
 } from '../snapshot/types'
 import { quoteIdent, quoteLiteral } from './identifiers'
+import { primaryKeyOf } from '../snapshot/name'
 
 /**
  * Raised when a change set needs a SQLite table rebuild but the emitter
@@ -59,7 +60,14 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
   for (const c of changes) {
     const t = perTableName(c)
     if (!t || createdTables.has(t)) continue
-    if (c.kind === 'alterColumn' || c.kind === 'dropForeignKey' || c.kind === 'addForeignKey') {
+    if (
+      c.kind === 'alterColumn' ||
+      c.kind === 'dropForeignKey' ||
+      c.kind === 'addForeignKey' ||
+      c.kind === 'alterPrimaryKey' ||
+      c.kind === 'addCheck' ||
+      c.kind === 'dropCheck'
+    ) {
       rebuildTables.add(t)
     }
   }
@@ -93,6 +101,9 @@ function perTableName(change: Change): string | null {
     case 'dropIndex':
     case 'addForeignKey':
     case 'dropForeignKey':
+    case 'alterPrimaryKey':
+    case 'addCheck':
+    case 'dropCheck':
       return change.table
     default:
       return null
@@ -128,7 +139,10 @@ function emitChange(change: Change): string {
     case 'addForeignKey':
     case 'dropForeignKey':
     case 'alterColumn':
-      // FK add/drop + column alters never emit a standalone statement:
+    case 'alterPrimaryKey':
+    case 'addCheck':
+    case 'dropCheck':
+      // Key, CHECK, FK and column changes never emit a standalone statement:
       // new-table FKs inline into CREATE TABLE, existing-table FK + column
       // changes are subsumed by the table rebuild.
       return ''
@@ -181,7 +195,7 @@ function emitRebuild(table: string, ctx: SqliteEmitContext): string {
 
 function emitCreateTable(name: string, t: TableSnapshot): string {
   const columns = Object.values(t.columns)
-  const pkCols = columns.filter((c) => c.primaryKey)
+  const pkCols = primaryKeyOf(t).columns.map((k) => t.columns[k]!)
 
   // A single integer PK becomes the rowid alias only when declared inline
   // as `INTEGER PRIMARY KEY`; composite/non-integer PKs use a table clause.
@@ -193,6 +207,7 @@ function emitCreateTable(name: string, t: TableSnapshot): string {
     lines.push(`PRIMARY KEY (${pkCols.map((c) => quoteIdent(c.name)).join(', ')})`)
   }
   for (const fk of t.foreignKeys) lines.push(emitInlineFk(fk))
+  for (const c of t.checks) lines.push(`CONSTRAINT ${quoteIdent(c.name)} CHECK (${c.expression})`)
 
   return `CREATE TABLE ${quoteIdent(name)} (\n  ${lines.join(',\n  ')}\n);`
 }

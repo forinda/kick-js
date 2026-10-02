@@ -47,6 +47,13 @@ export interface TableSnapshot {
   indexes: IndexSnapshot[]
   foreignKeys: ForeignKeySnapshot[]
   checks: CheckSnapshot[]
+  /**
+   * The key declared with `primaryKey(name?).on(...)`: its name and column
+   * order. The columns also carry `primaryKey: true`. Absent for a key
+   * declared on columns, so those snapshots — and migration hashes — stay
+   * as they were.
+   */
+  primaryKey?: { name?: string; columns: string[] }
 }
 
 /**

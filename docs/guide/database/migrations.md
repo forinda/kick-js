@@ -143,6 +143,22 @@ kick db migrate up --confirm-enum-drop
 
 At `kick db generate` time, the Postgres path also probes for composite-type references to the enum (the rename-recreate `USING`-cast can't reach into composite fields) and aborts with `CompositeEnumReferenceError` if any exist.
 
+## Primary keys and CHECKs
+
+Changing a table's primary key — other columns, another order, a new name — generates a key change rather than a column change:
+
+| Dialect  | Emitted                                                                                                                  |
+| -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Postgres | `DROP CONSTRAINT "<old>"` before any column is dropped, `ADD CONSTRAINT "<new>" PRIMARY KEY (…)` after columns are added |
+| MySQL    | `DROP PRIMARY KEY, ADD PRIMARY KEY (…)` in one statement (an `AUTO_INCREMENT` column must stay keyed)                    |
+| SQLite   | a table rebuild                                                                                                          |
+
+A CHECK that's added, removed or whose expression changed becomes `ADD CONSTRAINT … CHECK` / `DROP CONSTRAINT` (MySQL: `DROP CHECK`); on SQLite, a table rebuild. Down migrations reverse both.
+
+A SQLite rebuild copies every row into a new table. Before committing, the migration runs `PRAGMA foreign_key_check` and rolls back if any row now points at a parent that isn't there — fix the data and migrate again.
+
+Drift detection compares a key's columns, not its name, and doesn't compare CHECK constraints.
+
 ## Introspection
 
 Generate a TypeScript schema file from a live database — useful for bootstrapping from an existing DB or recovering from drift:
