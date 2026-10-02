@@ -69,6 +69,26 @@ class AuthController {
 }
 ```
 
+## Typing session data
+
+`ctx.session` is typed `Session`, and `ctx.session.data` is a `SessionData`. Declare your keys once and every read is typed:
+
+```ts
+// src/types/session.d.ts — or next to the code that sets them
+declare module '@forinda/kickjs' {
+  interface SessionData {
+    userId?: string
+    role?: 'admin' | 'member'
+  }
+}
+```
+
+```ts
+const userId = ctx.session.data.userId // string | undefined
+```
+
+Keys you don't declare are still readable, as `unknown`.
+
 ## Session API
 
 The `req.session` (or `ctx.session`) object provides:

@@ -4,6 +4,16 @@ import type { Request, Response, NextFunction } from 'express'
 
 import { registerDisposable } from '../../core/disposables'
 
+/**
+ * What a session holds. Augment it to type your keys — undeclared keys stay
+ * readable as `unknown`:
+ *
+ * ```ts
+ * declare module '@forinda/kickjs' {
+ *   interface SessionData { userId?: string; cart?: string[] }
+ * }
+ * ```
+ */
 export interface SessionData {
   [key: string]: unknown
 }

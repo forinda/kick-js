@@ -1070,12 +1070,14 @@ taken from the request unchecked — allow-list it, or accept only a same-site p
 import type { RequestContext } from '@forinda/kickjs'
 
 export async function adminGuard(ctx: RequestContext, next: () => void): Promise<void> {
-  const user = ctx.session?.user // requires the session middleware
-  if (!user) {
+  // Requires the session() middleware. Type the key once:
+  // declare module '@forinda/kickjs' { interface SessionData { role?: 'admin' | 'member' } }
+  const role = ctx.session?.data.role
+  if (!role) {
     ctx.problem.unauthorized({ detail: 'Not signed in' })
     return // do NOT call next()
   }
-  if (user.role !== 'admin') {
+  if (role !== 'admin') {
     ctx.problem.forbidden({ detail: 'Admin only' })
     return
   }
