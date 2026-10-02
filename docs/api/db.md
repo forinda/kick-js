@@ -123,6 +123,8 @@ const db = createDbClient({
 | `bus`                  | `KickEventBus`   | Republish to DevTools event bus                                           |
 | `plugins`              | `KyselyPlugin[]` | Query-builder plugins (see [`safeNullComparison()`](#safenullcomparison)) |
 
+Every query the client runs reports driver failures as [typed errors](#errors) — `UniqueViolationError`, `SerializationFailureError`, … — with the driver's error as `cause`.
+
 ## `KickDbClient`
 
 The injected handle. Provides lifecycle events, transactions, savepoints, and `$extends`, on top of a typed query-builder surface.
@@ -143,9 +145,11 @@ interface KickDbClient<DB = RegisteredDB> {
   off(event, listener): this
 
   transaction<T>(fn): Promise<T>
-  transaction<T>(opts, fn): Promise<T>
+  transaction<T>(opts: TransactionOptions, fn): Promise<T>
 
   savepoint<T>(fn): Promise<T>
+  afterCommit(fn: () => unknown): Promise<void>
+  readonly inTransaction: boolean
 
   $extends(ext): ExtendedClient // per-table methods
 
@@ -166,6 +170,7 @@ Subscribe via `db.on(event, listener)`. Events fire when `events: true` on the c
 | `transactionStart`    | `{ isolation? }`                               | Transaction opens                                                         |
 | `transactionCommit`   | `{ isolation? }`                               | Transaction commits                                                       |
 | `transactionRollback` | `{ isolation?, error }`                        | Transaction rolls back                                                    |
+| `transactionRetry`    | `{ isolation?, attempt, error, delayMs }`      | A `retry` transaction is about to run again                               |
 
 ```ts
 db.on('slowQuery', ({ sql, durationMs }) => {
@@ -179,19 +184,33 @@ db.on('queryError', ({ error, sql, parameters }) =>
 
 ### Transactions + savepoints
 
+Inside `transaction(fn)` the plain client joins the transaction too — code holding the injected `db` takes part without being handed `tx`. Full guide: [Queries → Transactions](../guide/database/queries.md#transactions).
+
 ```ts
-await db.transaction(async (tx) => {
-  const user = await tx.insertInto('users').values({ email }).returningAll().executeTakeFirstOrThrow()
-  await tx.insertInto('profiles').values({ userId: user.id }).execute()
+await db.transaction(async () => {
+  await usersRepo.create({ email }) // uses db internally — same transaction
+  await db.afterCommit(() => mailer.sendWelcome(email)) // after COMMIT; dropped on rollback
 })
 
-await db.transaction({ isolation: 'serializable' }, async (tx) => { ... })
+await db.transaction({ isolation: 'serializable', retry: true }, async () => { ... })
 
-await tx.savepoint(async (sp) => {
-  await sp.insertInto('audit_log').values({ ... }).execute()
-  throw new Error('rollback savepoint, keep outer tx alive')
+await db.transaction({ nested: 'savepoint' }, async () => { ... }) // inside an open one
+
+await db.savepoint(async () => {
+  await db.insertInto('audit_log').values({ ... }).execute()
+  throw new Error('rolls back the savepoint, keeps the outer transaction')
 })
 ```
+
+`TransactionOptions`:
+
+| Option      | Type                                                                            | Description                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `isolation` | `'serializable' \| 'repeatable read' \| 'read committed' \| 'read uncommitted'` | `SET TRANSACTION ISOLATION LEVEL` — when a transaction starts                                                        |
+| `nested`    | `'reuse' \| 'savepoint' \| 'separate'`                                          | When one is already open: join it (default), run behind a savepoint, or open an independent one (not on SQLite)      |
+| `retry`     | `boolean \| number \| { attempts, baseDelayMs?, maxDelayMs? }`                  | Run again on `retryable` errors (serialization failure, deadlock); `true` = 3 attempts, jittered exponential backoff |
+
+`afterCommit(fn)` runs `fn` after the commit, drops it on rollback (including a rolled-back savepoint), and runs it at once outside a transaction; a failing hook is reported, not thrown. `inTransaction` says whether the current call chain is inside one.
 
 ## Schema DSL
 
@@ -213,9 +232,14 @@ const posts = table(
   (t) => ({
     authorIdx: index('posts_author_idx').on(t.authorId),
     uniqueSlug: unique('posts_slug_unique').on(t.title, t.authorId),
+    titleLength: check('posts_title_length', 'length(title) > 0'),
   }),
 )
 ```
+
+The constraints builder returns any mix of `index()`, `unique()`, `check(name, expression)` and one `primaryKey(name?).on(...)` — a composite or named key, in key order (use it or a column's `.primaryKey()`, not both). See [Schema → Primary keys and CHECK constraints](../guide/database/schema.md#primary-keys-and-check-constraints).
+
+The same table can be declared as a class or with a fluent builder — `tableFromClass`, `TableBase`, `defineTable` ([Table Forms](../guide/db-table-forms.md)) — and validated with `insertSchema` / `selectSchema` / `updateSchema` from `@forinda/kickjs-db/schema` ([Validation from Tables](../guide/db-table-schemas.md)).
 
 ### Column constructors
 
@@ -348,19 +372,40 @@ await db.deleteFrom('posts').where('id', '=', 5).execute()
 
 Inferred column types end-to-end from your schema — `name` autocompletes against the table's columns, the `'='` operator's right-hand side is typed against the column's TS type, etc.
 
-### Layer 2 — Operator helpers
+### Layer 2 — Expressions and safe `LIKE`
+
+Compound conditions use Kysely's expression builder:
 
 ```ts
-import { eq, and, or, gt, lt, like, ilike, inArray, isNull } from '@forinda/kickjs-db'
-
 await db
   .selectFrom('users')
-  .where(and(eq(users.isActive, true), gt(users.signupCount, 5)))
+  .where((eb) => eb.and([eb('isActive', '=', true), eb('signupCount', '>', 5)]))
   .selectAll()
   .execute()
 ```
 
-Thin wrappers that compose into more readable filters when conditions get hairy.
+User input in a `LIKE` pattern goes through `likePattern(input, mode)` (or `escapeLike(input)`), which escapes `%`, `_` and `\` so the text matches literally:
+
+```ts
+import { sql } from 'kysely'
+import { likePattern } from '@forinda/kickjs-db'
+
+// Postgres / MySQL — backslash is the default escape character
+await db
+  .selectFrom('users')
+  .where('email', 'like', likePattern(search, 'contains'))
+  .selectAll()
+  .execute()
+
+// SQLite has no default escape character — say it
+await db
+  .selectFrom('users')
+  .where(sql<boolean>`email like ${likePattern(search, 'contains')} escape '\'`)
+  .selectAll()
+  .execute()
+```
+
+`mode` is `'contains'` (default), `'startsWith'`, `'endsWith'` or `'exact'`.
 
 ### Layer 3 — Relational queries
 
@@ -437,7 +482,7 @@ Spec-compliant across every dialect kickjs-db supports — PG, MSSQL, MySQL, SQL
 
 ## Migration API
 
-### `diff(prev, next)` / `invertChanges(forward)` / `emitPg(changes)`
+### `diff(prev, next)` / `invertChanges(forward)` / `emitPg` / `emitMysql` / `emitSqlite`
 
 In-memory diff engine + SQL emitter, exposed for adopters building custom migration tooling.
 
@@ -454,11 +499,18 @@ const reverse = invertChanges(forward)
 
 const sql = emitPg(forward)
 // → up.sql text
+
+// MySQL, and SQLite — which rebuilds tables for what ALTER TABLE can't do,
+// so it needs both snapshots
+emitMysql(forward)
+emitSqlite(forward, { from: prevSnapshot, to: nextSnapshot })
 ```
 
-### `introspectPg(client, options?)`
+Change kinds include `alterPrimaryKey`, `addCheck` and `dropCheck`; a key change is emitted around the column changes — the old key dropped first, the new one added after columns exist.
 
-Reverse direction: live PG → `SchemaSnapshot`. Powers the `kick db introspect` command.
+### `introspectPg` / `introspectMysql` / `introspectSqlite`
+
+Reverse direction: live database → `SchemaSnapshot`. Powers the `kick db introspect` command and drift detection.
 
 ```ts
 import { introspectPg } from '@forinda/kickjs-db'
@@ -467,7 +519,14 @@ import pg from 'pg'
 const client = new pg.Client({ connectionString })
 await client.connect()
 const snapshot = await introspectPg(client, { schema: 'public' })
+
+// await introspectMysql(connection, { excludeTables })   — async
+// introspectSqlite(database, { excludeTables })          — better-sqlite3 handle, sync
 ```
+
+### `checkDrift(live, expected, behavior)` / `reviewMigration(dir, id)`
+
+`checkDrift` compares an introspected snapshot with the last applied one and, for `behavior: 'error'`, throws `MigrationDriftError` listing what differs (`'warn'` logs, `'ignore'` skips). Primary keys are compared by columns; CHECK constraints aren't compared. `reviewMigration(migrationsDir, id)` marks a generated migration reviewed — what `kick db migrate review <id>` runs.
 
 ### `migrateLatest()` / `migrateUp()` / `migrateDown()` / `migrateRollback()` / `migrateStatus()`
 
@@ -507,6 +566,15 @@ Hierarchy rooted at `KickDbError`. All carry `.code`, `.cause`, and (where appli
 
 ```text
 KickDbError                         base
+├── DatabaseError                   a failure the database reported — .dialect, .driverCode,
+│   │                               .constraint, .table, .columns, .detail, .cause (driver error)
+│   ├── UniqueViolationError        duplicate unique / primary key — .status = 409
+│   ├── ForeignKeyViolationError
+│   ├── CheckViolationError
+│   ├── NotNullViolationError
+│   ├── SerializationFailureError   .retryable = true
+│   ├── DeadlockError               .retryable = true
+│   └── ConnectionError
 ├── RemovedValueAsDefaultError      pgEnum value being removed is still a column DEFAULT
 ├── RelationalQueryCancelledError   AbortSignal fired during db.query.*
 ├── RelationalQueryUnknownRelationError
@@ -523,6 +591,8 @@ KickDbError                         base
     ├── UnreviewedMigrationError    reviewed: false in non-dev
     └── MigrationEnumDropError      missing --confirm-enum-drop on a KICK ENUM REMOVE migration
 ```
+
+`translateDbError(err, dialect)` turns a raw driver error into one of the `DatabaseError` classes — for drivers you call directly; the client already does it. `SqliteRebuildRequiredError` (not a `KickDbError`) means `emitSqlite` was asked for a table rebuild without the snapshots to build it. Guide: [Queries → Errors](../guide/database/queries.md#errors).
 
 ## Snapshot types
 
@@ -556,7 +626,7 @@ import type {
 
 ## CLI commands
 
-The CLI lives at `@forinda/kickjs-cli` and provides:
+The CLI lives at `@forinda/kickjs-cli` and provides the commands below (also available standalone as the `kickjs-db` binary). `dbCliPlugin` from `@forinda/kickjs-db/cli` registers them on `kick`, and its typegen half — also exported as `kickDbTypegen` — keeps `KickDbRegister` up to date from your schema.
 
 ### `kick db generate <name>`
 
@@ -599,6 +669,10 @@ Reverse the entire last batch as a single transactional unit.
 
 Print a table of applied + pending migrations with their batch numbers, hashes, and reviewed flags.
 
+### `kick db migrate review <id>`
+
+Mark a generated migration reviewed after reading its SQL — required before `migrate latest` / `up` applies it outside development.
+
 ### `kick db introspect`
 
 Read the live database and generate / dump a `SchemaSnapshot`. Use for bootstrapping from an existing DB or recovering from drift.
@@ -616,20 +690,28 @@ kick db introspect --json | jq '.tables | keys'    # inspect raw snapshot
 
 ## Exports
 
-Schema DSL (all from package root): `table`, `relations`, `index`, `unique`, `primaryKey`, `customType`, `CustomColumnBuilder`, `serial`, `bigSerial`, `smallSerial`, `integer`, `bigint`, `smallint`, `decimal`, `numeric`, `real`, `doublePrecision`, `varchar`, `char`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json`, `jsonb`, `bytea`.
+Schema DSL (all from package root): `table`, `relations`, `index`, `unique`, `primaryKey`, `check`, `selfRef`, `fk`, `link`, `tableFromClass`, `TableBase`, `defineTable`, `Rule`, `customType`, `CustomColumnBuilder`, `serial`, `bigSerial`, `smallSerial`, `integer`, `bigint`, `smallint`, `decimal`, `numeric`, `real`, `doublePrecision`, `varchar`, `char`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json`, `jsonb`, `bytea`.
 
 Client + DI: `createDbClient`, `kickDbAdapter`, `DB_PRIMARY`, `DB_REPLICA`, `DB_CLIENT`, type-only `KickDbClient`, `CreateDbClientOptions`, `KickDbAdapterConfig`, `MigrationsOnBoot`.
 
 Query: `db.query.X.{findMany, findFirst, findUnique}`; type-only `FindManyOptions`, `FindManyRow`, `WithClause`, `QueryNamespace`, `TableQueryNamespace`, `KickDbRelationsRegister`, `RegisteredRelations`, `TableRelations`, `RelationMapEntry`, `ResolvedRelation`, `ResolvedRelations`.
 
-Lifecycle events: type-only `KickDbClientEvents`, `QueryEvent`, `QueryErrorEvent`, `BeforeQueryEvent`, `TransactionEvent`, `TransactionRollbackEvent`.
+Lifecycle events and transactions: type-only `KickDbClientEvents`, `QueryEvent`, `QueryErrorEvent`, `BeforeQueryEvent`, `TransactionEvent`, `TransactionOptions`, `TransactionRetryEvent`, `TransactionRollbackEvent`.
+
+Query helpers: `escapeLike`, `likePattern`.
 
 Plugins: `safeNullComparison`.
 
-Migration: `diff`, `invertChanges`, `hasAmbiguousReverse`, `emitPg`, `introspectPg`, `extractSnapshot`, `renderSchemaSource`, `migrateLatest`, `migrateUp`, `migrateDown`, `migrateRollback`, `migrateStatus`, `generate`, `resolveDbConfig`, `MemoryMigrationAdapter`, `migrationsTableDdl`, `lockTableDdl`, `KICK_MIGRATIONS_TABLE`, `KICK_LOCK_TABLE`, `readJournal`, `appendJournalEntry`, `computeMigrationHash`, `verifyMigrationHash`, `parseEnumDropHeader`, `enforceEnumDropGate`, `checkDrift`, `detectCompositeReferences`.
+Migration: `diff`, `invertChanges`, `hasAmbiguousReverse`, `emitPg`, `emitMysql`, `emitSqlite`, `introspectPg`, `introspectMysql`, `introspectSqlite`, `reviewMigration`, `extractSnapshot`, `renderSchemaSource`, `migrateLatest`, `migrateUp`, `migrateDown`, `migrateRollback`, `migrateStatus`, `generate`, `resolveDbConfig`, `MemoryMigrationAdapter`, `migrationsTableDdl`, `lockTableDdl`, `KICK_MIGRATIONS_TABLE`, `KICK_LOCK_TABLE`, `readJournal`, `appendJournalEntry`, `computeMigrationHash`, `verifyMigrationHash`, `parseEnumDropHeader`, `enforceEnumDropGate`, `checkDrift`, `detectCompositeReferences`.
 
-Errors: `KickDbError`, `RemovedValueAsDefaultError`, `RelationalQueryCancelledError`, `RelationalQueryUnknownRelationError`, `RelationalQueryAmbiguousRelationNameError`, `RelationalQueryMissingInverseError`, `RelationalQueryDepthError`, `RelationalQueryAliasCollisionError`, `RelationalQueryNotSupportedError`, `CompositeEnumReferenceError`, `MigrationError`, `MigrationDriftError`, `MigrationLockError`, `MigrationHashError`, `UnreviewedMigrationError`, `MigrationEnumDropError`.
+Errors: `KickDbError`, `DatabaseError`, `UniqueViolationError`, `ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError`, `ConnectionError`, `translateDbError`, `SqliteRebuildRequiredError`, `RemovedValueAsDefaultError`, `RelationalQueryCancelledError`, `RelationalQueryUnknownRelationError`, `RelationalQueryAmbiguousRelationNameError`, `RelationalQueryMissingInverseError`, `RelationalQueryDepthError`, `RelationalQueryAliasCollisionError`, `RelationalQueryNotSupportedError`, `CompositeEnumReferenceError`, `MigrationError`, `MigrationDriftError`, `MigrationLockError`, `MigrationHashError`, `UnreviewedMigrationError`, `MigrationEnumDropError`.
 
 Types: `Dialect`, `FkAction`, `ColumnSnapshot`, `IndexSnapshot`, `ForeignKeySnapshot`, `CheckSnapshot`, `TableSnapshot`, `EnumSnapshot`, `SchemaSnapshot`, `RelationSnapshot`, `SchemaToTypes`, `SchemaToRelationsRegister`, `KickDbRegister`, `RegisteredDB`, `ReadonlyKysely`.
 
-Subpath: `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`).
+Subpaths:
+
+- `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`), `pgSchema`, `pgDialect`, `pgAdapter`.
+- `@forinda/kickjs-db/mysql`, `@forinda/kickjs-db/sqlite` — the dialect and migration adapter for each.
+- `@forinda/kickjs-db/schema` — `insertSchema`, `selectSchema`, `updateSchema` (each returns a schema with `safeParse` and `toJsonSchema()`), and the row types `InferSelect` / `InferInsert`.
+- `@forinda/kickjs-db/cli` — `dbCliPlugin`, `kickDbTypegen`, config helpers.
+- `@forinda/kickjs-db/devtools-events` — the `db:*` event types the DevTools Database tab reads.

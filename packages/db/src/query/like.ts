@@ -9,10 +9,9 @@
  * literally.
  *
  * Escapes `%`, `_`, and the escape character itself. The default escape
- * char is backslash, which Postgres and SQLite honour by default; MySQL
- * also defaults to backslash. When you build the query, pair the pattern
- * with the matching `ESCAPE '\'` clause if your dialect/collation needs
- * it explicit.
+ * char is backslash, which Postgres and MySQL use by default. SQLite has
+ * no default escape character — add `ESCAPE '\'` to the LIKE there, or
+ * the escapes are matched as literal backslashes.
  */
 
 export type LikeMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'exact'
