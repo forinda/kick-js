@@ -3,8 +3,34 @@ import { pgPrimaryKeyName, primaryKeyOf, snapshotTableName } from '../snapshot/n
 import type { SchemaSnapshot, TableSnapshot } from '../snapshot/types'
 import type { Change, ChangeSet, PrimaryKeyShape } from './types'
 
-export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
+/**
+ * Renames to apply instead of a drop and an add. Names are qualified
+ * (`billing.invoices`) when the table lives in a schema.
+ */
+export interface RenameHints {
+  /** Old table name → new table name. */
+  tables?: Record<string, string>
+  /** `<new table>.<old column>` → new column name. */
+  columns?: Record<string, string>
+}
+
+export interface DiffOptions {
+  renames?: RenameHints
+  /**
+   * When true, only `renames` pair a drop with an add; the one-drop,
+   * one-add guess is off. Set once someone has answered for every candidate.
+   */
+  explicitRenames?: boolean
+}
+
+export function diff(
+  prev: SchemaSnapshot,
+  next: SchemaSnapshot,
+  options: DiffOptions = {},
+): ChangeSet {
   const changes: Change[] = []
+  const tableRenames = Object.entries(options.renames?.tables ?? {})
+  if (tableRenames.length > 0) prev = applyTableRenames(prev, next, tableRenames, changes)
 
   const prevTables = new Set(Object.keys(prev.tables))
   const nextTables = new Set(Object.keys(next.tables))
@@ -58,13 +84,85 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
   // Common tables — column/index/fk diff comes in Tasks 10-12
   for (const name of nextTables) {
     if (!prevTables.has(name)) continue
-    diffTable(prev.tables[name], next.tables[name], changes, next.dialect)
+    diffTable(prev.tables[name], next.tables[name], changes, next.dialect, options)
   }
 
   // Drop enums after every dependent table change has been emitted.
   diffEnumsDropPhase(prev, next, changes)
 
   return changes
+}
+
+/** `prev` with the given tables under their new names — to look for column renames inside them. */
+export function withTableRenames(
+  prev: SchemaSnapshot,
+  next: SchemaSnapshot,
+  renames: Record<string, string>,
+): SchemaSnapshot {
+  return applyTableRenames(prev, next, Object.entries(renames), [])
+}
+
+/**
+ * `prev` with each renamed table under its new name, and a `renameTable` for
+ * each. The tables then diff as one, so only what else changed is emitted.
+ */
+function applyTableRenames(
+  prev: SchemaSnapshot,
+  next: SchemaSnapshot,
+  renames: [string, string][],
+  changes: Change[],
+): SchemaSnapshot {
+  const tables = { ...prev.tables }
+  for (const [from, to] of renames) {
+    const table = tables[from]
+    if (!table || next.tables[from] || !next.tables[to] || tables[to]) {
+      throw new Error(
+        `kickjs-db: cannot rename table ${from} to ${to} — the schema must have lost ${from} and gained ${to}`,
+      )
+    }
+    if ((table.schema ?? null) !== (next.tables[to].schema ?? null)) {
+      throw new Error(
+        `kickjs-db: cannot rename table ${from} to ${to} — a rename stays in its schema`,
+      )
+    }
+    changes.push({ kind: 'renameTable', from, to })
+    delete tables[from]
+    tables[to] = { ...table, name: next.tables[to].name }
+  }
+  return { ...prev, tables }
+}
+
+/** Drops that might be renames: each lists what it could have become. */
+export interface RenameCandidates {
+  tables: { from: string; to: string[] }[]
+  columns: { table: string; from: string; to: string[] }[]
+}
+
+/**
+ * Every dropped table that a created table could replace, and every dropped
+ * column that a column added to the same table could replace — the cases
+ * where a drop might really be a rename, so someone should say which.
+ */
+export function findRenameCandidates(prev: SchemaSnapshot, next: SchemaSnapshot): RenameCandidates {
+  const droppedTables = Object.keys(prev.tables).filter((t) => !next.tables[t])
+  const createdTables = Object.keys(next.tables).filter((t) => !prev.tables[t])
+  const sameSchema = (a: string, b: string) =>
+    (prev.tables[a].schema ?? null) === (next.tables[b].schema ?? null)
+  const tables = droppedTables
+    .map((from) => ({ from, to: createdTables.filter((to) => sameSchema(from, to)) }))
+    .filter((c) => c.to.length > 0)
+
+  const columns: RenameCandidates['columns'] = []
+  for (const [name, after] of Object.entries(next.tables)) {
+    const before = prev.tables[name]
+    if (!before) continue
+    const added = Object.keys(after.columns).filter((c) => !before.columns[c])
+    if (added.length === 0) continue
+    for (const from of Object.keys(before.columns)) {
+      if (!after.columns[from]) columns.push({ table: name, from, to: added })
+    }
+  }
+  return { tables, columns }
 }
 
 function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, changes: Change[]) {
@@ -214,6 +312,7 @@ function diffTable(
   next: TableSnapshot,
   changes: Change[],
   dialect: SchemaSnapshot['dialect'],
+  options: DiffOptions = {},
 ) {
   // Every `table:` field on a Change carries the QUALIFIED name — that is what
   // the emitters quote and what `invertChanges` matches dropTable against.
@@ -229,8 +328,27 @@ function diffTable(
   for (const c of prevCols.keys()) if (!nextCols.has(c)) drops.push(c)
   for (const c of nextCols.keys()) if (!prevCols.has(c)) adds.push(c)
 
+  // Renames someone named: the old column is compared as the new one, so a
+  // rename that also changes the type is a rename plus an alter.
+  for (const [key, to] of Object.entries(options.renames?.columns ?? {})) {
+    const dot = key.lastIndexOf('.')
+    if (key.slice(0, dot) !== tableRef) continue
+    const from = key.slice(dot + 1)
+    if (!drops.includes(from) || !adds.includes(to)) {
+      throw new Error(
+        `kickjs-db: cannot rename ${tableRef}.${from} to ${to} — ` +
+          `${tableRef} must have lost ${from} and gained ${to}`,
+      )
+    }
+    changes.push({ kind: 'renameColumn', table: tableRef, from, to })
+    prevCols.set(to, { ...prevCols.get(from)!, name: to })
+    prevCols.delete(from)
+    drops.splice(drops.indexOf(from), 1)
+    adds.splice(adds.indexOf(to), 1)
+  }
+
   // Rename heuristic — pair only if exactly one drop + one add with identical attrs.
-  if (drops.length === 1 && adds.length === 1) {
+  if (!options.explicitRenames && drops.length === 1 && adds.length === 1) {
     const before = prevCols.get(drops[0])!
     const after = nextCols.get(adds[0])!
     if (columnAttrsEqual(before, after)) {

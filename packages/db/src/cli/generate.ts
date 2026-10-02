@@ -5,7 +5,15 @@ import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync } from 'node:fs'
 
 import { extractSnapshot } from '../snapshot/extract'
-import { diff } from '../diff/engine'
+import { snapshotTableName } from '../snapshot/name'
+import {
+  diff,
+  findRenameCandidates,
+  withTableRenames,
+  type DiffOptions,
+  type RenameCandidates,
+  type RenameHints,
+} from '../diff/engine'
 import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
 import { CompositeEnumReferenceError, type CompositeRef } from '../diff/composite-detect'
 import { emitPg } from '../emit/pg'
@@ -62,6 +70,22 @@ export interface GenerateOptions {
    * required). The CLI wires this for `dialect=postgres` workflows.
    */
   detectCompositeRefs?: (enumName: string) => Promise<readonly CompositeRef[]>
+  /** Renames known up front — `--rename-table` / `--rename-column`. */
+  renames?: RenameHints
+  /**
+   * Asked which dropped tables and columns are really renames, when the diff
+   * has a drop and an add that could be one. Called first with table
+   * candidates, then with column candidates (inside renamed tables too). What
+   * it doesn't name is dropped. Without it, only `renames` and the
+   * one-drop-one-add guess pair them.
+   */
+  askRenames?: (candidates: RenameCandidates) => Promise<RenameHints>
+  /**
+   * Told about each table or column the migration drops that could have been
+   * a rename, when `askRenames` isn't given — so a non-interactive run can
+   * still warn. `flag` is the `--rename-…` that would keep it.
+   */
+  onPossibleRename?: (drop: { what: string; flag: string }) => void
 }
 
 export interface GenerateResult {
@@ -97,7 +121,10 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const schemaAbs = path.resolve(opts.cwd, opts.config.schemaPath)
   const schemaModule = await loadModule(schemaAbs)
   const target = extractSnapshot(schemaModule, opts.config.dialect)
-  const changes = diff(prev, target)
+  const renames = await resolveRenames(prev, target, opts)
+  const changes = diff(prev, target, renames)
+  if (!opts.askRenames && opts.onPossibleRename)
+    warnPossibleRenames(prev, target, changes, renames, opts.onPossibleRename)
 
   if (changes.length === 0) {
     return { status: 'no-changes', changeCount: 0 }
@@ -139,6 +166,65 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     previous = path.basename(result.migrationDir!)
   }
   return { ...result!, changeCount: changes.length }
+}
+
+function warnPossibleRenames(
+  prev: SchemaSnapshot,
+  target: SchemaSnapshot,
+  changes: ChangeSet,
+  { renames = {} }: DiffOptions,
+  warn: NonNullable<GenerateOptions['onPossibleRename']>,
+): void {
+  const options = (to: string[]) => (to.length === 1 ? to[0] : `<${to.join('|')}>`)
+  const candidates = findRenameCandidates(
+    withTableRenames(prev, target, renames.tables ?? {}),
+    target,
+  )
+  for (const c of candidates.tables) {
+    if (!changes.some((x) => x.kind === 'dropTable' && snapshotTableName(x.table) === c.from))
+      continue
+    warn({ what: `table ${c.from}`, flag: `--rename-table ${c.from}=${options(c.to)}` })
+  }
+  for (const c of candidates.columns) {
+    const dropped = changes.some(
+      (x) => x.kind === 'dropColumn' && x.table === c.table && x.column.name === c.from,
+    )
+    if (!dropped) continue
+    warn({
+      what: `column ${c.table}.${c.from}`,
+      flag: `--rename-column ${c.table}.${c.from}=${options(c.to)}`,
+    })
+  }
+}
+
+async function resolveRenames(
+  prev: SchemaSnapshot,
+  target: SchemaSnapshot,
+  opts: GenerateOptions,
+): Promise<DiffOptions> {
+  const given = opts.renames ?? {}
+  if (!opts.askRenames) return { renames: given }
+
+  const tables = { ...given.tables }
+  const tableCandidates = findRenameCandidates(prev, target).tables.filter(
+    (c) => !(c.from in tables) && !c.to.some((to) => Object.values(tables).includes(to)),
+  )
+  if (tableCandidates.length > 0) {
+    Object.assign(tables, (await opts.askRenames({ tables: tableCandidates, columns: [] })).tables)
+  }
+
+  const columns = { ...given.columns }
+  const renamed = withTableRenames(prev, target, tables)
+  const columnCandidates = findRenameCandidates(renamed, target).columns.filter(
+    (c) => !(`${c.table}.${c.from}` in columns),
+  )
+  if (columnCandidates.length > 0) {
+    Object.assign(
+      columns,
+      (await opts.askRenames({ tables: [], columns: columnCandidates })).columns,
+    )
+  }
+  return { renames: { tables, columns }, explicitRenames: true }
 }
 
 function isConcurrentIndexChange(c: Change): boolean {

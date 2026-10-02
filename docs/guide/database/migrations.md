@@ -52,6 +52,26 @@ This:
 
 If nothing changed, it prints `No schema changes detected.` and exits without writing.
 
+### Renames
+
+A schema file can't say a column was renamed: `fullName` disappears and `name` appears. Taken literally, that is a dropped column and a new empty one, and the data is gone. So when a table or column is dropped and another one could replace it, `kick db generate` asks in a terminal:
+
+```text
+Column people.fullName is gone. Was it renamed?
+  0) no, drop it
+  1) renamed to name
+  2) renamed to bio
+>
+```
+
+Enter (or `0`) drops it; a number renames it. Tables are asked about first, then columns, including those inside a renamed table. A rename that also changes the column's type is a rename plus an alter, so the rows keep their values.
+
+Outside a terminal (CI, scripts) nothing is asked. Name renames with flags instead:
+
+<PmCommand exec="kick db generate rename_users --rename-table users=people --rename-column people.fullName=name" />
+
+Without a flag, a single dropped column whose replacement has the same type, nullability and default is still taken as a rename. Any other drop that could be a rename prints a warning with the flag that would keep it, and the drop goes into the migration. `--no-interactive` skips the questions in a terminal too.
+
 ### Empty migrations
 
 For data migrations or any change the diff engine can't author, generate an empty shell and write the SQL by hand (re-runnable sample data belongs in [`kick db seed`](./cli.md#seed) instead):
@@ -115,6 +135,38 @@ kick db migrate status
 ### Batches and rollback
 
 `migrate latest` stamps everything it applies with the same batch number. `migrate rollback` reverses that whole batch as a unit (in reverse-applied order, so FKs drop before tables); `migrate down` reverses just the single most recent migration.
+
+## Running migrations from code
+
+Everything the CLI does is exported, for a deploy script, a job, or an admin endpoint. Each runner takes a migration adapter for your dialect and the migrations folder:
+
+```ts
+import pg from 'pg'
+import { migrateLatest, migrateRollback, migrateStatus } from '@forinda/kickjs-db'
+import { pgAdapter } from '@forinda/kickjs-db/pg'
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = pgAdapter({ pool })
+const migrationsDir = 'db/migrations'
+
+const { applied, batch } = await migrateLatest({ adapter, migrationsDir })
+const status = await migrateStatus({ adapter, migrationsDir }) // [{ id, state, batch, reviewed, … }]
+await migrateRollback({ adapter, migrationsDir }) // the last batch
+```
+
+| Function                                   | Same as                             |
+| ------------------------------------------ | ----------------------------------- |
+| `migrateLatest` / `migrateUp`              | `kick db migrate latest` / `up`     |
+| `migrateDown` / `migrateRollback`          | `kick db migrate down` / `rollback` |
+| `migrateStatus`                            | `kick db migrate status`            |
+| `generate({ name, config, cwd, renames })` | `kick db generate`                  |
+| `reviewMigration(migrationsDir, id)`       | `kick db migrate review`            |
+| `checkMigrations({ config, cwd })`         | `kick db check`                     |
+| `runSeeds({ dir, names })`                 | `kick db seed`                      |
+
+The runners take the same lock as the CLI, so two callers can't apply migrations at once, and keep the same checks: unreviewed migrations are refused outside development (`requireReviewed: false` turns that off), and drift is checked first (`driftCheck: 'warn' | 'ignore'`). `sqliteAdapter` and `mysqlAdapter` come from `@forinda/kickjs-db/sqlite` and `/mysql`.
+
+Exposing these over HTTP is exposing schema changes to whoever can call the route. Put it behind authentication you trust with that, and prefer running them from a deploy step.
 
 ## Boot-time policy
 

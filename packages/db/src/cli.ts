@@ -22,6 +22,14 @@ import { defineCliPlugin, type KickCliPlugin } from '@forinda/kickjs-cli-kit'
 import { kickDbTypegen } from './cli-typegen'
 import { checkMigrations } from './cli/check'
 import { runSeeds } from './cli/seed'
+import { askRenamesInTerminal, parseRenameFlags } from './cli/renames'
+
+interface GenerateFlags {
+  empty?: boolean
+  renameTable?: string[]
+  renameColumn?: string[]
+  interactive?: boolean
+}
 
 export { kickDbTypegen } from './cli-typegen'
 
@@ -193,7 +201,18 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       '-e, --empty',
       'Skip schema diff and create an empty migration shell (data migration, seed, freeform SQL)',
     )
-    .action(async (name: string, opts: { empty?: boolean }) => {
+    .option(
+      '--rename-table <old=new>',
+      'Treat a dropped table as renamed (repeatable)',
+      (v: string, all: string[] = []) => [...all, v],
+    )
+    .option(
+      '--rename-column <table.old=new>',
+      'Treat a dropped column as renamed (repeatable)',
+      (v: string, all: string[] = []) => [...all, v],
+    )
+    .option('--no-interactive', "Don't ask which drops are renames, even in a terminal")
+    .action(async (name: string, opts: GenerateFlags) => {
       const cwd = process.cwd()
       const config = await getConfig()
 
@@ -203,7 +222,26 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
         : undefined
 
       try {
-        const result = await generate({ name, config, cwd, empty: opts.empty, detectCompositeRefs })
+        const renames = parseRenameFlags(opts.renameTable, opts.renameColumn)
+        // Asked only in a terminal; in CI, name renames with the flags.
+        const askRenames =
+          opts.interactive !== false && process.stdin.isTTY ? askRenamesInTerminal : undefined
+        const result = await generate({
+          name,
+          config,
+          cwd,
+          empty: opts.empty,
+          detectCompositeRefs,
+          renames,
+          askRenames,
+          onPossibleRename: askRenames
+            ? undefined
+            : (drop) =>
+                console.warn(
+                  `Warning: ${drop.what} will be dropped. If it was renamed, generate again with ` +
+                    `${drop.flag} — the data goes with a drop.`,
+                ),
+        })
         if (result.status === 'no-changes') {
           console.log('No schema changes detected.')
           return

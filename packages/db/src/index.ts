@@ -15,7 +15,13 @@ export { fitIdentifier } from './snapshot/name'
 export { renderSchemaSource } from './snapshot/render'
 
 export type * from './diff/types'
-export { diff } from './diff/engine'
+export {
+  diff,
+  findRenameCandidates,
+  type DiffOptions,
+  type RenameCandidates,
+  type RenameHints,
+} from './diff/engine'
 export { invertChanges, hasAmbiguousReverse } from './diff/invert'
 export {
   detectCompositeReferences,
