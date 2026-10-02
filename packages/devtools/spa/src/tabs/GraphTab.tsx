@@ -1,261 +1,265 @@
 /**
- * Dependency graph tab — DI registrations grouped by kind, with each
- * node showing its outgoing edges (dependencies) inline. Every node
- * + every edge target is clickable to open the DetailModal.
- *
- * Recovers the legacy Vue dashboard's Graph tab. Sources data from
- * store.container() (the unified /stream consumer) rather than its
- * own /graph endpoint call — the container snapshot already carries
- * kind/scope/resolveCount/dependencies, so a separate endpoint
- * doesn't add information.
+ * Graph — the DI dependency graph, laid out in columns from what nothing
+ * depends on (controllers, usually) to leaves. Selecting a token keeps its
+ * dependents and dependencies (all the way down) in focus, dims the rest,
+ * and shows its details beside the graph. Edges that close a cycle are red.
  */
 
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
-import { store, type ContainerRegistration } from '../lib/store'
-import { openToken } from '../lib/token-detail'
-import { Pagination, usePagination } from '../lib/pagination'
+import { store } from '../lib/store'
+import { kindTone } from '../lib/format'
+import { SplitPane } from '../lib/split-pane'
+import { TokenDetail } from '../lib/token-detail'
+import { edgeKey, layoutGraph } from '../lib/graph-layout'
 
-const KIND_GROUPS = [
-  { id: 'controllers', label: 'Controllers', match: (k?: string) => k === 'controller' },
-  { id: 'services', label: 'Services', match: (k?: string) => k === 'service' },
-  { id: 'repositories', label: 'Repositories', match: (k?: string) => k === 'repository' },
-  {
-    id: 'other',
-    label: 'Other',
-    match: (k?: string) => !['controller', 'service', 'repository'].includes(k ?? ''),
-  },
-] as const
+const NODE_W = 164
+const NODE_H = 26
+const COL_GAP = 56
+const ROW_GAP = 10
+const PAD = 12
+
+const KIND_COLOURS: Record<string, string> = {
+  controller: '#8b5cf6',
+  service: '#3b82f6',
+  repository: '#14b8a6',
+}
 
 export const GraphTab: Component = () => {
+  const [selected, setSelected] = createSignal<string | null>(null)
   const [search, setSearch] = createSignal('')
 
-  const filtered = createMemo<ContainerRegistration[]>(() => {
-    const all = store.container()
-    const q = search().trim().toLowerCase()
-    if (!q) return all
-    return all.filter(
-      (r) => r.token.toLowerCase().includes(q) || (r.kind ?? '').toLowerCase().includes(q),
-    )
-  })
-
-  const grouped = createMemo(() =>
-    KIND_GROUPS.map((g) => Object.assign(g, { nodes: filtered().filter((r) => g.match(r.kind)) })),
+  const nodes = createMemo(() => store.container())
+  const byId = createMemo(() => new Map(nodes().map((n) => [n.token, n])))
+  const edges = createMemo(() =>
+    nodes().flatMap((n) =>
+      (n.dependencies ?? []).filter((d) => byId().has(d)).map((d) => ({ from: n.token, to: d })),
+    ),
   )
+  const layout = createMemo(() =>
+    layoutGraph(
+      nodes().map((n) => n.token),
+      edges(),
+    ),
+  )
+  const position = createMemo(() => {
+    const pos = new Map<string, { x: number; y: number }>()
+    layout().layers.forEach((col, i) =>
+      col.forEach((id, j) =>
+        pos.set(id, { x: PAD + i * (NODE_W + COL_GAP), y: PAD + j * (NODE_H + ROW_GAP) }),
+      ),
+    )
+    return pos
+  })
+  const size = createMemo(() => ({
+    w: PAD * 2 + Math.max(1, layout().layers.length) * (NODE_W + COL_GAP) - COL_GAP,
+    h:
+      PAD * 2 + Math.max(1, ...layout().layers.map((c) => c.length)) * (NODE_H + ROW_GAP) - ROW_GAP,
+  }))
 
-  return (
-    <div class="bg-surface-1 rounded-xl border border-border p-5">
-      {/* Search */}
-      <div class="relative mb-4">
-        <svg
-          class="absolute left-3 top-2.5 w-4 h-4 text-text-muted"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
+  /** The selected node, everything it depends on, and everything that depends on it. */
+  const focus = createMemo<Set<string> | null>(() => {
+    const s = selected()
+    if (!s) return null
+    const walk = (start: string, next: (id: string) => string[]): Set<string> => {
+      const seen = new Set<string>([start])
+      const stack = [start]
+      while (stack.length) {
+        for (const m of next(stack.pop()!)) {
+          if (seen.has(m)) continue
+          seen.add(m)
+          stack.push(m)
+        }
+      }
+      return seen
+    }
+    const down = walk(s, (id) =>
+      edges()
+        .filter((e) => e.from === id)
+        .map((e) => e.to),
+    )
+    const up = walk(s, (id) =>
+      edges()
+        .filter((e) => e.to === id)
+        .map((e) => e.from),
+    )
+    return new Set([...down, ...up])
+  })
+  const dimmed = (id: string): boolean => !!focus() && !focus()!.has(id)
+
+  const jump = (): void => {
+    const q = search().trim().toLowerCase()
+    const hit = q && nodes().find((n) => n.token.toLowerCase().includes(q))
+    if (hit) setSelected(hit.token)
+  }
+
+  const edgePath = (from: string, to: string): string => {
+    const a = position().get(from)!
+    const b = position().get(to)!
+    const x1 = a.x + NODE_W
+    const y1 = a.y + NODE_H / 2
+    const x2 = b.x
+    const y2 = b.y + NODE_H / 2
+    const bend = Math.max(30, Math.abs(x2 - x1) / 2)
+    return `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}`
+  }
+
+  const graph = (
+    <div class="flex h-full flex-col">
+      <div class="flex flex-wrap items-center gap-2 border-b border-border p-2">
         <input
           type="text"
-          placeholder="Filter graph (token or kind)…"
+          placeholder="Find a token — Enter to select"
           value={search()}
           onInput={(e) => setSearch(e.currentTarget.value)}
-          class="w-full bg-surface-2 border border-border-strong rounded-lg pl-10 pr-4 py-2 text-sm
-                 text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
+          onKeyDown={(e) => e.key === 'Enter' && jump()}
+          class="w-60 bg-surface-2 border border-border-strong rounded-lg px-3 py-1 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
         />
+        <For each={Object.entries(KIND_COLOURS)}>
+          {([kind, colour]) => (
+            <span class="flex items-center gap-1 text-xs text-text-muted">
+              <span class="h-2 w-2 rounded-sm" style={{ background: colour }} />
+              {kind}
+            </span>
+          )}
+        </For>
+        <Show when={layout().cycleEdges.size > 0}>
+          <span class="flex items-center gap-1 text-xs text-red-500">
+            <span class="h-0.5 w-3 bg-red-500" /> cycle
+          </span>
+        </Show>
+        <span class="flex-1" />
+        <Show when={selected()}>
+          <button
+            type="button"
+            class="text-xs text-text-muted hover:text-text-strong"
+            onClick={() => setSelected(null)}
+          >
+            Clear focus
+          </button>
+        </Show>
       </div>
-
-      <Show
-        when={filtered().length > 0}
-        fallback={
-          <div class="empty">
-            {search() ? 'No nodes match the filter' : 'No DI registrations to graph'}
-          </div>
-        }
-      >
-        <div class="space-y-6">
-          <For each={grouped()}>
-            {(group) => (
-              <Show when={group.nodes.length > 0}>
-                <GroupSection label={group.label} nodes={group.nodes} />
-              </Show>
-            )}
-          </For>
-        </div>
-      </Show>
-    </div>
-  )
-}
-
-const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }> = (props) => {
-  // Each group runs its own pager — controllers, services, etc. all
-  // grow independently in real apps, so paging them in lockstep would
-  // overflow one section while another is empty. 25/page matches the
-  // Topology DI tokens table.
-  const source = createMemo(() => props.nodes ?? [])
-  const pager = usePagination(source)
-
-  // Collapsible — user toggles by clicking the section header. State
-  // persists per-group in localStorage so reloads remember which
-  // sections the user collapsed (typical use: collapse controllers
-  // when debugging a service-layer graph). Default open.
-  const storageKey = `kickjs-devtools-graph-collapsed-${props.label}`
-  const readPersisted = (): boolean => {
-    try {
-      return localStorage.getItem(storageKey) === '1'
-    } catch {
-      return false
-    }
-  }
-  const [collapsed, setCollapsed] = createSignal(readPersisted())
-  const toggle = (): void => {
-    const next = !collapsed()
-    setCollapsed(next)
-    try {
-      if (next) localStorage.setItem(storageKey, '1')
-      else localStorage.removeItem(storageKey)
-    } catch {
-      // localStorage unavailable — toggle still works in-memory.
-    }
-  }
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={!collapsed()}
-        class={`w-full flex items-center text-left text-xs font-semibold uppercase tracking-wider mb-2 ${labelColor(props.label)} cursor-pointer hover:opacity-80 transition-opacity`}
-      >
-        <svg
-          class={`w-3 h-3 mr-1.5 transition-transform ${collapsed() ? '' : 'rotate-90'}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
+      <div class="dt-panel-grid min-h-0 flex-1 overflow-auto !block !p-0">
+        <Show
+          when={layout().layers.length > 0}
+          fallback={
+            <div class="p-6 text-sm text-text-muted">
+              No dependencies between registered tokens yet.
+            </div>
+          }
         >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2.5"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
-        <span>{props.label}</span>
-        <span class="ml-2 text-text-muted font-normal normal-case">({source().length})</span>
-      </button>
-      <Show when={!collapsed()}>
-        <div class="space-y-1">
-          <For each={pager.page()}>{(node) => <NodeRow node={node} />}</For>
-        </div>
-        <Show when={pager.total() > 1}>
-          <Pagination pager={pager} />
+          <svg width={size().w} height={size().h} class="block">
+            <defs>
+              <marker
+                id="dt-arrow"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto"
+              >
+                <path d="M0 0 L8 4 L0 8 z" fill="var(--color-text-muted)" />
+              </marker>
+            </defs>
+            <For each={edges()}>
+              {(e) => {
+                const cyc = () => layout().cycleEdges.has(edgeKey(e.from, e.to))
+                return (
+                  <path
+                    d={edgePath(e.from, e.to)}
+                    fill="none"
+                    stroke={cyc() ? '#ef4444' : 'var(--color-border-strong)'}
+                    stroke-width={selected() === e.from || selected() === e.to ? 2 : 1.25}
+                    stroke-dasharray={cyc() ? '4 3' : undefined}
+                    marker-end="url(#dt-arrow)"
+                    opacity={dimmed(e.from) || dimmed(e.to) ? 0.15 : 1}
+                  />
+                )
+              }}
+            </For>
+            <For each={layout().layers.flat()}>
+              {(id) => {
+                const p = () => position().get(id)!
+                const kind = () => byId().get(id)?.kind ?? ''
+                return (
+                  <g
+                    transform={`translate(${p().x} ${p().y})`}
+                    class="cursor-pointer"
+                    opacity={dimmed(id) ? 0.25 : 1}
+                    onClick={() => setSelected((s) => (s === id ? null : id))}
+                  >
+                    <title>{id}</title>
+                    <rect
+                      width={NODE_W}
+                      height={NODE_H}
+                      rx="5"
+                      fill="var(--color-surface-1)"
+                      stroke={
+                        selected() === id ? 'var(--color-accent)' : 'var(--color-border-strong)'
+                      }
+                      stroke-width={selected() === id ? 2 : 1}
+                    />
+                    <rect
+                      width="4"
+                      height={NODE_H}
+                      rx="2"
+                      fill={KIND_COLOURS[kind()] ?? 'var(--color-text-muted)'}
+                    />
+                    <text
+                      x="12"
+                      y={NODE_H / 2 + 4}
+                      font-size="11.5"
+                      font-family="var(--font-mono)"
+                      fill="var(--color-text-body)"
+                    >
+                      {id.length > 22 ? `${id.slice(0, 21)}…` : id}
+                    </text>
+                  </g>
+                )
+              }}
+            </For>
+          </svg>
         </Show>
-      </Show>
-    </div>
-  )
-}
-
-const NodeRow: Component<{ node: ContainerRegistration }> = (props) => {
-  const deps = (): string[] => props.node.dependencies ?? []
-  return (
-    <button
-      type="button"
-      class="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-2/50 transition-colors group"
-      onClick={() => openToken(props.node.token)}
-    >
-      <div class="flex items-center gap-2">
-        <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(props.node.kind)}`}>
-          {kindShort(props.node.kind)}
-        </span>
-        <span class="font-mono text-sm text-text-body break-all">{props.node.token}</span>
-        <Show when={props.node.scope}>
-          <span class="bg-border-strong/50 text-text-secondary px-1.5 py-0.5 rounded text-xs">
-            {props.node.scope}
-          </span>
-        </Show>
-        <Show when={(props.node.resolveCount ?? 0) > 0}>
-          <span class="text-text-muted text-xs ml-auto tabular-nums">
-            {props.node.resolveCount} resolves
-          </span>
+        <Show when={layout().isolated.length > 0}>
+          <div class="border-t border-border p-3">
+            <div class="mb-1.5 text-[0.66rem] font-semibold uppercase tracking-wider text-text-muted">
+              No dependencies either way ({layout().isolated.length})
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <For each={layout().isolated}>
+                {(id) => (
+                  <button
+                    type="button"
+                    class={`${kindTone(byId().get(id)?.kind)} font-mono ${selected() === id ? 'ring-1 ring-kick-500' : ''}`}
+                    onClick={() => setSelected(id)}
+                  >
+                    {id}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
         </Show>
       </div>
-      {/* Outgoing edges */}
-      <Show when={deps().length > 0}>
-        <div class="ml-8 mt-1 space-y-0.5">
-          <For each={deps()}>
-            {(dep) => (
-              <div
-                class="flex items-center gap-2 text-xs text-text-muted hover:text-text-strong"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openToken(dep)
-                }}
-              >
-                <svg
-                  class="w-3 h-3 text-text-muted"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M13 7l5 5-5 5M6 12h12"
-                  />
-                </svg>
-                <span class={`px-1.5 py-0.5 rounded text-xs font-semibold ${edgeTargetBadge(dep)}`}>
-                  {edgeTargetKindShort(dep)}
-                </span>
-                <span class="font-mono">{dep}</span>
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
-    </button>
+    </div>
   )
-}
 
-function kindShort(kind: string | undefined): string {
-  if (kind === 'controller') return 'ctrl'
-  if (kind === 'service') return 'svc'
-  if (kind === 'repository') return 'repo'
-  return 'other'
-}
+  const detail = (
+    <Show
+      when={selected()}
+      fallback={
+        <div class="dt-panel-grid">
+          <div class="card text-sm text-text-muted">Select a token to trace its dependencies</div>
+        </div>
+      }
+    >
+      {(t) => (
+        <div class="h-full overflow-y-auto bg-surface-1">
+          <TokenDetail token={t()} onSelect={setSelected} />
+        </div>
+      )}
+    </Show>
+  )
 
-function kindBadge(kind: string | undefined): string {
-  if (kind === 'controller') return 'bg-violet-900/50 text-violet-300'
-  if (kind === 'service') return 'bg-blue-900/50 text-blue-300'
-  if (kind === 'repository') return 'bg-teal-900/50 text-teal-300'
-  return 'bg-border-strong/50 text-text-strong'
-}
-
-function labelColor(label: string): string {
-  if (label === 'Controllers') return 'text-violet-400'
-  if (label === 'Services') return 'text-blue-400'
-  if (label === 'Repositories') return 'text-teal-400'
-  return 'text-text-secondary'
-}
-
-/**
- * Look up the kind for an edge target by re-reading the store.
- * Done lazily inside the badge helpers so the badge stays accurate
- * if the snapshot changes (live SSE update). Edge targets that
- * resolve outside the snapshot (peer adapters, missing) get the
- * neutral "other" badge.
- */
-function edgeTargetKindShort(token: string): string {
-  return kindShort(store.container().find((r) => r.token === token)?.kind)
-}
-
-function edgeTargetBadge(token: string): string {
-  return kindBadge(store.container().find((r) => r.token === token)?.kind)
+  return <SplitPane storageKey="graph" defaultLeft={720} left={graph} right={detail} />
 }

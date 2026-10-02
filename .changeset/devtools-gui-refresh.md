@@ -14,3 +14,4 @@ A denser dashboard layout.
 - **Runtime:** the Memory tab is folded into Runtime — four charts (heap, process memory, event-loop delay with GC ticks, CPU) over the last minute, memory health, and the heap-snapshot / force-GC actions in the header.
 - **Metrics:** a sortable per-route table with 5xx share, percentile bars and a latency histogram per route. `/_debug/metrics` adds `serverErrors`, `clientErrors` and `histogram` to each route, and `latencyBucketsMs`.
 - **Container:** a list with kind and scope filters (with counts) and the selected token's dependencies, dependents and resolve stats beside it, replacing the paginated table and the detail modal. First and last resolve times now show — the dashboard read the wrong field names before.
+- **Graph:** a real dependency graph — tokens laid out in columns with arrows, focus on a token's whole chain, cycle edges in red, and token details beside it. Before, it was a list grouped by kind.

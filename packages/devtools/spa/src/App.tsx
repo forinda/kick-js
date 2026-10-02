@@ -113,7 +113,7 @@ const TAB_GROUPS: readonly TabGroup[] = [
 const SIDEBAR_WIDTH_KEY = 'kickjs-devtools-sidebar-w'
 const RAIL_KEY = 'kickjs-devtools-sidebar-mode'
 /** Tabs that lay out their own panes and fill the main area. */
-const FLUSH_TABS: ReadonlySet<string> = new Set(['routes', 'requests', 'container'])
+const FLUSH_TABS: ReadonlySet<string> = new Set(['routes', 'requests', 'container', 'graph'])
 const SIDEBAR_COLLAPSED_KEY = 'kickjs-devtools-sidebar-collapsed'
 const SIDEBAR_MIN = 150
 const SIDEBAR_MAX = 360
