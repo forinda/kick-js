@@ -357,6 +357,10 @@ Per-route inputs are saved in `localStorage`. Routes mounted through a hand-buil
 
 The sidebar is a column of icons — hover for the tab's name, and the small numbers are counts (routes, DI tokens). The arrow at its foot shows labels instead; the choice is remembered. When the app stops answering (a restart, a crash), a banner says so and the dashboard keeps retrying until it's back.
 
+### Command palette
+
+Press <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> (or <kbd>/</kbd> outside a text field), or click **Search** in the header. Type to find a tab, a route (opens it in the API runner), or a DI token (opens its detail), or to switch theme and density. Arrow keys move, Enter runs, Escape closes.
+
 ### Detail modal
 
 Click a token row in **Container** (or the "View full details" button), or any node in **Graph** — opens a modal with:

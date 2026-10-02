@@ -8,3 +8,4 @@ A denser dashboard layout.
 - **Routes:** a list grouped by controller, searchable and filterable by method, with the API runner open beside it. The divider can be resized, and its width is remembered. This replaces the paginated table and the overlay sheet.
 - **Runner:** the method, resolved URL and **Send** sit in one bar at the top. Response and history statuses are colored pills.
 - **Disconnect banner:** when the app stops answering, a banner says so and the dashboard keeps retrying. Before, it quietly stayed on "Polling" with stale data.
+- **Command palette:** ⌘K / Ctrl+K (or `/`) finds a tab, route or DI token and jumps to it, and switches theme or density.

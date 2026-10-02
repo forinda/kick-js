@@ -22,6 +22,10 @@ import { DetailModalHost } from './lib/detail-modal'
 import { activeTab, switchTab } from './lib/nav'
 import { Icon } from './lib/icons'
 import { AuthGate } from './lib/auth-gate'
+import { CommandPalette, openCommandPalette } from './lib/command-palette'
+import type { PaletteItem } from './lib/palette-core'
+import { openApiRunner } from './lib/api-runner'
+import { openDetailModal } from './lib/detail-modal'
 
 type BuiltInTabId =
   | 'overview'
@@ -256,6 +260,53 @@ export const App: Component = () => {
     })
   }
 
+  const paletteItems = (): PaletteItem[] => [
+    ...BUILT_INS.map((t) => ({
+      id: `tab:${t.id}`,
+      title: t.label,
+      group: 'Tabs',
+      icon: t.id,
+      run: () => switchTo(t.id),
+    })),
+    ...customTabs().map((t) => ({
+      id: `tab:${t.id}`,
+      title: t.title,
+      group: 'Tabs',
+      icon: 'custom',
+      run: () => switchTo(t.id),
+    })),
+    ...store.routes().map((r) => ({
+      id: `route:${r.method} ${r.path}`,
+      title: `${r.method} ${r.path}`,
+      description: `${r.controller}.${r.handler}`,
+      group: 'Routes',
+      icon: 'routes',
+      run: () => openApiRunner(r),
+    })),
+    ...store.container().map((c) => ({
+      id: `token:${c.token}`,
+      title: c.token,
+      description: [c.kind, c.scope].filter(Boolean).join(' · '),
+      group: 'DI tokens',
+      icon: 'container',
+      run: () => openDetailModal(c.token),
+    })),
+    ...(['system', 'light', 'dark'] as const).map((mode) => ({
+      id: `theme:${mode}`,
+      title: `Theme: ${mode}`,
+      group: 'Actions',
+      icon: 'action',
+      run: () => setTheme(mode),
+    })),
+    ...(['sm', 'md', 'lg'] as const).map((d) => ({
+      id: `density:${d}`,
+      title: `Density: ${d}`,
+      group: 'Actions',
+      icon: 'action',
+      run: () => setDensity(d),
+    })),
+  ]
+
   const activeCustom = (): DevtoolsTabDescriptor | undefined =>
     customTabs().find((t) => t.id === active())
 
@@ -269,6 +320,11 @@ export const App: Component = () => {
           <h1>KickJS DevTools</h1>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
+          <button type="button" class="dt-search-hint" onClick={openCommandPalette}>
+            <Icon name="search" size={13} />
+            Search
+            <kbd class="dt-kbd">⌘K</kbd>
+          </button>
           <ConnectionPill />
           <ThemeToggle />
           <SettingsMenu />
@@ -461,6 +517,7 @@ export const App: Component = () => {
           </Show>
         </main>
       </div>
+      <CommandPalette items={paletteItems} />
       <DetailModalHost />
       <AuthGate />
       <Show when={store.connectionStatus() === 'disconnected' && !store.authRequired()}>
