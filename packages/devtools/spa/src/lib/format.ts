@@ -98,3 +98,11 @@ export function ago(at: number, now = Date.now()): string {
   if (s < 86_400) return `${Math.floor(s / 3600)}h ago`
   return `${Math.floor(s / 86_400)}d ago`
 }
+
+/** A stable colour per name — the same event namespace is always the same hue. */
+export function hashColor(name: string): string {
+  let hash = 0
+  for (const c of name) hash = c.charCodeAt(0) + ((hash << 5) - hash)
+  // 12 hues 30° apart: a few namespaces stay tellable apart, unlike raw hash % 360.
+  return `hsl(${(Math.abs(hash) % 12) * 30} 60% 50%)`
+}
