@@ -4,7 +4,7 @@ layout: home
 # title alone loses "kickjs" to the streaming service. The custom home layout
 # does not read frontmatter `title`, so this only sets the document title;
 # `titleTemplate: false` stops VitePress appending " | KickJS" to it.
-title: KickJS — The Adaptive Node.js Framework
+title: KickJS — Build Node.js backends you're not afraid to change
 titleTemplate: false
 
 features:

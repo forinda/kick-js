@@ -1,13 +1,11 @@
 /**
  * Pure renderers for the DI-manifest typegen surface — the
  * `KickJsRegistry` augmentation, the `ServiceToken` / `ModuleToken`
- * unions, the `KickJsPluginRegistry` augmentation, and the
- * `defineAugmentation` catalogue.
+ * unions, and the `KickJsPluginRegistry` augmentation.
  *
  * These used to live in `generator.ts` (the monolithic legacy pass).
  * They are now consumed by the per-domain builtin typegen plugins
- * (`kick/registry`, `kick/services`, `kick/modules`, `kick/plugins`,
- * `kick/augmentations`) so the whole pipeline is plugin-based and each
+ * (`kick/registry`, `kick/services`, `kick/modules`, `kick/plugins`) so the whole pipeline is plugin-based and each
  * file is emitted + cache-tracked independently by the runner.
  *
  * Every function here is pure (scan data in → string out); no fs, no
@@ -20,7 +18,6 @@ import { dirname, relative, sep } from 'node:path'
 import type {
   DiscoveredRouteFlag,
   ClassCollision,
-  DiscoveredAugmentation,
   DiscoveredClass,
   DiscoveredInject,
   DiscoveredPluginOrAdapter,
@@ -406,61 +403,5 @@ ${body}
 }
 
 export {}
-`
-}
-
-/**
- * Render the augmentation manifest — one block per `defineAugmentation`
- * call discovered in the project. The output is a `.d.ts` file that does
- * nothing at runtime but acts as in-IDE documentation.
- */
-export function renderAugmentations(items: DiscoveredAugmentation[]): string {
-  if (items.length === 0) {
-    return `${HEADER}
-// No augmentations discovered.
-//
-// Plugins advertise augmentable interfaces via:
-//
-//   import { defineAugmentation } from '@forinda/kickjs'
-//   defineAugmentation('FeatureFlags', {
-//     description: 'Feature flag shape consumed by FlagsPlugin',
-//     example: '{ beta: boolean; rolloutPercentage: number }',
-//   })
-//
-// See \`docs/guide/typegen.md#augmentations\` for the full pattern.
-export {}
-`
-  }
-
-  // Dedupe by name — multiple plugins shouldn't claim the same name,
-  // but if they do we keep the first.
-  const byName = new Map<string, DiscoveredAugmentation>()
-  for (const item of items) {
-    if (!byName.has(item.name)) byName.set(item.name, item)
-  }
-
-  const blocks: string[] = []
-  for (const item of [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))) {
-    const docLines: string[] = []
-    if (item.description) {
-      for (const line of item.description.split('\n')) docLines.push(` * ${line}`)
-    }
-    if (item.example) {
-      docLines.push(` * @example`, ` * \`\`\`ts`)
-      for (const line of item.example.split('\n')) docLines.push(` * ${line}`)
-      docLines.push(` * \`\`\``)
-    }
-    docLines.push(` * @see ${item.relativePath}`)
-    blocks.push(
-      ['/**', ...docLines, ' */', `export interface ${item.name}Augmentation {}`].join('\n'),
-    )
-  }
-
-  return `${HEADER}
-// Catalogue of augmentable interfaces in this project. The interfaces
-// below are documentation only — augment the source-of-truth interfaces
-// in your own \`d.ts\` files (the framework declares the actual types).
-
-${blocks.join('\n\n')}
 `
 }

@@ -12,11 +12,12 @@ import { VPButton } from 'vitepress/theme'
         Open Source &middot; MIT Licensed
       </div>
       <h1 class="hero-name">Kick<span class="hero-accent">JS</span></h1>
-      <p class="hero-text">The Adaptive Node.js Framework</p>
+      <p class="hero-text">Build backends you're not afraid to change.</p>
       <p class="hero-tagline">
-        Decorator-driven APIs that run on Express, Fastify, or h3 &mdash; swap the engine in one
-        line. REST, WebSocket, queues, scheduled jobs. TypeScript-first, pluggable,
-        production-ready.
+        Type-safe from your database to your frontend. Boots in under half a second, with a
+        Vite-powered dev server that reloads as you save. Database, jobs, real-time and a typed
+        client built in &mdash; every piece pluggable, down to the HTTP engine. Start with one
+        route; grow into an enterprise platform.
       </p>
       <div class="hero-actions">
         <VPButton

@@ -109,14 +109,6 @@ export class LegacyAdapter implements AppAdapter {
 `)
   })
 
-  it('defineAugmentation with and without metadata', () => {
-    expectParity(`
-import { defineAugmentation } from '@forinda/kickjs'
-defineAugmentation('PolicyRegistry')
-defineAugmentation('KickAssets', { description: 'Typed asset paths', example: 'assets.mails.welcome()' })
-`)
-  })
-
   it('context decorators — direct and curried withParams forms', () => {
     expectParity(`
 import { defineContextDecorator, defineHttpContextDecorator } from '@forinda/kickjs'

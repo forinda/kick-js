@@ -641,23 +641,9 @@ The framework intentionally does NOT export a `setRequestValue` helper. Writes t
 Letting arbitrary services reach in and mutate the store from anywhere is "spooky action at a distance" — keys appear without an obvious source and tracing which service polluted what becomes a grep exercise. Services that need to publish per-request state should return the value to their caller and let _that_ layer write it via `ctx.set`. If you need a service-level write surface, expose a narrow named function (`recordTrace`, `markStartTime`) on the service that captures the side effect — not a generic write helper.
 :::
 
-### Augmenting `ContextMeta`: `declare module` vs `defineAugmentation`
+### Augmenting `ContextMeta`
 
-Two calls, two jobs, **both needed if you want both type safety and discoverability**.
-
-#### `declare module '@forinda/kickjs' { interface ContextMeta { ... } }`
-
-- **What it does** — tells **TypeScript** that `ctx.get('tenant')` returns your shape. Resolved at compile time by `tsc` / your IDE.
-- **What it doesn't do** — doesn't show up anywhere else in the project. Other devs reading the codebase have to grep for `declare module` to discover what keys are augmented.
-
-#### `defineAugmentation('ContextMeta', { description, example })` <Badge type="warning" text="deprecated" />
-
-::: warning Deprecated
-This was discovery tooling from when Context Contributors were still settling. Contributors are a stable typed API now, and this call never contributed a type — it only added a catalogue entry you had to keep in step with the `declare module` block. Drop it; keep the `declare module` block. Existing calls still work.
-:::
-
-- **What it does** — tells **`kick typegen`** to list the interface in `.kickjs/types/kick__augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op.
-- **What it doesn't do** — doesn't actually augment anything. Skipping the `declare module` block leaves `ctx.get('tenant')` as `unknown`.
+`declare module '@forinda/kickjs' { interface ContextMeta { ... } }` tells TypeScript that `ctx.get('tenant')` returns your shape — resolved at compile time by `tsc` and your IDE. Put a JSDoc comment on the keys you add so other developers can find what they hold.
 
 In practice, the file pattern looks like this:
 
@@ -691,9 +677,9 @@ export const TenantAdapter = defineAdapter({
 })
 ```
 
-Three traps to avoid:
+Two traps to avoid:
 
-- **`declare module` is the whole mechanism.** It is what makes `ctx.get('tenant')` typed; without it you cast at every read site. (`defineAugmentation` never typed anything and is deprecated — safe to drop.)
+- **`declare module` is the whole mechanism.** It is what makes `ctx.get('tenant')` typed; without it you cast at every read site.
 - **Augmenting the wrong module** — the `declare module '...'` string must match the package the interface was originally declared in, or the augmentation is silently a no-op. `ContextMeta` lives in `@forinda/kickjs`; a type you declared yourself, like `AuthUser`, is augmented in your own module, not the framework's.
 
 ### When the same registration runs at multiple levels

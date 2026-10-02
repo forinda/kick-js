@@ -35,7 +35,6 @@ describe('kick typegen', () => {
       '.kickjs/types/kick__services.d.ts',
       '.kickjs/types/kick__modules.d.ts',
       '.kickjs/types/kick__plugins.d.ts',
-      '.kickjs/types/kick__augmentations.d.ts',
       '.kickjs/types/kick__routes.ts',
       '.kickjs/.gitignore',
     ]) {

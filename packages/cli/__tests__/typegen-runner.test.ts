@@ -156,7 +156,6 @@ describe('runTypegen', () => {
         injects: [],
         env: null,
         pluginsAndAdapters: [],
-        augmentations: [],
         collisions: [],
       } as never
     }
@@ -197,7 +196,6 @@ describe('runTypegen', () => {
         injects: [],
         env: null,
         pluginsAndAdapters: [],
-        augmentations: [],
         collisions: [],
       } as never
     }

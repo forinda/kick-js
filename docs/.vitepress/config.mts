@@ -308,9 +308,9 @@ if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
   )
 }
 
-const SITE_OG_TITLE = 'KickJS — The Adaptive Node.js Framework'
+const SITE_OG_TITLE = "KickJS — Build Node.js backends you're not afraid to change"
 const SITE_OG_DESCRIPTION =
-  'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.'
+  'The progressive TypeScript framework for Node.js APIs: type-safe from database to frontend, boots in under half a second, Vite-powered dev server, and a built-in, pluggable core on Express, Fastify or h3.'
 
 /**
  * A page's first prose paragraph as plain text, for its meta description when
@@ -362,7 +362,7 @@ function truncate(text: string): string {
 export default defineConfig({
   title: 'KickJS',
   description:
-    'A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.',
+    'The progressive TypeScript framework for Node.js APIs — type-safe from database to frontend, sub-second boot, a Vite-powered dev server, and a built-in, pluggable core on Express, Fastify or h3.',
   base,
   ignoreDeadLinks: true,
   lastUpdated: true,
@@ -441,7 +441,7 @@ export default defineConfig({
       {
         property: 'og:image:alt',
         content:
-          'KickJS — The Adaptive Node.js Framework. Express, Fastify, h3: one decorator API.',
+          "KickJS — Build backends you're not afraid to change. Express, Fastify, h3: one decorator API.",
       },
     ],
     ['meta', { name: 'twitter:image', content: `${hostname}og-image.png` }],

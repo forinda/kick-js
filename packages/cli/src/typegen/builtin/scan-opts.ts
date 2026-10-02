@@ -1,6 +1,6 @@
 // Shared scan-options resolver for the scan-consuming builtin typegen
 // plugins (kick/routes, kick/registry, kick/services, kick/modules,
-// kick/plugins, kick/augmentations).
+// kick/plugins).
 //
 // The runner memoizes `scanProject` per pass on an order-independent key
 // derived from `{ root, cwd, envFile }`. Every plugin that wants the

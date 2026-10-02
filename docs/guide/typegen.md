@@ -16,7 +16,6 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
     kick__services.d.ts         # ServiceToken string-literal union
     kick__modules.d.ts          # ModuleToken string-literal union
     kick__plugins.d.ts          # KickJsPluginRegistry augmentation (narrows dependsOn)
-    kick__augmentations.d.ts    # defineAugmentation catalogue (docs-only)
     kick__routes.ts             # KickRoutes augmentation — typed Ctx<>, per-route
                                 #   response types, and the flat KickRoutes.Api map
                                 #   ('METHOD /mounted/path' keys) for the typed client
@@ -33,7 +32,7 @@ Each file is emitted by its own typegen plugin. There is no barrel
 `declare module` / `declare global` augmentation applies just by being
 present. (Upgrading from an older CLI? The first `kick typegen` run
 sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` /
-`modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` files
+`modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` / `kick__augmentations.d.ts` files
 automatically.)
 
 Five things become type-safe as a result:
@@ -83,6 +82,7 @@ export class UserController {
 | ----------------------- | ---------------------------------------------------------------------------- |
 | `kick typegen`          | One-shot — runs the scan and writes the types                                |
 | `kick typegen --watch`  | Re-runs on every source file change (Ctrl-C to exit)                         |
+| `kick typegen --fix`    | Also patches module globs to load the classes they miss (see below)          |
 | `kick dev`              | Runs once at startup, then re-runs whenever Vite's watcher fires             |
 | bare `vite`             | The `kickjs:typegen` vite plugin wires the same watcher + a startup catch-up |
 | `kick g module ...`     | Runs after the new files are written                                         |
@@ -91,6 +91,10 @@ export class UserController {
 | `kick init`             | Runs once after the project is scaffolded                                    |
 
 You almost never need to run it manually — the dev loop keeps `.kickjs/types/` up to date for you. (`kick dev` is the recommended entry; if something boots Vite directly, the `@forinda/kickjs-vite` plugin runs the identical watcher, resolving `@forinda/kickjs-cli` from your project — exactly one of the two ever owns the pipeline per process.)
+
+### Classes no module loads
+
+A decorated class registers when its file is imported. Modules load their files with `import.meta.glob(...)`, so a class in a file no glob matches never registers, and resolving it fails at runtime. Typegen checks every decorated class against its module's globs and warns about the ones left out, with the patterns that would cover them. `kick typegen --fix` adds those patterns to the module's `import.meta.glob(...)` call for you. A module without a glob call is listed for you to edit by hand.
 
 ### Watch-mode failure surfacing
 
@@ -509,25 +513,6 @@ the output is a flat map — where the context-key registry has to reason about 
 pipeline before it can say anything. See [Route Flags](./route-flags.md).
 
 Empty project → an empty registry, and every flag name falls back to `string`.
-
-## Augmentation catalogue
-
-> **Deprecated.** `defineAugmentation` does nothing at runtime or at the type level — the `declare module '@forinda/kickjs' { … }` block alone gives you the augmentation, and the catalogue it feeds is documentation-only. Prefer a plain `declare module` block with a JSDoc comment on your own interface. `defineAugmentation` and the `kick/augmentations` typegen plugin will be removed in a future major.
-
-Kept for compatibility: plugins written before this was deprecated advertise augmentable interfaces by calling `defineAugmentation('Name', meta)`, a runtime no-op that exists purely for `kick typegen` to discover. New code should use a `declare module` block with JSDoc instead.
-
-```ts
-import { defineAugmentation } from '@forinda/kickjs'
-
-export interface FeatureFlags {} // augmentable
-
-defineAugmentation('FeatureFlags', {
-  description: 'Flags consumed by FlagsPlugin',
-  example: '{ beta: boolean; rolloutPercentage: number }',
-})
-```
-
-Each call surfaces in `.kickjs/types/kick__augmentations.d.ts` as an empty `<Name>Augmentation` marker interface carrying the description, an example snippet, and a `@see` link back to the source file. That was the point: adopters saw every augmentable interface in one file rather than grepping each plugin's README. JSDoc on the augmented interface now covers the same ground without a second call to keep in sync.
 
 ## Limitations
 

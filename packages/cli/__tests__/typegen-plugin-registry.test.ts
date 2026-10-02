@@ -1,6 +1,6 @@
 /**
  * Tests for B-6 (architecture.md §21.2.1 + §21.3.3): plugin/adapter
- * registry typegen + `defineAugmentation` discovery.
+ * registry typegen.
  *
  * Mixes unit tests against the scanner + generator helpers with one
  * E2E pass through the CLI binary so the full pipeline (scan → write
@@ -13,10 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Container } from '@forinda/kickjs'
-import {
-  extractAugmentationsFromSource,
-  extractPluginsAndAdaptersFromSource,
-} from '../src/typegen/scanner'
+import { extractPluginsAndAdaptersFromSource } from '../src/typegen/scanner'
 import { assertCliOk, cleanupFixture, createFixtureProject, runCli } from './helpers'
 
 // Project rule: reset DI state before every test for isolation. Applies
@@ -146,106 +143,7 @@ describe('scanner — extractPluginsAndAdaptersFromSource', () => {
   })
 })
 
-describe('scanner — extractAugmentationsFromSource', () => {
-  it('discovers a defineAugmentation call with metadata', () => {
-    const source = `
-      import { defineAugmentation } from '@forinda/kickjs'
-      defineAugmentation('FeatureFlags', {
-        description: 'Flags consumed by FlagsPlugin',
-        example: '{ beta: boolean }',
-      })
-    `
-    const out = extractAugmentationsFromSource(source, '/fake/flags.ts', '/fake')
-    expect(out).toEqual([
-      {
-        name: 'FeatureFlags',
-        description: 'Flags consumed by FlagsPlugin',
-        example: '{ beta: boolean }',
-        filePath: '/fake/flags.ts',
-        relativePath: 'flags.ts',
-      },
-    ])
-  })
-
-  it('handles defineAugmentation with no metadata arg', () => {
-    const source = `
-      import { defineAugmentation } from '@forinda/kickjs'
-      defineAugmentation('SimpleAugmentation')
-    `
-    const out = extractAugmentationsFromSource(source, '/fake/x.ts', '/fake')
-    expect(out).toHaveLength(1)
-    expect(out[0]).toMatchObject({
-      name: 'SimpleAugmentation',
-      description: null,
-      example: null,
-    })
-  })
-
-  it('finds multiple augmentations across one file', () => {
-    const source = `
-      import { defineAugmentation } from '@forinda/kickjs'
-      defineAugmentation('A', { description: 'first' })
-      defineAugmentation('B', { example: '{ x: 1 }' })
-    `
-    const out = extractAugmentationsFromSource(source, '/fake/x.ts', '/fake')
-    expect(out.map((x) => x.name)).toEqual(['A', 'B'])
-  })
-
-  it('preserves backtick-string values containing single quotes (real-world example shape)', () => {
-    // Regression: prior regex `[^'"\`]+` truncated at the first foreign
-    // quote, so a backtick-delimited example like
-    // `{ plan: 'free' | 'pro' }` would clip at the first `'`. Both the
-    // description and example should round-trip the full source text.
-    const source = [
-      "import { defineAugmentation } from '@forinda/kickjs'",
-      "defineAugmentation('ContextMeta', {",
-      '  description: `Tenant resolved by TenantAdapter.`,',
-      '  example: `{',
-      "    tenant: { id: string; plan: 'free' | 'pro' | 'enterprise' }",
-      '  }`,',
-      '})',
-    ].join('\n')
-    const out = extractAugmentationsFromSource(source, '/fake/aug.ts', '/fake')
-    expect(out).toHaveLength(1)
-    expect(out[0].description).toBe('Tenant resolved by TenantAdapter.')
-    expect(out[0].example).toContain("plan: 'free' | 'pro' | 'enterprise'")
-  })
-
-  it('unescapes backslash escapes inside backtick string values', () => {
-    // Regression: previously `\\\`` survived into the catalogue as a
-    // literal backslash + backtick, breaking the JSDoc render. The
-    // parser should strip the backslash so the output is clean markdown.
-    // Using String.raw so the test fixture is a faithful copy of what
-    // a user would actually type into a `.ts` file.
-    const source = String.raw`
-      import { defineAugmentation } from '@forinda/kickjs'
-      defineAugmentation('Foo', {
-        description: ${'`'}Use \`ctx.get(\'foo\')\` to read it.${'`'},
-      })
-    `
-    const out = extractAugmentationsFromSource(source, '/fake/aug.ts', '/fake')
-    expect(out).toHaveLength(1)
-    expect(out[0].description).toBe("Use `ctx.get('foo')` to read it.")
-  })
-
-  it('preserves multi-line description and example through line-prefixed JSDoc', () => {
-    // Multi-line backtick literals must survive verbatim — the
-    // generator splits on \n and prefixes each line with ` * `.
-    const source = [
-      "import { defineAugmentation } from '@forinda/kickjs'",
-      "defineAugmentation('Multi', {",
-      '  description: `line one',
-      'line two',
-      'line three`,',
-      '})',
-    ].join('\n')
-    const out = extractAugmentationsFromSource(source, '/fake/aug.ts', '/fake')
-    expect(out).toHaveLength(1)
-    expect(out[0].description).toBe('line one\nline two\nline three')
-  })
-})
-
-describe('kick typegen — plugins.d.ts + augmentations.d.ts E2E', () => {
+describe('kick typegen — plugins.d.ts E2E', () => {
   let fixture: string
 
   beforeEach(() => {
@@ -262,11 +160,11 @@ describe('kick typegen — plugins.d.ts + augmentations.d.ts E2E', () => {
     writeFileSync(full, content)
   }
 
-  it('produces plugins.d.ts and augmentations.d.ts on every run', () => {
+  it('produces plugins.d.ts on every run, and no augmentation catalogue', () => {
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen')
     expect(existsSync(join(fixture, '.kickjs/types/kick__plugins.d.ts'))).toBe(true)
-    expect(existsSync(join(fixture, '.kickjs/types/kick__augmentations.d.ts'))).toBe(true)
+    expect(existsSync(join(fixture, '.kickjs/types/kick__augmentations.d.ts'))).toBe(false)
   })
 
   it('auto-populates ContextKeys from context-decorator key literals', () => {
@@ -343,34 +241,6 @@ export const FlagsPlugin = definePlugin({
     expect(plugins).toContain("'FlagsPlugin': 'plugin'")
   })
 
-  it('catalogues defineAugmentation calls into augmentations.d.ts', () => {
-    writeFile(
-      'src/plugins/flags.ts',
-      `import { definePlugin, defineAugmentation } from '@forinda/kickjs'
-
-export interface FeatureFlags {}
-
-defineAugmentation('FeatureFlags', {
-  description: 'Flags consumed by FlagsPlugin',
-  example: '{ beta: boolean; rolloutPercentage: number }',
-})
-
-export const FlagsPlugin = definePlugin({
-  name: 'FlagsPlugin',
-  build() { return {} },
-})
-`,
-    )
-
-    runCli(fixture, ['typegen'])
-
-    const aug = readFileSync(join(fixture, '.kickjs/types/kick__augmentations.d.ts'), 'utf-8')
-    expect(aug).toContain('FeatureFlagsAugmentation')
-    expect(aug).toContain('Flags consumed by FlagsPlugin')
-    expect(aug).toContain('{ beta: boolean; rolloutPercentage: number }')
-    expect(aug).toContain('@see src/plugins/flags.ts')
-  })
-
   it('emits an empty registry when no plugins/adapters exist', () => {
     runCli(fixture, ['typegen'])
     const plugins = readFileSync(join(fixture, '.kickjs/types/kick__plugins.d.ts'), 'utf-8')
@@ -378,11 +248,10 @@ export const FlagsPlugin = definePlugin({
     expect(plugins).toContain('no plugins/adapters discovered yet')
   })
 
-  it('reports plugin/adapter and augmentation counts in the typegen log', () => {
+  it('reports the plugin/adapter count in the typegen log', () => {
     writeFile(
       'src/x.ts',
-      `import { defineAdapter, defineAugmentation } from '@forinda/kickjs'
-defineAugmentation('Thing')
+      `import { defineAdapter } from '@forinda/kickjs'
 export const X = defineAdapter({ name: 'X', build() { return {} } })
 export const Y = defineAdapter({ name: 'Y', build() { return {} } })
 `,
@@ -390,6 +259,5 @@ export const Y = defineAdapter({ name: 'Y', build() { return {} } })
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen')
     expect(result.stdout).toMatch(/2 plugins\/adapters/)
-    expect(result.stdout).toMatch(/1 augmentations/)
   })
 })

@@ -12,6 +12,7 @@ import { MissingContextValueError } from '../core/context-errors'
 import { requestStore } from './request-store'
 import { waitUntil } from './background'
 import { resolveClientIp, type ClientRequestLike } from './client-ip'
+import type { Session } from './middleware/session'
 import {
   parseQuery,
   type ParseQueryOptions,
@@ -457,9 +458,18 @@ export class RequestContext<
     return ctrl.signal
   }
 
-  /** Session data (requires session middleware) */
-  get session(): any {
-    return (this.req as any).session
+  /**
+   * The request's session — set by the `session()` middleware, which must be
+   * installed. Type your keys once by augmenting `SessionData`:
+   *
+   * ```ts
+   * declare module '@forinda/kickjs' {
+   *   interface SessionData { userId?: string }
+   * }
+   * ```
+   */
+  get session(): Session {
+    return (this.req as { session?: Session }).session as Session
   }
 
   /**
