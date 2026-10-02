@@ -1,5 +1,6 @@
 import type { Queue, JobsOptions } from 'bullmq'
-import { Logger } from '@forinda/kickjs'
+import { Logger, type JobDispatcher } from '@forinda/kickjs'
+import type { QueueProvider } from './types'
 
 const log = Logger.for('QueueService')
 
@@ -11,9 +12,10 @@ export interface BulkJobEntry {
 }
 
 /**
- * Injectable service for adding jobs to BullMQ queues.
+ * Injectable service for adding jobs — to BullMQ queues, or through the
+ * adapter's `provider`. Also the app's {@link JobDispatcher}.
  *
- * Resolved from DI via `@Inject(QUEUE_MANAGER)`.
+ * Resolved from DI via `@Inject(QUEUE_MANAGER)` or `@Inject(JOB_DISPATCHER)`.
  *
  * @example
  * ```ts
@@ -27,8 +29,11 @@ export interface BulkJobEntry {
  * }
  * ```
  */
-export class QueueService {
+export class QueueService implements JobDispatcher {
   private queues = new Map<string, Queue>()
+
+  /** With a provider, jobs go through it rather than BullMQ queues. */
+  constructor(private readonly provider?: QueueProvider) {}
 
   /** Register a queue instance (called by the adapter) */
   registerQueue(name: string, queue: Queue): void {
@@ -43,6 +48,7 @@ export class QueueService {
 
   /** Add a single job to a queue */
   async add(queueName: string, jobName: string, data: any, opts?: JobsOptions) {
+    if (this.provider) return this.provider.addJob(queueName, jobName, data, opts)
     const queue = this.queues.get(queueName)
     if (!queue) {
       throw new Error(`Queue "${queueName}" not found. Did you register it in QueueAdapter?`)
@@ -54,6 +60,11 @@ export class QueueService {
 
   /** Add multiple jobs to a queue in bulk */
   async addBulk(queueName: string, jobs: BulkJobEntry[]) {
+    if (this.provider) {
+      return this.provider.addBulk
+        ? this.provider.addBulk(queueName, jobs)
+        : Promise.all(jobs.map((j) => this.provider!.addJob(queueName, j.name, j.data, j.opts)))
+    }
     const queue = this.queues.get(queueName)
     if (!queue) {
       throw new Error(`Queue "${queueName}" not found. Did you register it in QueueAdapter?`)
@@ -61,6 +72,16 @@ export class QueueService {
     const result = await queue.addBulk(jobs)
     log.debug(`Bulk jobs added: ${queueName} (count: ${result.length})`)
     return result
+  }
+
+  /** {@link JobDispatcher}: enqueue a job without naming the backend. */
+  dispatch<Data = unknown>(
+    queue: string,
+    name: string,
+    data: Data,
+    options?: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.add(queue, name, data, options as JobsOptions)
   }
 
   /** Get all registered queue names */
@@ -71,7 +92,8 @@ export class QueueService {
   /** Close all queues gracefully */
   async closeAll(): Promise<void> {
     for (const [name, queue] of this.queues) {
-      await queue.close()
+      // Provider-backed entries may have no close(); the provider shuts down itself.
+      await queue.close?.()
       log.debug(`Queue closed: ${name}`)
     }
     this.queues.clear()

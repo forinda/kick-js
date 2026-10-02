@@ -1,6 +1,6 @@
 # @forinda/kickjs-queue
 
-Decorator-driven job processing for KickJS — `@Job` to declare a queue class, `@Process` to bind handlers, `QueueService` for dispatch. Pluggable providers: BullMQ (default), RabbitMQ, Kafka, and Redis pub/sub.
+Runs KickJS background jobs on BullMQ (default) or another broker through a provider — RabbitMQ, Kafka, Redis pub/sub, or your own. `@Job` / `@Process` live in `@forinda/kickjs` (re-exported here), so the same handlers also run on Cloudflare Queues or a runner you write — see the [Background Jobs guide](https://kickjs.app/guide/jobs).
 
 ## Install
 
@@ -19,11 +19,9 @@ kick add queue:redis-pubsub   # lightweight pub/sub without persistence
 
 ```ts
 // processors/email.processor.ts
-import { Service } from '@forinda/kickjs'
-import { Job, Process } from '@forinda/kickjs-queue'
+import { Job, Process } from '@forinda/kickjs'
 import type { Job as BullMQJob } from 'bullmq'
 
-@Service()
 @Job('email')
 export class EmailProcessor {
   @Process('send-welcome')
@@ -45,20 +43,27 @@ export const app = await bootstrap({
 })
 ```
 
-Dispatch jobs from any service via the injected `QUEUE_MANAGER`:
+Dispatch jobs from any service via `JOB_DISPATCHER`, which doesn't name the backend (`QUEUE_MANAGER` still resolves the same `QueueService`):
 
 ```ts
-import { Inject, Service } from '@forinda/kickjs'
-import { QUEUE_MANAGER, type QueueService } from '@forinda/kickjs-queue'
+import { Inject, JOB_DISPATCHER, Service, type JobDispatcher } from '@forinda/kickjs'
 
 @Service()
 class UserService {
-  constructor(@Inject(QUEUE_MANAGER) private queue: QueueService) {}
+  @Inject(JOB_DISPATCHER) private jobs!: JobDispatcher
 
   signup(email: string) {
-    return this.queue.add('email', 'send-welcome', { email })
+    return this.jobs.dispatch('email', 'send-welcome', { email })
   }
 }
+```
+
+Another broker — BullMQ isn't needed:
+
+```ts
+import { QueueAdapter, RabbitMQProvider } from '@forinda/kickjs-queue'
+
+QueueAdapter({ provider: new RabbitMQProvider(process.env.AMQP_URL!) })
 ```
 
 ## Documentation

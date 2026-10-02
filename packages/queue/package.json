@@ -42,7 +42,7 @@
   "peerDependencies": {
     "bullmq": ">=5.0.0",
     "ioredis": ">=5.0.0",
-    "@forinda/kickjs": ">=5.18.0"
+    "@forinda/kickjs": ">=8.8.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
@@ -66,5 +66,12 @@
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {
+    "bullmq": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    }
+  }
 }

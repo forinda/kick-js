@@ -1,8 +1,15 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Job, Process, QueueService, QueueAdapter, QUEUE_MANAGER } from '@forinda/kickjs-queue'
-import { QUEUE_METADATA, jobRegistry } from '../src/types'
-import { getClassMetaOrUndefined, getClassMeta, Container } from '@forinda/kickjs'
+import { QUEUE_METADATA } from '../src/types'
+import {
+  getClassMetaOrUndefined,
+  getClassMeta,
+  Container,
+  JOB_DISPATCHER,
+  listJobHandlers,
+  NoJobHandlerError,
+} from '@forinda/kickjs'
 import { Worker } from 'bullmq'
 import { setObservers } from '../../kickjs/src/core/observers'
 
@@ -59,7 +66,6 @@ vi.mock('bullmq', () => {
 
 beforeEach(() => {
   Container.reset()
-  jobRegistry.clear()
 })
 
 // ─── @Job decorator ─────────────────────────────────────────────────────────
@@ -73,23 +79,18 @@ describe('@Job decorator', () => {
     expect(queueName).toBe('emails')
   })
 
-  it('registers the class in the global jobRegistry', () => {
+  it('makes the class discoverable by any runner (listJobHandlers)', () => {
     @Job('payments')
-    class PaymentProcessor {}
+    class PaymentProcessor {
+      @Process('charge')
+      charge() {}
+    }
 
-    expect(jobRegistry.has(PaymentProcessor)).toBe(true)
-  })
-
-  it('registers multiple distinct classes in the registry', () => {
-    @Job('queue-a')
-    class ProcessorA {}
-
-    @Job('queue-b')
-    class ProcessorB {}
-
-    expect(jobRegistry.has(ProcessorA)).toBe(true)
-    expect(jobRegistry.has(ProcessorB)).toBe(true)
-    expect(jobRegistry.size).toBeGreaterThanOrEqual(2)
+    expect(
+      listJobHandlers(Container.getInstance()).filter((h) => h.target === PaymentProcessor),
+    ).toEqual([
+      { queue: 'payments', jobName: 'charge', handlerName: 'charge', target: PaymentProcessor },
+    ])
   })
 })
 
@@ -140,24 +141,6 @@ describe('@Process decorator', () => {
     expect(names).toContain('a')
     expect(names).toContain('b')
     expect(names).toContain(undefined)
-  })
-})
-
-// ─── jobRegistry ────────────────────────────────────────────────────────────
-
-describe('jobRegistry', () => {
-  it('starts empty after clear', () => {
-    expect(jobRegistry.size).toBe(0)
-  })
-
-  it('is a Set that deduplicates the same class', () => {
-    @Job('dup')
-    class DupProcessor {}
-
-    // Add again manually — Set should deduplicate
-    jobRegistry.add(DupProcessor)
-    const count = [...jobRegistry].filter((c) => c === DupProcessor).length
-    expect(count).toBe(1)
   })
 })
 
@@ -279,20 +262,20 @@ describe('QueueAdapter', () => {
     expect(adapter.name).toBe('QueueAdapter')
   })
 
-  it('pre-creates queues listed in options', () => {
+  it('pre-creates queues listed in options', async () => {
     const adapter = QueueAdapter({
       redis: redisOpts,
       queues: ['email', 'sms'],
     })
 
     const container = Container.getInstance()
-    adapter.beforeStart({ container } as any)
+    await adapter.beforeStart({ container } as any)
 
     expect(adapter.getQueueNames()).toContain('email')
     expect(adapter.getQueueNames()).toContain('sms')
   })
 
-  it('discovers @Job classes and creates workers', () => {
+  it('discovers @Job classes and creates workers', async () => {
     @Job('worker-queue')
     class _WorkerProcessor {
       @Process('do-work')
@@ -305,13 +288,13 @@ describe('QueueAdapter', () => {
     })
 
     const container = Container.getInstance()
-    adapter.beforeStart({ container } as any)
+    await adapter.beforeStart({ container } as any)
 
     // The queue should have been created for the discovered @Job class
     expect(adapter.getQueueNames()).toContain('worker-queue')
   })
 
-  it('reports a failed job to the app’s error observers', () => {
+  it('reports a failed job to the app’s error observers', async () => {
     @Job('reports-queue')
     class _ReportsProcessor {
       @Process('build')
@@ -321,7 +304,7 @@ describe('QueueAdapter', () => {
     setObservers([{ name: 'rec', onError: (error, info) => void seen.push({ error, info }) }])
     try {
       const adapter = QueueAdapter({ redis: redisOpts })
-      adapter.beforeStart({ container: Container.getInstance() } as any)
+      await adapter.beforeStart({ container: Container.getInstance() } as any)
       const worker = (
         Worker as unknown as { instances: { name: string; emit: Function }[] }
       ).instances.find((w) => w.name === 'reports-queue')!
@@ -342,22 +325,22 @@ describe('QueueAdapter', () => {
     }
   })
 
-  it('skips @Job classes that have no @Process methods', () => {
+  it('skips @Job classes that have no @Process methods', async () => {
     @Job('empty-queue')
     class _EmptyProcessor {}
 
     const adapter = QueueAdapter({ redis: redisOpts })
     const container = Container.getInstance()
-    adapter.beforeStart({ container } as any)
+    await adapter.beforeStart({ container } as any)
 
     // The queue should NOT be created since there are no handlers
     expect(adapter.getQueueNames()).not.toContain('empty-queue')
   })
 
-  it('registers QueueService in the DI container', () => {
+  it('registers QueueService in the DI container', async () => {
     const adapter = QueueAdapter({ redis: redisOpts })
     const container = Container.getInstance()
-    adapter.beforeStart({ container } as any)
+    await adapter.beforeStart({ container } as any)
 
     const resolved = container.resolve(QUEUE_MANAGER)
     expect(resolved).toBeInstanceOf(QueueService)
@@ -370,7 +353,7 @@ describe('QueueAdapter', () => {
         queues: ['stats-q'],
       })
       const container = Container.getInstance()
-      adapter.beforeStart({ container } as any)
+      await adapter.beforeStart({ container } as any)
 
       const stats = await adapter.getQueueStats('stats-q')
       expect(stats).toHaveProperty('waiting')
@@ -382,7 +365,7 @@ describe('QueueAdapter', () => {
     it('returns error for an unknown queue', async () => {
       const adapter = QueueAdapter({ redis: redisOpts })
       const container = Container.getInstance()
-      adapter.beforeStart({ container } as any)
+      await adapter.beforeStart({ container } as any)
 
       const stats = await adapter.getQueueStats('nope')
       expect(stats).toEqual({ error: 'Queue not found' })
@@ -402,7 +385,7 @@ describe('QueueAdapter', () => {
         queues: ['shutdown-q'],
       })
       const container = Container.getInstance()
-      adapter.beforeStart({ container } as any)
+      await adapter.beforeStart({ container } as any)
 
       await expect(adapter.shutdown()).resolves.toBeUndefined()
       // After shutdown, queues should be cleared
@@ -439,5 +422,126 @@ describe('QueueAdapter panel routes', () => {
       vi.unstubAllEnvs()
     }
     expect(mountedPaths(QueueAdapter({ redis, panel: false }))).toEqual([])
+  })
+})
+
+// ─── Running jobs through runJob ────────────────────────────────────────────
+
+describe('QueueAdapter — jobs run through runJob', () => {
+  const redisOpts = { host: 'localhost', port: 6379 }
+  const workerFor = (name: string) =>
+    (
+      Worker as unknown as { instances: { name: string; processor: Function; emit: Function }[] }
+    ).instances.findLast((w) => w.name === name)!
+
+  it('routes to the named handler, else the catch-all, with the BullMQ job itself', async () => {
+    const seen: unknown[] = []
+    @Job('route-q')
+    class _Route {
+      @Process('a')
+      a(job: unknown) {
+        seen.push(['a', job])
+      }
+      @Process()
+      other(job: unknown) {
+        seen.push(['other', job])
+      }
+    }
+    const adapter = QueueAdapter({ redis: redisOpts })
+    await adapter.beforeStart({ container: Container.getInstance() } as any)
+    const bull = { name: 'a', data: { x: 1 }, id: '1', attemptsMade: 0, updateProgress() {} }
+    await workerFor('route-q').processor(bull)
+    await workerFor('route-q').processor({ name: 'b', data: null, id: '2', attemptsMade: 0 })
+    expect(seen[0]).toEqual(['a', bull])
+    expect((seen[1] as unknown[])[0]).toBe('other')
+  })
+
+  it('reports a handler failure once — runJob reports it, the failed event does not repeat it', async () => {
+    @Job('once-q')
+    class _Once {
+      @Process('x')
+      x() {
+        throw new Error('boom')
+      }
+    }
+    const seen: unknown[] = []
+    setObservers([{ name: 'rec', onError: (_e, info) => void seen.push(info) }])
+    try {
+      const adapter = QueueAdapter({ redis: redisOpts })
+      await adapter.beforeStart({ container: Container.getInstance() } as any)
+      const job = { name: 'x', data: {}, id: '7', attemptsMade: 2 }
+      let thrown: unknown
+      await workerFor('once-q')
+        .processor(job)
+        .catch((e: unknown) => (thrown = e))
+      workerFor('once-q').emit('failed', job, thrown)
+      expect(seen).toEqual([
+        { source: 'job', context: { queue: 'once-q', job: 'x', id: '7', attemptsMade: 2 } },
+      ])
+    } finally {
+      setObservers([])
+    }
+  })
+
+  it('fails a job nothing handles instead of acknowledging it', async () => {
+    @Job('nohandler-q')
+    class _Only {
+      @Process('known')
+      known() {}
+    }
+    const adapter = QueueAdapter({ redis: redisOpts })
+    await adapter.beforeStart({ container: Container.getInstance() } as any)
+    await expect(
+      workerFor('nohandler-q').processor({ name: 'unknown', data: null, attemptsMade: 0 }),
+    ).rejects.toBeInstanceOf(NoJobHandlerError)
+  })
+
+  it('registers QueueService as the tool-neutral JOB_DISPATCHER', async () => {
+    const adapter = QueueAdapter({ redis: redisOpts, queues: ['d-q'] })
+    const container = Container.getInstance()
+    await adapter.beforeStart({ container } as any)
+    const dispatcher = container.resolve(JOB_DISPATCHER)
+    expect(dispatcher).toBe(container.resolve(QUEUE_MANAGER))
+    await expect(dispatcher.dispatch('d-q', 'go', { a: 1 })).resolves.toMatchObject({ id: '1' })
+  })
+})
+
+describe('QueueAdapter — with a provider', () => {
+  function fakeProvider() {
+    const workers = new Map<
+      string,
+      (job: { name: string; data: unknown; id?: string }) => Promise<void>
+    >()
+    return {
+      workers,
+      addJob: vi.fn(async (queue: string, name: string, data: unknown) => ({ queue, name, data })),
+      createWorker: vi.fn((queue: string, processor: any) => void workers.set(queue, processor)),
+      shutdown: vi.fn(async () => {}),
+    }
+  }
+
+  it('subscribes each handled queue, runs jobs through @Process, and dispatches through the provider', async () => {
+    const done: unknown[] = []
+    @Job('prov-q')
+    class _Prov {
+      @Process('ping')
+      ping(job: { data: unknown }) {
+        done.push(job.data)
+      }
+    }
+    const provider = fakeProvider()
+    const adapter = QueueAdapter({ provider })
+    const container = Container.getInstance()
+    await adapter.beforeStart({ container } as any)
+
+    expect(provider.createWorker).toHaveBeenCalledWith('prov-q', expect.any(Function), 1)
+    await provider.workers.get('prov-q')!({ name: 'ping', data: 42 })
+    expect(done).toEqual([42])
+
+    await container.resolve(JOB_DISPATCHER).dispatch('prov-q', 'ping', 43)
+    expect(provider.addJob).toHaveBeenCalledWith('prov-q', 'ping', 43, undefined)
+
+    await adapter.shutdown!()
+    expect(provider.shutdown).toHaveBeenCalled()
   })
 })

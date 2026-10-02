@@ -1,15 +1,27 @@
 import 'reflect-metadata'
-import { createToken } from '@forinda/kickjs'
+import { createToken, JOB_META } from '@forinda/kickjs'
 import type { QueueService } from './queue.service'
 
-/** Options for configuring the QueueAdapter */
-export interface QueueAdapterOptions {
-  /** Redis connection configuration */
-  redis: {
-    host: string
-    port: number
-    password?: string
-  }
+/**
+ * Options for configuring the QueueAdapter. Give `redis` for the built-in
+ * BullMQ runner, or `provider` for any other backend (RabbitMQ, Kafka, your
+ * own `QueueProvider`).
+ */
+export type QueueAdapterOptions = QueueAdapterCommon &
+  (
+    | {
+        /** Redis connection for the built-in BullMQ runner (needs `bullmq` + `ioredis`). */
+        redis: { host: string; port: number; password?: string }
+        provider?: undefined
+      }
+    | {
+        /** Any queue backend — `new RabbitMQProvider(url)`, `new KafkaProvider(...)`, or your own. */
+        provider: QueueProvider
+        redis?: undefined
+      }
+  )
+
+interface QueueAdapterCommon {
   /** Queue names to pre-create (optional — queues are also created on-demand) */
   queues?: string[]
   /** Default worker concurrency (default: 1) */
@@ -60,22 +72,9 @@ export interface QueueProvider {
 }
 
 /**
- * Metadata keys for queue decorators (post-Symbol migration). Namespaced
- * under `kick/queue/` so they can't collide with adopter metadata keys
- * or other framework packages writing to the same Reflect storage.
+ * Metadata keys for the job decorators. `@Job` / `@Process` live in
+ * `@forinda/kickjs` now; the keys are unchanged.
  */
-export const QUEUE_METADATA = {
-  JOB: 'kick/queue/job',
-  PROCESS: 'kick/queue/process',
-} as const
+export const QUEUE_METADATA = JOB_META
 
-/** Metadata stored by @Process decorator */
-export interface ProcessDefinition {
-  /** Method name on the controller class */
-  handlerName: string
-  /** Job name to handle (undefined = handle all jobs in the queue) */
-  jobName?: string
-}
-
-/** Global registry of @Job-decorated classes */
-export const jobRegistry = new Set<any>()
+export type { ProcessDefinition } from '@forinda/kickjs'

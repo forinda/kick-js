@@ -34,6 +34,7 @@ import {
 import { requestStore } from './http/request-store'
 import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { runCronJobs } from './core/cron'
+import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
 import { buildMountPath } from './core/path'
 
@@ -44,6 +45,7 @@ export { reply, isReply, type Reply, type InferHandlerResponse } from './http/re
 export type { SseHandler } from './http/context'
 export { waitUntil, type PlatformContext } from './http/background'
 export { runCronJobs, type CronRun } from './core/cron'
+export { runJob, type JobLike } from './core/jobs'
 // Edge-safe stores + ctx-style rate limiter (zero runtime imports).
 export {
   KvRateLimitStore,
@@ -237,6 +239,12 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
  * `event.cron` — list the same expressions under `[triggers] crons` in
  * wrangler.toml.
  *
+ * `queue` consumes Cloudflare Queues: each message goes to the `@Job` class
+ * for the batch's queue via `runJob`, and is acked when its handler
+ * succeeds or retried when it throws. A message body of `{ name, data }`
+ * picks the `@Process(name)` method; any other body goes to the queue's
+ * catch-all `@Process()` as `data`.
+ *
  * ```ts
  * export default createFetchHandler((env) => ({ h3, modules, env }))
  * ```
@@ -251,6 +259,11 @@ export function createFetchHandler(
   ) => Promise<Response>
   scheduled: (
     event: { cron: string },
+    env?: Record<string, string | undefined>,
+    ctx?: PlatformContext,
+  ) => Promise<void>
+  queue: (
+    batch: QueueBatch,
     env?: Record<string, string | undefined>,
     ctx?: PlatformContext,
   ) => Promise<void>
@@ -269,7 +282,39 @@ export function createFetchHandler(
       ctx?.waitUntil?.(run)
       await run
     },
+    queue: async (batch, env = {}) => {
+      app ??= createWebApp(build(env))
+      const container = Container.getInstance()
+      await Promise.all(
+        batch.messages.map(async (message) => {
+          const body = message.body as { name?: unknown; data?: unknown } | null
+          const named = body !== null && typeof body === 'object' && typeof body.name === 'string'
+          try {
+            await runJob(container, batch.queue, {
+              name: named ? (body!.name as string) : '',
+              data: named ? body!.data : message.body,
+              id: message.id,
+            })
+            message.ack()
+          } catch {
+            // Reported by runJob; Cloudflare redelivers per the queue's retry settings.
+            message.retry()
+          }
+        }),
+      )
+    },
   }
+}
+
+/** The part of a Cloudflare Queues `MessageBatch` the consumer uses. */
+export interface QueueBatch {
+  readonly queue: string
+  readonly messages: ReadonlyArray<{
+    readonly id: string
+    readonly body: unknown
+    ack(): void
+    retry(): void
+  }>
 }
 
 /** Join a mount prefix and a route path into one URL, collapsing slashes. */

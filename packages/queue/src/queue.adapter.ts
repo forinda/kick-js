@@ -1,25 +1,20 @@
-import { Queue, Worker, type Job as BullMQJob } from 'bullmq'
+import type { Job as BullMQJob, Queue, Worker } from 'bullmq'
 import {
+  JOB_DISPATCHER,
   Logger,
   defineAdapter,
+  listJobHandlers,
+  reportError,
+  runJob,
   Scope,
-  getClassMetaOrUndefined,
-  getClassMeta,
 } from '@forinda/kickjs'
-import * as kick from '@forinda/kickjs'
 import {
   defineDevtoolsTab,
   PROTOCOL_VERSION,
   type DevtoolsTabDescriptor,
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
-import {
-  QUEUE_MANAGER,
-  QUEUE_METADATA,
-  jobRegistry,
-  type QueueAdapterOptions,
-  type ProcessDefinition,
-} from './types'
+import { QUEUE_MANAGER, type QueueAdapterOptions } from './types'
 import { QueueService } from './queue.service'
 
 const log = Logger.for('QueueAdapter')
@@ -64,7 +59,8 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
   build: (options) => {
     const panel = options.panel ?? process.env.NODE_ENV !== 'production'
     const workers: Worker[] = []
-    const queueService = new QueueService()
+    const queueService = new QueueService(options.provider)
+    let jobClassCount = 0
 
     const getQueueNames = (): string[] => queueService.getQueueNames()
 
@@ -99,15 +95,14 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
           protocolVersion: PROTOCOL_VERSION,
           name: 'QueueAdapter',
           kind: 'adapter',
-          state: {
-            redisHost: options.redis.host,
-            redisPort: options.redis.port,
-          },
+          state: options.redis
+            ? { redisHost: options.redis.host, redisPort: options.redis.port }
+            : { provider: options.provider.constructor?.name ?? 'custom' },
           tokens: { provides: ['kick/queue/Manager'], requires: [] },
           metrics: {
             registeredQueues: queueService.getQueueNames().length,
             activeWorkers: workers.length,
-            registeredJobClasses: jobRegistry.size,
+            registeredJobClasses: jobClassCount,
           },
         }
       },
@@ -157,101 +152,93 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
         })
       },
 
-      beforeStart({ container }) {
-        const { redis, queues: preCreateQueues = [], concurrency = 1 } = options
+      async beforeStart({ container }) {
+        const { queues: preCreateQueues = [], concurrency = 1 } = options
 
-        const connection = { host: redis.host, port: redis.port, password: redis.password }
+        // Every @Job / @Process the container can resolve — `@Job` and
+        // `@Process` live in @forinda/kickjs, and runJob() routes each job.
+        const handlers = listJobHandlers(container)
+        jobClassCount = new Set(handlers.map((h) => h.target)).size
+        const handled = [...new Set(handlers.map((h) => h.queue))]
 
-        // Pre-create any explicitly listed queues
-        for (const name of preCreateQueues) {
-          if (!queueService.getQueue(name)) {
-            const queue = new Queue(name, { connection })
-            queueService.registerQueue(name, queue)
+        if (options.provider) {
+          const provider = options.provider
+          for (const name of new Set([...preCreateQueues, ...handled])) {
+            queueService.registerQueue(name, (provider.getQueue?.(name) ?? { name }) as Queue)
           }
-        }
-
-        // Discover all @Job-decorated classes and wire workers
-        for (const jobClass of jobRegistry) {
-          const queueName = getClassMetaOrUndefined<string>(QUEUE_METADATA.JOB, jobClass)
-          if (queueName === undefined) continue
-
-          const handlers = getClassMeta<ProcessDefinition[]>(QUEUE_METADATA.PROCESS, jobClass, [])
-
-          if (handlers.length === 0) {
-            log.warn(
-              `@Job('${queueName}') class ${jobClass.name} has no @Process methods — skipping`,
+          for (const name of handled) {
+            provider.createWorker(
+              name,
+              (job) => runJob(container, name, job).then(() => {}),
+              concurrency,
             )
-            continue
+            log.info(`Worker started: ${name} (provider, concurrency: ${concurrency})`)
           }
-
-          // Ensure the queue exists
-          if (!queueService.getQueue(queueName)) {
-            const queue = new Queue(queueName, { connection })
-            queueService.registerQueue(queueName, queue)
+        } else {
+          // Loaded here, not at the top: with a `provider`, BullMQ needn't be installed.
+          const { Queue, Worker } = await import('bullmq')
+          const { host, port, password } = options.redis
+          const connection = { host, port, password }
+          for (const name of new Set([...preCreateQueues, ...handled])) {
+            if (!queueService.getQueue(name)) {
+              queueService.registerQueue(name, new Queue(name, { connection }))
+            }
           }
-
-          // Auto-register the @Job class if not already in the container.
-          // @Service()/@Job() set metadata but don't always call container.register(),
-          // especially after HMR rebuilds which reset the container.
-          if (!container.has(jobClass)) {
-            container.register(jobClass, jobClass)
-          }
-
-          // Resolve the processor instance from DI
-          const processor = container.resolve(jobClass)
-
-          // Build the worker processor function
-          const worker = new Worker(
-            queueName,
-            async (job: BullMQJob) => {
-              const specific = handlers.find((h) => h.jobName === job.name)
-              const handler = specific || handlers.find((h) => h.jobName === undefined)
-
-              if (handler) {
-                await processor[handler.handlerName](job)
-              } else {
-                log.warn(`No handler for job "${job.name}" in queue "${queueName}"`)
-              }
-            },
-            { connection, concurrency },
-          )
-
-          worker.on('failed', (job, err) => {
-            log.error({ err }, `Job failed: ${queueName}/${job?.name} (id: ${job?.id})`)
-            // Hand it to the app's error observers (Sentry & co.). `reportError`
-            // is looked up, not imported by name: kickjs releases before it
-            // existed are still supported peers, and there it is just skipped.
-            const report = (kick as { reportError?: typeof kick.reportError }).reportError
-            report?.(err, {
-              source: 'job',
-              context: {
-                queue: queueName,
-                job: job?.name,
-                id: job?.id,
-                attemptsMade: job?.attemptsMade,
+          // Errors runJob already reported; the 'failed' event reports the rest
+          // (a stalled job, a timeout) without reporting one twice.
+          const reported = new WeakSet<object>()
+          for (const name of handled) {
+            const worker = new Worker(
+              name,
+              // The BullMQ job itself goes to the handler, so it keeps
+              // job.attemptsMade, job.updateProgress() and the rest.
+              async (job: BullMQJob) => {
+                try {
+                  return await runJob(container, name, job, { attemptsMade: job.attemptsMade })
+                } catch (err) {
+                  if (err && typeof err === 'object') reported.add(err)
+                  throw err
+                }
               },
+              { connection, concurrency },
+            )
+            worker.on('failed', (job, err) => {
+              if (reported.has(err)) return
+              log.error({ err }, `Job failed: ${name}/${job?.name} (id: ${job?.id})`)
+              reportError(err, {
+                source: 'job',
+                context: {
+                  queue: name,
+                  job: job?.name,
+                  id: job?.id,
+                  attemptsMade: job?.attemptsMade,
+                },
+              })
             })
-          })
-
-          worker.on('completed', (job) => {
-            log.debug(`Job completed: ${queueName}/${job.name} (id: ${job.id})`)
-          })
-
-          workers.push(worker)
-          log.info(
-            `Worker started: ${queueName} (${jobClass.name}, ${handlers.length} handler(s), concurrency: ${concurrency})`,
-          )
+            worker.on('completed', (job) => {
+              log.debug(`Job completed: ${name}/${job.name} (id: ${job.id})`)
+            })
+            workers.push(worker)
+            log.info(`Worker started: ${name} (concurrency: ${concurrency})`)
+          }
         }
 
-        // Register the QueueService in DI
+        // QueueService under both tokens: the queue-specific one, and the
+        // tool-neutral dispatcher app code should prefer.
         container.registerFactory(QUEUE_MANAGER, () => queueService, Scope.SINGLETON)
+        container.registerFactory(JOB_DISPATCHER, () => queueService, Scope.SINGLETON)
 
         log.info(
-          `QueueAdapter ready — ${queueService.getQueueNames().length} queue(s), ${workers.length} worker(s)`,
+          `QueueAdapter ready — ${queueService.getQueueNames().length} queue(s), ${handled.length} worker(s)`,
         )
       },
 
       async shutdown() {
+        if (options.provider) {
+          await options.provider.shutdown()
+          await queueService.closeAll()
+          return
+        }
         // Close workers first so they stop picking up new jobs
         for (const worker of workers) {
           await worker.close()

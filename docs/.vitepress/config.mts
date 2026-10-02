@@ -68,6 +68,7 @@ const guideSidebar = [
       { text: 'Authorization', link: '/guide/authorization' },
       { text: 'Multi-Tenancy', link: '/guide/multi-tenancy' },
       { text: 'Cron Jobs', link: '/guide/cron' },
+      { text: 'Background Jobs', link: '/guide/jobs' },
       { text: 'Mailer', link: '/guide/mailer' },
       { text: 'Notifications', link: '/guide/notifications' },
       { text: 'OpenTelemetry', link: '/guide/otel' },
