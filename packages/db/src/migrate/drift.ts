@@ -46,7 +46,15 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
   for (const [name, t] of Object.entries(snap.tables)) {
     const columns: Record<string, ColumnSnapshot> = {}
     for (const [cn, c] of Object.entries(t.columns)) {
-      columns[cn] = { ...c, type: canonicalType(c.type, snap.dialect), default: null }
+      columns[cn] = {
+        ...c,
+        type: canonicalType(c.type, snap.dialect),
+        default: null,
+        // A primary key is never null, whatever introspection says: SQLite
+        // reports an inline `INTEGER PRIMARY KEY` (every `serial()`) as
+        // nullable, which read as drift on every run after the first.
+        nullable: c.primaryKey ? false : c.nullable,
+      }
     }
     // InnoDB creates a non-unique index for a foreign key whose columns no
     // index leads with, named after the constraint. It isn't in the schema,
@@ -106,7 +114,11 @@ export async function checkDrift(
   if (changes.length === 0) return
 
   const summary = summarize(changes)
-  const message = `Schema drift detected: ${summary.added.length} added, ${summary.removed.length} removed, ${summary.changed.length} changed`
+  const named = (['added', 'removed', 'changed'] as const)
+    .filter((k) => summary[k].length > 0)
+    .map((k) => `${k}: ${summary[k].join(', ')}`)
+    .join('; ')
+  const message = `Schema drift detected: ${summary.added.length} added, ${summary.removed.length} removed, ${summary.changed.length} changed (${named})`
   if (behavior === 'warn') {
     log.warn(message)
     return

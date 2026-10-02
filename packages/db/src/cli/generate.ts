@@ -226,7 +226,7 @@ interface LatestEntry {
   id: string | null
 }
 
-async function readLatestSnapshotEntry(
+export async function readLatestSnapshotEntry(
   migrationsDir: string,
   dialect: Dialect,
 ): Promise<LatestEntry> {

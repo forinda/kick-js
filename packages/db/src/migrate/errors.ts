@@ -23,6 +23,24 @@ export class MigrationDriftError extends MigrationError {
   }
 }
 
+/**
+ * A migration's SQL failed to apply. Names the migration — with several
+ * pending, the driver's own message ("no such table: …") doesn't say which —
+ * and keeps the driver error as `cause`. The migration stays pending.
+ */
+export class MigrationFailedError extends MigrationError {
+  readonly id: string
+
+  constructor(id: string, cause: unknown) {
+    super(
+      'migration_failed',
+      `Migration ${id} failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    this.id = id
+    this.cause = cause
+  }
+}
+
 export class MigrationHashError extends MigrationError {
   readonly id: string
   readonly expected: string

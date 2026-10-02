@@ -2,7 +2,12 @@ import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 
 import { readJournal, computeMigrationHash } from './journal'
-import { MigrationLockError, MigrationHashError, UnreviewedMigrationError } from './errors'
+import {
+  MigrationFailedError,
+  MigrationLockError,
+  MigrationHashError,
+  UnreviewedMigrationError,
+} from './errors'
 import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
 import { enforceEnumDropGate } from './enum-drop-gate'
 import type { MigrationAdapter } from './adapter'
@@ -41,7 +46,9 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
   const owner = opts.owner ?? `${process.pid}@${new Date().toISOString()}`
   const got = await opts.adapter.acquireLock(owner)
   if (!got) {
-    throw new MigrationLockError('Another process holds the migration lock')
+    throw new MigrationLockError(
+      'Another process holds the migration lock. If none is running — a deploy was killed mid-migration — release it with `kick db migrate unlock`.',
+    )
   }
   try {
     return await fn()
@@ -51,9 +58,11 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
 }
 
 /**
- * Verify pending entries: hash matches stored, meta.reviewed is true (if
- * requireReviewed). Throws MigrationHashError or UnreviewedMigrationError on
- * the first failure.
+ * Verify pending entries. A reviewed migration must still match the hash
+ * `review` recorded — an edit after review is refused (MigrationHashError).
+ * An unreviewed one is refused when `requireReviewed` (UnreviewedMigrationError);
+ * otherwise — development — it applies as it stands, edits included, and is
+ * recorded with its current hash.
  */
 async function verifyPending(
   pending: PreparedEntry[],
@@ -62,15 +71,14 @@ async function verifyPending(
 ): Promise<void> {
   for (const entry of pending) {
     const dir = path.join(migrationsDir, entry.id)
+    const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
     const actualHash = await computeMigrationHash(dir)
-    if (actualHash !== entry.hash) {
-      throw new MigrationHashError(entry.id, entry.hash, actualHash)
-    }
-    if (requireReviewed) {
-      const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
-      if (meta.reviewed !== true) {
-        throw new UnreviewedMigrationError(entry.id)
-      }
+    if (meta.reviewed === true) {
+      if (actualHash !== entry.hash) throw new MigrationHashError(entry.id, entry.hash, actualHash)
+    } else if (requireReviewed) {
+      throw new UnreviewedMigrationError(entry.id)
+    } else {
+      entry.hash = actualHash
     }
   }
 }
@@ -85,10 +93,14 @@ async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptio
   // a destructive migration without partial application.
   enforceEnumDropGate(entry.id, upSql, opts.confirmEnumDrop ?? false)
 
-  if (useTx) {
-    await opts.adapter.applySqlInTx(upSql)
-  } else {
-    await opts.adapter.applySqlNoTx(upSql)
+  try {
+    if (useTx) {
+      await opts.adapter.applySqlInTx(upSql)
+    } else {
+      await opts.adapter.applySqlNoTx(upSql)
+    }
+  } catch (err) {
+    throw new MigrationFailedError(entry.id, err)
   }
   await opts.adapter.recordApplied({
     id: entry.id,

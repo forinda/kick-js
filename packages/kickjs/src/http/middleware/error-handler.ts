@@ -176,9 +176,29 @@ export function errorHandler() {
       )
     }
 
-    // Unexpected errors — always log
-    const status = err.status || err.statusCode || 500
     const requestId = (req as any).requestId ?? req.headers['x-request-id']
+    const declared = Number(err.status ?? err.statusCode)
+
+    // Any error that says it's a client error — a database UniqueViolationError
+    // (409), a BYO auth check's 401 — is answered like an HttpException: RFC
+    // 9457, its message as `detail`, and a warning rather than an error log.
+    // It used to fall through to the catch-all: logged at ERROR with a stack,
+    // answered with a bare `{ message }` no problem+json client could parse.
+    if (Number.isInteger(declared) && declared >= 400 && declared < 500) {
+      log.warn(`${req.method} ${req.originalUrl ?? req.url} — ${declared} ${describeError(err)}`)
+      res.setHeader('Content-Type', 'application/problem+json')
+      return res.status(declared).json(
+        normalizeProblem({
+          status: declared,
+          detail: err.message || undefined,
+          ...(requestId ? { requestId } : {}),
+        }),
+      )
+    }
+
+    // Unexpected errors — always log. A declared 5xx keeps its status but
+    // gets the same guarded body as a 500.
+    const status = Number.isInteger(declared) && declared >= 500 && declared < 600 ? declared : 500
     log.error(
       err,
       // `originalUrl` is Express-only. Fastify and h3 pass `request.raw`, so
@@ -190,13 +210,6 @@ export function errorHandler() {
       }`,
     )
 
-    if (status !== 500) {
-      return res.status(status).json({
-        message: err.message || 'Error',
-        ...(requestId ? { requestId } : {}),
-      })
-    }
-
     // A 500 body must never carry the raw error in production — it can
     // contain table names, SQL, connection strings, or user data. But
     // returning a bare `{ message: 'Internal Server Error' }` in
@@ -207,7 +220,7 @@ export function errorHandler() {
     // which is the correlation handle back to the (now stack-carrying)
     // log line — without it an opaque 500 can't even be tied to its own
     // log entry.
-    res.status(500).json({
+    res.status(status).json({
       message: 'Internal Server Error',
       ...(requestId ? { requestId } : {}),
       ...(isProduction
