@@ -1,3 +1,5 @@
+import { Kysely } from 'kysely'
+import { sqliteDialect } from './dialect'
 import {
   lockTableDdl,
   migrationsTableDdl,
@@ -68,6 +70,7 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
   // handles `;`-separated batches natively).
   const runBatch = (sql: string) => database.exec(sql)
 
+  let migrationDb: Kysely<any> | undefined
   return {
     dialect,
 
@@ -203,6 +206,14 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
       // `text`), so this powers `kick db introspect`; byte-exact drift
       // against a code-first snapshot needs a dialect-normalised compare.
       return introspectSqlite(database)
+    },
+
+    kysely() {
+      // Built once, on the same connection. Never destroyed here: the pool or
+      // handle belongs to the caller (or to close()).
+      return (migrationDb ??= new Kysely<any>({
+        dialect: sqliteDialect({ database: database as never }),
+      }))
     },
 
     async close() {

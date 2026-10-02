@@ -10,6 +10,7 @@ import {
 } from './errors'
 import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
 import { enforceEnumDropGate } from './enum-drop-gate'
+import { codeMigrationFile, runCodeMigration } from './code-migration'
 import type { MigrationAdapter } from './adapter'
 import type { SchemaSnapshot } from '../snapshot/types'
 
@@ -101,6 +102,15 @@ async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptio
     direction: 'up' as const,
   }
   const { adapter } = opts
+  const code = codeMigrationFile(dir)
+  if (code) {
+    try {
+      await runCodeMigration(code, entry.id, 'up', adapter, useTx, { record })
+    } catch (err) {
+      throw new MigrationFailedError(entry.id, err)
+    }
+    return
+  }
   try {
     if (useTx && adapter.applyMigrationInTx) {
       // The row commits with the migration — a crash can't leave one without the other.
@@ -199,6 +209,11 @@ async function applyReverse(id: string, opts: RunnerOptions): Promise<void> {
   }
   const useTx = meta.transaction !== false
   const { adapter } = opts
+  const code = codeMigrationFile(dir)
+  if (code) {
+    await runCodeMigration(code, id, 'down', adapter, useTx, { remove: id })
+    return
+  }
   if (useTx && adapter.applyMigrationInTx) {
     await adapter.applyMigrationInTx(downSql, { remove: id })
     return

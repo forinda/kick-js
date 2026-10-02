@@ -1,3 +1,5 @@
+import { Kysely } from 'kysely'
+import { pgDialect } from './dialect'
 import {
   introspectPg,
   KickDbError,
@@ -87,6 +89,7 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
     throw new Error(`Invalid PG schema name: ${schema}`)
   }
 
+  let migrationDb: Kysely<any> | undefined
   return {
     dialect,
 
@@ -185,6 +188,12 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
 
     async introspect(): Promise<SchemaSnapshot> {
       return introspectPg(pool, { schema })
+    },
+
+    kysely() {
+      // Built once, on the same connection. Never destroyed here: the pool or
+      // handle belongs to the caller (or to close()).
+      return (migrationDb ??= new Kysely<any>({ dialect: pgDialect({ pool: pool as never }) }))
     },
 
     async close() {

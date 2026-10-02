@@ -139,6 +139,7 @@ export { emitMysql } from './emit/mysql'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'
+export type { CodeMigration, MigrationDb } from './migrate/code-migration'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
 export { checkMigrations, type CheckResult } from './cli/check'
 export { listSeeds, runSeeds, type SeedResult } from './cli/seed'
