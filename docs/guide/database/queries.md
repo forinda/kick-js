@@ -227,36 +227,7 @@ await this.db.transaction({ isolation: 'serializable', retry: true }, async () =
 
 ## Errors
 
-A failed query throws a typed error instead of the driver's own, on every dialect and inside transactions too. Each carries what the database reported — `constraint`, `table`, `columns`, `detail` — and the driver's error as `cause`:
-
-| Error                       | When                                                     | Notes                    |
-| --------------------------- | -------------------------------------------------------- | ------------------------ |
-| `UniqueViolationError`      | a row duplicates a unique or primary key                 | `status: 409`            |
-| `ForeignKeyViolationError`  | a row references a missing row, or a referenced row goes |                          |
-| `CheckViolationError`       | a CHECK constraint rejects the row                       | `constraint` is its name |
-| `NotNullViolationError`     | a NOT NULL column gets null                              |                          |
-| `SerializationFailureError` | a transaction conflicted with a concurrent one           | `retryable: true`        |
-| `DeadlockError`             | the database cancelled a deadlocked transaction          | `retryable: true`        |
-| `ConnectionError`           | the database can't be reached or dropped the connection  |                          |
-| `DatabaseError`             | anything else the database reports — the base class      | `driverCode` = SQLSTATE  |
-
-```ts
-import { HttpException } from '@forinda/kickjs'
-import { UniqueViolationError } from '@forinda/kickjs-db'
-
-try {
-  await this.db.insertInto('users').values({ email }).execute()
-} catch (err) {
-  if (err instanceof UniqueViolationError && err.columns.includes('email')) {
-    throw HttpException.conflict('That email is taken')
-  }
-  throw err
-}
-```
-
-Left unhandled, a `UniqueViolationError` answers `409` rather than `500` — it carries `status: 409`. Its message names the table and columns, never the duplicate value.
-
-Postgres names every field; MySQL and SQLite only some (SQLite reports a CHECK constraint by name and a foreign key without columns). Errors that don't come from the database — a `TypeError` in your own code — pass through untouched.
+A failed query throws a typed error — `UniqueViolationError`, `ForeignKeyViolationError`, `SerializationFailureError`, … — with the constraint, table and columns the database reported, and the driver's error as `cause`. An unhandled `UniqueViolationError` answers `409`. See [Errors](./errors) for every class, what each dialect reports, and a reference of causes and fixes.
 
 ## Lifecycle events
 

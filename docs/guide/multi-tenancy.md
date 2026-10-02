@@ -125,6 +125,50 @@ class OrdersRepo {
 
 The `Scope.REQUEST` registration ensures the factory runs once per request and the result is cached for the rest of the request lifecycle, regardless of how many services inject `TENANT_DB`.
 
+## Row-level security with kick/db (Postgres)
+
+With a shared database, Postgres [row-level security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) makes the database enforce the tenant filter, so a query that forgets `where tenantId = …` still sees only one tenant's rows.
+
+Policies read the tenant from a setting:
+
+```sql
+ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON notes
+  USING ("tenantId" = current_setting('app.tenant_id', true))
+  WITH CHECK ("tenantId" = current_setting('app.tenant_id', true));
+```
+
+Set it for the length of a transaction, and run the request's work inside it:
+
+```ts
+import { sql } from 'kysely'
+
+export function withTenant<T>(db: AppDb, tenantId: string, fn: () => Promise<T>) {
+  return db.transaction(async () => {
+    // `true` = local to this transaction — it can't leak to the next user of the connection
+    await sql`select set_config('app.tenant_id', ${tenantId}, true)`.execute(db.qb)
+    return fn()
+  })
+}
+```
+
+```ts
+@Get('/notes')
+list(ctx: RequestContext) {
+  return withTenant(this.db, ctx.get('tenant')!.id, () => this.notes.list())
+}
+```
+
+`NotesRepository` needs no tenant parameter: [transactions follow the call chain](./database/queries#transactions-follow-the-call-chain), so every query it runs on the injected client lands in the transaction that set `app.tenant_id`. Concurrent requests each get their own transaction and connection, so tenants can't see each other's setting even on a shared pool.
+
+Three things to get right:
+
+- **Connect as a role the policies apply to.** Superusers bypass row-level security, and so does the table's owner unless you add `ALTER TABLE … FORCE ROW LEVEL SECURITY`. Run migrations as the owner and the app as a separate role with only the grants it needs.
+- **Outside `withTenant`, nothing is visible** — `current_setting(…, true)` is null, so the policy matches no rows. That's the safe default; admin jobs that need every tenant use the owner role.
+- **Wrap in the handler or service, not a middleware.** A route middleware's `next()` can resolve before the handler finishes, so a transaction opened there may commit while the handler is still querying.
+
+Writes are checked too: inserting a row for another tenant fails the policy's `WITH CHECK`. This recipe runs in kick/db's test suite against Postgres, as a non-owner role.
+
 ## Three isolation strategies
 
 The previous package surfaced three modes; all three are still natural with the recipe above — just swap the `resolveDbForTenant` body:

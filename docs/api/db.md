@@ -575,6 +575,7 @@ KickDbError                         base
 │   ├── SerializationFailureError   .retryable = true
 │   ├── DeadlockError               .retryable = true
 │   └── ConnectionError
+├── TransactionFinishedError        a query ran after its transaction finished (un-awaited work)
 ├── RemovedValueAsDefaultError      pgEnum value being removed is still a column DEFAULT
 ├── RelationalQueryCancelledError   AbortSignal fired during db.query.*
 ├── RelationalQueryUnknownRelationError
@@ -704,7 +705,7 @@ Plugins: `safeNullComparison`.
 
 Migration: `diff`, `invertChanges`, `hasAmbiguousReverse`, `emitPg`, `emitMysql`, `emitSqlite`, `introspectPg`, `introspectMysql`, `introspectSqlite`, `reviewMigration`, `extractSnapshot`, `renderSchemaSource`, `migrateLatest`, `migrateUp`, `migrateDown`, `migrateRollback`, `migrateStatus`, `generate`, `resolveDbConfig`, `MemoryMigrationAdapter`, `migrationsTableDdl`, `lockTableDdl`, `KICK_MIGRATIONS_TABLE`, `KICK_LOCK_TABLE`, `readJournal`, `appendJournalEntry`, `computeMigrationHash`, `verifyMigrationHash`, `parseEnumDropHeader`, `enforceEnumDropGate`, `checkDrift`, `detectCompositeReferences`.
 
-Errors: `KickDbError`, `DatabaseError`, `UniqueViolationError`, `ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError`, `ConnectionError`, `translateDbError`, `SqliteRebuildRequiredError`, `RemovedValueAsDefaultError`, `RelationalQueryCancelledError`, `RelationalQueryUnknownRelationError`, `RelationalQueryAmbiguousRelationNameError`, `RelationalQueryMissingInverseError`, `RelationalQueryDepthError`, `RelationalQueryAliasCollisionError`, `RelationalQueryNotSupportedError`, `CompositeEnumReferenceError`, `MigrationError`, `MigrationDriftError`, `MigrationLockError`, `MigrationHashError`, `UnreviewedMigrationError`, `MigrationEnumDropError`.
+Errors: `KickDbError`, `TransactionFinishedError`, `DatabaseError`, `UniqueViolationError`, `ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError`, `ConnectionError`, `translateDbError`, `SqliteRebuildRequiredError`, `RemovedValueAsDefaultError`, `RelationalQueryCancelledError`, `RelationalQueryUnknownRelationError`, `RelationalQueryAmbiguousRelationNameError`, `RelationalQueryMissingInverseError`, `RelationalQueryDepthError`, `RelationalQueryAliasCollisionError`, `RelationalQueryNotSupportedError`, `CompositeEnumReferenceError`, `MigrationError`, `MigrationDriftError`, `MigrationLockError`, `MigrationHashError`, `UnreviewedMigrationError`, `MigrationEnumDropError`.
 
 Types: `Dialect`, `FkAction`, `ColumnSnapshot`, `IndexSnapshot`, `ForeignKeySnapshot`, `CheckSnapshot`, `TableSnapshot`, `EnumSnapshot`, `SchemaSnapshot`, `RelationSnapshot`, `SchemaToTypes`, `SchemaToRelationsRegister`, `KickDbRegister`, `RegisteredDB`, `ReadonlyKysely`.
 

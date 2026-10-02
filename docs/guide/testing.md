@@ -10,6 +10,10 @@ The `@forinda/kickjs-testing` package provides utilities for integration testing
 `kick g module` writes controller and repository tests alongside the module. Full flag list: [Generators](./generators.md#kick-g-test).
 :::
 
+::: tip Testing code that uses kick/db
+An in-memory database per test file, a transaction per test that rolls back, and swapping the client in `createTestApp` — see [Testing with kick/db](./database/testing.md).
+:::
+
 ## Typed API tests with the client
 
 For request-level integration tests, [`@forinda/kickjs-client`](./typed-client.md)'s

@@ -31,6 +31,7 @@ import { applyExtensions } from '../extend/apply'
 import type { KickDbEventEmitter } from './events'
 import type { CompileFn } from '../query/builder'
 import { buildQueryNamespace } from '../query/builder'
+import { KickDbError } from '../errors'
 import type { ResolvedRelations } from '../query/relations'
 import type { TableSnapshot } from '../snapshot/types'
 
@@ -38,6 +39,26 @@ import type { TableSnapshot } from '../snapshot/types'
 export interface TxFrame {
   trx: Kysely<any>
   afterCommit: Array<() => unknown>
+  /**
+   * Set once the transaction (or savepoint) has committed or rolled back.
+   * Async work started inside it can outlive it and still see the frame;
+   * a finished frame no longer counts as an open transaction.
+   */
+  done?: boolean
+}
+
+/**
+ * A query ran on a call chain whose transaction had already finished —
+ * typically a promise started inside `transaction()` that wasn't awaited.
+ */
+export class TransactionFinishedError extends KickDbError {
+  constructor() {
+    super(
+      'transaction_finished',
+      'Query ran after its transaction had finished — await every query inside transaction(), ' +
+        'or move work meant for after the commit into afterCommit().',
+    )
+  }
 }
 
 export interface InternalContext {
@@ -106,13 +127,19 @@ export function wrap<DB>(
   /** Where this client's queries go now: the open transaction for a root client, else its own. */
   const active = (): Kysely<DB> => {
     const frame = root ? ctx.transactions.getStore() : undefined
+    if (frame?.done) throw new TransactionFinishedError()
     return frame ? withPlugins<DB>(frame.trx, plugins) : qb
+  }
+  /** The open transaction on this call chain, ignoring one that has finished. */
+  const openFrame = (): TxFrame | undefined => {
+    const frame = ctx.transactions.getStore()
+    return frame && !frame.done ? frame : undefined
   }
   const childFor = (trx: Kysely<any>): KickDbClient<DB> =>
     wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins })
   /** The frame to run in — a transaction client used outside the callback still has its own. */
   const currentFrame = (): TxFrame | undefined =>
-    ctx.transactions.getStore() ?? (root ? undefined : { trx: qb, afterCommit: [] })
+    openFrame() ?? (root ? undefined : { trx: qb, afterCommit: [] })
 
   const ownQuery = buildQueryNamespace<DB>(
     qb,
@@ -134,6 +161,8 @@ export function wrap<DB>(
     } catch (err) {
       await sql.raw(`ROLLBACK TO SAVEPOINT ${name}`).execute(frame.trx)
       throw err
+    } finally {
+      inner.done = true
     }
   }
 
@@ -155,7 +184,9 @@ export function wrap<DB>(
           frame.trx = trx
           return ctx.transactions.run(frame, () => fn(childFor(trx)))
         })
+        frame.done = true
       } catch (err) {
+        frame.done = true
         ctx.events?.emit('transactionRollback', { isolation, error: err })
         if (attempt < plan.attempts && (err as { retryable?: unknown })?.retryable === true) {
           const delayMs = retryDelay(plan, attempt)
@@ -192,6 +223,7 @@ export function wrap<DB>(
     dialect: ctx.dialect,
     get query() {
       const frame = root ? ctx.transactions.getStore() : undefined
+      if (frame?.done) throw new TransactionFinishedError()
       return frame
         ? buildQueryNamespace<DB>(
             withPlugins<DB>(frame.trx, plugins),
@@ -202,7 +234,7 @@ export function wrap<DB>(
         : ownQuery
     },
     get inTransaction() {
-      return !root || ctx.transactions.getStore() !== undefined
+      return !root || openFrame() !== undefined
     },
 
     selectFrom: ((...args: unknown[]) =>
@@ -265,7 +297,7 @@ export function wrap<DB>(
 
     async afterCommit(fn) {
       const frame = currentFrame()
-      if (frame && ctx.transactions.getStore()) frame.afterCommit.push(fn)
+      if (frame && openFrame()) frame.afterCommit.push(fn)
       else await fn()
     },
 
