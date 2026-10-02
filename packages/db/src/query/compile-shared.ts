@@ -76,7 +76,9 @@ function makeTableRefProxy(eb: ExpressionBuilder<any, any>, alias: string): unkn
  * is `${name}_0`; nested levels increment.
  */
 function makeAlias(name: string, depth: number): string {
-  return `${name}_${depth}`
+  // No dots: `billing.invoices_0.col` would read as schema `billing`, table
+  // `invoices_0` — so a table in a named schema aliases as `billing_invoices_0`.
+  return `${name.replaceAll('.', '_')}_${depth}`
 }
 
 /**

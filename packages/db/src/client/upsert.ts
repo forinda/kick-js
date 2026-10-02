@@ -107,7 +107,11 @@ export async function upsert<DB, T extends keyof DB & string>(
 /**
  * The row matching `where`, or a new one built from `where` + `create`.
  * Race-safe: if another request inserts the same row first, the unique
- * violation is caught and that row is read instead.
+ * violation is caught and that row is read instead — outside a transaction,
+ * or inside a READ COMMITTED one. Inside a REPEATABLE READ or SERIALIZABLE
+ * transaction (MySQL's default) the re-read sees the transaction's snapshot,
+ * which can't include the winner's row, so the UniqueViolationError is
+ * rethrown: retry the whole transaction.
  */
 export async function findOrCreate<DB, T extends keyof DB & string>(
   db: KickDbClient<DB>,

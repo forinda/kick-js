@@ -36,6 +36,17 @@ export async function listSeeds(dir: string): Promise<string[]> {
 export async function runSeeds(opts: { dir: string; names?: string[] }): Promise<SeedResult> {
   const all = await listSeeds(opts.dir)
   const strip = (f: string) => f.replace(SEED_FILE, '')
+  // `01_users.ts` and `01_users.js` side by side — usually a stale build output —
+  // would both run, and a name couldn't pick one. Refuse before running anything.
+  const byBase = new Map<string, string[]>()
+  for (const f of all) byBase.set(strip(f), [...(byBase.get(strip(f)) ?? []), f])
+  const clashes = [...byBase.values()].filter((files) => files.length > 1)
+  if (clashes.length > 0) {
+    throw new KickDbError(
+      'KICK_DB_SEED_DUPLICATE',
+      `Seeds share a name: ${clashes.map((c) => c.join(' and ')).join('; ')} in ${opts.dir} — keep one of each`,
+    )
+  }
   const wanted = opts.names?.length ? new Set(opts.names.map(strip)) : null
   const files = wanted ? all.filter((f) => wanted.has(strip(f))) : all
 
@@ -51,7 +62,18 @@ export async function runSeeds(opts: { dir: string; names?: string[] }): Promise
 
   const ran: string[] = []
   for (const file of files) {
-    const mod = (await loadModule(path.join(opts.dir, file))) as { default?: unknown }
+    let mod: { default?: unknown }
+    try {
+      mod = (await loadModule(path.join(opts.dir, file))) as { default?: unknown }
+    } catch (cause) {
+      // A syntax error or an import that doesn't resolve — still name the seed.
+      const err = new KickDbError(
+        'KICK_DB_SEED_FAILED',
+        `Seed ${file} failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+      err.cause = cause
+      throw err
+    }
     if (typeof mod.default !== 'function') {
       throw new KickDbError(
         'KICK_DB_SEED_INVALID',

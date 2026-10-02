@@ -18,7 +18,7 @@ import {
   timestamptz,
   version,
 } from '@forinda/kickjs-db'
-import { pgDialect } from '@forinda/kickjs-db/pg'
+import { pgDialect, pgSchema } from '@forinda/kickjs-db/pg'
 
 const docs = table('docs', {
   id: serial().primaryKey(),
@@ -40,7 +40,15 @@ const docRelations = relations(docs, ({ many }) => ({ comments: many(comments) }
 const commentRelations = relations(comments, ({ one }) => ({
   doc: one(docs, { fields: [comments.docId], references: [docs.id] }),
 }))
-const schema = { docs, comments, docRelations, commentRelations }
+const billing = pgSchema('billing')
+const invoices = billing.table('invoices', {
+  id: serial().primaryKey(),
+  number: text().notNull().unique(),
+  version: version(),
+  updatedAt: timestamptz().notNull().defaultNow().onUpdateNow(),
+  deletedAt: timestamptz().softDelete(),
+})
+const schema = { docs, comments, docRelations, commentRelations, invoices }
 
 let container: StartedPostgreSqlContainer
 let pool: pg.Pool
@@ -50,6 +58,7 @@ beforeAll(async () => {
   pool = new pg.Pool({ connectionString: container.getConnectionUri() })
   pool.on('error', () => {})
   const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }
+  await pool.query('CREATE SCHEMA billing')
   await pool.query(emitPg(diff(empty, extractSnapshot(schema, 'postgres'))))
 }, 120_000)
 
@@ -99,5 +108,32 @@ describe('managed columns on Postgres', () => {
         withDeleted: true,
       }),
     ).toMatchObject({ slug: 'gone' })
+  }, 30_000)
+
+  it('works for a table in a named schema', async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    const first = await db.upsert('billing.invoices', {
+      values: { number: 'A-1' },
+      target: ['number'],
+    })
+    await db
+      .updateTable('billing.invoices')
+      .set({ number: 'A-1' })
+      .where('id', '=', first.id)
+      .execute()
+    const again = await db.upsert('billing.invoices', {
+      values: { number: 'A-1' },
+      target: ['number'],
+    })
+    expect(again.version).toBe(2)
+
+    await db
+      .insertInto('billing.invoices')
+      .values({ number: 'VOID', deletedAt: new Date() })
+      .execute()
+    const listed = await db.query['billing.invoices'].findMany({
+      orderBy: (_i, eb) => eb.ref('id'),
+    })
+    expect(listed.map((i) => i.number)).toEqual(['A-1'])
   }, 30_000)
 })

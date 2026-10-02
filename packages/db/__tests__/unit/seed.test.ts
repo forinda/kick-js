@@ -68,4 +68,32 @@ describe('runSeeds()', () => {
   it('treats a missing folder as no seeds', async () => {
     expect(await runSeeds({ dir: path.join(tmpdir(), 'kickdb-no-such-dir') })).toEqual({ ran: [] })
   })
+
+  it('refuses two seeds that share a name', async () => {
+    const dir = await seedsDir({ '01_users.ts': logs('ts'), '01_users.mjs': logs('mjs') })
+    await expect(runSeeds({ dir })).rejects.toThrow(
+      /Seeds share a name: 01_users.mjs and 01_users.ts/,
+    )
+    expect(g.__seedLog).toEqual([])
+  })
+
+  it('names a seed that fails to load', async () => {
+    const dir = await seedsDir({
+      '01_broken.mjs': "import './nope'\nexport default async () => {}\n",
+    })
+    const err = await runSeeds({ dir }).catch((e) => e)
+    expect(err.message).toMatch(/^Seed 01_broken.mjs failed to load: /)
+    expect(err.cause).toBeDefined()
+  })
+
+  it('lets a JavaScript seed use extensionless relative imports', async () => {
+    const dir = await seedsDir({
+      'helper.data.mjs': "export const name = 'from helper'\n",
+      '01_uses_helper.mjs':
+        "import { name } from './helper.data'\nexport default async () => { globalThis.__seedLog.push(name) }\n",
+    })
+    // helper.data.mjs is itself picked up as a seed only if it exports a default — name the one to run.
+    await runSeeds({ dir, names: ['01_uses_helper'] })
+    expect(g.__seedLog).toEqual(['from helper'])
+  })
 })

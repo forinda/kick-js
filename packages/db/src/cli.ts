@@ -266,7 +266,9 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       }
       // A seed imports the app's own client, whose pool would keep the
       // command alive; it's done, so exit once output is flushed.
-      process.stdout.write('', () => process.exit(process.exitCode ?? 0))
+      process.stderr.write('', () =>
+        process.stdout.write('', () => process.exit(process.exitCode ?? 0)),
+      )
     })
 
   // ── migrate runner subcommands ─────────────────────────────────────────

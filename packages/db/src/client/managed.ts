@@ -24,7 +24,7 @@ import {
   type RootOperationNode,
   type UnknownRow,
 } from 'kysely'
-import { unwrapTable, type TableDecl } from '../dsl/table'
+import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
 import type { ColumnBuilder } from '../dsl/columns/types'
 
 export interface ManagedColumns {
@@ -48,30 +48,37 @@ export function collectManaged(schema: unknown): Map<string, ManagedColumns> {
       else if (role === 'softDelete') managed.softDelete = name
     }
     if (managed.updatedAt.length || managed.version.length || managed.softDelete) {
-      out.set(t.__name, managed)
+      // Keyed like the snapshot — `billing.invoices` for a table in a named schema.
+      out.set(qualifiedTableName(t), managed)
     }
   }
   return out
 }
 
+/** The statement's table as the managed map keys it: `schema.table`, or `table`. */
 function tableName(node: OperationNode | undefined): string | undefined {
   if (!node) return undefined
   if (AliasNode.is(node)) return tableName(node.node)
-  if (TableNode.is(node)) return node.table.identifier.name
+  if (TableNode.is(node)) {
+    const { schema, identifier } = node.table
+    return schema ? `${schema.name}.${identifier.name}` : identifier.name
+  }
   return undefined
 }
 
-/** What to qualify a column with: the alias if the statement has one, else the table. */
-function qualifier(node: OperationNode | undefined): string | undefined {
-  if (node && AliasNode.is(node) && IdentifierNode.is(node.alias)) return node.alias.name
-  return tableName(node)
+/** What to qualify a column with: the alias if the statement has one, else the (schema-qualified) table. */
+function qualifier(node: OperationNode | undefined): TableNode | undefined {
+  if (!node) return undefined
+  if (AliasNode.is(node) && IdentifierNode.is(node.alias)) return TableNode.create(node.alias.name)
+  if (AliasNode.is(node)) return qualifier(node.node)
+  return TableNode.is(node) ? node : undefined
 }
 
 /** `updates` plus a SET for each managed column they don't already set. */
 function withManaged(
   updates: ReadonlyArray<ColumnUpdateNode>,
   managed: ManagedColumns,
-  table: string,
+  table: TableNode,
 ): ReadonlyArray<ColumnUpdateNode> {
   const set = new Set(
     updates.map((u) => (ColumnNode.is(u.column) ? u.column.column.name : undefined)),
@@ -89,7 +96,7 @@ function withManaged(
           BinaryOperationNode.create(
             // Qualified: in an upsert's update branch a bare name is ambiguous
             // between the stored row and the incoming one on Postgres.
-            ReferenceNode.create(ColumnNode.create(col), TableNode.create(table)),
+            ReferenceNode.create(ColumnNode.create(col), table),
             OperatorNode.create('+'),
             ValueNode.createImmediate(1),
           ),

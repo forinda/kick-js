@@ -9,3 +9,5 @@ Columns kick/db maintains (D.10), declared in the schema — no migration involv
 - `.softDelete()` marks a nullable timestamp as the deleted flag: relational reads (`db.query`) skip rows where it's set, at every level, unless asked `withDeleted: true`.
 
 They apply to queries kick/db builds; raw SQL and the plain query builder's reads are untouched.
+
+Tables in a named Postgres schema (`pgSchema('billing').table(…)`) get them too — and `db.query` on such a table no longer builds an alias (`billing.invoices_0`) that a column reference read as a schema.
