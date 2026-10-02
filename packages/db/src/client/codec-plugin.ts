@@ -44,7 +44,7 @@ import {
 } from 'kysely'
 
 import { CustomColumnBuilder } from '../custom-type'
-import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS } from './sqlite-dates'
+import { SQLITE_DATE_DECODERS, SQLITE_DATE_ENCODERS, fromSqliteBoolean } from './sqlite-dates'
 import { sqliteDecimalDecoder } from './sqlite-decimals'
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { unwrapTable, type TableDecl } from '../dsl/table'
@@ -298,7 +298,10 @@ export function buildDecoderMap(schema: unknown, dialect?: string): CodecMap {
     schema,
     'fromDriver',
     dialect === 'sqlite'
-      ? (type) => SQLITE_DATE_DECODERS[type] ?? sqliteDecimalDecoder(type)
+      ? (type) =>
+          SQLITE_DATE_DECODERS[type] ??
+          sqliteDecimalDecoder(type) ??
+          (type === 'boolean' ? fromSqliteBoolean : undefined)
       : undefined,
   )
 }

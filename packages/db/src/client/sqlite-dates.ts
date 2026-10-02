@@ -39,9 +39,18 @@ export const SQLITE_DATE_DECODERS: Record<string, (v: unknown) => unknown> = {
   date: fromSqliteDate,
 }
 
-/** Any `Date` left among a query's parameters — a `where`, raw SQL — becomes a stored timestamp. */
-export function encodeDateParameters(parameters: readonly unknown[]): readonly unknown[] {
-  return parameters.some((p) => p instanceof Date)
-    ? parameters.map((p) => (p instanceof Date ? sqliteTimestamp(p) : p))
+/**
+ * Parameters better-sqlite3 can't bind: a `Date` left among them — a
+ * `where`, raw SQL — becomes a stored timestamp, and a boolean becomes
+ * `1` / `0`, how SQLite stores one.
+ */
+export function encodeSqliteParameters(parameters: readonly unknown[]): readonly unknown[] {
+  return parameters.some((p) => p instanceof Date || typeof p === 'boolean')
+    ? parameters.map((p) =>
+        p instanceof Date ? sqliteTimestamp(p) : typeof p === 'boolean' ? (p ? 1 : 0) : p,
+      )
     : parameters
 }
+
+/** A `boolean()` column reads back as `true` / `false`, not SQLite's `1` / `0`. */
+export const fromSqliteBoolean = (v: unknown): unknown => (v === 1 ? true : v === 0 ? false : v)

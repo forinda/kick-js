@@ -9,7 +9,7 @@
  * can't reach.
  */
 import type { CompiledQuery, DatabaseConnection, Dialect, Driver } from 'kysely'
-import { encodeDateParameters } from './sqlite-dates'
+import { encodeSqliteParameters } from './sqlite-dates'
 import { translateDbError, type DbDialect } from '../db-errors'
 
 const PATCHED = Symbol('kick.db.translatesErrors')
@@ -36,7 +36,9 @@ export function translatingDialect(dialect: Dialect, tag: DbDialect): Dialect {
     conn.executeQuery = guard((query: CompiledQuery, ...rest: unknown[]) =>
       (exec as (...a: unknown[]) => Promise<unknown>)(
         // better-sqlite3 binds no Date — store it the way SQLite's own timestamps look.
-        tag === 'sqlite' ? { ...query, parameters: encodeDateParameters(query.parameters) } : query,
+        tag === 'sqlite'
+          ? { ...query, parameters: encodeSqliteParameters(query.parameters) }
+          : query,
         ...rest,
       ),
     ) as DatabaseConnection['executeQuery']
@@ -44,7 +46,9 @@ export function translatingDialect(dialect: Dialect, tag: DbDialect): Dialect {
     conn.streamQuery = async function* (...args: Parameters<DatabaseConnection['streamQuery']>) {
       const [query, ...rest] = args
       const encoded =
-        tag === 'sqlite' ? { ...query, parameters: encodeDateParameters(query.parameters) } : query
+        tag === 'sqlite'
+          ? { ...query, parameters: encodeSqliteParameters(query.parameters) }
+          : query
       try {
         yield* stream(encoded, ...rest)
       } catch (err) {
