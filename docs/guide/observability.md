@@ -101,6 +101,21 @@ tracingChannel('kickjs:handler').subscribe({
 })
 ```
 
+## Database queries
+
+kick/db reports its own lifecycle — every query, slow queries, failures, transaction start / commit / rollback / retry — as events on the client when it's created with `events: true`. Wire them to the same logger or tracer:
+
+```ts
+const db = createDbClient({ schema, dialect, events: true, slowQueryThresholdMs: 200 })
+
+db.on('slowQuery', ({ sql, durationMs }) => log.warn({ sql, durationMs }, 'slow query'))
+db.on('transactionRetry', ({ attempt, error }) =>
+  log.info({ attempt, err: error }, 'retrying transaction'),
+)
+```
+
+A failed query inside a request also reaches `onError` through the request it failed in, as a [typed error](./database/errors.md). Pass the DevTools event bus as `createDbClient({ bus })` and the DevTools **Database** tab shows the same stream. Event payloads: [Queries → Lifecycle events](./database/queries.md#lifecycle-events).
+
 ## Not covered
 
 - The web entry (`@forinda/kickjs/web` — Workers, Bun, Deno) has no adapters or plugins, and doesn't publish the channels.
