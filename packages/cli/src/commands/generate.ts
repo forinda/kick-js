@@ -222,6 +222,21 @@ async function printGeneratorList(): Promise<void> {
  * Generate one or more modules. Shared by `kick g module <names...>` and
  * the bare `kick g <names...>` shortcut.
  */
+/**
+ * A subcommand's options merged with `kick g`'s own. The parent declares the
+ * same flags (`-f`, `--no-tests`, `--no-pluralize`, …) and Commander binds
+ * such a flag to the parent, leaving the subcommand's `--no-*` defaults at
+ * `true` — so a `false` from either side wins.
+ */
+function mergeGenOpts<T extends object>(cmd: Command, opts: T): T {
+  const parent = (cmd.parent?.opts() ?? {}) as Record<string, unknown>
+  const merged = { ...cmd.optsWithGlobals(), ...opts } as Record<string, unknown>
+  for (const key of ['entity', 'tests', 'pluralize']) {
+    if (parent[key] === false) merged[key] = false
+  }
+  return merged as T
+}
+
 async function runModuleGeneration(
   names: string[],
   opts: ModuleGenOpts,
@@ -422,12 +437,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .action(async (names: string[], opts: ModuleGenOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
-      // The parent `gen` command also defines `-f, --force`; commander
-      // binds the option to the parent's opts in that case, not the
-      // subcommand's. Read both via `optsWithGlobals()` so `--force`
-      // works regardless of which subcommand the adopter scoped it to.
-      const merged = cmd.optsWithGlobals() as ModuleGenOpts
-      await runModuleGeneration(names, { ...merged, ...opts }, dryRun)
+      await runModuleGeneration(names, mergeGenOpts(cmd, opts), dryRun)
     })
 
   // ── kick g adapter <name> ──────────────────────────────────────────
@@ -673,7 +683,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--no-tests', 'Skip test file generation')
     .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
     .option('--modules-dir <dir>', 'Modules directory')
-    .action(async (name: string, rawFields: string[], opts: ScaffoldOpts, cmd: Command) => {
+    .action(async (name: string, rawFields: string[], scaffoldOpts: ScaffoldOpts, cmd: Command) => {
+      const opts = mergeGenOpts(cmd, scaffoldOpts)
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       if (rawFields.length === 0) {
