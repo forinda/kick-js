@@ -135,6 +135,7 @@ export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
 export { checkMigrations, type CheckResult } from './cli/check'
+export { listSeeds, runSeeds, type SeedResult } from './cli/seed'
 
 export * from './dsl/columns'
 export * from './dsl/table'

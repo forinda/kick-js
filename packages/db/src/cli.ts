@@ -15,11 +15,13 @@
  */
 
 import { writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { Command } from 'commander'
 
 import { defineCliPlugin, type KickCliPlugin } from '@forinda/kickjs-cli-kit'
 import { kickDbTypegen } from './cli-typegen'
 import { checkMigrations } from './cli/check'
+import { runSeeds } from './cli/seed'
 
 export { kickDbTypegen } from './cli-typegen'
 
@@ -50,6 +52,8 @@ import type { DriftBehavior } from './migrate/drift'
 export interface KickDbConfigInput {
   schemaPath?: string
   migrationsDir?: string
+  /** Where `kick db seed` finds seed files. Default `db/seeds`. */
+  seedsDir?: string
   dialect?: Dialect
   connectionString?: string
   adapter?: MigrationAdapterFactory
@@ -88,6 +92,7 @@ export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbCon
   return {
     schemaPath: db.schemaPath ?? 'src/db/schema.ts',
     migrationsDir: db.migrationsDir ?? 'db/migrations',
+    seedsDir: db.seedsDir ?? 'db/seeds',
     dialect: db.dialect ?? 'postgres',
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,
@@ -240,6 +245,28 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       }
       if (r.ok) console.log('Migrations are in step with the schema.')
       else process.exitCode = 1
+    })
+
+  parent
+    .command('seed [names...]')
+    .description(
+      'Run the seed files in db/seeds (or only those named), in name order — no migration tracking, so make them safe to re-run',
+    )
+    .action(async (names: string[]) => {
+      const config = await getConfig()
+      const dir = path.resolve(process.cwd(), config.seedsDir ?? 'db/seeds')
+      try {
+        const { ran } = await runSeeds({ dir, names })
+        console.log(
+          ran.length === 0 ? `No seeds in ${dir}.` : `Ran ${ran.length} seed(s): ${ran.join(', ')}`,
+        )
+      } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err))
+        process.exitCode = 1
+      }
+      // A seed imports the app's own client, whose pool would keep the
+      // command alive; it's done, so exit once output is flushed.
+      process.stdout.write('', () => process.exit(process.exitCode ?? 0))
     })
 
   // ── migrate runner subcommands ─────────────────────────────────────────

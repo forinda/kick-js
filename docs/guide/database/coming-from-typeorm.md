@@ -38,7 +38,7 @@ The closest thing to an entity class is the [base-class table form](../db-table-
 | `dataSource.query(sql, params)`                                | ``sql`…${param}`.execute(db.qb)`` — [Raw SQL](./raw-sql.md)                                                                                    |
 | `migration:generate` / `migration:run` / `migration:revert`    | `kick db generate <name>` / `kick db migrate latest` / `kick db migrate rollback` — [Migrations](./migrations.md)                              |
 | `synchronize: true`                                            | none on purpose — every change is a reviewed migration                                                                                         |
-| seeds (third-party)                                            | a hand-written migration: `kick db generate seed_x --empty`; a seed command is [D.2](../roadmap.md)                                            |
+| seeds (third-party)                                            | [`kick db seed`](./cli.md#seed) — files in `db/seeds`, run in name order                                                                       |
 
 ## Side by side
 

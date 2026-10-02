@@ -54,7 +54,7 @@ If nothing changed, it prints `No schema changes detected.` and exits without wr
 
 ### Empty migrations
 
-For data migrations, seeds, or any change the diff engine can't author, generate an empty shell and write the SQL by hand:
+For data migrations or any change the diff engine can't author, generate an empty shell and write the SQL by hand (re-runnable sample data belongs in [`kick db seed`](./cli.md#seed) instead):
 
 <PmCommand exec="kick db generate backfill_usernames --empty" />
 

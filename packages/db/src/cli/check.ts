@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { loadModule } from './load-module'
 
 import type { DbConfig } from './config'
 import { diff } from '../diff/engine'
@@ -30,9 +30,7 @@ export async function checkMigrations(opts: {
 }): Promise<CheckResult> {
   const migrationsAbs = path.resolve(opts.cwd, opts.config.migrationsDir)
   const { snapshot: prev } = await readLatestSnapshotEntry(migrationsAbs, opts.config.dialect)
-  const schemaModule = await import(
-    pathToFileURL(path.resolve(opts.cwd, opts.config.schemaPath)).href
-  )
+  const schemaModule = await loadModule(path.resolve(opts.cwd, opts.config.schemaPath))
   const unmigratedChanges = diff(prev, extractSnapshot(schemaModule, opts.config.dialect)).length
 
   const unreviewed: string[] = []

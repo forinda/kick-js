@@ -39,7 +39,7 @@ The closest thing to a model class is the [base-class table form](../db-table-fo
 | `sequelize.sync({ alter: true })`                              | none on purpose — every change is a reviewed migration                                                                                                                       |
 | `sequelize-cli migration:generate` (empty skeleton)            | `kick db generate <name>` — **diffs your schema and writes the SQL** — [Migrations](./migrations.md)                                                                         |
 | `db:migrate` / `db:migrate:undo`                               | `kick db migrate latest` / `kick db migrate down` (one) or `rollback` (last batch)                                                                                           |
-| seeders (`db:seed`)                                            | a hand-written migration: `kick db generate seed_x --empty`; a seed command is [D.2](../roadmap.md)                                                                          |
+| seeders (`db:seed`)                                            | [`kick db seed`](./cli.md#seed) — files in `db/seeds`, run in name order; nothing is tracked, so make them re-runnable                                                       |
 
 ## Side by side
 
@@ -289,7 +289,6 @@ Sequelize validates inside `create`; kick/db validates at the edge, before the h
 - **Scopes.** No `defaultScope` applied behind your back. Name the query in a repository function instead.
 - **`belongsToMany` in relational reads** — [D.13](../roadmap.md). Declare the junction table and nest through it: `with: { memberships: { with: { project: true } } }`.
 - **`sync()`.** Deliberately absent — schema changes ship as migrations someone has read.
-- **Seeders** — [D.2](../roadmap.md); write seed data in an `--empty` migration for now.
 
 ## Moving an existing Sequelize app
 

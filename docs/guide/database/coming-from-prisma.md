@@ -336,7 +336,6 @@ Each error names the `constraint`, `table` and `columns`, the same on Postgres, 
 
 ## Not there (yet)
 
-- **`prisma db seed`** — write a seed as an empty migration (`kick db generate seed_roles --empty`) or a script using the client; a seed command is deferred (D.2).
 - **Read replicas** — planned (D.12).
 - **Prisma Studio** — the KickJS [DevTools](../devtools.md) Database tab shows the queries your app runs; there is no data editor.
 - **`db push`** — deliberately absent; every change goes through a reviewed migration.

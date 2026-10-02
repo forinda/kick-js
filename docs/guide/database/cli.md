@@ -19,6 +19,7 @@ The `kick db` commands — migrations, schema diffs, introspection — ship with
 | [`migrate status`](#migrate-status)      | List applied and pending migrations                                       |       yes        |
 | [`migrate review <id>`](#migrate-review) | Mark a migration reviewed                                                 |        no        |
 | [`migrate unlock`](#migrate-unlock)      | Release a migration lock a killed run left behind                         |       yes        |
+| [`seed [names...]`](#seed)               | Run the seed files in `seedsDir`                                          |       yes        |
 | [`introspect`](#introspect)              | Write a schema file from a live database                                  |       yes        |
 
 ¹ On Postgres with a `connectionString` (and no `adapter` factory), `generate` connects to check enum changes against composite types; otherwise it reads only files.
@@ -87,6 +88,7 @@ The `kick.config.ts` `db` block and `kickjs-db.config.ts` share one shape:
 | ------------------ | ------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `schemaPath`       | `string`                              | `'src/db/schema.ts'` | The schema module `generate` and `check` read.                                                                                       |
 | `migrationsDir`    | `string`                              | `'db/migrations'`    | Where migrations and `_journal.json` live.                                                                                           |
+| `seedsDir`         | `string`                              | `'db/seeds'`         | Where `kick db seed` finds seed files.                                                                                               |
 | `dialect`          | `'postgres' \| 'sqlite' \| 'mysql'`   | `'postgres'`         | The SQL `generate` writes.                                                                                                           |
 | `connectionString` | `string`                              | `DATABASE_URL`       | Postgres only — the built-in adapter connects with it when there's no `adapter`.                                                     |
 | `adapter`          | `() => MigrationAdapter \| Promise<>` | —                    | Builds the connection the commands use. Required for SQLite and MySQL; wins over `connectionString`.                                 |
@@ -271,6 +273,35 @@ Releases the migration lock. The runner holds it while it migrates and releases 
 ```text
 Released the migration lock.
 ```
+
+## seed
+
+```text
+kick db seed [names...]
+```
+
+Runs the seed files in `seedsDir` (`db/seeds`) in name order — prefix them to order them (`01_roles.ts`, `02_admin.ts`) — or only the ones named, with or without the extension. Each file default-exports an async function and imports what it needs, usually the app's own client:
+
+```ts
+// db/seeds/01_admin.ts
+import { db } from '../../src/db/client'
+import { hashPassword } from '../../src/auth/password'
+
+export default async function seed() {
+  await db.findOrCreate('users', {
+    where: { email: 'admin@example.com' },
+    create: { name: 'Admin', passwordHash: await hashPassword(process.env.ADMIN_PASSWORD!) },
+  })
+}
+```
+
+```text
+Ran 1 seed(s): 01_admin.ts
+```
+
+Nothing records which seeds ran — they aren't migrations, and every run runs them all. Write them to be run again: [`db.upsert()`](./queries.md#upsert-and-find-or-create) and `db.findOrCreate()` make that one line. A seed that throws stops the run with `Seed <file> failed: <message>` and exit code `1`; `kick db seed <name>` that matches no file fails before anything runs. The command exits when the seeds finish, even though the client they imported still holds its pool.
+
+Seed files load the way the app's code does — TypeScript, extensionless relative imports. For schema changes, data fixes that must run exactly once, or anything a deploy depends on, write a migration (`kick db generate <name> --empty`) instead.
 
 ## introspect
 

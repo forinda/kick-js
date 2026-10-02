@@ -227,7 +227,7 @@ Postgres unless you have a reason not to; SQLite for local apps and tests; MySQL
 Yes — `` sql`…` `` from `kysely`, executed with `.execute(db.qb)`, with values bound as parameters — [Raw SQL & Recipes](./raw-sql.md). In a migration, use `kick db generate <name> --empty` (and record the hash — [above](#hash-mismatch-for-migration)).
 
 **How do I seed data?**
-There's no seed command yet (roadmap D.2). Write a seed migration with `kick db generate seed_<name> --empty`, or a script that uses the client.
+Put seed files in `db/seeds` and run [`kick db seed`](./cli.md#seed). Make them safe to run again with `db.upsert()` / `db.findOrCreate()`. Data a deploy depends on, that must run exactly once, belongs in a migration (`kick db generate <name> --empty`).
 
 **Is there soft delete, or an `updatedAt` that updates itself?**
 Yes: `.softDelete()`, `.onUpdateNow()` and `version()` — [columns kick/db maintains](./schema.md#columns-kick-db-maintains). Soft delete is honoured by relational reads; the plain query builder sees every row.

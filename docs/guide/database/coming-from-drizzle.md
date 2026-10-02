@@ -352,7 +352,7 @@ try {
 - **`columns` / `extras` in `db.query`** — use the query builder when you need a narrower select.
 - **A name or casing override for columns** — the key is the column name.
 - **`drizzle-kit push` and Studio** — every change goes through a reviewed migration; there's no data browser.
-- **`drizzle-seed`** — write a seed as an empty migration or a script; a seed command is deferred (D.2).
+- **`drizzle-seed`** (generated fake data) — no generator; write seed files for [`kick db seed`](./cli.md#seed) by hand or with a faker library.
 - **Read replicas** (`withReplicas`) — planned (D.12).
 
 ## Testing
