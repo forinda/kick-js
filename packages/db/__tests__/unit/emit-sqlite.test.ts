@@ -46,7 +46,7 @@ describe('emitSqlite — CREATE TABLE', () => {
         `  "id" TEXT NOT NULL DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6)))),\n` +
         '  "title" TEXT NOT NULL,\n' +
         '  "done" INTEGER NOT NULL DEFAULT 0,\n' +
-        '  "createdAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,\n' +
+        `  "createdAt" TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),\n` +
         '  PRIMARY KEY ("id")\n' +
         ');',
     )

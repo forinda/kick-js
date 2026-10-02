@@ -86,6 +86,16 @@ describe('dates on SQLite', () => {
     expect(rows[0]!.n).toBe(1)
   })
 
+  it('defaultNow() stores milliseconds, so rows inserted together still sort', async () => {
+    await db.insertInto('events').values({ name: 'first', at: new Date() }).execute()
+    const [{ stored }] = await sql<{
+      stored: string
+    }>`select "createdAt" as stored from events where name = 'first'`
+      .execute(db.qb)
+      .then((r) => r.rows)
+    expect(stored).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/)
+  })
+
   it('sorts stored timestamps chronologically, old CURRENT_TIMESTAMP values included', async () => {
     database.exec("insert into events (name, at) values ('old', '2026-05-01 00:00:00')")
     await db

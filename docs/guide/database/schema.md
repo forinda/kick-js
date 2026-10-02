@@ -90,7 +90,7 @@ text().array() // text[]  → TS type becomes T[]
 
 ```ts
 uuid().defaultRandom() // DEFAULT gen_random_uuid()
-timestamp().defaultNow() // DEFAULT CURRENT_TIMESTAMP
+timestamp().defaultNow() // DEFAULT CURRENT_TIMESTAMP (milliseconds on SQLite)
 timestamptz().defaultNow()
 ```
 
