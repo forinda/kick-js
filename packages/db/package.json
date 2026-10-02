@@ -37,6 +37,10 @@
       "import": "./dist/mysql.mjs",
       "types": "./dist/mysql.d.mts"
     },
+    "./testing": {
+      "import": "./dist/testing.mjs",
+      "types": "./dist/testing.d.mts"
+    },
     "./schema": {
       "import": "./dist/schema.mjs",
       "types": "./dist/schema.d.mts"
