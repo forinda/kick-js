@@ -101,9 +101,9 @@ kick db migrate status
 1. Acquire the single-row migration lock (`kick_migrations_lock`). A collision means another process is mid-migration — the command throws `MigrationLockError`.
 2. **Drift check** — introspect the live DB and compare against the last applied migration's `snapshot.json`. A mismatch throws `MigrationDriftError`. Behavior is `error` (default), `warn`, or `ignore`.
 3. Compute the pending set (journal entries not yet recorded as applied).
-4. Verify each pending migration's content hash matches the journal, and (outside dev) that it's reviewed.
+4. Verify each pending migration: outside development it must be reviewed, and a reviewed one must still match the hash `review` recorded.
 5. Allocate the next batch number.
-6. Apply each `up.sql` in order — each in its own transaction unless `meta.json.transaction === false` (for cases like PG `CREATE INDEX CONCURRENTLY`) — and record it.
+6. Apply each `up.sql` in order, each in its own transaction, and record it in `kick_migrations` in that same transaction — so a crash can't leave a migration applied but unrecorded. A migration with `meta.json.transaction === false` (for cases like PG `CREATE INDEX CONCURRENTLY`) runs outside a transaction and is recorded after it.
 7. Release the lock.
 
 ### Batches and rollback

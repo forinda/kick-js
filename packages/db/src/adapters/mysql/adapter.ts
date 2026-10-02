@@ -4,6 +4,7 @@ import {
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
+  type MigrationBookkeeping,
   type MigrationRow,
   type SchemaSnapshot,
 } from '../../index'
@@ -445,10 +446,27 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async applySqlInTx(sql: string) {
+      await this.applyMigrationInTx!(sql, null)
+    },
+
+    // MySQL commits DDL as it runs, so the transaction can't take a failed
+    // migration's DDL back; it still keeps the bookkeeping row with the
+    // statements that follow the last DDL.
+    async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       const conn = await pool.getConnection()
       try {
         await conn.query('START TRANSACTION')
         await runStatementsOnConn(conn, sql)
+        if (bookkeeping && 'record' in bookkeeping) {
+          const r = bookkeeping.record
+          await conn.query(
+            `INSERT INTO \`kick_migrations\` (id, name, hash, batch, direction)
+             VALUES (?, ?, ?, ?, ?)`,
+            [r.id, r.name, r.hash, r.batch, r.direction],
+          )
+        } else if (bookkeeping) {
+          await conn.query(`DELETE FROM \`kick_migrations\` WHERE id = ?`, [bookkeeping.remove])
+        }
         await conn.query('COMMIT')
       } catch (err) {
         await conn.query('ROLLBACK').catch(() => {

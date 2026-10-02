@@ -64,7 +64,7 @@ export {
   type JournalEntry,
 } from './migrate/journal'
 
-export type { MigrationAdapter, MigrationRow } from './migrate/adapter'
+export type { MigrationAdapter, MigrationBookkeeping, MigrationRow } from './migrate/adapter'
 export {
   migrationsTableDdl,
   lockTableDdl,

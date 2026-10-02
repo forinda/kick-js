@@ -1,5 +1,5 @@
 import type { Dialect, SchemaSnapshot } from '../snapshot/types'
-import type { MigrationAdapter, MigrationRow } from './adapter'
+import type { MigrationAdapter, MigrationBookkeeping, MigrationRow } from './adapter'
 
 /**
  * In-memory MigrationAdapter for unit tests. Lock semantics are exact (single-
@@ -43,6 +43,12 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
 
   async applySqlInTx(sql: string): Promise<void> {
     this.appliedSql.push(sql)
+  }
+
+  async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null): Promise<void> {
+    this.appliedSql.push(sql)
+    if (bookkeeping && 'record' in bookkeeping) await this.recordApplied(bookkeeping.record)
+    else if (bookkeeping) await this.removeApplied(bookkeeping.remove)
   }
 
   async applySqlNoTx(sql: string): Promise<void> {
