@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import Database from 'better-sqlite3'
 import {
   SerializationFailureError,
+  TransactionFinishedError,
   UniqueViolationError,
   createDbClient,
   serial,
@@ -203,5 +204,27 @@ describe('retry', () => {
       }),
     ).rejects.toThrow('bug')
     expect(calls).toBe(1)
+  })
+})
+
+describe('work that outlives its transaction', () => {
+  it('no longer counts as in the transaction, and a late query says why it failed', async () => {
+    let late!: Promise<{ inTx: boolean; error: unknown }>
+    const ranHook: string[] = []
+    await db.transaction(async () => {
+      // Not awaited — runs on after the transaction commits.
+      late = (async () => {
+        await new Promise((r) => setTimeout(r, 10))
+        const inTx = db.inTransaction
+        await db.afterCommit(() => void ranHook.push('late hook'))
+        const error = await (async () => repo.add('late@x.io'))().catch((e) => e)
+        return { inTx, error }
+      })()
+    })
+    const { inTx, error } = await late
+    expect(inTx).toBe(false)
+    expect(error).toBeInstanceOf(TransactionFinishedError)
+    expect(ranHook).toEqual(['late hook']) // outside a transaction it runs at once
+    expect(await emails()).toEqual([])
   })
 })

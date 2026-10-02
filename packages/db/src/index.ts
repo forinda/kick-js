@@ -25,6 +25,7 @@ export {
 } from './diff/composite-detect'
 
 export { KickDbError, RemovedValueAsDefaultError } from './errors'
+export { TransactionFinishedError } from './client/wrap'
 export {
   ConnectionError,
   DatabaseError,
