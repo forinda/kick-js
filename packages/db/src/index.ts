@@ -42,6 +42,7 @@ export {
 export {
   MigrationError,
   MigrationLockError,
+  MigrationFailedError,
   MigrationDriftError,
   MigrationHashError,
   UnreviewedMigrationError,

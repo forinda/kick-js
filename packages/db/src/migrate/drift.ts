@@ -114,7 +114,11 @@ export async function checkDrift(
   if (changes.length === 0) return
 
   const summary = summarize(changes)
-  const message = `Schema drift detected: ${summary.added.length} added, ${summary.removed.length} removed, ${summary.changed.length} changed`
+  const named = (['added', 'removed', 'changed'] as const)
+    .filter((k) => summary[k].length > 0)
+    .map((k) => `${k}: ${summary[k].join(', ')}`)
+    .join('; ')
+  const message = `Schema drift detected: ${summary.added.length} added, ${summary.removed.length} removed, ${summary.changed.length} changed (${named})`
   if (behavior === 'warn') {
     log.warn(message)
     return

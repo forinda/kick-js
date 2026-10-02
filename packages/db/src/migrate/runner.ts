@@ -2,7 +2,12 @@ import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 
 import { readJournal, computeMigrationHash } from './journal'
-import { MigrationLockError, MigrationHashError, UnreviewedMigrationError } from './errors'
+import {
+  MigrationFailedError,
+  MigrationLockError,
+  MigrationHashError,
+  UnreviewedMigrationError,
+} from './errors'
 import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
 import { enforceEnumDropGate } from './enum-drop-gate'
 import type { MigrationAdapter } from './adapter'
@@ -88,10 +93,14 @@ async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptio
   // a destructive migration without partial application.
   enforceEnumDropGate(entry.id, upSql, opts.confirmEnumDrop ?? false)
 
-  if (useTx) {
-    await opts.adapter.applySqlInTx(upSql)
-  } else {
-    await opts.adapter.applySqlNoTx(upSql)
+  try {
+    if (useTx) {
+      await opts.adapter.applySqlInTx(upSql)
+    } else {
+      await opts.adapter.applySqlNoTx(upSql)
+    }
+  } catch (err) {
+    throw new MigrationFailedError(entry.id, err)
   }
   await opts.adapter.recordApplied({
     id: entry.id,
