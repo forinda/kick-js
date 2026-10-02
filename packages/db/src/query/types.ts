@@ -31,7 +31,7 @@
  * exceeds `maxDepth`.
  */
 
-import type { Expression, ExpressionBuilder } from 'kysely'
+import type { Expression, ExpressionBuilder, SelectQueryBuilder } from 'kysely'
 import type { RegisteredDB } from '../client/register'
 
 /**
@@ -208,20 +208,44 @@ export type FindManyRow<
 type SelectedColumns<Row, C> =
   C extends Record<string, boolean | undefined>
     ? true extends C[keyof C]
-      ? Pick<
+      ? // Inclusion: a literal `true` is there; a `boolean` flag may be.
+        Pick<
           Row,
           { [K in keyof C & keyof Row]: C[K] extends true ? K : never }[keyof C & keyof Row]
-        >
-      : Omit<
+        > &
+          Partial<
+            Pick<
+              Row,
+              {
+                [K in keyof C & keyof Row]: C[K] extends true
+                  ? never
+                  : true extends C[K]
+                    ? K
+                    : never
+              }[keyof C & keyof Row]
+            >
+          >
+      : // Exclusion: only a literal `false` is certainly left out.
+        Omit<
           Row,
           { [K in keyof C & keyof Row]: C[K] extends false ? K : never }[keyof C & keyof Row]
         >
     : Row
 
-/** Each extra's value type, read off the expression it returns. */
+/**
+ * Each extra's value type, read off the expression it returns. A scalar
+ * subquery (`eb.selectFrom(…).select(x.as('n'))`) is its one column's value,
+ * or null when it finds no row.
+ */
 type ExtraFields<E> =
   E extends Record<string, (...args: never[]) => Expression<unknown>>
-    ? { [K in keyof E]: ReturnType<E[K]> extends Expression<infer T> ? T : never }
+    ? {
+        [K in keyof E]: ReturnType<E[K]> extends SelectQueryBuilder<any, any, infer O>
+          ? O[keyof O] | null
+          : ReturnType<E[K]> extends Expression<infer T>
+            ? T
+            : never
+      }
     : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
       {}
 

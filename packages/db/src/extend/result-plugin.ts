@@ -37,6 +37,7 @@ import {
   type UnknownRow,
 } from 'kysely'
 
+import type { ResolvedRelations } from '../query/relations'
 import type { ResultExtension, ResultExtensions } from './types'
 
 /** Per-table computed-field bag. */
@@ -51,7 +52,15 @@ export class ResultExtensionPlugin implements KyselyPlugin {
    */
   private pending = new Map<QueryId, string>()
 
-  constructor(extensions: ResultExtensions<unknown>) {
+  /**
+   * @param relations the client's relation graph. `db.query` returns related
+   * rows nested under their relation names; with it, those rows get their
+   * table's computeds too.
+   */
+  constructor(
+    extensions: ResultExtensions<unknown>,
+    private relations: ResolvedRelations = {},
+  ) {
     this.byTable = new Map()
     for (const [tableName, bag] of Object.entries(extensions)) {
       if (!bag) continue
@@ -80,32 +89,52 @@ export class ResultExtensionPlugin implements KyselyPlugin {
     if (!tableName) return args.result
     this.pending.delete(args.queryId)
 
-    const bag = this.byTable.get(tableName)
-    if (!bag) return args.result
-    const computeds = Object.entries(bag) as Array<[string, ResultExtension<UnknownRow>]>
-    if (computeds.length === 0) return args.result
-
-    const rows = args.result.rows.map((row) => {
-      if (row === null || row === undefined) return row
-      const base = row as Record<string, unknown>
-      const next: Record<string, unknown> = { ...base }
-      // Pass `base` (the pristine row, not `next`) into compute so
-      // computeds can't read each other's outputs by accident — order
-      // independence keeps the contract simple. Cross-computed
-      // dependencies are an explicit non-feature.
-      for (const [key, ext] of computeds) {
-        try {
-          next[key] = ext.compute(base as UnknownRow)
-        } catch {
-          // A throwing compute shouldn't poison the entire row set;
-          // surface as undefined so the caller still gets the
-          // pre-existing columns.
-          next[key] = undefined
-        }
-      }
-      return next as UnknownRow
-    })
+    const rows = args.result.rows.map((row) => this.computeRow(row, tableName, 0))
     return { ...args.result, rows }
+  }
+
+  /**
+   * The row with its table's computeds, and — for related rows `db.query`
+   * nested under a relation name — theirs, at every level.
+   */
+  private computeRow(row: UnknownRow, table: string, depth: number): UnknownRow {
+    if (row === null || typeof row !== 'object' || depth > MAX_NESTING) return row
+    const base = row as Record<string, unknown>
+    let next: Record<string, unknown> | undefined
+    const set = (key: string, value: unknown) => {
+      next ??= { ...base }
+      next[key] = value
+    }
+
+    const bag = this.byTable.get(table)
+    for (const [key, ext] of Object.entries(bag ?? {})) {
+      // A nested row holds only the columns `db.query` selected for it; a
+      // computed whose columns aren't all there is left off, not guessed.
+      if (depth > 0 && !Object.keys(ext.needs).every((c) => c in base)) continue
+      // Pass `base` (the pristine row) into compute so computeds can't read
+      // each other's outputs — order independence keeps the contract simple.
+      let value: unknown
+      try {
+        value = ext.compute(base as UnknownRow)
+      } catch {
+        // A throwing compute shouldn't poison the row set: undefined.
+        value = undefined
+      }
+      set(key, value)
+    }
+
+    for (const [key, rel] of Object.entries(this.relations[table] ?? {})) {
+      const value = base[key]
+      if (Array.isArray(value)) {
+        set(
+          key,
+          value.map((v) => this.computeRow(v as UnknownRow, rel.target, depth + 1)),
+        )
+      } else if (value && typeof value === 'object' && !(value instanceof Date)) {
+        set(key, this.computeRow(value as UnknownRow, rel.target, depth + 1))
+      }
+    }
+    return (next ?? base) as UnknownRow
   }
 }
 
@@ -116,6 +145,9 @@ export class ResultExtensionPlugin implements KyselyPlugin {
  * and anything we can't reliably attribute. The plugin only acts on
  * single-table selects in v1.
  */
+/** Relation nesting is bounded by `maxDepth` in the compiler; this only guards a cycle. */
+const MAX_NESTING = 32
+
 function singleTableTarget(node: SelectQueryNode): string | null {
   const from = node.from
   if (!from || from.froms.length !== 1) return null

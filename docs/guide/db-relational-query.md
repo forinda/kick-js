@@ -110,7 +110,7 @@ const user = await this.db.query.users.findFirst({
       eb
         .selectFrom('posts')
         .select(eb.fn.countAll<number>().as('n'))
-        .whereRef('posts.authorId', '=', 'users_0.id'),
+        .where('posts.authorId', '=', sql.ref<number>('users_0.id')),
   },
   with: {
     posts: {
@@ -123,7 +123,7 @@ const user = await this.db.query.users.findFirst({
 ```
 
 - **`columns`:** either name the columns you want (`true`) or the ones you don't (`false`); a mix of both is refused. Leaving it out returns every column.
-- **`extras`:** each one is an SQL expression over the row, and its type comes from the expression (`sql<number>`, `eb.fn.countAll<number>()`). To refer to the row in a correlated subquery, use its alias: the table name, then `_` and the nesting depth (`users_0` at the top, `posts_1` one level down).
+- **`extras`:** each one is an SQL expression over the row, and its type comes from the expression (`sql<number>`, `eb.fn.countAll<number>()`). To refer to the row in a correlated subquery, use its alias through `sql.ref()`, which type-checks where a string reference wouldn't: the table name, then `_` and the nesting depth (`users_0` at the top, `posts_1` one level down). A scalar subquery types as its one column's value, or `null`.
 - **The row type follows both.** Excluded columns aren't on it, and each extra is.
 - **Counts on Postgres:** at the top level, `count(*)` comes back as a string (a `bigint`). Cast it in SQL (`count(*)::int`) or with `Number()`. Inside `with` it comes back as JSON, so it's a number.
 

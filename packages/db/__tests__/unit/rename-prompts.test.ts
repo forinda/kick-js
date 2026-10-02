@@ -158,6 +158,67 @@ describe('generate asks about renames', () => {
     expect(up).not.toContain('DROP TABLE')
   })
 
+  it("doesn't offer a name a flag already claimed, but still asks about the drop", async () => {
+    const migrationsDir = path.join(dir, 'migrations')
+    const now = () => new Date(Date.UTC(2026, 9, 3, 12, 0, 0))
+    const write = async (file: string, body: string) => {
+      await writeFile(
+        path.join(dir, file),
+        `import { serial, table, text } from '@forinda/kickjs-db'\n${body}`,
+      )
+      return { schemaPath: path.join(dir, file), migrationsDir, dialect: 'postgres' as const }
+    }
+    await generate({
+      name: 'init',
+      config: await write(
+        'a.ts',
+        `export const users = table('users', { id: serial().primaryKey(), a: text(), b: text() })
+export const orders = table('orders', { id: serial().primaryKey() })`,
+      ),
+      cwd: dir,
+      now,
+    })
+    const asked: unknown[] = []
+    await generate({
+      name: 'next',
+      config: await write(
+        'b.ts',
+        `export const people = table('people', { id: serial().primaryKey(), x: text(), y: text() })
+export const members = table('members', { id: serial().primaryKey() })`,
+      ),
+      cwd: dir,
+      now: () => new Date(Date.UTC(2026, 9, 3, 12, 1, 0)),
+      renames: { tables: { orders: 'members' }, columns: {} },
+      askRenames: async (c) => {
+        asked.push(c)
+        return c.tables.length > 0
+          ? { tables: { users: 'people' } }
+          : { columns: { 'people.b': 'y' } }
+      },
+    })
+    // users could have become people or members; a flag claimed members.
+    expect(asked[0]).toEqual({ tables: [{ from: 'users', to: ['people'] }], columns: [] })
+  })
+
+  it('a column name a flag claimed is not offered', async () => {
+    const { v2, now } = await setup()
+    const asked: { columns: { to: string[] }[] }[] = []
+    await generate({
+      name: 'rename',
+      config: v2,
+      cwd: dir,
+      now,
+      renames: { tables: { users: 'people' }, columns: { 'people.fullName': 'displayName' } },
+      askRenames: async (c) => {
+        asked.push(c)
+        return {}
+      },
+    })
+    expect(asked).toEqual([
+      { tables: [], columns: [{ table: 'people', from: 'nickname', to: ['bio'] }] },
+    ])
+  })
+
   it('without a prompt, warns about each drop that could have been a rename', async () => {
     const { v2, now } = await setup()
     const warned: string[] = []

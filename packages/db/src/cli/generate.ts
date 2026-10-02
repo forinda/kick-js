@@ -205,19 +205,29 @@ async function resolveRenames(
   const given = opts.renames ?? {}
   if (!opts.askRenames) return { renames: given }
 
+  // A name a flag already claimed isn't offered again; a drop is only left
+  // out when a flag named it or nothing is left for it to become.
   const tables = { ...given.tables }
-  const tableCandidates = findRenameCandidates(prev, target).tables.filter(
-    (c) => !(c.from in tables) && !c.to.some((to) => Object.values(tables).includes(to)),
-  )
+  const claimedTables = new Set(Object.values(tables))
+  const tableCandidates = findRenameCandidates(prev, target)
+    .tables.filter((c) => !(c.from in tables))
+    .map((c) => Object.assign(c, { to: c.to.filter((t) => !claimedTables.has(t)) }))
+    .filter((c) => c.to.length > 0)
   if (tableCandidates.length > 0) {
     Object.assign(tables, (await opts.askRenames({ tables: tableCandidates, columns: [] })).tables)
   }
 
   const columns = { ...given.columns }
-  const renamed = withTableRenames(prev, target, tables)
-  const columnCandidates = findRenameCandidates(renamed, target).columns.filter(
-    (c) => !(`${c.table}.${c.from}` in columns),
+  const claimedColumns = new Set(
+    Object.entries(columns).map(([key, to]) => `${key.slice(0, key.lastIndexOf('.'))}.${to}`),
   )
+  const renamed = withTableRenames(prev, target, tables)
+  const columnCandidates = findRenameCandidates(renamed, target)
+    .columns.filter((c) => !(`${c.table}.${c.from}` in columns))
+    .map((c) =>
+      Object.assign(c, { to: c.to.filter((t) => !claimedColumns.has(`${c.table}.${t}`)) }),
+    )
+    .filter((c) => c.to.length > 0)
   if (columnCandidates.length > 0) {
     Object.assign(
       columns,

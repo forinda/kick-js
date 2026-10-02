@@ -308,7 +308,13 @@ function pickColumns(
   }
   if (included.length > 0) return Object.keys(table.columns).filter((c) => included.includes(c))
   const excluded = new Set(spec.map(([c]) => c))
-  return Object.keys(table.columns).filter((c) => !excluded.has(c))
+  const kept = Object.keys(table.columns).filter((c) => !excluded.has(c))
+  // An empty list would fall back to every column on a nested level — the
+  // opposite of what was asked — so it is refused rather than guessed.
+  if (kept.length === 0) {
+    throw new Error(`kickjs-db: columns on '${name}' leaves out every column — keep at least one`)
+  }
+  return kept
 }
 
 /** Select each extra's expression under its name. */

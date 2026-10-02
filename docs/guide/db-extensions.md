@@ -214,7 +214,8 @@ const rows = await dbX.selectFrom('posts').selectAll().execute()
 - Sync only in v1 — async opens up "runtime queries inside compute" footguns. Use a model method when you need to query.
 - Each row is computed independently; computeds on the same table all run per row.
 - A throwing `compute()` degrades to `undefined` on that row's property; sibling computeds and rows still complete cleanly.
-- Single-table only: joins, sub-selects, multi-table FROM clauses pass through untouched. Cross-table computeds are roadmap.
+- `db.query` reads apply them at every level: related rows loaded through `with` get their own table's computeds. A nested row whose `columns` leave out what a computed `needs` is returned without that computed.
+- On the query builder, single-table selects only: joins, sub-selects and multi-table `FROM` clauses pass through untouched.
 
 **How the rebuild works** — `$extends({ result })` registers a query-pipeline plugin that owns the transform pair. The new client shares the original's event emitter, savepoint counter, and dialect tag, so `.transaction()` / `.on('slowQuery', …)` / per-call savepoints keep working transparently. `$extends({ model })` alone (no `result`) skips the rebuild — it stays a thin Proxy as before. Composing both in one call is the common path:
 

@@ -63,7 +63,7 @@ describe('columns and extras in db.query', () => {
           eb
             .selectFrom('posts')
             .select(eb.fn.countAll<number>().as('n'))
-            .whereRef('posts.authorId', '=', 'users_0.id'),
+            .where('posts.authorId', '=', sql.ref<number>('users_0.id')),
         shout: () => sql<string>`upper(email)`,
       },
       with: {
@@ -86,7 +86,7 @@ describe('columns and extras in db.query', () => {
     })
   })
 
-  it('refuses a mix of true and false, and an unknown column', async () => {
+  it('refuses a mix of true and false, an unknown column, and no columns at all', async () => {
     const db = await make()
     await expect(db.query.users.findMany({ columns: { id: true, email: false } })).rejects.toThrow(
       /mixes true and false/,
@@ -94,5 +94,35 @@ describe('columns and extras in db.query', () => {
     await expect(db.query.users.findMany({ columns: { nope: true } as never })).rejects.toThrow(
       /doesn't have/,
     )
+    await expect(
+      db.query.users.findMany({
+        with: { posts: { columns: { id: false, authorId: false, title: false, body: false } } },
+      }),
+    ).rejects.toThrow(/leaves out every column/)
+  })
+})
+
+describe('result extensions on db.query', () => {
+  it('compute on related rows too, at every level', async () => {
+    const db = (await make()).$extends({
+      result: {
+        users: {
+          handle: { needs: { email: true }, compute: (u) => u.email.split('@')[0] },
+        },
+        posts: {
+          slug: { needs: { title: true }, compute: (p) => p.title.toLowerCase() },
+        },
+      },
+    })
+    const posts = await db.query.posts.findMany({
+      orderBy: (_p, eb) => eb.ref('id'),
+      with: { author: { with: { posts: { columns: { id: true } } } } },
+    })
+    expect(posts[0]).toMatchObject({ slug: 'one', author: { handle: 'ada' } })
+    // A nested row without the columns a computed needs is left without it.
+    expect(posts[0].author!.posts).toEqual([{ id: 1 }, { id: 2 }])
+    const users = await db.query.users.findMany({ with: { posts: true } })
+    expect(users[0].handle).toBe('ada')
+    expect(users[0].posts.map((p) => p.slug)).toEqual(['one', 'two'])
   })
 })
