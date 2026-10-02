@@ -19,6 +19,7 @@ import type { Command } from 'commander'
 
 import { defineCliPlugin, type KickCliPlugin } from '@forinda/kickjs-cli-kit'
 import { kickDbTypegen } from './cli-typegen'
+import { checkMigrations } from './cli/check'
 
 export { kickDbTypegen } from './cli-typegen'
 
@@ -215,6 +216,32 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       }
     })
 
+  parent
+    .command('check')
+    .description(
+      'Fail if the schema has changes no migration covers, or a migration is unreviewed or edited (no database needed — for CI)',
+    )
+    .action(async () => {
+      const config = await getConfig()
+      const r = await checkMigrations({ config, cwd: process.cwd() })
+      if (r.unmigratedChanges > 0) {
+        const plural = r.unmigratedChanges === 1 ? '' : 's'
+        console.error(
+          `The schema has ${r.unmigratedChanges} change${plural} no migration covers — run \`kick db generate <name>\`.`,
+        )
+      }
+      for (const id of r.unreviewed) {
+        console.error(`${id} is not reviewed — read it, then \`kick db migrate review ${id}\`.`)
+      }
+      for (const id of r.modified) {
+        console.error(
+          `${id} was edited after it was generated — its hash no longer matches the journal.`,
+        )
+      }
+      if (r.ok) console.log('Migrations are in step with the schema.')
+      else process.exitCode = 1
+    })
+
   // ── migrate runner subcommands ─────────────────────────────────────────
   const migrate = parent.command('migrate').description('Migration runner subcommands')
 
@@ -322,6 +349,22 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
         printStatusTable(await migrateStatus({ adapter, migrationsDir: config.migrationsDir }))
+      } finally {
+        await cleanup()
+      }
+    })
+
+  migrate
+    .command('unlock')
+    .description(
+      'Release the migration lock left by a run that was killed mid-migration (make sure none is running)',
+    )
+    .action(async () => {
+      const config = await getConfig()
+      const { adapter, cleanup } = await resolveAdapter(config)
+      try {
+        await adapter.releaseLock()
+        console.log('Released the migration lock.')
       } finally {
         await cleanup()
       }

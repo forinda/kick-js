@@ -41,7 +41,9 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
   const owner = opts.owner ?? `${process.pid}@${new Date().toISOString()}`
   const got = await opts.adapter.acquireLock(owner)
   if (!got) {
-    throw new MigrationLockError('Another process holds the migration lock')
+    throw new MigrationLockError(
+      'Another process holds the migration lock. If none is running — a deploy was killed mid-migration — release it with `kick db migrate unlock`.',
+    )
   }
   try {
     return await fn()

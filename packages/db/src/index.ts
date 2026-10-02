@@ -133,6 +133,7 @@ export { emitMysql } from './emit/mysql'
 export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
+export { checkMigrations, type CheckResult } from './cli/check'
 
 export * from './dsl/columns'
 export * from './dsl/table'

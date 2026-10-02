@@ -1,0 +1,58 @@
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+import type { DbConfig } from './config'
+import { diff } from '../diff/engine'
+import { computeMigrationHash, readJournal } from '../migrate/journal'
+import { extractSnapshot } from '../snapshot/extract'
+import { readLatestSnapshotEntry } from './generate'
+
+export interface CheckResult {
+  /** Changes in the schema that no migration covers yet — run `kick db generate`. */
+  unmigratedChanges: number
+  /** Migrations not marked reviewed — the runner refuses them outside development. */
+  unreviewed: string[]
+  /** Migrations whose files changed after they were journaled — the runner refuses them. */
+  modified: string[]
+  ok: boolean
+}
+
+/**
+ * Everything `migrate latest` would refuse, found without a database — for
+ * CI, before a deploy reaches one: the schema has changes no migration
+ * covers, a migration is unreviewed, or a migration was edited after it was
+ * generated.
+ */
+export async function checkMigrations(opts: {
+  config: DbConfig
+  cwd: string
+}): Promise<CheckResult> {
+  const migrationsAbs = path.resolve(opts.cwd, opts.config.migrationsDir)
+  const { snapshot: prev } = await readLatestSnapshotEntry(migrationsAbs, opts.config.dialect)
+  const schemaModule = await import(
+    pathToFileURL(path.resolve(opts.cwd, opts.config.schemaPath)).href
+  )
+  const unmigratedChanges = diff(prev, extractSnapshot(schemaModule, opts.config.dialect)).length
+
+  const unreviewed: string[] = []
+  const modified: string[] = []
+  if (existsSync(migrationsAbs)) {
+    for (const entry of (await readJournal(migrationsAbs, opts.config.dialect)).entries) {
+      const dir = path.join(migrationsAbs, entry.id)
+      if ((await computeMigrationHash(dir)) !== entry.hash) modified.push(entry.id)
+      const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8')) as {
+        reviewed?: boolean
+      }
+      if (meta.reviewed !== true) unreviewed.push(entry.id)
+    }
+  }
+
+  return {
+    unmigratedChanges,
+    unreviewed,
+    modified,
+    ok: unmigratedChanges === 0 && unreviewed.length === 0 && modified.length === 0,
+  }
+}
