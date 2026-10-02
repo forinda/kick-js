@@ -328,7 +328,7 @@ try {
 }
 ```
 
-`ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError` and `ConnectionError` follow the same pattern, each with the `constraint`, `table` and `columns` involved. An unhandled `UniqueViolationError` answers `409` in a KickJS app. [Errors](./errors.md) lists them.
+`ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError` and `ConnectionError` follow the same pattern. Each carries the `constraint`, `table` and `columns` involved when the driver reports them — `constraint` and `table` may be missing and `columns` empty, and the transaction and connection errors usually have none. An unhandled `UniqueViolationError` answers `409` in a KickJS app. [Errors](./errors.md) lists them.
 
 ## Types and validation
 

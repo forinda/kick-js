@@ -9,7 +9,7 @@ The same path as [Getting started](./index.md), on MySQL 8.0+ or MariaDB 10.5+: 
 ## 1. Start a database
 
 ```bash
-docker run -d --name app-mysql -p 3306:3306 \
+docker run -d --name app-mysql -p 127.0.0.1:3306:3306 \
   -e MYSQL_ROOT_PASSWORD=mysql -e MYSQL_DATABASE=app mysql:8
 ```
 
@@ -196,8 +196,9 @@ MySQL has no `RETURNING`. `returningAll()` type-checks but fails at run time wit
 ```ts
 // src/modules/users/user.repository.ts
 import { randomUUID } from 'node:crypto'
+import type { db as appDb } from '../../db/client'
 
-export function createUserRepository(db: typeof Db) {
+export function createUserRepository(db: typeof appDb) {
   return {
     /** A user with their posts, in one query. */
     async findById(id: string) {

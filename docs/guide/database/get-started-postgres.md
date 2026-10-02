@@ -11,7 +11,7 @@ The same path as [Getting started](./index.md), on PostgreSQL: install, schema, 
 Any Postgres 13 or newer works. For a local one:
 
 ```bash
-docker run -d --name app-pg -p 5432:5432 \
+docker run -d --name app-pg -p 127.0.0.1:5432:5432 \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=app postgres:18-alpine
 ```
 
@@ -189,7 +189,9 @@ A repository built on the client, registered with `createUserRepository(containe
 
 ```ts
 // src/modules/users/user.repository.ts
-export function createUserRepository(db: typeof Db) {
+import type { db as appDb } from '../../db/client'
+
+export function createUserRepository(db: typeof appDb) {
   return {
     /** A user with their posts, in one query. */
     async findById(id: string) {

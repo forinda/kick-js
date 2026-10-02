@@ -157,11 +157,7 @@ const user = await repo.findOne({
 const user = await db.query.users.findFirst({
   where: (u, eb) => eb('id', '=', 1),
   with: {
-    posts: {
-      where: (_p, eb) => eb('publishedAt', 'is not', null),
-      orderBy: (_p, eb) => eb.ref('publishedAt'),
-      limit: 5,
-    },
+    posts: { orderBy: (_p, eb) => eb.ref('publishedAt') },
   },
 })
 // user.posts: Post[]
@@ -170,7 +166,7 @@ const posts = await db.query.posts.findMany({ with: { author: true } })
 // posts[0].author: User | null
 ```
 
-`with` compiles to a single query whatever the depth — no N+1, and no lazy property that queries behind your back. `orderBy` takes an expression and sorts ascending; wrap the column in `desc()` (from `@forinda/kickjs-db`) for descending: `orderBy: (_p, eb) => desc(eb.ref('publishedAt'))`. `db.query` is read-only; writes go through `insertInto` / `updateTable` / `deleteFrom`.
+Each relation also takes its own `where` and `limit` — `posts: { where: …, limit: 5 }` — which TypeORM's `relations` can't express without a query builder. `with` compiles to a single query whatever the depth — no N+1, and no lazy property that queries behind your back. `orderBy` takes an expression and sorts ascending; wrap the column in `desc()` (from `@forinda/kickjs-db`) for descending: `orderBy: (_p, eb) => desc(eb.ref('publishedAt'))`. `db.query` is read-only; writes go through `insertInto` / `updateTable` / `deleteFrom`.
 
 ### Find operators
 
@@ -192,10 +188,13 @@ await repo.find({
 await db
   .selectFrom('users')
   .selectAll()
-  .where('createdAt', '>=', since)
-  .where('id', 'in', [1, 2, 3])
-  .where('name', 'like', 'Ada%')
-  .where((eb) => eb.or([eb('name', '=', 'Ada L.'), eb('email', 'like', '%@example.org')]))
+  // Each object in TypeORM's where array is one OR branch; its fields are ANDed.
+  .where((eb) =>
+    eb.or([
+      eb.and([eb('createdAt', '>=', since), eb('id', 'in', [1, 2, 3]), eb('name', 'like', 'Ada%')]),
+      eb('email', 'like', '%@example.org'),
+    ]),
+  )
   .orderBy('createdAt', 'desc')
   .limit(20)
   .offset(0)
