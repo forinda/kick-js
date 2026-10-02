@@ -719,7 +719,7 @@ uncompressed JS unless a CDN sits in front.
 
 ### E.9 Background jobs, bring your own runner {#e-9-background-jobs-bring-your-own-runner}
 
-**Status:** `proposed`
+**Status:** `shipped` — `@Job` / `@Process` in `@forinda/kickjs` with `listJobHandlers` / `listJobQueues` / `runJob` and a `JOB_DISPATCHER` token; `QueueAdapter` runs every job through `runJob` and honours `provider`; the web entry's `queue()` consumes Cloudflare Queues. See [Background Jobs](./jobs.md).
 **Effort:** 1–2 weeks
 
 **What we have.** `@forinda/kickjs-queue` provides `@Job` / `@Process` and `QueueService`, and ships BullMQ, RabbitMQ, Kafka and Redis pub/sub providers behind a `QueueProvider` interface. But `QueueAdapter` takes Redis options and builds BullMQ queues directly — it never reads a provider, so the other three can't be used and the interface's own example (`QueueAdapter({ provider })`) doesn't compile. Using any other tool (pg-boss, SQS, Inngest, Cloudflare Queues) means rebuilding discovery and error handling by hand.
@@ -806,15 +806,14 @@ Not planned, after the same comparison: per-row lifecycle hooks (an extra query 
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, and **C.1** re-scoped (validation from tables, and table forms). The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), and **E.9** background jobs with any runner. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **E.9 — Background jobs, bring your own runner** (1–2 weeks)
-2. **D.5–D.7 — typed database errors, call-chain transactions, transaction retry** (about 1 week together)
-3. **D.8 — primary-key and CHECK changes in migrations** (fixes a silent migration bug)
-4. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-5. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
+1. **D.5–D.7 — typed database errors, call-chain transactions, transaction retry** (about 1 week together)
+2. **D.8 — primary-key and CHECK changes in migrations** (fixes a silent migration bug)
+3. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+4. **Typegen registration manifest** (from C.2) — register decorated classes without relying on side-effect imports
 
 Open for redirection — these are starting points, not commitments.
 
