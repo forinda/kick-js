@@ -39,14 +39,14 @@ Plugins take the same two hooks.
 
 `info.source` says where the error came from:
 
-| `source`              | When                                                                            |
-| --------------------- | ------------------------------------------------------------------------------- |
-| `request`             | A handler, middleware, guard or validation threw — any status, 4xx included     |
-| `uncaught`            | An uncaught exception (with the default `processHooks`)                         |
-| `unhandled-rejection` | An unhandled promise rejection                                                  |
-| `background`          | Work passed to [`ctx.waitUntil()`](./serverless.md) failed                      |
-| `cron`                | A [`@Cron`](./cron.md) job failed (`context` holds job, expression, trigger)    |
-| `job`                 | A `@forinda/kickjs-queue` job failed (`context` holds queue, job, id, attempts) |
+| `source`              | When                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| `request`             | A handler, middleware, guard or validation threw — any status, 4xx included                     |
+| `uncaught`            | An uncaught exception (with the default `processHooks`)                                         |
+| `unhandled-rejection` | An unhandled promise rejection                                                                  |
+| `background`          | Work passed to [`ctx.waitUntil()`](./serverless.md) failed                                      |
+| `cron`                | A [`@Cron`](./cron.md) job failed (`context` holds job, expression, trigger)                    |
+| `job`                 | A [background job](./jobs.md) failed (`context` holds queue, job, id, and what the runner adds) |
 
 Request errors also carry `method`, `path`, `route` (the matched pattern, e.g. `/api/v1/users/:id`), `status` (what the error is answered with) and `requestId`.
 

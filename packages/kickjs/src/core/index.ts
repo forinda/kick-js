@@ -111,6 +111,22 @@ export {
   CRON_META,
 } from './cron'
 
+// Background jobs
+export {
+  Job,
+  Process,
+  listJobHandlers,
+  listJobQueues,
+  runJob,
+  NoJobHandlerError,
+  JOB_DISPATCHER,
+  JOB_META,
+  type JobDispatcher,
+  type JobHandler,
+  type JobLike,
+  type ProcessDefinition,
+} from './jobs'
+
 // Cache
 export {
   Cacheable,

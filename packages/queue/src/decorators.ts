@@ -1,63 +1,6 @@
-import { Service, setClassMeta, pushClassMeta } from '@forinda/kickjs'
-import { QUEUE_METADATA, jobRegistry, type ProcessDefinition } from './types'
-
 /**
- * Mark a class as a job processor for a specific BullMQ queue.
- *
- * The class is automatically registered in the DI container and will
- * be discovered by the QueueAdapter during startup.
- *
- * @param queueName - The name of the BullMQ queue this class processes
- *
- * @example
- * ```ts
- * @Job('email')
- * export class EmailJobProcessor {
- *   @Process('welcome')
- *   async sendWelcome(job: BullMQJob) {
- *     await sendEmail(job.data.to, 'Welcome!')
- *   }
- *
- *   @Process()
- *   async handleAll(job: BullMQJob) {
- *     console.log('Fallback handler for:', job.name)
- *   }
- * }
- * ```
+ * `@Job` / `@Process` live in `@forinda/kickjs`, where any job runner can
+ * read them (`listJobHandlers`, `runJob`). Re-exported here so existing
+ * imports from `@forinda/kickjs-queue` keep working.
  */
-export function Job(queueName: string): ClassDecorator {
-  return (target: any) => {
-    Service()(target)
-    setClassMeta(QUEUE_METADATA.JOB, queueName, target)
-    jobRegistry.add(target)
-  }
-}
-
-/**
- * Mark a method as a job processor within a @Job class.
- *
- * @param jobName - Specific job name to handle. Omit to handle all jobs in the queue.
- *
- * @example
- * ```ts
- * @Job('notifications')
- * export class NotificationProcessor {
- *   @Process('push')
- *   async handlePush(job: BullMQJob) { ... }
- *
- *   @Process('sms')
- *   async handleSms(job: BullMQJob) { ... }
- *
- *   @Process()
- *   async handleDefault(job: BullMQJob) { ... }
- * }
- * ```
- */
-export function Process(jobName?: string): MethodDecorator {
-  return (target, propertyKey) => {
-    pushClassMeta<ProcessDefinition>(QUEUE_METADATA.PROCESS, target.constructor, {
-      handlerName: propertyKey as string,
-      jobName,
-    })
-  }
-}
+export { Job, Process } from '@forinda/kickjs'
