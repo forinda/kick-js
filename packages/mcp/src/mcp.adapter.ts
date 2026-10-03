@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   Logger,
   METADATA,
@@ -317,7 +317,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     /** Elicitation answers carried between rounds, signed so a client can't forge them. */
     type Answer = { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
-    type ElicitState = { tool: string; answers: Record<string, Answer> }
+    // `args` pins the answers to the call they were given for: approving
+    // `env: 'prod'` must not carry over to a retry with other arguments.
+    type ElicitState = { tool: string; args: string; answers: Record<string, Answer> }
     const stateCodec = createRequestStateCodec<ElicitState>({
       key: options.requestStateKey ?? randomBytes(32),
       // State minted for one caller can't be replayed by another.
@@ -671,12 +673,31 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     }
 
     /** Run a custom tool: validate arguments, call the handler, shape the result. */
+    /** A digest of a call's validated arguments, independent of key order. */
+    const argumentsKey = (input: unknown): string => {
+      const canonical = (value: unknown): unknown =>
+        Array.isArray(value)
+          ? value.map(canonical)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(
+                Object.keys(value)
+                  .toSorted()
+                  .map((k) => [k, canonical((value as Record<string, unknown>)[k])]),
+              )
+            : value
+      return createHash('sha256')
+        .update(JSON.stringify(canonical(input ?? null)))
+        .digest('base64url')
+    }
+
     /** Answers from earlier rounds (signed state) plus this round's responses. */
-    const elicitAnswers = (tool: string, extra: unknown): Record<string, Answer> => {
+    const elicitAnswers = (tool: string, args: string, extra: unknown): Record<string, Answer> => {
       const mcpReq = (extra as ServerContext | undefined)?.mcpReq
       const state = mcpReq?.requestState<ElicitState>()
       const answers =
-        state && typeof state === 'object' && state.tool === tool ? { ...state.answers } : {}
+        state && typeof state === 'object' && state.tool === tool && state.args === args
+          ? { ...state.answers }
+          : {}
       for (const key of Object.keys(mcpReq?.inputResponses ?? {})) {
         const view = inputResponse(mcpReq?.inputResponses, key)
         if (view.kind === 'elicit') answers[key] = { action: view.action, content: view.content }
@@ -709,7 +730,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
       const call = callContextOf(extra)
       const signal = callSignal(extra) ?? new AbortController().signal
-      const answers = elicitAnswers(entry.tool.name, extra)
+      const argsKey = argumentsKey(input)
+      const answers = elicitAnswers(entry.tool.name, argsKey, extra)
       const context: McpToolContext = {
         headers: call.headers,
         principal: call.principal,
@@ -760,7 +782,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
               }),
             },
             requestState: await stateCodec.mint(
-              { tool: entry.tool.name, answers },
+              { tool: entry.tool.name, args: argsKey, answers },
               extra as ServerContext,
             ),
           }) as never
@@ -1060,6 +1082,15 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           } else if (entry.template.list) {
             const links = await entry.template.list(resourceContext(ctx))
             for (const link of links) {
+              // Each listed URI is filtered too, not just its template.
+              const summary: McpResourceSummary = {
+                kind: 'resource',
+                name: link.name,
+                uri: link.uri,
+                scopes: entry.summary.scopes,
+                provider: entry.summary.provider,
+              }
+              if (!(await resourceVisible(summary, call))) continue
               resources.push({ mimeType: entry.template.mimeType, ...link })
             }
           }

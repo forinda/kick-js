@@ -111,3 +111,41 @@ describe.each([
     )
   })
 })
+
+describe('ctx.elicit answers', () => {
+  it("don't carry over to a retry with other arguments", async () => {
+    const port = await start()
+    const client = new Client(
+      { name: 'test', version: '1.0.0' },
+      {
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+        capabilities: { elicitation: { form: {} } },
+        inputRequired: { autoFulfill: false },
+      },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)))
+    clients.push(client)
+
+    type Round = { requestState: string; inputRequests?: Record<string, unknown> }
+    const call = async (env: string, extra: Record<string, unknown> = {}) =>
+      (await client.callTool({ name: 'deploy', arguments: { env }, ...extra } as never, {
+        allowInputRequired: true,
+      })) as unknown as Round
+
+    // Round 1 asks to confirm; round 2 carries the approval for prod in its
+    // signed state and asks for the note.
+    const first = await call('prod')
+    const second = await call('prod', {
+      inputResponses: { confirm: { action: 'accept', content: { confirm: true } } },
+      requestState: first.requestState,
+    })
+    expect(Object.keys(second.inputRequests ?? {})).toEqual(['note'])
+
+    // Replaying that state against staging must not reuse the prod approval.
+    const replayed = await call('staging', {
+      inputResponses: { note: { action: 'accept', content: { note: 'x' } } },
+      requestState: second.requestState,
+    })
+    expect(Object.keys(replayed.inputRequests ?? {})).toEqual(['confirm'])
+  })
+})

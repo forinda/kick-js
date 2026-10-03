@@ -139,6 +139,17 @@ describe('resource access', () => {
     await expect(client.readResource({ uri: 'config://app' })).rejects.toThrow()
   })
 
+  it('filters each URI a template lists, not just the template', async () => {
+    const { port } = await start({
+      resourceFilter: (resource) => resource.uri !== 'invoices://inv-1',
+    })
+    const client = await connect(port, { pin: '2026-07-28' })
+    expect((await client.listResources()).resources.map((r) => r.uri)).not.toContain(
+      'invoices://inv-1',
+    )
+    expect((await client.listResourceTemplates()).resourceTemplates).toHaveLength(1)
+  })
+
   it('answers 403 insufficient_scope for a resource the token lacks scopes for', async () => {
     const { port } = await start({
       stateless: true,

@@ -44,7 +44,7 @@ container.resolve(MCP_ADAPTER).registerResourceProvider(invoices)
 
 ## Who sees what
 
-`resourceFilter` decides which resources a caller sees, like `toolFilter` does for tools. It applies to `resources/list`, `resources/templates/list` and `resources/read`, and a hidden resource reads as not found:
+`resourceFilter` decides which resources a caller sees, like `toolFilter` does for tools. It applies to `resources/list` (including each URI a template's `list` returns), `resources/templates/list` and `resources/read`, and a hidden resource reads as not found:
 
 ```ts
 McpAdapter({

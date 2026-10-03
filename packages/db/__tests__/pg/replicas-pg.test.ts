@@ -30,6 +30,10 @@ describe('read replicas on Postgres', () => {
   it('routes reads to the replica and writes to the primary', async () => {
     const primaryPool = new pg.Pool({ connectionString: primary.connectionString })
     const replicaPool = new pg.Pool({ connectionString: replica.connectionString })
+    // drop() force-terminates connections still closing after destroy().
+    for (const pool of [primaryPool, replicaPool]) {
+      pool.on('connect', (client) => client.on('error', () => {}))
+    }
     const db = createDbClient({
       schema,
       dialect: pgDialect({ pool: primaryPool }),
