@@ -125,5 +125,8 @@ describe('migration and transaction options on Postgres', () => {
     const { rows } = await pool.query('SELECT name FROM meta.schema_history')
     expect(rows).toEqual([{ name: 'init' }])
     expect((await migrateLatest(opts)).applied).toEqual([])
+    // A user table with the same bare name in the introspected schema is still reported.
+    await pool.query('CREATE TABLE public.schema_history (id int)')
+    expect(Object.keys((await adapter.introspect()).tables)).toContain('schema_history')
   }, 30_000)
 })

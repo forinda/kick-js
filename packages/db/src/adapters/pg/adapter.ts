@@ -102,10 +102,14 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
   const T = quoteTable(dialect, table)
   const L = quoteTable(dialect, lockTableName(table))
   // Introspection must not report the bookkeeping tables as schema.
-  // Postgres reads a dotted name as schema.table; introspection matches the bare name.
-  const bookkeepingTables = [table, lockTableName(table)].map((t) =>
-    t.slice(t.lastIndexOf('.') + 1),
-  )
+  // Postgres reads a dotted name as schema.table. Introspection reads one
+  // schema and matches bare names, so the tables are only left out when they
+  // live in that schema — elsewhere, a same-named table here is the user's.
+  const bookkeepingSchema = table.includes('.') ? table.slice(0, table.lastIndexOf('.')) : schema
+  const bookkeepingTables =
+    bookkeepingSchema === schema
+      ? [table, lockTableName(table)].map((t) => t.slice(t.lastIndexOf('.') + 1))
+      : []
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,
