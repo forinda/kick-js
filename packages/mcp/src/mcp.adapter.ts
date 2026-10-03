@@ -21,9 +21,12 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
   isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js'
 import {
@@ -34,12 +37,17 @@ import {
 } from '@forinda/kickjs-schema'
 import { MCP_ADAPTER } from './constants'
 import { getMcpToolMeta } from './decorators'
+import { McpToolError } from './errors'
 import type {
   McpAdapterOptions,
+  McpCallContext,
   McpCustomTool,
+  McpPrincipal,
+  McpRequestInfo,
   McpToolDefinition,
   McpToolOptions,
   McpToolProvider,
+  McpToolSummary,
   McpTransport,
 } from './types'
 
@@ -102,6 +110,56 @@ const DEFAULT_FORWARD_HEADERS = [
   'tracestate',
 ]
 
+/** Node request headers as web Headers. */
+function toHeaders(
+  raw: Record<string, string | string[] | undefined> | Headers | undefined,
+): Headers {
+  if (raw instanceof Headers) return new Headers(raw)
+  const headers = new Headers()
+  for (const [name, value] of Object.entries(raw ?? {})) {
+    if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+  }
+  return headers
+}
+
+/** A `WWW-Authenticate: Bearer` value with the given parameters. */
+function bearerChallenge(params: Record<string, string | undefined>): string {
+  const parts = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => `${k}="${String(v).replace(/["\\]/g, '\\$&')}"`)
+  return parts.length ? `Bearer ${parts.join(', ')}` : 'Bearer'
+}
+
+/** Required scopes the principal doesn't hold. */
+function missingScopes(
+  required: string[] | undefined,
+  principal: McpPrincipal | undefined,
+): string[] {
+  if (!required?.length) return []
+  const granted = new Set(principal?.scopes ?? [])
+  return required.filter((scope) => !granted.has(scope))
+}
+
+/** Whether the principal's audience, when it has one, names this resource. */
+function audienceMatches(principal: McpPrincipal, resource: string): boolean {
+  if (principal.audience === undefined) return true
+  const audiences = Array.isArray(principal.audience) ? principal.audience : [principal.audience]
+  const strip = (url: string) => url.replace(/\/+$/, '')
+  return audiences.some((aud) => strip(aud) === strip(resource))
+}
+
+/** A plain JSON object (not an array, not null). */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The result shape every tool path returns. */
+type ToolResult = {
+  content: Array<{ type: 'text'; text: string }>
+  isError?: boolean
+  structuredContent?: Record<string, unknown>
+}
+
 /**
  * Whether an `exclude` pattern matches a route path. Patterns are compared
  * against the full path and every trailing part of it that starts at a `/`,
@@ -153,11 +211,7 @@ export interface McpAdapterExtensions {
    *
    * @internal
    */
-  dispatchTool(
-    tool: McpToolDefinition,
-    args: unknown,
-    extra?: unknown,
-  ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }>
+  dispatchTool(tool: McpToolDefinition, args: unknown, extra?: unknown): Promise<ToolResult>
 
   /**
    * Mount a set of custom tools that are not controller routes — at any
@@ -230,10 +284,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     const routeTools = new Map<string, RouteTool>()
 
     /** Custom tools by provider name, with their validated schemas. */
-    const providers = new Map<
-      string,
-      Array<{ tool: McpCustomTool; schema?: KickSchema; inputSchema: Record<string, unknown> }>
-    >()
+    type ProviderEntry = {
+      tool: McpCustomTool
+      provider: string
+      schema?: KickSchema
+      inputSchema: Record<string, unknown>
+      outputSchema?: Record<string, unknown>
+    }
+    const providers = new Map<string, ProviderEntry[]>()
 
     const providerToolNamed = (name: string) => {
       for (const tools of providers.values()) {
@@ -271,6 +329,43 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     >()
     const maxSessions = options.maxSessions ?? 1000
     const sessionIdleTimeoutMs = options.sessionIdleTimeoutMs ?? 30 * 60_000
+
+    /** The MCP endpoint's path. */
+    const endpointPath = options.path ?? `${options.basePath!}/messages`
+    const metadataPath = '/.well-known/oauth-protected-resource'
+
+    /**
+     * Host, origin and resource URL of an MCP request. Forwarded headers are
+     * believed only with `trustProxy`; otherwise a client could pick them.
+     */
+    const requestInfoFor = (
+      raw: Record<string, string | string[] | undefined>,
+      encrypted: boolean,
+    ): McpRequestInfo => {
+      const forwarded = (name: string) =>
+        options.trustProxy ? firstHeader(raw[name])?.split(',')[0]?.trim() : undefined
+      const host = forwarded('x-forwarded-host') ?? firstHeader(raw.host) ?? 'localhost'
+      const scheme = forwarded('x-forwarded-proto') ?? (encrypted ? 'https' : 'http')
+      const origin = `${scheme}://${host}`
+      return { headers: toHeaders(raw), host, origin, resource: `${origin}${endpointPath}` }
+    }
+
+    /** Request info for a call that didn't come over HTTP (stdio, direct dispatch). */
+    const localRequestInfo = (headers?: Headers): McpRequestInfo => ({
+      headers: headers ?? new Headers(),
+      host: 'localhost',
+      origin: 'http://localhost',
+      resource: `http://localhost${endpointPath}`,
+    })
+
+    /** The caller of a tool request, from what the HTTP handler attached. */
+    const callContextOf = (extra: unknown): McpCallContext => {
+      const attached = (extra as { authInfo?: AuthInfo } | undefined)?.authInfo?.extra?.call
+      if (attached) return attached as McpCallContext
+      const raw = (extra as { requestInfo?: { headers?: Record<string, string> } } | undefined)
+        ?.requestInfo?.headers
+      return raw ? requestInfoFor(raw, false) : localRequestInfo()
+    }
 
     /** Start the idle countdown for a session that has nothing in progress. */
     const armIdleTimer = (id: string) => {
@@ -404,6 +499,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         httpMethod: route.method.toUpperCase(),
         mountPath: fullPath,
         examples: meta?.examples,
+        ...(meta?.annotations ? { annotations: meta.annotations } : {}),
+        ...(meta?.title ? { title: meta.title } : {}),
+        ...(meta?.scopes?.length ? { scopes: meta.scopes } : {}),
       }
     }
 
@@ -430,21 +528,44 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return Array.isArray(value) ? value.join(', ') : value
     }
 
+    /** The call's abort signal, plus the tool timeout when one is set. */
+    const callSignal = (extra: unknown): AbortSignal | undefined => {
+      const signal = (extra as { signal?: AbortSignal } | undefined)?.signal
+      if (!options.toolTimeoutMs) return signal
+      const timeout = AbortSignal.timeout(options.toolTimeoutMs)
+      return signal ? AbortSignal.any([signal, timeout]) : timeout
+    }
+
+    const errorResult = (
+      text: string,
+      structuredContent?: Record<string, unknown>,
+    ): ToolResult => ({
+      isError: true,
+      content: [{ type: 'text' as const, text }],
+      ...(structuredContent ? { structuredContent } : {}),
+    })
+
+    const timedOut = (name: string, err: unknown) =>
+      options.toolTimeoutMs !== undefined &&
+      err instanceof Error &&
+      (err.name === 'TimeoutError' || err.name === 'AbortError') &&
+      errorResult(`Tool ${name} timed out after ${options.toolTimeoutMs}ms`, {
+        error: { code: 'timeout', message: `Timed out after ${options.toolTimeoutMs}ms` },
+      })
+
     /**
      * Dispatch a tool call through the app's own pipeline — middleware,
      * validation, contributors, guards, error handling — as a request to the
-     * tool's route. Headers in `forwardHeaders` are copied from the MCP
-     * request, and the client's cancellation aborts the call.
+     * tool's route, addressed to the MCP request's own origin so host-based
+     * lookups (a tenant per host) see the caller's host. Headers in
+     * `forwardHeaders` are copied from the MCP request, and the client's
+     * cancellation (or `toolTimeoutMs`) aborts the call.
      */
     const dispatchTool = async (
       tool: McpToolDefinition,
       rawArgs: unknown,
       extra?: unknown,
-    ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> => {
-      const errorResult = (text: string) => ({
-        isError: true,
-        content: [{ type: 'text' as const, text }],
-      })
+    ): Promise<ToolResult> => {
       if (!appFetch && !serverBaseUrl) {
         return errorResult(`Cannot dispatch ${tool.name}: the adapter has not started`)
       }
@@ -469,7 +590,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       const init: RequestInit = {
         method: tool.httpMethod.toUpperCase(),
         headers,
-        signal: (extra as { signal?: AbortSignal } | undefined)?.signal,
+        signal: callSignal(extra),
       }
       if (target.body !== undefined) {
         headers.set('content-type', 'application/json')
@@ -478,14 +599,29 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
       try {
         const res = appFetch
-          ? await appFetch(new Request(new URL(target.url, 'http://localhost'), init))
+          ? await appFetch(new Request(new URL(target.url, callContextOf(extra).origin), init))
           : await fetch(`${serverBaseUrl}${target.url}`, init)
         const text = await res.text()
+        const isError = res.status >= 400
+        let json: unknown
+        try {
+          json = text ? JSON.parse(text) : undefined
+        } catch {
+          json = undefined
+        }
+        // A JSON object answer is also sent as structuredContent: for an
+        // error that's the Problem Details body (machine-readable `type` and
+        // `status`); for a success, when the tool declares an output schema.
+        const structured =
+          isJsonObject(json) && (isError || tool.outputSchema) ? { structuredContent: json } : {}
         return {
-          isError: res.status >= 400,
+          isError,
           content: [{ type: 'text' as const, text: text || `(${res.status} ${res.statusText})` }],
+          ...structured,
         }
       } catch (err) {
+        const timeout = timedOut(tool.name, err)
+        if (timeout) return timeout
         const message = err instanceof Error ? err.message : String(err)
         log.error(err as Error, `McpAdapter: dispatch failed for ${tool.name}`)
         return errorResult(`Tool dispatch error: ${message}`)
@@ -494,33 +630,35 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     /** Run a custom tool: validate arguments, call the handler, shape the result. */
     const callCustomTool = async (
-      entry: { tool: McpCustomTool; schema?: KickSchema },
+      entry: ProviderEntry,
       args: unknown,
       extra: unknown,
-    ): Promise<Record<string, unknown>> => {
-      const errorResult = (text: string) => ({
-        isError: true,
-        content: [{ type: 'text' as const, text }],
-      })
-
+    ): Promise<ToolResult | Record<string, unknown>> => {
       let input = args
       if (entry.schema) {
         const parsed = entry.schema.safeParse(args)
         if (!parsed.success) {
-          return errorResult(JSON.stringify({ error: 'Invalid arguments', issues: parsed.issues }))
+          return errorResult(
+            JSON.stringify({ error: 'Invalid arguments', issues: parsed.issues }),
+            {
+              error: {
+                code: 'invalid_arguments',
+                message: 'Invalid arguments',
+                issues: parsed.issues,
+              },
+            },
+          )
         }
         input = parsed.data
       }
 
-      const requestHeaders = (extra as { requestInfo?: { headers?: Record<string, string> } })
-        ?.requestInfo?.headers
-      const headers = new Headers()
-      for (const [name, value] of Object.entries(requestHeaders ?? {})) {
-        if (typeof value === 'string') headers.set(name, value)
-      }
+      const call = callContextOf(extra)
+      const signal = callSignal(extra) ?? new AbortController().signal
       const context = {
-        headers,
-        signal: (extra as { signal?: AbortSignal })?.signal ?? new AbortController().signal,
+        headers: call.headers,
+        principal: call.principal,
+        origin: call.origin,
+        signal,
         fetch: (request: Request) => {
           if (!appFetch) throw new Error('McpAdapter: the app is not started yet')
           return appFetch(request)
@@ -528,19 +666,85 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
 
       try {
-        const result = await entry.tool.handler(input, context)
-        if (
-          result &&
-          typeof result === 'object' &&
-          Array.isArray((result as { content?: unknown }).content)
-        ) {
-          return result as Record<string, unknown>
-        }
+        const run = Promise.resolve(entry.tool.handler(input, context))
+        // A handler that ignores the signal still ends at the timeout.
+        const result = options.toolTimeoutMs
+          ? await Promise.race([
+              run,
+              new Promise<never>((_, reject) =>
+                signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+              ),
+            ])
+          : await run
+        if (isJsonObject(result) && Array.isArray(result.content)) return result
         const text = typeof result === 'string' ? result : JSON.stringify(result ?? null)
-        return { content: [{ type: 'text' as const, text }] }
+        return {
+          content: [{ type: 'text' as const, text }],
+          ...(entry.outputSchema && isJsonObject(result) ? { structuredContent: result } : {}),
+        }
       } catch (err) {
+        if (err instanceof McpToolError) {
+          return errorResult(err.message, {
+            error: { code: err.code, message: err.message, ...err.data },
+          })
+        }
+        const timeout = timedOut(entry.tool.name, err)
+        if (timeout) return timeout
         log.error(err as Error, `McpAdapter: custom tool ${entry.tool.name} failed`)
         return errorResult(err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    /** Every tool, route and custom, as filters and `tools/list` see it. */
+    const allTools = () => [
+      ...tools.map((def) => ({
+        summary: {
+          name: def.name,
+          description: def.description,
+          kind: 'route' as const,
+          scopes: def.scopes,
+          annotations: def.annotations,
+          route: { method: def.httpMethod, path: def.mountPath },
+        } satisfies McpToolSummary,
+        listed: {
+          name: def.name,
+          description: def.description,
+          inputSchema: def.inputSchema,
+          ...(def.title ? { title: def.title } : {}),
+          ...(def.annotations ? { annotations: def.annotations } : {}),
+          ...(def.outputSchema ? { outputSchema: def.outputSchema } : {}),
+        },
+        route: def,
+      })),
+      ...[...providers.values()].flat().map((entry) => ({
+        summary: {
+          name: entry.tool.name,
+          description: entry.tool.description,
+          kind: 'custom' as const,
+          scopes: entry.tool.scopes,
+          annotations: entry.tool.annotations,
+          provider: entry.provider,
+        } satisfies McpToolSummary,
+        listed: {
+          name: entry.tool.name,
+          description: entry.tool.description,
+          inputSchema: entry.inputSchema,
+          ...(entry.tool.title ? { title: entry.tool.title } : {}),
+          ...(entry.tool.annotations ? { annotations: entry.tool.annotations } : {}),
+          ...(entry.outputSchema ? { outputSchema: entry.outputSchema } : {}),
+        },
+        custom: entry,
+      })),
+    ]
+
+    /** Whether `toolFilter` lets this caller see the tool. A throw hides it. */
+    const visible = async (summary: McpToolSummary, call: McpCallContext): Promise<boolean> => {
+      if (!options.toolFilter) return true
+      try {
+        return Boolean(await options.toolFilter(summary, call))
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: toolFilter threw for ${summary.name}; hiding it`)
+        return false
       }
     }
 
@@ -577,7 +781,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         }
         const schema = tool.inputSchema === undefined ? undefined : detectSchema(tool.inputSchema)
         const inputSchema = schema?.toJsonSchema() ?? { type: 'object', properties: {} }
-        return { tool, schema, inputSchema }
+        const outputSchema =
+          tool.outputSchema === undefined
+            ? undefined
+            : detectSchema(tool.outputSchema).toJsonSchema()
+        return { tool, provider: provider.name, schema, inputSchema, outputSchema }
       })
       const names = entries.map((e) => e.tool.name)
       if (new Set(names).size !== names.length) {
@@ -613,39 +821,59 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         { capabilities: { tools: { listChanged: true } } },
       )
 
-      server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: [
-          ...tools.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            inputSchema: tool.inputSchema as { type: 'object' },
-          })),
-          ...[...providers.values()].flat().map((entry) => ({
-            name: entry.tool.name,
-            description: entry.tool.description,
-            inputSchema: entry.inputSchema as { type: 'object' },
-          })),
-        ],
-      }))
+      server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+        const call = callContextOf(extra)
+        const listed: Array<Record<string, unknown>> = []
+        for (const tool of allTools()) {
+          if (await visible(tool.summary, call)) listed.push(tool.listed)
+        }
+        return { tools: listed as never }
+      })
 
       server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const args = request.params.arguments ?? {}
-        const tool = tools.find((t) => t.name === request.params.name)
-        if (tool) return dispatchTool(tool, args, extra)
-        const custom = providerToolNamed(request.params.name)
-        if (custom) return callCustomTool(custom, args, extra)
-        return {
-          isError: true,
-          content: [{ type: 'text' as const, text: `Unknown tool: ${request.params.name}` }],
+        const tool = allTools().find((t) => t.summary.name === request.params.name)
+        // A tool the caller can't see answers like one that doesn't exist.
+        if (!tool || !(await visible(tool.summary, callContextOf(extra)))) {
+          throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${request.params.name}`)
         }
+        return (
+          'route' in tool
+            ? await dispatchTool(tool.route, args, extra)
+            : await callCustomTool(tool.custom, args, extra)
+        ) as never
       })
 
       return server
     }
 
+    type Rejection = { status: number; message: string; headers?: Record<string, string> }
+
+    /** The 401 / 403 challenge, with resource metadata and scopes when known. */
+    const challenge = (info: McpRequestInfo, params: Record<string, string | undefined> = {}) => {
+      const configured = options.auth?.resourceMetadataUrl
+      const metadataUrl =
+        typeof configured === 'function'
+          ? configured(info)
+          : (configured ??
+            (options.protectedResource
+              ? `${info.origin}${metadataPath}${endpointPath}`
+              : undefined))
+      return bearerChallenge({ resource_metadata: metadataUrl, ...params })
+    }
+
+    const hostAllowed = (host: string): boolean => {
+      const allowed = options.allowedHosts
+      if (!allowed) return true
+      const bare = host.replace(/:\d+$/, '')
+      return typeof allowed === 'function'
+        ? allowed(host)
+        : allowed.includes(host) || allowed.includes(bare)
+    }
+
     /**
-     * Origin and auth checks for one HTTP request. Returns the rejection to
-     * send, or null to let the request through.
+     * Host, origin and auth checks for one HTTP request. Returns the
+     * rejection to send, or who is calling (when `authenticate` says).
      *
      * Origin: browsers send it, MCP clients (Claude Code, Cursor, the SDK) do
      * not. A request that carries one must match `allowedOrigins` — the MCP
@@ -653,38 +881,71 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
      */
     const checkAccess = async (
       headers: Record<string, string | string[] | undefined>,
-    ): Promise<{ status: number; message: string; headers?: Record<string, string> } | null> => {
+      info: McpRequestInfo,
+    ): Promise<{ denied: Rejection } | { principal?: McpPrincipal; credential: string }> => {
+      if (!hostAllowed(info.host)) {
+        return { denied: { status: 403, message: `Forbidden: host ${info.host} is not allowed` } }
+      }
       const origin = firstHeader(headers.origin)
       const allowedOrigins = options.allowedOrigins ?? []
       if (origin && !allowedOrigins.includes('*') && !allowedOrigins.includes(origin)) {
-        return { status: 403, message: `Forbidden: origin ${origin} is not allowed` }
+        return { denied: { status: 403, message: `Forbidden: origin ${origin} is not allowed` } }
       }
 
-      if (!options.auth) return null
+      const auth = options.auth
+      if (!auth) return { credential: '' }
       const authorization = firstHeader(headers.authorization) ?? ''
       const credential =
-        options.auth.type === 'bearer'
-          ? (/^Bearer\s+(.+)$/i.exec(authorization)?.[1] ?? '')
-          : authorization
-      let allowed = false
-      if (options.auth.type === 'custom' || credential !== '') {
-        try {
-          allowed = Boolean(await options.auth.validate(credential))
-        } catch (err) {
-          log.error(err as Error, 'McpAdapter: auth.validate threw; rejecting the request')
+        auth.type === 'bearer' ? (/^Bearer\s+(.+)$/i.exec(authorization)?.[1] ?? '') : authorization
+      const unauthorized: { denied: Rejection } = {
+        denied: {
+          status: 401,
+          message: 'Unauthorized',
+          ...(auth.type === 'bearer'
+            ? {
+                headers: { 'www-authenticate': challenge(info, { scope: auth.scopes?.join(' ') }) },
+              }
+            : {}),
+        },
+      }
+      if (auth.type === 'bearer' && credential === '') return unauthorized
+      try {
+        if (auth.authenticate) {
+          const principal = await auth.authenticate(credential, info)
+          if (!principal) return unauthorized
+          // A token minted for another resource (another tenant's server) is refused.
+          if (!audienceMatches(principal, info.resource)) return unauthorized
+          return { principal, credential }
         }
+        if (await auth.validate(credential)) return { credential }
+      } catch (err) {
+        log.error(err as Error, 'McpAdapter: auth threw; rejecting the request')
       }
-      if (allowed) return null
-      return {
-        status: 401,
-        message: 'Unauthorized',
-        ...(options.auth.type === 'bearer' ? { headers: { 'www-authenticate': 'Bearer' } } : {}),
+      return unauthorized
+    }
+
+    /**
+     * The scopes a `tools/call` in this body needs and the principal lacks —
+     * refused before the call runs, with a challenge naming them.
+     */
+    const lackingScopes = async (body: unknown, call: McpCallContext): Promise<string[]> => {
+      const messages = Array.isArray(body) ? body : [body]
+      const lacking = new Set<string>()
+      for (const message of messages) {
+        if (!isJsonObject(message) || message.method !== 'tools/call') continue
+        const name = (message.params as { name?: unknown } | undefined)?.name
+        const tool = allTools().find((t) => t.summary.name === name)
+        // A hidden tool must answer like an unknown one, so it's left to the
+        // call handler rather than revealing its scopes here.
+        if (!tool || !(await visible(tool.summary, call))) continue
+        for (const scope of missingScopes(tool.summary.scopes, call.principal)) lacking.add(scope)
       }
+      return [...lacking]
     }
 
     /** Mount the Streamable HTTP endpoint via the engine-agnostic HTTP facade. */
     const mountHttpRoutes = (http: AdapterHttp): void => {
-      const path = `${options.basePath!}/messages`
+      const path = endpointPath
 
       // The SDK's web-standard transport takes a Request and returns a
       // Response. Building the Request from `ctx.req` (method, url, headers —
@@ -695,25 +956,80 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           method?: string
           url?: string
           headers: Record<string, string | string[] | undefined>
+          socket?: { encrypted?: boolean }
         }
         try {
-          const denied = await checkAccess(req.headers)
-          if (denied) {
-            await sendJsonRpcError(ctx, denied.status, denied.message, denied.headers)
+          const info = requestInfoFor(req.headers, Boolean(req.socket?.encrypted))
+          const access = await checkAccess(req.headers, info)
+          if ('denied' in access) {
+            await sendJsonRpcError(
+              ctx,
+              access.denied.status,
+              access.denied.message,
+              access.denied.headers,
+            )
             return
           }
 
-          const headers = new Headers()
-          for (const [name, value] of Object.entries(req.headers)) {
-            if (value !== undefined)
-              headers.set(name, Array.isArray(value) ? value.join(', ') : value)
-          }
           const webRequest = new Request(new URL(req.url ?? path, 'http://localhost'), {
             method: req.method ?? 'POST',
-            headers,
+            headers: toHeaders(req.headers),
             signal: ctx.signal,
           })
           const parsedBody = webRequest.method === 'POST' ? ctx.body : undefined
+
+          // Who is calling travels with the request to the tool handlers.
+          const call: McpCallContext = { ...info, principal: access.principal }
+
+          // A tool that needs scopes the caller lacks: 403 with a challenge
+          // naming them, so the client can ask for more access (step-up).
+          const lacking = await lackingScopes(parsedBody, call)
+          if (lacking.length > 0) {
+            await sendJsonRpcError(ctx, 403, 'Forbidden: insufficient scope', {
+              'www-authenticate': challenge(info, {
+                error: 'insufficient_scope',
+                scope: lacking.join(' '),
+              }),
+            })
+            return
+          }
+
+          const authInfo: AuthInfo = {
+            token: access.credential,
+            clientId: access.principal?.clientId ?? '',
+            scopes: access.principal?.scopes ?? [],
+            extra: { call },
+          }
+
+          if (options.stateless) {
+            if (webRequest.method !== 'POST') {
+              await sendJsonRpcError(
+                ctx,
+                405,
+                'Method not allowed: this MCP endpoint is stateless',
+                {
+                  allow: 'POST',
+                },
+              )
+              return
+            }
+            // A fresh server for each request: nothing outlives it, so any
+            // instance can answer any request.
+            const server = buildMcpServer()
+            const statelessTransport = new WebStandardStreamableHTTPServerTransport({
+              sessionIdGenerator: undefined,
+              enableJsonResponse: true,
+            })
+            try {
+              await server.connect(statelessTransport)
+              await ctx.sendResponse(
+                await statelessTransport.handleRequest(webRequest, { parsedBody, authInfo }),
+              )
+            } finally {
+              await server.close().catch(() => {})
+            }
+            return
+          }
 
           const sessionId = firstHeader(req.headers['mcp-session-id'])
           if (sessionId) {
@@ -726,7 +1042,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             clearTimeout(session.idleTimer)
             try {
               await ctx.sendResponse(
-                await session.transport.handleRequest(webRequest, { parsedBody }),
+                await session.transport.handleRequest(webRequest, { parsedBody, authInfo }),
               )
             } finally {
               session.active--
@@ -764,7 +1080,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             sessions.delete(id)
           }
           await server.connect(sessionTransport)
-          await ctx.sendResponse(await sessionTransport.handleRequest(webRequest, { parsedBody }))
+          await ctx.sendResponse(
+            await sessionTransport.handleRequest(webRequest, { parsedBody, authInfo }),
+          )
           if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
@@ -776,15 +1094,51 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       // this is what lets the engine auto-answer the OPTIONS preflight with the
       // correct Allow header (separate `route()` calls would each get their own
       // router and the preflight wouldn't aggregate).
-      const makeEntry = (method: RouteMethod): RouteEntry => ({
+      const makeEntry = (
+        method: RouteMethod,
+        entryPath: string,
+        handler = handleRequest,
+      ): RouteEntry => ({
         method,
-        path,
+        path: entryPath,
         middlewares: [],
         contributorRunner: null,
-        handler: handleRequest,
+        handler,
         meta: {},
       })
-      http.mount('/', [makeEntry('POST'), makeEntry('GET'), makeEntry('DELETE')])
+      const entries = [makeEntry('POST', path), makeEntry('GET', path), makeEntry('DELETE', path)]
+
+      // OAuth protected-resource metadata (RFC 9728), at the well-known path
+      // and at it plus the endpoint path, per host.
+      const protectedResource = options.protectedResource
+      if (protectedResource) {
+        const serveMetadata = async (ctx: RequestContext): Promise<void> => {
+          const raw = ctx.req.headers as Record<string, string | string[] | undefined>
+          const info = requestInfoFor(
+            raw,
+            Boolean((ctx.req as { socket?: { encrypted?: boolean } }).socket?.encrypted),
+          )
+          const servers = protectedResource.authorizationServers
+          await ctx.sendResponse(
+            new Response(
+              JSON.stringify({
+                resource: protectedResource.resource?.(info) ?? info.resource,
+                authorization_servers: typeof servers === 'function' ? servers(info) : servers,
+                ...(protectedResource.scopesSupported
+                  ? { scopes_supported: protectedResource.scopesSupported }
+                  : {}),
+                bearer_methods_supported: ['header'],
+              }),
+              { headers: { 'content-type': 'application/json' } },
+            ),
+          )
+        }
+        entries.push(
+          makeEntry('GET', metadataPath, serveMetadata),
+          makeEntry('GET', `${metadataPath}${path}`, serveMetadata),
+        )
+      }
+      http.mount('/', entries)
     }
 
     /**
@@ -888,7 +1242,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         }
 
         log.info(
-          `McpAdapter ready — ${tools.length} tool(s) registered, listening at ${options.basePath}/messages`,
+          `McpAdapter ready — ${tools.length} tool(s) registered, listening at ${endpointPath}${options.stateless ? ' (stateless)' : ''}`,
         )
       },
 

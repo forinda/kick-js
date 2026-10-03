@@ -145,7 +145,7 @@ The connect-style `csrf()` has no table equivalent — a token check on an unmat
 McpAdapter({ name: 'api', exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })
 ```
 
-A route carrying a flag named in `exposeWhen` becomes a tool without `@McpTool` / `@AiTool`, and an object value on that flag is read as the tool's options. `hideWhen` removes a route regardless of decorators, which is how a module hides a controller it mounts but does not own. See [MCP](./mcp.md#exposing-with-route-flags) and [AI](./ai.md#exposing-tools-with-route-flags).
+A route carrying a flag named in `exposeWhen` becomes a tool without `@McpTool` / `@AiTool`, and an object value on that flag is read as the tool's options. `hideWhen` removes a route regardless of decorators, which is how a module hides a controller it mounts but does not own. See [MCP](./mcp/tools.md#exposing-with-route-flags) and [AI](./ai.md#exposing-tools-with-route-flags).
 
 ### Readers: OpenAPI and DevTools
 
