@@ -2,21 +2,27 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   createDbClient,
   defineTenancy,
   diff,
   emitPg,
   extractSnapshot,
+  generate,
+  migrateTenants,
   serial,
   table,
   tenantKey,
   text,
 } from '@forinda/kickjs-db'
-import { pgDialect } from '@forinda/kickjs-db/pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import { requestStore } from '@forinda/kickjs'
 import { sql } from 'kysely'
 
+const here = path.dirname(fileURLToPath(import.meta.url))
 let container: StartedPostgreSqlContainer
 let pool: pg.Pool
 /** The superuser: what the bypass dialect connects as here (it skips RLS). */
@@ -182,5 +188,79 @@ describe("'schema' tenancy", () => {
     const { rows } = await pool.query('SELECT number FROM t_globex.invoices')
     expect(rows).toEqual([{ number: 'G-1' }])
     await expect(db.selectFrom('invoices').selectAll().execute()).rejects.toThrow(/no tenant/)
+  })
+})
+
+describe('migrateTenants (schema per tenant)', () => {
+  it('migrates every tenant schema, reports failures, and rolls out a later migration', async () => {
+    const dir = await mkdtemp(path.join(here, '../fixtures/tmp-tenants-pg-'))
+    try {
+      const tenancy = defineTenancy({ strategy: 'schema', schemaFor: (id) => `ts_${id}` })
+      const config = {
+        schemaPath: path.join(dir, 'schema.ts'),
+        migrationsDir: path.join(dir, 'migrations'),
+        dialect: 'postgres' as const,
+      }
+      const base = `import { serial, table, text } from '@forinda/kickjs-db'
+export const orders = table('orders', { id: serial().primaryKey(), ref: text().notNull() })`
+      await writeFile(config.schemaPath, base)
+      await generate({ name: 'init', config, cwd: dir })
+
+      const url = new URL(container.getConnectionUri())
+      url.username = 'app'
+      url.password = 'app'
+      url.pathname = '/app'
+      const adapterFor = async (id: string) => {
+        if (id === 'broken') throw new Error('no database for broken')
+        const schema = tenancy.schemaFor(id)
+        await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`)
+        const tenantPool = new pg.Pool({
+          connectionString: url.toString(),
+          options: `-c search_path=${schema}`,
+        })
+        return pgAdapter({ pool: tenantPool, schema, endPoolOnClose: true })
+      }
+      const run = () =>
+        migrateTenants({
+          tenants: async () => ['acme', 'broken', 'globex'],
+          adapterFor,
+          migrationsDir: config.migrationsDir,
+          requireReviewed: false,
+        })
+
+      const first = await run()
+      expect(first.failed).toEqual(['broken'])
+      expect(first.results.find((r) => r.tenant === 'acme')?.summary?.applied).toHaveLength(1)
+
+      await writeFile(
+        config.schemaPath,
+        base.replace('ref: text().notNull()', 'ref: text().notNull(), note: text()'),
+      )
+      await generate({ name: 'note', config, cwd: dir })
+      const second = await run()
+      expect(second.results.filter((r) => r.summary).map((r) => r.summary!.applied.length)).toEqual(
+        [1, 1],
+      )
+
+      const orders = table('orders', {
+        id: serial().primaryKey(),
+        ref: text().notNull(),
+        note: text(),
+      })
+      const db = createDbClient({ schema: { orders }, tenancy, dialect: pgDialect({ pool }) })
+      await tenancy.run('globex', () =>
+        db.insertInto('orders').values({ ref: 'G-1', note: 'x' }).execute(),
+      )
+      expect(
+        await tenancy.run('globex', () =>
+          db.selectFrom('orders').select(['ref', 'note']).execute(),
+        ),
+      ).toEqual([{ ref: 'G-1', note: 'x' }])
+      expect(
+        await tenancy.run('acme', () => db.selectFrom('orders').selectAll().execute()),
+      ).toEqual([])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

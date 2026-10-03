@@ -46,6 +46,20 @@ export interface DbConfig {
    * for non-default adapter wiring (custom pool, neon-serverless, etc).
    */
   adapter?: MigrationAdapterFactory
+  /**
+   * Schema- or database-per-tenant: the tenants, and the adapter for one —
+   * what `kick db migrate latest --tenants` runs with.
+   */
+  tenants?: TenantsConfig
+}
+
+export interface TenantsConfig {
+  /** Every tenant's id — typically read from the central database. */
+  list: () => readonly string[] | Promise<readonly string[]>
+  /** The migration adapter for one tenant (closed after it's migrated). */
+  adapter: (tenantId: string) => MigrationAdapter | Promise<MigrationAdapter>
+  /** Tenants migrated at once. Default 1. */
+  concurrency?: number
 }
 
 export async function resolveDbConfig(opts: { configPath: string }): Promise<DbConfig> {

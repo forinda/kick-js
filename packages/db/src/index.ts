@@ -134,6 +134,12 @@ export {
   type RollbackSummary,
   type StatusEntry,
 } from './migrate/runner'
+export {
+  migrateTenants,
+  type MigrateTenantsOptions,
+  type MigrateTenantsResult,
+  type TenantMigrationResult,
+} from './migrate/tenants'
 export { reviewMigration, type ReviewResult } from './migrate/review'
 
 export { emitPg } from './emit/pg'

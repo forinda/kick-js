@@ -13,20 +13,31 @@ import { ColumnBuilder, type GeneratedBrand, type NotNullBrand } from './dsl/col
  *   the database filters.
  * - `'schema'` — a Postgres schema per tenant; kick/db points each query at
  *   the tenant's schema.
+ * - `'database'` — a database per tenant (any dialect: a Postgres database,
+ *   a SQLite / libsql / D1 file per tenant); kick/db sends each query to the
+ *   tenant's database. `bypass()` uses the client's own `dialect` — the
+ *   central database.
  */
-export type TenancyStrategy = 'column' | 'rls' | 'schema'
+export type TenancyStrategy = 'column' | 'rls' | 'schema' | 'database'
 
 export interface TenancyOptions {
   strategy: TenancyStrategy
   /**
-   * The current tenant's id outside `run()`: typically read from the request,
-   * `() => getRequestValue('tenant')?.id`. `undefined` means no tenant.
+   * The current tenant's id outside `run()`. Default: the request's `tenant`
+   * value (what a `LoadTenant` context contributor sets) — its `id`, or the
+   * value itself when it's a string. `undefined` means no tenant.
    */
   current?: () => string | undefined
   /** `'rls'`: the setting the policy reads. Default `app.tenant_id`. */
   setting?: string
   /** `'schema'`: the schema for a tenant. Default `tenant_<id>`. */
   schemaFor?: (tenantId: string) => string
+  /**
+   * `'database'`: the dialect for a tenant's database. Called once per
+   * tenant; its connections are kept for the client's life (closed by
+   * `db.destroy()`).
+   */
+  dialectFor?: (tenantId: string) => Dialect
   /**
    * `'rls'`: how a connection gets the tenant.
    *
@@ -77,6 +88,7 @@ export interface Tenancy extends Readonly<
   Required<Pick<TenancyOptions, 'strategy' | 'setting' | 'schemaFor' | 'binding' | 'roleCheck'>>
 > {
   readonly bypassDialect?: Dialect
+  readonly dialectFor?: (tenantId: string) => Dialect
   readonly __isTenancy: true
   /** Run `fn` as `tenantId` — jobs, cron, scripts, tests. Nested runs switch tenant. */
   run<T>(tenantId: string, fn: () => T): T
@@ -102,6 +114,14 @@ export class TenantRequiredError extends Error {
   }
 }
 
+/** The request's `tenant` value as an id: `{ id }` or a string. */
+function requestTenant(): string | undefined {
+  const value = requestStore.getStore()?.values.get('tenant') as unknown
+  if (typeof value === 'string') return value
+  const id = (value as { id?: unknown } | undefined)?.id
+  return id === undefined || id === null ? undefined : String(id)
+}
+
 /**
  * One description of how tenants are separated, shared by the schema
  * (`tenantKey(tenancy)`) and the client (`createDbClient({ tenancy })`).
@@ -114,6 +134,9 @@ export class TenantRequiredError extends Error {
  * ```
  */
 export function defineTenancy(options: TenancyOptions): Tenancy {
+  if (options.strategy === 'database' && !options.dialectFor) {
+    throw new Error("kickjs-db: 'database' tenancy needs dialectFor(tenantId)")
+  }
   const scope = new AsyncLocalStorage<{ id: string | null }>()
   return {
     __isTenancy: true,
@@ -123,6 +146,7 @@ export function defineTenancy(options: TenancyOptions): Tenancy {
     binding: options.binding ?? 'transaction',
     roleCheck: options.roleCheck ?? 'error',
     bypassDialect: options.bypassDialect,
+    dialectFor: options.dialectFor,
     run: (tenantId, fn) => scope.run({ id: tenantId }, fn),
     bypass: (fn, bypassOptions) => {
       if (!bypassOptions?.reason) {
@@ -149,7 +173,7 @@ export function defineTenancy(options: TenancyOptions): Tenancy {
     },
     current: () => {
       const store = scope.getStore()
-      return store ? store.id : options.current?.()
+      return store ? store.id : (options.current ?? requestTenant)()
     },
   }
 }
@@ -174,8 +198,10 @@ export function tenantKey<T = string>(
   tenancy: Tenancy,
   column: ColumnBuilder<T> = new ColumnBuilder<string>('text') as unknown as ColumnBuilder<T>,
 ): ColumnBuilder<T> & NotNullBrand & GeneratedBrand {
-  if (tenancy.strategy === 'schema') {
-    throw new Error(`kickjs-db: tenantKey() is for 'column' and 'rls' tenancy; 'schema' needs none`)
+  if (tenancy.strategy === 'schema' || tenancy.strategy === 'database') {
+    throw new Error(
+      `kickjs-db: tenantKey() is for 'column' and 'rls' tenancy; '${tenancy.strategy}' needs none`,
+    )
   }
   const state = (column as unknown as { state: { nullable: boolean; tenancy?: Tenancy } }).state
   state.nullable = false

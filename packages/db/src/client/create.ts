@@ -127,7 +127,10 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     plugins.push(...opts.plugins)
   }
   if (opts.tenancy) {
-    if (opts.tenancy.strategy !== 'column' && dialectTag !== 'postgres') {
+    if (
+      (opts.tenancy.strategy === 'rls' || opts.tenancy.strategy === 'schema') &&
+      dialectTag !== 'postgres'
+    ) {
       throw new Error(`kickjs-db: '${opts.tenancy.strategy}' tenancy is Postgres-only`)
     }
     // Before the casing plugin's query half: it names the tenant column by key.

@@ -82,6 +82,17 @@ class BillingService {
 }
 ```
 
+## Keeping tenants apart in the database
+
+With kick/db, [`defineTenancy()`](./database/tenancy.md) does the rest from the `tenant` value this contributor sets. Pick a strategy (a tenant column, row-level security, a schema or a database per tenant) and repositories need no tenant parameter:
+
+```ts
+export const tenancy = defineTenancy({ strategy: 'rls' }) // reads the request's `tenant`
+export const db = createDbClient({ schema, tenancy, dialect: pgDialect({ pool }) })
+```
+
+The rest of this page shows the pieces underneath, for a database layer other than kick/db.
+
 ## Per-tenant database switching
 
 Bind a tenant-scoped DB factory in a plugin, then resolve it inside any service that needs to query as the active tenant:
@@ -176,17 +187,16 @@ Three things to get right:
 
 Writes are checked too: inserting a row for another tenant fails the policy's `WITH CHECK`. This recipe runs in kick/db's test suite against Postgres, as a non-owner role.
 
-## Three isolation strategies
+## Isolation strategies
 
-The previous package surfaced three modes; all three are still natural with the recipe above — just swap the `resolveDbForTenant` body:
+| Strategy                 | How                                                    | Trade-offs                                                  |
+| ------------------------ | ------------------------------------------------------ | ----------------------------------------------------------- |
+| **discriminator column** | every query filtered by tenant (`'column'` in kick/db) | cheapest; relies on every query being filtered              |
+| **row-level security**   | the database filters (`'rls'`)                         | cheap; the database is the backstop; Postgres only          |
+| **schema per tenant**    | each tenant's schema (`'schema'`)                      | strong isolation in one database; migrations run per tenant |
+| **database per tenant**  | each tenant's database (`'database'`)                  | strongest isolation; most operations overhead               |
 
-| Mode                             | What `resolveDbForTenant(id)` returns                                                                                                               | Trade-offs                                                   |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **database-per-tenant**          | A fresh Drizzle/Prisma client connected to that tenant's database. Cache the client by tenant id at module scope so we don't reconnect per request. | Strongest isolation; most ops overhead (one DB per tenant).  |
-| **schema-per-tenant** (Postgres) | The shared client with `schema: 'tenant_<id>'` set.                                                                                                 | Strong isolation; one DB cluster.                            |
-| **discriminator column**         | The shared client; every query gets a `WHERE tenant_id = $id` clause via a query builder hook.                                                      | Cheapest; relies on app code never forgetting the predicate. |
-
-Pick at the application boundary; the contributor + plugin recipe stays the same.
+[Tenancy](./database/tenancy.md) compares them in detail.
 
 ## DevTools integration
 

@@ -6,7 +6,7 @@ import {
   type QueryResult,
   type TransactionSettings,
 } from 'kysely'
-import type { Tenancy } from '../tenancy'
+import { TenantRequiredError, type Tenancy } from '../tenancy'
 
 /**
  * `'rls'` tenancy, on connections:
@@ -21,6 +21,14 @@ import type { Tenancy } from '../tenancy'
  *   `BYPASSRLS`, which would skip the policies silently (`roleCheck`).
  */
 export function tenantConnections(dialect: Dialect, tenancy: Tenancy | undefined): Dialect {
+  if (tenancy?.strategy === 'database') {
+    return {
+      createAdapter: () => dialect.createAdapter(),
+      createQueryCompiler: () => dialect.createQueryCompiler(),
+      createIntrospector: (db) => dialect.createIntrospector(db),
+      createDriver: () => new DatabaseRouter(dialect.createDriver(), tenancy),
+    }
+  }
   if (tenancy?.strategy !== 'rls') return dialect
   return {
     createAdapter: () => dialect.createAdapter(),
@@ -210,5 +218,94 @@ class TenantDriver implements Driver {
   async destroy(options?: Parameters<Driver['destroy']>[0]): Promise<void> {
     await this.app.destroy(options)
     await this.bypass?.destroy(options)
+  }
+}
+
+/**
+ * `'database'` tenancy: each tenant's queries go to its own database,
+ * through a driver created on the tenant's first query and kept. `bypass()`
+ * uses the central database (the client's own dialect).
+ */
+class DatabaseRouter implements Driver {
+  private readonly owner = new WeakMap<DatabaseConnection, Driver>()
+  // ponytail: one driver per tenant for the client's life — add idle eviction
+  // when a process serves more tenants than it can hold pools for.
+  private readonly tenants = new Map<string, Promise<Driver>>()
+
+  constructor(
+    private readonly central: Driver,
+    private readonly tenancy: Tenancy,
+  ) {}
+
+  init(options?: Parameters<Driver['init']>[0]): Promise<void> {
+    return this.central.init(options)
+  }
+
+  private driverFor(tenant: string): Promise<Driver> {
+    let driver = this.tenants.get(tenant)
+    if (!driver) {
+      driver = (async () => {
+        const d = this.tenancy.dialectFor!(tenant).createDriver()
+        await d.init()
+        return d
+      })()
+      // A failed init isn't cached: the next query tries again.
+      driver.catch(() => this.tenants.delete(tenant))
+      this.tenants.set(tenant, driver)
+    }
+    return driver
+  }
+
+  async acquireConnection(
+    options?: Parameters<Driver['acquireConnection']>[0],
+  ): Promise<DatabaseConnection> {
+    const tenant = this.tenancy.current()
+    if (tenant === undefined) throw new TenantRequiredError('(any table)')
+    const driver = tenant === null ? this.central : await this.driverFor(tenant)
+    const conn = await driver.acquireConnection(options)
+    this.owner.set(conn, driver)
+    return conn
+  }
+
+  private of(conn: DatabaseConnection): Driver {
+    return this.owner.get(conn) ?? this.central
+  }
+
+  beginTransaction(conn: DatabaseConnection, settings: TransactionSettings): Promise<void> {
+    return this.of(conn).beginTransaction(conn, settings)
+  }
+
+  commitTransaction(conn: DatabaseConnection): Promise<void> {
+    return this.of(conn).commitTransaction(conn)
+  }
+
+  rollbackTransaction(conn: DatabaseConnection): Promise<void> {
+    return this.of(conn).rollbackTransaction(conn)
+  }
+
+  async savepoint(conn: DatabaseConnection, name: string, compile: any): Promise<void> {
+    await this.of(conn).savepoint!(conn, name, compile)
+  }
+
+  async rollbackToSavepoint(conn: DatabaseConnection, name: string, compile: any): Promise<void> {
+    await this.of(conn).rollbackToSavepoint!(conn, name, compile)
+  }
+
+  async releaseSavepoint(conn: DatabaseConnection, name: string, compile: any): Promise<void> {
+    await this.of(conn).releaseSavepoint!(conn, name, compile)
+  }
+
+  releaseConnection(
+    conn: DatabaseConnection,
+    options?: Parameters<Driver['releaseConnection']>[1],
+  ): Promise<void> {
+    return this.of(conn).releaseConnection(conn, options)
+  }
+
+  async destroy(options?: Parameters<Driver['destroy']>[0]): Promise<void> {
+    const drivers = await Promise.allSettled(this.tenants.values())
+    this.tenants.clear()
+    for (const d of drivers) if (d.status === 'fulfilled') await d.value.destroy(options)
+    await this.central.destroy(options)
   }
 }

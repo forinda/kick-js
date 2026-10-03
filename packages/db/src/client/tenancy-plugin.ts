@@ -178,6 +178,8 @@ class TenantColumnFilter extends OperationNodeTransformer {
  * tenant column on insert (the policy filters), `'schema'` switches schema.
  */
 export function tenancyPlugin(tenancy: Tenancy, schema: unknown): KyselyPlugin | undefined {
+  // 'database' routes connections instead (tenancy-connections.ts).
+  if (tenancy.strategy === 'database') return undefined
   if (tenancy.strategy === 'schema') {
     const plugins = new Map<string, WithSchemaPlugin>()
     return {
