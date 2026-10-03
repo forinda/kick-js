@@ -300,7 +300,7 @@ handler: async ({ invoiceId }, ctx) => {
 - **The handler runs again from the top for each answer.** The first `elicit` of a key stops the handler, and the client asks the user. When the answer arrives, the handler runs again and `elicit` returns it. Earlier answers are kept, so a second `elicit` doesn't ask the first question again. Code before an `elicit` must be safe to repeat, so do side effects after the last one.
 - **`schema` is a flat form:** an object of string, number, boolean or enum fields, from any schema library. Clients render it as a form.
 - **Both protocol eras work.** A 2026-07-28 client gets an `input_required` result and retries with the answer. On a 2025 session the SDK sends the client a real `elicitation/create` request. Under `stateless: true`, 2025 clients can't be asked (there's no session to ask over), so the call fails. 2026-07-28 clients work in either mode.
-- **Answers carried between rounds are signed** (HMAC), and bound to the caller and to the call's arguments, so a client can't forge them or replay an approval against other arguments. Each process signs with its own random key. When several instances serve one endpoint, set the same `requestStateKey` (32+ bytes) on each.
+- **Answers carried between rounds are signed** (HMAC) and bound to the caller, the call's arguments and the question asked, so a client can't forge them, replay an approval against other arguments, or answer a question the tool didn't ask. Each process signs with its own random key. When several instances serve one endpoint, set the same `requestStateKey` (32+ bytes) on each.
 - The client must support elicitation. Route tools can't ask; put the question in a custom tool.
 
 ## Titles and annotations

@@ -319,7 +319,13 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     type Answer = { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
     // `args` pins the answers to the call they were given for: approving
     // `env: 'prod'` must not carry over to a retry with other arguments.
-    type ElicitState = { tool: string; args: string; answers: Record<string, Answer> }
+    // `pending` is the question this round asked: a response counts only for it.
+    type ElicitState = {
+      tool: string
+      args: string
+      pending: string
+      answers: Record<string, Answer>
+    }
     const stateCodec = createRequestStateCodec<ElicitState>({
       key: options.requestStateKey ?? randomBytes(32),
       // State minted for one caller can't be replayed by another.
@@ -694,13 +700,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     const elicitAnswers = (tool: string, args: string, extra: unknown): Record<string, Answer> => {
       const mcpReq = (extra as ServerContext | undefined)?.mcpReq
       const state = mcpReq?.requestState<ElicitState>()
-      const answers =
-        state && typeof state === 'object' && state.tool === tool && state.args === args
-          ? { ...state.answers }
-          : {}
-      for (const key of Object.keys(mcpReq?.inputResponses ?? {})) {
-        const view = inputResponse(mcpReq?.inputResponses, key)
-        if (view.kind === 'elicit') answers[key] = { action: view.action, content: view.content }
+      // No signed state for this call: nothing was asked, so no response counts.
+      if (!state || typeof state !== 'object' || state.tool !== tool || state.args !== args) {
+        return {}
+      }
+      const answers = { ...state.answers }
+      const view = inputResponse(mcpReq?.inputResponses, state.pending)
+      if (view.kind === 'elicit') {
+        answers[state.pending] = { action: view.action, content: view.content }
       }
       return answers
     }
@@ -782,7 +789,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
               }),
             },
             requestState: await stateCodec.mint(
-              { tool: entry.tool.name, args: argsKey, answers },
+              { tool: entry.tool.name, args: argsKey, pending: err.key, answers },
               extra as ServerContext,
             ),
           }) as never

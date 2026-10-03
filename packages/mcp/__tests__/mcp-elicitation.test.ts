@@ -147,5 +147,17 @@ describe('ctx.elicit answers', () => {
       requestState: second.requestState,
     })
     expect(Object.keys(replayed.inputRequests ?? {})).toEqual(['confirm'])
+
+    // An answer the server didn't ask for doesn't count: with no state, or
+    // for a key other than the one the state is waiting on.
+    const unasked = await call('prod', {
+      inputResponses: { confirm: { action: 'accept', content: { confirm: true } } },
+    })
+    expect(Object.keys(unasked.inputRequests ?? {})).toEqual(['confirm'])
+    const offKey = await call('prod', {
+      inputResponses: { note: { action: 'accept', content: { note: 'x' } } },
+      requestState: first.requestState,
+    })
+    expect(Object.keys(offKey.inputRequests ?? {})).toEqual(['confirm'])
   })
 })
