@@ -506,7 +506,7 @@ If the server runs `DevToolsAdapter({ requireToken: true })` and you open the da
 
 ### VSCode extension
 
-The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension](https://marketplace.visualstudio.com/items?itemName=forinda.kickjs-devtools) — install it, run **KickJS: Connect to App…** from the palette, and the Activity Bar gets Health / Routes / DI Container tree views without leaving the editor. Click a route (or its inline **Open Handler** button) to jump to the handler — the path comes from the app, and the extension maps it into your workspace when the app runs elsewhere (a container, another checkout). When the server requires a token, run **KickJS: Set DevTools Token…** to paste it.
+The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension](https://marketplace.visualstudio.com/items?itemName=forinda.forinda-kickjs-devtools) — install it, run **KickJS: Connect to App…** from the palette, and the Activity Bar gets Health / Routes / DI Container tree views without leaving the editor. Click a route (or its inline **Open Handler** button) to jump to the handler — the path comes from the app, and the extension maps it into your workspace when the app runs elsewhere (a container, another checkout). When the server requires a token, run **KickJS: Set DevTools Token…** to paste it.
 
 ## Security
 
