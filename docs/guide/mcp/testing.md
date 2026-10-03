@@ -186,14 +186,13 @@ In the Inspector UI:
    ```text
    http://localhost:<your-port>/_mcp/messages
    ```
-   The `/_mcp/messages` path is where `McpAdapter` mounts the
-   StreamableHTTP transport. Replace `<your-port>` with whatever
-   port your KickJS server is running on.
+   `/_mcp/messages` is the default endpoint. If the adapter sets
+   `path` (e.g. `path: '/mcp'`) or `basePath`, use that endpoint
+   instead. Replace `<your-port>` with your server's port.
 3. Click **Connect**
 
 You should see a green **Connected** indicator and your server name
-
-- version in the sidebar.
+and version in the sidebar.
 
 ### 4. Discover and call tools
 
@@ -224,10 +223,10 @@ dispatch and resolves the user as normal.
 
 | Symptom                                                | Cause                                                            | Fix                                                                                                                                          |
 | ------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                             | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                                   |
+| 404 on connect                                         | URL doesn't match the adapter's endpoint                         | Use the full endpoint: `/_mcp/messages` by default, or the adapter's `path`                                                                  |
 | `403` "origin … is not allowed"                        | A browser-based client sent an `Origin` header                   | Add that origin to `allowedOrigins`, e.g. `allowedOrigins: ['http://localhost:6274']` for the Inspector UI                                   |
 | `401` on connect                                       | `auth` is set and the request has no valid credential            | Send the `Authorization` header your `auth.validate` expects                                                                                 |
-| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                          |
+| "Not Acceptable: Client must accept text/event-stream" | Opened the MCP endpoint directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                          |
 | CORS errors in browser console                         | Connecting from a different origin without CORS configured       | Add `cors()` middleware in your bootstrap: `middlewares: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]`        |
 | Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                      | Expand Authentication, enable the Authorization header, set the value                                                                        |
 | Tools not showing up                                   | Methods not decorated with `@McpTool` in explicit mode           | Add `@McpTool({ description: '...' })` to each method you want to expose                                                                     |

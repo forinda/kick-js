@@ -53,8 +53,8 @@ McpAdapter({
 
 The principal reaches:
 
-- custom tool handlers, as `ctx.principal` ([Tools](../tools.md#what-a-custom-tool-s-handler-gets));
-- `toolFilter`, as `call.principal`, to decide which tools this caller sees ([Multi-Tenancy](../multi-tenant.md#per-caller-tools-toolfilter));
+- custom tool handlers, as `ctx.principal` ([Tools](./tools.md#what-a-custom-tool-s-handler-gets));
+- `toolFilter`, as `call.principal`, to decide which tools this caller sees ([Multi-Tenancy](./multi-tenant.md#per-caller-tools-toolfilter));
 - tool scope checks (below).
 
 Route tools don't receive it directly. They get the caller's `Authorization` header (`forwardHeaders`) and authenticate it in their own pipeline, as they would for any request.
@@ -339,6 +339,17 @@ session state keyed by the MCP session ID. Subsequent calls in the
 same session are automatically authenticated — the agent handles the
 full flow without pre-configured tokens.
 
+Tool calls only carry the headers in `forwardHeaders`, and the session
+ID isn't one of the defaults, so add it (keeping the defaults you still
+need). This pattern needs sessions, so it doesn't work with
+`stateless: true`:
+
+```ts
+McpAdapter({
+  forwardHeaders: ['authorization', 'cookie', 'x-request-id', 'mcp-session-id'],
+})
+```
+
 ```ts
 const mcpSessions = new Map<string, User>()
 
@@ -394,6 +405,11 @@ automatically by the SDK on every request.
 
 Best for: agents that self-authenticate without pre-configured
 tokens.
+
+The session ID works like a bearer token: whoever holds an active ID
+acts as that user. The adapter generates the IDs and rejects unknown
+ones, so a client can't pick its own, but in production prefer
+per-request authentication (patterns 1 and 2, or `auth.authenticate`).
 
 ### Which pattern to use
 

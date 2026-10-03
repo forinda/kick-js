@@ -150,11 +150,17 @@ interface McpCustomTool<TArgs = any> {
   name: string // unique across the server, [A-Za-z0-9_.-]{1,128}
   description: string
   inputSchema?: unknown // any schema library; validated before the handler runs
+  outputSchema?: unknown // advertised; an object result is sent as structuredContent
+  title?: string
+  annotations?: McpToolAnnotations
+  scopes?: string[] // OAuth scopes the caller needs; otherwise 403 insufficient_scope
   handler(args: TArgs, ctx: McpToolContext): unknown
 }
 
 interface McpToolContext {
   headers: Headers // the MCP request's headers (credentials, tracing)
+  principal?: McpPrincipal // who is calling, when auth.authenticate is set
+  origin: string // the MCP request's scheme and host
   signal: AbortSignal // aborted when the client cancels the call
   fetch(request: Request): Promise<Response> // call the app's own routes
 }
@@ -257,7 +263,7 @@ The example is exercised as a test in
 
 | `ctx.`      | What it is                                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `principal` | who is calling, when [`auth.authenticate`](../auth.md#who-is-calling-auth-authenticate) is set               |
+| `principal` | who is calling, when [`auth.authenticate`](./auth.md#who-is-calling-auth-authenticate) is set                |
 | `origin`    | the MCP request's scheme and host; build requests to your own routes from it, so they keep the caller's host |
 | `headers`   | the MCP request's headers                                                                                    |
 | `signal`    | aborted when the client cancels, or at `toolTimeoutMs`                                                       |
@@ -296,7 +302,7 @@ void(ctx: RequestContext) {}
 | `idempotentHint`  | calling it again with the same arguments changes nothing more |
 | `openWorldHint`   | it reaches outside your system                                |
 
-They're hints, not enforcement: a client that ignores them can still call the tool. Enforce permissions in the route ([Authentication](../auth.md)). Custom tools take the same `title` and `annotations` fields.
+They're hints, not enforcement: a client that ignores them can still call the tool. Enforce permissions in the route ([Authentication](./auth.md)). Custom tools take the same `title` and `annotations` fields.
 
 ## Results
 
@@ -348,4 +354,4 @@ The route's request is aborted (its `ctx.signal` fires), and a custom tool's `ct
 
 ### Unknown tools
 
-Calling a tool that doesn't exist, or one a [`toolFilter`](../multi-tenant.md#per-caller-tools-toolfilter) hides from this caller, answers JSON-RPC error `-32602` (invalid params), as the MCP spec asks. Clients show it as a failed call rather than a tool result.
+Calling a tool that doesn't exist, or one a [`toolFilter`](./multi-tenant.md#per-caller-tools-toolfilter) hides from this caller, answers JSON-RPC error `-32602` (invalid params), as the MCP spec asks. Clients show it as a failed call rather than a tool result.

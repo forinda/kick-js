@@ -11,9 +11,9 @@ Exposing a route as an MCP tool is like exposing it to another HTTP client: the 
 **At the MCP endpoint**, every request:
 
 - **Host and origin.** A request for a host outside `allowedHosts` gets 403. So does one from a browser origin outside `allowedOrigins`; clients that send no `Origin` (Claude Code, Cursor, the SDK) are unaffected. Together they stop web pages from reaching a server through DNS rebinding.
-- **Authentication.** With `auth`, every request (`initialize`, `tools/list`, each `tools/call`) is checked, so a revoked token stops working at once. `authenticate` also checks the token's audience against this server's resource URL ([Authentication](../auth.md)).
+- **Authentication.** With `auth`, every request (`initialize`, `tools/list`, each `tools/call`) is checked, so a revoked token stops working at once. `authenticate` also checks the token's audience against this server's resource URL ([Authentication](./auth.md)).
 - **Scopes.** A tool's `scopes` refuse a call from a principal without them, before it runs.
-- **Which tools exist for this caller.** `toolFilter` hides tools a caller may not use, from the list and from calls ([Multi-Tenancy](../multi-tenant.md)).
+- **Which tools exist for this caller.** `toolFilter` hides tools a caller may not use, from the list and from calls ([Multi-Tenancy](./multi-tenant.md)).
 - **Load.** In session mode, `maxSessions` caps open sessions (503 beyond it) and idle sessions close after `sessionIdleTimeoutMs`. `toolTimeoutMs` caps how long a call runs.
 
 **In the route**, every tool call:

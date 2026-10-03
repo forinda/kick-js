@@ -928,14 +928,17 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
      * The scopes a `tools/call` in this body needs and the principal lacks —
      * refused before the call runs, with a challenge naming them.
      */
-    const lackingScopes = (body: unknown, principal: McpPrincipal | undefined): string[] => {
+    const lackingScopes = async (body: unknown, call: McpCallContext): Promise<string[]> => {
       const messages = Array.isArray(body) ? body : [body]
       const lacking = new Set<string>()
       for (const message of messages) {
         if (!isJsonObject(message) || message.method !== 'tools/call') continue
         const name = (message.params as { name?: unknown } | undefined)?.name
         const tool = allTools().find((t) => t.summary.name === name)
-        for (const scope of missingScopes(tool?.summary.scopes, principal)) lacking.add(scope)
+        // A hidden tool must answer like an unknown one, so it's left to the
+        // call handler rather than revealing its scopes here.
+        if (!tool || !(await visible(tool.summary, call))) continue
+        for (const scope of missingScopes(tool.summary.scopes, call.principal)) lacking.add(scope)
       }
       return [...lacking]
     }
@@ -975,9 +978,12 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           })
           const parsedBody = webRequest.method === 'POST' ? ctx.body : undefined
 
+          // Who is calling travels with the request to the tool handlers.
+          const call: McpCallContext = { ...info, principal: access.principal }
+
           // A tool that needs scopes the caller lacks: 403 with a challenge
           // naming them, so the client can ask for more access (step-up).
-          const lacking = lackingScopes(parsedBody, access.principal)
+          const lacking = await lackingScopes(parsedBody, call)
           if (lacking.length > 0) {
             await sendJsonRpcError(ctx, 403, 'Forbidden: insufficient scope', {
               'www-authenticate': challenge(info, {
@@ -988,8 +994,6 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             return
           }
 
-          // Who is calling travels with the request to the tool handlers.
-          const call: McpCallContext = { ...info, principal: access.principal }
           const authInfo: AuthInfo = {
             token: access.credential,
             clientId: access.principal?.clientId ?? '',

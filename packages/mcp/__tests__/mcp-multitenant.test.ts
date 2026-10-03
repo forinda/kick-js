@@ -276,6 +276,16 @@ describe('McpAdapter — multi-tenant surface', () => {
     })
     expect(guessed.json.error.code).toBe(-32602)
     expect(guessed.json.error.message).toContain('Unknown tool: InvoiceController.void')
+
+    // Without the tool's scopes, a hidden tool still answers like an unknown
+    // one, not with a 403 that names the scopes it needs.
+    const unscoped = await raw(port, {
+      host: 'acme.localhost',
+      token: 'tok-ada-acme.localhost',
+      body: rpc('tools/call', { name: 'InvoiceController.void', arguments: {} }),
+    })
+    expect(unscoped.status).toBe(200)
+    expect(unscoped.json.error.code).toBe(-32602)
   })
 
   it('refuses hosts outside allowedHosts', async () => {
