@@ -32,7 +32,7 @@ import { modules } from './modules'
 export const app = await bootstrap({ modules })
 ```
 
-The plugin reads the exported `app` from the entry file, mounts Express on Vite's HTTP server (single port for both Vite assets + KickJS API), and gives HMR-aware reloads. `envWatchPlugin()` triggers a full reload when `.env` changes so config tweaks land without a manual restart.
+The plugin reads the exported `app` from the entry file and serves it on Vite's HTTP server, one port for Vite assets and the KickJS API, whichever engine the app runs on, with HMR-aware reloads. `envWatchPlugin()` triggers a full reload when `.env` changes so config tweaks land without a manual restart.
 
 ## Documentation
 

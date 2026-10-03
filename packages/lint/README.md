@@ -1,6 +1,6 @@
 # @forinda/kickjs-lint
 
-Lint rules for KickJS conventions — DI tokens, plugin/adapter naming, and other framework patterns.
+Lint rules for KickJS conventions: DI tokens made with `createToken<T>()`, and the reserved `kick/` token prefix.
 
 ## Install
 
@@ -8,42 +8,25 @@ Lint rules for KickJS conventions — DI tokens, plugin/adapter naming, and othe
 pnpm add -D @forinda/kickjs-lint
 ```
 
-## CLI
+## Quick example
 
 ```bash
-# adopter project — lints `src/`, warns on third-party kick/ squatting
-kick-lint
-
-# framework / first-party packages — lints `packages/`, errors on missing kick/ prefix
-kick-lint --first-party
-
-# custom scope
-kick-lint --scope src,libs
+kick-lint                    # lints src/
+kick-lint --scope src,libs   # other folders
 ```
 
-## Programmatic
+| Rule                    | Default | Checks                                                       |
+| ----------------------- | ------- | ------------------------------------------------------------ |
+| `di-token-symbol`       | `error` | tokens use `createToken<T>()`, not `Symbol(...)`             |
+| `token-kick-prefix`     | `error` | first-party tokens start with `kick/` (`--first-party` only) |
+| `token-reserved-prefix` | `warn`  | third-party tokens don't use the reserved `kick/` prefix     |
 
-```ts
-import { runLint, formatViolations } from '@forinda/kickjs-lint'
+Disable one on a line with `// kick-lint-disable <rule>`. `runLint()` and `formatViolations()` run it from code.
 
-const result = await runLint({ cwd: process.cwd(), firstParty: false })
-if (result.violations.length > 0) console.error(formatViolations(result.violations))
-```
+## Documentation
 
-## Rules
+[DI tokens](https://kickjs.app/guide/dependency-injection#tokens)
 
-| Rule                    | Default | Description                                                                   |
-| ----------------------- | ------- | ----------------------------------------------------------------------------- |
-| `di-token-symbol`       | `error` | DI tokens must use `createToken<T>()` instead of `Symbol(...)` in token files |
-| `token-kick-prefix`     | `error` | First-party tokens must start with the reserved `kick/` prefix                |
-| `token-reserved-prefix` | `warn`  | Third-party tokens must not squat the reserved `kick/` prefix                 |
+## License
 
-Inline-disable a rule on a single line:
-
-```ts
-export const FOO = Symbol('Legacy') // kick-lint-disable di-token-symbol
-```
-
-## Why
-
-See [architecture.md §22](https://github.com/forinda/kick-js/blob/main/architecture.md#22-di-token-convention--symbol-to-string-migration) for the convention rationale. The convention landed in the v3 → v4 migration and has been stable since; refer to the [DI Tokens guide](https://kickjs.app/guide/dependency-injection.html#tokens) for the current shape.
+MIT

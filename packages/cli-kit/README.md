@@ -1,20 +1,6 @@
 # @forinda/kickjs-cli-kit
 
-The shared CLI-plugin contract for KickJS. Defines the types and helpers a package implements to ship `kick`-compatible commands, generators, and typegens — without depending on the full `@forinda/kickjs-cli`.
-
-This is a tiny, dependency-free package (one `commander` peer). You only need it if you're **building** a CLI plugin; app authors never import it directly.
-
-## Why this package exists
-
-The kick CLI mounts first-party plugins (the database tooling, for example). If those packages imported `defineCliPlugin` from `@forinda/kickjs-cli` to describe their commands, that would form a dependency cycle — the CLI already depends on them. Hoisting the **contract** into a standalone package both sides import breaks the cycle:
-
-```
-@forinda/kickjs-cli  ─┐
-                      ├─►  @forinda/kickjs-cli-kit   (contract only)
-@forinda/kickjs-db   ─┘
-```
-
-`@forinda/kickjs-cli` re-exports the whole contract, so `import { defineCliPlugin } from '@forinda/kickjs-cli'` keeps working for app-side `kick.config.ts` plugins.
+The contract for `kick` CLI plugins: `defineCliPlugin()`, `defineGenerator()` and their types, without depending on `@forinda/kickjs-cli` itself. You need it only to **build** a CLI plugin; `@forinda/kickjs-cli` re-exports all of it for `kick.config.ts`.
 
 ## Install
 
@@ -22,11 +8,7 @@ The kick CLI mounts first-party plugins (the database tooling, for example). If 
 pnpm add @forinda/kickjs-cli-kit commander
 ```
 
-`commander` is a peer dependency (the host CLI provides the `Command` your plugin registers against).
-
-## Quick start
-
-### A CLI plugin
+## Quick example
 
 ```ts
 import { defineCliPlugin } from '@forinda/kickjs-cli-kit'
@@ -37,59 +19,25 @@ export const helloPlugin = defineCliPlugin({
     program
       .command('hello <name>')
       .description('Say hello')
-      .action((name: string) => {
-        console.log(`Hello, ${name}! (project: ${ctx.projectRoot})`)
-      })
+      .action((name: string) => console.log(`Hello, ${name}! (${ctx.projectRoot})`))
   },
 })
 ```
 
-Mount it in `kick.config.ts`:
-
 ```ts
+// kick.config.ts
 import { defineConfig } from '@forinda/kickjs-cli'
 import { helloPlugin } from './tools/hello-plugin'
 
 export default defineConfig({ plugins: [helloPlugin] })
 ```
 
-```bash
-kick hello world
-```
+`defineGenerator()` adds a `kick g <name>` scaffolder the same way.
 
-### A `kick g <name>` generator
+## Documentation
 
-```ts
-import { defineGenerator } from '@forinda/kickjs-cli-kit'
-
-export default [
-  defineGenerator({
-    name: 'widget',
-    description: 'Scaffold a widget',
-    args: [{ name: 'name', required: true }],
-    files: (ctx) => [
-      {
-        path: `src/widgets/${ctx.kebab}.ts`,
-        content: `export class ${ctx.pascal}Widget {}\n`,
-      },
-    ],
-  }),
-]
-```
-
-## Contract surface
-
-| Export                    | Purpose                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------- |
-| `defineCliPlugin(p)`      | Declare a CLI plugin: `name` + `register()` / `commands` / `typegens` / `generators`. |
-| `defineGenerator(spec)`   | Declare a `kick g <name>` scaffolder (returns the spec, typed).                       |
-| `KickCliPlugin<TConfig>`  | The plugin shape. `TConfig` is the host config type (`ctx.config`).                   |
-| `KickCliPluginContext`    | What `register()` receives: `cwd`, `projectRoot`, `config`, `log`.                    |
-| `GeneratorSpec` + co.     | `GeneratorContext` / `GeneratorFile` / `GeneratorArg` / `GeneratorFlag`.              |
-| `KickCommandDefinition`   | A declarative shell-handler command (the `commands` field shape).                     |
-| `CliTypegen`              | Structural typegen shape (the CLI's `TypegenPlugin` satisfies it).                    |
-| `KickPluginConflictError` | Thrown on duplicate plugin / command / typegen / generator ids.                       |
+[kickjs.app/guide/cli-plugins](https://kickjs.app/guide/cli-plugins): commands, generators, typegens, conflicts.
 
 ## License
 
-MIT © Felix Orinda
+MIT
