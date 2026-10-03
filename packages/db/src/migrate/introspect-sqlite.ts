@@ -5,6 +5,7 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 
 const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
@@ -97,7 +98,23 @@ function* introspectSteps(opts: IntrospectSqliteOptions): Steps<SchemaSnapshot> 
       checks: [],
     }
   }
-  return { version: 1, dialect: 'sqlite', tables }
+  const snapshot: SchemaSnapshot = { version: 1, dialect: 'sqlite', tables }
+  const viewRows = yield* rows<{ name: string; sql: string }>(
+    `SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name`,
+  )
+  if (viewRows.length > 0) {
+    const views: Record<string, ViewSnapshot> = {}
+    for (const v of viewRows) {
+      views[v.name] = {
+        name: v.name,
+        // SQLite keeps the whole statement; the SELECT follows the first AS.
+        definition: v.sql.replace(/^[\s\S]*?\bAS\b\s*/i, '').trim(),
+        columns: yield* readColumns(v.name),
+      }
+    }
+    snapshot.views = views
+  }
+  return snapshot
 }
 
 /**

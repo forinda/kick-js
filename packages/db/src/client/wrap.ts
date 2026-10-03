@@ -350,6 +350,14 @@ export function wrap<DB>(
     findOrCreate: ((table: string, opts: FindOrCreateOptions<DB, any>) =>
       findOrCreate(client, table as never, opts)) as KickDbClient<DB>['findOrCreate'],
 
+    async refreshMaterializedView(name, options = {}) {
+      if (ctx.dialect !== 'postgres') {
+        throw new Error(`refreshMaterializedView: materialized views are Postgres-only`)
+      }
+      const how = options.concurrently ? sql`CONCURRENTLY ` : sql``
+      await sql`REFRESH MATERIALIZED VIEW ${how}${sql.table(name)}`.execute(active())
+    },
+
     $extends(ext) {
       return applyExtensions(client, ctx, ext)
     },

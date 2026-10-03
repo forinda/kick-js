@@ -6,6 +6,7 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from './types'
 
 /**
@@ -36,8 +37,14 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   for (const table of Object.values(snapshot.tables)) {
     tableSources.push(renderTable(table, usedColumnHelpers, enums))
   }
+  const views = Object.values(snapshot.views ?? {})
+  for (const v of views) tableSources.push(renderView(v, usedColumnHelpers, enums))
 
   const helpers = ['table', ...Array.from(usedColumnHelpers).toSorted()]
+  if (views.some((v) => !v.materialized)) helpers.push('view')
+  const viewIndexes = views.flatMap((v) => v.indexes ?? [])
+  if (viewIndexes.some((i) => !i.unique) && !helpers.includes('index')) helpers.push('index')
+  if (viewIndexes.some((i) => i.unique) && !helpers.includes('unique')) helpers.push('unique')
   // Common constraint helpers used by tables with secondary objects.
   const needsIndex = Object.values(snapshot.tables).some((t) =>
     t.indexes.some((i) => !isAutoUniqueName(t.name, i)),
@@ -50,10 +57,14 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
 
   const lines = [`import { ${helpers.join(', ')} } from '@forinda/kickjs-db'`]
 
-  // `pgEnum` lives on the dialect subpath, so it needs its own import line.
+  // `pgEnum` and `materializedView` live on the dialect subpath.
   const enumDecls = Object.values(enums)
-  if (enumDecls.length > 0) {
-    lines.push(`import { pgEnum } from '@forinda/kickjs-db/pg'`)
+  const pgImports = [
+    ...(enumDecls.length > 0 ? ['pgEnum'] : []),
+    ...(views.some((v) => v.materialized) ? ['materializedView'] : []),
+  ]
+  if (pgImports.length > 0) {
+    lines.push(`import { ${pgImports.join(', ')} } from '@forinda/kickjs-db/pg'`)
   }
 
   const body: string[] = []
@@ -68,6 +79,30 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   }
 
   return [...lines, '', ...body, ...tableSources].join('\n').trimEnd() + '\n'
+}
+
+/**
+ * A view as `view(name, columns, { as })` — or `materializedView` with its
+ * indexes. The columns are what introspection reported; the SQL is the
+ * database's own rewrite of it.
+ */
+function renderView(
+  v: ViewSnapshot,
+  helpers: Set<string>,
+  enums: Record<string, EnumSnapshot>,
+): string {
+  const columns = Object.values(v.columns ?? {}).map(
+    (c) => `  ${jsKey(c.name)}: ${renderColumn(c, helpers, undefined, false, v.name, enums)},`,
+  )
+  const sql =
+    '`' + v.definition.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`'
+  const opts = [`as: ${sql}`]
+  if (v.indexes?.length) {
+    const calls = v.indexes.map((i) => `    ${jsKey(i.name)}: ${renderIndexCall(i)}`).join(',\n')
+    opts.push(`constraints: (t) => ({\n${calls},\n  })`)
+  }
+  const factory = v.materialized ? 'materializedView' : 'view'
+  return `export const ${jsIdent(v.name)} = ${factory}(${strLit(v.name)}, {\n${columns.join('\n')}\n}, { ${opts.join(', ')} })`
 }
 
 /**

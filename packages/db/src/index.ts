@@ -150,6 +150,7 @@ export { listSeeds, runSeeds, type SeedResult } from './cli/seed'
 
 export * from './dsl/columns'
 export * from './dsl/table'
+export * from './dsl/view'
 export { selfRef } from './dsl/self-ref'
 export {
   Rule,

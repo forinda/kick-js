@@ -250,6 +250,8 @@ Cross-dialect (live on package root):
 
 Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.default(value)`, `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.references(() => other.column, { onDelete, onUpdate })`, `.comment(text)`, `.$defaultFn(fn)` (computed per inserted row), `.$onUpdate(fn)` (computed per update). Table comment: `table(name, columns, { comment, constraints })`.
 
+Views: `view(name, columns, { as })` (root) and `materializedView(name, columns, { as, constraints })` (`@forinda/kickjs-db/pg`), refreshed with `db.refreshMaterializedView(name, { concurrently })` ([Views](../guide/database/schema.md#views)).
+
 PG-only types live at `@forinda/kickjs-db/pg`: `tsvector`, `vector(N)`, `halfvec(N)`, `point`, `geometry(type?, srid?)`, `macaddr`, `macaddr8`, `citext`, `money`, `inet`, `cidr`, `xml`. MySQL-only at `@forinda/kickjs-db/mysql`: `mysqlEnum(...values)`, `unsigned(col)`, `tinyint`, `mediumint`, `datetime(fsp?)`.
 
 ### `relations()`

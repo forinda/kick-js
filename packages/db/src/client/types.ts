@@ -189,6 +189,16 @@ export interface KickDbClient<DB = RegisteredDB> {
     opts: import('./upsert').FindOrCreateOptions<DB, T>,
   ): Promise<{ row: Selectable<DB[T]>; created: boolean }>
 
+  /**
+   * Re-run a materialized view's query and store the new result (Postgres).
+   * `concurrently: true` keeps the view readable while it refreshes; it
+   * needs a unique index on the view, and can't run inside a transaction.
+   */
+  refreshMaterializedView(
+    name: keyof DB & string,
+    options?: { concurrently?: boolean },
+  ): Promise<void>
+
   transaction<T>(fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
   transaction<T>(opts: TransactionOptions, fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
 

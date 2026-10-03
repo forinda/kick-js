@@ -169,6 +169,14 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       t.checks = t.checks.filter((c) => c.name !== change.check.name)
       return
     }
+    case 'createView': {
+      snapshot.views = { ...snapshot.views, [change.view.name]: deepClone(change.view) }
+      return
+    }
+    case 'dropView': {
+      if (snapshot.views) delete snapshot.views[change.view.name]
+      return
+    }
     case 'setTableComment': {
       const t = snapshot.tables[change.table]
       if (!t) return

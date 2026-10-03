@@ -1,6 +1,7 @@
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { derivedFkName, derivedUniqueName } from './name'
 import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
+import { isView } from '../dsl/view'
 import { extractRelations } from '../query/extract-relations'
 import { applyCasing, type Casing } from './casing'
 import type {
@@ -10,6 +11,7 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from './types'
 
 interface MaybeTable {
@@ -74,9 +76,23 @@ export function extractSnapshot(
 
   const schemaNames = new Set<string>()
 
+  const views: Record<string, ViewSnapshot> = {}
+
   for (const exported of Object.values(schema)) {
     const value = unwrapTable(exported) ?? exported
-    if (isTable(value)) {
+    if (isView(value)) {
+      if (value.__materialized && dialect !== 'postgres') {
+        throw new Error(
+          `kickjs-db: '${value.__name}' is a materialized view, which only Postgres has — use view()`,
+        )
+      }
+      const v: ViewSnapshot = { name: value.__name, definition: value.__definition }
+      if (value.__materialized) {
+        v.materialized = true
+        if (value.__indexes.length > 0) v.indexes = [...value.__indexes]
+      }
+      views[qualifiedTableName(value)] = v
+    } else if (isTable(value)) {
       // Key by qualified name so two schemas can hold same-named tables
       // without the later one silently overwriting the earlier.
       tables[qualifiedTableName(value)] = extractTable(value)
@@ -127,6 +143,9 @@ export function extractSnapshot(
   if (relations) {
     snapshot.relations = relations
   }
+  // Absent when empty, so snapshots without views — and their migration
+  // hashes — are unchanged.
+  if (Object.keys(views).length > 0) snapshot.views = views
   return options.casing === 'snake_case' ? applyCasing(snapshot) : snapshot
 }
 

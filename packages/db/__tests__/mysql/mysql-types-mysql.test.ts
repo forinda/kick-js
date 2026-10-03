@@ -14,6 +14,7 @@ import {
   serial,
   table,
   varchar,
+  view,
 } from '@forinda/kickjs-db'
 import {
   datetime,
@@ -159,5 +160,34 @@ describe('comments on MySQL', () => {
     await pool.query('INSERT INTO notes (body) VALUES (?), (?)', ['a', 'b'])
     const [ids] = await pool.query('SELECT id FROM notes ORDER BY id')
     expect((ids as Array<{ id: number }>).map((r) => r.id)).toEqual([1, 2])
+  })
+})
+
+describe('views on MySQL', () => {
+  it('are created after their table, queried, kept across a column change, and introspected', async () => {
+    const people = table('people', { id: serial().primaryKey(), name: varchar(50).notNull() })
+    const shortNames = view(
+      'short_names',
+      { id: integer().notNull(), name: varchar(50).notNull() },
+      { as: 'SELECT id, name FROM people WHERE CHAR_LENGTH(name) < 5' },
+    )
+    const widened = table('people', { id: serial().primaryKey(), name: varchar(80).notNull() })
+    const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
+    await pool.query(emitMysql(diff(empty, extractSnapshot({ people, shortNames }, 'mysql'))))
+    await pool.query(`INSERT INTO people (name) VALUES ('Ada'), ('Grace')`)
+
+    const db = createDbClient({ schema: { shortNames }, dialect: mysqlDialect({ pool }) })
+    expect(await db.selectFrom('short_names').select('name').execute()).toEqual([{ name: 'Ada' }])
+
+    const step = diff(
+      extractSnapshot({ people, shortNames }, 'mysql'),
+      extractSnapshot({ people: widened, shortNames }, 'mysql'),
+    )
+    expect(step.map((c) => c.kind)).toEqual(['dropView', 'alterColumn', 'createView'])
+    await pool.query(emitMysql(step))
+
+    const live = await introspectMysql(pool as never, {})
+    expect(Object.keys(live.views ?? {})).toContain('short_names')
+    expect(live.views!.short_names.columns!.name.type).toBe('varchar(80)')
   })
 })

@@ -101,6 +101,10 @@ function emitChange(change: Change): string {
       return `ALTER TABLE ${ident(change.table)} DROP CHECK ${ident(change.check.name)};`
     case 'setTableComment':
       return `ALTER TABLE ${ident(change.table)} COMMENT = ${mysqlString(change.to ?? '')};`
+    case 'createView':
+      return `CREATE VIEW ${ident(change.view.name)} AS\n${change.view.definition};`
+    case 'dropView':
+      return `DROP VIEW ${ident(change.view.name)};`
     case 'setColumnComment': {
       // MySQL sets a comment by restating the column; a serial key keeps its
       // AUTO_INCREMENT, which MODIFY would otherwise drop.

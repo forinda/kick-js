@@ -108,6 +108,10 @@ function invert(change: Exclude<Change, CreateSchema>): Change {
       return { kind: 'dropCheck', table: change.table, check: change.check }
     case 'dropCheck':
       return { kind: 'addCheck', table: change.table, check: change.check }
+    case 'createView':
+      return { kind: 'dropView', view: change.view }
+    case 'dropView':
+      return { kind: 'createView', view: change.view }
     case 'setTableComment':
       return { ...change, from: change.to, to: change.from }
     case 'setColumnComment':

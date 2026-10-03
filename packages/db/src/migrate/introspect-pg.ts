@@ -1,10 +1,12 @@
 import type {
+  ColumnSnapshot,
   EnumSnapshot,
   ForeignKeySnapshot,
   FkAction,
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 import type { IntrospectPgOptions, PgQueryRunner } from './introspect-types'
 
@@ -102,11 +104,73 @@ export async function introspectPg(
   const enums = await readEnums(client, schema)
 
   const snapshot: SchemaSnapshot = { version: 1, dialect: 'postgres', tables }
+  const views = await readViews(client, schema)
+  if (Object.keys(views).length > 0) snapshot.views = views
   // Only carry `enums` when the database has some, matching what
   // `extractSnapshot` does — an empty `enums: {}` would change the serialized
   // snapshot and invalidate every existing migration hash.
   if (Object.keys(enums).length > 0) snapshot.enums = enums
   return snapshot
+}
+
+/** Views and materialized views, with their SQL, columns and (materialized) indexes. */
+async function readViews(
+  client: PgQueryRunner,
+  schema: string,
+): Promise<Record<string, ViewSnapshot>> {
+  const rows = await client.query<{ name: string; definition: string; materialized: boolean }>(
+    `SELECT viewname AS name, definition, false AS materialized
+       FROM pg_views WHERE schemaname = $1
+     UNION ALL
+     SELECT matviewname, definition, true FROM pg_matviews WHERE schemaname = $1
+     ORDER BY name`,
+    [schema],
+  )
+  const out: Record<string, ViewSnapshot> = {}
+  for (const r of rows.rows) {
+    const cols = await client.query<{ name: string; type: string; notnull: boolean }>(
+      `SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS type,
+              a.attnotnull AS notnull
+       FROM pg_attribute a
+       WHERE a.attrelid = format('%I.%I', $1::text, $2::text)::regclass
+         AND a.attnum > 0 AND NOT a.attisdropped
+       ORDER BY a.attnum`,
+      [schema, r.name],
+    )
+    const columns: Record<string, ColumnSnapshot> = {}
+    for (const c of cols.rows) {
+      columns[c.name] = {
+        name: c.name,
+        type: viewColumnType(c.type),
+        nullable: !c.notnull,
+        default: null,
+        primaryKey: false,
+      }
+    }
+    const v: ViewSnapshot = {
+      name: r.name,
+      definition: r.definition.trim().replace(/;$/, ''),
+      columns,
+    }
+    if (r.materialized) {
+      v.materialized = true
+      const indexes = await readIndexes(client, schema, r.name)
+      if (indexes.length > 0) v.indexes = indexes
+    }
+    out[r.name] = v
+  }
+  return out
+}
+
+/** `format_type()` spelling → the DSL's, for the types a view usually returns. */
+function viewColumnType(type: string): string {
+  return type
+    .replace(/^character varying/, 'varchar')
+    .replace(/^character\b/, 'char')
+    .replace(/^timestamp(\(\d+\))? without time zone$/, 'timestamp')
+    .replace(/^timestamp(\(\d+\))? with time zone$/, 'timestamptz')
+    .replace(/^time(\(\d+\))? without time zone$/, 'time')
+    .replace(/,(\S)/g, ', $1')
 }
 
 /**
@@ -343,7 +407,7 @@ async function readIndexes(
      JOIN pg_am am ON am.oid = i.relam
      JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
      LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum AND k.attnum <> 0
-     WHERE n.nspname = $1 AND t.relname = $2 AND t.relkind = 'r'
+     WHERE n.nspname = $1 AND t.relname = $2 AND t.relkind IN ('r', 'm')
      ORDER BY i.relname, k.ord`,
     [schema, table],
   )

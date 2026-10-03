@@ -5,6 +5,7 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 
 const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
@@ -88,7 +89,25 @@ export async function introspectMysql(
       ...(t.TABLE_COMMENT ? { comment: t.TABLE_COMMENT } : {}),
     }
   }
-  return { version: 1, dialect: 'mysql', tables }
+  const snapshot: SchemaSnapshot = { version: 1, dialect: 'mysql', tables }
+  const viewRows = await rows<{ TABLE_NAME: string; VIEW_DEFINITION: string }>(
+    db,
+    `SELECT TABLE_NAME, VIEW_DEFINITION FROM information_schema.VIEWS
+     WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME`,
+    [],
+  )
+  if (viewRows.length > 0) {
+    const views: Record<string, ViewSnapshot> = {}
+    for (const v of viewRows) {
+      views[v.TABLE_NAME] = {
+        name: v.TABLE_NAME,
+        definition: v.VIEW_DEFINITION,
+        columns: await readColumns(db, v.TABLE_NAME),
+      }
+    }
+    snapshot.views = views
+  }
+  return snapshot
 }
 
 async function readColumns(

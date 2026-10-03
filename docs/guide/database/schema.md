@@ -354,6 +354,50 @@ export const events = table('events', {
 - `unsigned()` takes any integer column (`integer`, `smallint`, `bigint`, `tinyint`, `mediumint`), keeps its type and chain, and widens the validators' range.
 - `datetime` isn't converted to UTC as `TIMESTAMP` is, and covers years 1000–9999.
 
+## Views
+
+A view is a stored `SELECT` you read like a table. Declare it with the columns it returns, which give the typed client its row type, and its SQL:
+
+```ts
+import { integer, text, view } from '@forinda/kickjs-db'
+
+export const activeUsers = view(
+  'active_users',
+  { id: integer().notNull(), email: text().notNull() },
+  { as: 'SELECT id, email FROM users WHERE deleted_at IS NULL' },
+)
+
+await db.selectFrom('active_users').selectAll().execute() // { id: number; email: string }[]
+```
+
+- **Migrations** create views after the tables, in declaration order (so a view can select from one declared before it), and drop them before the tables. A changed definition drops and re-creates the view.
+- **A change to a table a view reads re-creates the view around it.** Postgres won't alter a column a view uses, and SQLite's table rebuild breaks a view over the table, so kick/db drops every view whose SQL names a table the migration alters, and the views built on those, then creates them again afterwards. Index and comment changes leave views alone.
+- **The columns aren't checked against the SQL.** Keep them in step, as you would a hand-written type. With `casing: 'snake_case'`, alias the SQL's columns in snake_case.
+- **Views are read-only** in kick/db's eyes. The typed client accepts writes, but most views can't take them.
+- **Introspection** reads views back with their columns (`kick db introspect` renders them). Drift checks which views exist, not their SQL, because every database rewrites it.
+
+### Materialized views (Postgres)
+
+A materialized view stores the result, so reads are fast and data is as fresh as the last refresh:
+
+```ts
+import { date, numeric, unique } from '@forinda/kickjs-db'
+import { materializedView } from '@forinda/kickjs-db/pg'
+
+export const dailySales = materializedView(
+  'daily_sales',
+  { day: date().notNull(), total: numeric(12, 2, { mode: 'number' }).notNull() },
+  {
+    as: 'SELECT created_at::date AS day, sum(amount) AS total FROM orders GROUP BY 1',
+    constraints: (t) => ({ byDay: unique('daily_sales_day').on(t.day) }),
+  },
+)
+
+await db.refreshMaterializedView('daily_sales', { concurrently: true })
+```
+
+`refreshMaterializedView` re-runs the query. With `concurrently: true`, readers keep the old rows while it refreshes. That needs a unique index (declared in `constraints`, as above) and can't run inside a transaction. Refresh from a [cron job](../cron.md) or after the writes that matter.
+
 ## Custom column types
 
 `customType<T>()` lets a project introduce a typed column that isn't in the built-in DSL — encrypted strings, ULIDs, PostGIS geometry — without forking the package. It takes a `dataType` thunk plus optional `toDriver` / `fromDriver` codecs:

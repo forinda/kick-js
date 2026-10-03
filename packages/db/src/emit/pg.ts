@@ -96,6 +96,16 @@ function emitChange(change: Change): string {
       return `COMMENT ON TABLE ${quoteIdent(change.table)} IS ${commentLiteral(change.to)};`
     case 'setColumnComment':
       return columnComment(change.table, change.column.name, change.to)
+    case 'createView': {
+      const v = change.view
+      if (!v.materialized) return `CREATE VIEW ${quoteIdent(v.name)} AS\n${v.definition};`
+      return [
+        `CREATE MATERIALIZED VIEW ${quoteIdent(v.name)} AS\n${v.definition}\nWITH DATA;`,
+        ...(v.indexes ?? []).map((i) => emitAddIndex(v.name, i)),
+      ].join('\n')
+    }
+    case 'dropView':
+      return `DROP ${change.view.materialized ? 'MATERIALIZED VIEW' : 'VIEW'} ${quoteIdent(change.view.name)};`
   }
 }
 

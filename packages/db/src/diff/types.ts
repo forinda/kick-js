@@ -5,6 +5,7 @@ import type {
   ForeignKeySnapshot,
   IndexSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 
 /**
@@ -178,6 +179,18 @@ export interface DropCheck {
   check: CheckSnapshot
 }
 
+/** Create a view (after every table change in the migration). */
+export interface CreateView {
+  kind: 'createView'
+  view: ViewSnapshot
+}
+
+/** Drop a view (before every table change in the migration). */
+export interface DropView {
+  kind: 'dropView'
+  view: ViewSnapshot
+}
+
 /** A table's comment changed; `null` is none. */
 export interface SetTableComment {
   kind: 'setTableComment'
@@ -220,5 +233,7 @@ export type Change =
   | DropCheck
   | SetTableComment
   | SetColumnComment
+  | CreateView
+  | DropView
 
 export type ChangeSet = Change[]

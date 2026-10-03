@@ -27,6 +27,19 @@ import { MigrationDriftError, type SchemaDiffSummary } from './errors'
  * compared raw and keeps default-level drift detection.
  */
 function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
+  // A view's SQL comes back rewritten by the database (Postgres reformats it,
+  // MySQL qualifies every name), so drift compares which views exist.
+  if (snap.views) {
+    snap = {
+      ...snap,
+      views: Object.fromEntries(
+        Object.entries(snap.views).map(([n, v]) => [
+          n,
+          { name: v.name, definition: '', ...(v.materialized ? { materialized: true } : {}) },
+        ]),
+      ) as SchemaSnapshot['views'],
+    }
+  }
   // Introspection reads neither CHECK constraints (Postgres also rewrites
   // their expressions) nor a primary key's name and declared order, so drift
   // compares key columns only and leaves CHECKs out. ponytail: introspect
@@ -150,6 +163,12 @@ function summarize(changes: Change[]): SchemaDiffSummary {
     switch (c.kind) {
       case 'createTable':
         added.push(c.table.name)
+        break
+      case 'createView':
+        added.push(`view ${c.view.name}`)
+        break
+      case 'dropView':
+        removed.push(`view ${c.view.name}`)
         break
       case 'dropTable':
         removed.push(c.table.name)
