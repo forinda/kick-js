@@ -18,6 +18,8 @@ export interface TestDbOptions<S> {
    * schema — the SQL production runs. Unreviewed ones apply too.
    */
   migrationsDir?: string
+  /** The `casing` your client and `kick.config.ts` use. */
+  casing?: 'snake_case'
 }
 
 /**
@@ -43,10 +45,16 @@ export async function createTestDb<S>(
     })
   } else {
     const empty: SchemaSnapshot = { version: 1, dialect: 'sqlite', tables: {} }
-    const target = extractSnapshot(opts.schema as Record<string, unknown>, 'sqlite')
+    const target = extractSnapshot(opts.schema as Record<string, unknown>, 'sqlite', {
+      casing: opts.casing,
+    })
     database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
   }
-  return createDbClient({ schema: opts.schema, dialect: sqliteDialect({ database }) }) as never
+  return createDbClient({
+    schema: opts.schema,
+    dialect: sqliteDialect({ database }),
+    casing: opts.casing,
+  }) as never
 }
 
 export interface PgTestDb<S> {
@@ -100,13 +108,21 @@ export async function createPgTestDb<S>(
   } else {
     const empty: SchemaSnapshot = { version: 1, dialect: 'postgres', tables: {} }
     await pool.query(
-      emitPg(diff(empty, extractSnapshot(opts.schema as Record<string, unknown>, 'postgres'))),
+      emitPg(
+        diff(
+          empty,
+          extractSnapshot(opts.schema as Record<string, unknown>, 'postgres', {
+            casing: opts.casing,
+          }),
+        ),
+      ),
     )
   }
 
   const db = createDbClient({
     schema: opts.schema,
     dialect: pgDialect({ pool }),
+    casing: opts.casing,
   }) as never as KickDbClient<SchemaToTypes<S>>
   return {
     db,

@@ -51,6 +51,8 @@ export interface MigrationAdapter {
    * can't run those migrations.
    */
   kysely?(): Kysely<any>
+  /** The table migrations are recorded in, when not `kick_migrations`. */
+  readonly migrationsTable?: string
   /** Close any underlying pool / connection. Caller-owned resources may keep the no-op. */
   close(): Promise<void>
 }

@@ -20,6 +20,7 @@ import {
 import { wrap, type InternalContext } from './wrap'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
+import { casingPlugins } from '../snapshot/casing'
 import { ManagedColumnsPlugin, collectManaged } from './managed'
 import type { CompileTable } from '../query/compile-shared'
 import { KICK_DIALECT_DATES, readDialectMark, type DialectDateOptions } from '../dialect-marker'
@@ -116,6 +117,13 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // place. Order matches Kysely's documented "plugins run top-down".
   if (opts.plugins && opts.plugins.length > 0) {
     plugins.push(...opts.plugins)
+  }
+  if (opts.casing === 'snake_case') {
+    // Results are converted before anything reads them by key; queries after
+    // everything else has written them by key.
+    const casing = casingPlugins(collectRelationKeys(opts.schema))
+    plugins.unshift(casing.first)
+    plugins.push(casing.last)
   }
 
   const makeKysely = (dialect: KyselyDialect) =>

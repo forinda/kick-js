@@ -58,6 +58,12 @@ export interface TransactionOptions extends TransactionEvent {
    */
   nested?: 'reuse' | 'savepoint' | 'separate'
   /**
+   * Start the transaction read-only (Postgres, MySQL): a write inside it fails.
+   * For reports that must see one consistent view and must not change it.
+   * SQLite has no read-only transactions, so it's refused there.
+   */
+  readOnly?: boolean
+  /**
    * Run the whole transaction again when it fails with a retryable error —
    * a serialization failure or deadlock (`err.retryable`). `true` is three
    * attempts; waits between them back off exponentially with jitter.
@@ -325,4 +331,10 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * inline. Tracked upstream at <https://github.com/forinda/kick-js/issues/220>.
    */
   plugins?: KyselyPlugin[]
+  /**
+   * `'snake_case'`: tables and columns are snake_case in the database and
+   * camelCase in TypeScript — `firstName` is the `first_name` column. Set the
+   * same `casing` in `kick.config.ts` so migrations use those names.
+   */
+  casing?: 'snake_case'
 }

@@ -81,25 +81,25 @@ export const postsRelations = relations(posts, ({ one }) => ({
 }))
 ```
 
-| Prisma                                    | kick/db                                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `model User { … }`                        | `export const users = table('users', { … })` — or a [class form](../db-table-forms.md)       |
-| Model name ≠ table name, `@@map`          | the first argument _is_ the table name                                                       |
-| `@map("created_at")`                      | no mapping: the key is the column name. Name the key `created_at`, or keep camelCase columns |
-| `String?` (optional)                      | nullable by default; `.notNull()` makes it required                                          |
-| `@id @default(uuid())`                    | `uuid().primaryKey().defaultRandom()`                                                        |
-| `@id @default(autoincrement())`           | `serial().primaryKey()` (`bigSerial()` for `BigInt`)                                         |
-| `@default(now())`                         | `.defaultNow()`                                                                              |
-| `@updatedAt`                              | `.onUpdateNow()` — [maintained columns](./schema.md#columns-kick-db-maintains)               |
-| `@unique`, `@@unique([a, b])`             | `.unique()`, `unique(name).on(t.a, t.b)` in the third argument                               |
-| `@@index([a])`                            | `index(name).on(t.a)`                                                                        |
-| `@@id([a, b])`                            | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                         |
-| `@relation(fields, references, onDelete)` | `.references(() => users.id, { onDelete: 'cascade' })` on the column                         |
-| relation fields (`posts Post[]`)          | `relations()`, declared beside the tables; used by `db.query` only, no DDL                   |
-| `enum Role { … }`                         | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg`                             |
-| `Json`, `Decimal`, `Bytes`                | `json<T>()` / `jsonb<T>()`, `decimal(p, s)` (a `string`), `bytea()`                          |
-| `Unsupported("…")`, a custom scalar       | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))      |
-| CHECK constraint (raw SQL in a migration) | `check(name, sql)` — part of the schema, so migrations generate it                           |
+| Prisma                                    | kick/db                                                                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model User { … }`                        | `export const users = table('users', { … })` — or a [class form](../db-table-forms.md)                                                                   |
+| Model name ≠ table name, `@@map`          | the first argument _is_ the table name                                                                                                                   |
+| `@map("created_at")`                      | `casing: 'snake_case'` maps every camelCase key to its snake_case column ([Column names](./schema.md#column-names-casing)); there's no per-column `@map` |
+| `String?` (optional)                      | nullable by default; `.notNull()` makes it required                                                                                                      |
+| `@id @default(uuid())`                    | `uuid().primaryKey().defaultRandom()`                                                                                                                    |
+| `@id @default(autoincrement())`           | `serial().primaryKey()` (`bigSerial()` for `BigInt`)                                                                                                     |
+| `@default(now())`                         | `.defaultNow()`                                                                                                                                          |
+| `@updatedAt`                              | `.onUpdateNow()` — [maintained columns](./schema.md#columns-kick-db-maintains)                                                                           |
+| `@unique`, `@@unique([a, b])`             | `.unique()`, `unique(name).on(t.a, t.b)` in the third argument                                                                                           |
+| `@@index([a])`                            | `index(name).on(t.a)`                                                                                                                                    |
+| `@@id([a, b])`                            | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                                                                                     |
+| `@relation(fields, references, onDelete)` | `.references(() => users.id, { onDelete: 'cascade' })` on the column                                                                                     |
+| relation fields (`posts Post[]`)          | `relations()`, declared beside the tables; used by `db.query` only, no DDL                                                                               |
+| `enum Role { … }`                         | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg`                                                                                         |
+| `Json`, `Decimal`, `Bytes`                | `json<T>()` / `jsonb<T>()`, `decimal(p, s)` (a `string`), `bytea()`                                                                                      |
+| `Unsupported("…")`, a custom scalar       | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))                                                                  |
+| CHECK constraint (raw SQL in a migration) | `check(name, sql)` — part of the schema, so migrations generate it                                                                                       |
 
 Every column type is on [Tables & Columns](./schema.md).
 

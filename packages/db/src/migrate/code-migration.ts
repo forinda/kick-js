@@ -57,11 +57,12 @@ export async function runCodeMigration(
     )
   }
 
+  const table = adapter.migrationsTable ?? 'kick_migrations'
   const record = async (exec: MigrationDb) => {
     if ('record' in bookkeeping) {
-      await exec.insertInto('kick_migrations').values(bookkeeping.record).execute()
+      await exec.insertInto(table).values(bookkeeping.record).execute()
     } else {
-      await exec.deleteFrom('kick_migrations').where('id', '=', bookkeeping.remove).execute()
+      await exec.deleteFrom(table).where('id', '=', bookkeeping.remove).execute()
     }
   }
 

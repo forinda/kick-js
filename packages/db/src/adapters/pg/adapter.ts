@@ -4,6 +4,9 @@ import {
   introspectPg,
   KickDbError,
   lockTableDdl,
+  lockTableName,
+  quoteTable,
+  KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
   type Dialect,
   type MigrationAdapter,
@@ -45,6 +48,12 @@ export interface PgPoolLike {
 }
 
 export interface PgAdapterOptions {
+  /**
+   * The table migrations are recorded in. Default `kick_migrations`; its lock
+   * table is the same name plus `_lock`. On Postgres it may be schema-qualified
+   * (`meta.kick_migrations`); the schema is created if missing.
+   */
+  migrationsTable?: string
   /**
    * A pg-protocol-compatible Pool. Concretely: pg.Pool, neon-serverless Pool,
    * any other Pool that satisfies the {@link PgPoolLike} structural shape.
@@ -89,13 +98,25 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
     throw new Error(`Invalid PG schema name: ${schema}`)
   }
 
+  const table = opts.migrationsTable ?? KICK_MIGRATIONS_TABLE
+  const T = quoteTable(dialect, table)
+  const L = quoteTable(dialect, lockTableName(table))
+  // Introspection must not report the bookkeeping tables as schema.
+  // Postgres reads a dotted name as schema.table. Introspection reads one
+  // schema and matches bare names, so the tables are only left out when they
+  // live in that schema — elsewhere, a same-named table here is the user's.
+  const bookkeepingSchema = table.includes('.') ? table.slice(0, table.lastIndexOf('.')) : schema
+  const bookkeepingTables =
+    bookkeepingSchema === schema
+      ? [table, lockTableName(table)].map((t) => t.slice(t.lastIndexOf('.') + 1))
+      : []
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,
 
     async ensureMigrationTables() {
-      await pool.query(migrationsTableDdl(dialect))
-      await pool.query(lockTableDdl(dialect))
+      await pool.query(migrationsTableDdl(dialect, table))
+      await pool.query(lockTableDdl(dialect, table))
     },
 
     async listApplied(): Promise<MigrationRow[]> {
@@ -108,7 +129,7 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
         direction: 'up' | 'down'
       }>(
         `SELECT id, name, hash, batch, applied_at, direction
-         FROM kick_migrations
+         FROM ${T}
          ORDER BY applied_at ASC, id ASC`,
       )
       return r.rows.map((row) => ({
@@ -124,19 +145,19 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
 
     async recordApplied(row) {
       await pool.query(
-        `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+        `INSERT INTO ${T} (id, name, hash, batch, direction)
          VALUES ($1, $2, $3, $4, $5)`,
         [row.id, row.name, row.hash, row.batch, row.direction],
       )
     },
 
     async removeApplied(id: string) {
-      await pool.query(`DELETE FROM kick_migrations WHERE id = $1`, [id])
+      await pool.query(`DELETE FROM ${T} WHERE id = $1`, [id])
     },
 
     async acquireLock(owner: string): Promise<boolean> {
       const r = await pool.query(
-        `UPDATE kick_migrations_lock
+        `UPDATE ${L}
          SET locked_at = CURRENT_TIMESTAMP, locked_by = $1
          WHERE id = 1 AND locked_at IS NULL`,
         [owner],
@@ -146,7 +167,7 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
 
     async releaseLock() {
       await pool.query(
-        `UPDATE kick_migrations_lock
+        `UPDATE ${L}
          SET locked_at = NULL, locked_by = NULL
          WHERE id = 1`,
       )
@@ -164,12 +185,12 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
         if (bookkeeping && 'record' in bookkeeping) {
           const r = bookkeeping.record
           await client.query(
-            `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+            `INSERT INTO ${T} (id, name, hash, batch, direction)
              VALUES ($1, $2, $3, $4, $5)`,
             [r.id, r.name, r.hash, r.batch, r.direction],
           )
         } else if (bookkeeping) {
-          await client.query(`DELETE FROM kick_migrations WHERE id = $1`, [bookkeeping.remove])
+          await client.query(`DELETE FROM ${T} WHERE id = $1`, [bookkeeping.remove])
         }
         await client.query('COMMIT')
       } catch (err) {
@@ -187,8 +208,10 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
     },
 
     async introspect(): Promise<SchemaSnapshot> {
-      return introspectPg(pool, { schema })
+      return introspectPg(pool, { schema, excludeTables: bookkeepingTables })
     },
+
+    migrationsTable: table,
 
     kysely() {
       // Built once, on the same connection. Never destroyed here: the pool or

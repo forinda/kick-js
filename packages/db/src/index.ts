@@ -73,6 +73,8 @@ export {
 export type { MigrationAdapter, MigrationBookkeeping, MigrationRow } from './migrate/adapter'
 export {
   migrationsTableDdl,
+  lockTableName,
+  quoteTable,
   lockTableDdl,
   KICK_MIGRATIONS_TABLE,
   KICK_LOCK_TABLE,
@@ -139,6 +141,7 @@ export { emitMysql } from './emit/mysql'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'
+export { toDbName, toKeyName, type Casing } from './snapshot/casing'
 export type { CodeMigration, MigrationDb } from './migrate/code-migration'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
 export { checkMigrations, type CheckResult } from './cli/check'
