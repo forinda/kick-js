@@ -112,6 +112,7 @@
     "miniflare": "^4.20260730.0",
     "mysql2": "^3.24.4",
     "pg": "^8.23.0",
+    "pg-cursor": "^2.22.1",
     "typescript": "^7.0.2"
   },
   "publishConfig": {

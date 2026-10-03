@@ -66,7 +66,7 @@ The table gets row-level security, forced (your app usually connects as the owne
 
 How each connection gets the tenant is `binding`:
 
-- **`'transaction'` (default):** the tenant is set locally to each transaction (`set_config(…, true)`). A query on its own runs in a short transaction (`BEGIN`, set, query, `COMMIT`), so it's three extra round trips. Wrap a unit of work in `db.transaction()` to pay that once. This is safe behind transaction-mode poolers (PgBouncer, Supavisor, Neon's pooler), which hand a server connection to other clients between transactions.
+- **`'transaction'` (default):** the tenant is set locally to each transaction (`set_config(…, true)`). A query on its own runs in a short transaction (`BEGIN` with the tenant, the query, `COMMIT`), so it's two extra round trips. Wrap a unit of work in `db.transaction()` to pay that once. This is safe behind transaction-mode poolers (PgBouncer, Supavisor, Neon's pooler), which hand a server connection to other clients between transactions.
 - **`'connection'`:** the tenant is set on the connection when it's handed out, only when it changes. It's faster, but only for a pool your app owns (node-postgres' `Pool`). Behind a transaction-mode pooler the setting would leak to the next client.
 
 The app must not connect as a superuser or a `BYPASSRLS` role: row-level security never applies to those. The client checks on its first connection and throws (`roleCheck: 'warn' | 'off'` to relax it).
@@ -77,7 +77,7 @@ Each query goes to the tenant's schema (`schemaFor`, default `tenant_<id>`). No 
 
 ### `'database'`
 
-Each tenant's queries go to its own database. `dialectFor(id)` returns its dialect, called once per tenant; the connections are kept until `db.destroy()`. The client's own `dialect` is the central database (tenant registry, billing), used inside `bypass()`.
+Each tenant's queries go to its own database. `dialectFor(id)` returns its dialect, called when the tenant's connections open. They close after `tenantIdleMs` unused or to stay under `maxOpenTenants`, and reopen on the tenant's next query ([below](#many-databases-closing-idle-ones)). The client's own `dialect` is the central database (tenant registry, billing), used inside `bypass()`.
 
 ```ts
 import { Pool } from 'pg'

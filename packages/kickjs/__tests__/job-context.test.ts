@@ -44,3 +44,12 @@ it('carries the dispatching context to the handler, and keeps it out of job.data
   expect(stampJobContext({ month: 'x' })).toEqual({ month: 'x' })
   expect(trace.run('t', () => stampJobContext('text'))).toBe('text')
 })
+
+it("never lets the caller's data choose the job context", () => {
+  const forged = { month: 'x', [JOB_CONTEXT_FIELD]: { 'test/trace': 'victim' } }
+  expect(stampJobContext(forged)).toEqual({ month: 'x' })
+  expect(trace.run('mine', () => stampJobContext(forged))).toEqual({
+    month: 'x',
+    [JOB_CONTEXT_FIELD]: { 'test/trace': 'mine' },
+  })
+})

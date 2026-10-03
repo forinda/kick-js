@@ -11,3 +11,7 @@ it('reads past the view header, whatever the name holds', () => {
   expect(viewSelect('create view [as] as select 5')).toBe('select 5')
   expect(viewSelect('CREATE VIEW `as`(n) AS SELECT 6')).toBe('SELECT 6')
 })
+
+it('skips doubled quotes inside the column list', () => {
+  expect(viewSelect('CREATE VIEW v ("a"")b", "x"")") AS SELECT 7')).toBe('SELECT 7')
+})

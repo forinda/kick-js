@@ -126,24 +126,56 @@ class TenantColumnFilter extends OperationNodeTransformer {
 
   protected override transformUpdateQuery(node: UpdateQueryNode): UpdateQueryNode {
     const out = super.transformUpdateQuery(node)
-    const where = this.withFilters(out.where, out.table ? [out.table] : [])
+    // The target and every source table in UPDATE … FROM.
+    const where = this.withFilters(out.where, [
+      ...(out.table ? [out.table] : []),
+      ...(out.from?.froms ?? []),
+    ])
     return { ...out, ...(where ? { where } : {}), joins: this.withJoinFilters(out.joins) }
   }
 
   protected override transformDeleteQuery(node: DeleteQueryNode): DeleteQueryNode {
     const out = super.transformDeleteQuery(node)
-    const where = this.withFilters(out.where, out.from.froms)
+    // The target and every source table in DELETE … USING.
+    const where = this.withFilters(out.where, [...out.from.froms, ...(out.using?.tables ?? [])])
     return { ...out, ...(where ? { where } : {}), joins: this.withJoinFilters(out.joins) }
   }
 
-  /** Fill the tenant column; refuse a row for another tenant. */
+  /**
+   * Fill the tenant column; refuse a row for another tenant. Under `'column'`
+   * (`filter`), an insert whose tenant can't be checked is refused, and an
+   * upsert's update is held to the tenant's rows. Under `'rls'` the policy
+   * checks all of that itself.
+   */
   protected override transformInsertQuery(node: InsertQueryNode): InsertQueryNode {
-    const out = super.transformInsertQuery(node)
+    let out = super.transformInsertQuery(node)
     const t = out.into ? tableOf(out.into) : undefined
     const column = t && this.columns.get(t.table)
-    if (!t || !column || !out.columns || !out.values || !ValuesNode.is(out.values)) return out
+    if (!t || !column) return out
     const tenant = this.need(t.table)
-    const at = out.columns.findIndex((c) => c.column.name === column)
+    const refuse = (why: string): never => {
+      throw new Error(`kickjs-db: can't insert into tenanted ${t.table} — ${why}`)
+    }
+    const columns = out.columns
+    const source = out.values
+    if (!columns || !source || !ValuesNode.is(source)) {
+      if (!this.filter) return out
+      return refuse(
+        'its tenant can only be checked on a values(...) insert, not INSERT … SELECT or DEFAULT VALUES',
+      )
+    }
+    if (this.filter && out.onDuplicateKey) {
+      refuse("MySQL's ON DUPLICATE KEY UPDATE can't be limited to the tenant's rows")
+    }
+    if (this.filter && out.onConflict?.updates) {
+      // The conflicting row must be this tenant's too, or DO UPDATE would change another's.
+      const condition = matches(t.ref, column, tenant)
+      const updateWhere = out.onConflict.updateWhere
+        ? WhereNode.cloneWithOperation(out.onConflict.updateWhere, 'And', condition)
+        : WhereNode.create(condition)
+      out = { ...out, onConflict: { ...out.onConflict, updateWhere } }
+    }
+    const at = columns.findIndex((c) => c.column.name === column)
     const check = (value: unknown) => {
       if (value !== tenant) {
         throw new Error(
@@ -151,7 +183,7 @@ class TenantColumnFilter extends OperationNodeTransformer {
         )
       }
     }
-    const rows = out.values.values.map((row) => {
+    const rows = source.values.map((row) => {
       if (PrimitiveValueListNode.is(row)) {
         if (at === -1) return PrimitiveValueListNode.create([...row.values, tenant])
         check(row.values[at])
@@ -161,13 +193,14 @@ class TenantColumnFilter extends OperationNodeTransformer {
         if (i !== at) return v
         if (DefaultInsertValueNode.is(v)) return ValueNode.create(tenant)
         if (ValueNode.is(v)) check(v.value)
+        else if (this.filter) refuse(`its ${column} is an expression, which can't be checked`)
         return v
       })
       return ValueListNode.create(at === -1 ? [...values, ValueNode.create(tenant)] : values)
     })
     return {
       ...out,
-      columns: at === -1 ? [...out.columns, ColumnNode.create(column)] : out.columns,
+      columns: at === -1 ? [...columns, ColumnNode.create(column)] : columns,
       values: ValuesNode.create(rows),
     }
   }

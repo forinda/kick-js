@@ -2,6 +2,7 @@
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
+import { sql } from 'kysely'
 import {
   TenantRequiredError,
   createDbClient,
@@ -145,5 +146,76 @@ describe('tenancy and background jobs', () => {
       data: JSON.parse(JSON.stringify(data)),
     })
     expect(seen).toEqual([[{ name: 'Lasers' }]])
+  })
+})
+
+describe("'column' tenancy: writes that could cross tenants", () => {
+  const slugs = table('slugs', {
+    id: serial().primaryKey(),
+    tenantId: tenantKey(tenancy),
+    slug: text().notNull().unique(),
+    owner: text(),
+  })
+  const setup = () => {
+    const database = new Database(':memory:')
+    const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
+    const target = extractSnapshot({ ...schema, slugs }, 'sqlite')
+    database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
+    database.exec(`INSERT INTO projects (id, tenantId, name) VALUES (1, 'acme', 'Rocket'), (2, 'globex', 'Lasers');
+      INSERT INTO slugs (tenantId, slug, owner) VALUES ('globex', 'home', 'globex');`)
+    return createDbClient({
+      schema: { ...schema, slugs },
+      tenancy,
+      dialect: sqliteDialect({ database }),
+    })
+  }
+
+  it("scopes UPDATE … FROM and DELETE … USING sources, and upserts can't touch another tenant's row", async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      // UPDATE … FROM: the source is filtered too, so globex's project can't drive the update.
+      await db
+        .updateTable('projects')
+        .from('slugs')
+        .set({ name: 'hijacked' })
+        .whereRef('slugs.slug', '=', 'slugs.slug')
+        .execute()
+      const compiled = db.deleteFrom('projects').using('slugs').compile().sql
+      expect(compiled).toMatch(/"slugs"\."tenantId" = \?/)
+      // An upsert colliding with globex's slug leaves it alone.
+      await db
+        .insertInto('slugs')
+        .values({ slug: 'home', owner: 'acme' })
+        .onConflict((oc) => oc.column('slug').doUpdateSet({ owner: 'acme' }))
+        .execute()
+      await expect(
+        db
+          .insertInto('projects')
+          .columns(['name'])
+          .expression(db.selectFrom('plans').select('name'))
+          .execute(),
+      ).rejects.toThrow(/INSERT … SELECT/)
+      await expect(
+        db
+          .insertInto('projects')
+          .values({ name: 'x', tenantId: sql`'globex'` as never })
+          .execute(),
+      ).rejects.toThrow(/expression/)
+    })
+    const rows = await tenancy.bypass(
+      async () => ({
+        projects: await db.selectFrom('projects').select('name').orderBy('id').execute(),
+        slugs: await db.selectFrom('slugs').select(['tenantId', 'owner']).execute(),
+      }),
+      { reason: 'test' },
+    )
+    // acme's update had no slug of its own to join, so nothing changed.
+    expect(rows.projects).toEqual([{ name: 'Rocket' }, { name: 'Lasers' }])
+    expect(rows.slugs).toEqual([{ tenantId: 'globex', owner: 'globex' }])
+  })
+
+  it('insertSchema leaves the tenant column optional', async () => {
+    const { insertSchema } = await import('@forinda/kickjs-db/schema')
+    expect(insertSchema(projects).safeParse({ name: 'x' }).success).toBe(true)
   })
 })

@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
+import Cursor from 'pg-cursor'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -116,6 +117,19 @@ describe.each(['transaction', 'connection'] as const)("'rls' tenancy, %s binding
     await tenancy.run('acme', () => db.selectFrom(t).selectAll().execute())
     const { rows } = await pool.query(`select current_setting('app.tenant_id', true) as v`)
     expect(rows[0].v).toBe(binding === 'connection' ? 'acme' : '')
+
+    // A stream left early (break) hands the connection back with no
+    // transaction, and no tenant, still open.
+    const streaming = createDbClient({
+      schema: { notes },
+      tenancy,
+      dialect: pgDialect({ pool, cursor: Cursor }),
+    })
+    await tenancy.run('acme', async () => {
+      for await (const _row of streaming.selectFrom(t).selectAll().stream()) break
+    })
+    const after = await pool.query(`select current_setting('app.tenant_id', true) as v`)
+    expect(after.rows[0].v).toBe(binding === 'connection' ? 'acme' : '')
 
     // bypass: the bypass dialect's connection, audited and tagged.
     const all = await tenancy.bypass(

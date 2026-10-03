@@ -176,17 +176,23 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
 
 /**
  * `data` with the current job context added — for a {@link JobDispatcher}
- * implementation to call before enqueueing. Only plain-object data can carry
+ * implementation to call before enqueueing. Any `__kickContext` already in
+ * `data` is removed first: only this call may set it, so a dispatcher that
+ * enqueues caller-supplied data without it lets that data choose the context. Only plain-object data can carry
  * it; anything else, or nothing to carry, is returned as is.
  */
 export function stampJobContext<Data>(data: Data): Data {
-  if (jobContextCarriers.size === 0 || !isPlainObject(data)) return data
+  if (!isPlainObject(data)) return data
+  // Only the dispatcher's own context travels. A caller's data (a request
+  // body, say) carrying the field would otherwise pick the job's tenant.
+  const { [JOB_CONTEXT_FIELD]: _untrusted, ...rest } = data
   const context: Record<string, unknown> = {}
   for (const [key, carrier] of jobContextCarriers) {
     const value = carrier.capture()
     if (value !== undefined) context[key] = value
   }
-  return Object.keys(context).length > 0 ? { ...data, [JOB_CONTEXT_FIELD]: context } : data
+  const stamped = Object.keys(context).length > 0 ? { ...rest, [JOB_CONTEXT_FIELD]: context } : rest
+  return stamped as Data
 }
 
 /** Take the carried context off the job's data, and wrap `run` in every restore. */

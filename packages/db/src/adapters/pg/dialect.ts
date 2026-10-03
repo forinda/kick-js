@@ -16,6 +16,11 @@ export interface PgDialectOptions {
    * pick whichever runtime fits.
    */
   pool: PgPoolLike
+  /**
+   * `pg-cursor`'s `Cursor` class, for `.stream()`: rows arrive in chunks
+   * instead of all at once. `import Cursor from 'pg-cursor'`.
+   */
+  cursor?: unknown
 }
 
 /**
@@ -42,5 +47,11 @@ export function pgDialect(opts: PgDialectOptions): KyselyDialect {
   // Kysely versions; casting through `unknown` keeps adopters using
   // alternate clients (neon, pg-cloudflare) compatible without
   // pulling node-postgres' typings into our public surface.
-  return markDialect(new PostgresDialect({ pool: opts.pool as unknown as never }), 'postgres')
+  return markDialect(
+    new PostgresDialect({
+      pool: opts.pool as unknown as never,
+      ...(opts.cursor ? { cursor: opts.cursor as never } : {}),
+    }),
+    'postgres',
+  )
 }

@@ -202,7 +202,12 @@ export function viewSelect(statement: string): string {
     for (let depth = 0; i < s.length; i++) {
       const end = close[s[i]!]
       if (end) {
-        for (i++; i < s.length && s[i] !== end; i++);
+        // A quoted name: up to its closing quote; a doubled one is part of it.
+        for (i++; i < s.length; i++) {
+          if (s[i] !== end) continue
+          if (s[i + 1] === end && end !== ']') i++
+          else break
+        }
         continue
       }
       if (s[i] === '(') depth++

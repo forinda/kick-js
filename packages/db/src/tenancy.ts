@@ -33,9 +33,9 @@ export interface TenancyOptions {
   /** `'schema'`: the schema for a tenant. Default `tenant_<id>`. */
   schemaFor?: (tenantId: string) => string
   /**
-   * `'database'`: the dialect for a tenant's database. Called once per
-   * tenant; its connections are kept for the client's life (closed by
-   * `db.destroy()`).
+   * `'database'`: the dialect for a tenant's database. Called when the
+   * tenant's connections open — again after they were closed for being idle
+   * (`tenantIdleMs`) or to make room (`maxOpenTenants`).
    */
   dialectFor?: (tenantId: string) => Dialect
   /**

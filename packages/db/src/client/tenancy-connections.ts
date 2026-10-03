@@ -93,12 +93,15 @@ class TenantConnection implements DatabaseConnection {
       return
     }
     await this.beginBound()
+    let committed = false
     try {
       yield* this.inner.streamQuery<R>(query, chunkSize)
       await this.inner.executeQuery(raw('commit'))
-    } catch (err) {
-      await this.inner.executeQuery(raw('rollback')).catch(() => {})
-      throw err
+      committed = true
+    } finally {
+      // An error, or the consumer stopping early (break): never hand the
+      // connection back with the transaction — and the tenant — still open.
+      if (!committed) await this.inner.executeQuery(raw('rollback')).catch(() => {})
     }
   }
 }

@@ -511,6 +511,9 @@ function optionalOnInsert(builder: ColumnBuilder): boolean {
   return (
     state.nullable ||
     state.default !== null ||
+    // Filled by the client: the tenant, a $defaultFn.
+    state.tenancy !== undefined ||
+    state.defaultFn !== undefined ||
     state.identity === 'byDefault' ||
     /^(small|big)?serial$/.test(state.type)
   )
