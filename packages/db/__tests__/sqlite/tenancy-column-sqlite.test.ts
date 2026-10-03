@@ -67,8 +67,9 @@ describe("'column' tenancy", () => {
       await db.updateTable('tasks').set({ title: 'refuel' }).execute()
       await db.deleteFrom('projects').where('name', '=', 'Lasers').execute() // another tenant's: untouched
     })
-    const all = await tenancy.bypass(() =>
-      db.selectFrom('tasks').select('title').orderBy('id').execute(),
+    const all = await tenancy.bypass(
+      () => db.selectFrom('tasks').select('title').orderBy('id').execute(),
+      { reason: 'test' },
     )
     expect(all.map((t) => t.title)).toEqual([
       'refuel',
@@ -76,7 +77,9 @@ describe("'column' tenancy", () => {
       "planted by globex in acme's project",
     ])
     expect(
-      await tenancy.bypass(() => db.selectFrom('projects').selectAll().execute()),
+      await tenancy.bypass(() => db.selectFrom('projects').selectAll().execute(), {
+        reason: 'test',
+      }),
     ).toHaveLength(2)
     // Shared tables are left alone, with or without a tenant.
     expect(await db.selectFrom('plans').select('name').execute()).toEqual([{ name: 'free' }])

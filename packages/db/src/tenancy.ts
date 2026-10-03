@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { requestStore } from '@forinda/kickjs'
+import type { Dialect } from 'kysely'
 import { ColumnBuilder, type GeneratedBrand, type NotNullBrand } from './dsl/columns/types'
 
 /**
@@ -25,18 +27,66 @@ export interface TenancyOptions {
   setting?: string
   /** `'schema'`: the schema for a tenant. Default `tenant_<id>`. */
   schemaFor?: (tenantId: string) => string
+  /**
+   * `'rls'`: how a connection gets the tenant.
+   *
+   * - `'transaction'` (default) — `set_config(…, true)`, local to a
+   *   transaction: a query outside one runs in its own short transaction.
+   *   Safe behind a transaction-mode pooler (PgBouncer, Supavisor, Neon's
+   *   pooler), which hands a server connection to another client between
+   *   transactions.
+   * - `'connection'` — `set_config(…, false)` on the connection when it's
+   *   handed out, only when the tenant changes: fewer round trips, but only
+   *   for a pool that owns its connections (node-postgres' `Pool`, a direct
+   *   connection). Behind a transaction-mode pooler the setting would leak to
+   *   whoever gets the connection next.
+   */
+  binding?: 'transaction' | 'connection'
+  /**
+   * `'rls'`: a dialect connecting as a role that bypasses row-level security
+   * (`BYPASSRLS`, e.g. the migration role) — what `bypass()` runs on. Without
+   * it, `bypass()` throws under `'rls'`: there's no safe way for the app's own
+   * role to switch policies off (a flag any SQL can set is one injection away).
+   */
+  bypassDialect?: Dialect
+  /** Called on every `bypass()`, for an audit log. */
+  onBypass?: (info: BypassInfo) => void
+  /**
+   * `'rls'`: what to do when the app's role would skip the policies anyway —
+   * a superuser or `BYPASSRLS` role. Checked on the first connection.
+   * Default `'error'`.
+   */
+  roleCheck?: 'error' | 'warn' | 'off'
 }
 
-export interface Tenancy extends Readonly<Required<Omit<TenancyOptions, 'current'>>> {
+export interface BypassInfo {
+  reason: string
+  strategy: TenancyStrategy
+  /** Where `bypass()` was called. */
+  stack: string | undefined
+}
+
+export interface BypassOptions {
+  /** Why — passed to `onBypass`, for the audit log. */
+  reason: string
+  /** Allow it inside an HTTP request (refused there by default). */
+  allowInRequest?: boolean
+}
+
+export interface Tenancy extends Readonly<
+  Required<Pick<TenancyOptions, 'strategy' | 'setting' | 'schemaFor' | 'binding' | 'roleCheck'>>
+> {
+  readonly bypassDialect?: Dialect
   readonly __isTenancy: true
   /** Run `fn` as `tenantId` — jobs, cron, scripts, tests. Nested runs switch tenant. */
   run<T>(tenantId: string, fn: () => T): T
   /**
-   * Run `fn` across every tenant: no tenant filter (`'column'`), no schema
-   * switch (`'schema'`). For admin work and cross-tenant reports. With
-   * `'rls'` the database decides: connect as a role that bypasses the policy.
+   * Run `fn` across every tenant — admin work, cross-tenant reports: no tenant
+   * filter (`'column'`), no schema switch (`'schema'`), the `bypassDialect`'s
+   * connections (`'rls'`). Needs a reason, reported to `onBypass`, and is
+   * refused inside an HTTP request unless `allowInRequest`.
    */
-  bypass<T>(fn: () => T): T
+  bypass<T>(fn: () => T, options: BypassOptions): T
   /** The tenant in effect: an id, `null` inside `bypass()`, or `undefined` for none. */
   current(): string | null | undefined
 }
@@ -70,8 +120,33 @@ export function defineTenancy(options: TenancyOptions): Tenancy {
     strategy: options.strategy,
     setting: options.setting ?? 'app.tenant_id',
     schemaFor: options.schemaFor ?? ((id) => `tenant_${id}`),
+    binding: options.binding ?? 'transaction',
+    roleCheck: options.roleCheck ?? 'error',
+    bypassDialect: options.bypassDialect,
     run: (tenantId, fn) => scope.run({ id: tenantId }, fn),
-    bypass: (fn) => scope.run({ id: null }, fn),
+    bypass: (fn, bypassOptions) => {
+      if (!bypassOptions?.reason) {
+        throw new Error(
+          'kickjs-db: tenancy.bypass(fn, { reason }) needs a reason, for the audit log',
+        )
+      }
+      if (options.strategy === 'rls' && !options.bypassDialect) {
+        throw new Error(
+          "kickjs-db: bypass() under 'rls' needs a bypassDialect — a connection as a role that bypasses row-level security",
+        )
+      }
+      if (requestStore.getStore() && !bypassOptions.allowInRequest) {
+        throw new Error(
+          'kickjs-db: tenancy.bypass() inside an HTTP request — pass allowInRequest: true if this route is meant to see every tenant',
+        )
+      }
+      options.onBypass?.({
+        reason: bypassOptions.reason,
+        strategy: options.strategy,
+        stack: new Error().stack?.split('\n').slice(2).join('\n'),
+      })
+      return scope.run({ id: null }, fn)
+    },
     current: () => {
       const store = scope.getStore()
       return store ? store.id : options.current?.()

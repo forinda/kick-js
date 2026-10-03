@@ -1,35 +1,214 @@
-import { CompiledQuery, type DatabaseConnection, type Dialect } from 'kysely'
+import {
+  CompiledQuery,
+  type DatabaseConnection,
+  type Dialect,
+  type Driver,
+  type QueryResult,
+  type TransactionSettings,
+} from 'kysely'
 import type { Tenancy } from '../tenancy'
 
 /**
- * `'rls'` tenancy: each connection is handed out set to the current tenant
- * (`set_config(setting, tenant, false)`), so the policies see it on every
- * query — no transaction per request. The setting is only sent when it
- * changes for that connection. It's set before Kysely's BEGIN, so a
- * rolled-back transaction can't undo it. With no tenant (or in `bypass()`)
- * it's `''`, which the generated policy matches to nothing.
+ * `'rls'` tenancy, on connections:
+ *
+ * - The app's connections carry the current tenant in `tenancy.setting`:
+ *   per transaction (`set_config(…, true)`; a lone query gets its own short
+ *   transaction), or, with `binding: 'connection'`, per connection
+ *   (`set_config(…, false)`, sent only when the tenant changes).
+ * - Inside `bypass()`, connections come from `bypassDialect` instead — a role
+ *   that bypasses row-level security — tagged `application_name = kick-bypass`.
+ * - The first app connection checks the role isn't a superuser or
+ *   `BYPASSRLS`, which would skip the policies silently (`roleCheck`).
  */
 export function tenantConnections(dialect: Dialect, tenancy: Tenancy | undefined): Dialect {
   if (tenancy?.strategy !== 'rls') return dialect
-  const current = new WeakMap<DatabaseConnection, string>()
-  const set = CompiledQuery.raw('select set_config($1, $2, false)', [])
   return {
     createAdapter: () => dialect.createAdapter(),
     createQueryCompiler: () => dialect.createQueryCompiler(),
     createIntrospector: (db) => dialect.createIntrospector(db),
-    createDriver: () => {
-      const driver = dialect.createDriver()
-      const acquire = driver.acquireConnection.bind(driver)
-      driver.acquireConnection = async () => {
-        const conn = await acquire()
-        const tenant = tenancy.current() ?? ''
-        if (current.get(conn) !== tenant) {
-          await conn.executeQuery({ ...set, parameters: [tenancy.setting, tenant] })
-          current.set(conn, tenant)
-        }
-        return conn
+    createDriver: () =>
+      new TenantDriver(dialect.createDriver(), tenancy.bypassDialect?.createDriver(), tenancy),
+  }
+}
+
+const raw = (sql: string, parameters: unknown[] = []) => CompiledQuery.raw(sql, parameters)
+
+/** An app connection under transaction binding: every statement runs with the tenant set locally. */
+class TenantConnection implements DatabaseConnection {
+  inTransaction = false
+
+  constructor(
+    readonly inner: DatabaseConnection,
+    private readonly setting: string,
+    private readonly tenant: string,
+  ) {}
+
+  /** Set the tenant for the transaction just begun. */
+  bind(): Promise<QueryResult<unknown>> {
+    return this.inner.executeQuery(
+      raw('select set_config($1, $2, true)', [this.setting, this.tenant]),
+    )
+  }
+
+  async executeQuery<R>(query: CompiledQuery): Promise<QueryResult<R>> {
+    if (this.inTransaction) return this.inner.executeQuery<R>(query)
+    // A query on its own: wrap it, so the local setting has a transaction to live in.
+    await this.inner.executeQuery(raw('begin'))
+    try {
+      await this.bind()
+      const result = await this.inner.executeQuery<R>(query)
+      await this.inner.executeQuery(raw('commit'))
+      return result
+    } catch (err) {
+      await this.inner.executeQuery(raw('rollback')).catch(() => {})
+      throw err
+    }
+  }
+
+  async *streamQuery<R>(
+    query: CompiledQuery,
+    chunkSize: number,
+  ): AsyncIterableIterator<QueryResult<R>> {
+    if (this.inTransaction) {
+      yield* this.inner.streamQuery<R>(query, chunkSize)
+      return
+    }
+    await this.inner.executeQuery(raw('begin'))
+    try {
+      await this.bind()
+      yield* this.inner.streamQuery<R>(query, chunkSize)
+      await this.inner.executeQuery(raw('commit'))
+    } catch (err) {
+      await this.inner.executeQuery(raw('rollback')).catch(() => {})
+      throw err
+    }
+  }
+}
+
+class TenantDriver implements Driver {
+  /** Which driver each handed-out connection came from. */
+  private readonly owner = new WeakMap<DatabaseConnection, Driver>()
+  /** `'connection'` binding: the tenant each connection was last set to. */
+  private readonly bound = new WeakMap<DatabaseConnection, string>()
+  private readonly tagged = new WeakSet<DatabaseConnection>()
+  private roleChecked: Promise<void> | undefined
+
+  constructor(
+    private readonly app: Driver,
+    private readonly bypass: Driver | undefined,
+    private readonly tenancy: Tenancy,
+  ) {}
+
+  async init(options?: Parameters<Driver['init']>[0]): Promise<void> {
+    await this.app.init(options)
+    await this.bypass?.init(options)
+  }
+
+  async acquireConnection(
+    options?: Parameters<Driver['acquireConnection']>[0],
+  ): Promise<DatabaseConnection> {
+    const tenant = this.tenancy.current()
+    if (tenant === null) {
+      if (!this.bypass) throw new Error("kickjs-db: bypass() under 'rls' needs a bypassDialect")
+      const conn = await this.bypass.acquireConnection(options)
+      this.owner.set(conn, this.bypass)
+      if (!this.tagged.has(conn)) {
+        // Visible in pg_stat_activity and the server log as the bypass.
+        await conn.executeQuery(raw(`select set_config('application_name', 'kick-bypass', false)`))
+        this.tagged.add(conn)
       }
-      return driver
-    },
+      return conn
+    }
+
+    const conn = await this.app.acquireConnection(options)
+    this.owner.set(conn, this.app)
+    try {
+      await (this.roleChecked ??= this.checkRole(conn))
+    } catch (err) {
+      await this.app.releaseConnection(conn)
+      throw err
+    }
+    if (this.tenancy.binding === 'connection') {
+      const value = tenant ?? ''
+      if (this.bound.get(conn) !== value) {
+        await conn.executeQuery(
+          raw('select set_config($1, $2, false)', [this.tenancy.setting, value]),
+        )
+        this.bound.set(conn, value)
+      }
+      return conn
+    }
+    const wrapped = new TenantConnection(conn, this.tenancy.setting, tenant ?? '')
+    this.owner.set(wrapped, this.app)
+    return wrapped
+  }
+
+  /** The policies don't apply to a superuser or BYPASSRLS role: say so before it matters. */
+  private async checkRole(conn: DatabaseConnection): Promise<void> {
+    if (this.tenancy.roleCheck === 'off') return
+    const { rows } = await conn.executeQuery<{ rolsuper: boolean; rolbypassrls: boolean }>(
+      raw('select rolsuper, rolbypassrls from pg_roles where rolname = current_user'),
+    )
+    const role = rows[0]
+    if (!role?.rolsuper && !role?.rolbypassrls) return
+    const message =
+      `kickjs-db: the app connects as a ${role.rolsuper ? 'superuser' : 'BYPASSRLS role'}, ` +
+      `which row-level security never applies to — every tenant's rows are visible. ` +
+      `Connect as an ordinary role (roleCheck: 'warn' or 'off' to allow it).`
+    if (this.tenancy.roleCheck === 'error') {
+      this.roleChecked = undefined // checked again next time, not cached as passed
+      throw new Error(message)
+    }
+    console.warn(message)
+  }
+
+  private unwrap(conn: DatabaseConnection): DatabaseConnection {
+    return conn instanceof TenantConnection ? conn.inner : conn
+  }
+
+  private driverOf(conn: DatabaseConnection): Driver {
+    return this.owner.get(conn) ?? this.app
+  }
+
+  async beginTransaction(conn: DatabaseConnection, settings: TransactionSettings): Promise<void> {
+    await this.driverOf(conn).beginTransaction(this.unwrap(conn), settings)
+    if (conn instanceof TenantConnection) {
+      await conn.bind()
+      conn.inTransaction = true
+    }
+  }
+
+  async commitTransaction(conn: DatabaseConnection): Promise<void> {
+    if (conn instanceof TenantConnection) conn.inTransaction = false
+    await this.driverOf(conn).commitTransaction(this.unwrap(conn))
+  }
+
+  async rollbackTransaction(conn: DatabaseConnection): Promise<void> {
+    if (conn instanceof TenantConnection) conn.inTransaction = false
+    await this.driverOf(conn).rollbackTransaction(this.unwrap(conn))
+  }
+
+  async savepoint(conn: DatabaseConnection, name: string, compile: any): Promise<void> {
+    await this.driverOf(conn).savepoint!(this.unwrap(conn), name, compile)
+  }
+
+  async rollbackToSavepoint(conn: DatabaseConnection, name: string, compile: any): Promise<void> {
+    await this.driverOf(conn).rollbackToSavepoint!(this.unwrap(conn), name, compile)
+  }
+
+  async releaseSavepoint(conn: DatabaseConnection, name: string, compile: any): Promise<void> {
+    await this.driverOf(conn).releaseSavepoint!(this.unwrap(conn), name, compile)
+  }
+
+  async releaseConnection(
+    conn: DatabaseConnection,
+    options?: Parameters<Driver['releaseConnection']>[1],
+  ): Promise<void> {
+    await this.driverOf(conn).releaseConnection(this.unwrap(conn), options)
+  }
+
+  async destroy(options?: Parameters<Driver['destroy']>[0]): Promise<void> {
+    await this.app.destroy(options)
+    await this.bypass?.destroy(options)
   }
 }
