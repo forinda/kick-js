@@ -108,6 +108,15 @@ function invert(change: Exclude<Change, CreateSchema>): Change {
       return { kind: 'dropCheck', table: change.table, check: change.check }
     case 'dropCheck':
       return { kind: 'addCheck', table: change.table, check: change.check }
+    case 'setTableComment':
+      return { ...change, from: change.to, to: change.from }
+    case 'setColumnComment':
+      return {
+        ...change,
+        column: { ...change.column, comment: change.from ?? undefined },
+        from: change.to,
+        to: change.from,
+      }
     case 'removeEnumValue':
       // The forward direction of a value removal is itself an
       // advisory + manual operation; the reverse is symmetric. Carry

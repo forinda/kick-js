@@ -17,6 +17,8 @@ interface ColumnRow {
   generation_expression: string | null
   /** pg_attribute.attgenerated: 's' stored, 'v' virtual, '' not generated. */
   attgenerated: string
+  /** col_description(): the column's comment, or null. */
+  comment: string | null
   data_type: string
   udt_name: string
   is_nullable: 'YES' | 'NO'
@@ -75,8 +77,10 @@ export async function introspectPg(
   const schema = opts.schema ?? 'public'
   const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
 
-  const tableRows = await client.query<{ table_name: string }>(
-    `SELECT table_name
+  const tableRows = await client.query<{ table_name: string; comment: string | null }>(
+    `SELECT table_name,
+            obj_description(format('%I.%I', table_schema, table_name)::regclass, 'pg_class')
+              AS comment
      FROM information_schema.tables
      WHERE table_schema = $1 AND table_type = 'BASE TABLE'
      ORDER BY table_name`,
@@ -92,6 +96,7 @@ export async function introspectPg(
       indexes: await readIndexes(client, schema, t.table_name),
       foreignKeys: await readForeignKeys(client, schema, t.table_name),
       checks: [],
+      ...(t.comment !== null ? { comment: t.comment } : {}),
     }
   }
   const enums = await readEnums(client, schema)
@@ -153,7 +158,10 @@ async function readColumns(
             is_identity, identity_generation, generation_expression,
             (SELECT a.attgenerated FROM pg_attribute a
               WHERE a.attrelid = format('%I.%I', table_schema, table_name)::regclass
-                AND a.attname = column_name) AS attgenerated
+                AND a.attname = column_name) AS attgenerated,
+            col_description(
+              format('%I.%I', table_schema, table_name)::regclass, ordinal_position::int
+            ) AS comment
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -187,6 +195,7 @@ async function readColumns(
     if (r.is_identity === 'YES') {
       out[r.column_name].identity = r.identity_generation === 'ALWAYS' ? 'always' : 'byDefault'
     }
+    if (r.comment !== null) out[r.column_name].comment = r.comment
     if (r.attgenerated && r.generation_expression) {
       out[r.column_name].generated = {
         expression: r.generation_expression,

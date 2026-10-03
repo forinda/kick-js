@@ -134,14 +134,18 @@ function renderTable(
   // column-level form, and the members of any column carrying more than one.
   const deferredFks = table.foreignKeys.filter((f) => !inlined.has(f))
 
-  const hasThirdArg = explicitIndexes.length > 0
   const tableArgs: string[] = [strLit(table.name), `{\n${columns.join('\n')}\n}`]
 
-  if (hasThirdArg) {
-    const callbacks = explicitIndexes
-      .map((i) => `    ${jsKey(i.name)}: ${renderIndexCall(i)}`)
-      .join(',\n')
-    tableArgs.push(`(t) => ({\n${callbacks},\n  })`)
+  const callbacks = explicitIndexes
+    .map((i) => `    ${jsKey(i.name)}: ${renderIndexCall(i)}`)
+    .join(',\n')
+  const constraints = explicitIndexes.length > 0 ? `(t) => ({\n${callbacks},\n  })` : undefined
+  if (table.comment !== undefined) {
+    const parts = [`comment: ${strLit(table.comment)}`]
+    if (constraints) parts.push(`constraints: ${constraints}`)
+    tableArgs.push(`{ ${parts.join(', ')} }`)
+  } else if (constraints) {
+    tableArgs.push(constraints)
   }
 
   let src = `export const ${ident} = table(${tableArgs.join(', ')})`
@@ -208,6 +212,7 @@ function chainSuffix(
     chain += `.generatedAlwaysAs(${strLit(col.generated.expression)}${virtual})`
   }
   if (inlineUnique) chain += '.unique()'
+  if (col.comment !== undefined) chain += `.comment(${strLit(col.comment)})`
   if (fk) {
     const ref = `${jsIdent(fk.refTable)}.${jsIdent(fk.refColumns[0])}`
     const opts: string[] = []

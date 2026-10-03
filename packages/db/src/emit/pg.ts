@@ -92,7 +92,19 @@ function emitChange(change: Change): string {
       return `ALTER TABLE ${quoteIdent(change.table)} ADD CONSTRAINT ${quoteIdent(change.check.name)} CHECK (${change.check.expression});`
     case 'dropCheck':
       return `ALTER TABLE ${quoteIdent(change.table)} DROP CONSTRAINT ${quoteIdent(change.check.name)};`
+    case 'setTableComment':
+      return `COMMENT ON TABLE ${quoteIdent(change.table)} IS ${commentLiteral(change.to)};`
+    case 'setColumnComment':
+      return columnComment(change.table, change.column.name, change.to)
   }
+}
+
+function commentLiteral(text: string | null | undefined): string {
+  return text == null ? 'NULL' : quoteLiteral(text)
+}
+
+function columnComment(table: string, column: string, text: string | null | undefined): string {
+  return `COMMENT ON COLUMN ${quoteIdent(`${table}.${column}`)} IS ${commentLiteral(text)};`
 }
 
 /**
@@ -264,7 +276,8 @@ function sanitizeForLineComment(value: string): string {
 }
 
 function emitAddColumn(table: string, c: ColumnSnapshot): string {
-  return `ALTER TABLE ${quoteIdent(table)} ADD COLUMN ${emitColumnDecl(c)};`
+  const add = `ALTER TABLE ${quoteIdent(table)} ADD COLUMN ${emitColumnDecl(c)};`
+  return c.comment === undefined ? add : `${add}\n${columnComment(table, c.name, c.comment)}`
 }
 
 function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSnapshot): string {
@@ -383,7 +396,13 @@ function emitCreateTable(t: TableSnapshot): string {
     lines.push(`${named}PRIMARY KEY (${pk.join(', ')})`)
   }
   for (const c of t.checks) lines.push(`CONSTRAINT ${quoteIdent(c.name)} CHECK (${c.expression})`)
-  return `CREATE TABLE ${tableIdent(t)} (\n  ${lines.join(',\n  ')}\n);`
+  const out = [`CREATE TABLE ${tableIdent(t)} (\n  ${lines.join(',\n  ')}\n);`]
+  if (t.comment !== undefined)
+    out.push(`COMMENT ON TABLE ${tableIdent(t)} IS ${commentLiteral(t.comment)};`)
+  for (const c of Object.values(t.columns)) {
+    if (c.comment !== undefined) out.push(columnComment(snapshotTableName(t), c.name, c.comment))
+  }
+  return out.join('\n')
 }
 
 /** Strip any schema qualifier: `billing.invoices` → `invoices`. */

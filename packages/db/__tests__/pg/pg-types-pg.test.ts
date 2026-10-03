@@ -15,6 +15,7 @@ import {
   relations,
   serial,
   table,
+  text,
 } from '@forinda/kickjs-db'
 import { halfvec, macaddr, pgDialect, point, vector } from '@forinda/kickjs-db/pg'
 import { insertSchema } from '@forinda/kickjs-db/schema'
@@ -91,5 +92,32 @@ describe('Postgres types with codecs', () => {
     const live = await introspectPg(pool, { schema: 'public' })
     expect(live.tables.places.columns.location.type).toBe('point')
     expect(live.tables.places.columns.device.type).toBe('macaddr')
+  })
+})
+
+describe('comments on Postgres', () => {
+  it('are created, introspected, and changed', async () => {
+    const v1 = {
+      notes: table(
+        'notes',
+        { id: serial().primaryKey(), body: text().comment('Markdown') },
+        {
+          comment: "Team's notes",
+        },
+      ),
+    }
+    const v2 = {
+      notes: table('notes', { id: serial().primaryKey(), body: text().comment('Plain text') }),
+    }
+    const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }
+    await pool.query(emitPg(diff(empty, extractSnapshot(v1, 'postgres'))))
+    let live = await introspectPg(pool, { schema: 'public' })
+    expect(live.tables.notes.comment).toBe("Team's notes")
+    expect(live.tables.notes.columns.body.comment).toBe('Markdown')
+
+    await pool.query(emitPg(diff(extractSnapshot(v1, 'postgres'), extractSnapshot(v2, 'postgres'))))
+    live = await introspectPg(pool, { schema: 'public' })
+    expect(live.tables.notes.comment).toBeUndefined()
+    expect(live.tables.notes.columns.body.comment).toBe('Plain text')
   })
 })

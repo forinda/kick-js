@@ -389,6 +389,17 @@ function diffTable(
     if (!columnsEqual(before, after)) {
       changes.push({ kind: 'alterColumn', table: tableRef, column: c, before, after })
     }
+    // A comment is its own change: on SQLite it isn't stored, and an
+    // alterColumn there would rebuild the table for nothing.
+    if ((before.comment ?? null) !== (after.comment ?? null)) {
+      changes.push({
+        kind: 'setColumnComment',
+        table: tableRef,
+        column: after,
+        from: before.comment ?? null,
+        to: after.comment ?? null,
+      })
+    }
   }
 
   if (pk && pk.after.columns.length > 0) {
@@ -439,6 +450,15 @@ function diffTable(
     (f) => changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f }),
     (f) => changes.push({ kind: 'addForeignKey', table: tableRef, fk: f }),
   )
+
+  if ((prev.comment ?? null) !== (next.comment ?? null)) {
+    changes.push({
+      kind: 'setTableComment',
+      table: tableRef,
+      from: prev.comment ?? null,
+      to: next.comment ?? null,
+    })
+  }
 }
 
 /** What makes two indexes the same index. `concurrently` is how it is built, not what it is. */

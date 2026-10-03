@@ -178,6 +178,26 @@ export interface DropCheck {
   check: CheckSnapshot
 }
 
+/** A table's comment changed; `null` is none. */
+export interface SetTableComment {
+  kind: 'setTableComment'
+  table: string
+  from: string | null
+  to: string | null
+}
+
+/**
+ * A column's comment changed; `null` is none. `column` is its definition,
+ * for MySQL, which can only set a comment by restating it.
+ */
+export interface SetColumnComment {
+  kind: 'setColumnComment'
+  table: string
+  column: ColumnSnapshot
+  from: string | null
+  to: string | null
+}
+
 export type Change =
   | CreateSchema
   | CreateTable
@@ -198,5 +218,7 @@ export type Change =
   | AlterPrimaryKey
   | AddCheck
   | DropCheck
+  | SetTableComment
+  | SetColumnComment
 
 export type ChangeSet = Change[]

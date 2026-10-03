@@ -100,6 +100,14 @@ export function extractSnapshot(
     }
   }
 
+  // SQLite stores no comments; keeping them would make migrations that do nothing.
+  if (dialect === 'sqlite') {
+    for (const t of Object.values(tables)) {
+      delete t.comment
+      for (const c of Object.values(t.columns)) delete c.comment
+    }
+  }
+
   const relations = extractRelations(schema, tables)
 
   // Only carry `enums` on PG snapshots — other dialects don't define
@@ -158,6 +166,7 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
 
   const checks = (t.__checks ?? []).map((c) => ({ name: c.name, expression: c.expression }))
   const snapshot: TableSnapshot = { name: t.__name, columns, indexes, foreignKeys, checks }
+  if (t.__comment !== undefined) snapshot.comment = t.__comment
   if (t.__primaryKey) {
     for (const c of t.__primaryKey.columns) {
       // A key column can't be null; the database enforces it either way.

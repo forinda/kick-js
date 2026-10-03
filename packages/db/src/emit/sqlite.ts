@@ -154,6 +154,10 @@ function emitChange(change: Change): string {
       // new-table FKs inline into CREATE TABLE, existing-table FK + column
       // changes are subsumed by the table rebuild.
       return ''
+    case 'setTableComment':
+    case 'setColumnComment':
+      // SQLite stores no comments.
+      return ''
     case 'createEnum':
     case 'dropEnum':
     case 'addEnumValue':

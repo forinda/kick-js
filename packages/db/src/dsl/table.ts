@@ -17,6 +17,8 @@ export interface TableDecl<
   /** Declared with `primaryKey(...)` — absent when columns carry `.primaryKey()`. */
   __primaryKey?: PrimaryKeyDecl
   __checks?: CheckDecl[]
+  /** `table(name, columns, { comment })`: stored in the database (Postgres, MySQL). */
+  __comment?: string
   /**
    * Named SQL schema this table lives in, from `pgSchema('x').table(...)`.
    * `undefined` means the connection's default search_path (`public` on PG),
@@ -65,6 +67,14 @@ type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (
 ) => Record<string, TableConstraint>
 
 /**
+ * `table()`'s third argument: the constraints callback, or options holding it
+ * and the table's comment — `table('users', columns, { comment: 'People who sign in' })`.
+ */
+export type TableOptions<C extends Record<string, ColumnBuilder>> =
+  | ConstraintBuilder<C>
+  | { constraints?: ConstraintBuilder<C>; comment?: string }
+
+/**
  * Declare a typed table. The `TName extends string` generic narrows to the
  * literal table name so `SchemaToTypes<S>` can index by it without losing
  * the constant — `table('users', …)` widens to `TableDecl<'users', …>`,
@@ -73,9 +83,9 @@ type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (
 export function table<TName extends string, C extends Record<string, ColumnBuilder>>(
   name: TName,
   columns: C,
-  constraints?: ConstraintBuilder<C>,
+  options?: TableOptions<C>,
 ): TableRefs<TName, C> {
-  return buildTable(name, columns, constraints, undefined)
+  return buildTable(name, columns, options, undefined)
 }
 
 /**
@@ -89,9 +99,11 @@ export function buildTable<
 >(
   name: TName,
   declared: C,
-  constraints: ConstraintBuilder<C> | undefined,
+  options: TableOptions<C> | undefined,
   schema: TSchema,
 ): TableRefs<TName, C, TSchema> {
+  const constraints = typeof options === 'function' ? options : options?.constraints
+  const comment = typeof options === 'function' ? undefined : options?.comment
   const selfRefs: Record<string, ColumnRef> = {}
   const columns = resolveSelfRefs(name, declared, selfRefs)
   const decl: TableDecl<TName, C, TSchema> = {
@@ -103,6 +115,7 @@ export function buildTable<
   // Only stamp the field when a schema was declared, so unqualified tables
   // serialize identically to before this feature existed.
   if (schema !== undefined) decl.__schema = schema
+  if (comment !== undefined) decl.__comment = comment
 
   // Column refs carry the QUALIFIED owner name. `extractSnapshot` reads it
   // straight into `ForeignKeySnapshot.refTable`, so a foreign key pointing

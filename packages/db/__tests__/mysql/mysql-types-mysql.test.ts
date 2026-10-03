@@ -13,6 +13,7 @@ import {
   introspectMysql,
   serial,
   table,
+  varchar,
 } from '@forinda/kickjs-db'
 import {
   datetime,
@@ -108,5 +109,55 @@ describe('MySQL column types', () => {
     expect(insert.safeParse({ status: 'live', hits: 1, at }).success).toBe(false)
     expect(insert.safeParse({ status: 'Live', hits: -1, at }).success).toBe(false)
     expect(insert.safeParse({ status: 'Live', hits: 1, level: 256, at }).success).toBe(false)
+  })
+})
+
+describe('comments on MySQL', () => {
+  it('are created, introspected, kept through a column alter, and changed', async () => {
+    const v1 = {
+      notes: table(
+        'notes',
+        { id: serial().primaryKey(), body: varchar(100).comment('Markdown') },
+        {
+          comment: "Team's notes",
+        },
+      ),
+    }
+    // A type change restates the column: its comment must survive.
+    const v2 = {
+      notes: table('notes', { id: serial().primaryKey(), body: varchar(200).comment('Markdown') }),
+    }
+    const v3 = {
+      notes: table('notes', {
+        id: serial().primaryKey().comment('Row id'),
+        body: varchar(200).comment('Plain \\ text'),
+      }),
+    }
+    const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
+    const step = (a: object, b: object) =>
+      pool.query(
+        emitMysql(diff(extractSnapshot(a as never, 'mysql'), extractSnapshot(b as never, 'mysql'))),
+      )
+    await pool.query(emitMysql(diff(empty, extractSnapshot(v1, 'mysql'))))
+    let live = await introspectMysql(pool as never, {})
+    expect(live.tables.notes.comment).toBe("Team's notes")
+    expect(live.tables.notes.columns.body.comment).toBe('Markdown')
+
+    await step(v1, v2)
+    live = await introspectMysql(pool as never, {})
+    expect(live.tables.notes.columns.body).toMatchObject({
+      type: 'varchar(200)',
+      comment: 'Markdown',
+    })
+    expect(live.tables.notes.comment).toBeUndefined()
+
+    await step(v2, v3)
+    live = await introspectMysql(pool as never, {})
+    expect(live.tables.notes.columns.body.comment).toBe('Plain \\ text')
+    expect(live.tables.notes.columns.id.comment).toBe('Row id')
+    // Still auto-incrementing after the MODIFY.
+    await pool.query('INSERT INTO notes (body) VALUES (?), (?)', ['a', 'b'])
+    const [ids] = await pool.query('SELECT id FROM notes ORDER BY id')
+    expect((ids as Array<{ id: number }>).map((r) => r.id)).toEqual([1, 2])
   })
 })

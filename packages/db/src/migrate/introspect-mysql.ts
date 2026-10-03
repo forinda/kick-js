@@ -25,6 +25,8 @@ interface ColumnRow {
   IS_NULLABLE: 'YES' | 'NO'
   COLUMN_DEFAULT: string | null
   COLUMN_KEY: string
+  /** '' when the column has none: MySQL doesn't distinguish no comment from an empty one. */
+  COLUMN_COMMENT: string
   EXTRA: string
 }
 
@@ -66,9 +68,9 @@ export async function introspectMysql(
 ): Promise<SchemaSnapshot> {
   const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
 
-  const tableRows = await rows<{ TABLE_NAME: string }>(
+  const tableRows = await rows<{ TABLE_NAME: string; TABLE_COMMENT: string }>(
     db,
-    `SELECT TABLE_NAME FROM information_schema.TABLES
+    `SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
      ORDER BY TABLE_NAME`,
     [],
@@ -83,6 +85,7 @@ export async function introspectMysql(
       indexes: await readIndexes(db, t.TABLE_NAME),
       foreignKeys: await readForeignKeys(db, t.TABLE_NAME),
       checks: [],
+      ...(t.TABLE_COMMENT ? { comment: t.TABLE_COMMENT } : {}),
     }
   }
   return { version: 1, dialect: 'mysql', tables }
@@ -94,7 +97,8 @@ async function readColumns(
 ): Promise<Record<string, ColumnSnapshot>> {
   const cols = await rows<ColumnRow>(
     db,
-    `SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA
+    `SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA,
+            COLUMN_COMMENT
      FROM information_schema.COLUMNS
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
      ORDER BY ORDINAL_POSITION`,
@@ -108,6 +112,7 @@ async function readColumns(
       nullable: c.IS_NULLABLE === 'YES',
       default: c.COLUMN_DEFAULT,
       primaryKey: c.COLUMN_KEY === 'PRI',
+      ...(c.COLUMN_COMMENT ? { comment: c.COLUMN_COMMENT } : {}),
     }
   }
   return out

@@ -12,6 +12,8 @@ export interface ColumnSnapshot {
   generated?: { expression: string; stored: boolean }
   /** An identity column (Postgres): `GENERATED ALWAYS | BY DEFAULT AS IDENTITY`. */
   identity?: 'always' | 'byDefault'
+  /** The column's comment in the database (Postgres, MySQL). */
+  comment?: string
 }
 
 export interface IndexSnapshot {
@@ -69,6 +71,8 @@ export interface TableSnapshot {
    * as they were.
    */
   primaryKey?: { name?: string; columns: string[] }
+  /** The table's comment in the database (Postgres, MySQL). */
+  comment?: string
 }
 
 /**

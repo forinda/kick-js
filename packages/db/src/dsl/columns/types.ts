@@ -84,6 +84,8 @@ export interface ColumnState {
    * `numeric(p, s, { mode })`). Unset, the driver's own value is returned.
    */
   mode?: 'bigint' | 'number' | 'string'
+  /** `.comment()`: stored in the database on Postgres and MySQL. */
+  comment?: string
   /** `$defaultFn`: computed in JS for each inserted row that doesn't set it. */
   defaultFn?: () => unknown
   /** `$onUpdate`: computed in JS for each update that doesn't set it. */
@@ -295,6 +297,15 @@ export class ColumnBuilder<T = unknown> {
     return this as this & NotNullBrand & GeneratedBrand
   }
 
+  /**
+   * A comment stored with the column in the database, for whoever reads the
+   * schema there (Postgres, MySQL; SQLite has none). Changing it migrates.
+   */
+  comment(text: string): this {
+    this.state.comment = text
+    return this
+  }
+
   /** The role kick/db maintains this column in, if any. */
   managedAs(): ColumnState['managed'] {
     return this.state.managed
@@ -310,6 +321,7 @@ export class ColumnBuilder<T = unknown> {
       // Only when set, so other columns serialize as they always have.
       ...(this.state.generated ? { generated: { ...this.state.generated } } : {}),
       ...(this.state.identity ? { identity: this.state.identity } : {}),
+      ...(this.state.comment !== undefined ? { comment: this.state.comment } : {}),
     }
   }
 
