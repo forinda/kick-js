@@ -16,7 +16,7 @@
   <path d="M112 52L76 108h24l-8 40 36-56H104l8-40z" fill="url(#bolt-grad)"/>
   <!-- Text -->
   <text x="200" y="95" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="56" font-weight="800" fill="#FFFFFF" letter-spacing="-1">KickJS</text>
-  <text x="200" y="135" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="18" fill="#A5B4FC" letter-spacing="0.5">Build backends you're not afraid to change.</text>
+  <text x="200" y="135" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="18" fill="#A5B4FC" letter-spacing="0.5">Modern type-safe backend framework, powered by Vite.</text>
   <!-- Version badge -->
   <rect x="395" y="70" width="52" height="24" rx="12" fill="rgba(250,204,21,0.15)" stroke="#FACC15" stroke-width="1"/>
   <text x="421" y="87" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="#FACC15" text-anchor="middle">v2</text>

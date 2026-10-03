@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.
+  Modern type-safe backend framework, powered by Vite.<br />
+  Built for developer experience. Pluggable as you need.
 </p>
 
 <p align="center">

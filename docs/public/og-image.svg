@@ -20,8 +20,8 @@
 
   <!-- Name and tagline -->
   <text x="80" y="310" font-family="DejaVu Sans, sans-serif" font-size="104" font-weight="700" fill="#FFFFFF" letter-spacing="-3">KickJS</text>
-  <text x="80" y="372" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">Build backends you're</text>
-  <text x="80" y="418" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">not afraid to change.</text>
+  <text x="80" y="372" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">Modern type-safe backend</text>
+  <text x="80" y="418" font-family="DejaVu Sans, sans-serif" font-size="36" fill="#C7D2FE">framework, powered by Vite.</text>
 
   <!-- Decorator code card -->
   <rect x="660" y="96" width="460" height="196" rx="18" fill="#0F0D2E" fill-opacity="0.55" stroke="#A5B4FC" stroke-opacity="0.25"/>
@@ -34,6 +34,6 @@
 
   <!-- Engines and domain -->
   <line x1="80" y1="470" x2="1120" y2="470" stroke="#A5B4FC" stroke-opacity="0.2"/>
-  <text x="80" y="540" font-family="DejaVu Sans, sans-serif" font-size="30" fill="#E0E7FF">Express <tspan fill="#FACC15">·</tspan> Fastify <tspan fill="#FACC15">·</tspan> h3 <tspan fill="#A5B4FC">— one decorator API</tspan></text>
+  <text x="80" y="540" font-family="DejaVu Sans, sans-serif" font-size="30" fill="#E0E7FF">Express <tspan fill="#FACC15">·</tspan> Fastify <tspan fill="#FACC15">·</tspan> h3 <tspan fill="#A5B4FC">— pluggable as you need</tspan></text>
   <text x="1120" y="540" font-family="DejaVu Sans Mono, monospace" font-size="28" fill="#A5B4FC" text-anchor="end">kickjs.app</text>
 </svg>

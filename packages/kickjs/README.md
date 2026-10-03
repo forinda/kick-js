@@ -1,6 +1,6 @@
 # @forinda/kickjs
 
-Decorator-driven Node.js framework for TypeScript: DI, modules, typed request context, validation and generators. It runs on Express (default), Fastify or h3, and on Workers, Bun and Deno through a web-standard entry.
+Modern type-safe backend framework, powered by Vite. Built for developer experience, and pluggable as you need: DI, modules, a typed request context, validation and generators, on Express (default), Fastify or h3, and on Workers, Bun and Deno through a web-standard entry.
 
 ## Install
 
