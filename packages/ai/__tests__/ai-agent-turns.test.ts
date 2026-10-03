@@ -6,27 +6,8 @@
 import 'reflect-metadata'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Application, Container, Controller, Get, type RequestContext } from '@forinda/kickjs'
-import { AiAdapter, AiTool } from '@forinda/kickjs-ai'
-import type { AiProvider, ChatInput, ChatResponse } from '@forinda/kickjs-ai'
-
-class ScriptedProvider implements AiProvider {
-  readonly name = 'scripted'
-  readonly inputs: ChatInput[] = []
-  constructor(private readonly queue: ChatResponse[]) {}
-  async chat(input: ChatInput): Promise<ChatResponse> {
-    this.inputs.push(structuredClone(input))
-    const next = this.queue.shift()
-    if (!next) throw new Error('no scripted response left')
-    return next
-  }
-  // eslint-disable-next-line require-yield
-  async *stream(): AsyncGenerator<never> {
-    throw new Error('not used')
-  }
-  async embed(): Promise<number[][]> {
-    throw new Error('not used')
-  }
-}
+import { AiAdapter, AiTool, ScriptedProvider } from '@forinda/kickjs-ai'
+import type { AiProvider } from '@forinda/kickjs-ai'
 
 let calls: string[] = []
 const apps: Application[] = []

@@ -102,6 +102,12 @@ new OpenAIProvider({
 })
 ```
 
+Transient failures (429, 5xx) are retried three times with backoff. Set
+`retry: { maxRetries, baseDelayMs, maxDelayMs }` to tune it, or
+`{ maxRetries: 0 }` to turn it off. A `Retry-After` longer than
+`maxDelayMs` (default 30s) isn't waited out; the `ProviderError` is
+thrown so you can decide.
+
 ### Anthropic
 
 `AnthropicProvider` calls Claude through the official SDK. Install it
@@ -115,21 +121,21 @@ import { AnthropicProvider } from '@forinda/kickjs-ai'
 
 new AnthropicProvider({
   // apiKey: omit to use ANTHROPIC_API_KEY or an `ant auth login` profile
-  // defaultChatModel: 'claude-opus-5',
+  // defaultChatModel: 'claude-opus-5-5',
   effort: 'medium', // low | medium | high | xhigh | max
 })
 ```
 
-| Option             | Default           | Description                                                                                                                                                                    |
-| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apiKey`           | SDK credentials   | API key; omitted, the SDK reads `ANTHROPIC_API_KEY` or an `ant auth login` profile                                                                                             |
-| `client`           | —                 | A pre-configured SDK client (custom retries, or a Bedrock/Vertex client)                                                                                                       |
-| `defaultChatModel` | `'claude-opus-5'` | Model when a call doesn't set one                                                                                                                                              |
-| `defaultMaxTokens` | `64000`           | Cap on thinking plus response text; requests always stream, so large values are safe                                                                                           |
-| `effort`           | model default     | Thinking depth and token spend; `ChatOptions.effort` overrides per call                                                                                                        |
-| `thinkingDisplay`  | model default     | `'summarized'` returns a summary of the model's thinking; `'omitted'` returns none                                                                                             |
-| `cache`            | `true`            | Automatic prompt caching, so agent loops re-read tools, system prompt and history from cache                                                                                   |
-| `fallbacks`        | `'default'`       | On Claude Opus 5 and Fable/Mythos 5 models, a declined request is re-run on Anthropic's recommended fallback model; `false` turns it off (and must, on Bedrock/Vertex/Foundry) |
+| Option             | Default             | Description                                                                                                                                                                    |
+| ------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apiKey`           | SDK credentials     | API key; omitted, the SDK reads `ANTHROPIC_API_KEY` or an `ant auth login` profile                                                                                             |
+| `client`           | —                   | A pre-configured SDK client (custom retries, or a Bedrock/Vertex client)                                                                                                       |
+| `defaultChatModel` | `'claude-opus-5-5'` | Model when a call doesn't set one                                                                                                                                              |
+| `defaultMaxTokens` | `64000`             | Cap on thinking plus response text; requests always stream, so large values are safe                                                                                           |
+| `effort`           | model default       | Thinking depth and token spend; `ChatOptions.effort` overrides per call                                                                                                        |
+| `thinkingDisplay`  | model default       | `'summarized'` returns a summary of the model's thinking; `'omitted'` returns none                                                                                             |
+| `cache`            | `true`              | Automatic prompt caching, so agent loops re-read tools, system prompt and history from cache                                                                                   |
+| `fallbacks`        | `'default'`         | On Claude Opus 5 and Fable/Mythos 5 models, a declined request is re-run on Anthropic's recommended fallback model; `false` turns it off (and must, on Bedrock/Vertex/Foundry) |
 
 What the provider handles for you:
 
@@ -461,17 +467,21 @@ const result = await this.ai.runAgentWithMemory({
 
 `runAgentWithMemory` handles the boilerplate for you:
 
-- First turn: persists the system prompt + user message before calling
-  the model. On follow-up turns, the system prompt is ignored so the
-  model sees a single stable persona.
-- After each turn: appends the assistant reply. Tool results are
+- First turn: sends the system prompt with the user message. On
+  follow-up turns, the system prompt is ignored so the model sees a
+  single stable persona.
+- It takes every `runAgent` option (`effort`, `tools`, `headers`, …).
+- Nothing is saved until the turn succeeds. Then the user message and
+  the assistant reply are appended together, so a failed call never
+  leaves an unanswered message in the history. Tool results are
   dropped from memory by default (they're usually large API
   responses), and so are the tool calls that led to them — a call
   saved without its result is a history providers reject. The
   assistant's text is kept. Set `persistToolResults: true` for
   full-transcript replay.
 - `SlidingWindowChatMemory` keeps the most recent `maxMessages`
-  messages. A pinned first system message stays put so the model
+  messages, and runs its writes one at a time so concurrent turns can't
+  drop each other's messages. A pinned first system message stays put so the model
   never loses its persona. The kept history always starts at a user
   message, so it never opens on a tool result whose call was evicted —
   the window can hold slightly fewer messages than the cap.
@@ -608,6 +618,10 @@ export class KnowledgeService {
 }
 ```
 
+`index` embeds `batchSize` documents per provider call (default 100),
+so a large corpus stays under the provider's input limits:
+`rag.index(docs, { batchSize: 50 })`.
+
 `augmentChatInput` retrieves the top-K most similar documents,
 concatenates them into a system message, and returns a new
 `ChatInput` you can hand straight to `provider.chat`. By default it
@@ -628,9 +642,11 @@ await rag.search('how does auth work', {
 
 - Scalar values become exact-match conditions.
 - Arrays become `IN`-style conditions.
-- Qdrant and Pinecone both support richer native DSLs (range, `$or`,
-  `$not`) — pass them through the same `filter` field and the
-  translator keeps operator records untouched.
+- Pinecone also takes its native operators (`$gt`, `$ne`, `$or`, …):
+  a filter whose keys start with `$`, or a value that is an operator
+  record, passes through unchanged.
+- Qdrant, pgvector and the in-memory store take equality and `IN` only. For
+  ranges or negation, query the store directly.
 
 ## Using other OpenAI-compatible providers
 
@@ -669,38 +685,29 @@ debug UIs so you can tell at a glance which endpoint is being hit.
 
 ## Testing
 
-The `ScriptedProvider` pattern keeps tests deterministic without
-touching a real API. Implement `AiProvider` with a queue of canned
-responses and assert on what the adapter sent:
+`ScriptedProvider` answers each call with the next scripted turn, so tests
+run without a real API. It records every input and its options:
 
 ```ts
-class ScriptedProvider implements AiProvider {
-  readonly name = 'scripted'
-  public inputs: ChatInput[] = []
-  private queue: ChatResponse[]
+import { ScriptedProvider } from '@forinda/kickjs-ai'
 
-  constructor(responses: ChatResponse[]) {
-    this.queue = [...responses]
-  }
+const provider = new ScriptedProvider([
+  { content: '', toolCalls: [{ id: 'c1', name: 'TasksController_list', arguments: {} }] },
+  { content: 'You have 2 tasks.', finishReason: 'stop' },
+])
 
-  async chat(input: ChatInput): Promise<ChatResponse> {
-    this.inputs.push({ ...input, messages: [...input.messages] })
-    return this.queue.shift()!
-  }
+const result = await ai.runAgent({ provider, messages: [{ role: 'user', content: 'tasks?' }] })
 
-  async *stream() {
-    throw new Error('not used')
-  }
-
-  async embed(): Promise<number[][]> {
-    throw new Error('not used')
-  }
-}
+expect(result.content).toBe('You have 2 tasks.')
+expect(provider.inputs[1].messages.at(-1)).toMatchObject({ role: 'tool' })
 ```
 
-Deep-copy the captured inputs — the agent loop mutates its messages
-array between calls, so a stored reference would drift away from the
-state the provider actually saw.
+- A turn can be a function of the input: `(input) => ({ content: ... })`.
+- `stream()` replays the next turn as chunks. `embed()` needs an `embed`
+  option, `new ScriptedProvider([], { embed: (texts) => texts.map(() => [1, 0]) })`,
+  which is enough for `RagService` tests.
+- `provider.remaining` is the count of unused turns. A call past the end
+  throws, so a loop that runs too long fails the test.
 
 ## Next steps
 

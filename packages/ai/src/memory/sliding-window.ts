@@ -71,6 +71,9 @@ export class SlidingWindowChatMemory implements ChatMemory {
   private readonly inner: ChatMemory
   private readonly maxMessages: number
   private readonly pinSystemPrompt: boolean
+  // ponytail: serializes writes through this instance only; several
+  // processes sharing one store need a store that trims natively.
+  private pending: Promise<void> = Promise.resolve()
 
   constructor(options: SlidingWindowChatMemoryOptions) {
     if (!options.inner) {
@@ -90,7 +93,17 @@ export class SlidingWindowChatMemory implements ChatMemory {
     return this.applyWindow(raw)
   }
 
-  async add(message: ChatMessage | ChatMessage[]): Promise<void> {
+  /**
+   * Writes run one at a time: the read-trim-rewrite below would otherwise
+   * let two concurrent adds clear each other's messages.
+   */
+  add(message: ChatMessage | ChatMessage[]): Promise<void> {
+    const run = this.pending.then(() => this.addNow(message))
+    this.pending = run.catch(() => {})
+    return run
+  }
+
+  private async addNow(message: ChatMessage | ChatMessage[]): Promise<void> {
     await this.inner.add(message)
     // Trim eagerly after every add so subsequent gets see a bounded
     // history. Eager eviction keeps the stored state and the visible
@@ -105,8 +118,10 @@ export class SlidingWindowChatMemory implements ChatMemory {
     }
   }
 
-  async clear(): Promise<void> {
-    await this.inner.clear()
+  clear(): Promise<void> {
+    const run = this.pending.then(() => this.inner.clear())
+    this.pending = run.catch(() => {})
+    return run
   }
 
   async size(): Promise<number> {

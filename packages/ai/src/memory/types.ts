@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../types'
+import type { ChatMessage, RunAgentOptions } from '../types'
 
 /**
  * Chat memory contract.
@@ -77,7 +77,7 @@ export interface ChatMemory {
  * real chatbots end up writing this wrapper anyway; shipping it in
  * the framework saves everyone that boilerplate.
  */
-export interface RunAgentWithMemoryOptions {
+export interface RunAgentWithMemoryOptions extends Omit<RunAgentOptions, 'messages'> {
   /** Memory backend for this conversation. Typically scoped to a request or session. */
   memory: ChatMemory
   /** The user's message for this turn. */
@@ -88,25 +88,6 @@ export interface RunAgentWithMemoryOptions {
    * the model sees a single, stable system prompt for the session.
    */
   systemPrompt?: string
-  /** Provider for this turn: a registered name or an instance. See `RunAgentOptions.provider`. */
-  provider?: string | import('../types').AiProvider
-  /** Model override. Defaults to the provider's configured default. */
-  model?: string
-  /**
-   * Tools the agent can call. Defaults to `'auto'` — every tool in
-   * the adapter's `@AiTool` registry.
-   */
-  tools?: 'auto' | import('../types').ChatToolDefinition[]
-  /** Maximum chat → tool-call → dispatch cycles per turn. Defaults to 8. */
-  maxSteps?: number
-  /** Runtime chat options passed through to the provider. */
-  temperature?: number
-  maxTokens?: number
-  topP?: number
-  stopSequences?: string[]
-  signal?: AbortSignal
-  /** Headers sent with every tool call. See `RunAgentOptions.headers`. */
-  headers?: Headers | Record<string, string>
   /**
    * When true, tool call results written to memory preserve their
    * full content. When false (the default), tool results are

@@ -3,7 +3,6 @@ import type {
   RagAugmentOptions,
   RagIndexInput,
   RagSearchOptions,
-  VectorDocument,
   VectorSearchHit,
   VectorStore,
 } from './types'
@@ -76,35 +75,39 @@ export class RagService<M extends Record<string, unknown> = Record<string, unkno
   }
 
   /**
-   * Index a batch of documents: embed each one's content via the
-   * provider, then upsert into the store. Embedding happens in a
-   * single batched call, which is both faster and cheaper than one
-   * call per document for most providers.
+   * Index documents: embed their content via the provider, then upsert
+   * into the store, `batchSize` documents at a time (default 100) so a
+   * large corpus stays under the provider's per-request input limits.
    *
    * Documents with empty content are skipped rather than failing the
    * whole batch — the store can't meaningfully retrieve empty strings
    * and silently dropping them matches what users usually expect when
    * a content field turns out to be blank.
    */
-  async index(docs: RagIndexInput<M>[]): Promise<void> {
+  async index(docs: RagIndexInput<M>[], options: { batchSize?: number } = {}): Promise<void> {
     const nonEmpty = docs.filter((d) => d.content && d.content.trim().length > 0)
-    if (nonEmpty.length === 0) return
-
-    const vectors = await this.provider.embed(nonEmpty.map((d) => d.content))
-    if (vectors.length !== nonEmpty.length) {
-      throw new Error(
-        `RagService.index: provider returned ${vectors.length} vectors for ${nonEmpty.length} inputs`,
-      )
+    const batchSize = options.batchSize ?? 100
+    if (!Number.isInteger(batchSize) || batchSize <= 0) {
+      throw new Error('RagService.index: `batchSize` must be a positive integer')
     }
 
-    const toUpsert: VectorDocument<M>[] = nonEmpty.map((doc, i) => ({
-      id: doc.id,
-      content: doc.content,
-      vector: vectors[i],
-      metadata: doc.metadata,
-    }))
-
-    await this.store.upsert(toUpsert)
+    for (let start = 0; start < nonEmpty.length; start += batchSize) {
+      const batch = nonEmpty.slice(start, start + batchSize)
+      const vectors = await this.provider.embed(batch.map((d) => d.content))
+      if (vectors.length !== batch.length) {
+        throw new Error(
+          `RagService.index: provider returned ${vectors.length} vectors for ${batch.length} inputs`,
+        )
+      }
+      await this.store.upsert(
+        batch.map((doc, i) => ({
+          id: doc.id,
+          content: doc.content,
+          vector: vectors[i],
+          metadata: doc.metadata,
+        })),
+      )
+    }
   }
 
   /**
