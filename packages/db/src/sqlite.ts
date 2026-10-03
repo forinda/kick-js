@@ -3,3 +3,4 @@
 // `@forinda/kickjs-db`; install it alongside to use this subpath.
 export * from './adapters/sqlite/adapter'
 export * from './adapters/sqlite/dialect'
+export * from './adapters/sqlite/async-adapter'

@@ -62,6 +62,44 @@ interface FkListRow {
   match: string
 }
 
+/** One query introspection needs: the caller runs it and sends back the rows. */
+type Step = { sql: string; params: unknown[] }
+type Steps<T> = Generator<Step, T, unknown[]>
+
+/** Run a query; the rows come back from whoever drives the walk. */
+function* rows<T>(sql: string, ...params: unknown[]): Steps<T[]> {
+  return (yield { sql, params }) as T[]
+}
+
+/**
+ * The introspection walk, written once: it yields each query it needs, so the
+ * same code runs over a sync handle (better-sqlite3, `bun:sqlite`) and an
+ * async driver (libsql, D1). Counts are read with `Number()` because some
+ * drivers return them as bigints.
+ */
+function* introspectSteps(opts: IntrospectSqliteOptions): Steps<SchemaSnapshot> {
+  const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
+  // `_cf_*` tables are Cloudflare D1's own.
+  const tableRows = yield* rows<{ name: string }>(
+    `SELECT name FROM sqlite_master
+       WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\'
+       ORDER BY name`,
+  )
+
+  const tables: Record<string, TableSnapshot> = {}
+  for (const { name } of tableRows) {
+    if (excluded.includes(name)) continue
+    tables[name] = {
+      name,
+      columns: yield* readColumns(name),
+      indexes: yield* readIndexes(name),
+      foreignKeys: yield* readForeignKeys(name),
+      checks: [],
+    }
+  }
+  return { version: 1, dialect: 'sqlite', tables }
+}
+
 /**
  * Read a live SQLite database into a {@link SchemaSnapshot} via
  * `sqlite_master` + `PRAGMA` walks. Type strings come back as the
@@ -74,75 +112,72 @@ export function introspectSqlite(
   db: SqliteIntrospectDb,
   opts: IntrospectSqliteOptions = {},
 ): SchemaSnapshot {
-  const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
-
-  const tableRows = db
-    .prepare(
-      `SELECT name FROM sqlite_master
-       WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-       ORDER BY name`,
-    )
-    .all() as { name: string }[]
-
-  const tables: Record<string, TableSnapshot> = {}
-  for (const { name } of tableRows) {
-    if (excluded.includes(name)) continue
-    tables[name] = {
-      name,
-      columns: readColumns(db, name),
-      indexes: readIndexes(db, name),
-      foreignKeys: readForeignKeys(db, name),
-      checks: [],
-    }
-  }
-  return { version: 1, dialect: 'sqlite', tables }
+  const walk = introspectSteps(opts)
+  let step = walk.next()
+  while (!step.done) step = walk.next(db.prepare(step.value.sql).all(...step.value.params))
+  return step.value
 }
 
-function readColumns(db: SqliteIntrospectDb, table: string): Record<string, ColumnSnapshot> {
+/**
+ * {@link introspectSqlite} over an async driver (libsql/Turso, Cloudflare D1):
+ * `query` runs one statement and resolves with its rows.
+ */
+export async function introspectSqliteAsync(
+  query: (sql: string, params: unknown[]) => Promise<unknown[]>,
+  opts: IntrospectSqliteOptions = {},
+): Promise<SchemaSnapshot> {
+  const walk = introspectSteps(opts)
+  let step = walk.next()
+  while (!step.done) step = walk.next(await query(step.value.sql, step.value.params))
+  return step.value
+}
+
+function* readColumns(table: string): Steps<Record<string, ColumnSnapshot>> {
   // table_xinfo, unlike table_info, lists generated columns too.
-  const rows = db.prepare(`PRAGMA table_xinfo(${quote(table)})`).all() as TableInfoRow[]
+  const list = yield* rows<TableInfoRow>(`PRAGMA table_xinfo(${quote(table)})`)
   const out: Record<string, ColumnSnapshot> = {}
   let createSql: string | undefined
-  for (const r of rows) {
+  for (const r of list) {
     out[r.name] = {
       name: r.name,
       // SQLite reports a generated column's type with the clause appended.
       type: normalizeType(r.type.replace(/\s+GENERATED\s+ALWAYS\b.*$/i, '')),
-      nullable: r.notnull === 0,
+      nullable: Number(r.notnull) === 0,
       default: r.dflt_value,
-      primaryKey: r.pk > 0,
+      primaryKey: Number(r.pk) > 0,
     }
-    if (r.hidden === 2 || r.hidden === 3) {
-      createSql ??= (
-        db
-          .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`)
-          .all(table)[0] as { sql: string } | undefined
-      )?.sql
+    const hidden = Number(r.hidden ?? 0)
+    if (hidden === 2 || hidden === 3) {
+      createSql ??= (yield* rows<{ sql: string }>(
+        `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`,
+        table,
+      ))[0]?.sql
       out[r.name].generated = {
         expression: generatedExpression(createSql ?? '', r.name),
-        stored: r.hidden === 3,
+        stored: hidden === 3,
       }
     }
   }
   return out
 }
 
-function readIndexes(db: SqliteIntrospectDb, table: string): IndexSnapshot[] {
-  const list = db.prepare(`PRAGMA index_list(${quote(table)})`).all() as IndexListRow[]
+function* readIndexes(table: string): Steps<IndexSnapshot[]> {
+  const list = yield* rows<IndexListRow>(`PRAGMA index_list(${quote(table)})`)
   const out: IndexSnapshot[] = []
   for (const idx of list) {
     // Skip auto-indexes SQLite creates for UNIQUE / PK constraints — those
     // belong to the column/constraint definitions, not standalone indexes.
     if (idx.origin !== 'c') continue
-    const cols = (db.prepare(`PRAGMA index_info(${quote(idx.name)})`).all() as IndexInfoRow[])
+    const cols = (yield* rows<IndexInfoRow>(`PRAGMA index_info(${quote(idx.name)})`))
       .filter((c) => c.name !== null)
       .map((c) => c.name as string)
-    const entry: IndexSnapshot = { name: idx.name, columns: cols, unique: idx.unique === 1 }
-    if (idx.partial === 1) {
+    const entry: IndexSnapshot = { name: idx.name, columns: cols, unique: Number(idx.unique) === 1 }
+    if (Number(idx.partial) === 1) {
       // SQLite keeps only the statement; WHERE is its last clause.
-      const row = db
-        .prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`)
-        .all(idx.name)[0] as { sql: string | null } | undefined
+      const row = (yield* rows<{ sql: string | null }>(
+        `SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`,
+        idx.name,
+      ))[0]
       const where = row?.sql?.match(/\bWHERE\b([\s\S]*)$/i)?.[1].trim()
       if (where) entry.where = where
     }
@@ -151,18 +186,18 @@ function readIndexes(db: SqliteIntrospectDb, table: string): IndexSnapshot[] {
   return out
 }
 
-function readForeignKeys(db: SqliteIntrospectDb, table: string): ForeignKeySnapshot[] {
-  const rows = db.prepare(`PRAGMA foreign_key_list(${quote(table)})`).all() as FkListRow[]
+function* readForeignKeys(table: string): Steps<ForeignKeySnapshot[]> {
+  const list = yield* rows<FkListRow>(`PRAGMA foreign_key_list(${quote(table)})`)
   // Group multi-column FKs by their `id`.
   const byId = new Map<number, FkListRow[]>()
-  for (const r of rows) {
-    const g = byId.get(r.id) ?? []
+  for (const r of list) {
+    const g = byId.get(Number(r.id)) ?? []
     g.push(r)
-    byId.set(r.id, g)
+    byId.set(Number(r.id), g)
   }
   const out: ForeignKeySnapshot[] = []
   for (const [id, group] of byId) {
-    group.sort((a, b) => a.seq - b.seq)
+    group.sort((a, b) => Number(a.seq) - Number(b.seq))
     const first = group[0]
     out.push({
       // SQLite doesn't name FKs — synthesize a stable name.

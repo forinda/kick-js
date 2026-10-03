@@ -161,6 +161,8 @@ jobs:
             console.log('All', Object.keys(checks).length, 'exports verified')
             console.log('Bun export test passed')
           "
+      - name: Smoke test — kick/db on bun:sqlite
+        run: bun scripts/bun-db-smoke.ts
 
   deno-smoke-test:
     name: Deno smoke test

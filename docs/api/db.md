@@ -114,14 +114,15 @@ const db = createDbClient({
 
 ### `CreateDbClientOptions`
 
-| Option                 | Type             | Description                                                               |
-| ---------------------- | ---------------- | ------------------------------------------------------------------------- |
-| `schema`               | `TSchema`        | Schema record — used for type inference                                   |
-| `dialect`              | `Dialect`        | A dialect handle from a peer adapter (e.g. `pgDialect({ pool })`)         |
-| `events`               | `boolean`        | Enable lifecycle event emission. Zero-overhead when off                   |
-| `slowQueryThresholdMs` | `number \| null` | Fire `slowQuery` above this duration                                      |
-| `bus`                  | `KickEventBus`   | Republish to DevTools event bus                                           |
-| `plugins`              | `KyselyPlugin[]` | Query-builder plugins (see [`safeNullComparison()`](#safenullcomparison)) |
+| Option                 | Type                                | Description                                                                                                                         |
+| ---------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`               | `TSchema`                           | Schema record — used for type inference                                                                                             |
+| `dialect`              | `Dialect`                           | A dialect handle from a peer adapter (e.g. `pgDialect({ pool })`), or any Kysely dialect                                            |
+| `dialectTag`           | `'postgres' \| 'mysql' \| 'sqlite'` | Which SQL `dialect` speaks, for a dialect kick/db can't place ([Drivers](../guide/database/drivers.md#serverless-and-edge-drivers)) |
+| `events`               | `boolean`                           | Enable lifecycle event emission. Zero-overhead when off                                                                             |
+| `slowQueryThresholdMs` | `number \| null`                    | Fire `slowQuery` above this duration                                                                                                |
+| `bus`                  | `KickEventBus`                      | Republish to DevTools event bus                                                                                                     |
+| `plugins`              | `KyselyPlugin[]`                    | Query-builder plugins (see [`safeNullComparison()`](#safenullcomparison))                                                           |
 
 Every query the client runs reports driver failures as [typed errors](#errors) — `UniqueViolationError`, `SerializationFailureError`, … — with the driver's error as `cause`.
 
@@ -521,7 +522,8 @@ await client.connect()
 const snapshot = await introspectPg(client, { schema: 'public' })
 
 // await introspectMysql(connection, { excludeTables })   — async
-// introspectSqlite(database, { excludeTables })          — better-sqlite3 handle, sync
+// introspectSqlite(database, { excludeTables })          — better-sqlite3 / bun:sqlite handle, sync
+// await introspectSqliteAsync((sql, params) => rows, …)  — any async driver (libsql, D1)
 ```
 
 ### `checkDrift(live, expected, behavior)` / `reviewMigration(dir, id)`
@@ -542,7 +544,7 @@ Runner entry points — called by the CLI but also usable from custom scripts.
 
 Each returns a typed summary (`AppliedSummary`, `ReversedSummary`, `RollbackSummary`, `StatusEntry[]`).
 
-The `adapter` argument implements the `MigrationAdapter` interface and is dialect-specific (`pgAdapter()`, `sqliteAdapter()`, `mysqlAdapter()`). For tests, `MemoryMigrationAdapter` is available.
+The `adapter` argument implements the `MigrationAdapter` interface and is dialect-specific (`pgAdapter()`, `sqliteAdapter()`, `mysqlAdapter()`, or `asyncSqliteAdapter({ driver })` for libsql/Turso and Cloudflare D1, with `libsqlDriver(client)` / `d1Driver(db)` from `@forinda/kickjs-db/sqlite`). For tests, `MemoryMigrationAdapter` is available.
 
 ### `generate(options)`
 

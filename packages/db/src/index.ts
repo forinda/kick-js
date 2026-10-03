@@ -83,6 +83,7 @@ export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 export { introspectPg } from './migrate/introspect-pg'
 export {
   introspectSqlite,
+  introspectSqliteAsync,
   type SqliteIntrospectDb,
   type IntrospectSqliteOptions,
 } from './migrate/introspect-sqlite'

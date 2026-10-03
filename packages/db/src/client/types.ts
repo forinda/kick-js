@@ -246,8 +246,17 @@ export interface KickDbClient<DB = RegisteredDB> {
 export interface CreateDbClientOptions<TSchema, _DB = unknown> {
   /** Schema record — only used for type inference (M2-S1 tightens). */
   schema: TSchema
-  /** A Kysely Dialect — typically PostgresDialect from db-pg. */
+  /**
+   * A Kysely dialect: `pgDialect` / `mysqlDialect` / `sqliteDialect`, or any
+   * Kysely dialect (Neon, D1, libsql, `bun:sqlite`, PlanetScale…).
+   */
   dialect: KyselyDialect
+  /**
+   * Which SQL `dialect` speaks, when it can't be told from the dialect:
+   * kick/db's own dialects say so, and others are recognised by their
+   * Kysely adapter. A dialect that's neither throws until this is set.
+   */
+  dialectTag?: 'postgres' | 'mysql' | 'sqlite'
   /**
    * Read replicas — a dialect, or several used in turn. Reads outside a
    * transaction (`selectFrom`, `db.query`) go to a replica; writes, raw

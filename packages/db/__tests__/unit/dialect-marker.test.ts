@@ -40,3 +40,43 @@ describe('dialect marker', () => {
     expect(readDialectMark(dialect)).toBe('sqlite')
   })
 })
+
+describe('createDbClient dialect detection', () => {
+  // A real dialect whose class and adapter name no known dialect.
+  const unknownDialect = async () => {
+    const { PostgresDialect } = await import('kysely')
+    class CustomAdapter {}
+    class CustomDialect extends PostgresDialect {
+      createAdapter() {
+        return new CustomAdapter() as never
+      }
+    }
+    return new CustomDialect({ pool: {} as never })
+  }
+
+  it('recognises raw Kysely dialects by their adapter', async () => {
+    const { MysqlDialect, PostgresDialect, SqliteDialect } = await import('kysely')
+    const { createDbClient } = await import('../../src')
+    const tagOf = (dialect: object) =>
+      createDbClient({ schema: {}, dialect: dialect as never }).dialect
+    expect(tagOf(new PostgresDialect({ pool: {} as never }))).toBe('postgres')
+    expect(tagOf(new MysqlDialect({ pool: {} as never }))).toBe('mysql')
+    expect(tagOf(new SqliteDialect({ database: {} as never }))).toBe('sqlite')
+  })
+
+  it('refuses to guess an unknown dialect, and takes dialectTag', async () => {
+    const { createDbClient } = await import('../../src')
+    const custom = await unknownDialect()
+    expect(() => createDbClient({ schema: {}, dialect: custom as never })).toThrow(/dialectTag/)
+    expect(
+      createDbClient({ schema: {}, dialect: custom as never, dialectTag: 'postgres' }).dialect,
+    ).toBe('postgres')
+    expect(() =>
+      createDbClient({
+        schema: {},
+        dialect: custom as never,
+        dialectTag: 'oracle' as never,
+      }),
+    ).toThrow(/dialectTag must be/)
+  })
+})

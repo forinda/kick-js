@@ -99,6 +99,8 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@forinda/kickjs-schema": "workspace:*",
+    "@libsql/client": "^0.18.0",
+    "@libsql/kysely-libsql": "^0.4.1",
     "@testcontainers/mysql": "^12.2.0",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/better-sqlite3": "^9.6.0",
@@ -106,6 +108,8 @@
     "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
     "kysely": "^0.29.6",
+    "kysely-d1": "^0.4.0",
+    "miniflare": "^4.20260730.0",
     "mysql2": "^3.24.4",
     "pg": "^8.23.0",
     "typescript": "^7.0.2"

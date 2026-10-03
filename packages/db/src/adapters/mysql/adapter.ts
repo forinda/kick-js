@@ -1,4 +1,5 @@
 import { Kysely } from 'kysely'
+import { splitSqlStatements } from '../../migrate/split-statements'
 import { mysqlDialect } from './dialect'
 import {
   KickDbError,
@@ -171,148 +172,9 @@ function checkVersionSupport(parsed: ParsedMysqlVersion | null, raw: string): st
   return null
 }
 
-/**
- * Split a SQL blob into individual statements at the top-level `;`
- * boundary. Respects single-quote / double-quote / backtick string
- * literals AND `--` line comments + C-style block comments —
- * `;` inside any of those does not terminate a statement.
- *
- * mysql2's default `Pool.query()` rejects multi-statement SQL unless
- * the driver was created with `multipleStatements: true`. Splitting
- * lets the adapter run kickjs-emitted DDL (multi-statement, but
- * always semicolon-separated at the top level) without that flag.
- *
- * Two MySQL-specific quirks the splitter handles:
- *
- *   - **`--` comments require trailing whitespace/end-of-input.**
- *     Per MySQL docs, `--` is only a line-comment introducer when
- *     followed by whitespace (space/tab/newline) or end-of-input —
- *     otherwise it's two unary-minus operators (`5--3` evaluates
- *     to `8`). Bare `--xyz` is a parse error in MySQL but kickjs
- *     should pass it through unchanged so the driver surfaces the
- *     real error, not silently swallow the rest of the line.
- *   - **Doubled-quote string escapes.** MySQL accepts both
- *     backslash-escapes (`'it\'s'`) and SQL-standard doubled-quote
- *     escapes (`'it''s'`). The state machine peeks for the doubled
- *     form and stays in-string. Same rule applies to `""` inside
- *     double-quoted strings.
- *
- * Adopter-written migrations with pathological SQL — e.g. `;` in
- * an unterminated block comment — won't split correctly.
- * Documented in the README; turn on `multipleStatements: true` on
- * the pool if you hit it.
- */
+/** {@link splitSqlStatements} for MySQL. */
 export function splitMysqlStatements(sql: string): string[] {
-  const out: string[] = []
-  let buf = ''
-  let inSingle = false
-  let inDouble = false
-  let inBacktick = false
-  let inLineComment = false
-  let inBlockComment = false
-
-  const isCommentWhitespace = (c: string) =>
-    c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v'
-
-  for (let i = 0; i < sql.length; i++) {
-    const ch = sql[i]
-    const next = i + 1 < sql.length ? sql[i + 1] : ''
-    const after = i + 2 < sql.length ? sql[i + 2] : ''
-
-    if (inLineComment) {
-      buf += ch
-      if (ch === '\n') inLineComment = false
-      continue
-    }
-    if (inBlockComment) {
-      buf += ch
-      if (ch === '*' && next === '/') {
-        buf += next
-        i++
-        inBlockComment = false
-      }
-      continue
-    }
-    if (inSingle) {
-      // Doubled `''` is an SQL-standard escape — stay in-string.
-      if (ch === "'" && next === "'") {
-        buf += ch
-        buf += next
-        i++
-        continue
-      }
-      buf += ch
-      if (ch === '\\' && next !== '') {
-        buf += next
-        i++
-        continue
-      }
-      if (ch === "'") inSingle = false
-      continue
-    }
-    if (inDouble) {
-      // Doubled `""` is an SQL-standard escape — stay in-string.
-      if (ch === '"' && next === '"') {
-        buf += ch
-        buf += next
-        i++
-        continue
-      }
-      buf += ch
-      if (ch === '\\' && next !== '') {
-        buf += next
-        i++
-        continue
-      }
-      if (ch === '"') inDouble = false
-      continue
-    }
-    if (inBacktick) {
-      buf += ch
-      if (ch === '`') inBacktick = false
-      continue
-    }
-
-    // `--` is a comment introducer only when followed by whitespace
-    // (or end-of-input). Anything else (`5--3`, `--xyz`) is left as
-    // operator-soup and the driver decides what to do with it.
-    if (ch === '-' && next === '-' && (after === '' || isCommentWhitespace(after))) {
-      buf += ch
-      inLineComment = true
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      buf += ch
-      inBlockComment = true
-      continue
-    }
-    if (ch === "'") {
-      buf += ch
-      inSingle = true
-      continue
-    }
-    if (ch === '"') {
-      buf += ch
-      inDouble = true
-      continue
-    }
-    if (ch === '`') {
-      buf += ch
-      inBacktick = true
-      continue
-    }
-    if (ch === ';') {
-      const trimmed = buf.trim()
-      if (trimmed.length > 0) out.push(trimmed)
-      buf = ''
-      continue
-    }
-    buf += ch
-  }
-
-  const tail = buf.trim()
-  if (tail.length > 0) out.push(tail)
-  return out
+  return splitSqlStatements(sql, 'mysql')
 }
 
 /**

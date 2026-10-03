@@ -65,7 +65,7 @@ export const db = createDbClient({
 export const migrationAdapter = sqliteAdapter({ database })
 ```
 
-Both factories take a `better-sqlite3` handle (or any structurally compatible runtime, e.g. `bun:sqlite`).
+Both factories take a `better-sqlite3` handle, or a `bun:sqlite` `Database` on Bun ([below](#bun-sqlite)).
 
 Notes:
 
@@ -109,6 +109,87 @@ Notes:
 - **`introspect()` works** — `kick db introspect` reverse-engineers the live database (via `information_schema`) and `kick db migrate` runs dialect-normalised drift detection. Introspected types reflect the declared MySQL types (`uuid()` reads back as `char(36)`).
 - **`kick db generate` emits MySQL DDL** — backtick identifiers, `MODIFY COLUMN` alters, `DROP FOREIGN KEY`, MySQL type mapping.
 - The package exports helpers for custom tooling: `parseMysqlVersion(version)`, `parseMysqlMajorVersion(version)`, and `splitMysqlStatements(sql)`.
+
+## Serverless and edge drivers
+
+`createDbClient` takes any Kysely dialect, so the serverless drivers that ship one work as they are. kick/db tells which SQL to compile from the dialect's Kysely adapter (Postgres, MySQL or SQLite). A dialect it can't place throws, and asks for `dialectTag`:
+
+```ts
+createDbClient({ schema, dialect: myDialect, dialectTag: 'postgres' })
+```
+
+| Database       | Query dialect                                        | Migrations                                | Tested          |
+| -------------- | ---------------------------------------------------- | ----------------------------------------- | --------------- |
+| libsql / Turso | `LibsqlDialect` from `@libsql/kysely-libsql`         | `asyncSqliteAdapter` + `libsqlDriver`     | ✅              |
+| Cloudflare D1  | `D1Dialect` from `kysely-d1`                         | `asyncSqliteAdapter` + `d1Driver`         | ✅ (Miniflare)  |
+| `bun:sqlite`   | `sqliteDialect`                                      | `sqliteAdapter`                           | ✅ (CI, on Bun) |
+| Neon           | `pgDialect` with `@neondatabase/serverless`'s `Pool` | `pgAdapter` with the same `Pool`          | not in CI       |
+| PlanetScale    | `PlanetScaleDialect` from `kysely-planetscale`       | `mysqlAdapter` over a `mysql2` connection | not in CI       |
+
+### libsql / Turso
+
+<PmCommand add="@forinda/kickjs-db @libsql/client @libsql/kysely-libsql" />
+
+```ts
+import { createClient } from '@libsql/client'
+import { LibsqlDialect } from '@libsql/kysely-libsql'
+import { createDbClient } from '@forinda/kickjs-db'
+import { asyncSqliteAdapter, libsqlDriver } from '@forinda/kickjs-db/sqlite'
+import * as schema from './schema'
+
+const client = createClient({ url: process.env.TURSO_URL!, authToken: process.env.TURSO_TOKEN })
+
+export const db = createDbClient({ schema, dialect: new LibsqlDialect({ client }) })
+export const migrationAdapter = asyncSqliteAdapter({ driver: libsqlDriver(client) })
+```
+
+In `kick.config.ts`, return the adapter from the `db.adapter` factory with `dialect: 'sqlite'`, and pass `close: () => client.close()` so `kick db` exits when it's done ([Non-Postgres dialects](./migrations#non-postgres-dialects)).
+
+### Cloudflare D1
+
+<PmCommand add="@forinda/kickjs-db kysely-d1" />
+
+```ts
+import { D1Dialect } from 'kysely-d1'
+import { createDbClient } from '@forinda/kickjs-db'
+import * as schema from './schema'
+
+export default {
+  async fetch(request: Request, env: { DB: D1Database }) {
+    const db = createDbClient({ schema, dialect: new D1Dialect({ database: env.DB }) })
+    return Response.json(await db.selectFrom('users').selectAll().execute())
+  },
+}
+```
+
+`asyncSqliteAdapter({ driver: d1Driver(env.DB) })` runs migrations wherever you hold a D1 binding: in a Worker, or in Node through Miniflare or wrangler's `getPlatformProxy()` for a local database.
+
+- **No interactive transactions.** D1 doesn't allow `BEGIN`, so `db.transaction()` throws. A migration still applies all or nothing: the adapter sends it as one `batch`, which D1 runs atomically.
+- **Migration files are read from disk.** Running them from inside a deployed Worker needs them bundled, which kick/db doesn't do yet.
+
+### `bun:sqlite` {#bun-sqlite}
+
+```ts
+import { Database } from 'bun:sqlite'
+import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
+
+const database = new Database('app.db')
+export const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })
+export const migrationAdapter = sqliteAdapter({ database })
+```
+
+The same factories as `better-sqlite3`: `sqliteDialect` adapts Bun's statements to what Kysely expects.
+
+### Neon and PlanetScale
+
+Neon's `Pool` speaks the Postgres protocol over WebSockets, so `pgDialect({ pool })` and `pgAdapter({ pool })` take it as they take `pg.Pool`. For PlanetScale, query through `kysely-planetscale`'s dialect (recognised as MySQL) and migrate with `mysqlAdapter` over a regular `mysql2` connection. Neither runs in kick/db's CI, so check them against your setup.
+
+### Notes for async SQLite drivers
+
+- **A migration is one batch:** its statements, its `kick_migrations` row, and, after a table rebuild, a foreign-key check. If any of them fails, none apply.
+- **Migration SQL is split at top-level `;`.** A hand-written trigger (`BEGIN … ; … END`) won't split correctly. Write it in a TypeScript migration as one ``sql`…`.execute(db)`` statement instead.
+- **`introspect()` works** over the driver, as it does on `better-sqlite3`.
+- **TypeScript migrations** (`migration.ts`) need a Kysely instance: pass `kysely: new Kysely({ dialect })` to `asyncSqliteAdapter`. They run in a transaction, which D1 doesn't have; set `"transaction": false` in a D1 migration's `meta.json`.
 
 ## Choosing a dialect
 
