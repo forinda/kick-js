@@ -36,11 +36,18 @@ export async function checkMigrations(opts: {
     extractSnapshot(schemaModule, opts.config.dialect, { casing: opts.config.casing }),
   ).length
 
+  // Every folder the runner applies is checked for unreviewed or edited
+  // migrations. The schema is compared with `migrationsDir` only: the other
+  // folders belong to schemas of their own.
   const unreviewed: string[] = []
   const modified: string[] = []
-  if (existsSync(migrationsAbs)) {
-    for (const entry of (await readJournal(migrationsAbs, opts.config.dialect)).entries) {
-      const dir = path.join(migrationsAbs, entry.id)
+  const folders = [opts.config.migrationsDir, ...(opts.config.migrationsDirs ?? [])].map((d) =>
+    path.resolve(opts.cwd, d),
+  )
+  for (const folder of folders) {
+    if (!existsSync(folder)) continue
+    for (const entry of (await readJournal(folder, opts.config.dialect)).entries) {
+      const dir = path.join(folder, entry.id)
       const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8')) as {
         reviewed?: boolean
       }

@@ -102,6 +102,7 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
   const T = quoteTable(dialect, table)
   const L = quoteTable(dialect, lockTableName(table))
   // Introspection must not report the bookkeeping tables as schema.
+  // Postgres reads a dotted name as schema.table; introspection matches the bare name.
   const bookkeepingTables = [table, lockTableName(table)].map((t) =>
     t.slice(t.lastIndexOf('.') + 1),
   )

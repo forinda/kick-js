@@ -121,7 +121,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   if (opts.casing === 'snake_case') {
     // Results are converted before anything reads them by key; queries after
     // everything else has written them by key.
-    const casing = casingPlugins()
+    const casing = casingPlugins(collectRelationKeys(opts.schema))
     plugins.unshift(casing.first)
     plugins.push(casing.last)
   }

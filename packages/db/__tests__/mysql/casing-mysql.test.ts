@@ -89,5 +89,16 @@ describe('casing on MySQL', () => {
         db.insertInto('users').values({ firstName: 'x' }).execute(),
       ),
     ).rejects.toThrow(/READ ONLY transaction/i)
+    // Isolation is set before the transaction starts, as MySQL requires.
+    await expect(
+      db.transaction({ readOnly: true, isolation: 'repeatable read' }, () =>
+        db.selectFrom('users').select('firstName').execute(),
+      ),
+    ).resolves.toHaveLength(1)
+    await expect(
+      db.transaction({ isolation: 'serializable' }, () =>
+        db.insertInto('users').values({ firstName: 'Iso' }).execute(),
+      ),
+    ).resolves.toBeDefined()
   }, 60_000)
 })

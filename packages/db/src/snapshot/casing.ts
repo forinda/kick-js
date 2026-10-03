@@ -55,12 +55,9 @@ function renameSnapshot(
   snapshot: SchemaSnapshot,
   rename: (name: string) => string,
 ): SchemaSnapshot {
-  const tableName = (qualified: string) => {
-    const dot = qualified.lastIndexOf('.')
-    return dot === -1
-      ? rename(qualified)
-      : `${qualified.slice(0, dot + 1)}${rename(qualified.slice(dot + 1))}`
-  }
+  // Every part, schema included: Kysely's CamelCasePlugin converts a schema
+  // name in a query the same way, so `pgSchema('billingApp')` is `billing_app`.
+  const tableName = (qualified: string) => qualified.split('.').map(rename).join('.')
   const col = (c: string) => (c.startsWith('(') ? c : rename(c))
 
   const tables: Record<string, TableSnapshot> = {}
@@ -95,26 +92,55 @@ function renameSnapshot(
     }))
 
     const next: TableSnapshot = { ...t, name, columns, indexes, foreignKeys }
+    if (t.schema !== undefined) next.schema = rename(t.schema)
     if (t.primaryKey) next.primaryKey = { ...t.primaryKey, columns: t.primaryKey.columns.map(col) }
     tables[tableName(key)] = next
   }
-  return { ...snapshot, tables }
+  const renamed: SchemaSnapshot = { ...snapshot, tables }
+  if (snapshot.schemas) renamed.schemas = snapshot.schemas.map(rename).toSorted()
+  return renamed
 }
 
 /**
- * The client half of `casing`, as two plugins: Kysely runs both query and
- * result transforms in plugin order, and the conversion has to come last on
- * the way out (after managed columns and codecs have added and encoded by
- * key) but first on the way back (before codecs decode by key). So one
- * plugin goes at each end of the chain.
+ * The client half of `casing`, as two plugins. Kysely runs query and result
+ * transforms in plugin order, and the conversion has to come last on the way
+ * out (after managed columns and codecs have added and encoded by key) but
+ * first on the way back (before codecs decode by key). So one plugin goes at
+ * each end of the chain.
+ *
+ * Results are converted here rather than by CamelCasePlugin, which renames
+ * keys at every depth — including inside a JSON column's value, which is the
+ * user's data. Only a row's own keys are renamed, and the rows `db.query`
+ * nests under a relation name. (On SQLite and MySQL those nested rows arrive
+ * as JSON text already keyed by the selected names, which are camelCase.)
  */
-export function casingPlugins(): { first: KyselyPlugin; last: KyselyPlugin } {
+export function casingPlugins(relationKeys: ReadonlySet<string>): {
+  first: KyselyPlugin
+  last: KyselyPlugin
+} {
   const plugin = new CamelCasePlugin()
+  const convert = (row: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(row)) {
+      const key = toKeyName(k)
+      out[key] = relationKeys.has(key) ? convertNested(v) : v
+    }
+    return out
+  }
+  const convertNested = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(convertNested)
+    if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+      return convert(value as Record<string, unknown>)
+    }
+    return value
+  }
   return {
     first: {
       transformQuery: (args: PluginTransformQueryArgs): RootOperationNode => args.node,
-      transformResult: (args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> =>
-        plugin.transformResult(args),
+      transformResult: async (args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> =>
+        args.result.rows
+          ? { ...args.result, rows: args.result.rows.map((r) => convert(r) as UnknownRow) }
+          : args.result,
     },
     last: {
       transformQuery: (args: PluginTransformQueryArgs): RootOperationNode =>

@@ -11,12 +11,13 @@ import {
   emitPg,
   extractSnapshot,
   generate,
+  jsonb,
   migrateLatest,
   serial,
   table,
   text,
 } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+import { pgAdapter, pgDialect, pgSchema } from '@forinda/kickjs-db/pg'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const notes = table('notes', { id: serial().primaryKey(), body: text() })
@@ -58,6 +59,52 @@ describe('migration and transaction options on Postgres', () => {
         db.insertInto('notes').values({ body: 'x' }).execute(),
       ),
     ).rejects.toThrow(/read-only transaction/)
+  }, 30_000)
+
+  it('a read-only request inside a writable transaction is refused, inside a read-only one allowed', async () => {
+    const db = createDbClient({ schema: { notes }, dialect: pgDialect({ pool }) })
+    await expect(
+      db.transaction(() =>
+        db.transaction({ readOnly: true }, () => db.selectFrom('notes').selectAll().execute()),
+      ),
+    ).rejects.toThrow(/inside a writable transaction can't be read-only/)
+    await expect(
+      db.transaction({ readOnly: true }, () =>
+        db.transaction({ readOnly: true, nested: 'savepoint' }, () =>
+          db.selectFrom('notes').selectAll().execute(),
+        ),
+      ),
+    ).resolves.toBeDefined()
+    // A separate transaction can be read-only whatever is open.
+    await expect(
+      db.transaction(() =>
+        db.transaction({ readOnly: true, nested: 'separate' }, () =>
+          db.selectFrom('notes').selectAll().execute(),
+        ),
+      ),
+    ).resolves.toBeDefined()
+  }, 30_000)
+
+  it('casing converts a schema name like the query does, and leaves JSON values alone', async () => {
+    const app = pgSchema('billingApp')
+    const invoices = app.table('invoices', {
+      id: serial().primaryKey(),
+      lineItems: jsonb<{ unit_price: number }[]>(),
+    })
+    const target = extractSnapshot({ invoices }, 'postgres', { casing: 'snake_case' })
+    expect(target.schemas).toEqual(['billing_app'])
+    await pool.query(emitPg(diff({ version: 1, dialect: 'postgres', tables: {} }, target)))
+    const db = createDbClient({
+      schema: { invoices },
+      dialect: pgDialect({ pool }),
+      casing: 'snake_case',
+    })
+    await db
+      .insertInto('billingApp.invoices')
+      .values({ lineItems: JSON.stringify([{ unit_price: 5 }]) as never })
+      .execute()
+    const row = await db.selectFrom('billingApp.invoices').selectAll().executeTakeFirstOrThrow()
+    expect(row.lineItems).toEqual([{ unit_price: 5 }])
   }, 30_000)
 
   it('records migrations in a table in another schema, created if missing', async () => {

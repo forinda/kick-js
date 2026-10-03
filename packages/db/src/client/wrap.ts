@@ -46,6 +46,8 @@ export interface TxFrame {
    * a finished frame no longer counts as an open transaction.
    */
   done?: boolean
+  /** Started with `readOnly: true`. */
+  readOnly?: boolean
 }
 
 /**
@@ -170,7 +172,7 @@ export function wrap<DB>(
     const name = `sp_${++ctx.savepointCounter.value}`
     await sql.raw(`SAVEPOINT ${name}`).execute(frame.trx)
     // Hooks registered behind the savepoint wait on it: dropped if it rolls back.
-    const inner: TxFrame = { trx: frame.trx, afterCommit: [] }
+    const inner: TxFrame = { trx: frame.trx, afterCommit: [], readOnly: frame.readOnly }
     try {
       const result = await ctx.transactions.run(inner, () => fn(childFor(frame.trx)))
       await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(frame.trx)
@@ -188,20 +190,22 @@ export function wrap<DB>(
     opts: TransactionOptions,
     fn: (tx: KickDbClient<DB>) => Promise<T>,
   ): Promise<T> => {
-    if (opts.readOnly && ctx.dialect === 'sqlite') {
-      throw new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly')
-    }
     const isolation = opts.isolation
     const plan = retryPlan(opts.retry)
     for (let attempt = 1; ; attempt++) {
-      const frame: TxFrame = { trx: ctx.root, afterCommit: [] }
+      const frame: TxFrame = { trx: ctx.root, afterCommit: [], readOnly: opts.readOnly }
       ctx.events?.emit('transactionStart', { isolation })
       let result: T
       try {
+        // Isolation and access mode go through Kysely, which sets them the way
+        // each database needs: on Postgres with START TRANSACTION, on MySQL
+        // before it (a SET TRANSACTION inside an open one is refused there).
         let builder = ctx.root.transaction()
+        if (isolation && ctx.dialect !== 'sqlite') builder = builder.setIsolationLevel(isolation)
         if (opts.readOnly) builder = builder.setAccessMode('read only')
         result = await builder.execute(async (trx) => {
-          if (isolation) {
+          if (isolation && ctx.dialect === 'sqlite') {
+            // Kept as before: SQLite has no isolation levels, and says so.
             await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`).execute(trx)
           }
           frame.trx = trx
@@ -311,6 +315,20 @@ export function wrap<DB>(
       const fn = (typeof a === 'function' ? a : b) as (tx: KickDbClient<DB>) => Promise<unknown>
       const frame = currentFrame()
       const nested = opts.nested ?? 'reuse'
+      if (opts.readOnly && ctx.dialect === 'sqlite') {
+        return Promise.reject(
+          new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly'),
+        )
+      }
+      // Joining an open transaction can't change its access mode, so a
+      // read-only request is only met when that transaction is read-only too.
+      if (frame && nested !== 'separate' && opts.readOnly && !frame.readOnly) {
+        return Promise.reject(
+          new Error(
+            "kickjs-db: transaction({ readOnly: true }) inside a writable transaction can't be read-only — use nested: 'separate'",
+          ),
+        )
+      }
       if (frame && nested === 'reuse') return fn(childFor(frame.trx))
       if (frame && nested === 'savepoint') return savepointIn(frame, fn)
       if (frame && ctx.dialect === 'sqlite') {

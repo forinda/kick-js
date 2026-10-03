@@ -8,8 +8,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import {
+  checkMigrations,
   createDbClient,
   generate,
+  json,
   migrateDown,
   migrateLatest,
   migrateRollback,
@@ -119,6 +121,59 @@ describe('a custom migrations table', () => {
     expect(Object.keys((await adapter.introspect()).tables)).toEqual(['a'])
     // Runs again with the drift check, which would trip on the bookkeeping tables.
     await migrateLatest({ adapter, migrationsDir: folder, requireReviewed: false })
+  })
+})
+
+describe('a dotted migrations table name on SQLite', () => {
+  it('is one name, left out of introspection', async () => {
+    const folder = path.join(dir, 'migrations')
+    await history(folder, [v.a])
+    const database = new Database(':memory:')
+    const adapter = sqliteAdapter({ database, migrationsTable: 'app.history' })
+    await migrateLatest({ adapter, migrationsDir: folder, requireReviewed: false })
+    expect(Object.keys((await adapter.introspect()).tables)).toEqual(['a'])
+    await migrateLatest({ adapter, migrationsDir: folder, requireReviewed: false })
+  })
+})
+
+describe('kick db check with several folders', () => {
+  it('reports an unreviewed migration in any of them', async () => {
+    const app = path.join(dir, 'app')
+    const pkg = path.join(dir, 'pkg')
+    await history(app, [v.a])
+    const [pkgId] = await history(pkg, [
+      `export const z = table('z', { id: serial().primaryKey() })`,
+    ])
+    const schemaPath = path.join(dir, `schema-${(fileCount += 1)}.ts`)
+    await writeFile(schemaPath, `import { serial, table } from '@forinda/kickjs-db'\n${v.a}`)
+    const r = await checkMigrations({
+      config: { schemaPath, migrationsDir: app, migrationsDirs: [pkg], dialect: 'sqlite' },
+      cwd: dir,
+    })
+    expect(r.unmigratedChanges).toBe(0)
+    expect(r.unreviewed).toContain(pkgId)
+  })
+})
+
+describe('casing and JSON values', () => {
+  it('keeps the keys inside a JSON column as stored', async () => {
+    const docs = table('docs', {
+      id: serial().primaryKey(),
+      metaData: json<{ created_by: string }>(),
+    })
+    const database = new Database(':memory:')
+    database.exec('CREATE TABLE docs (id integer primary key, meta_data text)')
+    const db = createDbClient({
+      schema: { docs },
+      dialect: sqliteDialect({ database }),
+      casing: 'snake_case',
+    })
+    await db
+      .insertInto('docs')
+      .values({ metaData: { created_by: 'ada' } })
+      .execute()
+    const row = await db.selectFrom('docs').selectAll().executeTakeFirstOrThrow()
+    expect(row).toEqual({ id: 1, metaData: { created_by: 'ada' } })
   })
 })
 

@@ -394,9 +394,8 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
   const T = quoteTable(dialect, table)
   const L = quoteTable(dialect, lockTableName(table))
   // Introspection must not report the bookkeeping tables as schema.
-  const bookkeepingTables = [table, lockTableName(table)].map((t) =>
-    t.slice(t.lastIndexOf('.') + 1),
-  )
+  // A dot is part of the name here, not a schema.
+  const bookkeepingTables = [table, lockTableName(table)]
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,
