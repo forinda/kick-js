@@ -6,8 +6,9 @@ import type {
   ChatOptions,
   ChatResponse,
   EmbedInput,
+  EmbedOptions,
 } from '../types'
-import { postJson, postJsonStream, ProviderError } from './base'
+import { postJson, postJsonStream, ProviderError, type RetryOptions } from './base'
 
 /**
  * Configuration for the built-in OpenAI provider.
@@ -37,6 +38,8 @@ export interface OpenAIProviderOptions {
    * `'ollama'` if pointing baseURL at a local Ollama instance.
    */
   name?: string
+  /** Retries for transient failures (429, 5xx). Defaults to 3 with backoff; `{ maxRetries: 0 }` disables. */
+  retry?: RetryOptions
 }
 
 /**
@@ -83,6 +86,7 @@ export class OpenAIProvider implements AiProvider {
    * fetch init.
    */
   private readonly headers: Record<string, string>
+  private readonly retry?: RetryOptions
 
   constructor(options: OpenAIProviderOptions) {
     if (!options.apiKey) {
@@ -92,6 +96,7 @@ export class OpenAIProvider implements AiProvider {
     this.defaultChatModel = options.defaultChatModel ?? 'gpt-4o-mini'
     this.defaultEmbedModel = options.defaultEmbedModel ?? 'text-embedding-3-small'
     this.name = options.name ?? 'openai'
+    this.retry = options.retry
     this.headers = {
       authorization: `Bearer ${options.apiKey}`,
       ...(options.organization ? { 'openai-organization': options.organization } : {}),
@@ -111,6 +116,7 @@ export class OpenAIProvider implements AiProvider {
     const data = await postJson<OpenAIChatResponse>(`${this.baseURL}/chat/completions`, payload, {
       headers: this.headers,
       signal: options.signal,
+      retry: this.retry,
     })
     return this.normalizeChatResponse(data)
   }
@@ -129,6 +135,7 @@ export class OpenAIProvider implements AiProvider {
     const events = postJsonStream(`${this.baseURL}/chat/completions`, payload, {
       headers: this.headers,
       signal: options.signal,
+      retry: this.retry,
     })
 
     let sawAnyChunk = false
@@ -197,7 +204,7 @@ export class OpenAIProvider implements AiProvider {
    * length-1 array back, so callers can use the same indexed access
    * pattern regardless of input shape.
    */
-  async embed(input: EmbedInput): Promise<number[][]> {
+  async embed(input: EmbedInput, options: EmbedOptions = {}): Promise<number[][]> {
     const inputs = Array.isArray(input) ? input : [input]
     if (inputs.length === 0) return []
 
@@ -207,9 +214,7 @@ export class OpenAIProvider implements AiProvider {
         model: this.defaultEmbedModel,
         input: inputs,
       },
-      {
-        headers: this.headers,
-      },
+      { headers: this.headers, signal: options.signal, retry: this.retry },
     )
 
     if (!data.data || !Array.isArray(data.data)) {

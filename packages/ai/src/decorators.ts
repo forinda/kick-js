@@ -5,13 +5,11 @@ import type { AiToolOptions } from './types'
 /**
  * Mark a controller method as an AI-callable tool.
  *
- * At startup, the `AiAdapter` scans all `@Controller` classes in the
- * DI container for this decorator and builds a tool registry. When a
- * service calls `ai.chat({ ..., tools: 'auto' })`, the framework
- * passes the registered tools to the provider, the model may call
- * them, and the framework dispatches back through the normal Express
- * pipeline — so tool calls go through auth, validation, and logging
- * just like external HTTP requests.
+ * At startup, the `AiAdapter` collects this decorator from every
+ * mounted controller into a tool registry. `runAgent({ tools: 'auto' })`
+ * offers those tools to the model, and each call it makes is dispatched
+ * as a request to the route, in-process — so tool calls go through
+ * middleware, auth and validation just like external HTTP requests.
  *
  * The input schema is derived from the route's `body` Zod schema:
  *

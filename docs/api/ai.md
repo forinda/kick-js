@@ -35,6 +35,7 @@ Optional peers: `@anthropic-ai/sdk` for `AnthropicProvider`, `pg` for `PgVectorS
 | `OpenAIProvider`    | OpenAI Chat Completions and embeddings, and OpenAI-compatible endpoints    |
 | `AnthropicProvider` | Claude through `@anthropic-ai/sdk`; no embeddings                          |
 | `ProviderError`     | Error with the HTTP `status` and response `body` of a failed provider call |
+| `ScriptedProvider`  | Test provider that answers with scripted turns and records each input      |
 
 ### Prompts and memory
 
@@ -84,7 +85,7 @@ Inject with `@Inject(AI_ADAPTER)`.
 | `getTools()`                  | Discovered tool definitions                                                                 |
 | `setServerBaseUrl(url)`       | Send tool calls to a URL over HTTP instead of through the app (tests driving hooks by hand) |
 
-`RunAgentOptions` adds `messages`, `provider` (a registered name or an instance), `model`, `tools` (`'auto'` or a list), `maxSteps`, `headers` (sent with every tool call) and `signal` to `ChatOptions`. `RunAgentResult` has `content`, `messages`, `steps`, `usage`, `maxStepsReached`, `finishReason` and `refusal`.
+`RunAgentOptions` adds `messages`, `provider` (a registered name or an instance), `model`, `tools` (`'auto'` or a list), `maxSteps`, `headers` (sent with every tool call) and `signal` to `ChatOptions`. `RunAgentResult` has `content`, `messages`, `steps`, `usage` (summed across steps, cache tokens included), `maxStepsReached`, `finishReason` and `refusal`.
 
 ## Chat types
 

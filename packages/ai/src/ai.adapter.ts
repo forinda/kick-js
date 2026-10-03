@@ -25,6 +25,7 @@ import type {
   AiToolOptions,
   ChatMessage,
   ChatToolDefinition,
+  ChatUsage,
   RunAgentOptions,
   RunAgentResult,
 } from './types'
@@ -344,7 +345,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
       const messages: ChatMessage[] = [...agentOptions.messages]
       let steps = 0
-      const usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      const usage: ChatUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 
       for (let i = 0; i < maxSteps; i++) {
         steps++
@@ -372,6 +373,12 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           usage.promptTokens += response.usage.promptTokens
           usage.completionTokens += response.usage.completionTokens
           usage.totalTokens += response.usage.totalTokens
+          if (response.usage.cacheReadTokens !== undefined) {
+            usage.cacheReadTokens = (usage.cacheReadTokens ?? 0) + response.usage.cacheReadTokens
+          }
+          if (response.usage.cacheWriteTokens !== undefined) {
+            usage.cacheWriteTokens = (usage.cacheWriteTokens ?? 0) + response.usage.cacheWriteTokens
+          }
         }
 
         // A refused or token-truncated turn ends the loop: its tool calls may
@@ -436,40 +443,26 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
     const runAgentWithMemory = async (
       memoryOptions: RunAgentWithMemoryOptions,
     ): Promise<RunAgentResult> => {
-      const history = await memoryOptions.memory.get()
-      const messages: ChatMessage[] = [...history]
-
-      const isFirstTurn = messages.length === 0
-      if (isFirstTurn && memoryOptions.systemPrompt) {
-        const systemMessage: ChatMessage = { role: 'system', content: memoryOptions.systemPrompt }
-        messages.push(systemMessage)
-        await memoryOptions.memory.add(systemMessage)
+      const { memory, userMessage, systemPrompt, persistToolResults, ...agentOptions } =
+        memoryOptions
+      const history = await memory.get()
+      const turn: ChatMessage[] = []
+      if (history.length === 0 && systemPrompt) {
+        turn.push({ role: 'system', content: systemPrompt })
       }
+      turn.push({ role: 'user', content: userMessage })
+      const messages = [...history, ...turn]
 
-      const userMessage: ChatMessage = { role: 'user', content: memoryOptions.userMessage }
-      messages.push(userMessage)
-      await memoryOptions.memory.add(userMessage)
-
-      const result = await runAgent({
-        messages,
-        provider: memoryOptions.provider,
-        model: memoryOptions.model,
-        tools: memoryOptions.tools,
-        maxSteps: memoryOptions.maxSteps,
-        temperature: memoryOptions.temperature,
-        maxTokens: memoryOptions.maxTokens,
-        topP: memoryOptions.topP,
-        stopSequences: memoryOptions.stopSequences,
-        signal: memoryOptions.signal,
-        headers: memoryOptions.headers,
-      })
+      // Nothing is saved until the run succeeds, so a failed turn leaves the
+      // history as it was rather than ending on an unanswered user message.
+      const result = await runAgent({ ...agentOptions, messages })
 
       const newMessages = result.messages.slice(messages.length)
       // Without tool results, a saved tool call would leave the history in a
       // state providers reject on the next turn (a call with no result). Keep
       // the assistant's text, drop the calls and the native content that
       // carries them, and skip turns left empty.
-      const toPersist = memoryOptions.persistToolResults
+      const toPersist = persistToolResults
         ? newMessages
         : newMessages
             .filter((m) => m.role !== 'tool')
@@ -477,9 +470,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
               m.toolCalls?.length ? { role: m.role, content: m.content } : m,
             )
             .filter((m) => m.role !== 'assistant' || m.content !== '' || m.providerContent)
-      if (toPersist.length > 0) {
-        await memoryOptions.memory.add(toPersist)
-      }
+      await memory.add([...turn, ...toPersist])
 
       return result
     }

@@ -35,7 +35,7 @@ function eventsFor(message: ScriptedMessage): unknown[] {
         id: 'msg_1',
         type: 'message',
         role: 'assistant',
-        model: 'claude-opus-5',
+        model: 'claude-opus-5-5',
         content: [],
         stop_reason: null,
         stop_sequence: null,
@@ -154,7 +154,7 @@ describe('AnthropicProvider — request', () => {
     expect(request.headers.get('x-api-key')).toBe('sk-test')
     expect(request.headers.get('anthropic-beta')).toBe('server-side-fallback-2026-07-01')
     expect(request.body).toMatchObject({
-      model: 'claude-opus-5',
+      model: 'claude-opus-5-5',
       max_tokens: 64000,
       stream: true,
       cache_control: { type: 'ephemeral' },
