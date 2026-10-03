@@ -190,7 +190,15 @@ const guideSidebar = [
   {
     text: 'Testing',
     items: [
-      { text: 'Testing Guide', link: '/guide/testing' },
+      { text: 'Overview', link: '/guide/testing' },
+      { text: 'HTTP Integration Tests', link: '/guide/testing/http' },
+      { text: 'Unit Tests', link: '/guide/testing/units' },
+      { text: 'Authentication', link: '/guide/testing/auth' },
+      { text: 'Jobs, Cron, WebSockets, Mail', link: '/guide/testing/background' },
+      { text: 'Contributors, Middleware, Plugins', link: '/guide/testing/contributors' },
+      { text: 'Test Environment', link: '/guide/testing/environment' },
+      { text: 'Large Suites', link: '/guide/testing/large-suites' },
+      { text: 'With kick/db', link: '/guide/database/testing' },
       { text: 'Benchmarks', link: '/guide/benchmarks' },
     ],
   },

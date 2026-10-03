@@ -275,6 +275,21 @@ export const baseEnvSchema: BaseEnvSchema = new Proxy({} as BaseEnvSchema, {
 
 /** Cached env config to avoid re-parsing — keyed by schema reference */
 let cachedEnv: any = null
+/**
+ * Values {@link withEnv} lays over the parsed env while its callback runs.
+ * Kept apart from the cache so a re-parse during the callback (a different
+ * schema, a reload) can't drop them.
+ */
+let envOverlay: Record<string, unknown> | null = null
+
+function overlaid<T>(env: T): T {
+  return envOverlay ? ({ ...(env as object), ...envOverlay } as T) : env
+}
+
+/** What `@Value()` reads: an overlay value first, then the parsed env. */
+function resolveEnvKey(key: string): unknown {
+  return envOverlay && key in envOverlay ? envOverlay[key] : cachedEnv?.[key]
+}
 let cachedSchema: any = null
 
 /**
@@ -348,45 +363,89 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
   // schema over re-parsing with the base schema.
   const s = schema ?? cachedSchema ?? getBaseEnvSchema()
   // Re-parse if schema changed or no cache yet
-  if (cachedEnv && cachedSchema === s) return cachedEnv
+  if (cachedEnv && cachedSchema === s) return overlaid(cachedEnv)
   cachedSchema = s
   cachedEnv = s.parse(process.env)
 
   // Register env resolver so @Value() reads validated values
-  Container._envResolver = (key: string) => cachedEnv?.[key]
+  Container._envResolver = resolveEnvKey
 
-  return cachedEnv
+  return overlaid(cachedEnv)
 }
 
 /**
- * Get a single typed environment variable value.
+ * Get a single typed environment variable value, read from the env schema
+ * the app registered — the one source of truth, set once with
+ * `loadEnv(envSchema)` in `src/env.ts`.
  *
- * Three forms:
- * - **No-arg, KickEnv populated** (`kick typegen` has run) → key is
- *   constrained to known `KickEnv` keys; return type inferred from
- *   the schema.
- * - **With explicit schema** → key constrained to that schema's keys;
- *   return type is `z.infer<typeof schema>[K]`.
- * - **No-arg, KickEnv empty** → loose `string` key, `any` return.
+ * - **`getEnv(key)`** returns the parsed value: `getEnv('PORT')` is a number
+ *   once `kick typegen` has run.
+ * - **`getEnv(key, fallback)`** returns `fallback` when the value is unset
+ *   (`undefined` or `null`) — for keys the schema leaves optional.
  *
  * @example
  * ```ts
- * // After `kick typegen` (KickEnv populated):
- * const port = getEnv('PORT')              // typed as number
- * const url = getEnv('DATABASE_URL')       // typed as string
- *
- * // With an inline schema (legacy / one-off):
- * const dbUrl = getEnv('DATABASE_URL', envSchema)
+ * const port = getEnv('PORT') // number
+ * const region = getEnv('S3_REGION', 'eu-west-1') // string, never undefined
  * ```
+ *
+ * A default every caller shares belongs in the schema (`.default(...)`);
+ * the fallback is for a value one call site can live without.
  */
 export function getEnv<K extends EnvKey>(key: K): KickEnv[K]
-export function getEnv<T extends z.ZodObject<any>, K extends string & keyof z.infer<T>>(
+export function getEnv<K extends EnvKey>(
   key: K,
-  schema: T,
-): z.infer<T>[K]
-export function getEnv(key: string, schema?: z.ZodObject<any>): any {
-  const env = schema ? loadEnv(schema) : (loadEnv() as Record<string, any>)
-  return env[key]
+  fallback: NonNullable<KickEnv[K]>,
+): NonNullable<KickEnv[K]>
+export function getEnv(key: string, fallback?: unknown): any {
+  // The old second argument was a schema. Still honoured, so existing calls
+  // keep working, but the schema belongs in one place: loadEnv(envSchema).
+  if (isZodObject(fallback)) {
+    if (!warnedSchemaArg) {
+      warnedSchemaArg = true
+      process.emitWarning(
+        'getEnv(key, schema) is deprecated: register the schema once with loadEnv(envSchema); ' +
+          'the second argument is now a fallback value.',
+        'DeprecationWarning',
+      )
+    }
+    return (loadEnv(fallback) as Record<string, unknown>)[key]
+  }
+  const value = (loadEnv() as Record<string, unknown>)[key]
+  return value ?? fallback
+}
+
+let warnedSchemaArg = false
+
+function isZodObject(value: unknown): value is z.ZodObject<any> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { safeParse?: unknown }).safeParse === 'function' &&
+    'shape' in value
+  )
+}
+
+/**
+ * Run `fn` with some env values replaced — for tests. The overrides are
+ * parsed values (`{ TRUST_PROXY: true }`), laid over the current env for the
+ * duration of the call and taken away afterwards, whatever `fn` does.
+ * `getEnv`, `ConfigService` and `@Value()` all see them. No `.env` file is
+ * read. Not for concurrent use: the env is process-wide.
+ */
+export async function withEnv<T>(
+  overrides: Record<string, unknown>,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  loadEnv() // registers the resolver @Value() reads through
+  const previous = envOverlay
+  // Nested calls layer: the inner overrides win, the outer ones come back after.
+  envOverlay = { ...previous, ...overrides }
+  try {
+    return await fn()
+  } finally {
+    envOverlay = previous
+  }
 }
 
 /**
@@ -495,8 +554,8 @@ export function loadEnvFromSchema(schema: unknown): unknown {
   }
   cachedEnv = result.data
   cachedSchema = schema
-  Container._envResolver = (key: string) => cachedEnv?.[key]
-  return result.data
+  Container._envResolver = resolveEnvKey
+  return overlaid(result.data)
 }
 
 /**

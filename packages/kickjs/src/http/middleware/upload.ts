@@ -129,9 +129,36 @@ function createMulter(options: UploadOptions) {
  * }
  * ```
  */
+/**
+ * The handler, callable both ways it gets used: as Express middleware
+ * `(req, res, next)` — `middlewares: [upload.single(...)]`, and what
+ * `@FileUpload` builds — and as a route middleware `(ctx, next)`, which is
+ * how `@Middleware(upload.single(...))` calls it. Called the second way,
+ * Multer got the context as its request and failed on every upload.
+ */
+function bothConventions(handler: RequestHandler): RequestHandler {
+  return ((first: any, second: any, third?: any) => {
+    const isRouteMiddleware =
+      third === undefined &&
+      typeof second === 'function' &&
+      first !== null &&
+      typeof first === 'object' &&
+      'req' in first &&
+      'res' in first
+    if (!isRouteMiddleware) return handler(first, second, third)
+    return new Promise<void>((resolve, reject) => {
+      handler(first.req, first.res, (err?: unknown) => {
+        if (err) return reject(err)
+        resolve()
+        second()
+      })
+    })
+  }) as RequestHandler
+}
+
 function single(fieldName: string, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return translateMulterErrors(m.single(fieldName) as RequestHandler, options)
+  return bothConventions(translateMulterErrors(m.single(fieldName) as RequestHandler, options))
 }
 
 /**
@@ -139,7 +166,9 @@ function single(fieldName: string, options: UploadOptions = {}): RequestHandler 
  */
 function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return translateMulterErrors(m.array(fieldName, maxCount) as RequestHandler, options)
+  return bothConventions(
+    translateMulterErrors(m.array(fieldName, maxCount) as RequestHandler, options),
+  )
 }
 
 /**
@@ -147,7 +176,7 @@ function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): R
  */
 function none(options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return translateMulterErrors(m.none() as RequestHandler, options)
+  return bothConventions(translateMulterErrors(m.none() as RequestHandler, options))
 }
 
 /**

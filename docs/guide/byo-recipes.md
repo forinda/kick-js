@@ -246,13 +246,16 @@ export interface AuthAdapterOptions {
 
 export const AuthAdapter = defineAdapter<AuthAdapterOptions>({
   name: 'AuthAdapter',
-  register: (container, opts) => {
-    container.registerInstance(AUTH_STRATEGIES, opts.strategies)
-  },
-  contributors: (opts) =>
-    opts.defaultPolicy === 'protected'
-      ? [LoadAuthUser.with({ on401: 'reject' }).registration]
-      : [LoadAuthUser.with({ on401: 'allow' }).registration],
+  // `build` receives the options the adapter was called with and returns its hooks.
+  build: (opts) => ({
+    beforeStart: ({ container }) => {
+      container.registerInstance(AUTH_STRATEGIES, opts.strategies)
+    },
+    contributors: () =>
+      opts.defaultPolicy === 'protected'
+        ? [LoadAuthUser.with({ on401: 'reject' }).registration]
+        : [LoadAuthUser.with({ on401: 'allow' }).registration],
+  }),
 })
 ```
 

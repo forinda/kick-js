@@ -11,6 +11,7 @@ export {
   loadEnvFromSchema,
   getEnv,
   reloadEnv,
+  withEnv,
   resetEnvCache,
   type Env,
 } from './env'

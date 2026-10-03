@@ -85,5 +85,9 @@ export default defineConfig({
     pool: 'threads',
     maxConcurrency: 1,
     testTimeout: 90_000,
+    // Starting and stopping a container takes longer than the default 10s
+    // under parallel load. Per-file timeouts on each hook kept missing a file
+    // (composite-detect's afterAll was the latest), so set it once here.
+    hookTimeout: 60_000,
   },
 })

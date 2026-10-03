@@ -64,7 +64,7 @@ const { app } = await createTestApp({
 const res = await request(app.handle.bind(app)).get('/api/v1/users')
 ```
 
-Use the entries form (`[[TOKEN, value]]`) — see [Testing → Overriding a token binding](../testing#overriding-a-token-binding).
+Use the entries form (`[[TOKEN, value]]`) — see [Replace a dependency](../testing/http.md#replace-a-dependency-overrides).
 
 ## Against real Postgres
 
