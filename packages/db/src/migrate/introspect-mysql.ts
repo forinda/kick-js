@@ -5,6 +5,7 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 
 const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
@@ -25,6 +26,8 @@ interface ColumnRow {
   IS_NULLABLE: 'YES' | 'NO'
   COLUMN_DEFAULT: string | null
   COLUMN_KEY: string
+  /** '' when the column has none: MySQL doesn't distinguish no comment from an empty one. */
+  COLUMN_COMMENT: string
   EXTRA: string
 }
 
@@ -66,9 +69,9 @@ export async function introspectMysql(
 ): Promise<SchemaSnapshot> {
   const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
 
-  const tableRows = await rows<{ TABLE_NAME: string }>(
+  const tableRows = await rows<{ TABLE_NAME: string; TABLE_COMMENT: string }>(
     db,
-    `SELECT TABLE_NAME FROM information_schema.TABLES
+    `SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
      ORDER BY TABLE_NAME`,
     [],
@@ -83,9 +86,28 @@ export async function introspectMysql(
       indexes: await readIndexes(db, t.TABLE_NAME),
       foreignKeys: await readForeignKeys(db, t.TABLE_NAME),
       checks: [],
+      ...(t.TABLE_COMMENT ? { comment: t.TABLE_COMMENT } : {}),
     }
   }
-  return { version: 1, dialect: 'mysql', tables }
+  const snapshot: SchemaSnapshot = { version: 1, dialect: 'mysql', tables }
+  const viewRows = await rows<{ TABLE_NAME: string; VIEW_DEFINITION: string }>(
+    db,
+    `SELECT TABLE_NAME, VIEW_DEFINITION FROM information_schema.VIEWS
+     WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME`,
+    [],
+  )
+  if (viewRows.length > 0) {
+    const views: Record<string, ViewSnapshot> = {}
+    for (const v of viewRows) {
+      views[v.TABLE_NAME] = {
+        name: v.TABLE_NAME,
+        definition: v.VIEW_DEFINITION,
+        columns: await readColumns(db, v.TABLE_NAME),
+      }
+    }
+    snapshot.views = views
+  }
+  return snapshot
 }
 
 async function readColumns(
@@ -94,7 +116,8 @@ async function readColumns(
 ): Promise<Record<string, ColumnSnapshot>> {
   const cols = await rows<ColumnRow>(
     db,
-    `SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA
+    `SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA,
+            COLUMN_COMMENT
      FROM information_schema.COLUMNS
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
      ORDER BY ORDINAL_POSITION`,
@@ -108,6 +131,7 @@ async function readColumns(
       nullable: c.IS_NULLABLE === 'YES',
       default: c.COLUMN_DEFAULT,
       primaryKey: c.COLUMN_KEY === 'PRI',
+      ...(c.COLUMN_COMMENT ? { comment: c.COLUMN_COMMENT } : {}),
     }
   }
   return out
@@ -189,7 +213,13 @@ function mapFkAction(action: string): FkAction {
   }
 }
 
-/** Use the declared `COLUMN_TYPE` (carries length), lowercased. */
+/**
+ * Use the declared `COLUMN_TYPE` (carries length), lowercased — except an
+ * enum's or set's values, which keep their case.
+ */
 function normalizeType(c: ColumnRow): string {
-  return (c.COLUMN_TYPE || c.DATA_TYPE).trim().toLowerCase() || 'text'
+  const type = (c.COLUMN_TYPE || c.DATA_TYPE).trim()
+  const values = /^(enum|set)\s*(\(.*\))$/is.exec(type)
+  if (values) return `${values[1]!.toLowerCase()}${values[2]}`
+  return type.toLowerCase() || 'text'
 }

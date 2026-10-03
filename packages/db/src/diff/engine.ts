@@ -1,6 +1,6 @@
 import { RemovedValueAsDefaultError } from '../errors'
 import { pgPrimaryKeyName, primaryKeyOf, snapshotTableName } from '../snapshot/name'
-import type { SchemaSnapshot, TableSnapshot } from '../snapshot/types'
+import type { PolicySnapshot, SchemaSnapshot, TableSnapshot, ViewSnapshot } from '../snapshot/types'
 import type { Change, ChangeSet, PrimaryKeyShape } from './types'
 
 /**
@@ -90,7 +90,162 @@ export function diff(
   // Drop enums after every dependent table change has been emitted.
   diffEnumsDropPhase(prev, next, changes)
 
-  return changes
+  return withRowLevelSecurity(prev, next, withViews(prev, next, changes))
+}
+
+const policyKey = (p: PolicySnapshot) =>
+  JSON.stringify([p.as, p.command, [...p.to].toSorted(), p.using ?? null, p.withCheck ?? null])
+
+/**
+ * Roles first; then policy drops, ahead of the table changes (Postgres won't
+ * drop a column a policy uses); then, last of all, row-level security on and
+ * off and policy creates. A table whose shape changes, or that a policy's SQL
+ * names, has its policies dropped and re-created around the change.
+ */
+function withRowLevelSecurity(
+  prev: SchemaSnapshot,
+  next: SchemaSnapshot,
+  changes: Change[],
+): Change[] {
+  const roles: Change[] = []
+  for (const [name, role] of Object.entries(next.roles ?? {})) {
+    const was = prev.roles?.[name]
+    if (!was) roles.push({ kind: 'createRole', role })
+    else if (JSON.stringify(was) !== JSON.stringify(role)) roles.push({ kind: 'alterRole', role })
+  }
+
+  // A rename doesn't touch policies: Postgres keeps them on the table, and
+  // their expressions refer to it by identity, not by name.
+  const touched = new Set(changes.filter((c) => c.kind !== 'renameTable').flatMap(touchedBy))
+  // Policy drops run before the rename, so they name the table as it was.
+  const renamedFrom = new Map<string, string>()
+  for (const c of changes) if (c.kind === 'renameTable') renamedFrom.set(c.to, c.from)
+  const drops: Change[] = []
+  const creates: Change[] = []
+  for (const [name, t] of Object.entries(next.tables)) {
+    const before = prev.tables[name]
+    const was = new Map((before?.policies ?? []).map((p) => [p.name, p]))
+    const now = t.policies ?? []
+    // Re-create every policy on a table this migration reshapes, or whose SQL names one that is.
+    const reshaped = (p: PolicySnapshot) =>
+      touched.has(name) ||
+      [...touched].some((x) => mentions(`${p.using ?? ''} ${p.withCheck ?? ''}`, x))
+    for (const [pname, p] of was) {
+      const kept = now.find((q) => q.name === pname)
+      if (!kept || policyKey(kept) !== policyKey(p) || reshaped(p)) {
+        drops.push({ kind: 'dropPolicy', table: renamedFrom.get(name) ?? name, policy: p })
+      }
+    }
+    const rlsBefore = before?.rls ?? null
+    const rlsAfter = t.rls ?? null
+    if (JSON.stringify(rlsBefore) !== JSON.stringify(rlsAfter)) {
+      creates.push({ kind: 'setRowLevelSecurity', table: name, from: rlsBefore, to: rlsAfter })
+    }
+    for (const p of now) {
+      const old = was.get(p.name)
+      if (!old || policyKey(old) !== policyKey(p) || reshaped(p)) {
+        creates.push({ kind: 'createPolicy', table: name, policy: p })
+      }
+    }
+  }
+  if (roles.length === 0 && drops.length === 0 && creates.length === 0) return changes
+  return [...roles, ...drops, ...changes, ...creates]
+}
+
+/** Change kinds that don't alter a table's shape, so a view over it is unaffected. */
+const SHAPE_NEUTRAL = new Set<Change['kind']>([
+  'addIndex',
+  'dropIndex',
+  'setTableComment',
+  'setColumnComment',
+  'createSchema',
+  'createEnum',
+  'addEnumValue',
+])
+
+/** The tables (and views) a change alters, by qualified name. */
+function touchedBy(change: Change): string[] {
+  if (SHAPE_NEUTRAL.has(change.kind)) return []
+  switch (change.kind) {
+    case 'createTable':
+    case 'dropTable':
+      return [snapshotTableName(change.table)]
+    case 'renameTable':
+      return [change.from, change.to]
+    case 'removeEnumValue':
+      return change.affectedColumns.map((c) => c.table)
+    default:
+      return 'table' in change && typeof change.table === 'string' ? [change.table] : []
+  }
+}
+
+/** Whether a view's SQL names a table or view: `orders`, `"orders"`, `billing.orders`. */
+function mentions(definition: string, qualified: string): boolean {
+  const bare = qualified.slice(qualified.lastIndexOf('.') + 1)
+  const escaped = bare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^\\w$])["\`]?${escaped}["\`]?($|[^\\w$])`, 'i').test(definition)
+}
+
+/**
+ * Add view changes around the table changes: drops first (dependents before
+ * what they select from), creates last (in declaration order). A view whose
+ * SQL names a table this migration alters is dropped and re-created too:
+ * Postgres won't alter a column a view uses, and SQLite's table rebuild
+ * breaks on a view over the table. The same goes for a view over a view
+ * that's re-created.
+ */
+function withViews(prev: SchemaSnapshot, next: SchemaSnapshot, changes: Change[]): Change[] {
+  const before = prev.views ?? {}
+  const after = next.views ?? {}
+  if (Object.keys(before).length === 0 && Object.keys(after).length === 0) return changes
+
+  const sameView = (a: ViewSnapshot, b: ViewSnapshot) =>
+    a.definition === b.definition && !!a.materialized === !!b.materialized
+  const recreate = new Set(
+    Object.keys(after).filter((n) => !before[n] || !sameView(before[n]!, after[n]!)),
+  )
+  const dropped = Object.keys(before).filter((n) => !after[n])
+
+  const touched = new Set(changes.flatMap(touchedBy))
+  for (let grew = true; grew;) {
+    grew = false
+    const changed = [...touched, ...recreate, ...dropped]
+    for (const [name, v] of Object.entries(after)) {
+      if (recreate.has(name) || !before[name]) continue
+      if (changed.some((t) => t !== name && mentions(v.definition, t))) {
+        recreate.add(name)
+        grew = true
+      }
+    }
+  }
+
+  const drops: Change[] = Object.keys(before)
+    .filter((n) => !after[n] || (recreate.has(n) && before[n]))
+    .toReversed()
+    .map((n) => ({ kind: 'dropView', view: { ...before[n]!, name: n } }))
+  const creates: Change[] = Object.keys(after)
+    .filter((n) => recreate.has(n))
+    .map((n) => ({ kind: 'createView', view: { ...after[n]!, name: n } }))
+
+  // Index changes on a materialized view that stays.
+  const indexChanges: Change[] = []
+  for (const [name, v] of Object.entries(after)) {
+    if (recreate.has(name) || !v.materialized) continue
+    const was = new Map((before[name]?.indexes ?? []).map((i) => [i.name, i]))
+    const now = new Map((v.indexes ?? []).map((i) => [i.name, i]))
+    for (const [n, i] of was) {
+      if (!now.has(n) || indexDefinition(now.get(n)!) !== indexDefinition(i)) {
+        indexChanges.push({ kind: 'dropIndex', table: name, index: i })
+      }
+    }
+    for (const [n, i] of now) {
+      if (!was.has(n) || indexDefinition(was.get(n)!) !== indexDefinition(i)) {
+        indexChanges.push({ kind: 'addIndex', table: name, index: i })
+      }
+    }
+  }
+
+  return [...drops, ...changes, ...creates, ...indexChanges]
 }
 
 /** `prev` with the given tables under their new names — to look for column renames inside them. */
@@ -389,6 +544,17 @@ function diffTable(
     if (!columnsEqual(before, after)) {
       changes.push({ kind: 'alterColumn', table: tableRef, column: c, before, after })
     }
+    // A comment is its own change: on SQLite it isn't stored, and an
+    // alterColumn there would rebuild the table for nothing.
+    if ((before.comment ?? null) !== (after.comment ?? null)) {
+      changes.push({
+        kind: 'setColumnComment',
+        table: tableRef,
+        column: after,
+        from: before.comment ?? null,
+        to: after.comment ?? null,
+      })
+    }
   }
 
   if (pk && pk.after.columns.length > 0) {
@@ -439,6 +605,15 @@ function diffTable(
     (f) => changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f }),
     (f) => changes.push({ kind: 'addForeignKey', table: tableRef, fk: f }),
   )
+
+  if ((prev.comment ?? null) !== (next.comment ?? null)) {
+    changes.push({
+      kind: 'setTableComment',
+      table: tableRef,
+      from: prev.comment ?? null,
+      to: next.comment ?? null,
+    })
+  }
 }
 
 /** What makes two indexes the same index. `concurrently` is how it is built, not what it is. */

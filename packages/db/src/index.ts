@@ -83,6 +83,7 @@ export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 export { introspectPg } from './migrate/introspect-pg'
 export {
   introspectSqlite,
+  introspectSqliteAsync,
   type SqliteIntrospectDb,
   type IntrospectSqliteOptions,
 } from './migrate/introspect-sqlite'
@@ -133,6 +134,12 @@ export {
   type RollbackSummary,
   type StatusEntry,
 } from './migrate/runner'
+export {
+  migrateTenants,
+  type MigrateTenantsOptions,
+  type MigrateTenantsResult,
+  type TenantMigrationResult,
+} from './migrate/tenants'
 export { reviewMigration, type ReviewResult } from './migrate/review'
 
 export { emitPg } from './emit/pg'
@@ -149,6 +156,8 @@ export { listSeeds, runSeeds, type SeedResult } from './cli/seed'
 
 export * from './dsl/columns'
 export * from './dsl/table'
+export * from './dsl/view'
+export * from './tenancy'
 export { selfRef } from './dsl/self-ref'
 export {
   Rule,

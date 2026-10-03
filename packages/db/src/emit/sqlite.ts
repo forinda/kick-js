@@ -82,8 +82,10 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
 
   const out: string[] = []
 
-  // 1. Emit every change that isn't subsumed by a rebuild.
+  // 1. Emit every change that isn't subsumed by a rebuild. Views are created
+  //    last, after the rebuilds of the tables they select from.
   for (const c of changes) {
+    if (c.kind === 'createView') continue
     const t = perTableName(c)
     if (t && rebuildTables.has(current(t))) continue // folded into the rebuild below
     const sql = emitChange(c)
@@ -94,6 +96,9 @@ export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): str
   for (const table of rebuildTables) {
     out.push(emitRebuild(table, ctx, changes))
   }
+
+  // 3. Views.
+  for (const c of changes) if (c.kind === 'createView') out.push(emitChange(c))
 
   return out.join('\n')
 }
@@ -154,6 +159,20 @@ function emitChange(change: Change): string {
       // new-table FKs inline into CREATE TABLE, existing-table FK + column
       // changes are subsumed by the table rebuild.
       return ''
+    case 'setTableComment':
+    case 'setColumnComment':
+      // SQLite stores no comments.
+      return ''
+    case 'createView':
+      return `CREATE VIEW ${quoteIdent(change.view.name)} AS\n${change.view.definition};`
+    case 'dropView':
+      return `DROP VIEW ${quoteIdent(change.view.name)};`
+    case 'createRole':
+    case 'alterRole':
+    case 'setRowLevelSecurity':
+    case 'createPolicy':
+    case 'dropPolicy':
+      throw new Error('kickjs-db: row-level security and roles are Postgres-only')
     case 'createEnum':
     case 'dropEnum':
     case 'addEnumValue':

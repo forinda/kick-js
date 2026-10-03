@@ -24,6 +24,8 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
     // diff never saw; the down migration leaves the (now empty) schema behind
     // for an operator to remove deliberately. See CreateSchema in ./types.
     if (change.kind === 'createSchema') continue
+    // Roles are the server's, not this database's: a down migration leaves them.
+    if (change.kind === 'createRole' || change.kind === 'alterRole') continue
     reversed.push(invert(change))
   }
   const ordered = reversed.toReversed()
@@ -43,7 +45,13 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
     ordered.filter((c) => c.kind === 'dropTable').map((c) => snapshotTableName(c.table)),
   )
   return ordered.filter((c) => {
-    if (c.kind === 'dropForeignKey' || c.kind === 'dropIndex' || c.kind === 'dropCheck') {
+    if (
+      c.kind === 'dropForeignKey' ||
+      c.kind === 'dropIndex' ||
+      c.kind === 'dropCheck' ||
+      c.kind === 'dropPolicy' ||
+      c.kind === 'setRowLevelSecurity'
+    ) {
       return !droppedTables.has(c.table)
     }
     return true
@@ -52,7 +60,9 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
 
 // `CreateSchema` is filtered out above rather than inverted, so excluding it
 // here keeps the switch exhaustive without a dead default branch.
-function invert(change: Exclude<Change, CreateSchema>): Change {
+function invert(
+  change: Exclude<Change, CreateSchema | { kind: 'createRole' } | { kind: 'alterRole' }>,
+): Change {
   switch (change.kind) {
     case 'createTable':
       return { kind: 'dropTable', table: change.table }
@@ -108,6 +118,25 @@ function invert(change: Exclude<Change, CreateSchema>): Change {
       return { kind: 'dropCheck', table: change.table, check: change.check }
     case 'dropCheck':
       return { kind: 'addCheck', table: change.table, check: change.check }
+    case 'createPolicy':
+      return { kind: 'dropPolicy', table: change.table, policy: change.policy }
+    case 'dropPolicy':
+      return { kind: 'createPolicy', table: change.table, policy: change.policy }
+    case 'setRowLevelSecurity':
+      return { ...change, from: change.to, to: change.from }
+    case 'createView':
+      return { kind: 'dropView', view: change.view }
+    case 'dropView':
+      return { kind: 'createView', view: change.view }
+    case 'setTableComment':
+      return { ...change, from: change.to, to: change.from }
+    case 'setColumnComment':
+      return {
+        ...change,
+        column: { ...change.column, comment: change.from ?? undefined },
+        from: change.to,
+        to: change.from,
+      }
     case 'removeEnumValue':
       // The forward direction of a value removal is itself an
       // advisory + manual operation; the reverse is symmetric. Carry

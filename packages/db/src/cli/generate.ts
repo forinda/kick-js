@@ -126,7 +126,8 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   }
 
   const schemaAbs = path.resolve(opts.cwd, opts.config.schemaPath)
-  const schemaModule = await loadModule(schemaAbs)
+  // Fresh: a second generate() in the same process must see the edited schema.
+  const schemaModule = await loadModule(schemaAbs, { fresh: true })
   const target = extractSnapshot(schemaModule, opts.config.dialect, { casing: opts.config.casing })
   const renames = await resolveRenames(prev, target, opts)
   const changes = diff(prev, target, renames)

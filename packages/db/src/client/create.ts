@@ -18,12 +18,20 @@ import {
   collectRelationKeys,
 } from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
+import { tenancyPlugin } from './tenancy-plugin'
+import { tenantConnections } from './tenancy-connections'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
 import { casingPlugins } from '../snapshot/casing'
 import { ManagedColumnsPlugin, collectManaged } from './managed'
 import type { CompileTable } from '../query/compile-shared'
-import { KICK_DIALECT_DATES, readDialectMark, type DialectDateOptions } from '../dialect-marker'
+import {
+  KICK_DIALECT_DATES,
+  isDialectTag,
+  readDialectMark,
+  type DialectDateOptions,
+  type DialectTag,
+} from '../dialect-marker'
 import { pickCompiler } from '../query/compilers'
 import { extractSnapshot } from '../snapshot/extract'
 
@@ -65,7 +73,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // when their map is empty so the plugin is free of per-row /
   // per-query cost when no customType is in play. Plugin only
   // attached when at least one side has work to do.
-  const dialectTag = detectDialect(opts.dialect)
+  const dialectTag = detectDialect(opts.dialect, opts.dialectTag)
   const decoders = buildDecoderMap(opts.schema, dialectTag)
   const encoders = buildEncoderMap(opts.schema, dialectTag)
   const dates = (opts.dialect as { [KICK_DIALECT_DATES]?: DialectDateOptions } | undefined)?.[
@@ -118,6 +126,17 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   if (opts.plugins && opts.plugins.length > 0) {
     plugins.push(...opts.plugins)
   }
+  if (opts.tenancy) {
+    if (
+      (opts.tenancy.strategy === 'rls' || opts.tenancy.strategy === 'schema') &&
+      dialectTag !== 'postgres'
+    ) {
+      throw new Error(`kickjs-db: '${opts.tenancy.strategy}' tenancy is Postgres-only`)
+    }
+    // Before the casing plugin's query half: it names the tenant column by key.
+    const plugin = tenancyPlugin(opts.tenancy, opts.schema)
+    if (plugin) plugins.push(plugin)
+  }
   if (opts.casing === 'snake_case') {
     // Results are converted before anything reads them by key; queries after
     // everything else has written them by key.
@@ -129,7 +148,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const makeKysely = (dialect: KyselyDialect) =>
     new Kysely<DB>({
       // Driver failures surface as typed errors (UniqueViolationError, …).
-      dialect: translatingDialect(dialect, dialectTag),
+      dialect: translatingDialect(tenantConnections(dialect, opts.tenancy), dialectTag),
       plugins: plugins.length > 0 ? plugins : undefined,
       log: events
         ? (event) => {
@@ -188,24 +207,35 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   return wrap<DB>(kysely, ctx, { root: true })
 }
 
-function detectDialect(dialect: KyselyDialect): KickDbClient['dialect'] {
+function detectDialect(dialect: KyselyDialect, override?: DialectTag): KickDbClient['dialect'] {
+  if (override) {
+    if (!isDialectTag(override)) {
+      throw new Error(
+        `createDbClient: dialectTag must be 'postgres', 'mysql' or 'sqlite', got ${String(override)}`,
+      )
+    }
+    return override
+  }
   // Fast path: KickJS's own dialect factories (`pgDialect` /
   // `mysqlDialect` / `sqliteDialect`) stamp an explicit marker, so
   // detection is exact and never silently mis-classifies.
   const marked = readDialectMark(dialect)
   if (marked) return marked
 
-  // Fallback for raw Kysely dialects an adopter constructs directly.
-  // Kysely's dialects have ctor names like PostgresDialect /
-  // SqliteDialect / MysqlDialect. Adopters who hand-roll the
-  // KyselyDialect interface (`{ createAdapter, ... }` literals)
-  // bypass that ctor — fall back to inspecting the adapter class
-  // returned by `createAdapter()`, which is the real kysely
-  // PostgresAdapter / SqliteAdapter / MysqlAdapter.
+  // Raw Kysely dialects (Neon, D1, libsql, bun:sqlite, PlanetScale, …):
+  // their adapter is Kysely's PostgresAdapter / MysqlAdapter /
+  // SqliteAdapter, so the dialect or adapter class name tells which SQL
+  // to compile.
   const dialectCtor = (dialect.constructor as { name?: string })?.name ?? ''
   const adapterCtor = (dialect.createAdapter().constructor as { name?: string })?.name ?? ''
   const tag = `${dialectCtor} ${adapterCtor}`
   if (/Postgres/i.test(tag)) return 'postgres'
   if (/Mysql/i.test(tag)) return 'mysql'
-  return 'sqlite'
+  if (/Sqlite/i.test(tag)) return 'sqlite'
+  // Guessing would compile the wrong SQL (JSON aggregation, quoting) and
+  // fail at the first query, far from the cause.
+  throw new Error(
+    `createDbClient: can't tell which SQL dialect ${dialectCtor || 'this dialect'} speaks. ` +
+      `Pass dialectTag: 'postgres' | 'mysql' | 'sqlite'.`,
+  )
 }

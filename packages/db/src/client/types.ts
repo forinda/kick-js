@@ -64,6 +64,18 @@ export interface TransactionOptions extends TransactionEvent {
    */
   readOnly?: boolean
   /**
+   * Run the transaction as this role (`SET LOCAL ROLE`, Postgres): row-level
+   * security policies `TO` that role apply. The connection's own role must be
+   * a member of it.
+   */
+  role?: string
+  /**
+   * Settings for this transaction only (`set_config(key, value, true)`,
+   * Postgres), for policies to read with `current_setting('app.user_id')`.
+   * Keys need a dot (`app.user_id`). Values are bound, never spliced into SQL.
+   */
+  settings?: Record<string, string | number | boolean>
+  /**
    * Run the whole transaction again when it fails with a retryable error —
    * a serialization failure or deadlock (`err.retryable`). `true` is three
    * attempts; waits between them back off exponentially with jitter.
@@ -189,6 +201,16 @@ export interface KickDbClient<DB = RegisteredDB> {
     opts: import('./upsert').FindOrCreateOptions<DB, T>,
   ): Promise<{ row: Selectable<DB[T]>; created: boolean }>
 
+  /**
+   * Re-run a materialized view's query and store the new result (Postgres).
+   * `concurrently: true` keeps the view readable while it refreshes; it
+   * needs a unique index on the view, and can't run inside a transaction.
+   */
+  refreshMaterializedView(
+    name: keyof DB & string,
+    options?: { concurrently?: boolean },
+  ): Promise<void>
+
   transaction<T>(fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
   transaction<T>(opts: TransactionOptions, fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
 
@@ -246,8 +268,22 @@ export interface KickDbClient<DB = RegisteredDB> {
 export interface CreateDbClientOptions<TSchema, _DB = unknown> {
   /** Schema record — only used for type inference (M2-S1 tightens). */
   schema: TSchema
-  /** A Kysely Dialect — typically PostgresDialect from db-pg. */
+  /**
+   * A Kysely dialect: `pgDialect` / `mysqlDialect` / `sqliteDialect`, or any
+   * Kysely dialect (Neon, D1, libsql, `bun:sqlite`, PlanetScale…).
+   */
   dialect: KyselyDialect
+  /**
+   * Which SQL `dialect` speaks, when it can't be told from the dialect:
+   * kick/db's own dialects say so, and others are recognised by their
+   * Kysely adapter. A dialect that's neither throws until this is set.
+   */
+  dialectTag?: 'postgres' | 'mysql' | 'sqlite'
+  /**
+   * Keep tenants apart: the same `defineTenancy()` the schema's
+   * `tenantKey()` columns use. See {@link import('../tenancy').defineTenancy}.
+   */
+  tenancy?: import('../tenancy').Tenancy
   /**
    * Read replicas — a dialect, or several used in turn. Reads outside a
    * transaction (`selectFrom`, `db.query`) go to a replica; writes, raw

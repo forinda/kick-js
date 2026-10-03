@@ -334,14 +334,21 @@ export function buildNestedDecoderMap(
   dialect?: string,
   dates?: DialectDateOptions,
 ): CodecMap {
-  const builtins = nestedDateDecoder(dialect, dates)
-  return builtins ? collectCodecs(schema, 'fromDriver', builtins, true) : new Map()
+  // Always walked: a column's `mode` applies to nested rows on every dialect.
+  return collectCodecs(schema, 'fromDriver', nestedDateDecoder(dialect, dates), true)
 }
 
 /** Encoders for comparisons: the dialect's built-ins only, never a custom `toDriver`. */
 export function buildComparisonEncoderMap(schema: unknown, dialect?: string): CodecMap {
   if (dialect !== 'sqlite') return new Map()
   return collectCodecs(schema, 'toDriver', (type) => SQLITE_DATE_ENCODERS[type], true)
+}
+
+/** Reads a bigint / numeric column as its `mode` asks, whatever the driver returned. */
+const MODE_DECODERS: Record<string, ((value: unknown) => unknown) | undefined> = {
+  bigint: (v) => (v == null || typeof v === 'bigint' ? v : BigInt(v as string | number)),
+  number: (v) => (v == null ? v : Number(v)),
+  string: (v) => (v == null ? v : String(v)),
 }
 
 function collectCodecs(
@@ -372,7 +379,8 @@ function collectCodecs(
           ? builtinsOnly
             ? undefined
             : (col[key] as ((v: unknown) => unknown) | undefined)
-          : builtins?.(col.toJSON(colName).type)
+          : ((key === 'fromDriver' ? MODE_DECODERS[col.__state().mode ?? ''] : undefined) ??
+            builtins?.(col.toJSON(colName).type))
       if (!fn) continue
 
       const existing = out.get(colName)

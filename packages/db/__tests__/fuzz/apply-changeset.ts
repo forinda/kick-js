@@ -169,6 +169,56 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       t.checks = t.checks.filter((c) => c.name !== change.check.name)
       return
     }
+    case 'createRole':
+    case 'alterRole': {
+      snapshot.roles = { ...snapshot.roles, [change.role.name]: deepClone(change.role) }
+      return
+    }
+    case 'setRowLevelSecurity': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      if (change.to) t.rls = deepClone(change.to)
+      else delete t.rls
+      return
+    }
+    case 'createPolicy': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      t.policies = [
+        ...(t.policies ?? []).filter((p) => p.name !== change.policy.name),
+        deepClone(change.policy),
+      ]
+      return
+    }
+    case 'dropPolicy': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      t.policies = (t.policies ?? []).filter((p) => p.name !== change.policy.name)
+      if (t.policies.length === 0) delete t.policies
+      return
+    }
+    case 'createView': {
+      snapshot.views = { ...snapshot.views, [change.view.name]: deepClone(change.view) }
+      return
+    }
+    case 'dropView': {
+      if (snapshot.views) delete snapshot.views[change.view.name]
+      return
+    }
+    case 'setTableComment': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      if (change.to === null) delete t.comment
+      else t.comment = change.to
+      return
+    }
+    case 'setColumnComment': {
+      const col = snapshot.tables[change.table]?.columns[change.column.name]
+      if (!col) return
+      if (change.to === null) delete col.comment
+      else col.comment = change.to
+      return
+    }
     default: {
       // Exhaustiveness guard: a new Change variant added without
       // an applier case here would silently no-op and make the

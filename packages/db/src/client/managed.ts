@@ -6,6 +6,10 @@
  */
 import {
   AliasNode,
+  DefaultInsertValueNode,
+  PrimitiveValueListNode,
+  ValueListNode,
+  ValuesNode,
   BinaryOperationNode,
   ColumnNode,
   ColumnUpdateNode,
@@ -31,6 +35,10 @@ export interface ManagedColumns {
   updatedAt: string[]
   version: string[]
   softDelete?: string
+  /** `$defaultFn` columns: filled in on insert. */
+  insertDefaults?: Array<[string, () => unknown]>
+  /** `$onUpdate` columns: set on update. */
+  updateValues?: Array<[string, () => unknown]>
 }
 
 /** Every table's managed columns, by table name. Tables with none are absent. */
@@ -46,8 +54,17 @@ export function collectManaged(schema: unknown): Map<string, ManagedColumns> {
       if (role === 'updatedAt') managed.updatedAt.push(name)
       else if (role === 'version') managed.version.push(name)
       else if (role === 'softDelete') managed.softDelete = name
+      const state = col.__state?.()
+      if (state?.defaultFn) (managed.insertDefaults ??= []).push([name, state.defaultFn])
+      if (state?.onUpdateFn) (managed.updateValues ??= []).push([name, state.onUpdateFn])
     }
-    if (managed.updatedAt.length || managed.version.length || managed.softDelete) {
+    if (
+      managed.updatedAt.length ||
+      managed.version.length ||
+      managed.softDelete ||
+      managed.insertDefaults ||
+      managed.updateValues
+    ) {
       // Keyed like the snapshot — `billing.invoices` for a table in a named schema.
       out.set(qualifiedTableName(t), managed)
     }
@@ -88,6 +105,10 @@ function withManaged(
     if (!set.has(col))
       extra.push(ColumnUpdateNode.create(ColumnNode.create(col), ValueNode.create(new Date())))
   }
+  for (const [col, fn] of managed.updateValues ?? []) {
+    if (!set.has(col))
+      extra.push(ColumnUpdateNode.create(ColumnNode.create(col), ValueNode.create(fn())))
+  }
   for (const col of managed.version) {
     if (!set.has(col)) {
       extra.push(
@@ -107,6 +128,39 @@ function withManaged(
   return extra.length ? [...updates, ...extra] : updates
 }
 
+/**
+ * `node` with each `$defaultFn` column the insert doesn't list added, and its
+ * value computed for every row. Inserts from a SELECT are left alone.
+ */
+function withInsertDefaults(node: InsertQueryNode, m: ManagedColumns): InsertQueryNode {
+  if (!m.insertDefaults || !node.columns || !node.values || !ValuesNode.is(node.values)) return node
+  const listed = node.columns.map((c) => c.column.name)
+  const missing = m.insertDefaults.filter(([col]) => !listed.includes(col))
+  // A listed column a row leaves out (a multi-row insert lists every row's
+  // keys) holds DEFAULT in that row; it gets the computed value too.
+  const listedFns = new Map(
+    m.insertDefaults
+      .filter(([col]) => listed.includes(col))
+      .map(([col, fn]) => [listed.indexOf(col), fn] as const),
+  )
+  if (missing.length === 0 && listedFns.size === 0) return node
+  const rows = node.values.values.map((row) => {
+    if (PrimitiveValueListNode.is(row)) {
+      return PrimitiveValueListNode.create([...row.values, ...missing.map(([, fn]) => fn())])
+    }
+    const values = row.values.map((v, i) => {
+      const fn = listedFns.get(i)
+      return fn && DefaultInsertValueNode.is(v) ? ValueNode.create(fn()) : v
+    })
+    return ValueListNode.create([...values, ...missing.map(([, fn]) => ValueNode.create(fn()))])
+  })
+  return {
+    ...node,
+    columns: [...node.columns, ...missing.map(([col]) => ColumnNode.create(col))],
+    values: ValuesNode.create(rows),
+  }
+}
+
 export class ManagedColumnsPlugin implements KyselyPlugin {
   constructor(private readonly managed: Map<string, ManagedColumns>) {}
 
@@ -120,24 +174,29 @@ export class ManagedColumnsPlugin implements KyselyPlugin {
     if (InsertQueryNode.is(node)) {
       const m = this.managed.get(tableName(node.into) ?? '')
       if (!m) return node
-      // An upsert's update branch is an update too.
-      if (node.onConflict?.updates?.length) {
-        return {
-          ...node,
-          onConflict: {
-            ...node.onConflict,
-            updates: withManaged(node.onConflict.updates, m, qualifier(node.into)!),
-          },
-        }
+      return this.withUpsertUpdates(withInsertDefaults(node, m), m)
+    }
+    return node
+  }
+
+  /** An upsert's update branch is an update too. */
+  private withUpsertUpdates(node: InsertQueryNode, m: ManagedColumns): InsertQueryNode {
+    if (node.onConflict?.updates?.length) {
+      return {
+        ...node,
+        onConflict: {
+          ...node.onConflict,
+          updates: withManaged(node.onConflict.updates, m, qualifier(node.into)!),
+        },
       }
-      if (node.onDuplicateKey?.updates?.length) {
-        return {
-          ...node,
-          onDuplicateKey: {
-            ...node.onDuplicateKey,
-            updates: withManaged(node.onDuplicateKey.updates, m, qualifier(node.into)!),
-          },
-        }
+    }
+    if (node.onDuplicateKey?.updates?.length) {
+      return {
+        ...node,
+        onDuplicateKey: {
+          ...node.onDuplicateKey,
+          updates: withManaged(node.onDuplicateKey.updates, m, qualifier(node.into)!),
+        },
       }
     }
     return node

@@ -30,7 +30,9 @@ export async function checkMigrations(opts: {
 }): Promise<CheckResult> {
   const migrationsAbs = path.resolve(opts.cwd, opts.config.migrationsDir)
   const { snapshot: prev } = await readLatestSnapshotEntry(migrationsAbs, opts.config.dialect)
-  const schemaModule = await loadModule(path.resolve(opts.cwd, opts.config.schemaPath))
+  const schemaModule = await loadModule(path.resolve(opts.cwd, opts.config.schemaPath), {
+    fresh: true,
+  })
   const unmigratedChanges = diff(
     prev,
     extractSnapshot(schemaModule, opts.config.dialect, { casing: opts.config.casing }),

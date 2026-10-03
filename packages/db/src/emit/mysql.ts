@@ -99,6 +99,25 @@ function emitChange(change: Change): string {
       return `ALTER TABLE ${ident(change.table)} ADD CONSTRAINT ${ident(change.check.name)} CHECK (${change.check.expression});`
     case 'dropCheck':
       return `ALTER TABLE ${ident(change.table)} DROP CHECK ${ident(change.check.name)};`
+    case 'setTableComment':
+      return `ALTER TABLE ${ident(change.table)} COMMENT = ${mysqlString(change.to ?? '')};`
+    case 'createView':
+      return `CREATE VIEW ${ident(change.view.name)} AS\n${change.view.definition};`
+    case 'dropView':
+      return `DROP VIEW ${ident(change.view.name)};`
+    case 'createRole':
+    case 'alterRole':
+    case 'setRowLevelSecurity':
+    case 'createPolicy':
+    case 'dropPolicy':
+      throw new Error('kickjs-db: row-level security and roles are Postgres-only')
+    case 'setColumnComment': {
+      // MySQL sets a comment by restating the column; a serial key keeps its
+      // AUTO_INCREMENT, which MODIFY would otherwise drop.
+      const column = { ...change.column, comment: change.to ?? undefined }
+      const decl = emitColumnDecl(column, false, /serial/i.test(column.type))
+      return `ALTER TABLE ${ident(change.table)} MODIFY COLUMN ${decl};`
+    }
     case 'createEnum':
     case 'dropEnum':
     case 'addEnumValue':
@@ -125,10 +144,16 @@ function emitCreateTable(t: TableSnapshot): string {
     lines.push(`PRIMARY KEY (${pkCols.map((c) => ident(c.name)).join(', ')})`)
   }
   for (const c of t.checks) lines.push(`CONSTRAINT ${ident(c.name)} CHECK (${c.expression})`)
-  return `CREATE TABLE ${ident(t.name)} (\n  ${lines.join(',\n  ')}\n);`
+  const comment = t.comment === undefined ? '' : ` COMMENT=${mysqlString(t.comment)}`
+  return `CREATE TABLE ${ident(t.name)} (\n  ${lines.join(',\n  ')}\n)${comment};`
 }
 
-function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
+/** A MySQL string literal: backslashes escape too, unless NO_BACKSLASH_ESCAPES. */
+function mysqlString(text: string): string {
+  return `'${text.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
+}
+
+function emitColumnDecl(c: ColumnSnapshot, inlinePk = false, autoIncrement = false): string {
   let s = `${ident(c.name)} ${mysqlType(c.type)}`
   if (c.generated) {
     s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
@@ -136,6 +161,9 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
   if (!c.nullable) s += ' NOT NULL'
   if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default)}`
   if (inlinePk) s += ' AUTO_INCREMENT PRIMARY KEY'
+  else if (autoIncrement) s += ' AUTO_INCREMENT'
+  // Always restated: MODIFY COLUMN replaces the whole definition, comment included.
+  if (c.comment !== undefined) s += ` COMMENT ${mysqlString(c.comment)}`
   return s
 }
 
@@ -168,6 +196,9 @@ function emitAddFk(table: string, fk: ForeignKeySnapshot): string {
  * Map a Postgres column type string to a MySQL type.
  */
 export function mysqlType(pgType: string): string {
+  // An enum's values keep their case.
+  const enumMatch = /^\s*enum\s*(\(.*\))\s*$/is.exec(pgType)
+  if (enumMatch) return `ENUM${enumMatch[1]}`
   const lower = pgType.toLowerCase().trim()
   const base = lower
     .replace(/\(.*\)/, '')

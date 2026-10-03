@@ -139,12 +139,78 @@ export async function runJob(
   try {
     if (!handler) throw new NoJobHandlerError(queue, job.name)
     const instance = container.resolve(handler.target) as Record<string, (j: JobLike) => unknown>
-    return await instance[handler.handlerName]!(job)
+    return await withJobContext(job, () => instance[handler.handlerName]!(job))()
   } catch (err) {
     log.error({ err }, `Job ${queue}/${job.name} failed`)
     reportError(err, { source: 'job', context: { queue, job: job.name, id: job.id, ...report } })
     throw err
   }
+}
+
+/**
+ * Something about where a job was dispatched from that its handler should
+ * run with — the tenant, a trace id, the acting user. Captured when the job
+ * is dispatched, carried in its data, and restored around the handler.
+ */
+export interface JobContextCarrier<T = unknown> {
+  /** Unique: the field it travels under. */
+  key: string
+  /** The value to carry, or `undefined` for nothing. */
+  capture(): T | undefined
+  /** Run the handler with the value back in place. */
+  restore<R>(value: T, run: () => R): R
+}
+
+/** The field a job's data carries its context in. Removed before the handler sees the data. */
+export const JOB_CONTEXT_FIELD = '__kickContext'
+
+const jobContextCarriers = new Map<string, JobContextCarrier>()
+
+/** Carry a value from dispatch to handler for every job. Registering a key again replaces it. */
+export function registerJobContext<T>(carrier: JobContextCarrier<T>): void {
+  jobContextCarriers.set(carrier.key, carrier as JobContextCarrier)
+}
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype
+
+/**
+ * `data` with the current job context added — for a {@link JobDispatcher}
+ * implementation to call before enqueueing. Any `__kickContext` already in
+ * `data` is removed first: only this call may set it, so a dispatcher that
+ * enqueues caller-supplied data without it lets that data choose the context. Only plain-object data can carry
+ * it; anything else, or nothing to carry, is returned as is.
+ */
+export function stampJobContext<Data>(data: Data): Data {
+  if (!isPlainObject(data)) return data
+  // Only the dispatcher's own context travels. A caller's data (a request
+  // body, say) carrying the field would otherwise pick the job's tenant.
+  const { [JOB_CONTEXT_FIELD]: _untrusted, ...rest } = data
+  const context: Record<string, unknown> = {}
+  for (const [key, carrier] of jobContextCarriers) {
+    const value = carrier.capture()
+    if (value !== undefined) context[key] = value
+  }
+  const stamped = Object.keys(context).length > 0 ? { ...rest, [JOB_CONTEXT_FIELD]: context } : rest
+  return stamped as Data
+}
+
+/** Take the carried context off the job's data, and wrap `run` in every restore. */
+function withJobContext<R>(job: JobLike, run: () => R): () => R {
+  const data = job.data
+  if (!isPlainObject(data) || !(JOB_CONTEXT_FIELD in data)) return run
+  const context = data[JOB_CONTEXT_FIELD]
+  delete data[JOB_CONTEXT_FIELD]
+  // Only an object of carrier keys is context; anything else is dropped.
+  if (!isPlainObject(context)) return run
+  let wrapped = run
+  for (const [key, value] of Object.entries(context)) {
+    const carrier = jobContextCarriers.get(key)
+    if (!carrier) continue
+    const inner = wrapped
+    wrapped = () => carrier.restore(value, inner)
+  }
+  return wrapped
 }
 
 /** Enqueue a job — implemented by whichever adapter runs the jobs. */

@@ -34,7 +34,7 @@ import type {
   GeneratedBrand,
   NotNullBrand,
 } from './dsl/columns/types'
-import { PgEnumColumnBuilder } from './dsl/columns/pg'
+import { PgCodecColumnBuilder, PgEnumColumnBuilder } from './dsl/columns/pg'
 import type { TableDecl } from './dsl/table'
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -198,11 +198,49 @@ function specFor(builder: ColumnBuilder): ColumnSpec {
           : fail(`Expected one of ${values.join(', ')}`, 'invalid_enum_value'),
     }
   }
-  if (builder instanceof CustomColumnBuilder) return anySpec()
+  if (builder instanceof CustomColumnBuilder && !(builder instanceof PgCodecColumnBuilder)) {
+    return anySpec()
+  }
 
-  const type = builder.__state().type.toLowerCase()
-  if (type.endsWith('[]')) return arraySpec(specForType(type.slice(0, -2)))
-  return specForType(type)
+  const raw = builder.__state().type
+  // An enum's values keep their case.
+  const type = /^enum\s*\(/i.test(raw) ? `enum${raw.slice(raw.indexOf('('))}` : raw.toLowerCase()
+  const spec = type.endsWith('[]') ? arraySpec(specForType(type.slice(0, -2))) : specForType(type)
+  const mode = builder.__state().mode
+  return mode ? withMode(spec, mode) : spec
+}
+
+/** A bigint / numeric column with a `mode` validates to the type it reads as. */
+function withMode(spec: ColumnSpec, mode: 'bigint' | 'number' | 'string'): ColumnSpec {
+  const convert = { bigint: BigInt, number: Number, string: String }[mode]
+  return {
+    ...spec,
+    parse: (v) => {
+      const r = spec.parse(v)
+      if (!r.ok || r.value == null) return r
+      // A number can't hold every 64-bit integer: refuse rather than round.
+      if (mode === 'number' && typeof r.value === 'bigint') {
+        if (
+          r.value < BigInt(Number.MIN_SAFE_INTEGER) ||
+          r.value > BigInt(Number.MAX_SAFE_INTEGER)
+        ) {
+          return fail('Out of the safe range for a number', r.value < 0n ? 'too_small' : 'too_big')
+        }
+      }
+      // A decimal past 15 significant digits doesn't survive as a number.
+      if (mode === 'number' && typeof r.value === 'string') {
+        const digits = r.value
+          .replace(/^[+-]/, '')
+          .replace('.', '')
+          .replace(/^0+/, '')
+          .replace(/0+$/, '')
+        if (digits.length > 15 || !Number.isFinite(Number(r.value))) {
+          return fail("Too many digits for a number — use mode: 'string'", 'too_big')
+        }
+      }
+      return ok(convert(r.value as never))
+    },
+  }
 }
 
 function anySpec(): ColumnSpec {
@@ -279,9 +317,21 @@ function arraySpec(item: ColumnSpec, length?: number): ColumnSpec {
   }
 }
 
+/** MySQL's smaller integers and the unsigned ranges, by type: [min, max]. */
+const MYSQL_INTEGERS: Record<string, [number, number]> = {
+  tinyint: [-128, 127],
+  'tinyint unsigned': [0, 255],
+  'smallint unsigned': [0, 65_535],
+  mediumint: [-8_388_608, 8_388_607],
+  'mediumint unsigned': [0, 16_777_215],
+  'int unsigned': [0, 4_294_967_295],
+}
+
 function specForType(type: string): ColumnSpec {
   const base = type.replace(/\(.*$/, '').trim()
   const size = Number(/\((\d+)/.exec(type)?.[1])
+  const mysqlRange = MYSQL_INTEGERS[base]
+  if (mysqlRange) return integerSpec(...mysqlRange)
   switch (base) {
     // serial values start at 1.
     case 'smallserial':
@@ -295,6 +345,7 @@ function specForType(type: string): ColumnSpec {
       return integerSpec(-INT32 - 1, INT32)
     case 'bigserial':
     case 'bigint':
+    case 'bigint unsigned':
       // JSON has no 64-bit integer: accept a number or a string of digits,
       // parse to the column's TS type, bigint.
       return {
@@ -307,8 +358,9 @@ function specForType(type: string): ColumnSpec {
             return fail('Expected an integer or a string of digits')
           }
           const n = BigInt(v)
-          return n < -INT64 || n >= INT64
-            ? fail('Out of range for a 64-bit integer', 'too_big')
+          const [min, max] = base === 'bigint unsigned' ? [0n, 2n * INT64] : [-INT64, INT64]
+          return n < min || n >= max
+            ? fail('Out of range for a 64-bit integer', n < min ? 'too_small' : 'too_big')
             : ok(n)
         },
       }
@@ -339,12 +391,40 @@ function specForType(type: string): ColumnSpec {
       }
     case 'timestamp':
     case 'timestamptz':
+    case 'datetime':
       return dateSpec('date-time')
     case 'date':
       return dateSpec('date')
     case 'uuid':
       return stringSpec({ format: 'uuid' }, (v) => (UUID.test(v) ? null : 'Expected a UUID'))
+    case 'enum': {
+      // A MySQL enum: enum('a','b').
+      const values = [...type.matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1]!.replace(/''/g, "'"))
+      return {
+        json: { type: 'string', enum: values },
+        parse: (v) =>
+          typeof v === 'string' && values.includes(v)
+            ? ok(v)
+            : fail(`Expected one of ${values.join(', ')}`, 'invalid_enum_value'),
+      }
+    }
+    case 'point':
+      return {
+        json: {
+          type: 'object',
+          properties: { x: { type: 'number' }, y: { type: 'number' } },
+          required: ['x', 'y'],
+        },
+        parse: (v) =>
+          typeof v === 'object' &&
+          v !== null &&
+          typeof (v as { x?: unknown }).x === 'number' &&
+          typeof (v as { y?: unknown }).y === 'number'
+            ? ok(v)
+            : fail('Expected a point { x, y }'),
+      }
     case 'vector':
+    case 'halfvec':
       return arraySpec(
         {
           json: { type: 'number' },
@@ -442,6 +522,9 @@ function optionalOnInsert(builder: ColumnBuilder): boolean {
   return (
     state.nullable ||
     state.default !== null ||
+    // Filled by the client: the tenant, a $defaultFn.
+    state.tenancy !== undefined ||
+    state.defaultFn !== undefined ||
     state.identity === 'byDefault' ||
     /^(small|big)?serial$/.test(state.type)
   )

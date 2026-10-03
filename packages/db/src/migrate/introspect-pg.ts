@@ -1,10 +1,13 @@
 import type {
+  ColumnSnapshot,
   EnumSnapshot,
   ForeignKeySnapshot,
   FkAction,
   IndexSnapshot,
   SchemaSnapshot,
+  PolicySnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 import type { IntrospectPgOptions, PgQueryRunner } from './introspect-types'
 
@@ -17,6 +20,8 @@ interface ColumnRow {
   generation_expression: string | null
   /** pg_attribute.attgenerated: 's' stored, 'v' virtual, '' not generated. */
   attgenerated: string
+  /** col_description(): the column's comment, or null. */
+  comment: string | null
   data_type: string
   udt_name: string
   is_nullable: 'YES' | 'NO'
@@ -75,8 +80,10 @@ export async function introspectPg(
   const schema = opts.schema ?? 'public'
   const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
 
-  const tableRows = await client.query<{ table_name: string }>(
-    `SELECT table_name
+  const tableRows = await client.query<{ table_name: string; comment: string | null }>(
+    `SELECT table_name,
+            obj_description(format('%I.%I', table_schema, table_name)::regclass, 'pg_class')
+              AS comment
      FROM information_schema.tables
      WHERE table_schema = $1 AND table_type = 'BASE TABLE'
      ORDER BY table_name`,
@@ -92,16 +99,118 @@ export async function introspectPg(
       indexes: await readIndexes(client, schema, t.table_name),
       foreignKeys: await readForeignKeys(client, schema, t.table_name),
       checks: [],
+      ...(t.comment !== null ? { comment: t.comment } : {}),
+      ...(await readRowLevelSecurity(client, schema, t.table_name)),
     }
   }
   const enums = await readEnums(client, schema)
 
   const snapshot: SchemaSnapshot = { version: 1, dialect: 'postgres', tables }
+  const views = await readViews(client, schema)
+  if (Object.keys(views).length > 0) snapshot.views = views
   // Only carry `enums` when the database has some, matching what
   // `extractSnapshot` does — an empty `enums: {}` would change the serialized
   // snapshot and invalidate every existing migration hash.
   if (Object.keys(enums).length > 0) snapshot.enums = enums
   return snapshot
+}
+
+/** A table's row-level security switch and its policies, as snapshot fields. */
+async function readRowLevelSecurity(
+  client: PgQueryRunner,
+  schema: string,
+  table: string,
+): Promise<Pick<TableSnapshot, 'rls' | 'policies'>> {
+  const flags = await client.query<{ on: boolean; force: boolean }>(
+    `SELECT relrowsecurity AS on, relforcerowsecurity AS force FROM pg_class
+     WHERE oid = format('%I.%I', $1::text, $2::text)::regclass`,
+    [schema, table],
+  )
+  const rows = await client.query<{
+    name: string
+    permissive: string
+    roles: string[]
+    cmd: string
+    qual: string | null
+    with_check: string | null
+  }>(
+    `SELECT policyname AS name, permissive, array_to_json(roles) AS roles, cmd, qual, with_check
+     FROM pg_policies WHERE schemaname = $1 AND tablename = $2 ORDER BY policyname`,
+    [schema, table],
+  )
+  const out: Pick<TableSnapshot, 'rls' | 'policies'> = {}
+  if (flags.rows[0]?.on) out.rls = flags.rows[0].force ? { force: true } : {}
+  if (rows.rows.length > 0) {
+    out.policies = rows.rows.map((r) => ({
+      name: r.name,
+      as: r.permissive === 'RESTRICTIVE' ? 'restrictive' : 'permissive',
+      command: r.cmd.toLowerCase() as PolicySnapshot['command'],
+      to: r.roles,
+      ...(r.qual !== null ? { using: r.qual } : {}),
+      ...(r.with_check !== null ? { withCheck: r.with_check } : {}),
+    }))
+  }
+  return out
+}
+
+/** Views and materialized views, with their SQL, columns and (materialized) indexes. */
+async function readViews(
+  client: PgQueryRunner,
+  schema: string,
+): Promise<Record<string, ViewSnapshot>> {
+  const rows = await client.query<{ name: string; definition: string; materialized: boolean }>(
+    `SELECT viewname AS name, definition, false AS materialized
+       FROM pg_views WHERE schemaname = $1
+     UNION ALL
+     SELECT matviewname, definition, true FROM pg_matviews WHERE schemaname = $1
+     ORDER BY name`,
+    [schema],
+  )
+  const out: Record<string, ViewSnapshot> = {}
+  for (const r of rows.rows) {
+    const cols = await client.query<{ name: string; type: string; notnull: boolean }>(
+      `SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS type,
+              a.attnotnull AS notnull
+       FROM pg_attribute a
+       WHERE a.attrelid = format('%I.%I', $1::text, $2::text)::regclass
+         AND a.attnum > 0 AND NOT a.attisdropped
+       ORDER BY a.attnum`,
+      [schema, r.name],
+    )
+    const columns: Record<string, ColumnSnapshot> = {}
+    for (const c of cols.rows) {
+      columns[c.name] = {
+        name: c.name,
+        type: viewColumnType(c.type),
+        nullable: !c.notnull,
+        default: null,
+        primaryKey: false,
+      }
+    }
+    const v: ViewSnapshot = {
+      name: r.name,
+      definition: r.definition.trim().replace(/;$/, ''),
+      columns,
+    }
+    if (r.materialized) {
+      v.materialized = true
+      const indexes = await readIndexes(client, schema, r.name)
+      if (indexes.length > 0) v.indexes = indexes
+    }
+    out[r.name] = v
+  }
+  return out
+}
+
+/** `format_type()` spelling → the DSL's, for the types a view usually returns. */
+function viewColumnType(type: string): string {
+  return type
+    .replace(/^character varying/, 'varchar')
+    .replace(/^character\b/, 'char')
+    .replace(/^timestamp(\(\d+\))? without time zone$/, 'timestamp')
+    .replace(/^timestamp(\(\d+\))? with time zone$/, 'timestamptz')
+    .replace(/^time(\(\d+\))? without time zone$/, 'time')
+    .replace(/,(\S)/g, ', $1')
 }
 
 /**
@@ -153,7 +262,10 @@ async function readColumns(
             is_identity, identity_generation, generation_expression,
             (SELECT a.attgenerated FROM pg_attribute a
               WHERE a.attrelid = format('%I.%I', table_schema, table_name)::regclass
-                AND a.attname = column_name) AS attgenerated
+                AND a.attname = column_name) AS attgenerated,
+            col_description(
+              format('%I.%I', table_schema, table_name)::regclass, ordinal_position::int
+            ) AS comment
      FROM information_schema.columns
      WHERE table_schema = $1 AND table_name = $2
      ORDER BY ordinal_position`,
@@ -187,6 +299,7 @@ async function readColumns(
     if (r.is_identity === 'YES') {
       out[r.column_name].identity = r.identity_generation === 'ALWAYS' ? 'always' : 'byDefault'
     }
+    if (r.comment !== null) out[r.column_name].comment = r.comment
     if (r.attgenerated && r.generation_expression) {
       out[r.column_name].generated = {
         expression: r.generation_expression,
@@ -334,7 +447,7 @@ async function readIndexes(
      JOIN pg_am am ON am.oid = i.relam
      JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
      LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum AND k.attnum <> 0
-     WHERE n.nspname = $1 AND t.relname = $2 AND t.relkind = 'r'
+     WHERE n.nspname = $1 AND t.relname = $2 AND t.relkind IN ('r', 'm')
      ORDER BY i.relname, k.ord`,
     [schema, table],
   )

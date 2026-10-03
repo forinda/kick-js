@@ -16,7 +16,7 @@ export const users = table('users', {
 })
 ```
 
-## `table(name, columns, constraints?)`
+## `table(name, columns, options?)`
 
 `table()` takes a literal table name, a record of column builders, and an optional constraints callback. The literal name is preserved at the type level so `SchemaToTypes<S>` can index by it:
 
@@ -36,35 +36,63 @@ export const posts = table(
 
 The third argument receives a `refs` object — one `ColumnRef` per column — for declaring multi-column indexes and unique constraints. See [Keys and Constraints → Indexes & unique constraints](./constraints#indexes-unique-constraints).
 
+It can also be an object holding that callback and the table's comment:
+
+```ts
+export const posts = table('posts', columns, {
+  comment: 'Published and draft posts',
+  constraints: (t) => ({ titleIdx: index('posts_title_idx').on(t.title) }),
+})
+```
+
+### Comments
+
+`.comment(text)` on a column, and `comment` in a table's options, are stored in the database, where anyone reading the schema sees them (`\d+ posts` in psql, `SHOW FULL COLUMNS` in MySQL). Changing one generates a migration: `COMMENT ON` on Postgres, a restated column or `ALTER TABLE … COMMENT` on MySQL. `kick db introspect` reads them back. SQLite has no comments, so there they're ignored and never produce a migration.
+
+```ts
+email: varchar(200).notNull().comment('Sign-in address, lowercased'),
+```
+
 ## Column builders
 
 All cross-dialect builders are imported from the package root. Each carries a phantom TypeScript type that flows into the row shape.
 
-| Builder                 | SQL type           | TS type                        |
-| ----------------------- | ------------------ | ------------------------------ |
-| `serial()`              | `serial`           | `number` (generated, not-null) |
-| `bigSerial()`           | `bigserial`        | `bigint` (generated, not-null) |
-| `smallSerial()`         | `smallserial`      | `number` (generated, not-null) |
-| `integer()`             | `integer`          | `number`                       |
-| `bigint()`              | `bigint`           | `bigint`                       |
-| `smallint()`            | `smallint`         | `number`                       |
-| `decimal(p?, s?)`       | `decimal(p, s)`    | `string`                       |
-| `numeric(p?, s?)`       | `numeric(p, s)`    | `string`                       |
-| `real()`                | `real`             | `number`                       |
-| `doublePrecision()`     | `double precision` | `number`                       |
-| `varchar(length = 255)` | `varchar(n)`       | `string`                       |
-| `char(length = 1)`      | `char(n)`          | `string`                       |
-| `text()`                | `text`             | `string`                       |
-| `boolean()`             | `boolean`          | `boolean`                      |
-| `timestamp()`           | `timestamp`        | `Date`                         |
-| `timestamptz()`         | `timestamptz`      | `Date`                         |
-| `date()`                | `date`             | `Date`                         |
-| `time()`                | `time`             | `string`                       |
-| `interval()`            | `interval`         | `string`                       |
-| `uuid()`                | `uuid`             | `string`                       |
-| `json<T>()`             | `json`             | `T`                            |
-| `jsonb<T>()`            | `jsonb`            | `T`                            |
-| `bytea()`               | `bytea`            | `Uint8Array`                   |
+| Builder                      | SQL type           | TS type                        |
+| ---------------------------- | ------------------ | ------------------------------ |
+| `serial()`                   | `serial`           | `number` (generated, not-null) |
+| `bigSerial()`                | `bigserial`        | `bigint` (generated, not-null) |
+| `smallSerial()`              | `smallserial`      | `number` (generated, not-null) |
+| `integer()`                  | `integer`          | `number`                       |
+| `bigint({ mode? })`          | `bigint`           | `bigint` (or per `mode`)       |
+| `smallint()`                 | `smallint`         | `number`                       |
+| `decimal(p?, s?, { mode? })` | `decimal(p, s)`    | `string` (or per `mode`)       |
+| `numeric(p?, s?, { mode? })` | `numeric(p, s)`    | `string` (or per `mode`)       |
+| `real()`                     | `real`             | `number`                       |
+| `doublePrecision()`          | `double precision` | `number`                       |
+| `varchar(length = 255)`      | `varchar(n)`       | `string`                       |
+| `char(length = 1)`           | `char(n)`          | `string`                       |
+| `text()`                     | `text`             | `string`                       |
+| `boolean()`                  | `boolean`          | `boolean`                      |
+| `timestamp()`                | `timestamp`        | `Date`                         |
+| `timestamptz()`              | `timestamptz`      | `Date`                         |
+| `date()`                     | `date`             | `Date`                         |
+| `time()`                     | `time`             | `string`                       |
+| `interval()`                 | `interval`         | `string`                       |
+| `uuid()`                     | `uuid`             | `string`                       |
+| `json<T>()`                  | `json`             | `T`                            |
+| `jsonb<T>()`                 | `jsonb`            | `T`                            |
+| `bytea()`                    | `bytea`            | `Uint8Array`                   |
+
+**`mode` for big and exact numbers.** Drivers disagree on 64-bit integers: `pg` returns a string, better-sqlite3 a number. Pick what you get back, and the type follows:
+
+```ts
+bigint({ mode: 'bigint' }) // 9007199254740993n — exact
+bigint({ mode: 'number' }) // a number — exact up to 2^53
+bigint({ mode: 'string' }) // '9007199254740993'
+numeric(12, 2, { mode: 'number' }) // 19.99 instead of '19.99'
+```
+
+Without `mode`, `bigint()` returns the driver's value as it comes. Validators (`insertSchema` and friends) refuse input a `'number'` mode can't hold exactly, rather than rounding it: a bigint past `Number.MAX_SAFE_INTEGER`, or a decimal with more than 15 significant digits. On MySQL, give the pool `supportBigNumbers: true, bigNumberStrings: true`, or mysql2 reads a BIGINT as a number and loses digits past 2^53 before `mode` sees it. `mode` applies to nested rows from `db.query` too.
 
 `decimal` and `numeric` are strings so no digit is lost — `decimal(12, 2)` reads back as `'0.10'`, not `0.1`. Do arithmetic on them with a decimal library, or in SQL. SQLite has no exact decimal type: it stores a float, which kick/db reads back as the same string at the column's scale, exact up to 15 significant digits. An aggregate such as `sum(amount)` has no column to decode and comes back as a number on SQLite.
 
@@ -83,6 +111,27 @@ text().array() // text[]  → TS type becomes T[]
 - `.notNull()` / `.primaryKey()` stamp the column NOT NULL and remove `| null` from its inferred type.
 - `.default(value)` sets a SQL default and marks the column generated, so you can omit it on insert. Pass the SQL literal as a string: `.default('true')`, `.default('0')`, `.default("'pending'")`.
 - `.array()` wraps the SQL type in `[]` and the TS type in `T[]`.
+- `.comment(text)` stores a comment with the column ([Comments](#comments)).
+
+### Defaults computed in JS
+
+When a default can't be SQL (an id from your own generator, a value from config, who made the change), compute it in JS:
+
+```ts
+import { ulid } from 'ulid'
+
+export const notes = table('notes', {
+  id: text()
+    .primaryKey()
+    .$defaultFn(() => ulid()), // each inserted row that doesn't set it
+  body: text().notNull(),
+  editedBy: text().$onUpdate(() => currentUser()), // each update that doesn't set it
+})
+```
+
+- **`$defaultFn(fn)`** runs once per inserted row that leaves the column out, so a multi-row insert gets a fresh value per row. The column is optional on insert.
+- **`$onUpdate(fn)`** runs on every update, and an upsert's update branch, that doesn't set the column. Inserts don't call it.
+- Neither is part of the schema: the database has no default, so raw `sql` inserts must set the column themselves.
 
 ### Columns kick/db maintains
 
@@ -269,14 +318,85 @@ Value order is preserved as declared, because for an enum it is part of the type
 The `@forinda/kickjs-db/pg` subpath also exports:
 
 ```ts
-import { tsvector, vector, citext, money, inet, cidr, xml } from '@forinda/kickjs-db/pg'
+import { tsvector, vector, halfvec, point, geometry, macaddr, citext } from '@forinda/kickjs-db/pg'
 
-vector(384) // pgvector embedding column → number[]
+vector(384) // pgvector embedding → number[]
+halfvec(384) // half-precision pgvector embedding (pgvector 0.7+) → number[]
+point() // geometric point → { x, y }
+geometry('Point', 4326) // PostGIS geometry → string (hex EWKB out, WKT/EWKT in)
+macaddr() // MAC address → string (also macaddr8())
 citext() // case-insensitive text → string
 tsvector() // full-text search vector → string
 ```
 
+`vector`, `halfvec` and `point` carry codecs, so you write and read the JS value. Before, a `vector` came back as the text `'[1,2,3]'` and an inserted array was sent as a Postgres array literal. `vector` and `halfvec` need the `vector` extension, and `geometry` needs `postgis`: create the extension in a migration before the table. For `geometry`, convert in SQL with `ST_AsGeoJSON(...)` / `ST_GeomFromGeoJSON(...)`. Also exported: `money`, `inet`, `cidr`, `xml`.
+
 These are subpath-imported (not from the package root) so you can't accidentally reach for a `tsvector` while targeting another dialect.
+
+## MySQL-only types
+
+The `@forinda/kickjs-db/mysql` subpath exports MySQL's own column types:
+
+```ts
+import { mysqlEnum, unsigned, tinyint, mediumint, datetime } from '@forinda/kickjs-db/mysql'
+
+export const events = table('events', {
+  id: serial().primaryKey(),
+  status: mysqlEnum('Draft', 'Live').notNull(), // ENUM, typed 'Draft' | 'Live'
+  hits: unsigned(integer()).notNull(), // INT UNSIGNED, 0…4294967295
+  level: unsigned(tinyint()), // TINYINT UNSIGNED, 0…255
+  bucket: mediumint(), // MEDIUMINT
+  at: datetime(3).notNull(), // DATETIME(3) → Date
+})
+```
+
+- `mysqlEnum` keeps its values' case through migrations, introspection and validation.
+- `unsigned()` takes any integer column (`integer`, `smallint`, `bigint`, `tinyint`, `mediumint`), keeps its type and chain, and widens the validators' range.
+- `datetime` isn't converted to UTC as `TIMESTAMP` is, and covers years 1000–9999.
+
+## Views
+
+A view is a stored `SELECT` you read like a table. Declare it with the columns it returns, which give the typed client its row type, and its SQL:
+
+```ts
+import { integer, text, view } from '@forinda/kickjs-db'
+
+export const activeUsers = view(
+  'active_users',
+  { id: integer().notNull(), email: text().notNull() },
+  { as: 'SELECT id, email FROM users WHERE deleted_at IS NULL' },
+)
+
+await db.selectFrom('active_users').selectAll().execute() // { id: number; email: string }[]
+```
+
+- **Migrations** create views after the tables, in declaration order (so a view can select from one declared before it), and drop them before the tables. A changed definition drops and re-creates the view.
+- **A change to a table a view reads re-creates the view around it.** Postgres won't alter a column a view uses, and SQLite's table rebuild breaks a view over the table, so kick/db drops every view whose SQL names a table the migration alters, and the views built on those, then creates them again afterwards. Index and comment changes leave views alone.
+- **The columns aren't checked against the SQL.** Keep them in step, as you would a hand-written type. With `casing: 'snake_case'`, alias the SQL's columns in snake_case.
+- **Views are read-only** in kick/db's eyes. The typed client accepts writes, but most views can't take them.
+- **Introspection** reads views back with their columns (`kick db introspect` renders them). Drift checks which views exist, not their SQL, because every database rewrites it.
+
+### Materialized views (Postgres)
+
+A materialized view stores the result, so reads are fast and data is as fresh as the last refresh:
+
+```ts
+import { date, numeric, unique } from '@forinda/kickjs-db'
+import { materializedView } from '@forinda/kickjs-db/pg'
+
+export const dailySales = materializedView(
+  'daily_sales',
+  { day: date().notNull(), total: numeric(12, 2, { mode: 'number' }).notNull() },
+  {
+    as: 'SELECT created_at::date AS day, sum(amount) AS total FROM orders GROUP BY 1',
+    constraints: (t) => ({ byDay: unique('daily_sales_day').on(t.day) }),
+  },
+)
+
+await db.refreshMaterializedView('daily_sales', { concurrently: true })
+```
+
+`refreshMaterializedView` re-runs the query. With `concurrently: true`, readers keep the old rows while it refreshes. That needs a unique index (declared in `constraints`, as above) and can't run inside a transaction. Refresh from a [cron job](../cron.md) or after the writes that matter.
 
 ## Custom column types
 

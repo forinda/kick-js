@@ -156,6 +156,8 @@ const guideSidebar = [
           { text: 'Relational Queries', link: '/guide/db-relational-query' },
           { text: 'Raw SQL & Recipes', link: '/guide/database/raw-sql' },
           { text: 'Transactions', link: '/guide/database/transactions' },
+          { text: 'Row-Level Security', link: '/guide/database/row-level-security' },
+          { text: 'Tenancy', link: '/guide/database/tenancy' },
           { text: 'Errors', link: '/guide/database/errors' },
           { text: 'Events & Plugins', link: '/guide/database/events-plugins' },
         ],

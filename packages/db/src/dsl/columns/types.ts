@@ -79,6 +79,19 @@ export interface ColumnState {
   managed?: 'updatedAt' | 'version' | 'softDelete'
   generated?: { expression: string; stored: boolean }
   identity?: 'always' | 'byDefault'
+  /**
+   * How a bigint / numeric value is read back (`bigint({ mode })`,
+   * `numeric(p, s, { mode })`). Unset, the driver's own value is returned.
+   */
+  mode?: 'bigint' | 'number' | 'string'
+  /** `.comment()`: stored in the database on Postgres and MySQL. */
+  comment?: string
+  /** `tenantKey(tenancy)`: this is the table's tenant column. */
+  tenancy?: { strategy: string; setting: string }
+  /** `$defaultFn`: computed in JS for each inserted row that doesn't set it. */
+  defaultFn?: () => unknown
+  /** `$onUpdate`: computed in JS for each update that doesn't set it. */
+  onUpdateFn?: () => unknown
 }
 
 /**
@@ -154,6 +167,7 @@ export class ColumnBuilder<T = unknown> {
       primaryKey: defaults.primaryKey ?? false,
       unique: defaults.unique ?? false,
       references: defaults.references ?? null,
+      ...(defaults.mode ? { mode: defaults.mode } : {}),
     }
   }
 
@@ -214,6 +228,27 @@ export class ColumnBuilder<T = unknown> {
   }
 
   /**
+   * A default computed in JS for each inserted row that doesn't set this
+   * column — an id generator, a slug, a value from config:
+   * `id: text().primaryKey().$defaultFn(() => ulid())`. Not part of the
+   * schema: the database has no default, so raw SQL inserts must set it.
+   */
+  $defaultFn(fn: () => T): this & GeneratedBrand {
+    this.state.defaultFn = fn
+    return this as this & GeneratedBrand
+  }
+
+  /**
+   * A value computed in JS for each update (and an upsert's update branch)
+   * that doesn't set this column: `revisedBy: text().$onUpdate(() => currentUser())`.
+   * Like `onUpdateNow()`, with your own value. Inserts don't call it.
+   */
+  $onUpdate(fn: () => T): this {
+    this.state.onUpdateFn = fn
+    return this
+  }
+
+  /**
    * Set this column to the current time on every update that doesn't set it
    * itself — `updatedAt: timestamp().notNull().defaultNow().onUpdateNow()`.
    */
@@ -264,6 +299,15 @@ export class ColumnBuilder<T = unknown> {
     return this as this & NotNullBrand & GeneratedBrand
   }
 
+  /**
+   * A comment stored with the column in the database, for whoever reads the
+   * schema there (Postgres, MySQL; SQLite has none). Changing it migrates.
+   */
+  comment(text: string): this {
+    this.state.comment = text
+    return this
+  }
+
   /** The role kick/db maintains this column in, if any. */
   managedAs(): ColumnState['managed'] {
     return this.state.managed
@@ -279,6 +323,7 @@ export class ColumnBuilder<T = unknown> {
       // Only when set, so other columns serialize as they always have.
       ...(this.state.generated ? { generated: { ...this.state.generated } } : {}),
       ...(this.state.identity ? { identity: this.state.identity } : {}),
+      ...(this.state.comment !== undefined ? { comment: this.state.comment } : {}),
     }
   }
 

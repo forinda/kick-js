@@ -114,14 +114,15 @@ const db = createDbClient({
 
 ### `CreateDbClientOptions`
 
-| Option                 | Type             | Description                                                               |
-| ---------------------- | ---------------- | ------------------------------------------------------------------------- |
-| `schema`               | `TSchema`        | Schema record — used for type inference                                   |
-| `dialect`              | `Dialect`        | A dialect handle from a peer adapter (e.g. `pgDialect({ pool })`)         |
-| `events`               | `boolean`        | Enable lifecycle event emission. Zero-overhead when off                   |
-| `slowQueryThresholdMs` | `number \| null` | Fire `slowQuery` above this duration                                      |
-| `bus`                  | `KickEventBus`   | Republish to DevTools event bus                                           |
-| `plugins`              | `KyselyPlugin[]` | Query-builder plugins (see [`safeNullComparison()`](#safenullcomparison)) |
+| Option                 | Type                                | Description                                                                                                                         |
+| ---------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`               | `TSchema`                           | Schema record — used for type inference                                                                                             |
+| `dialect`              | `Dialect`                           | A dialect handle from a peer adapter (e.g. `pgDialect({ pool })`), or any Kysely dialect                                            |
+| `dialectTag`           | `'postgres' \| 'mysql' \| 'sqlite'` | Which SQL `dialect` speaks, for a dialect kick/db can't place ([Drivers](../guide/database/drivers.md#serverless-and-edge-drivers)) |
+| `events`               | `boolean`                           | Enable lifecycle event emission. Zero-overhead when off                                                                             |
+| `slowQueryThresholdMs` | `number \| null`                    | Fire `slowQuery` above this duration                                                                                                |
+| `bus`                  | `KickEventBus`                      | Republish to DevTools event bus                                                                                                     |
+| `plugins`              | `KyselyPlugin[]`                    | Query-builder plugins (see [`safeNullComparison()`](#safenullcomparison))                                                           |
 
 Every query the client runs reports driver failures as [typed errors](#errors) — `UniqueViolationError`, `SerializationFailureError`, … — with the driver's error as `cause`.
 
@@ -245,11 +246,15 @@ The same table can be declared as a class or with a fluent builder — `tableFro
 
 Cross-dialect (live on package root):
 
-`serial`, `bigSerial`, `smallSerial`, `integer`, `bigint`, `smallint`, `decimal`, `numeric`, `real`, `doublePrecision`, `varchar(n)`, `char(n)`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json<T>()`, `jsonb<T>()`, `bytea`. Arrays via `.array()`.
+`serial`, `bigSerial`, `smallSerial`, `integer`, `bigint({ mode? })`, `smallint`, `decimal(p?, s?, { mode? })`, `numeric(p?, s?, { mode? })`, `real`, `doublePrecision`, `varchar(n)`, `char(n)`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json<T>()`, `jsonb<T>()`, `bytea`. Arrays via `.array()`.
 
-Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.default(value)`, `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.references(() => other.column, { onDelete, onUpdate })`.
+Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.default(value)`, `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.references(() => other.column, { onDelete, onUpdate })`, `.comment(text)`, `.$defaultFn(fn)` (computed per inserted row), `.$onUpdate(fn)` (computed per update). Table comment: `table(name, columns, { comment, constraints })`.
 
-PG-only types live at `@forinda/kickjs-db/pg`: `tsvector`, `vector(N)`, `citext`, `money`, `inet`, `cidr`, `xml`.
+Row-level security (Postgres): `policy(name)` in a table's constraints and `table(name, columns, { rls: { force } })`; roles with `pgRole(name, options)` (`@forinda/kickjs-db/pg`); per-transaction identity with `db.transaction({ role, settings }, fn)` ([Row-Level Security](../guide/database/row-level-security.md)).
+
+Views: `view(name, columns, { as })` (root) and `materializedView(name, columns, { as, constraints })` (`@forinda/kickjs-db/pg`), refreshed with `db.refreshMaterializedView(name, { concurrently })` ([Views](../guide/database/schema.md#views)).
+
+PG-only types live at `@forinda/kickjs-db/pg`: `tsvector`, `vector(N)`, `halfvec(N)`, `point`, `geometry(type?, srid?)`, `macaddr`, `macaddr8`, `citext`, `money`, `inet`, `cidr`, `xml`. MySQL-only at `@forinda/kickjs-db/mysql`: `mysqlEnum(...values)`, `unsigned(col)`, `tinyint`, `mediumint`, `datetime(fsp?)`.
 
 ### `relations()`
 
@@ -521,7 +526,8 @@ await client.connect()
 const snapshot = await introspectPg(client, { schema: 'public' })
 
 // await introspectMysql(connection, { excludeTables })   — async
-// introspectSqlite(database, { excludeTables })          — better-sqlite3 handle, sync
+// introspectSqlite(database, { excludeTables })          — better-sqlite3 / bun:sqlite handle, sync
+// await introspectSqliteAsync((sql, params) => rows, …)  — any async driver (libsql, D1)
 ```
 
 ### `checkDrift(live, expected, behavior)` / `reviewMigration(dir, id)`
@@ -542,7 +548,7 @@ Runner entry points — called by the CLI but also usable from custom scripts.
 
 Each returns a typed summary (`AppliedSummary`, `ReversedSummary`, `RollbackSummary`, `StatusEntry[]`).
 
-The `adapter` argument implements the `MigrationAdapter` interface and is dialect-specific (`pgAdapter()`, `sqliteAdapter()`, `mysqlAdapter()`). For tests, `MemoryMigrationAdapter` is available.
+The `adapter` argument implements the `MigrationAdapter` interface and is dialect-specific (`pgAdapter()`, `sqliteAdapter()`, `mysqlAdapter()`, or `asyncSqliteAdapter({ driver })` for libsql/Turso and Cloudflare D1, with `libsqlDriver(client)` / `d1Driver(db)` from `@forinda/kickjs-db/sqlite`). For tests, `MemoryMigrationAdapter` is available.
 
 ### `generate(options)`
 
@@ -711,8 +717,9 @@ Types: `Dialect`, `FkAction`, `ColumnSnapshot`, `IndexSnapshot`, `ForeignKeySnap
 
 Subpaths:
 
-- `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`), `pgSchema`, `pgDialect`, `pgAdapter`.
-- `@forinda/kickjs-db/mysql`, `@forinda/kickjs-db/sqlite` — the dialect and migration adapter for each.
+- `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `halfvec`, `point`, `geometry`, `macaddr`, `citext`, `money`, `inet`, `cidr`, `xml`), `pgSchema`, `pgDialect`, `pgAdapter`.
+- `@forinda/kickjs-db/mysql` — `mysqlDialect`, `mysqlAdapter`, and MySQL column types (`mysqlEnum`, `unsigned`, `tinyint`, `mediumint`, `datetime`).
+- `@forinda/kickjs-db/sqlite` — `sqliteDialect`, `sqliteAdapter`, and `asyncSqliteAdapter` with `libsqlDriver` / `d1Driver`.
 - `@forinda/kickjs-db/schema` — `insertSchema`, `selectSchema`, `updateSchema` (each returns a schema with `safeParse` and `toJsonSchema()`), and the row types `InferSelect` / `InferInsert`.
 - `@forinda/kickjs-db/cli` — `dbCliPlugin`, `kickDbTypegen`, config helpers.
 - `@forinda/kickjs-db/devtools-events` — the `db:*` event types the DevTools Database tab reads.

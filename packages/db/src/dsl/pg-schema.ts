@@ -1,6 +1,5 @@
 import type { ColumnBuilder, TypedColumnRefs } from './columns/types'
-import type { IndexDecl } from './constraints'
-import { buildTable, type TableDecl } from './table'
+import { buildTable, type TableDecl, type TableOptions } from './table'
 
 /**
  * PostgreSQL named-schema namespace.
@@ -36,7 +35,7 @@ export interface PgSchema<TSchema extends string | undefined = string | undefine
   table<TName extends string, C extends Record<string, ColumnBuilder>>(
     name: TName,
     columns: C,
-    constraints?: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>,
+    options?: TableOptions<C>,
   ): TableDecl<TName, C, TSchema> & TypedColumnRefs<C>
 }
 
@@ -85,9 +84,9 @@ export function pgSchema<TName extends string>(name: TName): PgSchema<EffectiveS
     table<TName2 extends string, C extends Record<string, ColumnBuilder>>(
       tableName: TName2,
       columns: C,
-      constraints?: (refs: TypedColumnRefs<C>) => Record<string, IndexDecl>,
+      options?: TableOptions<C>,
     ) {
-      return buildTable(tableName, columns, constraints, effective)
+      return buildTable(tableName, columns, options, effective)
     },
   }
 }

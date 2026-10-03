@@ -4,7 +4,10 @@ import type {
   EnumSnapshot,
   ForeignKeySnapshot,
   IndexSnapshot,
+  PolicySnapshot,
+  RoleSnapshot,
   TableSnapshot,
+  ViewSnapshot,
 } from '../snapshot/types'
 
 /**
@@ -178,6 +181,73 @@ export interface DropCheck {
   check: CheckSnapshot
 }
 
+/**
+ * Create a role if it doesn't exist (Postgres). Roles belong to the server,
+ * so a removed one is never dropped and a down migration doesn't drop it.
+ */
+export interface CreateRole {
+  kind: 'createRole'
+  role: RoleSnapshot
+}
+
+/** Change a declared role's attributes (Postgres). Not inverted, like CreateRole. */
+export interface AlterRole {
+  kind: 'alterRole'
+  role: RoleSnapshot
+}
+
+/** Turn row-level security on or off for a table, and whether it binds the owner. */
+export interface SetRowLevelSecurity {
+  kind: 'setRowLevelSecurity'
+  table: string
+  from: { force?: true } | null
+  to: { force?: true } | null
+}
+
+export interface CreatePolicy {
+  kind: 'createPolicy'
+  table: string
+  policy: PolicySnapshot
+}
+
+export interface DropPolicy {
+  kind: 'dropPolicy'
+  table: string
+  policy: PolicySnapshot
+}
+
+/** Create a view (after every table change in the migration). */
+export interface CreateView {
+  kind: 'createView'
+  view: ViewSnapshot
+}
+
+/** Drop a view (before every table change in the migration). */
+export interface DropView {
+  kind: 'dropView'
+  view: ViewSnapshot
+}
+
+/** A table's comment changed; `null` is none. */
+export interface SetTableComment {
+  kind: 'setTableComment'
+  table: string
+  from: string | null
+  to: string | null
+}
+
+/**
+ * A column's comment changed; `null` is none. `column` is its definition,
+ * for MySQL, which can only set a comment by restating it.
+ */
+export interface SetColumnComment {
+  kind: 'setColumnComment'
+  table: string
+  column: ColumnSnapshot
+  from: string | null
+  to: string | null
+}
+
 export type Change =
   | CreateSchema
   | CreateTable
@@ -198,5 +268,14 @@ export type Change =
   | AlterPrimaryKey
   | AddCheck
   | DropCheck
+  | SetTableComment
+  | SetColumnComment
+  | CreateView
+  | DropView
+  | CreateRole
+  | AlterRole
+  | SetRowLevelSecurity
+  | CreatePolicy
+  | DropPolicy
 
 export type ChangeSet = Change[]

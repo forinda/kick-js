@@ -1,5 +1,5 @@
 import type { Change, ChangeSet } from '../diff/types'
-import type { ColumnSnapshot, TableSnapshot } from '../snapshot/types'
+import type { ColumnSnapshot, PolicySnapshot, RoleSnapshot, TableSnapshot } from '../snapshot/types'
 import { primaryKeyOf, snapshotTableName } from '../snapshot/name'
 import { quoteIdent, quoteLiteral } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
@@ -92,7 +92,87 @@ function emitChange(change: Change): string {
       return `ALTER TABLE ${quoteIdent(change.table)} ADD CONSTRAINT ${quoteIdent(change.check.name)} CHECK (${change.check.expression});`
     case 'dropCheck':
       return `ALTER TABLE ${quoteIdent(change.table)} DROP CONSTRAINT ${quoteIdent(change.check.name)};`
+    case 'setTableComment':
+      return `COMMENT ON TABLE ${quoteIdent(change.table)} IS ${commentLiteral(change.to)};`
+    case 'setColumnComment':
+      return columnComment(change.table, change.column.name, change.to)
+    case 'createView': {
+      const v = change.view
+      if (!v.materialized) return `CREATE VIEW ${quoteIdent(v.name)} AS\n${v.definition};`
+      return [
+        `CREATE MATERIALIZED VIEW ${quoteIdent(v.name)} AS\n${v.definition}\nWITH DATA;`,
+        ...(v.indexes ?? []).map((i) => emitAddIndex(v.name, i)),
+      ].join('\n')
+    }
+    case 'createRole':
+      return emitCreateRole(change.role)
+    case 'alterRole': {
+      const options = roleOptions(change.role)
+      // An attribute removed from the schema is left as the role has it.
+      return options ? `ALTER ROLE ${quoteIdent(change.role.name)}${options};` : ''
+    }
+    case 'setRowLevelSecurity': {
+      const t = quoteIdent(change.table)
+      const out: string[] = []
+      if (!change.from && change.to) out.push(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY;`)
+      if (change.from && !change.to) out.push(`ALTER TABLE ${t} DISABLE ROW LEVEL SECURITY;`)
+      const force = !!change.to?.force
+      if (force !== !!change.from?.force) {
+        out.push(`ALTER TABLE ${t} ${force ? '' : 'NO '}FORCE ROW LEVEL SECURITY;`)
+      }
+      return out.join('\n')
+    }
+    case 'createPolicy':
+      return emitCreatePolicy(change.table, change.policy)
+    case 'dropPolicy':
+      return `DROP POLICY ${quoteIdent(change.policy.name)} ON ${quoteIdent(change.table)};`
+    case 'dropView':
+      return `DROP ${change.view.materialized ? 'MATERIALIZED VIEW' : 'VIEW'} ${quoteIdent(change.view.name)};`
   }
+}
+
+/** Role attributes, as `CREATE ROLE` / `ALTER ROLE` options (attributes left unset are left alone). */
+function roleOptions(role: RoleSnapshot): string {
+  const flag = (on: boolean | undefined, word: string) =>
+    on === undefined ? '' : ` ${on ? '' : 'NO'}${word}`
+  return (
+    flag(role.login, 'LOGIN') +
+    flag(role.createDb, 'CREATEDB') +
+    flag(role.createRole, 'CREATEROLE') +
+    flag(role.inherit, 'INHERIT') +
+    flag(role.bypassRls, 'BYPASSRLS')
+  )
+}
+
+/** CREATE ROLE only when it's missing: a role is shared by every database on the server. */
+function emitCreateRole(role: RoleSnapshot): string {
+  return [
+    `DO $$ BEGIN`,
+    `  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = ${quoteLiteral(role.name)}) THEN`,
+    `    CREATE ROLE ${quoteIdent(role.name)}${roleOptions(role)};`,
+    `  END IF;`,
+    `END $$;`,
+  ].join('\n')
+}
+
+function emitCreatePolicy(table: string, p: PolicySnapshot): string {
+  const to = p.to.map((r) =>
+    r === 'public' || r === 'current_user' || r === 'session_user'
+      ? r.toUpperCase()
+      : quoteIdent(r),
+  )
+  let s = `CREATE POLICY ${quoteIdent(p.name)} ON ${quoteIdent(table)} AS ${p.as.toUpperCase()} FOR ${p.command.toUpperCase()} TO ${to.join(', ')}`
+  if (p.using) s += ` USING (${p.using})`
+  if (p.withCheck) s += ` WITH CHECK (${p.withCheck})`
+  return `${s};`
+}
+
+function commentLiteral(text: string | null | undefined): string {
+  return text == null ? 'NULL' : quoteLiteral(text)
+}
+
+function columnComment(table: string, column: string, text: string | null | undefined): string {
+  return `COMMENT ON COLUMN ${quoteIdent(`${table}.${column}`)} IS ${commentLiteral(text)};`
 }
 
 /**
@@ -264,7 +344,8 @@ function sanitizeForLineComment(value: string): string {
 }
 
 function emitAddColumn(table: string, c: ColumnSnapshot): string {
-  return `ALTER TABLE ${quoteIdent(table)} ADD COLUMN ${emitColumnDecl(c)};`
+  const add = `ALTER TABLE ${quoteIdent(table)} ADD COLUMN ${emitColumnDecl(c)};`
+  return c.comment === undefined ? add : `${add}\n${columnComment(table, c.name, c.comment)}`
 }
 
 function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSnapshot): string {
@@ -383,7 +464,13 @@ function emitCreateTable(t: TableSnapshot): string {
     lines.push(`${named}PRIMARY KEY (${pk.join(', ')})`)
   }
   for (const c of t.checks) lines.push(`CONSTRAINT ${quoteIdent(c.name)} CHECK (${c.expression})`)
-  return `CREATE TABLE ${tableIdent(t)} (\n  ${lines.join(',\n  ')}\n);`
+  const out = [`CREATE TABLE ${tableIdent(t)} (\n  ${lines.join(',\n  ')}\n);`]
+  if (t.comment !== undefined)
+    out.push(`COMMENT ON TABLE ${tableIdent(t)} IS ${commentLiteral(t.comment)};`)
+  for (const c of Object.values(t.columns)) {
+    if (c.comment !== undefined) out.push(columnComment(snapshotTableName(t), c.name, c.comment))
+  }
+  return out.join('\n')
 }
 
 /** Strip any schema qualifier: `billing.invoices` → `invoices`. */

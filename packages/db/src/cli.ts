@@ -53,6 +53,7 @@ import {
   detectCompositeReferences,
   generate,
   migrateLatest,
+  migrateTenants,
   migrateUp,
   migrateDown,
   migrateRollback,
@@ -91,6 +92,8 @@ export interface KickDbConfigInput {
   casing?: 'snake_case'
   /** The table migrations are recorded in. Default `kick_migrations`. */
   migrationsTable?: string
+  /** Schema- or database-per-tenant: see `kick db migrate latest --tenants`. */
+  tenants?: import('./cli/config').TenantsConfig
   /**
    * More migration folders, run with `migrationsDir` as one history ordered by
    * migration id — a package's own migrations, say. `generate` writes to
@@ -134,6 +137,7 @@ export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbCon
     casing: db.casing,
     migrationsTable: db.migrationsTable,
     migrationsDirs: db.migrationsDirs,
+    tenants: db.tenants,
   }
 }
 
@@ -358,8 +362,33 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       'Allow migrations carrying the `-- KICK ENUM REMOVE` header to apply',
       false,
     )
-    .action(async (opts: { confirmEnumDrop?: boolean }) => {
+    .option('--tenants', "Migrate every tenant's schema or database (db.tenants in kick.config)")
+    .action(async (opts: { confirmEnumDrop?: boolean; tenants?: boolean }) => {
       const config = await getConfig()
+      if (opts.tenants) {
+        if (!config.tenants) {
+          throw new Error(
+            'kick db migrate latest --tenants needs a `tenants: { list, adapter }` db config',
+          )
+        }
+        const r = await migrateTenants({
+          tenants: config.tenants.list,
+          adapterFor: config.tenants.adapter,
+          concurrency: config.tenants.concurrency,
+          migrationsDir: runDirs(config),
+          driftCheck: config.driftCheck,
+          confirmEnumDrop: opts.confirmEnumDrop,
+          onTenant: (t) =>
+            console.log(
+              t.error
+                ? `✗ ${t.tenant}: ${t.error instanceof Error ? t.error.message : String(t.error)}`
+                : `✓ ${t.tenant}: ${t.summary!.applied.length === 0 ? 'up to date' : t.summary!.applied.join(', ')}`,
+            ),
+        })
+        console.log(`${r.results.length - r.failed.length} migrated, ${r.failed.length} failed`)
+        if (r.failed.length > 0) process.exitCode = 1
+        return
+      }
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
         const r = await migrateLatest({

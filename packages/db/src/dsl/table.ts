@@ -1,6 +1,7 @@
 import type { ColumnBuilder, ColumnRef, TypedColumnRefs } from './columns/types'
 import type { CheckDecl, IndexDecl, PrimaryKeyDecl, TableConstraint } from './constraints'
-import type { IndexSnapshot } from '../snapshot/types'
+import type { IndexSnapshot, PolicySnapshot } from '../snapshot/types'
+import type { PolicyDecl } from './rls'
 import { resolveSelfRefs } from './self-ref'
 
 export type { ColumnRef }
@@ -17,6 +18,11 @@ export interface TableDecl<
   /** Declared with `primaryKey(...)` — absent when columns carry `.primaryKey()`. */
   __primaryKey?: PrimaryKeyDecl
   __checks?: CheckDecl[]
+  /** `table(name, columns, { comment })`: stored in the database (Postgres, MySQL). */
+  __comment?: string
+  /** `table(name, columns, { rls })`, or set by declaring a policy (Postgres). */
+  __rls?: { force?: true }
+  __policies?: PolicySnapshot[]
   /**
    * Named SQL schema this table lives in, from `pgSchema('x').table(...)`.
    * `undefined` means the connection's default search_path (`public` on PG),
@@ -65,6 +71,24 @@ type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (
 ) => Record<string, TableConstraint>
 
 /**
+ * `table()`'s third argument: the constraints callback, or options holding it
+ * and the table's comment — `table('users', columns, { comment: 'People who sign in' })`.
+ */
+export type TableOptions<C extends Record<string, ColumnBuilder>> =
+  | ConstraintBuilder<C>
+  | {
+      constraints?: ConstraintBuilder<C>
+      comment?: string
+      /**
+       * Turn on row-level security (Postgres) — implied by declaring a
+       * policy. `{ force: true }` applies it to the table's owner too, which
+       * is usually the account the app connects as. With it on and no
+       * policy, no row is visible.
+       */
+      rls?: boolean | { force?: boolean }
+    }
+
+/**
  * Declare a typed table. The `TName extends string` generic narrows to the
  * literal table name so `SchemaToTypes<S>` can index by it without losing
  * the constant — `table('users', …)` widens to `TableDecl<'users', …>`,
@@ -73,9 +97,9 @@ type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (
 export function table<TName extends string, C extends Record<string, ColumnBuilder>>(
   name: TName,
   columns: C,
-  constraints?: ConstraintBuilder<C>,
+  options?: TableOptions<C>,
 ): TableRefs<TName, C> {
-  return buildTable(name, columns, constraints, undefined)
+  return buildTable(name, columns, options, undefined)
 }
 
 /**
@@ -89,9 +113,12 @@ export function buildTable<
 >(
   name: TName,
   declared: C,
-  constraints: ConstraintBuilder<C> | undefined,
+  options: TableOptions<C> | undefined,
   schema: TSchema,
 ): TableRefs<TName, C, TSchema> {
+  const constraints = typeof options === 'function' ? options : options?.constraints
+  const comment = typeof options === 'function' ? undefined : options?.comment
+  const rls = typeof options === 'function' ? undefined : options?.rls
   const selfRefs: Record<string, ColumnRef> = {}
   const columns = resolveSelfRefs(name, declared, selfRefs)
   const decl: TableDecl<TName, C, TSchema> = {
@@ -103,6 +130,8 @@ export function buildTable<
   // Only stamp the field when a schema was declared, so unqualified tables
   // serialize identically to before this feature existed.
   if (schema !== undefined) decl.__schema = schema
+  if (comment !== undefined) decl.__comment = comment
+  if (rls) decl.__rls = typeof rls === 'object' && rls.force ? { force: true } : {}
 
   // Column refs carry the QUALIFIED owner name. `extractSnapshot` reads it
   // straight into `ForeignKeySnapshot.refTable`, so a foreign key pointing
@@ -127,6 +156,11 @@ export function buildTable<
     decl.__indexes = declared.filter((c): c is IndexDecl => '__index' in c).map((c) => c.__index)
     const checks = declared.filter((c): c is CheckDecl => 'kind' in c && c.kind === 'check')
     if (checks.length > 0) decl.__checks = checks
+    const policies = declared.filter((c): c is PolicyDecl => 'kind' in c && c.kind === 'policy')
+    if (policies.length > 0) {
+      decl.__policies = policies.map((p) => ({ ...p.__policy, to: [...p.__policy.to] }))
+      decl.__rls ??= {}
+    }
     const keys = declared.filter((c): c is PrimaryKeyDecl => 'kind' in c && c.kind === 'primaryKey')
     if (keys.length > 1) {
       throw new Error(`kickjs-db: table '${name}' declares primaryKey() more than once`)

@@ -1,8 +1,10 @@
 import type { ColumnBuilder } from '../dsl/columns/types'
 import { derivedFkName, derivedUniqueName } from './name'
 import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
+import { isView } from '../dsl/view'
+import { isRole } from '../dsl/rls'
 import { extractRelations } from '../query/extract-relations'
-import { applyCasing, type Casing } from './casing'
+import { applyCasing, toDbName, type Casing } from './casing'
 import type {
   Dialect,
   EnumSnapshot,
@@ -10,6 +12,8 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  RoleSnapshot,
+  ViewSnapshot,
 } from './types'
 
 interface MaybeTable {
@@ -74,9 +78,26 @@ export function extractSnapshot(
 
   const schemaNames = new Set<string>()
 
+  const views: Record<string, ViewSnapshot> = {}
+  const roles: Record<string, RoleSnapshot> = {}
+
   for (const exported of Object.values(schema)) {
     const value = unwrapTable(exported) ?? exported
-    if (isTable(value)) {
+    if (isRole(value)) {
+      if (!value.__existing) roles[value.__role.name] = { ...value.__role }
+    } else if (isView(value)) {
+      if (value.__materialized && dialect !== 'postgres') {
+        throw new Error(
+          `kickjs-db: '${value.__name}' is a materialized view, which only Postgres has — use view()`,
+        )
+      }
+      const v: ViewSnapshot = { name: value.__name, definition: value.__definition }
+      if (value.__materialized) {
+        v.materialized = true
+        if (value.__indexes.length > 0) v.indexes = [...value.__indexes]
+      }
+      views[qualifiedTableName(value)] = v
+    } else if (isTable(value)) {
       // Key by qualified name so two schemas can hold same-named tables
       // without the later one silently overwriting the earlier.
       tables[qualifiedTableName(value)] = extractTable(value)
@@ -100,6 +121,26 @@ export function extractSnapshot(
     }
   }
 
+  if (dialect !== 'postgres') {
+    const rlsTable = Object.values(tables).find((t) => t.rls || t.policies)
+    if (rlsTable || Object.keys(roles).length > 0) {
+      throw new Error(
+        `kickjs-db: row-level security, policies and pgRole() are Postgres-only` +
+          (rlsTable ? ` (table '${rlsTable.name}')` : ''),
+      )
+    }
+  }
+
+  // SQLite stores no comments; keeping them would make migrations that do nothing.
+  if (dialect === 'sqlite') {
+    for (const t of Object.values(tables)) {
+      delete t.comment
+      for (const c of Object.values(t.columns)) delete c.comment
+    }
+  }
+
+  addTenantPolicies(schema, tables, dialect, options.casing)
+
   const relations = extractRelations(schema, tables)
 
   // Only carry `enums` on PG snapshots — other dialects don't define
@@ -119,7 +160,52 @@ export function extractSnapshot(
   if (relations) {
     snapshot.relations = relations
   }
+  // Absent when empty, so snapshots without views — and their migration
+  // hashes — are unchanged.
+  if (Object.keys(views).length > 0) snapshot.views = views
+  if (Object.keys(roles).length > 0) snapshot.roles = roles
   return options.casing === 'snake_case' ? applyCasing(snapshot) : snapshot
+}
+
+/**
+ * A table whose `tenantKey()` uses `'rls'` tenancy gets row-level security,
+ * forced, and a policy matching the column to the tenancy's setting — unless
+ * it declares one with the same name itself.
+ */
+function addTenantPolicies(
+  schema: Record<string, unknown>,
+  tables: Record<string, TableSnapshot>,
+  dialect: Dialect,
+  casing: Casing | undefined,
+): void {
+  for (const exported of Object.values(schema)) {
+    const t = unwrapTable(exported)
+    if (!t || isView(t)) continue
+    for (const [key, builder] of Object.entries(t.__columns)) {
+      const tenancy = builder.__state().tenancy
+      if (tenancy?.strategy !== 'rls') continue
+      if (dialect !== 'postgres') {
+        throw new Error(`kickjs-db: 'rls' tenancy is Postgres-only (table '${t.__name}')`)
+      }
+      const snap = tables[qualifiedTableName(t)]!
+      const column = casing === 'snake_case' ? toDbName(key) : key
+      const name = `${t.__name}_tenant`
+      if (snap.policies?.some((p) => p.name === name)) continue
+      const matches = `"${column.replace(/"/g, '""')}" = nullif(current_setting('${tenancy.setting.replace(/'/g, "''")}', true), '')::${snap.columns[key]!.type}`
+      snap.rls = { force: true, ...snap.rls }
+      snap.policies = [
+        ...(snap.policies ?? []),
+        {
+          name,
+          as: 'permissive',
+          command: 'all',
+          to: ['public'],
+          using: matches,
+          withCheck: matches,
+        },
+      ]
+    }
+  }
 }
 
 function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): TableSnapshot {
@@ -158,6 +244,9 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
 
   const checks = (t.__checks ?? []).map((c) => ({ name: c.name, expression: c.expression }))
   const snapshot: TableSnapshot = { name: t.__name, columns, indexes, foreignKeys, checks }
+  if (t.__comment !== undefined) snapshot.comment = t.__comment
+  if (t.__rls) snapshot.rls = { ...t.__rls }
+  if (t.__policies?.length) snapshot.policies = t.__policies.map((p) => ({ ...p, to: [...p.to] }))
   if (t.__primaryKey) {
     for (const c of t.__primaryKey.columns) {
       // A key column can't be null; the database enforces it either way.
