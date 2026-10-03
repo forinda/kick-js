@@ -1,5 +1,69 @@
 # @forinda/kickjs
 
+## 9.0.0
+
+### Major Changes
+
+- [#787](https://github.com/forinda/kick-js/pull/787) [`f025e39`](https://github.com/forinda/kick-js/commit/f025e3965a75fc3f4acf1617863d5876e2e27c68) Thanks [@forinda](https://github.com/forinda)! - `getEnv(key, fallback)`: the second argument is now a fallback value, returned when the key is unset (`undefined` or `null`), e.g. `getEnv('S3_REGION', 'eu-west-1')`. The env schema is registered once with `loadEnv(envSchema)` and is the one source of truth.
+  
+  `ConfigService.get(key, fallback)` (and `createConfigService`'s `get`) take the same fallback.
+  
+  The `getEnv(key, schema)` overload is removed from the types. At runtime a schema passed the old way still works, with a one-time deprecation warning. Migrate to `loadEnv(envSchema)` once, then plain `getEnv(key)`.
+
+- [#782](https://github.com/forinda/kick-js/pull/782) [`1221039`](https://github.com/forinda/kick-js/commit/1221039a3b8d6532c214bbb30d3d7c5ef7a052fa) Thanks [@forinda](https://github.com/forinda)! - `defineAugmentation` is removed, with the `kick/augmentations` typegen plugin and its `.kickjs/types/kick__augmentations.d.ts` catalogue. It was deprecated since 7.2 and did nothing at runtime or at the type level — the `declare module '@forinda/kickjs' { … }` block was always what typed an augmentation. Delete the calls; keep the `declare module` blocks. `kick typegen` sweeps the old `kick__augmentations.d.ts` from existing projects.
+
+### Minor Changes
+
+- [#769](https://github.com/forinda/kick-js/pull/769) [`8b57411`](https://github.com/forinda/kick-js/commit/8b57411b3b53be6d770a31701b4aa025660e06e2) Thanks [@forinda](https://github.com/forinda)! - Background jobs with any runner. `@Job(queue)` / `@Process(name)` now live in `@forinda/kickjs` and only record which method handles which job, the same way `@Cron` records a schedule. Any job tool runs them with two calls:
+  
+  - **`listJobQueues(container)` / `listJobHandlers(container)`** — what to subscribe to.
+  - **`runJob(container, queue, job, extra?)`** — picks the `@Process` method for `job.name` (or the queue's catch-all) and calls it with the runner's own job object. A failure is reported to the error observers with `source: 'job'` and rethrown, so the runner's retries still apply. A job nothing handles throws `NoJobHandlerError` instead of being acknowledged.
+  
+  **Enqueue without naming the tool:** inject `JOB_DISPATCHER` and call `dispatch(queue, name, data, options)`. The active adapter provides it.
+  
+  **Cloudflare Queues:** `createFetchHandler()` returns `queue()` beside `fetch` and `scheduled`. Each message runs through `runJob` and is acked on success or retried on failure.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`fa0f2ac`](https://github.com/forinda/kick-js/commit/fa0f2ac9b6392a05d889a30790892ee9ef4b8851) Thanks [@forinda](https://github.com/forinda)! - Job context: `registerJobContext({ key, capture, restore })` carries a value from where a job is dispatched to its handler — a tenant, a trace id, the acting user.
+  
+  - `stampJobContext(data)` adds the captured values to a job's plain-object data, under `__kickContext`. A `JobDispatcher` implementation calls it before enqueueing.
+  - `runJob` takes the context off the data, so the handler never sees the field, and runs the handler inside each carrier's `restore`.
+  - Exported from the root and from `@forinda/kickjs/web`.
+
+- [#782](https://github.com/forinda/kick-js/pull/782) [`b0f2983`](https://github.com/forinda/kick-js/commit/b0f29832ac2826a7bb8dee8381a6657b15f6db07) Thanks [@forinda](https://github.com/forinda)! - `ctx.session` is typed `Session` instead of `any`. Declare your session keys once by augmenting `SessionData` and every read is typed:
+  
+  ```ts
+  declare module '@forinda/kickjs' {
+    interface SessionData {
+      userId?: string
+    }
+  }
+  ctx.session.data.userId // string | undefined
+  ```
+  
+  Undeclared keys read as `unknown`. Code that relied on `any` — `ctx.session.userId` (the data lives under `.data`), or passing `ctx.session.data.x` where a `string` is expected — now needs the declaration above or a cast. The generated agent docs' guard example read `ctx.session?.user`, which never existed; it now reads a typed `ctx.session?.data.role`.
+
+- [#787](https://github.com/forinda/kick-js/pull/787) [`35db416`](https://github.com/forinda/kick-js/commit/35db416b876205da886747ddd15c343013cadcd6) Thanks [@forinda](https://github.com/forinda)! - `withEnv(overrides, fn)` runs `fn` with some parsed env values laid over the real ones. `getEnv`, `ConfigService` and `@Value()` see the overrides, and the real values come back afterwards. Nested calls layer, and a reload or re-parse inside `fn` keeps the overrides. No `.env` file is read. It's meant for tests.
+
+### Patch Changes
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`18147bd`](https://github.com/forinda/kick-js/commit/18147bde10e3aa4a56cbb1d8d616b49ef8473e54) Thanks [@forinda](https://github.com/forinda)! - An adapter's `beforeMount` or `beforeStart` that throws now stops the app from booting, instead of being logged while the server started anyway. The adapter hadn't finished wiring itself, so the app served half-built — `kickDbAdapter({ migrationsOnBoot: 'fail-if-pending' })` logged "pending migrations" and then served requests against the unmigrated database. `afterStart` runs once the server is listening, so its failure is still logged and the server keeps running.
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`6b419cd`](https://github.com/forinda/kick-js/commit/6b419cd7efcd4056d827170617abb07f694572b0) Thanks [@forinda](https://github.com/forinda)! - A process that ends after an uncaught exception or unhandled rejection now exits with code 1. KickJS's own listeners for both replace Node's handling, which exits with 1, so a boot that threw — `await bootstrap()` rejecting because an adapter refused to start — ended the process with 0, and a deploy read the crash as success. A running server still logs the error and keeps serving, as before.
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`f42227b`](https://github.com/forinda/kick-js/commit/f42227be03c783c41efdd4ac0d60baf644f8d80c) Thanks [@forinda](https://github.com/forinda)! - `ctx.download(buffer, filename)` writes the file name per RFC 6266: an ASCII fallback plus `filename*=UTF-8''…`. The name went into `Content-Disposition` raw, so a name taken from an upload could break the header — a `"` cut it short, a line break made Node throw — and non-Latin names were mangled.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`a506117`](https://github.com/forinda/kick-js/commit/a5061172ed4a28e685ac77876fee050fd2ee8c4b) Thanks [@forinda](https://github.com/forinda)! - `stampJobContext(data)` always removes a `__kickContext` already in `data`. Only the dispatcher's own context travels, so a job enqueued from a request body can't choose its tenant.
+  
+  `runJob` drops a `__kickContext` that isn't a plain object (a string, array, number or `null`) instead of reading entries from it.
+
+- [#788](https://github.com/forinda/kick-js/pull/788) [`267cbb3`](https://github.com/forinda/kick-js/commit/267cbb34ef6f04d743c9ba2c4eac19532896639b) Thanks [@forinda](https://github.com/forinda)! - `Application.fetch()` (and `AdapterContext.fetch`) on Express, Fastify and h3 v1 now delivers the Request's host as `Host`. They forward through an in-process loopback server, and the route saw `Host: 127.0.0.1:<port>` with the real host only in `X-Forwarded-Host`, so tenant-by-host lookups failed for MCP tool calls, AI tool calls and every other in-process call. The host crosses the hop in an internal header that carries a per-instance secret, so a client can't choose it.
+
+- [#782](https://github.com/forinda/kick-js/pull/782) [`41e112e`](https://github.com/forinda/kick-js/commit/41e112e4a98f46c41defa50de137da19b5ea392a) Thanks [@forinda](https://github.com/forinda)! - `ctx.session.destroy()` works on Fastify and h3. It cleared the cookie with Express's `res.clearCookie`, which those runtimes' responses don't have, so the request failed with a 500; it now expires the cookie the same runtime-neutral way the middleware sets it.
+
+- [#779](https://github.com/forinda/kick-js/pull/779) [`2722fe9`](https://github.com/forinda/kick-js/commit/2722fe91815f374af76aaaaef5804fdd1ad7f071) Thanks [@forinda](https://github.com/forinda)! - An error that isn't an `HttpException` but declares a 4xx status (`err.status` / `err.statusCode`) — kick/db's `UniqueViolationError` (409), an auth check that throws with `status: 401` — is answered like an `HttpException`: RFC 9457 `application/problem+json` with its message as `detail`, logged as a warning. It used to be logged at ERROR with a stack and answered with a bare `{ message, requestId }`. A declared 5xx other than 500 keeps its status but now gets the guarded 500 body; its raw message used to be sent to the client.
+
+- [#787](https://github.com/forinda/kick-js/pull/787) [`d8a120f`](https://github.com/forinda/kick-js/commit/d8a120f349078c54408677efd81fac05db5de63e) Thanks [@forinda](https://github.com/forinda)! - `@Middleware(upload.single(...))`, `upload.array()` and `upload.none()` work as route middleware. The upload handlers were Express `(req, res, next)` functions, but route middleware is called `(ctx, next)`, so Multer received the context as its request and every upload failed with `req.on is not a function`. They now accept both conventions. An oversized file answers 413 and a refused type 415, as with `@FileUpload`.
+
 ## 8.7.0
 
 ### Minor Changes

@@ -1,5 +1,38 @@
 # @forinda/kickjs-queue
 
+## 8.0.0
+
+### Major Changes
+
+- [#769](https://github.com/forinda/kick-js/pull/769) [`8b57411`](https://github.com/forinda/kick-js/commit/8b57411b3b53be6d770a31701b4aa025660e06e2) Thanks [@forinda](https://github.com/forinda)! - `QueueAdapter({ provider })` works, and every job runs through `@forinda/kickjs`'s `runJob`.
+  
+  - **Providers work.** `QueueAdapter({ provider: new RabbitMQProvider(url) })` (or Kafka, Redis pub/sub, your own `QueueProvider`) subscribes each queue a `@Job` class handles and dispatches through the provider. Before, the adapter ignored `provider` and always built BullMQ queues. BullMQ is now loaded only for `redis`, so `bullmq` / `ioredis` are optional peers.
+  - **`@Job` / `@Process` come from `@forinda/kickjs`.** They are re-exported here, so existing imports keep working, and the metadata keys are unchanged.
+  - **`QueueService` is also `JOB_DISPATCHER`**, with a `dispatch()` method. `QUEUE_MANAGER` still resolves it.
+  - **Handlers still receive the BullMQ `Job` itself** on the Redis path, so `attemptsMade` and `updateProgress()` are still there.
+  
+  **Breaking:**
+  
+  - A job no `@Process` method handles now fails (`NoJobHandlerError`) instead of completing with a warning.
+  - The peer range is now `@forinda/kickjs >= 8.8.0`.
+  - `QueueAdapterOptions` is a union: either `redis` or `provider`.
+  - The internal `jobRegistry` export is gone; use `listJobHandlers(container)`.
+  - `beforeStart` is async.
+
+### Minor Changes
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`7b7d778`](https://github.com/forinda/kick-js/commit/7b7d778d32fb6f9bb8fdfd168aa76bb92a391d01) Thanks [@forinda](https://github.com/forinda)! - Manage jobs from DevTools.
+  
+  - **`JobInspector`** (devtools-kit): the contract the DevTools Queues tab uses to list queues, page through jobs by state, read one job, and — when implemented — retry, remove, retry all failed, clean a state, and pause / resume. Any job tool can implement it; an adapter or plugin exposes it as `jobInspector()`.
+  - **`QueueAdapter`** implements it for BullMQ. Providers with no job store (RabbitMQ, Kafka, Redis pub/sub) list their queues without jobs.
+  - **The queue package's own DevTools panel is gone:** the built-in Queues tab replaces the iframe tab and its `/_kick/queue/panel` and `/_kick/queue/data` routes (the data route carried no auth). The `panel` option is deprecated and has no effect.
+
+### Patch Changes
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`fa0f2ac`](https://github.com/forinda/kick-js/commit/fa0f2ac9b6392a05d889a30790892ee9ef4b8851) Thanks [@forinda](https://github.com/forinda)! - `QueueService.dispatch` (the `JOB_DISPATCHER`) stamps the dispatching code's job context onto the job, so `registerJobContext` carriers such as kick/db's tenancy reach the handler.
+- Updated dependencies [[`f64c9bf`](https://github.com/forinda/kick-js/commit/f64c9bf1b67ab57c7e288be7a82be9c59fce24e2), [`3d9c64b`](https://github.com/forinda/kick-js/commit/3d9c64b23c78a7a8903ce0158cc8b9ddc62de28c), [`7b7d778`](https://github.com/forinda/kick-js/commit/7b7d778d32fb6f9bb8fdfd168aa76bb92a391d01)]:
+  - @forinda/kickjs-devtools-kit@7.1.0
+
 ## 7.1.0
 
 ### Minor Changes

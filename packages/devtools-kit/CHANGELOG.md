@@ -1,5 +1,29 @@
 # @forinda/kickjs-devtools-kit
 
+## 7.1.0
+
+### Minor Changes
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`3d9c64b`](https://github.com/forinda/kick-js/commit/3d9c64b23c78a7a8903ce0158cc8b9ddc62de28c) Thanks [@forinda](https://github.com/forinda)! - Custom tabs can run server code and render live content.
+  
+  - **`launch` buttons work:** an action's new `run()` executes on the server when its button is clicked, and the dashboard shows what it returns (or the error). Before, every button posted to a route nothing served and got a 404.
+  - **`module` view:** `view: { type: 'module', src }` loads a browser module from the app's own origin and mounts its default export — a `defineDevtoolsRenderTab(...)` spec or a `render(el, props)` function — with the dashboard's event bus. `defineDevtoolsRenderTab` was exported before but nothing rendered it. Modules from other origins are refused.
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`7b7d778`](https://github.com/forinda/kick-js/commit/7b7d778d32fb6f9bb8fdfd168aa76bb92a391d01) Thanks [@forinda](https://github.com/forinda)! - Manage jobs from DevTools.
+  
+  - **`JobInspector`** (devtools-kit): the contract the DevTools Queues tab uses to list queues, page through jobs by state, read one job, and — when implemented — retry, remove, retry all failed, clean a state, and pause / resume. Any job tool can implement it; an adapter or plugin exposes it as `jobInspector()`.
+  - **`QueueAdapter`** implements it for BullMQ. Providers with no job store (RabbitMQ, Kafka, Redis pub/sub) list their queues without jobs.
+  - **The queue package's own DevTools panel is gone:** the built-in Queues tab replaces the iframe tab and its `/_kick/queue/panel` and `/_kick/queue/data` routes (the data route carried no auth). The `panel` option is deprecated and has no effect.
+
+### Patch Changes
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`f64c9bf`](https://github.com/forinda/kick-js/commit/f64c9bf1b67ab57c7e288be7a82be9c59fce24e2) Thanks [@forinda](https://github.com/forinda)! - DevTools fixes.
+  
+  - **No false leak alarm at boot:** memory health ignores the first 30 seconds of uptime and waits for 20 seconds of settled samples before judging heap growth. Until then it reports `sampling: true` with severity `ok`. Before, normal startup allocation read as "critical" within seconds.
+  - **Consistent DI counts:** `/_debug/container` leaves out the dev server's `__hmr__` shadow registrations, like the topology and graph endpoints already did.
+  - **Readable labels in light theme:** kind and status labels no longer use dark-only colours.
+  - **No stray horizontal scrollbar:** hidden metric tooltips near the right edge no longer widen the page.
+
 ## 7.0.2
 
 ### Patch Changes

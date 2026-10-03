@@ -1,5 +1,25 @@
 # @forinda/kickjs-ai
 
+## 8.1.0
+
+### Minor Changes
+
+- [#789](https://github.com/forinda/kick-js/pull/789) [`39c180f`](https://github.com/forinda/kick-js/commit/39c180f9b4eb7b19ee24b994f1db7c8148c8282a) Thanks [@forinda](https://github.com/forinda)! - Fixes and test helpers:
+  
+  - **`runAgentWithMemory`** takes every `runAgent` option (`effort` was dropped). It also saves nothing until the run succeeds, so a failed turn no longer leaves an unanswered user message in memory.
+  - **`SlidingWindowChatMemory`** runs writes one at a time, so concurrent adds no longer erase each other.
+  - **`RunAgentResult.usage`** now sums `cacheReadTokens` and `cacheWriteTokens` across steps.
+  - **`RagService.index(docs, { batchSize })`** embeds in batches (default 100).
+  - **Retries:** a `Retry-After` longer than `maxDelayMs` is no longer waited out, and the `ProviderError` is thrown instead. A stream aborted while waiting to retry throws the abort reason.
+  - **`OpenAIProvider`:** takes a `retry` option. `embed(input, { signal })` can be cancelled (`EmbedOptions`).
+  - **`AnthropicProvider`:** default model is now `claude-opus-5-5`.
+  - **New export `ScriptedProvider`:** a test provider that answers with scripted turns and records each input and its options.
+  - **Exported types:** `RetryOptions` and `EmbedOptions`.
+
+### Patch Changes
+
+- [#794](https://github.com/forinda/kick-js/pull/794) [`4a5c813`](https://github.com/forinda/kick-js/commit/4a5c8139cb65e834cf92eaecf6cb1cf70f964265) Thanks [@forinda](https://github.com/forinda)! - Accept `@forinda/kickjs` 9 as a peer (`>=8.5.0 <10.0.0`). Neither package uses the APIs kickjs 9 removes.
+
 ## 8.0.0
 
 ### Major Changes

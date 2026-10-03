@@ -1,5 +1,51 @@
 # @forinda/kickjs-mcp
 
+## 9.0.0
+
+### Major Changes
+
+- [#790](https://github.com/forinda/kick-js/pull/790) [`04defba`](https://github.com/forinda/kick-js/commit/04defba301bf450a0f9f4a50985ca63a618d8077) Thanks [@forinda](https://github.com/forinda)! - Moves to MCP SDK v2 and protocol 2026-07-28, and adds resources and elicitation.
+  
+  **Breaking:** the peer dependency is now `@modelcontextprotocol/server` `^2.3.0` instead of `@modelcontextprotocol/sdk`. Install it with `pnpm add @modelcontextprotocol/server` (or run `kick add mcp`), then remove `@modelcontextprotocol/sdk` unless you use it yourself. Tests that use the SDK client import `Client` and `StreamableHTTPClientTransport` from `@modelcontextprotocol/client`.
+  
+  - **Protocol 2026-07-28.** One endpoint serves both eras.
+    - 2026-07-28 clients are served statelessly in either mode, and hear about list changes through `subscriptions/listen`.
+    - 2025 clients keep their sessions, or get stateless serving under `stateless: true`.
+    - Over stdio, the connection's first message picks the era.
+  - **Resources.** `registerResourceProvider({ name, resources, templates })` serves fixed URIs and RFC 6570 URI templates.
+    - Reads can go through your own routes with `ctx.fetch`.
+    - `resourceFilter` decides what each caller sees.
+    - A resource's `scopes` answer 403 `insufficient_scope`.
+    - Connected clients get `resources/list_changed`.
+  - **Elicitation.** A custom tool calls `ctx.elicit(key, { message, schema })` to ask the user mid-call, and gets the validated answer or `undefined`.
+    - 2026-07-28 clients get `input_required` rounds; answers carried between rounds are HMAC-signed and bound to the caller.
+    - 2025 sessions get real `elicitation/create` requests.
+    - Set `requestStateKey` when several instances serve one endpoint.
+  - Unknown tools still answer `-32602`, now as `ProtocolError` from the v2 SDK.
+
+### Minor Changes
+
+- [#788](https://github.com/forinda/kick-js/pull/788) [`267cbb3`](https://github.com/forinda/kick-js/commit/267cbb34ef6f04d743c9ba2c4eac19532896639b) Thanks [@forinda](https://github.com/forinda)! - A multi-tenant, per-user MCP surface. All of these are new options; nothing existing changes behaviour.
+  
+  - **`auth.authenticate(credential, request)`:** returns who is calling (`McpPrincipal`: `subject`, `clientId`, `scopes`, `audience`, …) instead of a yes/no.
+    - A principal whose `audience` doesn't name this host's resource URL is refused, so a token for one tenant's server can't be used at another's.
+    - Tool handlers read the caller as `ctx.principal`, filters as `call.principal`.
+  - **OAuth challenges:** a 401 sends `WWW-Authenticate: Bearer resource_metadata="…", scope="…"` (`auth.resourceMetadataUrl`, `auth.scopes`). A tool's `scopes` refuse a call without them with 403 `error="insufficient_scope"`.
+  - **`protectedResource`:** serves RFC 9728 metadata at `/.well-known/oauth-protected-resource` and at that path plus the endpoint path, per host.
+  - **`toolFilter(tool, call)`:** decides which tools each caller sees. It applies to `tools/list` and `tools/call`, so a hidden tool answers like an unknown one.
+  - **Tenant host on dispatch:** route tools are dispatched to the MCP request's own origin, so a tenant-per-host app sees the caller's host. Custom tools get `ctx.origin`. `trustProxy` believes `X-Forwarded-Proto` / `-Host`.
+  - **`stateless: true`:** a fresh server per request and no session map, so it can scale across instances. `GET` / `DELETE` answer 405.
+  - **`path`:** the full endpoint path (e.g. `'/mcp'`).
+  - **`allowedHosts`:** completes the DNS-rebinding defence.
+  - **Tool metadata:** tools take `annotations`, `title` and `scopes`. `outputSchema` is now advertised in `tools/list`, and a JSON object result is sent as `structuredContent`. An error route answer's Problem Details body is sent as `structuredContent` too.
+  - **`McpToolError(code, message, data)`:** for typed, machine-readable custom tool errors.
+  - **`toolTimeoutMs`:** sets a call timeout.
+  - **Unknown tools:** an unknown (or filtered-out) tool now answers JSON-RPC error `-32602`, as the spec asks, instead of a tool error result.
+
+### Patch Changes
+
+- [#794](https://github.com/forinda/kick-js/pull/794) [`4a5c813`](https://github.com/forinda/kick-js/commit/4a5c8139cb65e834cf92eaecf6cb1cf70f964265) Thanks [@forinda](https://github.com/forinda)! - Accept `@forinda/kickjs` 9 as a peer (`>=8.5.0 <10.0.0`). Neither package uses the APIs kickjs 9 removes.
+
 ## 8.0.0
 
 ### Major Changes

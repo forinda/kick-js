@@ -1,5 +1,49 @@
 # @forinda/kickjs-devtools
 
+## 7.4.0
+
+### Minor Changes
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`72f2772`](https://github.com/forinda/kick-js/commit/72f2772741e8c33299503b74d59a925327b432a9) Thanks [@forinda](https://github.com/forinda)! - A denser dashboard layout.
+  
+  - **Icon sidebar:** the sidebar is a column of icons with tooltips and count badges. It can be expanded to labels, and the choice is remembered.
+  - **Routes:** a list grouped by controller, searchable and filterable by method, with the API runner open beside it. The divider can be resized, and its width is remembered. This replaces the paginated table and the overlay sheet.
+  - **Runner:** the method, resolved URL and **Send** sit in one bar at the top. Response and history statuses are colored pills.
+  - **Disconnect banner:** when the app stops answering, a banner says so and the dashboard keeps retrying. Before, it quietly stayed on "Polling" with stale data.
+  - **Command palette:** ⌘K / Ctrl+K (or `/`) finds a tab, route or DI token and jumps to it, and switches theme or density.
+  - **Requests tab:** the app's recent requests (status, method, path, duration, and the error a failed one threw), filterable by status, with a detail pane and **Replay in runner**. Served from the new `GET /_debug/requests`; `requestLog` sets how many are kept (default 200).
+  - **Overview:** a strip of headline numbers (requests, server errors, p95 latency, heap) with last-minute sparklines, the latest failed requests with their errors, and app status with adapter status dots. Replaces the three cards.
+  - **Runtime:** the Memory tab is folded into Runtime — four charts (heap, process memory, event-loop delay with GC ticks, CPU) over the last minute, memory health, and the heap-snapshot / force-GC actions in the header.
+  - **Metrics:** a sortable per-route table with 5xx share, percentile bars and a latency histogram per route. `/_debug/metrics` adds `serverErrors`, `clientErrors` and `histogram` to each route, and `latencyBucketsMs`.
+  - **Container:** a list with kind and scope filters (with counts) and the selected token's dependencies, dependents and resolve stats beside it, replacing the paginated table and the detail modal. First and last resolve times now show — the dashboard read the wrong field names before.
+  - **Graph:** a real dependency graph on a canvas — tokens in columns with arrows, drag to rearrange (remembered), pan and zoom, focus on a token's whole chain, cycle edges in red, and token details beside it. Before, it was a list grouped by kind.
+  - **Topology:** plugins, adapters and contributors as side-by-side cards with their counters, state and provided / required tokens (hover to highlight, click to open in Container). The duplicate DI table is gone — Container has it.
+  - **Activity:** namespace chips with counts, tinted error and warning rows, a held list with **N new** while you read, and the selected event's full payload beside the stream. Replaces the paginated table.
+  - **Database:** a **Slowest** view grouping statements by shape (calls, failures, mean, p95, total) next to the **Recent** log, with the full SQL, parameters and error beside them.
+  - **Scrollbars:** thin and theme-coloured everywhere.
+  - **Queues:** browse jobs by queue and state, see a job's data, result, failure and stack traces, and retry, remove, retry all failed, clean a state, or pause / resume a queue. Served from new `/_debug/jobs*` endpoints over any `jobInspector()` an adapter or plugin exposes.
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`3d9c64b`](https://github.com/forinda/kick-js/commit/3d9c64b23c78a7a8903ce0158cc8b9ddc62de28c) Thanks [@forinda](https://github.com/forinda)! - Custom tabs can run server code and render live content.
+  
+  - **`launch` buttons work:** an action's new `run()` executes on the server when its button is clicked, and the dashboard shows what it returns (or the error). Before, every button posted to a route nothing served and got a 404.
+  - **`module` view:** `view: { type: 'module', src }` loads a browser module from the app's own origin and mounts its default export — a `defineDevtoolsRenderTab(...)` spec or a `render(el, props)` function — with the dashboard's event bus. `defineDevtoolsRenderTab` was exported before but nothing rendered it. Modules from other origins are refused.
+
+### Patch Changes
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`f64c9bf`](https://github.com/forinda/kick-js/commit/f64c9bf1b67ab57c7e288be7a82be9c59fce24e2) Thanks [@forinda](https://github.com/forinda)! - DevTools fixes.
+  
+  - **No false leak alarm at boot:** memory health ignores the first 30 seconds of uptime and waits for 20 seconds of settled samples before judging heap growth. Until then it reports `sampling: true` with severity `ok`. Before, normal startup allocation read as "critical" within seconds.
+  - **Consistent DI counts:** `/_debug/container` leaves out the dev server's `__hmr__` shadow registrations, like the topology and graph endpoints already did.
+  - **Readable labels in light theme:** kind and status labels no longer use dark-only colours.
+  - **No stray horizontal scrollbar:** hidden metric tooltips near the right edge no longer widen the page.
+
+- [#771](https://github.com/forinda/kick-js/pull/771) [`f4ec61e`](https://github.com/forinda/kick-js/commit/f4ec61e6a230888cde15fd59b5a61ea92e30dd3c) Thanks [@forinda](https://github.com/forinda)! - Custom DevTools tabs.
+  
+  - **`kick g adapter` / `kick g plugin`:** both now write the `introspect()` and `devtoolsTabs()` hooks (commented out), in shapes that type-check once uncommented. Before, the adapter's tab example used fields the descriptor doesn't have (`kind`, `render`), its snapshot was missing `name` and `kind`, and neither example said where `defineDevtoolsTab` or `IntrospectionSnapshot` come from. The comments now name the import and the `@forinda/kickjs-devtools-kit` dependency to add.
+  - **Iframe tabs:** the dashboard token is only added to an iframe `src` on the app's own origin. It was appended to every `src`, so a tab pointing at another site received the token.
+- Updated dependencies [[`f64c9bf`](https://github.com/forinda/kick-js/commit/f64c9bf1b67ab57c7e288be7a82be9c59fce24e2), [`3d9c64b`](https://github.com/forinda/kick-js/commit/3d9c64b23c78a7a8903ce0158cc8b9ddc62de28c), [`7b7d778`](https://github.com/forinda/kick-js/commit/7b7d778d32fb6f9bb8fdfd168aa76bb92a391d01)]:
+  - @forinda/kickjs-devtools-kit@7.1.0
+
 ## 7.3.0
 
 ### Minor Changes
