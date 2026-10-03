@@ -34,7 +34,7 @@ import type {
   GeneratedBrand,
   NotNullBrand,
 } from './dsl/columns/types'
-import { PgEnumColumnBuilder } from './dsl/columns/pg'
+import { PgCodecColumnBuilder, PgEnumColumnBuilder } from './dsl/columns/pg'
 import type { TableDecl } from './dsl/table'
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -198,11 +198,26 @@ function specFor(builder: ColumnBuilder): ColumnSpec {
           : fail(`Expected one of ${values.join(', ')}`, 'invalid_enum_value'),
     }
   }
-  if (builder instanceof CustomColumnBuilder) return anySpec()
+  if (builder instanceof CustomColumnBuilder && !(builder instanceof PgCodecColumnBuilder)) {
+    return anySpec()
+  }
 
   const type = builder.__state().type.toLowerCase()
-  if (type.endsWith('[]')) return arraySpec(specForType(type.slice(0, -2)))
-  return specForType(type)
+  const spec = type.endsWith('[]') ? arraySpec(specForType(type.slice(0, -2))) : specForType(type)
+  const mode = builder.__state().mode
+  return mode ? withMode(spec, mode) : spec
+}
+
+/** A bigint / numeric column with a `mode` validates to the type it reads as. */
+function withMode(spec: ColumnSpec, mode: 'bigint' | 'number' | 'string'): ColumnSpec {
+  const convert = { bigint: BigInt, number: Number, string: String }[mode]
+  return {
+    ...spec,
+    parse: (v) => {
+      const r = spec.parse(v)
+      return r.ok && r.value != null ? ok(convert(r.value as never)) : r
+    },
+  }
 }
 
 function anySpec(): ColumnSpec {
@@ -344,7 +359,23 @@ function specForType(type: string): ColumnSpec {
       return dateSpec('date')
     case 'uuid':
       return stringSpec({ format: 'uuid' }, (v) => (UUID.test(v) ? null : 'Expected a UUID'))
+    case 'point':
+      return {
+        json: {
+          type: 'object',
+          properties: { x: { type: 'number' }, y: { type: 'number' } },
+          required: ['x', 'y'],
+        },
+        parse: (v) =>
+          typeof v === 'object' &&
+          v !== null &&
+          typeof (v as { x?: unknown }).x === 'number' &&
+          typeof (v as { y?: unknown }).y === 'number'
+            ? ok(v)
+            : fail('Expected a point { x, y }'),
+      }
     case 'vector':
+    case 'halfvec':
       return arraySpec(
         {
           json: { type: 'number' },
