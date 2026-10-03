@@ -182,7 +182,7 @@ list(ctx: RequestContext) {
 Three things to get right:
 
 - **Connect as a role the policies apply to.** Superusers bypass row-level security, and so does the table's owner unless the table has `rls: { force: true }`. Or run migrations as the owner and the app as a separate role with only the grants it needs.
-- **Outside `withTenant`, nothing is visible** — `current_setting(…, true)` is null (or `''` once a transaction on that connection has set it), so the policy matches no rows. That's the safe default; admin jobs that need every tenant use the owner role.
+- **Outside `withTenant`, nothing is visible** — `current_setting(…, true)` is null (or `''` once a transaction on that connection has set it), so the policy matches no rows. That's the safe default. With `rls: { force: true }` the owner is held to the policy too, so admin jobs that need every tenant connect as a role with `BYPASSRLS` (with kick/db's tenancy, `tenancy.bypass()` on a `bypassDialect`), or go through a `SECURITY DEFINER` function.
 - **Wrap in the handler or service, not a middleware.** A route middleware's `next()` can resolve before the handler finishes, so a transaction opened there may commit while the handler is still querying.
 
 Writes are checked too: inserting a row for another tenant fails the policy's `WITH CHECK`. This recipe runs in kick/db's test suite against Postgres, as a non-owner role.

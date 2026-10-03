@@ -217,7 +217,17 @@ function withMode(spec: ColumnSpec, mode: 'bigint' | 'number' | 'string'): Colum
     ...spec,
     parse: (v) => {
       const r = spec.parse(v)
-      return r.ok && r.value != null ? ok(convert(r.value as never)) : r
+      if (!r.ok || r.value == null) return r
+      // A number can't hold every 64-bit integer: refuse rather than round.
+      if (mode === 'number' && typeof r.value === 'bigint') {
+        if (
+          r.value < BigInt(Number.MIN_SAFE_INTEGER) ||
+          r.value > BigInt(Number.MAX_SAFE_INTEGER)
+        ) {
+          return fail('Out of the safe range for a number', r.value < 0n ? 'too_small' : 'too_big')
+        }
+      }
+      return ok(convert(r.value as never))
     },
   }
 }

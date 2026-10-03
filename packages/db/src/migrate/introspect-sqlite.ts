@@ -107,8 +107,7 @@ function* introspectSteps(opts: IntrospectSqliteOptions): Steps<SchemaSnapshot> 
     for (const v of viewRows) {
       views[v.name] = {
         name: v.name,
-        // SQLite keeps the whole statement; the SELECT follows the first AS.
-        definition: v.sql.replace(/^[\s\S]*?\bAS\b\s*/i, '').trim(),
+        definition: viewSelect(v.sql),
         columns: yield* readColumns(v.name),
       }
     }
@@ -147,6 +146,74 @@ export async function introspectSqliteAsync(
   let step = walk.next()
   while (!step.done) step = walk.next(await query(step.value.sql, step.value.params))
   return step.value
+}
+
+/**
+ * The SELECT of a `CREATE VIEW` statement, which SQLite stores whole: past
+ * `CREATE [TEMP] VIEW [IF NOT EXISTS]`, the (possibly quoted, possibly
+ * qualified) name and an optional column list — a quoted name may contain `as`.
+ */
+export function viewSelect(statement: string): string {
+  let i = 0
+  const s = statement
+  const space = () => {
+    while (i < s.length && /\s/.test(s[i]!)) i++
+  }
+  const word = (w: string) => {
+    space()
+    if (s.slice(i, i + w.length).toUpperCase() === w && !/\w/.test(s[i + w.length] ?? '')) {
+      i += w.length
+      return true
+    }
+    return false
+  }
+  const close: Record<string, string> = { '"': '"', '`': '`', '[': ']', "'": "'" }
+  const identifier = () => {
+    space()
+    const end = close[s[i]!]
+    if (end) {
+      // Quoted: up to the closing quote; a doubled one is part of the name.
+      for (i++; i < s.length; i++) {
+        if (s[i] === end) {
+          if (s[i + 1] === end && end !== ']') i++
+          else return void i++
+        }
+      }
+      return
+    }
+    while (i < s.length && /[\w$]/.test(s[i]!)) i++
+  }
+  word('CREATE')
+  if (!word('TEMPORARY')) word('TEMP')
+  word('VIEW')
+  if (word('IF')) {
+    word('NOT')
+    word('EXISTS')
+  }
+  identifier()
+  space()
+  if (s[i] === '.') {
+    i++
+    identifier()
+  }
+  space()
+  if (s[i] === '(') {
+    // The column list: up to its closing parenthesis, skipping quoted names.
+    for (let depth = 0; i < s.length; i++) {
+      const end = close[s[i]!]
+      if (end) {
+        for (i++; i < s.length && s[i] !== end; i++);
+        continue
+      }
+      if (s[i] === '(') depth++
+      else if (s[i] === ')' && --depth === 0) {
+        i++
+        break
+      }
+    }
+  }
+  word('AS')
+  return s.slice(i).trim().replace(/;$/, '')
 }
 
 function* readColumns(table: string): Steps<Record<string, ColumnSnapshot>> {

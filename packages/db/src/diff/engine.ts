@@ -114,7 +114,12 @@ function withRowLevelSecurity(
     else if (JSON.stringify(was) !== JSON.stringify(role)) roles.push({ kind: 'alterRole', role })
   }
 
-  const touched = new Set(changes.flatMap(touchedBy))
+  // A rename doesn't touch policies: Postgres keeps them on the table, and
+  // their expressions refer to it by identity, not by name.
+  const touched = new Set(changes.filter((c) => c.kind !== 'renameTable').flatMap(touchedBy))
+  // Policy drops run before the rename, so they name the table as it was.
+  const renamedFrom = new Map<string, string>()
+  for (const c of changes) if (c.kind === 'renameTable') renamedFrom.set(c.to, c.from)
   const drops: Change[] = []
   const creates: Change[] = []
   for (const [name, t] of Object.entries(next.tables)) {
@@ -128,7 +133,7 @@ function withRowLevelSecurity(
     for (const [pname, p] of was) {
       const kept = now.find((q) => q.name === pname)
       if (!kept || policyKey(kept) !== policyKey(p) || reshaped(p)) {
-        drops.push({ kind: 'dropPolicy', table: name, policy: p })
+        drops.push({ kind: 'dropPolicy', table: renamedFrom.get(name) ?? name, policy: p })
       }
     }
     const rlsBefore = before?.rls ?? null

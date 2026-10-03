@@ -102,3 +102,34 @@ describe('row-level security', () => {
     expect(src).toContain(`docs_audit: policy('docs_audit').for('select').to('auditor')`)
   })
 })
+
+describe('row-level security across a table rename', () => {
+  const named = (name: string, using: string) =>
+    table(name, { id: serial().primaryKey(), ownerId: integer().notNull() }, () => ({
+      own: policy(`${name}_own`).using(using),
+    }))
+
+  it('leaves policies alone — Postgres keeps them on the renamed table', () => {
+    const changes = diff(
+      extractSnapshot({ t: named('docs', 'true') }, 'postgres'),
+      extractSnapshot({ t: named('papers', 'true') }, 'postgres'),
+      { renames: { tables: { docs: 'papers' } } },
+    )
+    // The policy's name follows the table here, so it's dropped (on the old
+    // table, before the rename) and created (on the new one, after).
+    expect(changes.map((c) => ('policy' in c ? `${c.kind}:${c.table}` : c.kind))).toEqual([
+      'dropPolicy:docs',
+      'renameTable',
+      'createPolicy:papers',
+    ])
+    const sameName = (name: string) =>
+      table(name, { id: serial().primaryKey() }, () => ({ own: policy('own').using('true') }))
+    expect(
+      diff(
+        extractSnapshot({ t: sameName('docs') }, 'postgres'),
+        extractSnapshot({ t: sameName('papers') }, 'postgres'),
+        { renames: { tables: { docs: 'papers' } } },
+      ).map((c) => c.kind),
+    ).toEqual(['renameTable'])
+  })
+})

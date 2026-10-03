@@ -39,3 +39,14 @@ it('reads each column as its mode asks', async () => {
     price: 1.5,
   })
 })
+
+it("refuses a value a number can't hold, under mode 'number'", async () => {
+  const { insertSchema } = await import('@forinda/kickjs-db/schema')
+  const t = table('t', { id: serial().primaryKey(), n: bigint({ mode: 'number' }) })
+  const schema = insertSchema(t)
+  expect(schema.safeParse({ n: '9007199254740991' })).toMatchObject({
+    success: true,
+    data: { n: 9007199254740991 },
+  })
+  expect(schema.safeParse({ n: '9007199254740993' }).success).toBe(false)
+})
