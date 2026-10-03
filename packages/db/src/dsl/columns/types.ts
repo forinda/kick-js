@@ -79,6 +79,10 @@ export interface ColumnState {
   managed?: 'updatedAt' | 'version' | 'softDelete'
   generated?: { expression: string; stored: boolean }
   identity?: 'always' | 'byDefault'
+  /** `$defaultFn`: computed in JS for each inserted row that doesn't set it. */
+  defaultFn?: () => unknown
+  /** `$onUpdate`: computed in JS for each update that doesn't set it. */
+  onUpdateFn?: () => unknown
 }
 
 /**
@@ -211,6 +215,27 @@ export class ColumnBuilder<T = unknown> {
   default(value: string | number | boolean): this & GeneratedBrand {
     this.state.default = typeof value === 'string' ? value : String(value)
     return this as this & GeneratedBrand
+  }
+
+  /**
+   * A default computed in JS for each inserted row that doesn't set this
+   * column — an id generator, a slug, a value from config:
+   * `id: text().primaryKey().$defaultFn(() => ulid())`. Not part of the
+   * schema: the database has no default, so raw SQL inserts must set it.
+   */
+  $defaultFn(fn: () => T): this & GeneratedBrand {
+    this.state.defaultFn = fn
+    return this as this & GeneratedBrand
+  }
+
+  /**
+   * A value computed in JS for each update (and an upsert's update branch)
+   * that doesn't set this column: `revisedBy: text().$onUpdate(() => currentUser())`.
+   * Like `onUpdateNow()`, with your own value. Inserts don't call it.
+   */
+  $onUpdate(fn: () => T): this {
+    this.state.onUpdateFn = fn
+    return this
   }
 
   /**
