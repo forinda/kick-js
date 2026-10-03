@@ -30,6 +30,13 @@ export function serial(): ColumnBuilder<number> & GeneratedBrand & NotNullBrand 
   return brandNotNull(brandGenerated(new ColumnBuilder<number>('serial', { nullable: false })))
 }
 
+/** How `bigint` / `numeric` values are read back, and the type they get. */
+export interface NumberModes {
+  bigint: bigint
+  number: number
+  string: string
+}
+
 export function bigSerial(): ColumnBuilder<bigint> & GeneratedBrand & NotNullBrand {
   return brandNotNull(brandGenerated(new ColumnBuilder<bigint>('bigserial', { nullable: false })))
 }
@@ -44,8 +51,18 @@ export function integer(): ColumnBuilder<number> {
   return new ColumnBuilder<number>('integer')
 }
 
-export function bigint(): ColumnBuilder<bigint> {
-  return new ColumnBuilder<bigint>('bigint')
+/**
+ * A 64-bit integer. Drivers return it differently (`pg` a string,
+ * better-sqlite3 a number), so pick how it reads back with `mode`:
+ * `'bigint'` (exact), `'number'` (safe up to 2^53) or `'string'`. Without
+ * `mode` the driver's value is returned, typed `bigint`.
+ */
+export function bigint(): ColumnBuilder<bigint>
+export function bigint<M extends keyof NumberModes>(options: {
+  mode: M
+}): ColumnBuilder<NumberModes[M]>
+export function bigint(options?: { mode: keyof NumberModes }): ColumnBuilder<unknown> {
+  return new ColumnBuilder('bigint', options ? { mode: options.mode } : {})
 }
 
 export function smallint(): ColumnBuilder<number> {
@@ -66,12 +83,46 @@ export function version(): ColumnBuilder<number> & NotNullBrand & GeneratedBrand
   return col
 }
 
-export function decimal(precision?: number, scale?: number): ColumnBuilder<string> {
-  return new ColumnBuilder<string>(formatNumeric('decimal', precision, scale))
+type DecimalMode = { mode: 'number' | 'string' }
+
+/**
+ * An exact decimal, read back as a string by default so no precision is lost.
+ * `{ mode: 'number' }` reads it as a JS number (fine for money in cents-scale
+ * amounts, lossy past ~15 significant digits).
+ */
+export function decimal(precision?: number, scale?: number): ColumnBuilder<string>
+export function decimal<M extends DecimalMode['mode']>(
+  precision: number | undefined,
+  scale: number | undefined,
+  options: { mode: M },
+): ColumnBuilder<NumberModes[M]>
+export function decimal(
+  precision?: number,
+  scale?: number,
+  options?: DecimalMode,
+): ColumnBuilder<unknown> {
+  return new ColumnBuilder(
+    formatNumeric('decimal', precision, scale),
+    options ? { mode: options.mode } : {},
+  )
 }
 
-export function numeric(precision?: number, scale?: number): ColumnBuilder<string> {
-  return new ColumnBuilder<string>(formatNumeric('numeric', precision, scale))
+/** Same as {@link decimal}. */
+export function numeric(precision?: number, scale?: number): ColumnBuilder<string>
+export function numeric<M extends DecimalMode['mode']>(
+  precision: number | undefined,
+  scale: number | undefined,
+  options: { mode: M },
+): ColumnBuilder<NumberModes[M]>
+export function numeric(
+  precision?: number,
+  scale?: number,
+  options?: DecimalMode,
+): ColumnBuilder<unknown> {
+  return new ColumnBuilder(
+    formatNumeric('numeric', precision, scale),
+    options ? { mode: options.mode } : {},
+  )
 }
 
 export function real(): ColumnBuilder<number> {
