@@ -122,13 +122,34 @@ kick db migrate latest --tenants # ✓ / ✗ per tenant; a failure doesn't stop 
 
 ## Background jobs
 
-A job has no request, so carry the tenant in its data and run the handler as it:
+A job dispatched as a tenant runs as that tenant: tenancy is a [job context carrier](../jobs.md#job-context), so the tenant travels with the job and is restored around its handler. This works with `QueueAdapter`'s dispatcher, and with your own dispatcher once it calls `stampJobContext(data)`.
 
 ```ts
-await jobs.dispatch('reports', 'build', { tenantId: tenancy.current(), month })
+await jobs.dispatch('reports', 'build', { month }) // inside a request for tenant acme
 
 @Process('build')
-build(job: Job<{ tenantId: string; month: string }>) {
-  return tenancy.run(job.data.tenantId, () => this.reports.build(job.data.month))
+build(job: Job<{ month: string }>) {
+  return this.reports.build(job.data.month) // queries run as acme
 }
 ```
+
+Jobs started some other way (cron, a script) use `tenancy.run(id, fn)`.
+
+## What it costs
+
+Measured on Postgres 16, per read, through the typed client (`__tests__/bench/tenancy-binding-pg.test.ts`, run with `KICK_BENCH=1`):
+
+|                                                                 | Local   | 1 ms round trip |
+| --------------------------------------------------------------- | ------- | --------------- |
+| No tenancy                                                      | 0.23 ms | 1.5 ms          |
+| `'rls'`, `'connection'` binding, lone queries (tenant changing) | 0.38 ms | 3.3 ms          |
+| `'rls'`, `'transaction'` binding, lone queries                  | 0.47 ms | 4.2 ms          |
+| `'rls'`, `'transaction'` binding, 10 per `db.transaction()`     | 0.24 ms | 1.8 ms          |
+
+A lone query under `'transaction'` binding is three round trips (`BEGIN` with the tenant, the query, `COMMIT`), so latency, not the policy, is the cost. Wrap a request's queries in one `db.transaction()` and it's close to no tenancy at all. `'connection'` binding sends the tenant only when it changes on that connection, so it's cheapest when a connection keeps serving the same tenant.
+
+`'column'` adds a `WHERE` clause and costs nothing measurable. Index the tenant column, or lead composite indexes with it.
+
+## Many databases: closing idle ones
+
+With `'database'`, each tenant's connections stay open while it's busy, and close after `tenantIdleMs` without use (default 10 minutes). `maxOpenTenants` caps how many tenants keep connections at once: when a new tenant arrives, the least recently used idle one is closed. Tenants with a query in flight are never closed, so it's a soft cap. A closed tenant reopens on its next query.

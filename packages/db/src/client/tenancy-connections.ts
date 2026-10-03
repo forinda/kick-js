@@ -58,12 +58,23 @@ class TenantConnection implements DatabaseConnection {
     )
   }
 
+  /**
+   * `begin` and the tenant in one round trip: a parameterless query goes out
+   * as a simple query, which may hold several statements. The values are
+   * quoted as SQL literals (standard strings, `'` doubled).
+   */
+  private beginBound(): Promise<QueryResult<unknown>> {
+    const literal = (v: string) => `'${v.replace(/'/g, "''")}'`
+    return this.inner.executeQuery(
+      raw(`begin; select set_config(${literal(this.setting)}, ${literal(this.tenant)}, true)`),
+    )
+  }
+
   async executeQuery<R>(query: CompiledQuery): Promise<QueryResult<R>> {
     if (this.inTransaction) return this.inner.executeQuery<R>(query)
     // A query on its own: wrap it, so the local setting has a transaction to live in.
-    await this.inner.executeQuery(raw('begin'))
+    await this.beginBound()
     try {
-      await this.bind()
       const result = await this.inner.executeQuery<R>(query)
       await this.inner.executeQuery(raw('commit'))
       return result
@@ -81,9 +92,8 @@ class TenantConnection implements DatabaseConnection {
       yield* this.inner.streamQuery<R>(query, chunkSize)
       return
     }
-    await this.inner.executeQuery(raw('begin'))
+    await this.beginBound()
     try {
-      await this.bind()
       yield* this.inner.streamQuery<R>(query, chunkSize)
       await this.inner.executeQuery(raw('commit'))
     } catch (err) {
@@ -228,9 +238,16 @@ class TenantDriver implements Driver {
  */
 class DatabaseRouter implements Driver {
   private readonly owner = new WeakMap<DatabaseConnection, Driver>()
-  // ponytail: one driver per tenant for the client's life — add idle eviction
-  // when a process serves more tenants than it can hold pools for.
-  private readonly tenants = new Map<string, Promise<Driver>>()
+  private readonly tenantOf = new WeakMap<DatabaseConnection, string>()
+  private readonly tenants = new Map<
+    string,
+    {
+      driver: Promise<Driver>
+      inUse: number
+      lastUsed: number
+      idle?: ReturnType<typeof setTimeout>
+    }
+  >()
 
   constructor(
     private readonly central: Driver,
@@ -241,19 +258,46 @@ class DatabaseRouter implements Driver {
     return this.central.init(options)
   }
 
-  private driverFor(tenant: string): Promise<Driver> {
-    let driver = this.tenants.get(tenant)
-    if (!driver) {
-      driver = (async () => {
+  /** The tenant's entry, created on first use; counted as in use until released. */
+  private use(tenant: string) {
+    let entry = this.tenants.get(tenant)
+    if (!entry) {
+      const driver = (async () => {
         const d = this.tenancy.dialectFor!(tenant).createDriver()
         await d.init()
         return d
       })()
-      // A failed init isn't cached: the next query tries again.
+      entry = { driver, inUse: 0, lastUsed: Date.now() }
+      this.tenants.set(tenant, entry)
+      // A failed init isn't kept: the next query tries again.
       driver.catch(() => this.tenants.delete(tenant))
-      this.tenants.set(tenant, driver)
+      this.makeRoom(tenant)
     }
-    return driver
+    clearTimeout(entry.idle)
+    entry.inUse++
+    entry.lastUsed = Date.now()
+    return entry
+  }
+
+  /** Over `maxOpenTenants`: close the least recently used tenant with nothing in flight. */
+  private makeRoom(keep: string) {
+    while (this.tenants.size > this.tenancy.maxOpenTenants) {
+      let oldest: string | undefined
+      for (const [id, e] of this.tenants) {
+        if (id === keep || e.inUse > 0) continue
+        if (!oldest || e.lastUsed < this.tenants.get(oldest)!.lastUsed) oldest = id
+      }
+      if (!oldest) return // everyone is busy: a soft cap
+      this.close(oldest)
+    }
+  }
+
+  private close(tenant: string) {
+    const entry = this.tenants.get(tenant)
+    if (!entry) return
+    this.tenants.delete(tenant)
+    clearTimeout(entry.idle)
+    void entry.driver.then((d) => d.destroy()).catch(() => {})
   }
 
   async acquireConnection(
@@ -261,10 +305,36 @@ class DatabaseRouter implements Driver {
   ): Promise<DatabaseConnection> {
     const tenant = this.tenancy.current()
     if (tenant === undefined) throw new TenantRequiredError('(any table)')
-    const driver = tenant === null ? this.central : await this.driverFor(tenant)
-    const conn = await driver.acquireConnection(options)
-    this.owner.set(conn, driver)
-    return conn
+    if (tenant === null) {
+      const conn = await this.central.acquireConnection(options)
+      this.owner.set(conn, this.central)
+      return conn
+    }
+    const entry = this.use(tenant)
+    try {
+      const driver = await entry.driver
+      const conn = await driver.acquireConnection(options)
+      this.owner.set(conn, driver)
+      this.tenantOf.set(conn, tenant)
+      return conn
+    } catch (err) {
+      this.done(tenant)
+      throw err
+    }
+  }
+
+  /** A tenant's connection is back: start its idle countdown when nothing else is in flight. */
+  private done(tenant: string) {
+    const entry = this.tenants.get(tenant)
+    if (!entry) return
+    entry.inUse = Math.max(0, entry.inUse - 1)
+    entry.lastUsed = Date.now()
+    if (entry.inUse === 0 && this.tenancy.tenantIdleMs > 0) {
+      entry.idle = setTimeout(() => {
+        if (this.tenants.get(tenant) === entry && entry.inUse === 0) this.close(tenant)
+      }, this.tenancy.tenantIdleMs)
+      entry.idle.unref?.()
+    }
   }
 
   private of(conn: DatabaseConnection): Driver {
@@ -295,16 +365,25 @@ class DatabaseRouter implements Driver {
     await this.of(conn).releaseSavepoint!(conn, name, compile)
   }
 
-  releaseConnection(
+  async releaseConnection(
     conn: DatabaseConnection,
     options?: Parameters<Driver['releaseConnection']>[1],
   ): Promise<void> {
-    return this.of(conn).releaseConnection(conn, options)
+    await this.of(conn).releaseConnection(conn, options)
+    const tenant = this.tenantOf.get(conn)
+    if (tenant !== undefined) this.done(tenant)
+  }
+
+  /** Tenants with connections open now — for monitoring and tests. */
+  openTenants(): string[] {
+    return [...this.tenants.keys()]
   }
 
   async destroy(options?: Parameters<Driver['destroy']>[0]): Promise<void> {
-    const drivers = await Promise.allSettled(this.tenants.values())
+    const entries = [...this.tenants.values()]
     this.tenants.clear()
+    for (const e of entries) clearTimeout(e.idle)
+    const drivers = await Promise.allSettled(entries.map((e) => e.driver))
     for (const d of drivers) if (d.status === 'fulfilled') await d.value.destroy(options)
     await this.central.destroy(options)
   }

@@ -1,5 +1,5 @@
 import type { Queue, JobsOptions } from 'bullmq'
-import { Logger, type JobDispatcher } from '@forinda/kickjs'
+import { Logger, stampJobContext, type JobDispatcher } from '@forinda/kickjs'
 import type { QueueProvider } from './types'
 
 const log = Logger.for('QueueService')
@@ -81,7 +81,8 @@ export class QueueService implements JobDispatcher {
     data: Data,
     options?: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.add(queue, name, data, options as JobsOptions)
+    // The dispatching code's job context (tenant, trace) travels with the job.
+    return this.add(queue, name, stampJobContext(data), options as JobsOptions)
   }
 
   /** Get all registered queue names */

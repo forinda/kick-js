@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { requestStore } from '@forinda/kickjs'
+import { registerJobContext, requestStore } from '@forinda/kickjs'
 import type { Dialect } from 'kysely'
 import { ColumnBuilder, type GeneratedBrand, type NotNullBrand } from './dsl/columns/types'
 
@@ -38,6 +38,17 @@ export interface TenancyOptions {
    * `db.destroy()`).
    */
   dialectFor?: (tenantId: string) => Dialect
+  /**
+   * `'database'`: close a tenant's connections after this long unused.
+   * Default 10 minutes; `0` keeps them for the client's life.
+   */
+  tenantIdleMs?: number
+  /**
+   * `'database'`: at most this many tenants' connections open at once — the
+   * least recently used idle one is closed to make room. A soft cap: tenants
+   * with a query in flight are never closed. Default unlimited.
+   */
+  maxOpenTenants?: number
   /**
    * `'rls'`: how a connection gets the tenant.
    *
@@ -89,6 +100,8 @@ export interface Tenancy extends Readonly<
 > {
   readonly bypassDialect?: Dialect
   readonly dialectFor?: (tenantId: string) => Dialect
+  readonly tenantIdleMs: number
+  readonly maxOpenTenants: number
   readonly __isTenancy: true
   /** Run `fn` as `tenantId` — jobs, cron, scripts, tests. Nested runs switch tenant. */
   run<T>(tenantId: string, fn: () => T): T
@@ -133,12 +146,14 @@ function requestTenant(): string | undefined {
  * })
  * ```
  */
+let tenancies = 0
+
 export function defineTenancy(options: TenancyOptions): Tenancy {
   if (options.strategy === 'database' && !options.dialectFor) {
     throw new Error("kickjs-db: 'database' tenancy needs dialectFor(tenantId)")
   }
   const scope = new AsyncLocalStorage<{ id: string | null }>()
-  return {
+  const tenancy: Tenancy = {
     __isTenancy: true,
     strategy: options.strategy,
     setting: options.setting ?? 'app.tenant_id',
@@ -147,6 +162,8 @@ export function defineTenancy(options: TenancyOptions): Tenancy {
     roleCheck: options.roleCheck ?? 'error',
     bypassDialect: options.bypassDialect,
     dialectFor: options.dialectFor,
+    tenantIdleMs: options.tenantIdleMs ?? 600_000,
+    maxOpenTenants: options.maxOpenTenants ?? Number.POSITIVE_INFINITY,
     run: (tenantId, fn) => scope.run({ id: tenantId }, fn),
     bypass: (fn, bypassOptions) => {
       if (!bypassOptions?.reason) {
@@ -176,6 +193,13 @@ export function defineTenancy(options: TenancyOptions): Tenancy {
       return store ? store.id : (options.current ?? requestTenant)()
     },
   }
+  // A job dispatched as a tenant runs as it.
+  registerJobContext<string>({
+    key: `kick/db/tenant/${++tenancies}`,
+    capture: () => tenancy.current() ?? undefined,
+    restore: (tenantId, run) => tenancy.run(tenantId, run),
+  })
+  return tenancy
 }
 
 /**

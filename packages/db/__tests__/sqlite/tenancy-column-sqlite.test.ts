@@ -1,4 +1,5 @@
 /** Tenancy experiment: the 'column' strategy on SQLite. */
+import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import {
@@ -121,5 +122,28 @@ describe("'column' tenancy", () => {
     await expect(db.selectFrom('projects').selectAll().execute()).rejects.toBeInstanceOf(
       TenantRequiredError,
     )
+  })
+})
+
+describe('tenancy and background jobs', () => {
+  it('runs a job as the tenant that dispatched it', async () => {
+    const { Container, Job, Process, runJob, stampJobContext } = await import('@forinda/kickjs')
+    Container.reset()
+    const db = make()
+    const seen: unknown[] = []
+    @Job('reports')
+    class ReportJobs {
+      @Process('count')
+      async count() {
+        seen.push(await db.selectFrom('projects').select('name').execute())
+      }
+    }
+    void ReportJobs
+    const data = tenancy.run('globex', () => stampJobContext({ kind: 'count' }))
+    await runJob(Container.getInstance(), 'reports', {
+      name: 'count',
+      data: JSON.parse(JSON.stringify(data)),
+    })
+    expect(seen).toEqual([[{ name: 'Lasers' }]])
   })
 })

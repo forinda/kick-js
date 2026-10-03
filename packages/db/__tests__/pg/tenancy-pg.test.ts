@@ -88,6 +88,10 @@ describe.each(['transaction', 'connection'] as const)("'rls' tenancy, %s binding
     expect(await bodies('acme')).toEqual([{ body: 'a1' }])
     expect(await bodies('globex')).toEqual([{ body: 'g1' }])
     expect(await bodies('acme')).toEqual([{ body: 'a1' }]) // same connection, switched back
+    // A tenant id with a quote: quoted as a literal, never spliced as SQL.
+    const odd = "o'brien'); drop table notes; --"
+    await tenancy.run(odd, () => db.insertInto(t).values({ body: 'odd' }).execute())
+    expect(await bodies(odd)).toEqual([{ body: 'odd' }])
     // No tenant: the policy matches nothing.
     expect(await db.selectFrom(t).selectAll().execute()).toEqual([])
     // The database refuses another tenant's row.
@@ -118,7 +122,7 @@ describe.each(['transaction', 'connection'] as const)("'rls' tenancy, %s binding
       () => db.selectFrom(t).select('body').orderBy('body').execute(),
       { reason: 'monthly report' },
     )
-    expect(all).toEqual([{ body: 'a1' }, { body: 'g1' }])
+    expect(all).toEqual([{ body: 'a1' }, { body: 'g1' }, { body: 'odd' }])
     expect(audit).toContain('monthly report')
     const tagged = await tenancy.bypass(
       () =>

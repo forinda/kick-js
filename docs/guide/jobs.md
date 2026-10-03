@@ -101,6 +101,7 @@ import {
   defineAdapter,
   listJobQueues,
   runJob,
+  stampJobContext,
   type JobDispatcher,
 } from '@forinda/kickjs'
 
@@ -118,7 +119,9 @@ export const PgBossAdapter = defineAdapter<{ url: string }>({
           )
         }
         const dispatcher: JobDispatcher = {
-          dispatch: (queue, name, data, options) => boss.send(queue, { name, data }, options),
+          // stampJobContext carries the dispatcher's job context (tenant, trace) to the handler.
+          dispatch: (queue, name, data, options) =>
+            boss.send(queue, { name, data: stampJobContext(data) }, options),
         }
         container.registerFactory(JOB_DISPATCHER, () => dispatcher)
       },
@@ -131,6 +134,22 @@ export const PgBossAdapter = defineAdapter<{ url: string }>({
 ```
 
 `runJob(container, queue, job, extra?)` picks the handler, runs it, reports a failure (with `extra` added to the report's context — an attempt count, say) and rethrows. `listJobHandlers(container)` returns every handler with its queue, job name, class and method, for tools that subscribe per job name.
+
+## Job context
+
+Some things about where a job was dispatched should hold while it runs: the tenant, a trace id, the acting user. A **job context carrier** captures a value when the job is dispatched and puts it back around the handler:
+
+```ts
+import { registerJobContext } from '@forinda/kickjs'
+
+registerJobContext<string>({
+  key: 'app/trace',
+  capture: () => traceStore.getStore(), // at dispatch; undefined carries nothing
+  restore: (traceId, run) => traceStore.run(traceId, run), // around the handler
+})
+```
+
+The value travels in the job's data under `__kickContext`, which `runJob` takes off before the handler sees `job.data`. Only plain-object data can carry it. `QueueAdapter`'s dispatcher stamps it; a dispatcher of your own calls `stampJobContext(data)`, as above. kick/db's [tenancy](./database/tenancy.md#background-jobs) registers itself as a carrier, so a job dispatched as a tenant runs as that tenant.
 
 ## In DevTools
 

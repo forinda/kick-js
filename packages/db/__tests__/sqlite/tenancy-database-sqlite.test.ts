@@ -87,3 +87,48 @@ describe("'database' tenancy", () => {
     }
   })
 })
+
+describe("'database' tenancy closes idle tenants", () => {
+  it('keeps at most maxOpenTenants open, and closes one idle past tenantIdleMs', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'kick-tenants-idle-'))
+    const handles = new Map<string, Database.Database[]>()
+    const open = (id: string) => {
+      const db = new Database(path.join(root, `${id}.db`))
+      db.exec('CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)')
+      handles.set(id, [...(handles.get(id) ?? []), db])
+      return db
+    }
+    const tenancy = defineTenancy({
+      strategy: 'database',
+      maxOpenTenants: 2,
+      tenantIdleMs: 50,
+      dialectFor: (id) => sqliteDialect({ database: open(id) }),
+    })
+    const db = createDbClient({
+      schema,
+      tenancy,
+      dialect: sqliteDialect({ database: new Database(':memory:') }),
+    })
+    const add = (id: string) =>
+      tenancy.run(id, () => db.insertInto('notes').values({ body: id }).execute())
+    try {
+      await add('a')
+      await add('b')
+      await add('c') // over the cap: 'a', least recently used, is closed
+      expect(handles.get('a')![0]!.open).toBe(false)
+      expect(handles.get('b')![0]!.open).toBe(true)
+
+      await add('a') // reopened, its data intact
+      expect(handles.get('a')).toHaveLength(2)
+      expect(await tenancy.run('a', () => db.selectFrom('notes').select('body').execute())).toEqual(
+        [{ body: 'a' }, { body: 'a' }],
+      )
+
+      await new Promise((r) => setTimeout(r, 120))
+      expect([...handles.values()].flat().every((h) => !h.open)).toBe(true)
+    } finally {
+      await db.destroy()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})

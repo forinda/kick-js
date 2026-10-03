@@ -75,7 +75,7 @@
     "kysely": "0.29.6"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=5.18.0",
+    "@forinda/kickjs": ">=8.8.0",
     "@forinda/kickjs-devtools-kit": ">=7.0.0",
     "better-sqlite3": ">=12.0.0",
     "mysql2": ">=3.0.0",

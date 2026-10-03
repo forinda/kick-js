@@ -45,7 +45,14 @@ export { reply, isReply, type Reply, type InferHandlerResponse } from './http/re
 export type { SseHandler } from './http/context'
 export { waitUntil, type PlatformContext } from './http/background'
 export { runCronJobs, type CronRun } from './core/cron'
-export { runJob, type JobLike } from './core/jobs'
+export {
+  runJob,
+  registerJobContext,
+  stampJobContext,
+  JOB_CONTEXT_FIELD,
+  type JobLike,
+  type JobContextCarrier,
+} from './core/jobs'
 // Edge-safe stores + ctx-style rate limiter (zero runtime imports).
 export {
   KvRateLimitStore,
