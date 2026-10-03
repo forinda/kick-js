@@ -1,5 +1,270 @@
 # @forinda/kickjs-db
 
+## 8.1.0
+
+### Minor Changes
+
+- [#786](https://github.com/forinda/kick-js/pull/786) [`46d0906`](https://github.com/forinda/kick-js/commit/46d09064782742c85c4e82f52823ddd56677f299) Thanks [@forinda](https://github.com/forinda)! - `casing: 'snake_case'`: camelCase keys in TypeScript over snake_case tables and columns. Set it on `createDbClient` and in `kick.config.ts` `db`.
+  
+  - **Migrations:** they name tables, columns, keys and foreign keys in snake_case, and re-derive kick/db's own constraint names. Names you wrote are kept.
+  - **Queries:** they convert both ways through Kysely's `CamelCasePlugin`. It is split around kick/db's plugins so managed columns, codecs and date decoding still work by key, including nested `db.query` rows.
+  - **Elsewhere:** `createTestDb` / `createPgTestDb` take `casing`, `kick db introspect` renders camelCase keys when it's set, and `extractSnapshot(schema, dialect, { casing })` exposes it programmatically.
+
+- [#779](https://github.com/forinda/kick-js/pull/779) [`bee0dbf`](https://github.com/forinda/kick-js/commit/bee0dbfdd5380cc84f2335ce0c95ea73b922083f) Thanks [@forinda](https://github.com/forinda)! - Two commands for running migrations in CI and production:
+  
+  - `kick db check` fails (exit 1) when the schema has changes no migration covers, a migration isn't reviewed, or a reviewed migration was edited after review — everything `migrate latest` would refuse, found without a database, so CI catches it before a deploy does. Also exported as `checkMigrations({ config, cwd })`.
+  - `kick db migrate unlock` releases the migration lock a run left behind when it was killed mid-migration. Until now that needed a hand-written `UPDATE` on the lock table; the "another process holds the migration lock" error now says to use it.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`20d0bf8`](https://github.com/forinda/kick-js/commit/20d0bf8d4f9f58a77ed3a41147157c175a7be117) Thanks [@forinda](https://github.com/forinda)! - More column options (D.24).
+  
+  - **JS-side defaults:**
+    - `.$defaultFn(fn)` fills a column per inserted row that leaves it out, including the rows of a multi-row insert.
+    - `.$onUpdate(fn)` sets it on every update and every upsert update branch that doesn't set it.
+  - **`mode` for big and exact numbers:** `bigint({ mode: 'bigint' | 'number' | 'string' })` and `numeric(p, s, { mode: 'number' | 'string' })`.
+    - The value is read back as that type, top level and in `db.query` nested rows, and validators follow.
+    - Without `mode`, nothing changes.
+  - **Comments:** `.comment(text)` on columns, and `table(name, columns, { comment, constraints })` for tables.
+    - Postgres: migrated with `COMMENT ON`. MySQL: inline, or by restating the column, keeping `AUTO_INCREMENT` on a serial key.
+    - Read back by introspection and `kick db introspect`. SQLite ignores them.
+    - MySQL column definitions now always carry their comment, so a column alter no longer erases it.
+  - **Postgres:** `halfvec(n)`, `point()` (`{ x, y }`), `geometry(type?, srid?)`, `macaddr()` and `macaddr8()`.
+    - Fix: `vector(n)` now reads and writes `number[]`. It used to return the text `'[1,2,3]'` and send arrays as Postgres array literals.
+  - **MySQL:** `mysqlEnum(...values)` (typed union; values keep their case through emit, introspection and validators), `unsigned(col)`, `tinyint()`, `mediumint()` and `datetime(fsp?)`.
+
+- [#784](https://github.com/forinda/kick-js/pull/784) [`ddea862`](https://github.com/forinda/kick-js/commit/ddea862229d168e524c931d4f1edc9f00cade38d) Thanks [@forinda](https://github.com/forinda)! - `columns` and `extras` in relational reads, at every level of `with`.
+  
+  - **`columns`:** `{ id: true, title: true }` returns only those columns, and `{ passwordHash: false }` returns everything else.
+  - **`extras`:** `{ postCount: (_u, eb) => … }` adds computed fields from SQL expressions.
+  
+  The row type follows both: excluded columns disappear, and each extra is typed from its expression. A mix of `true` and `false`, or an unknown column, is refused. `findManyAndCount` counts the same rows.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`709bf15`](https://github.com/forinda/kick-js/commit/709bf1519c6fc1b0baf3684e4715061b1c131ed8) Thanks [@forinda](https://github.com/forinda)! - Runs on edge and serverless drivers (D.23).
+  
+  - **`createDbClient({ dialectTag })`:** names the SQL a dialect speaks.
+    - Raw Kysely dialects (Neon, D1, libsql, PlanetScale) are still recognised by their adapter.
+    - A dialect kick/db can't place now throws and asks for `dialectTag`. Before, it was treated as SQLite and failed at the first query.
+  - **`asyncSqliteAdapter({ driver })`:** migrations on async SQLite drivers, with `libsqlDriver(client)` for libsql/Turso and `d1Driver(db)` for Cloudflare D1.
+    - Each migration is one atomic batch, with its bookkeeping row and, after a table rebuild, a foreign-key check.
+    - `introspect()` works over the driver.
+    - Passing `kysely` enables TypeScript migrations.
+  - **`introspectSqliteAsync(query)`:** SQLite introspection over any async driver.
+  - **`bun:sqlite`:** `sqliteDialect` now returns rows on Bun. Kysely's driver read a better-sqlite3-only field, so every SELECT ran as a write and returned nothing.
+  - **`generate()` and `check()`:** they reload the schema file, so a second call in the same process sees your edits.
+
+- [#783](https://github.com/forinda/kick-js/pull/783) [`42bc32e`](https://github.com/forinda/kick-js/commit/42bc32e3f5621adcd4ad7bc73e5567809ab7a94e) Thanks [@forinda](https://github.com/forinda)! - `db.query.X.findManyAndCount(options)` returns one page and the total number of rows `where` matches before `limit` / `offset`, as `{ data, total }` — the shape `ctx.paginate` takes. The count runs as a second query with the same `where` and soft-delete filter, ignoring `with`, `orderBy` and paging; `total` is always a number, including on Postgres.
+
+- [#784](https://github.com/forinda/kick-js/pull/784) [`c494efd`](https://github.com/forinda/kick-js/commit/c494efdacfc7043cdfe61e355ee23d1f54c0fcf5) Thanks [@forinda](https://github.com/forinda)! - Generated and identity columns.
+  
+  - **`.generatedAlwaysAs(sql, { stored? })`:** a column the database computes from the row. Stored by default; virtual on MySQL, SQLite and Postgres 18+.
+  - **`.generatedAlwaysAsIdentity()` / `.generatedByDefaultAsIdentity()`:** identity columns, Postgres only.
+  
+  Generated columns and `ALWAYS` identities type as Kysely's `GeneratedAlways<T>`, so writes are rejected at compile time. `InferInsert`, `insertSchema` and `updateSchema` leave them out.
+  
+  Migrations change them in place where the database allows: Postgres `SET EXPRESSION` / `DROP EXPRESSION` and `ADD | SET | DROP IDENTITY`, MySQL `MODIFY`, and a SQLite rebuild, which also adds stored generated columns. Introspection reads them back on Postgres and SQLite.
+  
+  Also fixed: a SQLite table rebuild no longer copies into a generated column, which SQLite refuses.
+
+- [#781](https://github.com/forinda/kick-js/pull/781) [`de72ad2`](https://github.com/forinda/kick-js/commit/de72ad2709821b0a8d7bfc93ac8fe29d5d555b4a) Thanks [@forinda](https://github.com/forinda)! - Columns kick/db maintains (D.10), declared in the schema — no migration involved:
+  
+  - `.onUpdateNow()` sets a timestamp to the current time on every update that doesn't set it itself, including an upsert's update branch.
+  - `version()` — an integer, not null, starting at 0 — is incremented on every update; guard an update with `.where('version', '=', read)` for optimistic locking.
+  - `.softDelete()` marks a nullable timestamp as the deleted flag: relational reads (`db.query`) skip rows where it's set, at every level, unless asked `withDeleted: true`.
+  
+  They apply to queries kick/db builds; raw SQL and the plain query builder's reads are untouched.
+  
+  Tables in a named Postgres schema (`pgSchema('billing').table(…)`) get them too — and `db.query` on such a table no longer builds an alias (`billing.invoices_0`) that a column reference read as a schema.
+
+- [#781](https://github.com/forinda/kick-js/pull/781) [`5a015d0`](https://github.com/forinda/kick-js/commit/5a015d000c245380cc351820a289276c51d2770c) Thanks [@forinda](https://github.com/forinda)! - Many-to-many in relational reads: `many(tags, { through: postTags })` loads a post's tags through the junction table in the same single query, with `where`, `orderBy`, `limit` and nested `with` like any `many`. The junction's foreign keys decide the join; when it has more than one to a side — a table joined to itself, like `follows` — name them: `{ table: follows, from: [follows.followerId], to: [follows.followeeId] }`. A junction that can't be resolved throws `RelationalQueryThroughError` at client creation.
+
+- [#786](https://github.com/forinda/kick-js/pull/786) [`af587f9`](https://github.com/forinda/kick-js/commit/af587f93a5aca507d474907664c372c15f1bd912) Thanks [@forinda](https://github.com/forinda)! - Migration and transaction options.
+  
+  - **`db.transaction({ readOnly: true }, fn)`:** a read-only transaction (Postgres, MySQL), refused on SQLite.
+  - **`kick db migrate up --to <migration>` / `migrateUp({ to })`:** applies through a named migration.
+  - **`migrate down --to <migration>` / `migrateDown({ to })`:** reverses everything after it. `migrateDown` now also returns `reversedAll`.
+  - **`migrate rollback --all` / `migrateRollback({ all: true })`:** reverses every migration.
+  - **`migrationsTable`:** in the `db` config or on `pgAdapter` / `mysqlAdapter` / `sqliteAdapter`, it renames the bookkeeping tables. On Postgres it may be schema-qualified. Those tables are left out of introspection and drift.
+  - **`migrationsDirs` / `migrationsDir: [...]`:** runs several migration folders as one history ordered by id, with drift checked across them.
+  
+  Also fixed: `kick db` now reads `casing` from the `db` config block. The config resolver used to drop it.
+
+- [#784](https://github.com/forinda/kick-js/pull/784) [`6972cee`](https://github.com/forinda/kick-js/commit/6972cee27045346f45792057da68f012c969d1ed) Thanks [@forinda](https://github.com/forinda)! - Condition helpers, table aliases and reusable CTEs.
+  
+  - **Operators:** `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `like`, `notLike`, `ilike`, `isNull`, `isNotNull`, `inArray`, `notInArray`, `between`, `and`, `or`, `not`, `exists`, `notExists`.
+    - Exported from `@forinda/kickjs-db`, and they return Kysely expressions, so they work in `.where()`, join `.on()`, `having`, and `db.query`'s `where`.
+    - Operands are type-checked against the column. They can be a table's columns, the `db.query` row argument, any Kysely expression, or a value.
+    - Edge cases stay valid SQL: `and()` / `or()` skip `undefined`, and empty `inArray` lists are handled.
+  - **`alias(table, name)`:** the same table under another name, for self-joins, with `$from` for `selectFrom` and joins.
+  - **CTEs:** `db.with`, `db.withRecursive` and `db.cte(name, query)` are now on the client, so a CTE can be defined once and spread in: `db.with(...recent)`.
+
+- [#773](https://github.com/forinda/kick-js/pull/773) [`4d04049`](https://github.com/forinda/kick-js/commit/4d04049d4d9a14d10e2b4a25b052e025107b2b5f) Thanks [@forinda](https://github.com/forinda)! - Primary-key and CHECK changes in migrations.
+  
+  - **Composite and named keys:** `primaryKey(name?).on(t.a, t.b)` in a table's constraints declares a key over several columns, in key order, optionally named (Postgres keeps the name). Declaring a key both this way and with a column's `.primaryKey()` throws.
+  - **CHECK constraints:** `check(name, expression)` in the constraints. They're created with the table and migrated when added, removed or changed.
+  - **Key changes migrate:** a changed primary key used to surface only as a column change — Postgres emitted nothing for the key and MySQL a `MODIFY COLUMN` that neither added nor dropped it. It's now its own change: Postgres drops the old constraint before columns are dropped and adds the new one after columns are added; MySQL swaps the key in one statement; SQLite rebuilds the table. Down migrations reverse it.
+  - **SQLite rebuilds check foreign keys:** a migration that rebuilds a table runs `PRAGMA foreign_key_check` before committing and rolls back if a row points at a missing parent.
+  - Snapshots of tables without these are unchanged, so existing migration hashes stay valid.
+
+- [#781](https://github.com/forinda/kick-js/pull/781) [`1425728`](https://github.com/forinda/kick-js/commit/1425728a6b3bd7c68e6a957b814ecfc3d096fcd9) Thanks [@forinda](https://github.com/forinda)! - Read replicas: `createDbClient({ schema, dialect, replica })` — a dialect, or several used in turn. Reads outside a transaction (`selectFrom`, `db.query`) go to a replica; writes, raw `db.qb`, and everything inside a transaction go to the primary. `db.primary` is the same client with reads pinned to the primary, for reading your own writes while replicas lag; `findOrCreate()` and `upsert()`'s MySQL read-back already use it. `db.destroy()` closes the replicas too.
+
+- [#778](https://github.com/forinda/kick-js/pull/778) [`8d200b7`](https://github.com/forinda/kick-js/commit/8d200b7af7ce62e99aa9cd0b1e0cac3178c56e42) Thanks [@forinda](https://github.com/forinda)! - Relational queries can sort descending: `asc()` and `desc()` wrap an `orderBy` expression — `orderBy: (_p, eb) => desc(eb.ref('publishedAt'))` — at the top level and inside `with`, on every dialect. Returning an array from `orderBy` (`[desc(eb.ref('priority')), asc(eb.ref('title'))]`), which the type always allowed, now works; it used to throw. An empty array sorts nothing. The relational-query guide's per-relation example used `eb.isNotNull()` and `.desc()`, which don't exist; it now uses `eb('publishedAt', 'is not', null)` and `desc()`.
+
+- [#784](https://github.com/forinda/kick-js/pull/784) [`ffb217e`](https://github.com/forinda/kick-js/commit/ffb217e5e04e45ec12e208defcc6590e59ec7da2) Thanks [@forinda](https://github.com/forinda)! - `kick db generate` asks which drops are renames. When a table or column is dropped and a new one could replace it, a terminal run asks "Column people.fullName is gone. Was it renamed?". Tables are asked about first, then columns, including those inside a renamed table. A rename that also changes the type is a rename plus an alter, so rows keep their values.
+  
+  Outside a terminal, name renames with `--rename-table old=new` / `--rename-column table.old=new`. Any other drop that could be a rename prints a warning with the flag that would keep it.
+  
+  Programmatically, `generate({ renames, askRenames, onPossibleRename })` and `diff(prev, next, { renames })` do the same, and `findRenameCandidates()` lists the possible renames.
+  
+  Also fixed: a SQLite table rebuild in the same migration as a table or column rename copied from the wrong names and failed.
+
+- [#784](https://github.com/forinda/kick-js/pull/784) [`227c394`](https://github.com/forinda/kick-js/commit/227c3948e7d7a853f4c51ea4c210a7e3d7133b3d) Thanks [@forinda](https://github.com/forinda)! - Richer indexes. Chain options onto `index(…).on(…)` / `unique(…).on(…)`:
+  
+  - `.where(sql)` makes a partial index (Postgres, SQLite).
+  - A string key is an expression: `.on('lower(email)')` (all three dialects).
+  - `.using('gin' | 'gist' | 'hnsw' | …)` sets the index method (Postgres; MySQL takes `btree` / `hash`).
+  - `.op(key, 'gin_trgm_ops')` sets an operator class (Postgres).
+  - `.include(...cols)` adds covering columns (Postgres).
+  - `.concurrently()` (Postgres): `kick db generate` writes each concurrent index change as a migration of its own that runs outside a transaction.
+  
+  An option the dialect can't express fails when the schema is read. Introspection reads expressions, predicates, methods and `INCLUDE` back on Postgres, and predicates on SQLite.
+  
+  Behaviour change: an index whose definition changed under the same name is now dropped and recreated by `generate`. Before, the diff compared indexes by name only and missed the change. Drift checks still compare name, uniqueness and plain columns.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`f8ed04f`](https://github.com/forinda/kick-js/commit/f8ed04f57f844ae0cdf569085d4e7707f514bd14) Thanks [@forinda](https://github.com/forinda)! - Row-level security in the schema (D.26, Postgres).
+  
+  - **Declaring:** `policy(name).for(...).to(...).as(...).using(sql).withCheck(sql)` in a table's constraints. `table(name, columns, { rls: true | { force: true } })` turns RLS on, which a policy also does.
+  - **Roles:** `pgRole(name, { login, createDb, createRole, inherit, bypassRls })` is created by migrations if missing. A role is never dropped, not even by a down migration. `pgRole(name).existing()` refers to one managed elsewhere.
+  - **Migrations:**
+    - Roles come first, policy drops before the table changes, and RLS switches and policy creates last.
+    - A changed policy is dropped and re-created.
+    - Policies on a table whose shape changes, or whose SQL names such a table, are dropped and re-created around the change.
+  - **`db.transaction({ settings, role }, fn)`:** `set_config(key, value, true)` and `SET LOCAL ROLE`, scoped to the transaction so they're safe on a pool. They're refused inside an open transaction unless `nested: 'separate'`.
+  - **Introspection** reads RLS state and policies, and `kick db introspect` renders them. Drift compares policies by name, command, kind and roles, and ignores declared roles.
+
+- [#781](https://github.com/forinda/kick-js/pull/781) [`b2dcfdb`](https://github.com/forinda/kick-js/commit/b2dcfdb76b63af084511ab377e72afd4a43bc481) Thanks [@forinda](https://github.com/forinda)! - `kick db seed [names...]` runs the seed files in `db/seeds` (`seedsDir` in the `db` config) in name order, or only the ones named. Each file default-exports an async function and imports what it needs — usually the app's own client — and nothing records that it ran, so seeds are written to be re-run (`db.upsert()` / `db.findOrCreate()`). A failing seed stops the run with `Seed <file> failed: …` and exit code 1. Also exported as `runSeeds()` / `listSeeds()`.
+  
+  Schema files, seed files and `kick db check` now load through jiti, like `kick.config.ts`: a schema split across files with extensionless relative imports used to fail under Node's built-in TypeScript loading.
+  
+  Seed files that share a name (`01_users.ts` beside `01_users.js`) are refused before any runs, a seed that fails to load is named in the error, and JavaScript seeds get extensionless relative imports too.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`fa0f2ac`](https://github.com/forinda/kick-js/commit/fa0f2ac9b6392a05d889a30790892ee9ef4b8851) Thanks [@forinda](https://github.com/forinda)! - Tenancy, continued.
+  
+  - **Jobs:** tenancy registers as a kickjs job context carrier, so a job dispatched as a tenant runs as that tenant. Needs `@forinda/kickjs` 8.8 for `registerJobContext`; the peer range is now `>=8.8.0`.
+  - **`'database'` connections:** a tenant's connections close after `tenantIdleMs` unused (default 10 minutes). `maxOpenTenants` caps how many tenants keep connections open, closing the least recently used idle one; tenants with a query in flight are never closed.
+  - **`'rls'` with `'transaction'` binding:** a lone query is three round trips instead of four, because `BEGIN` and the tenant now go in one simple query, with the tenant quoted as a SQL literal. Costs are measured on the Tenancy page.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`c840d9c`](https://github.com/forinda/kick-js/commit/c840d9c18011f7a1cb388baa6ec23552e04ac737) Thanks [@forinda](https://github.com/forinda)! - Multi-tenancy: `defineTenancy({ strategy })` with `'column'`, `'rls'`, `'schema'` or `'database'`, given to both the schema and the client, so handlers and repositories carry no tenant code.
+  
+  - **`tenantKey(tenancy)`** marks a tenanted table.
+    - `'column'` adds the tenant to every select, update and delete on it (joins in their `ON`, every level of `db.query`), and fills or refuses it on insert.
+    - `'rls'` generates a forced row-level-security policy, and fills the tenant on insert.
+  - **`'rls'` binding:** `'transaction'` (default) sets the tenant locally per transaction, which is safe behind PgBouncer-style poolers. `'connection'` sets it once per connection, for pools the app owns.
+  - **`'schema'`** points each query at the tenant's schema. **`'database'`** routes each tenant to its own database via `dialectFor(id)`, with drivers cached per tenant.
+  - **The current tenant** defaults to the request's `tenant` value. `tenancy.run(id, fn)` covers jobs, cron, scripts and tests. With no tenant, queries fail closed.
+  - **`tenancy.bypass(fn, { reason, allowInRequest })`:**
+    - a reason is required, and each call goes to the `onBypass` audit hook;
+    - it's refused inside a request by default;
+    - under `'rls'` it runs on a separate `bypassDialect` (a `BYPASSRLS` role), tagged `application_name = kick-bypass`.
+  - **`roleCheck`:** under `'rls'`, the client refuses to run as a superuser or `BYPASSRLS` role.
+  - **`migrateTenants({ tenants, adapterFor })`** and `kick db migrate latest --tenants` (`db.tenants` in `kick.config`) migrate every tenant's schema or database and report failures per tenant.
+
+- [#781](https://github.com/forinda/kick-js/pull/781) [`8e98bef`](https://github.com/forinda/kick-js/commit/8e98bef8a358c6915c96f2febd89e3e81765d682) Thanks [@forinda](https://github.com/forinda)! - Test helpers, from `@forinda/kickjs-db/testing`:
+  
+  - `createTestDb({ schema })` — an in-memory SQLite database with the schema (or `migrationsDir`'s migrations) applied and foreign keys on; one per test file, milliseconds to create.
+  - `createPgTestDb({ schema, connectionString })` — a throwaway database on an existing Postgres server (a CI service container, local Docker), with the schema or migrations applied; `drop()` removes it. No container per test file.
+  - `rolledBack(db, fn)` — runs a test in a transaction that's always rolled back; code holding only the client joins it through the call chain.
+
+- [#772](https://github.com/forinda/kick-js/pull/772) [`07e6ec2`](https://github.com/forinda/kick-js/commit/07e6ec2aa48620f23162ee4bcc0f165f8a35e8fa) Thanks [@forinda](https://github.com/forinda)! - Transactions that follow the call chain, `afterCommit`, and retry.
+  
+  - **Call-chain transactions:** inside `transaction(fn)`, the plain client joins the transaction — repositories using the injected `db` take part without being handed `tx`. Concurrent requests each keep their own. `db.inTransaction` reports whether one is open.
+  - **Nesting:** `transaction({ nested })` — `'reuse'` (default) runs inside the open transaction, `'savepoint'` behind a savepoint, `'separate'` in an independent transaction on another connection (not on SQLite). Before, a nested `db.transaction()` always opened a separate one.
+  - **`afterCommit(fn)`:** runs once the transaction commits, dropped on rollback (including a rolled-back savepoint); runs at once outside a transaction. A failing hook is reported, not thrown.
+  - **`retry`:** `transaction({ retry: true })` runs the whole transaction again on a serialization failure or deadlock (`err.retryable`), with jittered exponential backoff; a `transactionRetry` event fires per retry.
+  - `savepoint()` on the plain client now opens the savepoint on the call chain's transaction, and throws a clear error outside one.
+
+- [#785](https://github.com/forinda/kick-js/pull/785) [`44472a6`](https://github.com/forinda/kick-js/commit/44472a6771a06a3114e525fad0adc3b4c5ccf8bf) Thanks [@forinda](https://github.com/forinda)! - Migrations written in TypeScript. `kick db generate <name> --ts` (or `generate({ typescript: true })`) writes a `migration.ts` exporting `up(db)` / `down(db)`, for data changes that need code.
+  
+  - **Runs:** `db` is Kysely on the migration's transaction, and the migration is recorded on the same transaction, so a failure leaves neither its changes nor its record. With `"transaction": false` it runs on the connection.
+  - **Hashing:** the code is hashed with the migration, so an edit after review is refused. SQL migrations keep their existing hashes.
+  - **Adapters:** migration adapters gain an optional `kysely()`, which the Postgres, MySQL and SQLite adapters implement.
+  - **Loading:** migration code is read fresh on every run, never from a module cache.
+
+- [#772](https://github.com/forinda/kick-js/pull/772) [`9fc8ceb`](https://github.com/forinda/kick-js/commit/9fc8ceb8826a328fbe582382264192896a071129) Thanks [@forinda](https://github.com/forinda)! - Typed database errors.
+  
+  A failed query now throws `UniqueViolationError`, `ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError`, `ConnectionError` or the `DatabaseError` base instead of the driver's own error — on Postgres, MySQL and SQLite, for queries, transactions (including a serializable `COMMIT`), savepoints and connecting. Each carries the `constraint`, `table`, `columns` and `detail` the database reported, `driverCode`, and the driver's error as `cause`. Serialization failures and deadlocks are `retryable`. A `UniqueViolationError` has `status: 409`, so an unhandled one answers `409` rather than `500`.
+  
+  Code that caught driver errors by their own class or `code` should read `err.cause` (or switch to the typed classes).
+
+- [#781](https://github.com/forinda/kick-js/pull/781) [`b4380f2`](https://github.com/forinda/kick-js/commit/b4380f230d796e823968c2b94006ae9895b8b803) Thanks [@forinda](https://github.com/forinda)! - `db.upsert()` and `db.findOrCreate()`.
+  
+  - `db.upsert(table, { values, target, update?, where? })` inserts a row — or rows — or updates the ones whose `target` key exists, in one statement, and returns them as stored: `ON CONFLICT … DO UPDATE … RETURNING` on Postgres and SQLite, `ON DUPLICATE KEY UPDATE` plus a read-back on MySQL. `update` takes column names (default: every inserted column outside `target`) or values and expressions; `where` targets a partial unique index.
+  - `db.findOrCreate(table, { where, create? })` returns `{ row, created }`. It's race-safe: a request that loses the race to insert catches the `UniqueViolationError` and reads the winner's row, and inside a transaction the insert runs in a savepoint so losing doesn't abort the transaction on Postgres.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`5f374d2`](https://github.com/forinda/kick-js/commit/5f374d23fddf66e8cb5f3c82441d591f80c5b0de) Thanks [@forinda](https://github.com/forinda)! - Views and materialized views (D.25).
+  
+  - **Declaring:** `view(name, columns, { as })` from the root, and `materializedView(name, columns, { as, constraints })` from `@forinda/kickjs-db/pg`. They're queried through the typed client like tables.
+  - **Migrations:**
+    - Views are created after the tables in declaration order, and dropped before them.
+    - A changed definition drops and re-creates the view.
+    - A view whose SQL names a table the migration alters, and any view over such a view, is dropped and re-created around the change. Postgres won't alter a column a view uses, and SQLite's table rebuild breaks a view over the table.
+    - SQLite creates views after its table rebuilds.
+  - **Materialized views:** indexes, and `db.refreshMaterializedView(name, { concurrently })`.
+  - **Introspection** reads views on Postgres, MySQL and SQLite, with columns and materialized-view indexes. `kick db introspect` renders them, and drift compares which views exist.
+  - Snapshots without views are unchanged.
+
+### Patch Changes
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`e63bdf9`](https://github.com/forinda/kick-js/commit/e63bdf97eff6c8c020cdcdf5a5dbd858b53594d8) Thanks [@forinda](https://github.com/forinda)! - `insertSchema` / `updateSchema` / `selectSchema` hold a `decimal(p, s)` / `numeric(p, s)` column to its precision and scale: `decimal(12, 2)` accepts at most 10 digits before the point and 2 after. A third decimal place used to pass validation and be rounded away by the database, and an oversized value failed the insert with a server error; both are now `422` validation issues naming the column. The OpenAPI `pattern` reflects the same bounds. A scale outside 0…precision (Postgres' `numeric(3, 5)`, `numeric(2, -3)`) keeps the plain decimal check and leaves the range to the database.
+
+- [#779](https://github.com/forinda/kick-js/pull/779) [`464710c`](https://github.com/forinda/kick-js/commit/464710cdc1b93a7ecb95f0be38d0e56b203462fe) Thanks [@forinda](https://github.com/forinda)! - Migration errors say what went wrong. A migration whose SQL fails throws `MigrationFailedError` — "Migration <id> failed: <the database's message>", with `id` and the driver error as `cause` — instead of the bare driver error, which didn't say which of several pending migrations broke. "Schema drift detected" now lists what drifted — `(added: users.bio)` — not only the counts.
+
+- [#778](https://github.com/forinda/kick-js/pull/778) [`8d6a40c`](https://github.com/forinda/kick-js/commit/8d6a40ce66284b3b18d535b5df0a35038d12835d) Thanks [@forinda](https://github.com/forinda)! - MySQL works as documented, end to end:
+  
+  - `mysqlDialect({ pool })` with a `mysql2/promise` pool — the same pool `mysqlAdapter` takes — no longer hangs on every query. Kysely drives mysql2's callback API, which a promise pool ignores; the dialect now hands Kysely the pool's callback core.
+  - A real mysql2 `Pool` satisfies `MysqlPoolLike` without a cast (its query values are mutable; the type said `readonly`).
+  - After a migration with a foreign key on a column with no index of its own, the next `migrate latest` no longer fails with "Schema drift detected": the non-unique index InnoDB creates for the foreign key isn't counted as drift (a unique index is still compared).
+  - `mysqlAdapter` and `pgAdapter` take `endPoolOnClose: true` for a pool the adapter owns — a `kick.config.ts` `db.adapter()` factory that opens one for the CLI — so `kick db` exits when it's done instead of waiting on the open pool. A pool with no `end()` is refused up front (`KICK_DB_POOL_NOT_CLOSABLE`) rather than silently left open.
+  
+  Rows nested by `db.query` decode their dates on Postgres and MySQL too, as they already did on SQLite: `timestamp`, `timestamptz` and `date` columns come back as `Date`, read the way the driver reads the same column at the top level (on MySQL, in the pool's `timezone`, and left as strings for the types mysql2's `dateStrings` keeps as strings).
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`d717834`](https://github.com/forinda/kick-js/commit/d717834263c718daf18f07c2410497d4a57f6847) Thanks [@forinda](https://github.com/forinda)! - Rows that `db.query` nests under a relation now decode like top-level rows: a `customType` column comes back through its `fromDriver` codec on every dialect (a JSON-text list used to arrive as the raw string), and on SQLite nested dates are `Date` and nested decimals are exact strings. An ordinary column that shares a relation's name keeps its stored value.
+
+- [#780](https://github.com/forinda/kick-js/pull/780) [`edfcf63`](https://github.com/forinda/kick-js/commit/edfcf634182d58961fdac7dc9476976e86cbd311) Thanks [@forinda](https://github.com/forinda)! - A migration and its `kick_migrations` row commit in one transaction. The row used to be written after the migration's transaction committed, so a crash in between left the migration applied but unrecorded, and the next run failed re-applying it; `migrate down` had the mirror problem. The built-in Postgres, MySQL and SQLite adapters implement a new optional `MigrationAdapter.applyMigrationInTx(sql, bookkeeping)`; a custom adapter without it keeps the old two-step behaviour. The window remains where a transaction can't cover it: a migration with `transaction: false`, and on MySQL any migration with DDL, which MySQL commits as it runs.
+
+- [#784](https://github.com/forinda/kick-js/pull/784) [`cf9455b`](https://github.com/forinda/kick-js/commit/cf9455b0a1f3c5af15b03621fabda538584b2762) Thanks [@forinda](https://github.com/forinda)! - `$extends({ result })` computeds now apply to related rows that `db.query` loads through `with`, at every level. The types already promised them, but they were missing at runtime.
+
+- [#779](https://github.com/forinda/kick-js/pull/779) [`5bbab4a`](https://github.com/forinda/kick-js/commit/5bbab4a4cbaef78b05f76c1ee77daa1ed9f6a675) Thanks [@forinda](https://github.com/forinda)! - Hand-written SQL in a migration applies. The journal hash was recorded at `generate` and never again, so filling in a `kick db generate <name> --empty` migration — which its own output tells you to do — or editing a generated one before review failed `migrate latest` with "Hash mismatch", reviewed or not. `kick db migrate review <id>` now records the hash of the files as reviewed, and the runner checks the hash only for reviewed migrations: an edit after review is still refused, until you review it again. An unreviewed migration applied in development is recorded with its current hash.
+
+- [#778](https://github.com/forinda/kick-js/pull/778) [`2e70fe5`](https://github.com/forinda/kick-js/commit/2e70fe555b41919dbd2cf94463fd9965589b9345) Thanks [@forinda](https://github.com/forinda)! - Booleans work on SQLite. A `boolean()` column is typed `boolean`, but writing `true` failed ("SQLite3 can only bind numbers, strings, bigints, buffers, and null") and reads came back as `1` / `0`. Booleans now bind as `1` / `0` anywhere — values, `where`, raw `sql` — and `boolean()` columns read back as `true` / `false` — any non-zero integer as `true`, as SQLite reads it.
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`7112eaa`](https://github.com/forinda/kick-js/commit/7112eaa0acb15e0f4203b0f26d63a79f7e7f3cb3) Thanks [@forinda](https://github.com/forinda)! - Dates work on SQLite. `timestamp()`, `timestamptz()` and `date()` columns are typed `Date`, but on SQLite they read back as strings and writing a `Date` failed ("SQLite3 can only bind numbers, strings, bigints, buffers, and null"). They now read back as `Date`, and a `Date` is accepted anywhere — insert and update values, `where` clauses, raw `sql` — stored as `YYYY-MM-DD HH:MM:SS.SSS` in UTC (the shape SQLite's own `CURRENT_TIMESTAMP` writes, so old and new values sort together); `date()` columns store `YYYY-MM-DD`, and a `Date` compared with a `date()` column in a `where` (`=`, `<`, `in`, …) matches by calendar day. A `customType` codec on a column still takes precedence.
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`047970f`](https://github.com/forinda/kick-js/commit/047970fe0378df14694cd3389575a2d29fb114be) Thanks [@forinda](https://github.com/forinda)! - `decimal()`, `numeric()` and `money()` columns on SQLite now read back as strings at the column's scale — `decimal(12, 2)` gives `'0.10'`, as on Postgres and MySQL — instead of the float `0.1` that contradicted their `string` type. SQLite still stores a float, so values are exact up to 15 significant digits.
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`fad73c9`](https://github.com/forinda/kick-js/commit/fad73c95b5cb6a22d68987c400bcf3b3762a7dd8) Thanks [@forinda](https://github.com/forinda)! - `defaultNow()` on SQLite stores milliseconds — `strftime('%Y-%m-%d %H:%M:%f', 'now')` instead of `CURRENT_TIMESTAMP`, which has whole seconds — so rows inserted within the same second no longer tie on `ORDER BY createdAt`. The stored shape matches what kick/db writes for a `Date`. Applies to tables created or rebuilt from now on; drift checks ignore SQLite defaults.
+
+- [#779](https://github.com/forinda/kick-js/pull/779) [`f8afde6`](https://github.com/forinda/kick-js/commit/f8afde6933eb01d27dc1496c3e4ff0b3977b14f3) Thanks [@forinda](https://github.com/forinda)! - Two SQLite fixes:
+  
+  - A table keyed by `serial()` no longer reads as drift on every `migrate latest` after the first ("Schema drift detected: 0 added, 0 removed, 1 changed"). SQLite reports an inline `INTEGER PRIMARY KEY` as nullable; drift now treats every primary-key column as not null.
+  - `json()`, `jsonb()` and `.array()` columns work: values are stored as JSON text and read back as what was written, at the top level and in nested `db.query` rows. Writing an object or array used to throw "SQLite3 can only bind numbers, strings, bigints, buffers, and null".
+
+- [#777](https://github.com/forinda/kick-js/pull/777) [`1cce7a2`](https://github.com/forinda/kick-js/commit/1cce7a2dfdf6971f9a0c75cf2c8a83c9acb3389a) Thanks [@forinda](https://github.com/forinda)! - `uuid().defaultRandom()` on SQLite now generates a canonical version-4 UUID (`8-4-4-4-12`), not 32 bare hex characters — so a generated id passes the same UUID validation a Postgres one does (`z.uuid()` rejected it before). Applies to tables created or rebuilt by migrations generated from now on; existing columns keep their old default until the table is next rebuilt. Drift checks ignore SQLite defaults, so no drift is reported either way.
+
+- [#792](https://github.com/forinda/kick-js/pull/792) [`a506117`](https://github.com/forinda/kick-js/commit/a5061172ed4a28e685ac77876fee050fd2ee8c4b) Thanks [@forinda](https://github.com/forinda)! - Tenancy hardening and fixes.
+  
+  - **`'column'` tenancy:**
+    - It also filters the source tables of `UPDATE … FROM` and `DELETE … USING`.
+    - An upsert's `DO UPDATE` is held to the tenant's rows, so a conflict on another tenant's row leaves it alone.
+    - MySQL's `ON DUPLICATE KEY UPDATE`, `INSERT … SELECT`, `DEFAULT VALUES` and a non-literal tenant value are refused on tenanted tables, because their tenant can't be checked.
+  - **`'rls'` streams:** a stream left early (`break`) rolls back its short transaction, so the connection never returns to the pool with the tenant still set.
+  - **`insertSchema`:** the tenant column and `$defaultFn` columns are optional on insert.
+  - **SQLite view introspection:** handles doubled quotes inside a view's column list.
+  - **`pgDialect({ cursor })`:** takes `pg-cursor`'s `Cursor`, so `.stream()` works on Postgres.
+  - Validators under `numeric(p, s, { mode: 'number' })` refuse a decimal with more than 15 significant digits, or one that isn't finite, instead of rounding it.
+
+- [#790](https://github.com/forinda/kick-js/pull/790) [`cef336f`](https://github.com/forinda/kick-js/commit/cef336f841651435e529c3b37f135f9e1835bb6d) Thanks [@forinda](https://github.com/forinda)! - `createPgTestDb().drop()` no longer surfaces "terminating connection due to administrator command" as an uncaught error. `pool.end()` can resolve before a client's socket closes, and the forced `DROP DATABASE` then terminated that connection after the pool had detached its error listener. Each client now keeps its own listener.
+
+- [#775](https://github.com/forinda/kick-js/pull/775) [`e4fabb6`](https://github.com/forinda/kick-js/commit/e4fabb6270c06dd781eab2d97d117e25e1e042b4) Thanks [@forinda](https://github.com/forinda)! - Work that outlives its transaction no longer looks like it's inside it. An async continuation started inside `transaction()` but still running after the commit (an un-awaited promise, say) used to see `inTransaction: true` and fail with Kysely's bare "Transaction is already committed". `inTransaction` is now `false` once the transaction (or savepoint) finishes, a query from that continuation throws `TransactionFinishedError` naming the likely cause, and `transaction()` / `afterCommit()` behave as outside a transaction.
+
 ## 8.0.0
 
 ### Major Changes
