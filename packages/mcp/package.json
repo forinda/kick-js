@@ -44,7 +44,7 @@
   "peerDependencies": {
     "@modelcontextprotocol/server": "^2.3.0",
     "zod": "^4.6.5",
-    "@forinda/kickjs": ">=8.5.0 <9.0.0"
+    "@forinda/kickjs": ">=8.5.0 <10.0.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/server": {
