@@ -4,7 +4,7 @@ import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
 import { isView } from '../dsl/view'
 import { isRole } from '../dsl/rls'
 import { extractRelations } from '../query/extract-relations'
-import { applyCasing, type Casing } from './casing'
+import { applyCasing, toDbName, type Casing } from './casing'
 import type {
   Dialect,
   EnumSnapshot,
@@ -139,6 +139,8 @@ export function extractSnapshot(
     }
   }
 
+  addTenantPolicies(schema, tables, dialect, options.casing)
+
   const relations = extractRelations(schema, tables)
 
   // Only carry `enums` on PG snapshots — other dialects don't define
@@ -163,6 +165,47 @@ export function extractSnapshot(
   if (Object.keys(views).length > 0) snapshot.views = views
   if (Object.keys(roles).length > 0) snapshot.roles = roles
   return options.casing === 'snake_case' ? applyCasing(snapshot) : snapshot
+}
+
+/**
+ * A table whose `tenantKey()` uses `'rls'` tenancy gets row-level security,
+ * forced, and a policy matching the column to the tenancy's setting — unless
+ * it declares one with the same name itself.
+ */
+function addTenantPolicies(
+  schema: Record<string, unknown>,
+  tables: Record<string, TableSnapshot>,
+  dialect: Dialect,
+  casing: Casing | undefined,
+): void {
+  for (const exported of Object.values(schema)) {
+    const t = unwrapTable(exported)
+    if (!t || isView(t)) continue
+    for (const [key, builder] of Object.entries(t.__columns)) {
+      const tenancy = builder.__state().tenancy
+      if (tenancy?.strategy !== 'rls') continue
+      if (dialect !== 'postgres') {
+        throw new Error(`kickjs-db: 'rls' tenancy is Postgres-only (table '${t.__name}')`)
+      }
+      const snap = tables[qualifiedTableName(t)]!
+      const column = casing === 'snake_case' ? toDbName(key) : key
+      const name = `${t.__name}_tenant`
+      if (snap.policies?.some((p) => p.name === name)) continue
+      const matches = `"${column.replace(/"/g, '""')}" = nullif(current_setting('${tenancy.setting.replace(/'/g, "''")}', true), '')::${snap.columns[key]!.type}`
+      snap.rls = { force: true, ...snap.rls }
+      snap.policies = [
+        ...(snap.policies ?? []),
+        {
+          name,
+          as: 'permissive',
+          command: 'all',
+          to: ['public'],
+          using: matches,
+          withCheck: matches,
+        },
+      ]
+    }
+  }
 }
 
 function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): TableSnapshot {

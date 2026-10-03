@@ -18,6 +18,8 @@ import {
   collectRelationKeys,
 } from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
+import { tenancyPlugin } from './tenancy-plugin'
+import { tenantConnections } from './tenancy-connections'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
 import { casingPlugins } from '../snapshot/casing'
@@ -124,6 +126,14 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   if (opts.plugins && opts.plugins.length > 0) {
     plugins.push(...opts.plugins)
   }
+  if (opts.tenancy) {
+    if (opts.tenancy.strategy !== 'column' && dialectTag !== 'postgres') {
+      throw new Error(`kickjs-db: '${opts.tenancy.strategy}' tenancy is Postgres-only`)
+    }
+    // Before the casing plugin's query half: it names the tenant column by key.
+    const plugin = tenancyPlugin(opts.tenancy, opts.schema)
+    if (plugin) plugins.push(plugin)
+  }
   if (opts.casing === 'snake_case') {
     // Results are converted before anything reads them by key; queries after
     // everything else has written them by key.
@@ -135,7 +145,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const makeKysely = (dialect: KyselyDialect) =>
     new Kysely<DB>({
       // Driver failures surface as typed errors (UniqueViolationError, …).
-      dialect: translatingDialect(dialect, dialectTag),
+      dialect: translatingDialect(tenantConnections(dialect, opts.tenancy), dialectTag),
       plugins: plugins.length > 0 ? plugins : undefined,
       log: events
         ? (event) => {

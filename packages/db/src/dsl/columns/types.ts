@@ -86,6 +86,8 @@ export interface ColumnState {
   mode?: 'bigint' | 'number' | 'string'
   /** `.comment()`: stored in the database on Postgres and MySQL. */
   comment?: string
+  /** `tenantKey(tenancy)`: this is the table's tenant column. */
+  tenancy?: { strategy: string; setting: string }
   /** `$defaultFn`: computed in JS for each inserted row that doesn't set it. */
   defaultFn?: () => unknown
   /** `$onUpdate`: computed in JS for each update that doesn't set it. */

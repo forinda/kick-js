@@ -280,6 +280,11 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    */
   dialectTag?: 'postgres' | 'mysql' | 'sqlite'
   /**
+   * Keep tenants apart: the same `defineTenancy()` the schema's
+   * `tenantKey()` columns use. See {@link import('../tenancy').defineTenancy}.
+   */
+  tenancy?: import('../tenancy').Tenancy
+  /**
    * Read replicas — a dialect, or several used in turn. Reads outside a
    * transaction (`selectFrom`, `db.query`) go to a replica; writes, raw
    * `db.qb`, and everything inside a transaction go to `dialect`. Read your
