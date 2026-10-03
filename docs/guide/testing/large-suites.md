@@ -25,7 +25,11 @@ export default defineConfig({
 const t = useTestApp(() => appOptions, { shared: true, client: { basePath: '/api/v1' } })
 ```
 
-With `shared: true`, the first file in a worker builds the app and the rest reuse it. It shuts down when the worker exits. The options function runs only once per worker, so a per-file `overrides` list doesn't take effect: put shared fakes in `appOptions`, or use separate files (or projects) for apps that need different wiring.
+With `shared: true`, the first file in a worker builds the app and the rest reuse it. It shuts down when the worker exits. The options function runs only for the first file, so a later file's `overrides` don't take effect. Put shared fakes in `appOptions`. Files that need differently wired apps give each wiring a name, and get one app per name:
+
+```ts
+const t = useTestApp(() => adminOptions, { shared: 'admin-api' })
+```
 
 ## Reset state, not the app: `onTestReset`
 

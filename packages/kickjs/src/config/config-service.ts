@@ -72,8 +72,14 @@ export class ConfigService {
    *   accepted and `T` falls back to the explicit generic for
    *   back-compat.
    */
-  get<K extends string, T = any>(key: ConfigKey<K>): ConfigValue<K, T> {
-    return this.env[key] as ConfigValue<K, T>
+  get<K extends string, T = any>(key: ConfigKey<K>): ConfigValue<K, T>
+  /** With a fallback, returned when the value is unset (`undefined` or `null`). */
+  get<K extends string, T = any>(
+    key: ConfigKey<K>,
+    fallback: NonNullable<ConfigValue<K, T>>,
+  ): NonNullable<ConfigValue<K, T>>
+  get(key: string, fallback?: unknown): unknown {
+    return this.env[key] ?? fallback
   }
 
   /**
@@ -111,6 +117,7 @@ export class ConfigService {
  */
 export interface TypedConfigService<TEnv extends Record<string, any>> {
   get<K extends string & keyof TEnv>(key: K): TEnv[K]
+  get<K extends string & keyof TEnv>(key: K, fallback: NonNullable<TEnv[K]>): NonNullable<TEnv[K]>
   getAll(): Readonly<TEnv>
   reload(): void
   isProduction(): boolean
@@ -156,8 +163,10 @@ export function createConfigService<T extends z.ZodObject<any>>(schema: T) {
       return loadEnv(schema)
     }
 
-    get<K extends string & keyof TEnv>(key: K): TEnv[K] {
-      return this.env[key]
+    get<K extends string & keyof TEnv>(key: K): TEnv[K]
+    get<K extends string & keyof TEnv>(key: K, fallback: NonNullable<TEnv[K]>): NonNullable<TEnv[K]>
+    get(key: string, fallback?: unknown): unknown {
+      return (this.env as Record<string, unknown>)[key] ?? fallback
     }
 
     getAll(): Readonly<TEnv> {

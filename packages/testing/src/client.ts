@@ -75,7 +75,8 @@ export function createClient(
   // it, so `.as()` / `.withHeaders()` keep the same cookie jar. Otherwise a
   // fresh request each call.
   const agent = options.cookies ? (sharedAgent ?? request.agent(handler)) : undefined
-  const headers = { ...options.headers }
+  // Header names are case-insensitive: kept lower-case so a later one replaces an earlier one.
+  const headers = lowerCaseKeys(options.headers)
   if (options.bearer) headers.authorization = `Bearer ${options.bearer}`
   const base = options.basePath?.replace(/\/$/, '') ?? ''
 
@@ -88,7 +89,20 @@ export function createClient(
     }
   }
   client.as = (token) => createClient(app, request, { ...options, headers, bearer: token }, agent)
-  client.withHeaders = (extra) =>
-    createClient(app, request, { ...options, headers: { ...headers, ...extra } }, agent)
+  client.withHeaders = (extra) => {
+    const added = lowerCaseKeys(extra)
+    // An explicit Authorization replaces the inherited bearer token.
+    const bearer = 'authorization' in added ? undefined : options.bearer
+    return createClient(
+      app,
+      request,
+      { ...options, bearer, headers: { ...headers, ...added } },
+      agent,
+    )
+  }
   return client
+}
+
+function lowerCaseKeys(headers: Record<string, string> = {}): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]))
 }

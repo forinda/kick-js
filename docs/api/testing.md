@@ -60,7 +60,7 @@ From `@forinda/kickjs-testing/vitest`. Registers the Vitest hooks that build the
 function useTestApp(
   options: () => CreateTestAppOptions | Promise<CreateTestAppOptions>,
   settings?: {
-    shared?: boolean // one app per worker (isolate: false); default false
+    shared?: boolean | string // one app per worker (isolate: false), per name; true = 'default'
     reset?: 'file' | 'test' | false // when onTestReset resets run; default 'file'
     client?: TestClientOptions // defaults for t.client()
   },

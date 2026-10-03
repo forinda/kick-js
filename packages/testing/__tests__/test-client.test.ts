@@ -71,6 +71,13 @@ describe.each(runtimes)('client() on $name', ({ make }) => {
 
     // Scoping returns a new client; the original is unchanged.
     expect((await api.get('/echo/headers')).body.auth).toBeNull()
+
+    // An explicit Authorization replaces an inherited bearer; names are case-insensitive.
+    const asOne = client({ bearer: 'one', basePath: '/api/v1' })
+    expect(
+      (await asOne.withHeaders({ Authorization: 'Bearer two' }).get('/echo/headers')).body.auth,
+    ).toBe('Bearer two')
+    expect((await asOne.as('three').get('/echo/headers')).body.auth).toBe('Bearer three')
   })
 
   it('keeps cookies between requests when asked, and not otherwise', async () => {

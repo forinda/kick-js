@@ -297,6 +297,12 @@ If `KickEnv` is empty (no `src/env.ts`, or you've disabled env typegen), `Config
 const url = this.config.get<string, string>('DATABASE_URL') // explicit T generic
 ```
 
+A second argument is a fallback, returned when the value is unset (`undefined` or `null`), for a key the schema leaves optional:
+
+```ts
+const region = this.config.get('S3_REGION', 'eu-west-1') // string, never undefined
+```
+
 The two-generic form `get<K, T>` lets you supply a return type when typegen isn't available. With typegen active, the explicit `T` is ignored and the schema-inferred type wins.
 
 ### `loadEnv` and `getEnv` outside DI
@@ -311,12 +317,21 @@ const env = loadEnv()
 env.DATABASE_URL // string
 env.PORT // number
 
-// getEnv() also takes the no-arg form and returns the inferred type
+// getEnv() reads one key, typed from the schema
 const port = getEnv('PORT') // number
 const secret = getEnv('JWT_SECRET') // string
+
+// A fallback for a key the schema leaves optional — used when it's unset
+const region = getEnv('S3_REGION', 'eu-west-1') // string, never undefined — ConfigService.get takes the same fallback
 ```
 
-You can still pass an explicit schema to either function — useful for one-off scripts or tests that need a different schema than the project default. The cache is **sticky**: once `loadEnv(extendedSchema)` has been called, subsequent `loadEnv()` calls reuse the extended schema instead of falling back to the base.
+The schema in `src/env.ts` is the one source of truth: `loadEnv(envSchema)` registers it, and every later `loadEnv()` / `getEnv()` reads through it. The cache is **sticky**: once `loadEnv(extendedSchema)` has been called, subsequent `loadEnv()` calls reuse it instead of falling back to the base schema.
+
+`getEnv`'s second argument is a fallback, returned when the value is `undefined` or `null` (a `0` or `''` is a value). A default every caller shares belongs in the schema (`.default('eu-west-1')`), where `ConfigService` and `@Value()` see it too; the fallback is for one call site that can live without the value.
+
+::: warning Passing a schema to `getEnv` is deprecated
+`getEnv(key, schema)` still reads through the given schema, with a one-time deprecation warning. Register the schema once with `loadEnv(envSchema)` instead. For a test that needs different values, use [`withEnv`](./testing/environment.md#one-test-one-value-withenv).
+:::
 
 ### `createConfigService` (deprecated)
 

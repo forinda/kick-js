@@ -19,8 +19,13 @@ export interface UseTestAppOptions {
    * Keep one app for every file this worker runs (with `isolate: false`)
    * instead of one per file — far faster for a large suite. It is shut down
    * when the worker exits. Default `false`.
+   *
+   * The app is built from the options of the FIRST file that asks for it;
+   * later files reuse it without calling their own. Files that need a
+   * differently configured app name their own: `shared: 'admin-api'` keeps
+   * one app per name. `true` is the name `'default'`.
    */
-  shared?: boolean
+  shared?: boolean | string
   /**
    * When `onTestReset` resets run: before each test file (`'file'`, the
    * default), before each test (`'test'`), or never (`false`).
@@ -39,7 +44,9 @@ export interface TestAppHandle {
 
 type Created = Awaited<ReturnType<typeof createTestApp>>
 
-let shared: Promise<Created> | undefined
+/** Shared apps by name, for the life of the worker. */
+const sharedApps = new Map<string, Promise<Created>>()
+let shutdownRegistered = false
 
 export function useTestApp(
   options: () => CreateTestAppOptions | Promise<CreateTestAppOptions>,
@@ -51,14 +58,22 @@ export function useTestApp(
   beforeAll(async () => {
     if (settings.reset !== false) await resetTestState()
     if (settings.shared) {
-      if (!shared) {
-        shared = build()
-        // One app for the worker: closed when the worker goes.
+      const name = settings.shared === true ? 'default' : settings.shared
+      let app = sharedApps.get(name)
+      if (!app) {
+        app = build()
+        sharedApps.set(name, app)
+      }
+      if (!shutdownRegistered) {
+        shutdownRegistered = true
+        // Shared apps live as long as the worker. Vitest ends its workers when
+        // the run is over, so a handle an app leaves open can't hold the run
+        // up; this closes them cleanly when the worker drains.
         process.once('beforeExit', () => {
-          void shared?.then(({ app }) => app.shutdown())
+          for (const shared of sharedApps.values()) void shared.then(({ app }) => app.shutdown())
         })
       }
-      created = await shared
+      created = await app
     } else {
       created = await build()
     }
