@@ -390,6 +390,28 @@ export function getEnv(key: string, schema?: z.ZodObject<any>): any {
 }
 
 /**
+ * Run `fn` with some env values replaced — for tests. The overrides are
+ * parsed values (`{ TRUST_PROXY: true }`), laid over the current env for the
+ * duration of the call and taken away afterwards, whatever `fn` does.
+ * `getEnv`, `ConfigService` and `@Value()` all see them. No `.env` file is
+ * read. Not for concurrent use: the env is process-wide.
+ */
+export async function withEnv<T>(
+  overrides: Record<string, unknown>,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  const current = loadEnv() as Record<string, unknown>
+  const schema = cachedSchema
+  cachedEnv = { ...current, ...overrides }
+  try {
+    return await fn()
+  } finally {
+    // Only restore what this call replaced: a reload in between wins.
+    if (cachedSchema === schema) cachedEnv = current
+  }
+}
+
+/**
  * Reload env from `process.env`. Re-reads `.env` via dotenv (if
  * installed), then re-parses the result against the **same** schema
  * the project registered at startup. Called during HMR rebuild and by

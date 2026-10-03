@@ -208,6 +208,7 @@ export {
   loadEnvFromSchema,
   getEnv,
   reloadEnv,
+  withEnv,
   resetEnvCache,
   ConfigService,
   createConfigService,

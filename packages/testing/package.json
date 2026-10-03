@@ -22,6 +22,10 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./vitest": {
+      "import": "./dist/vitest.mjs",
+      "types": "./dist/vitest.d.mts"
     }
   },
   "files": [
@@ -38,7 +42,9 @@
   "dependencies": {},
   "peerDependencies": {
     "express": "^5.1.0",
-    "@forinda/kickjs": ">=5.18.0"
+    "@forinda/kickjs": ">=5.18.0",
+    "supertest": ">=7.0.0",
+    "vitest": ">=3.0.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
@@ -69,5 +75,12 @@
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {
+    "supertest": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  }
 }

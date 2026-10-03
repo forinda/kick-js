@@ -36,23 +36,124 @@ const created = await api.post('/tasks', { body: { title: 'x' } }) // created: T
 
 ## createTestApp
 
-Creates an Application instance for testing — resets DI, runs `setup()`, and returns the app to drive with supertest:
+Creates an Application instance for testing — resets DI, runs `setup()`, and returns the app with a request client:
 
 ```ts
-import request from 'supertest'
 import { createTestApp } from '@forinda/kickjs-testing'
 import { UserModule } from '../src/modules/users'
 
-const { app, container } = await createTestApp({
+const { app, container, client } = await createTestApp({
   modules: [UserModule],
 })
 
-const res = await request(app.handle.bind(app)).get('/api/v1/users')
+const res = await client().get('/api/v1/users')
 ```
 
-`app.handle` is the Application's own Node request listener, so this works
-whichever runtime the app is configured with. See
-[Testing the engine you deploy](#testing-the-engine-you-deploy).
+`client()` sends requests through `app.handle`, the Application's own Node request listener, so they go through
+whichever runtime the app is configured with. See [Testing the engine you deploy](#testing-the-engine-you-deploy). It
+uses supertest, so add `supertest` as a dev dependency. A plain `request(app.handle.bind(app))` still works if you'd
+rather use supertest directly.
+
+### The request client
+
+Set what every request needs once, and scope from there:
+
+```ts
+const api = client({ headers: { host: 'localhost' }, basePath: '/api/v1' })
+
+await api.get('/health').expect(200)
+await api.as(token).post('/invoices').send(body).expect(201) // Authorization: Bearer <token>
+await api.withHeaders({ 'x-tenant': 'acme' }).get('/me')
+```
+
+| Option     | Does                                                                       |
+| ---------- | -------------------------------------------------------------------------- |
+| `headers`  | sent with every request                                                    |
+| `bearer`   | sent as `Authorization: Bearer <token>`                                    |
+| `basePath` | prefixed to every path                                                     |
+| `cookies`  | keep cookies between requests, like a browser — for session and CSRF flows |
+
+`.as(token)` and `.withHeaders()` return a new client; the one they came from is unchanged. Each request is a supertest
+request, so `.send()`, `.query()`, `.expect()` and the rest work as usual.
+
+### One call per file: `useTestApp`
+
+`useTestApp` from `@forinda/kickjs-testing/vitest` registers the `beforeAll` / `afterAll` that build and shut down the app:
+
+```ts
+import { useTestApp } from '@forinda/kickjs-testing/vitest'
+import { appOptions } from '../src/app'
+
+const t = useTestApp(() => ({ ...appOptions, overrides: [[MAILER, fakeMailer]] }), {
+  client: { headers: { host: 'localhost' }, basePath: '/api/v1' },
+})
+
+it('lists invoices', async () => {
+  await t.client().as(token).get('/invoices').expect(200)
+})
+```
+
+`t.app`, `t.container` and `t.client()` are ready inside tests and hooks. Two settings matter for large suites:
+
+- **`shared: true`** keeps one app for every file the worker runs (with Vitest's `isolate: false`), instead of building
+  one per file. It's shut down when the worker exits.
+- **`reset`** sets when the resets registered with `onTestReset` run (see below): `'file'` (the default), `'test'`, or
+  `false`.
+
+### Share the app's options with `bootstrap`
+
+Keep the options `bootstrap()` takes in one module, and spread them into the test app, so the two can't drift apart:
+
+```ts
+// src/app.ts
+import type { ApplicationOptions } from '@forinda/kickjs'
+export const appOptions = {
+  modules,
+  adapters,
+  middlewares,
+  contributors,
+} satisfies ApplicationOptions
+
+// src/index.ts
+await bootstrap(appOptions)
+
+// tests
+const t = useTestApp(() => ({ ...appOptions, overrides }))
+```
+
+Options a test app doesn't use (the port, cluster mode) are ignored.
+
+### Reset state between files: `onTestReset`
+
+In-memory fakes, caches and module-level maps outlive a test, especially with `isolate: false`. Register the reset next
+to the thing it resets, once:
+
+```ts
+import { onTestReset } from '@forinda/kickjs-testing'
+
+export const sentEmails: Email[] = []
+onTestReset(() => {
+  sentEmails.length = 0
+})
+```
+
+`useTestApp` runs every registered reset before each file, or before each test with `reset: 'test'`. Elsewhere, call
+`resetTestState()` yourself. All resets run even if one throws; the errors are reported together.
+
+### Spy on a real service
+
+To drive a use case directly, or watch what a gateway was called with, resolve the real instance from the test app's
+container:
+
+```ts
+const gateway = t.container.resolve(PaymentGateway)
+const charge = vi.spyOn(gateway, 'charge').mockResolvedValue({ id: 'ch_1' })
+
+await t.client().as(token).post('/api/v1/orders').send(order).expect(201)
+expect(charge).toHaveBeenCalledWith(expect.objectContaining({ amount: 4200 }))
+```
+
+To replace a binding before the app is built, pass `overrides` instead (next section).
 
 ::: tip
 `createTestApp` is **async** — always `await` it.
@@ -208,12 +309,11 @@ class TestUserController {
 
 ### 3. Integration Test
 
-Wire everything with `createTestModule` and hit endpoints with supertest:
+Wire everything with `createTestModule` and hit endpoints with the client:
 
 ```ts
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
-import request from 'supertest'
 import { Container } from '@forinda/kickjs'
 import { buildRoutes } from '@forinda/kickjs'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
@@ -236,20 +336,21 @@ describe('UserController', () => {
   }
 
   it('GET /api/v1/users returns user list', async () => {
-    const { app } = await createTestApp({ modules: [buildTestModule()] })
-    const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
+    const { client } = await createTestApp({ modules: [buildTestModule()] })
+    const res = await client().get('/api/v1/users').expect(200)
     expect(res.body.data).toHaveLength(1)
   })
 
   it('GET /api/v1/users/:id returns 404 for unknown', async () => {
-    const { app } = await createTestApp({ modules: [buildTestModule()] })
-    await request(app.handle.bind(app)).get('/api/v1/users/unknown').expect(404)
+    const { client } = await createTestApp({ modules: [buildTestModule()] })
+    await client().get('/api/v1/users/unknown').expect(404)
   })
 
   it('DELETE removes and reduces count', async () => {
-    const { app } = await createTestApp({ modules: [buildTestModule()] })
-    await request(app.handle.bind(app)).delete('/api/v1/users/u1').expect(204)
-    const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
+    const { client } = await createTestApp({ modules: [buildTestModule()] })
+    const api = client({ basePath: '/api/v1' })
+    await api.delete('/users/u1').expect(204)
+    const res = await api.get('/users').expect(200)
     expect(res.body.data).toHaveLength(0)
   })
 })
@@ -292,30 +393,23 @@ class ProtectedController {
 
 // Tests
 it('rejects requests without token', async () => {
-  const { app } = await createTestApp({ modules: [buildProtectedModule()] })
-  await request(app.handle.bind(app)).get('/api/v1/protected/me').expect(401)
+  const { client } = await createTestApp({ modules: [buildProtectedModule()] })
+  await client().get('/api/v1/protected/me').expect(401)
 })
 
 it('accepts valid JWT', async () => {
-  const { app } = await createTestApp({ modules: [buildProtectedModule()] })
+  const { client } = await createTestApp({ modules: [buildProtectedModule()] })
   const token = jwt.sign({ sub: 'u1', email: 'alice@test.com' }, TEST_SECRET, { expiresIn: '1h' })
 
-  const res = await request(app.handle.bind(app))
-    .get('/api/v1/protected/me')
-    .set('Authorization', `Bearer ${token}`)
-    .expect(200)
-
+  const res = await client().as(token).get('/api/v1/protected/me').expect(200)
   expect(res.body.data.id).toBe('u1')
 })
 
 it('rejects expired tokens', async () => {
-  const { app } = await createTestApp({ modules: [buildProtectedModule()] })
+  const { client } = await createTestApp({ modules: [buildProtectedModule()] })
   const token = jwt.sign({ sub: 'u1' }, TEST_SECRET, { expiresIn: '-1s' })
 
-  await request(app.handle.bind(app))
-    .get('/api/v1/protected/me')
-    .set('Authorization', `Bearer ${token}`)
-    .expect(401)
+  await client().as(token).get('/api/v1/protected/me').expect(401)
 })
 ```
 

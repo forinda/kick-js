@@ -18,6 +18,11 @@ import {
   type MetaValue,
   type ModuleRoutes,
 } from '@forinda/kickjs'
+import * as kick from '@forinda/kickjs'
+import { createClient, loadSupertest, type TestClient, type TestClientOptions } from './client'
+
+export type { TestClient, TestClientOptions, TestRequest } from './client'
+export { onTestReset, resetTestState } from './reset'
 
 /**
  * Bootstrap options forwarded verbatim to the underlying Application so
@@ -145,6 +150,14 @@ function overrideEntries(
 export async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
   /**
+   * Requests against the app through whichever runtime it runs on, with the
+   * headers every call needs set once (needs supertest installed):
+   *
+   *   const api = client({ headers: { host: 'localhost' }, basePath: '/api/v1' })
+   *   await api.as(token).get('/me').expect(200)
+   */
+  client: (options?: TestClientOptions) => TestClient
+  /**
    * @deprecated Use `app.handle.bind(app)`. Only valid under the Express
    * runtime — under
    * any other engine this throws rather than handing back that engine's
@@ -221,9 +234,11 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   }
 
   const runtimeName = app.getActiveRuntime().name
+  const request = await loadSupertest()
 
   return {
     app,
+    client: (clientOptions) => createClient(app, request, clientOptions),
     get expressApp(): express.Express {
       if (runtimeName !== 'express') {
         throw new Error(
@@ -294,6 +309,18 @@ export interface RunContributorOptions {
 
   /** Override the fake context's `requestId` (default: `'test-req'`). */
   requestId?: string
+
+  /**
+   * More fields on the fake context — what an HTTP contributor reads off it:
+   * `{ req: { headers: { host: 'acme.example.com' } } }`.
+   */
+  ctx?: Record<string, unknown>
+
+  /**
+   * Env values `getEnv` / `ConfigService` return while `resolve()` runs —
+   * parsed values, like `{ TRUST_PROXY: true }`. Restored afterwards.
+   */
+  env?: Record<string, unknown>
 }
 
 /**
@@ -365,8 +392,18 @@ export async function runContributor<
     },
     requestId: options.requestId ?? 'test-req',
   }
+  Object.assign(ctx, options.ctx)
 
-  const value = await decorator.registration.resolve(ctx, (options.deps ?? {}) as never)
+  const run = () => decorator.registration.resolve(ctx, (options.deps ?? {}) as never)
+  // Looked up, not imported by name: the peer range reaches back before
+  // withEnv existed, and a missing named import fails the whole module.
+  const withEnv = (
+    kick as { withEnv?: (env: Record<string, unknown>, fn: () => unknown) => Promise<unknown> }
+  ).withEnv
+  if (options.env && !withEnv) {
+    throw new Error('runContributor: the env option needs a newer @forinda/kickjs (withEnv)')
+  }
+  const value = await (options.env ? withEnv!(options.env, run) : run())
   meta.set(decorator.registration.key, value)
 
   return { value: value as MetaValue<K>, ctx, meta }

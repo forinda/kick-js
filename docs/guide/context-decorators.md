@@ -1299,7 +1299,7 @@ export class OrdersUseCase {
 - **Database isolation per tenant** — every query goes to the right DB without the controller, use case, or service threading anything. The contributor pipeline + ALS handles propagation.
 - **Override per route or controller** — `@LoadTenant({ source: 'subdomain' })` on one class, `@LoadTenant({ source: 'header' })` on another. Same `LoadTenant` definition, same DI deps, same topo position.
 - **Read replicas via param** — `@LoadTenantDb({ pool: 'replica' })` on read-only routes (extend the resolver as shown).
-- **Testable in isolation** — `runContributor(LoadTenantDb, { ctxSeed: { tenant: fakeTenant }, deps: { dbPool: fakePool } })` exercises the resolver with no Express stack.
+- **Testable in isolation** — `runContributor(LoadTenantDb, { initial: { tenant: fakeTenant }, deps: { dbPool: fakePool } })` exercises the resolver with no Express stack.
 
 ### Overriding an adapter-shipped contributor for one route
 
@@ -1370,6 +1370,17 @@ describe('ResolveLocale', () => {
   })
 })
 ```
+
+A resolver that reads config takes `env`: parsed values that `getEnv`, `ConfigService` and `@Value()` return while it runs, restored afterwards. No `vi.mock('@forinda/kickjs')` needed:
+
+```ts
+const { value } = await runContributor(ResolveTenantFromHost, {
+  ctx: { req: { headers: { host: 'acme.example.com', 'x-forwarded-host': 'acme.app' } } },
+  env: { TRUST_PROXY: true },
+})
+```
+
+The same overlay is exported from `@forinda/kickjs` as `withEnv(overrides, fn)` for any test.
 
 ### Unit: a contributor with `deps`
 
