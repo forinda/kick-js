@@ -12,3 +12,4 @@ Tenancy hardening and fixes.
 - **`insertSchema`:** the tenant column and `$defaultFn` columns are optional on insert.
 - **SQLite view introspection:** handles doubled quotes inside a view's column list.
 - **`pgDialect({ cursor })`:** takes `pg-cursor`'s `Cursor`, so `.stream()` works on Postgres.
+- Validators under `numeric(p, s, { mode: 'number' })` refuse a decimal with more than 15 significant digits, or one that isn't finite, instead of rounding it.

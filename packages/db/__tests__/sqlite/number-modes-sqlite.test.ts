@@ -50,3 +50,15 @@ it("refuses a value a number can't hold, under mode 'number'", async () => {
   })
   expect(schema.safeParse({ n: '9007199254740993' }).success).toBe(false)
 })
+
+it("refuses a decimal a number can't hold exactly, under mode 'number'", async () => {
+  const { insertSchema } = await import('@forinda/kickjs-db/schema')
+  const t = table('t', { id: serial().primaryKey(), price: numeric(20, 2, { mode: 'number' }) })
+  const schema = insertSchema(t)
+  expect(schema.safeParse({ price: '1234567890123.45' })).toMatchObject({
+    success: true,
+    data: { price: 1234567890123.45 },
+  })
+  expect(schema.safeParse({ price: '0.10' })).toMatchObject({ success: true, data: { price: 0.1 } })
+  expect(schema.safeParse({ price: '12345678901234567.89' }).success).toBe(false)
+})

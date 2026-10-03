@@ -92,7 +92,7 @@ bigint({ mode: 'string' }) // '9007199254740993'
 numeric(12, 2, { mode: 'number' }) // 19.99 instead of '19.99'
 ```
 
-Without `mode`, `bigint()` returns the driver's value as it comes. On MySQL, give the pool `supportBigNumbers: true, bigNumberStrings: true`, or mysql2 reads a BIGINT as a number and loses digits past 2^53 before `mode` sees it. `mode` applies to nested rows from `db.query` too.
+Without `mode`, `bigint()` returns the driver's value as it comes. Validators (`insertSchema` and friends) refuse input a `'number'` mode can't hold exactly, rather than rounding it: a bigint past `Number.MAX_SAFE_INTEGER`, or a decimal with more than 15 significant digits. On MySQL, give the pool `supportBigNumbers: true, bigNumberStrings: true`, or mysql2 reads a BIGINT as a number and loses digits past 2^53 before `mode` sees it. `mode` applies to nested rows from `db.query` too.
 
 `decimal` and `numeric` are strings so no digit is lost — `decimal(12, 2)` reads back as `'0.10'`, not `0.1`. Do arithmetic on them with a decimal library, or in SQL. SQLite has no exact decimal type: it stores a float, which kick/db reads back as the same string at the column's scale, exact up to 15 significant digits. An aggregate such as `sum(amount)` has no column to decode and comes back as a number on SQLite.
 

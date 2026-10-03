@@ -87,8 +87,8 @@ type DecimalMode = { mode: 'number' | 'string' }
 
 /**
  * An exact decimal, read back as a string by default so no precision is lost.
- * `{ mode: 'number' }` reads it as a JS number (fine for money in cents-scale
- * amounts, lossy past ~15 significant digits).
+ * `{ mode: 'number' }` reads it as a JS number: exact up to 15 significant
+ * digits, which validators enforce on input (more is refused, not rounded).
  */
 export function decimal(precision?: number, scale?: number): ColumnBuilder<string>
 export function decimal<M extends DecimalMode['mode']>(

@@ -227,6 +227,17 @@ function withMode(spec: ColumnSpec, mode: 'bigint' | 'number' | 'string'): Colum
           return fail('Out of the safe range for a number', r.value < 0n ? 'too_small' : 'too_big')
         }
       }
+      // A decimal past 15 significant digits doesn't survive as a number.
+      if (mode === 'number' && typeof r.value === 'string') {
+        const digits = r.value
+          .replace(/^[+-]/, '')
+          .replace('.', '')
+          .replace(/^0+/, '')
+          .replace(/0+$/, '')
+        if (digits.length > 15 || !Number.isFinite(Number(r.value))) {
+          return fail("Too many digits for a number — use mode: 'string'", 'too_big')
+        }
+      }
       return ok(convert(r.value as never))
     },
   }
