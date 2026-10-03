@@ -9,3 +9,7 @@ vitest.config.ts
 **/*.map
 **/*.ts
 !dist/**
+# Build-time only: turbo logs, and the icon source the PNG is rendered from.
+.turbo/**
+scripts/**
+resources/icon-marketplace.svg
