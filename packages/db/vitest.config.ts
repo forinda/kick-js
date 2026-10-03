@@ -81,6 +81,8 @@ export default defineConfig({
     },
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
+    // A client terminated as its container stops mustn't fail the run.
+    setupFiles: ['__tests__/setup/pg-teardown.ts'],
     globals: false,
     pool: 'threads',
     maxConcurrency: 1,
