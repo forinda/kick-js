@@ -199,10 +199,12 @@ export function stampJobContext<Data>(data: Data): Data {
 function withJobContext<R>(job: JobLike, run: () => R): () => R {
   const data = job.data
   if (!isPlainObject(data) || !(JOB_CONTEXT_FIELD in data)) return run
-  const context = data[JOB_CONTEXT_FIELD] as Record<string, unknown>
+  const context = data[JOB_CONTEXT_FIELD]
   delete data[JOB_CONTEXT_FIELD]
+  // Only an object of carrier keys is context; anything else is dropped.
+  if (!isPlainObject(context)) return run
   let wrapped = run
-  for (const [key, value] of Object.entries(context ?? {})) {
+  for (const [key, value] of Object.entries(context)) {
     const carrier = jobContextCarriers.get(key)
     if (!carrier) continue
     const inner = wrapped

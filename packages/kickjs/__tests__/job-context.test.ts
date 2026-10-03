@@ -53,3 +53,23 @@ it("never lets the caller's data choose the job context", () => {
     [JOB_CONTEXT_FIELD]: { 'test/trace': 'mine' },
   })
 })
+
+it('drops a context field that is not an object of carrier keys', async () => {
+  const seen: Array<string | undefined> = []
+  @Job('misc')
+  class MiscJobs {
+    @Process('x')
+    x(job: JobLike<Record<string, unknown>>) {
+      seen.push(trace.getStore())
+      expect(job.data).toEqual({ a: 1 })
+    }
+  }
+  void MiscJobs
+  for (const bad of ['test/trace', ['victim'], null, 42]) {
+    await runJob(Container.getInstance(), 'misc', {
+      name: 'x',
+      data: { a: 1, [JOB_CONTEXT_FIELD]: bad },
+    })
+  }
+  expect(seen).toEqual([undefined, undefined, undefined, undefined])
+})
