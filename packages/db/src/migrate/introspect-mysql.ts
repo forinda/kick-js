@@ -189,7 +189,13 @@ function mapFkAction(action: string): FkAction {
   }
 }
 
-/** Use the declared `COLUMN_TYPE` (carries length), lowercased. */
+/**
+ * Use the declared `COLUMN_TYPE` (carries length), lowercased — except an
+ * enum's or set's values, which keep their case.
+ */
 function normalizeType(c: ColumnRow): string {
-  return (c.COLUMN_TYPE || c.DATA_TYPE).trim().toLowerCase() || 'text'
+  const type = (c.COLUMN_TYPE || c.DATA_TYPE).trim()
+  const values = /^(enum|set)\s*(\(.*\))$/is.exec(type)
+  if (values) return `${values[1]!.toLowerCase()}${values[2]}`
+  return type.toLowerCase() || 'text'
 }

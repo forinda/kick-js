@@ -202,7 +202,9 @@ function specFor(builder: ColumnBuilder): ColumnSpec {
     return anySpec()
   }
 
-  const type = builder.__state().type.toLowerCase()
+  const raw = builder.__state().type
+  // An enum's values keep their case.
+  const type = /^enum\s*\(/i.test(raw) ? `enum${raw.slice(raw.indexOf('('))}` : raw.toLowerCase()
   const spec = type.endsWith('[]') ? arraySpec(specForType(type.slice(0, -2))) : specForType(type)
   const mode = builder.__state().mode
   return mode ? withMode(spec, mode) : spec
@@ -294,9 +296,21 @@ function arraySpec(item: ColumnSpec, length?: number): ColumnSpec {
   }
 }
 
+/** MySQL's smaller integers and the unsigned ranges, by type: [min, max]. */
+const MYSQL_INTEGERS: Record<string, [number, number]> = {
+  tinyint: [-128, 127],
+  'tinyint unsigned': [0, 255],
+  'smallint unsigned': [0, 65_535],
+  mediumint: [-8_388_608, 8_388_607],
+  'mediumint unsigned': [0, 16_777_215],
+  'int unsigned': [0, 4_294_967_295],
+}
+
 function specForType(type: string): ColumnSpec {
   const base = type.replace(/\(.*$/, '').trim()
   const size = Number(/\((\d+)/.exec(type)?.[1])
+  const mysqlRange = MYSQL_INTEGERS[base]
+  if (mysqlRange) return integerSpec(...mysqlRange)
   switch (base) {
     // serial values start at 1.
     case 'smallserial':
@@ -310,6 +324,7 @@ function specForType(type: string): ColumnSpec {
       return integerSpec(-INT32 - 1, INT32)
     case 'bigserial':
     case 'bigint':
+    case 'bigint unsigned':
       // JSON has no 64-bit integer: accept a number or a string of digits,
       // parse to the column's TS type, bigint.
       return {
@@ -322,8 +337,9 @@ function specForType(type: string): ColumnSpec {
             return fail('Expected an integer or a string of digits')
           }
           const n = BigInt(v)
-          return n < -INT64 || n >= INT64
-            ? fail('Out of range for a 64-bit integer', 'too_big')
+          const [min, max] = base === 'bigint unsigned' ? [0n, 2n * INT64] : [-INT64, INT64]
+          return n < min || n >= max
+            ? fail('Out of range for a 64-bit integer', n < min ? 'too_small' : 'too_big')
             : ok(n)
         },
       }
@@ -354,11 +370,23 @@ function specForType(type: string): ColumnSpec {
       }
     case 'timestamp':
     case 'timestamptz':
+    case 'datetime':
       return dateSpec('date-time')
     case 'date':
       return dateSpec('date')
     case 'uuid':
       return stringSpec({ format: 'uuid' }, (v) => (UUID.test(v) ? null : 'Expected a UUID'))
+    case 'enum': {
+      // A MySQL enum: enum('a','b').
+      const values = [...type.matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1]!.replace(/''/g, "'"))
+      return {
+        json: { type: 'string', enum: values },
+        parse: (v) =>
+          typeof v === 'string' && values.includes(v)
+            ? ok(v)
+            : fail(`Expected one of ${values.join(', ')}`, 'invalid_enum_value'),
+      }
+    }
     case 'point':
       return {
         json: {

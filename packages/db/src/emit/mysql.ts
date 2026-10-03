@@ -168,6 +168,9 @@ function emitAddFk(table: string, fk: ForeignKeySnapshot): string {
  * Map a Postgres column type string to a MySQL type.
  */
 export function mysqlType(pgType: string): string {
+  // An enum's values keep their case.
+  const enumMatch = /^\s*enum\s*(\(.*\))\s*$/is.exec(pgType)
+  if (enumMatch) return `ENUM${enumMatch[1]}`
   const lower = pgType.toLowerCase().trim()
   const base = lower
     .replace(/\(.*\)/, '')

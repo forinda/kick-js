@@ -3,3 +3,4 @@
 // `@forinda/kickjs-db`; install it alongside to use this subpath.
 export * from './adapters/mysql/adapter'
 export * from './adapters/mysql/dialect'
+export * from './dsl/columns/mysql'
