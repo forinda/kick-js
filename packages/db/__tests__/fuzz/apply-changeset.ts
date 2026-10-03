@@ -169,6 +169,20 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       t.checks = t.checks.filter((c) => c.name !== change.check.name)
       return
     }
+    case 'setTableComment': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      if (change.to === null) delete t.comment
+      else t.comment = change.to
+      return
+    }
+    case 'setColumnComment': {
+      const col = snapshot.tables[change.table]?.columns[change.column.name]
+      if (!col) return
+      if (change.to === null) delete col.comment
+      else col.comment = change.to
+      return
+    }
     default: {
       // Exhaustiveness guard: a new Change variant added without
       // an applier case here would silently no-op and make the

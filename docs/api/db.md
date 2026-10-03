@@ -246,11 +246,11 @@ The same table can be declared as a class or with a fluent builder — `tableFro
 
 Cross-dialect (live on package root):
 
-`serial`, `bigSerial`, `smallSerial`, `integer`, `bigint`, `smallint`, `decimal`, `numeric`, `real`, `doublePrecision`, `varchar(n)`, `char(n)`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json<T>()`, `jsonb<T>()`, `bytea`. Arrays via `.array()`.
+`serial`, `bigSerial`, `smallSerial`, `integer`, `bigint({ mode? })`, `smallint`, `decimal(p?, s?, { mode? })`, `numeric(p?, s?, { mode? })`, `real`, `doublePrecision`, `varchar(n)`, `char(n)`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json<T>()`, `jsonb<T>()`, `bytea`. Arrays via `.array()`.
 
-Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.default(value)`, `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.references(() => other.column, { onDelete, onUpdate })`.
+Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.default(value)`, `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.references(() => other.column, { onDelete, onUpdate })`, `.comment(text)`, `.$defaultFn(fn)` (computed per inserted row), `.$onUpdate(fn)` (computed per update). Table comment: `table(name, columns, { comment, constraints })`.
 
-PG-only types live at `@forinda/kickjs-db/pg`: `tsvector`, `vector(N)`, `citext`, `money`, `inet`, `cidr`, `xml`.
+PG-only types live at `@forinda/kickjs-db/pg`: `tsvector`, `vector(N)`, `halfvec(N)`, `point`, `geometry(type?, srid?)`, `macaddr`, `macaddr8`, `citext`, `money`, `inet`, `cidr`, `xml`. MySQL-only at `@forinda/kickjs-db/mysql`: `mysqlEnum(...values)`, `unsigned(col)`, `tinyint`, `mediumint`, `datetime(fsp?)`.
 
 ### `relations()`
 
@@ -713,8 +713,9 @@ Types: `Dialect`, `FkAction`, `ColumnSnapshot`, `IndexSnapshot`, `ForeignKeySnap
 
 Subpaths:
 
-- `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`), `pgSchema`, `pgDialect`, `pgAdapter`.
-- `@forinda/kickjs-db/mysql`, `@forinda/kickjs-db/sqlite` — the dialect and migration adapter for each.
+- `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `halfvec`, `point`, `geometry`, `macaddr`, `citext`, `money`, `inet`, `cidr`, `xml`), `pgSchema`, `pgDialect`, `pgAdapter`.
+- `@forinda/kickjs-db/mysql` — `mysqlDialect`, `mysqlAdapter`, and MySQL column types (`mysqlEnum`, `unsigned`, `tinyint`, `mediumint`, `datetime`).
+- `@forinda/kickjs-db/sqlite` — `sqliteDialect`, `sqliteAdapter`, and `asyncSqliteAdapter` with `libsqlDriver` / `d1Driver`.
 - `@forinda/kickjs-db/schema` — `insertSchema`, `selectSchema`, `updateSchema` (each returns a schema with `safeParse` and `toJsonSchema()`), and the row types `InferSelect` / `InferInsert`.
 - `@forinda/kickjs-db/cli` — `dbCliPlugin`, `kickDbTypegen`, config helpers.
 - `@forinda/kickjs-db/devtools-events` — the `db:*` event types the DevTools Database tab reads.
