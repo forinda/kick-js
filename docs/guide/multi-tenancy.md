@@ -87,6 +87,9 @@ class BillingService {
 With kick/db, [`defineTenancy()`](./database/tenancy.md) does the rest from the `tenant` value this contributor sets. Pick a strategy (a tenant column, row-level security, a schema or a database per tenant) and repositories need no tenant parameter:
 
 ```ts
+import { createDbClient, defineTenancy } from '@forinda/kickjs-db'
+import { pgDialect } from '@forinda/kickjs-db/pg'
+
 export const tenancy = defineTenancy({ strategy: 'rls' }) // reads the request's `tenant`
 export const db = createDbClient({ schema, tenancy, dialect: pgDialect({ pool }) })
 ```

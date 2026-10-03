@@ -171,7 +171,9 @@ export default {
 
 ```ts
 import { Database } from 'bun:sqlite'
+import { createDbClient } from '@forinda/kickjs-db'
 import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import * as schema from './schema'
 
 const database = new Database('app.db')
 export const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })

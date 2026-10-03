@@ -26,6 +26,14 @@ export const notes = table('notes', {
 ```
 
 ```ts
+// src/db/client.ts
+import { Pool } from 'pg'
+import { createDbClient } from '@forinda/kickjs-db'
+import { pgDialect } from '@forinda/kickjs-db/pg'
+import * as schema from './schema'
+import { tenancy } from './tenancy'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 export const db = createDbClient({ schema, tenancy, dialect: pgDialect({ pool }) })
 
 await db.selectFrom('notes').selectAll().execute() // the current tenant's notes
@@ -72,6 +80,10 @@ Each query goes to the tenant's schema (`schemaFor`, default `tenant_<id>`). No 
 Each tenant's queries go to its own database. `dialectFor(id)` returns its dialect, called once per tenant; the connections are kept until `db.destroy()`. The client's own `dialect` is the central database (tenant registry, billing), used inside `bypass()`.
 
 ```ts
+import { Pool } from 'pg'
+import { defineTenancy } from '@forinda/kickjs-db'
+import { pgDialect } from '@forinda/kickjs-db/pg'
+
 const tenancy = defineTenancy({
   strategy: 'database',
   dialectFor: (id) => pgDialect({ pool: new Pool({ connectionString: urlFor(id), max: 5 }) }),
@@ -99,7 +111,10 @@ For a narrow cross-tenant read that runs often (counts per tenant, say), a Postg
 `'column'` and `'rls'` migrate like any app: one schema. `'schema'` and `'database'` run the same migrations for every tenant. Each tenant keeps its own `kick_migrations`, so a new tenant, or one that failed, catches up on the next run:
 
 ```ts
-// kick.config.ts
+// kick.config.ts — inside defineConfig({ … })
+import { Pool } from 'pg'
+import { pgAdapter } from '@forinda/kickjs-db/pg'
+
 db: {
   dialect: 'postgres',
   tenants: {
