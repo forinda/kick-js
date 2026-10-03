@@ -445,6 +445,8 @@ export default defineConfig({
   },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
+    // Crawl and index every page; large image previews in results.
+    ['meta', { name: 'robots', content: 'index, follow, max-image-preview:large, max-snippet:-1' }],
     // Google Search Console site verification.
     [
       'meta',
