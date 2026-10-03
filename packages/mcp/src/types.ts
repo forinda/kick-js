@@ -267,10 +267,25 @@ export interface McpAdapterOptions {
    */
   toolFilter?: (tool: McpToolSummary, call: McpCallContext) => boolean | Promise<boolean>
   /**
+   * Decide which resources and templates a caller sees, like `toolFilter`.
+   * Applies to `resources/list`, `resources/templates/list` and
+   * `resources/read`: a hidden resource reads as not found.
+   */
+  resourceFilter?: (
+    resource: McpResourceSummary,
+    call: McpCallContext,
+  ) => boolean | Promise<boolean>
+  /**
    * Abort a tool call that takes longer than this, with an error result.
    * Default: no limit.
    */
   toolTimeoutMs?: number
+  /**
+   * Key (32+ bytes) that signs the answers a multi-step `ctx.elicit` carries
+   * between rounds. Set it when several instances serve one endpoint;
+   * otherwise each process uses its own random key.
+   */
+  requestStateKey?: string
   /**
    * Expose routes carrying these [route flags](https://kickjs.app/guide/route-flags)
    * as tools, without `@McpTool` — on a method, a controller, or a module
@@ -411,6 +426,28 @@ export interface McpToolContext {
   /** Aborted when the client cancels the call. */
   signal: AbortSignal
   /**
+   * Ask the user for input mid-call (MCP elicitation) — a confirmation, a
+   * missing field. Returns the validated answer, or `undefined` when the
+   * user declines or cancels. Custom tools only.
+   *
+   * The first time a key is asked, the handler stops and the client is asked;
+   * the handler then runs again from the top with the answer, so code before
+   * `elicit` must be safe to repeat. `schema` is a flat object of primitive
+   * fields (string, number, boolean, enum), from any schema library.
+   *
+   * ```ts
+   * const ok = await ctx.elicit('confirm', {
+   *   message: `Void invoice ${id}?`,
+   *   schema: z.object({ confirm: z.boolean() }),
+   * })
+   * if (!ok?.confirm) return 'Cancelled'
+   * ```
+   */
+  elicit<T = Record<string, unknown>>(
+    key: string,
+    request: { message: string; schema: unknown },
+  ): Promise<T | undefined>
+  /**
    * Run a `Request` through this app's pipeline — to call one of the app's
    * own routes with the caller's credentials. See `AdapterContext.fetch`.
    */
@@ -470,4 +507,99 @@ export interface McpCustomTool<TArgs = any> {
 export interface McpToolProvider {
   name: string
   tools: McpCustomTool[]
+}
+
+/**
+ * What a resource's `read` returns. A string is sent as text, a
+ * `Uint8Array` as binary (base64 `blob`), anything else as JSON text with
+ * `mimeType: 'application/json'`. An object that is already MCP read
+ * contents (`{ contents: [...] }`) is sent as is.
+ */
+export type McpResourceReadResult = unknown
+
+/** What a resource's `read` and `list` get: the tool context, without `elicit`. */
+export type McpResourceContext = Omit<McpToolContext, 'elicit'>
+
+/** Fields a fixed resource and a resource template share. */
+interface McpResourceCommon {
+  /** Short identifier shown to the user. */
+  name: string
+  title?: string
+  description?: string
+  /** Defaults to `text/plain` for strings, `application/json` for values. */
+  mimeType?: string
+  /**
+   * Scopes the caller's principal must hold to read it; otherwise 403 with
+   * an `insufficient_scope` challenge — see `McpToolOptions.scopes`.
+   */
+  scopes?: string[]
+}
+
+/** A resource at a fixed URI, such as `config://app` or `file:///README.md`. */
+export interface McpResource extends McpResourceCommon {
+  uri: string
+  read(ctx: McpResourceContext): McpResourceReadResult | Promise<McpResourceReadResult>
+}
+
+/**
+ * A family of resources behind an RFC 6570 URI template, such as
+ * `invoices://{id}`. `read` gets the template's variables.
+ */
+export interface McpResourceTemplate extends McpResourceCommon {
+  uriTemplate: string
+  /**
+   * Optional: the concrete resources to list in `resources/list`. Without
+   * it, clients only see the template and fill in the variables.
+   */
+  list?(ctx: McpResourceContext): McpResourceLink[] | Promise<McpResourceLink[]>
+  read(
+    params: Record<string, string>,
+    ctx: McpResourceContext & { uri: string },
+  ): McpResourceReadResult | Promise<McpResourceReadResult>
+}
+
+/** A concrete resource a template lists. */
+export interface McpResourceLink {
+  uri: string
+  name: string
+  title?: string
+  description?: string
+  mimeType?: string
+}
+
+/**
+ * A named set of resources, mounted with `McpAdapter.registerResourceProvider()`
+ * at any time. Registering one with the name of one already mounted replaces it.
+ *
+ * @example
+ * ```ts
+ * mcp.registerResourceProvider({
+ *   name: 'invoices',
+ *   templates: [
+ *     {
+ *       uriTemplate: 'invoices://{id}',
+ *       name: 'invoice',
+ *       read: ({ id }, ctx) => ctx.fetch(new Request(new URL(`/api/v1/invoices/${id}`, ctx.origin))).then((r) => r.json()),
+ *     },
+ *   ],
+ * })
+ * ```
+ */
+export interface McpResourceProvider {
+  name: string
+  resources?: McpResource[]
+  templates?: McpResourceTemplate[]
+}
+
+/** A resource or template as `resourceFilter` sees it. */
+export interface McpResourceSummary {
+  kind: 'resource' | 'template'
+  name: string
+  /** The resource's URI (`kind: 'resource'`). */
+  uri?: string
+  /** The template (`kind: 'template'`). */
+  uriTemplate?: string
+  scopes?: string[]
+  /** The provider that mounted it. */
+  provider: string
 }

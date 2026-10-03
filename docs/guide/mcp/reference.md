@@ -62,11 +62,13 @@ McpAdapter({
 
 ### Calls
 
-| Option           | Default                                                                    | Notes                                                                   |
-| ---------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `toolFilter`     | —                                                                          | `(tool, call) => boolean`: which tools a caller sees, for list and call |
-| `forwardHeaders` | `['authorization', 'cookie', 'x-request-id', 'traceparent', 'tracestate']` | headers copied from the MCP request onto route tool calls               |
-| `toolTimeoutMs`  | no limit                                                                   | end a call that runs longer, with a `timeout` error                     |
+| Option            | Default                                                                    | Notes                                                                   |
+| ----------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `toolFilter`      | —                                                                          | `(tool, call) => boolean`: which tools a caller sees, for list and call |
+| `forwardHeaders`  | `['authorization', 'cookie', 'x-request-id', 'traceparent', 'tracestate']` | headers copied from the MCP request onto route tool calls               |
+| `toolTimeoutMs`   | no limit                                                                   | end a call that runs longer, with a `timeout` error                     |
+| `resourceFilter`  | —                                                                          | `(resource, call) => boolean`: which resources a caller sees and reads  |
+| `requestStateKey` | a random key per process                                                   | signs `ctx.elicit` answers between rounds; share it across instances    |
 
 ## `@McpTool(options)`
 
@@ -97,28 +99,43 @@ A route flag's object value takes the same fields.
 | `title`, `annotations`, `scopes` | as on `@McpTool`                                                       |
 | `handler(args, ctx)`             | its return value is the result; throw `McpToolError` for a typed error |
 
-`ctx` has `principal`, `origin`, `headers`, `signal` and `fetch(request)`.
+`ctx` has `principal`, `origin`, `headers`, `signal`, `fetch(request)` and `elicit(key, { message, schema })`.
+
+## Resources
+
+`registerResourceProvider({ name, resources?, templates? })` mounts resources ([Resources](./resources.md)).
+
+| Field                                      | Notes                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `uri` / `uriTemplate`                      | a fixed URI, or an RFC 6570 template such as `invoices://{id}`     |
+| `name`, `title`, `description`, `mimeType` | shown to clients; `mimeType` defaults by what `read` returns       |
+| `scopes`                                   | scopes the principal must hold; otherwise 403 `insufficient_scope` |
+| `read(ctx)` / `read(params, ctx)`          | string → text, `Uint8Array` → binary, other values → JSON          |
+| `list(ctx)` (templates)                    | concrete resources to show in `resources/list`                     |
 
 ## Types
 
-| Type                | Shape                                                                                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `McpPrincipal`      | `{ subject, clientId?, scopes?, audience?, [key]: unknown }`                                                                                   |
-| `McpRequestInfo`    | `{ headers, host, origin, resource }`                                                                                                          |
-| `McpCallContext`    | `McpRequestInfo & { principal? }` — what `toolFilter` gets                                                                                     |
-| `McpToolSummary`    | `{ name, description, kind: 'route' \| 'custom', scopes?, annotations?, route?, provider? }`                                                   |
-| `McpToolDefinition` | a discovered route tool: `name`, `description`, `inputSchema`, `outputSchema?`, `httpMethod`, `mountPath`, `annotations?`, `title?`, `scopes?` |
-| `McpToolError`      | `new McpToolError(code, message, data?)`                                                                                                       |
+| Type                 | Shape                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `McpPrincipal`       | `{ subject, clientId?, scopes?, audience?, [key]: unknown }`                                                                                   |
+| `McpRequestInfo`     | `{ headers, host, origin, resource }`                                                                                                          |
+| `McpCallContext`     | `McpRequestInfo & { principal? }` — what `toolFilter` gets                                                                                     |
+| `McpToolSummary`     | `{ name, description, kind: 'route' \| 'custom', scopes?, annotations?, route?, provider? }`                                                   |
+| `McpToolDefinition`  | a discovered route tool: `name`, `description`, `inputSchema`, `outputSchema?`, `httpMethod`, `mountPath`, `annotations?`, `title?`, `scopes?` |
+| `McpToolError`       | `new McpToolError(code, message, data?)`                                                                                                       |
+| `McpResourceSummary` | `{ kind: 'resource' \| 'template', name, uri?, uriTemplate?, scopes?, provider }` — what `resourceFilter` gets                                 |
 
 ## The adapter instance
 
 Resolve it with `container.resolve(MCP_ADAPTER)` (typed `McpAdapterInstance`), or keep the value `McpAdapter()` returned:
 
-| Method                     | Does                                                                          |
-| -------------------------- | ----------------------------------------------------------------------------- |
-| `getTools()`               | the route tools discovered at startup                                         |
-| `registerProvider(p)`      | mount custom tools; connected clients get `tools/list_changed` (session mode) |
-| `unregisterProvider(name)` | unmount them; `false` when no such provider                                   |
+| Method                             | Does                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| `getTools()`                       | the route tools discovered at startup                                         |
+| `registerProvider(p)`              | mount custom tools; connected clients get `tools/list_changed` (session mode) |
+| `unregisterProvider(name)`         | unmount them; `false` when no such provider                                   |
+| `registerResourceProvider(p)`      | mount resources; connected clients get `resources/list_changed`               |
+| `unregisterResourceProvider(name)` | unmount them; `false` when no such provider                                   |
 
 ## Exports
 

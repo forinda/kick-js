@@ -268,6 +268,7 @@ The example is exercised as a test in
 | `headers`   | the MCP request's headers                                                                                    |
 | `signal`    | aborted when the client cancels, or at `toolTimeoutMs`                                                       |
 | `fetch`     | runs a `Request` through the app's pipeline                                                                  |
+| `elicit`    | asks the user for input mid-call; see [Asking the user](#asking-the-user-elicitation)                        |
 
 ```ts
 handler: async ({ invoiceId }, ctx) => {
@@ -280,6 +281,27 @@ handler: async ({ invoiceId }, ctx) => {
   return res.json()
 }
 ```
+
+## Asking the user (elicitation)
+
+A custom tool can stop and ask the user for something: a confirmation before a destructive action, a field the model didn't have. `ctx.elicit(key, { message, schema })` returns the answer, validated against `schema`, or `undefined` when the user declines or cancels:
+
+```ts
+handler: async ({ invoiceId }, ctx) => {
+  const ok = await ctx.elicit<{ confirm: boolean }>('confirm', {
+    message: `Void invoice ${invoiceId}? This can't be undone.`,
+    schema: z.object({ confirm: z.boolean() }),
+  })
+  if (!ok?.confirm) return 'Cancelled'
+  return voidInvoice(invoiceId)
+}
+```
+
+- **The handler runs again from the top for each answer.** The first `elicit` of a key stops the handler, and the client asks the user. When the answer arrives, the handler runs again and `elicit` returns it. Earlier answers are kept, so a second `elicit` doesn't ask the first question again. Code before an `elicit` must be safe to repeat, so do side effects after the last one.
+- **`schema` is a flat form:** an object of string, number, boolean or enum fields, from any schema library. Clients render it as a form.
+- **Both protocol eras work.** A 2026-07-28 client gets an `input_required` result and retries with the answer. On a 2025 session the SDK sends the client a real `elicitation/create` request. Under `stateless: true`, 2025 clients can't be asked (there's no session to ask over), so the call fails. 2026-07-28 clients work in either mode.
+- **Answers carried between rounds are signed** (HMAC), and bound to the caller, so a client can't forge or replay them. Each process signs with its own random key. When several instances serve one endpoint, set the same `requestStateKey` (32+ bytes) on each.
+- The client must support elicitation. Route tools can't ask; put the question in a custom tool.
 
 ## Titles and annotations
 

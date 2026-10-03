@@ -30,13 +30,12 @@ Exposing a route as an MCP tool is like exposing it to another HTTP client: the 
 ## What stays yours
 
 - **Permissions.** Annotations (`destructiveHint`) are hints for clients, not enforcement, and `toolFilter` decides what's offered, not what's allowed. Keep the permission check in the route.
-- **Approval for risky actions.** There's no built-in human-in-the-loop step. Clients usually ask the user before a call; for actions that need sign-off inside your system, route them through your own approval flow and return a typed error (`McpToolError('approval_pending', …)`) the model can report.
+- **Approval for risky actions.** `ctx.elicit` can ask the user to confirm inside a custom tool ([Asking the user](./tools.md#asking-the-user-elicitation)). For actions that need sign-off inside your system, route them through your own approval flow and return a typed error (`McpToolError('approval_pending', …)`) the model can report.
 - **The authorization server.** The adapter is the resource server: it validates tokens and serves metadata. Issuing them (sign-in, consent, refresh, revocation) is your identity provider's job.
 - **Rate limits per caller.** Route-level rate limits apply to route tools. Custom tools need their own, or a check in the handler.
 - **Isolation.** Tools run in your app's process with its permissions. For untrusted code, use an OS-level sandbox.
 
 ## Not yet supported
 
-- **The 2026-07-28 protocol revision** (stateless by design, `server/discover`, the `Mcp-Method` / `Mcp-Name` headers). The adapter speaks the protocol versions of the MCP SDK it builds on (up to 2025-11-25); `stateless: true` covers the scaling half today.
-- **Resources and prompts.** The server offers tools only.
-- **Elicitation** (asking the user for input in the middle of a call).
+- **Prompts**, and resource subscriptions (`resources/subscribe`).
+- **Sampling** (asking the client's model to generate text mid-call).

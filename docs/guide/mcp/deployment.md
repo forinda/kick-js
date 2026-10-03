@@ -89,9 +89,18 @@ Add it to your client's MCP config as an HTTP server. `path` sets the whole endp
 McpAdapter({ name: 'billing', path: '/mcp' }) // https://your-app.example.com/mcp
 ```
 
+## Protocol versions
+
+One endpoint serves every protocol revision the MCP SDK supports:
+
+- **2026-07-28 clients** are served statelessly: each request carries what it needs, and a fresh server answers it. This happens in either mode, so they scale across instances with no extra setup. List-changed notifications reach them over their `subscriptions/listen` stream.
+- **2025 clients** (`2025-11-25` and earlier, the ones that send `initialize`) get a session, or are served statelessly with `stateless: true`, as described below.
+
+The adapter tells them apart per request, so new and older clients can share the endpoint while clients upgrade. Over stdio, the connection's first message picks the era.
+
 ## Several instances: `stateless`
 
-By default each client gets a session held in the server's memory: `initialize` creates it, and later requests carry its `Mcp-Session-Id`. Behind a load balancer, a request that reaches another instance gets 404 "Session not found".
+By default each 2025 client gets a session held in the server's memory: `initialize` creates it, and later requests carry its `Mcp-Session-Id`. Behind a load balancer, a request that reaches another instance gets 404 "Session not found".
 
 `stateless: true` serves every request with a fresh MCP server and no session:
 
@@ -102,7 +111,7 @@ McpAdapter({ name: 'billing', path: '/mcp', stateless: true })
 - **Any instance can answer any request**, so no sticky routing or shared session store is needed.
 - **POST only:** responses are plain JSON. `GET` (the notification stream) and `DELETE` (ending a session) answer 405, since there's no session to stream from or end.
 - **No session limits:** `maxSessions` and `sessionIdleTimeoutMs` don't apply.
-- **No server-to-client notifications.** `tools/list_changed` after `registerProvider()` reaches no one; clients see the new list the next time they ask.
+- **No server-to-client notifications for 2025 clients.** `tools/list_changed` after `registerProvider()` doesn't reach them; they see the new list the next time they ask. They also can't be asked questions (`ctx.elicit`).
 - **Auth runs on every request** in both modes, so stateless loses no security. Everything a call needs (the token, the host) comes with each request.
 
 Use stateless for remote servers that scale out. Keep sessions for a single instance where clients want notifications.

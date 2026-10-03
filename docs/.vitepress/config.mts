@@ -90,6 +90,7 @@ const guideSidebar = [
         items: [
           { text: 'Overview', link: '/guide/mcp' },
           { text: 'Tools', link: '/guide/mcp/tools' },
+          { text: 'Resources', link: '/guide/mcp/resources' },
           { text: 'Authentication', link: '/guide/mcp/auth' },
           { text: 'Multi-Tenancy', link: '/guide/mcp/multi-tenant' },
           { text: 'Deployment', link: '/guide/mcp/deployment' },

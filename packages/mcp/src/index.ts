@@ -20,4 +20,11 @@ export type {
   McpProtectedResourceOptions,
   McpToolAnnotations,
   McpToolSummary,
+  McpResource,
+  McpResourceContext,
+  McpResourceLink,
+  McpResourceProvider,
+  McpResourceReadResult,
+  McpResourceSummary,
+  McpResourceTemplate,
 } from './types'

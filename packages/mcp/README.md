@@ -140,7 +140,7 @@ McpAdapter({
   description: 'Create a task',          // Required. Shown to the LLM.
   name: 'create_task',                   // Override tool name (default: Controller.method)
   inputSchema: z.object({ ... }),        // Override query/body input (default: route's params, query and body schemas)
-  outputSchema: z.object({ ... }),       // Output schema for documentation
+  outputSchema: z.object({ ... }),       // Advertised; an object answer is sent as structuredContent
   hidden: true,                          // Exclude from auto mode
   examples: [{                           // Usage examples shown in client UIs
     description: 'Create a high-priority task',
@@ -160,11 +160,12 @@ IN PLACE:
   [x] Input validation — the route's own params/query/body validation checks tool arguments
   [x] getTools() — inspect the tool registry at runtime or in tests
 
+  [x] Tool annotations, per-tool scopes, per-caller tool and resource filters
+  [x] Elicitation — custom tools ask the user mid-call with ctx.elicit
+
 NOT YET IN PLACE:
-  [ ] Tool annotations (readOnlyHint, destructiveHint, idempotentHint)
-  [ ] Elicitation (server-driven user prompts mid-call)
+  [ ] Prompts, resource subscriptions, sampling
   [ ] Process sandbox (tools run in same Node process)
-  [ ] Server-side approval / human-in-the-loop
 ```
 
 The mental model: treat MCP exposure exactly like exposing the same route to a public HTTP client. Your existing auth + RBAC + rate-limit story carries the weight.

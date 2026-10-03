@@ -10,9 +10,9 @@ What sets it apart from a hand-built MCP server: **a tool call is a request to y
 
 ## Install
 
-<PmCommand add="@forinda/kickjs-mcp" />
+<PmCommand add="@forinda/kickjs-mcp @modelcontextprotocol/server" />
 
-The package depends on `@modelcontextprotocol/sdk` and `@forinda/kickjs`.
+`@modelcontextprotocol/server` (the MCP TypeScript SDK v2) is a peer dependency. The adapter speaks protocol 2026-07-28 and the 2025 revisions on the same endpoint, so new and older clients both connect.
 
 ## Wire up the adapter
 
@@ -156,15 +156,16 @@ Key points:
 
 ## Guides
 
-| Page                                   | Covers                                                                                                                                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Tools](./mcp/tools.md)                | which routes become tools (`@McpTool`, route flags, `auto`), custom tool providers, annotations, structured results, typed errors, timeouts |
-| [Authentication](./mcp/auth.md)        | the endpoint check, who is calling (`authenticate`), OAuth metadata and challenges, audiences, scopes, auth inside tool calls               |
-| [Multi-Tenancy](./mcp/multi-tenant.md) | a server per tenant host, the tenant's host on tool calls, per-caller tool lists, `allowedHosts`, proxies                                   |
-| [Deployment](./mcp/deployment.md)      | HTTP and stdio, the endpoint path, `stateless` for several instances, sessions, CORS                                                        |
-| [Testing](./mcp/testing.md)            | `getTools()`, the SDK client, raw requests, the MCP Inspector                                                                               |
-| [Security](./mcp/security.md)          | what protects a call, what stays yours, what's not supported yet                                                                            |
-| [Reference](./mcp/reference.md)        | every option, field and type                                                                                                                |
+| Page                                   | Covers                                                                                                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| [Tools](./mcp/tools.md)                | which routes become tools (`@McpTool`, route flags, `auto`), custom tool providers, asking the user, structured results, typed errors |
+| [Resources](./mcp/resources.md)        | resources and URI templates, reading through your routes, per-caller filtering, scopes                                                |
+| [Authentication](./mcp/auth.md)        | the endpoint check, who is calling (`authenticate`), OAuth metadata and challenges, audiences, scopes, auth inside tool calls         |
+| [Multi-Tenancy](./mcp/multi-tenant.md) | a server per tenant host, the tenant's host on tool calls, per-caller tool lists, `allowedHosts`, proxies                             |
+| [Deployment](./mcp/deployment.md)      | protocol versions, HTTP and stdio, the endpoint path, `stateless` for several instances, sessions, CORS                               |
+| [Testing](./mcp/testing.md)            | `getTools()`, the SDK client, raw requests, the MCP Inspector                                                                         |
+| [Security](./mcp/security.md)          | what protects a call, what stays yours, what's not supported yet                                                                      |
+| [Reference](./mcp/reference.md)        | every option, field and type                                                                                                          |
 
 ## Sharing tools with `@forinda/kickjs-ai`
 

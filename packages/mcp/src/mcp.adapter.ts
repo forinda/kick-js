@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import {
   Logger,
   METADATA,
@@ -20,7 +20,12 @@ import {
 import {
   ProtocolError,
   ProtocolErrorCode,
+  ResourceNotFoundError,
   Server,
+  UriTemplate,
+  createRequestStateCodec,
+  inputRequired,
+  inputResponse,
   WebStandardStreamableHTTPServerTransport,
   createMcpHandler,
   isInitializeRequest,
@@ -30,6 +35,7 @@ import {
   type ServerContext,
 } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
+import { toReadResult } from './resources'
 import {
   buildRouteTool,
   detectSchema,
@@ -44,6 +50,11 @@ import type {
   McpCallContext,
   McpCustomTool,
   McpPrincipal,
+  McpToolContext,
+  McpResource,
+  McpResourceProvider,
+  McpResourceSummary,
+  McpResourceTemplate,
   McpRequestInfo,
   McpToolDefinition,
   McpToolOptions,
@@ -225,6 +236,16 @@ export interface McpAdapterExtensions {
 
   /** Unmount a provider's tools. Returns false when no such provider is mounted. */
   unregisterProvider(name: string): boolean
+
+  /**
+   * Mount a set of resources and resource templates — at any time; connected
+   * clients are notified with `resources/list_changed`. A provider with the
+   * same name is replaced. Throws when a URI or template is already mounted.
+   */
+  registerResourceProvider(provider: McpResourceProvider): void
+
+  /** Unmount a resource provider. Returns false when none has that name. */
+  unregisterResourceProvider(name: string): boolean
 }
 
 /**
@@ -293,6 +314,23 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       outputSchema?: Record<string, unknown>
     }
     const providers = new Map<string, ProviderEntry[]>()
+
+    /** Elicitation answers carried between rounds, signed so a client can't forge them. */
+    type Answer = { action: 'accept' | 'decline' | 'cancel'; content?: Record<string, unknown> }
+    type ElicitState = { tool: string; answers: Record<string, Answer> }
+    const stateCodec = createRequestStateCodec<ElicitState>({
+      key: options.requestStateKey ?? randomBytes(32),
+      // State minted for one caller can't be replayed by another.
+      bind: (ctx) => callContextOf(ctx).principal?.subject ?? '',
+    })
+    /** Thrown by `ctx.elicit` to stop the handler until the client answers. */
+    class InputNeeded {
+      constructor(
+        readonly key: string,
+        readonly message: string,
+        readonly requestedSchema: Record<string, unknown>,
+      ) {}
+    }
 
     const providerToolNamed = (name: string) => {
       for (const tools of providers.values()) {
@@ -633,6 +671,19 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     }
 
     /** Run a custom tool: validate arguments, call the handler, shape the result. */
+    /** Answers from earlier rounds (signed state) plus this round's responses. */
+    const elicitAnswers = (tool: string, extra: unknown): Record<string, Answer> => {
+      const mcpReq = (extra as ServerContext | undefined)?.mcpReq
+      const state = mcpReq?.requestState<ElicitState>()
+      const answers =
+        state && typeof state === 'object' && state.tool === tool ? { ...state.answers } : {}
+      for (const key of Object.keys(mcpReq?.inputResponses ?? {})) {
+        const view = inputResponse(mcpReq?.inputResponses, key)
+        if (view.kind === 'elicit') answers[key] = { action: view.action, content: view.content }
+      }
+      return answers
+    }
+
     const callCustomTool = async (
       entry: ProviderEntry,
       args: unknown,
@@ -658,7 +709,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
       const call = callContextOf(extra)
       const signal = callSignal(extra) ?? new AbortController().signal
-      const context = {
+      const answers = elicitAnswers(entry.tool.name, extra)
+      const context: McpToolContext = {
         headers: call.headers,
         principal: call.principal,
         origin: call.origin,
@@ -666,6 +718,18 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         fetch: (request: Request) => {
           if (!appFetch) throw new Error('McpAdapter: the app is not started yet')
           return appFetch(request)
+        },
+        elicit: async <T>(key: string, request: { message: string; schema: unknown }) => {
+          const schema = detectSchema(request.schema)
+          const answer = answers[key]
+          if (!answer) throw new InputNeeded(key, request.message, schema.toJsonSchema())
+          if (answer.action !== 'accept') return undefined
+          const parsed = schema.safeParse(answer.content ?? {})
+          if (!parsed.success)
+            throw new McpToolError('invalid_input', 'The answer is not valid', {
+              issues: parsed.issues,
+            })
+          return parsed.data as T
         },
       }
 
@@ -687,6 +751,20 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           ...(entry.outputSchema && isJsonObject(result) ? { structuredContent: result } : {}),
         }
       } catch (err) {
+        if (err instanceof InputNeeded) {
+          return inputRequired({
+            inputRequests: {
+              [err.key]: inputRequired.elicit({
+                message: err.message,
+                requestedSchema: err.requestedSchema as never,
+              }),
+            },
+            requestState: await stateCodec.mint(
+              { tool: entry.tool.name, answers },
+              extra as ServerContext,
+            ),
+          }) as never
+        }
         if (err instanceof McpToolError) {
           return errorResult(err.message, {
             error: { code: err.code, message: err.message, ...err.data },
@@ -807,6 +885,121 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return removed
     }
 
+    const resourceProviders = new Map<string, McpResourceProvider>()
+
+    /** Every resource and template with its provider, as filters see them. */
+    const allResources = () =>
+      [...resourceProviders.values()].flatMap((provider) => [
+        ...(provider.resources ?? []).map((resource) => ({
+          resource,
+          summary: {
+            kind: 'resource' as const,
+            name: resource.name,
+            uri: resource.uri,
+            scopes: resource.scopes,
+            provider: provider.name,
+          } satisfies McpResourceSummary,
+        })),
+        ...(provider.templates ?? []).map((template) => ({
+          template,
+          matcher: new UriTemplate(template.uriTemplate),
+          summary: {
+            kind: 'template' as const,
+            name: template.name,
+            uriTemplate: template.uriTemplate,
+            scopes: template.scopes,
+            provider: provider.name,
+          } satisfies McpResourceSummary,
+        })),
+      ])
+
+    /** Whether `resourceFilter` lets this caller see it. A throw hides it. */
+    const resourceVisible = async (
+      summary: McpResourceSummary,
+      call: McpCallContext,
+    ): Promise<boolean> => {
+      if (!options.resourceFilter) return true
+      try {
+        return Boolean(await options.resourceFilter(summary, call))
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: resourceFilter threw for ${summary.name}; hiding it`)
+        return false
+      }
+    }
+
+    /** The resource or template entry answering this URI, with template variables. */
+    const resourceFor = (uri: string) => {
+      for (const entry of allResources()) {
+        if ('resource' in entry) {
+          if (entry.resource.uri === uri) return { entry, params: {} }
+          continue
+        }
+        const vars = entry.matcher.match(uri)
+        if (vars) {
+          const params = Object.fromEntries(
+            Object.entries(vars).map(([k, v]) => [k, Array.isArray(v) ? v.join(',') : v]),
+          )
+          return { entry, params }
+        }
+      }
+      return undefined
+    }
+
+    /** What a resource's `read` and `list` get: the caller, and a way back into the app. */
+    const resourceContext = (extra: unknown) => {
+      const call = callContextOf(extra)
+      return {
+        headers: call.headers,
+        principal: call.principal,
+        origin: call.origin,
+        signal: callSignal(extra) ?? new AbortController().signal,
+        fetch: (request: Request) => {
+          if (!appFetch) throw new Error('McpAdapter: the app is not started yet')
+          return appFetch(request)
+        },
+      }
+    }
+
+    /** Tell every connected client the resource list changed. */
+    const notifyResourcesChanged = () => {
+      const servers = [
+        ...[...sessions.values()].map((s) => s.server),
+        ...(mcpServer ? [mcpServer] : []),
+      ]
+      for (const server of servers) server.sendResourceListChanged().catch(() => {})
+      modern?.notify.resourcesChanged()
+    }
+
+    const registerResourceProvider = (provider: McpResourceProvider): void => {
+      const taken = new Set(
+        [...resourceProviders.values()]
+          .filter((p) => p.name !== provider.name)
+          .flatMap((p) => [
+            ...(p.resources ?? []).map((r: McpResource) => r.uri),
+            ...(p.templates ?? []).map((t: McpResourceTemplate) => t.uriTemplate),
+          ]),
+      )
+      for (const key of [
+        ...(provider.resources ?? []).map((r) => r.uri),
+        ...(provider.templates ?? []).map((t) => t.uriTemplate),
+      ]) {
+        if (taken.has(key)) {
+          throw new Error(
+            `McpAdapter: resource "${key}" (provider ${provider.name}) is already mounted`,
+          )
+        }
+        taken.add(key)
+      }
+      resourceProviders.set(provider.name, provider)
+      notifyResourcesChanged()
+    }
+
+    const unregisterResourceProvider = (name: string): boolean => {
+      const removed = resourceProviders.delete(name)
+      if (removed) notifyResourcesChanged()
+      return removed
+    }
+
     /**
      * Construct an MCP server that lists every discovered tool and
      * dispatches calls through the HTTP pipeline, where the route's own
@@ -824,7 +1017,10 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           version: options.version!,
           ...(options.description ? { description: options.description } : {}),
         },
-        { capabilities: { tools: { listChanged: true } } },
+        {
+          capabilities: { tools: { listChanged: true }, resources: { listChanged: true } },
+          requestState: { verify: (state, ctx) => stateCodec.verify(state, ctx) },
+        },
       )
 
       server.setRequestHandler('tools/list', async (_request, ctx) => {
@@ -851,6 +1047,53 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             ? await dispatchTool(tool.route, args, ctx)
             : await callCustomTool(tool.custom, args, ctx)
         ) as never
+      })
+
+      server.setRequestHandler('resources/list', async (_request, ctx) => {
+        const call = callContextOf(ctx)
+        const resources: Array<Record<string, unknown>> = []
+        for (const entry of allResources()) {
+          if (!(await resourceVisible(entry.summary, call))) continue
+          if ('resource' in entry) {
+            const { read: _read, scopes: _scopes, ...listed } = entry.resource
+            resources.push(listed)
+          } else if (entry.template.list) {
+            const links = await entry.template.list(resourceContext(ctx))
+            for (const link of links) {
+              resources.push({ mimeType: entry.template.mimeType, ...link })
+            }
+          }
+        }
+        return { resources: resources as never }
+      })
+
+      server.setRequestHandler('resources/templates/list', async (_request, ctx) => {
+        const call = callContextOf(ctx)
+        const resourceTemplates: Array<Record<string, unknown>> = []
+        for (const entry of allResources()) {
+          if ('template' in entry && (await resourceVisible(entry.summary, call))) {
+            const { read: _read, list: _list, scopes: _scopes, ...listed } = entry.template
+            resourceTemplates.push(listed)
+          }
+        }
+        return { resourceTemplates: resourceTemplates as never }
+      })
+
+      server.setRequestHandler('resources/read', async (request, ctx) => {
+        const { uri } = request.params
+        const found = resourceFor(uri)
+        // A resource the caller can't see reads like one that doesn't exist.
+        if (!found || !(await resourceVisible(found.entry.summary, callContextOf(ctx)))) {
+          throw new ResourceNotFoundError(uri)
+        }
+        const context = resourceContext(ctx)
+        const { entry } = found
+        const result =
+          'resource' in entry
+            ? await entry.resource.read(context)
+            : await entry.template.read(found.params, { ...context, uri })
+        const mimeType = 'resource' in entry ? entry.resource.mimeType : entry.template.mimeType
+        return toReadResult(uri, mimeType, result) as never
       })
 
       return server
@@ -934,20 +1177,28 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     }
 
     /**
-     * The scopes a `tools/call` in this body needs and the principal lacks —
+     * The scopes a `tools/call` or `resources/read` in this body needs and the principal lacks —
      * refused before the call runs, with a challenge naming them.
      */
     const lackingScopes = async (body: unknown, call: McpCallContext): Promise<string[]> => {
       const messages = Array.isArray(body) ? body : [body]
       const lacking = new Set<string>()
       for (const message of messages) {
-        if (!isJsonObject(message) || message.method !== 'tools/call') continue
-        const name = (message.params as { name?: unknown } | undefined)?.name
-        const tool = allTools().find((t) => t.summary.name === name)
-        // A hidden tool must answer like an unknown one, so it's left to the
-        // call handler rather than revealing its scopes here.
-        if (!tool || !(await visible(tool.summary, call))) continue
-        for (const scope of missingScopes(tool.summary.scopes, call.principal)) lacking.add(scope)
+        if (!isJsonObject(message)) continue
+        const params = message.params as { name?: unknown; uri?: unknown } | undefined
+        let scopes: string[] | undefined
+        if (message.method === 'tools/call') {
+          const tool = allTools().find((t) => t.summary.name === params?.name)
+          // A hidden tool must answer like an unknown one, so it's left to the
+          // call handler rather than revealing its scopes here.
+          if (!tool || !(await visible(tool.summary, call))) continue
+          scopes = tool.summary.scopes
+        } else if (message.method === 'resources/read' && typeof params?.uri === 'string') {
+          const found = resourceFor(params.uri)
+          if (!found || !(await resourceVisible(found.entry.summary, call))) continue
+          scopes = found.entry.summary.scopes
+        } else continue
+        for (const scope of missingScopes(scopes, call.principal)) lacking.add(scope)
       }
       return [...lacking]
     }
@@ -1180,6 +1431,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       dispatchTool,
       registerProvider,
       unregisterProvider,
+      registerResourceProvider,
+      unregisterResourceProvider,
     }
 
     return {
