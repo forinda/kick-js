@@ -14,7 +14,7 @@ export default defineConfig({
   external: [
     '@forinda/kickjs',
     '@forinda/kickjs-schema',
-    /^@modelcontextprotocol\/sdk/,
+    /^@modelcontextprotocol\//,
     'zod',
     /^node:/,
   ],

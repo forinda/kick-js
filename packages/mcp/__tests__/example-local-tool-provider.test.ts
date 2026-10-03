@@ -11,8 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Application, Container } from '@forinda/kickjs'
 import { MCP_ADAPTER, McpAdapter, type McpToolProvider } from '@forinda/kickjs-mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
 // ── The example provider ──────────────────────────────────────────────────
 

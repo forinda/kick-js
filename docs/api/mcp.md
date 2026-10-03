@@ -4,7 +4,7 @@ Expose controller routes as [Model Context Protocol](https://modelcontextprotoco
 
 ## Installation
 
-<PmCommand add="@forinda/kickjs-mcp @modelcontextprotocol/sdk" />
+<PmCommand add="@forinda/kickjs-mcp @modelcontextprotocol/server" />
 
 ## Exports
 
@@ -18,13 +18,15 @@ Expose controller routes as [Model Context Protocol](https://modelcontextprotoco
 | `isMcpTool`         | Whether a method carries `@McpTool`                          |
 | `MCP_TOOL_METADATA` | Metadata key `@McpTool` writes                               |
 
-Types: `McpAdapterInstance`, `McpAdapterOptions`, `McpAuthOptions`, `McpPrincipal`, `McpRequestInfo`, `McpCallContext`, `McpProtectedResourceOptions`, `McpToolOptions`, `McpToolDefinition`, `McpToolAnnotations`, `McpToolSummary`, `McpCustomTool`, `McpToolContext`, `McpToolProvider`, `McpToolExample`, `McpExposureMode`, `McpTransport`.
+Types: `McpResourceProvider`, `McpResource`, `McpResourceTemplate`, `McpResourceLink`, `McpResourceContext`, `McpResourceSummary`, `McpResourceReadResult`, `McpAdapterInstance`, `McpAdapterOptions`, `McpAuthOptions`, `McpPrincipal`, `McpRequestInfo`, `McpCallContext`, `McpProtectedResourceOptions`, `McpToolOptions`, `McpToolDefinition`, `McpToolAnnotations`, `McpToolSummary`, `McpCustomTool`, `McpToolContext`, `McpToolProvider`, `McpToolExample`, `McpExposureMode`, `McpTransport`.
 
 ## Behaviour in brief
 
 - **Tool calls are requests to your routes**, run in-process through the full pipeline (middleware, contributors, guards, validation) with the caller's credentials and host. No listening server is needed.
 - **Identity and access:** `auth.authenticate` returns the caller; `toolFilter` picks each caller's tools; tool `scopes` answer 403 `insufficient_scope`; `protectedResource` serves OAuth metadata.
-- **Serving:** Streamable HTTP with a session per client, or `stateless: true` for several instances; stdio for local clients. Works on Express, Fastify, h3 and h3 v2.
+- **Resources:** `registerResourceProvider` serves fixed URIs and URI templates, filtered per caller with `resourceFilter`.
+- **Asking the user:** custom tools call `ctx.elicit` for a confirmation or a missing field.
+- **Serving:** protocol 2026-07-28 and the 2025 revisions on one endpoint. 2025 clients get a session each, or `stateless: true` for several instances; stdio for local clients. Works on Express, Fastify, h3 and h3 v2.
 
 ## Related
 

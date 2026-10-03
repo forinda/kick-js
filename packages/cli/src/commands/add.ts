@@ -190,7 +190,7 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   // MCP — Model Context Protocol server
   mcp: {
     pkg: '@forinda/kickjs-mcp',
-    peers: ['@modelcontextprotocol/sdk'],
+    peers: ['@modelcontextprotocol/server'],
     description: 'Model Context Protocol server — expose @Controller endpoints as AI tools',
   },
 

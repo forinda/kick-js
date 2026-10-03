@@ -21,8 +21,7 @@ import { fastifyRuntime } from '@forinda/kickjs/fastify'
 import { h3WebRuntime } from '@forinda/kickjs/h3-web'
 import * as h3v2 from 'h3-v2'
 import { McpAdapter, McpTool } from '@forinda/kickjs-mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
 const cleanups: Array<() => Promise<unknown>> = []
 

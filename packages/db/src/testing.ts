@@ -96,7 +96,12 @@ export async function createPgTestDb<S>(
   url.pathname = `/${name}`
   const connectionString = url.toString()
   const pool = new pg.Pool({ connectionString })
-  pool.on('error', () => {}) // dropped connections at teardown aren't test failures
+  // Dropped connections at teardown aren't test failures. The client-level
+  // listener matters: `pool.end()` resolves before a client's socket closes,
+  // and the pool detaches its own listener first, so the FORCE drop's
+  // termination would otherwise surface as an uncaught error.
+  pool.on('error', () => {})
+  pool.on('connect', (client) => client.on('error', () => {}))
 
   if (opts.migrationsDir) {
     await migrateLatest({

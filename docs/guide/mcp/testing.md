@@ -33,8 +33,7 @@ To test a tool end to end (the MCP endpoint, auth, dispatch through the route), 
 ```ts
 import type { AddressInfo } from 'node:net'
 import { Application } from '@forinda/kickjs'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
 let app: Application
 let client: Client
@@ -69,6 +68,8 @@ it('creates a task', async () => {
   expect(result.isError).toBe(false)
 })
 ```
+
+The client is `@modelcontextprotocol/client` (a dev dependency). It speaks the 2025 protocol by default; to test as a 2026-07-28 client, pass `{ versionNegotiation: { mode: { pin: '2026-07-28' } } }` as the `Client`'s second argument.
 
 `signTestToken` is your own helper that signs a token your auth accepts ([Testing Authentication](../testing/auth.md#a-token-the-app-accepts)).
 
@@ -138,6 +139,7 @@ const ctx = {
   principal: { subject: 'u1', scopes: [] },
   signal: new AbortController().signal,
   fetch: (req: Request) => app.fetch(req),
+  elicit: async () => ({ confirm: true }), // the user's answer, for tools that ask
 }
 expect(await reports.tools[0].handler({ month: '2026-09' }, ctx)).toMatchObject({ total: 1200 })
 ```
