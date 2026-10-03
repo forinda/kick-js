@@ -83,6 +83,11 @@ describe.each(runtimes)('client() on $name', ({ make }) => {
     const browser = client({ cookies: true, basePath: '/api/v1' })
     await browser.get('/echo/visit')
     expect((await browser.get('/echo/visit')).body).toEqual({ count: 2 })
+    // A client scoped from a cookie client shares its cookie jar.
+    expect((await browser.as('tok').get('/echo/visit')).body).toEqual({ count: 3 })
+    expect((await browser.withHeaders({ 'x-a': '1' }).get('/echo/visit')).body).toEqual({
+      count: 4,
+    })
 
     const fresh = client({ basePath: '/api/v1' })
     await fresh.get('/echo/visit')

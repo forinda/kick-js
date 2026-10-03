@@ -63,6 +63,7 @@ export function createClient(
   app: Application,
   request: Supertest | null,
   options: TestClientOptions = {},
+  sharedAgent?: Record<string, (path: string) => TestRequest>,
 ): TestClient {
   if (!request) {
     throw new Error(
@@ -70,8 +71,10 @@ export function createClient(
     )
   }
   const handler = app.handle.bind(app)
-  // One agent per client keeps cookies; otherwise a fresh request each call.
-  const agent = options.cookies ? request.agent(handler) : undefined
+  // One agent per client keeps cookies — shared with the clients scoped from
+  // it, so `.as()` / `.withHeaders()` keep the same cookie jar. Otherwise a
+  // fresh request each call.
+  const agent = options.cookies ? (sharedAgent ?? request.agent(handler)) : undefined
   const headers = { ...options.headers }
   if (options.bearer) headers.authorization = `Bearer ${options.bearer}`
   const base = options.basePath?.replace(/\/$/, '') ?? ''
@@ -84,8 +87,8 @@ export function createClient(
       return test
     }
   }
-  client.as = (token) => createClient(app, request, { ...options, headers, bearer: token })
+  client.as = (token) => createClient(app, request, { ...options, headers, bearer: token }, agent)
   client.withHeaders = (extra) =>
-    createClient(app, request, { ...options, headers: { ...headers, ...extra } })
+    createClient(app, request, { ...options, headers: { ...headers, ...extra } }, agent)
   return client
 }

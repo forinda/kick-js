@@ -9,7 +9,9 @@ Create an Application configured for testing. Resets the DI container, registers
 ```typescript
 async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
-  /** @deprecated Express-only — throws under any other runtime. Use `app.handle`. */
+  /** A request client through `app.handle` (needs supertest). */
+  client: (options?: TestClientOptions) => TestClient
+  /** @deprecated Express-only — throws under any other runtime. Use `client()` or `app.handle`. */
   expressApp: express.Express
   container: Container
 }>
@@ -30,6 +32,53 @@ const { app, container } = await createTestApp({
 
 const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
 ```
+
+### client
+
+```typescript
+interface TestClientOptions {
+  headers?: Record<string, string> // sent with every request
+  bearer?: string // Authorization: Bearer <token>
+  basePath?: string // prefixed to every path
+  cookies?: boolean // keep cookies between requests (a supertest agent)
+}
+
+interface TestClient {
+  get(path: string): Test // also post, put, patch, delete, head, options
+  as(token: string): TestClient // same client, with Authorization: Bearer <token>
+  withHeaders(headers: Record<string, string>): TestClient
+}
+```
+
+Each method returns a supertest `Test`. `as()` and `withHeaders()` return a new client and leave the original unchanged; one scoped from a `cookies: true` client shares its cookie jar. Guide: [The request client](../guide/testing/http.md#the-request-client).
+
+## useTestApp
+
+From `@forinda/kickjs-testing/vitest`. Registers the Vitest hooks that build the app before a file's tests and shut it down after.
+
+```typescript
+function useTestApp(
+  options: () => CreateTestAppOptions | Promise<CreateTestAppOptions>,
+  settings?: {
+    shared?: boolean // one app per worker (isolate: false); default false
+    reset?: 'file' | 'test' | false // when onTestReset resets run; default 'file'
+    client?: TestClientOptions // defaults for t.client()
+  },
+): {
+  readonly app: Application
+  readonly container: Container
+  client(options?: TestClientOptions): TestClient
+}
+```
+
+## onTestReset / resetTestState
+
+```typescript
+function onTestReset(reset: () => unknown): () => void // returns an unregister function
+function resetTestState(): Promise<void> // runs every reset in order; all run, errors aggregated
+```
+
+Guide: [Large Suites](../guide/testing/large-suites.md#reset-state-not-the-app-ontestreset).
 
 ### Testing the runtime you deploy
 
@@ -180,6 +229,10 @@ async function runContributor<K extends string, D extends Record<string, any>>(
     initial?: Record<string, unknown>
     /** Override the fake ctx requestId (default: 'test-req'). */
     requestId?: string
+    /** More fields on the fake ctx, e.g. `{ req: { headers } }` for HTTP contributors. */
+    ctx?: Record<string, unknown>
+    /** Env values getEnv / ConfigService / @Value() return during resolve(), restored after. */
+    env?: Record<string, unknown>
   },
 ): Promise<{
   /** Value returned by resolve() — typed via ContextMeta[K]. */

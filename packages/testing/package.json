@@ -39,10 +39,9 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wireit"
   },
-  "dependencies": {},
   "peerDependencies": {
-    "express": "^5.1.0",
     "@forinda/kickjs": ">=5.18.0",
+    "express": "^5.1.0",
     "supertest": ">=7.0.0",
     "vitest": ">=3.0.0"
   },
@@ -50,9 +49,11 @@
     "@forinda/kickjs": "workspace:*",
     "@swc/core": "^1.16.2",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.2",
     "@types/supertest": "^7.2.1",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.3.0",
     "typescript": "^7.0.2",
