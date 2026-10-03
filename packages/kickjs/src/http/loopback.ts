@@ -8,6 +8,7 @@
  *
  * @module @forinda/kickjs/http/loopback
  */
+import { randomBytes } from 'node:crypto'
 import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
@@ -38,6 +39,10 @@ const HOP_BY_HOP_RESPONSE = [
   'content-encoding',
   'content-length',
 ]
+
+/** Carry the Request's host across the loopback hop; never seen by the app. */
+const LOOPBACK_HOST = 'x-kick-loopback-host'
+const LOOPBACK_SECRET = 'x-kick-loopback-secret'
 
 export interface Loopback {
   /** Forward a Request to the handler; starts the server on first use. */
@@ -75,10 +80,23 @@ export function createLoopback(
   handle: (req: IncomingMessage, res: ServerResponse) => void,
 ): Loopback {
   let started: Promise<{ origin: string; server: http.Server }> | undefined
+  // Proves a request came through this loopback, not from another process
+  // that found the port: only then is the host it carries believed.
+  const secret = randomBytes(24).toString('hex')
 
   const server = () => {
     started ??= new Promise<{ origin: string; server: http.Server }>((resolve, reject) => {
-      const instance = http.createServer((req, res) => handle(req, res))
+      const instance = http.createServer((req, res) => {
+        // Node's fetch won't send a Host header, so the original host travels
+        // in LOOPBACK_HOST and is put back here: the app sees the Host the
+        // Request was addressed to, as it would from a real client.
+        const host = req.headers[LOOPBACK_HOST]
+        if (req.headers[LOOPBACK_SECRET] === secret && typeof host === 'string')
+          req.headers.host = host
+        delete req.headers[LOOPBACK_HOST]
+        delete req.headers[LOOPBACK_SECRET]
+        handle(req, res)
+      })
       instance.once('error', reject)
       instance.listen(0, '127.0.0.1', () => {
         // Never keep a process alive on its own account.
@@ -107,6 +125,8 @@ export function createLoopback(
       // headers, which a trusting runtime would otherwise believe.
       headers.set('x-forwarded-host', url.host)
       headers.set('x-forwarded-proto', url.protocol.slice(0, -1))
+      headers.set(LOOPBACK_HOST, url.host)
+      headers.set(LOOPBACK_SECRET, secret)
 
       const body = await streamedBody(request)
       const upstream = await fetch(origin + url.pathname + url.search, {

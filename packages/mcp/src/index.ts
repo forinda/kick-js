@@ -2,6 +2,7 @@ export { McpAdapter } from './mcp.adapter'
 export type { McpAdapterExtensions as McpAdapterInstance } from './mcp.adapter'
 export { McpTool, getMcpToolMeta, isMcpTool } from './decorators'
 export { MCP_ADAPTER, MCP_TOOL_METADATA } from './constants'
+export { McpToolError } from './errors'
 export type {
   McpAdapterOptions,
   McpTransport,
@@ -13,4 +14,10 @@ export type {
   McpCustomTool,
   McpToolContext,
   McpToolProvider,
+  McpPrincipal,
+  McpRequestInfo,
+  McpCallContext,
+  McpProtectedResourceOptions,
+  McpToolAnnotations,
+  McpToolSummary,
 } from './types'

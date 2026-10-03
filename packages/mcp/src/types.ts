@@ -25,26 +25,145 @@ export type McpTransport = 'stdio' | 'sse' | 'http'
 export type McpExposureMode = 'explicit' | 'auto'
 
 /**
+ * Who is calling: what `auth.authenticate` returns. `subject` is required;
+ * the rest is whatever your tokens carry. Tool handlers read it as
+ * `ctx.principal`, and `toolFilter` gets it on `call.principal`.
+ */
+export interface McpPrincipal {
+  /** The user (or service) the token was issued to. */
+  subject: string
+  /** The OAuth client acting for them, when there is one. */
+  clientId?: string
+  /** Granted scopes, checked against a tool's `scopes`. */
+  scopes?: string[]
+  /**
+   * The token's audience. When set, it must include this server's resource
+   * URL (`call.resource`) or the request is refused with 401: a token minted
+   * for one tenant's server can't be used at another's.
+   */
+  audience?: string | string[]
+  /** Anything else your app wants on hand (tenant id, roles, …). */
+  [key: string]: unknown
+}
+
+/**
+ * The HTTP request a call arrived on, as auth and tool filters see it.
+ */
+export interface McpRequestInfo {
+  /** The MCP request's headers. */
+  headers: Headers
+  /** The host it was addressed to — `acme.example.com`. */
+  host: string
+  /** Scheme and host — `https://acme.example.com`. Tool calls are sent here. */
+  origin: string
+  /**
+   * This server's resource URL for the request: `origin` plus the endpoint
+   * path. The value a token's audience should name (RFC 8707).
+   */
+  resource: string
+}
+
+/** What a tool filter and a tool handler know about the caller. */
+export interface McpCallContext extends McpRequestInfo {
+  /** Who is calling, when `auth.authenticate` is configured. */
+  principal?: McpPrincipal
+}
+
+/**
  * Authentication for the HTTP transports (`sse` and `http`).
  *
  * Checked on every request to the MCP endpoint — `initialize`, `tools/list`
  * and every tool call — so a revoked token stops working mid-session.
- * Rejected requests get `401` (with `WWW-Authenticate: Bearer` for
+ * Rejected requests get `401` (with a `WWW-Authenticate` challenge for
  * `bearer`). Not used for `stdio`, where client and server share a process.
  *
  * Tool calls still run through each route's own middleware and guards on
  * top of this check.
  */
-export interface McpAuthOptions {
+export type McpAuthOptions = McpAuthCommon &
+  (
+    | {
+        /** Return true to allow the request. A throw counts as a rejection. */
+        validate: (credential: string) => boolean | Promise<boolean>
+        authenticate?: never
+      }
+    | {
+        /**
+         * Return who is calling, or `null` to refuse with 401. A throw counts
+         * as a refusal. Gets the request too, for the per-host resource URL a
+         * token's audience is checked against.
+         */
+        authenticate: (
+          credential: string,
+          request: McpRequestInfo,
+        ) => McpPrincipal | null | Promise<McpPrincipal | null>
+        validate?: never
+      }
+  )
+
+interface McpAuthCommon {
   /**
-   * - `bearer`: `validate` receives the token from `Authorization: Bearer <token>`.
-   *   A missing or malformed header is rejected without calling `validate`.
-   * - `custom`: `validate` receives the raw `Authorization` header value
+   * - `bearer`: the credential is the token from `Authorization: Bearer <token>`.
+   *   A missing or malformed header is rejected without calling your function.
+   * - `custom`: the credential is the raw `Authorization` header value
    *   (`''` when absent).
    */
   type: 'bearer' | 'custom'
-  /** Return true to allow the request. A throw counts as a rejection. */
-  validate: (credential: string) => boolean | Promise<boolean>
+  /**
+   * Where clients find this server's OAuth protected-resource metadata, sent
+   * as `resource_metadata` in the 401 challenge (RFC 9728). Defaults to the
+   * route `protectedResource` mounts, when that is configured.
+   */
+  resourceMetadataUrl?: string | ((request: McpRequestInfo) => string)
+  /** Scopes to name in the 401 challenge's `scope` parameter. */
+  scopes?: string[]
+}
+
+/**
+ * OAuth 2.0 protected-resource metadata (RFC 9728), served at
+ * `/.well-known/oauth-protected-resource` and at that path plus the MCP
+ * endpoint path, per host. MCP clients read it to find your authorization
+ * server.
+ */
+export interface McpProtectedResourceOptions {
+  /** Authorization server issuer URLs. A function picks them per request (per tenant). */
+  authorizationServers: string[] | ((request: McpRequestInfo) => string[])
+  /** Scopes this server understands. */
+  scopesSupported?: string[]
+  /** Overrides the `resource` value; defaults to the request's resource URL. */
+  resource?: (request: McpRequestInfo) => string
+}
+
+/**
+ * Hints about a tool's behaviour for clients (MCP `ToolAnnotations`). Hints,
+ * not guarantees: clients use them to decide what needs a confirmation.
+ */
+export interface McpToolAnnotations {
+  /** A display name. */
+  title?: string
+  /** The tool changes nothing. */
+  readOnlyHint?: boolean
+  /** The tool may delete or overwrite (only meaningful when not read-only). */
+  destructiveHint?: boolean
+  /** Calling it again with the same arguments has no further effect. */
+  idempotentHint?: boolean
+  /** The tool reaches outside your system (the web, a third party). */
+  openWorldHint?: boolean
+}
+
+/** A tool as a filter sees it — route and custom tools alike. */
+export interface McpToolSummary {
+  name: string
+  description: string
+  /** `route` for a controller method, `custom` for a provider tool. */
+  kind: 'route' | 'custom'
+  /** Scopes the tool requires. */
+  scopes?: string[]
+  annotations?: McpToolAnnotations
+  /** The route's method and path, for a route tool. */
+  route?: { method: string; path: string }
+  /** The provider's name, for a custom tool. */
+  provider?: string
 }
 
 /**
@@ -114,6 +233,45 @@ export interface McpAdapterOptions {
   /** Base path for the MCP endpoint (SSE/HTTP only). Defaults to `/_mcp`. */
   basePath?: string
   /**
+   * The full endpoint path, e.g. `'/mcp'`. Defaults to `` `${basePath}/messages` ``.
+   */
+  path?: string
+  /**
+   * Serve each request with a fresh server and no session (`sse`/`http`):
+   * nothing is kept between requests, so any instance behind a load balancer
+   * can answer any request. `GET` and `DELETE` get 405. `maxSessions` and
+   * `sessionIdleTimeoutMs` don't apply. Default `false`.
+   */
+  stateless?: boolean
+  /**
+   * Hosts the MCP endpoint answers for (`sse`/`http`) — `['acme.example.com']`,
+   * or a function for a pattern (`(host) => host.endsWith('.example.com')`).
+   * Any other `Host` gets 403, which completes the DNS-rebinding defence
+   * `allowedOrigins` starts. Defaults to any host.
+   */
+  allowedHosts?: string[] | ((host: string) => boolean)
+  /**
+   * Believe `X-Forwarded-Proto` and `X-Forwarded-Host` from the proxy in
+   * front of the app, for the request's origin and resource URL — set it
+   * behind a TLS-terminating proxy, or the resource URL reads `http://`. Only
+   * when that proxy overwrites those headers: otherwise a client chooses them.
+   * Default `false`.
+   */
+  trustProxy?: boolean
+  /** Serve OAuth protected-resource metadata. See {@link McpProtectedResourceOptions}. */
+  protectedResource?: McpProtectedResourceOptions
+  /**
+   * Decide which tools a caller sees, per request. Applied to `tools/list`
+   * and to `tools/call`: a tool filtered out can't be called by guessing its
+   * name — the call gets the same error as an unknown tool.
+   */
+  toolFilter?: (tool: McpToolSummary, call: McpCallContext) => boolean | Promise<boolean>
+  /**
+   * Abort a tool call that takes longer than this, with an error result.
+   * Default: no limit.
+   */
+  toolTimeoutMs?: number
+  /**
    * Expose routes carrying these [route flags](https://kickjs.app/guide/route-flags)
    * as tools, without `@McpTool` — on a method, a controller, or a module
    * mount (`routes: () => ({ …, flags: ['mcp.tool'] })`). Takes the same
@@ -182,9 +340,21 @@ export interface McpToolOptions {
    */
   inputSchema?: unknown
   /**
-   * Optional output schema for documentation. Not validated at runtime.
+   * The shape of a successful result, from any schema library. Advertised in
+   * `tools/list`; a JSON object response is then also sent as
+   * `structuredContent`. Not validated at runtime.
    */
   outputSchema?: unknown
+  /** Behaviour hints for clients — read-only, destructive, idempotent. */
+  annotations?: McpToolAnnotations
+  /** A display name. */
+  title?: string
+  /**
+   * Scopes the caller's principal must hold. A call without them is refused
+   * with `403` and `WWW-Authenticate: Bearer error="insufficient_scope"`, so
+   * the client can ask the user for more access.
+   */
+  scopes?: string[]
   /** Optional usage examples shown in the tool description. */
   examples?: McpToolExample[]
   /**
@@ -220,6 +390,9 @@ export interface McpToolDefinition {
   mountPath: string
   /** Examples for documentation. */
   examples?: McpToolExample[]
+  annotations?: McpToolAnnotations
+  title?: string
+  scopes?: string[]
 }
 
 /**
@@ -228,6 +401,13 @@ export interface McpToolDefinition {
 export interface McpToolContext {
   /** Headers of the MCP request that carried the call (credentials, tracing). */
   headers: Headers
+  /** Who is calling, when `auth.authenticate` is configured. */
+  principal?: McpPrincipal
+  /**
+   * Scheme and host of the MCP request — build requests to your own routes
+   * from it, so they keep the caller's host: `new Request(new URL('/api/v1/x', ctx.origin))`.
+   */
+  origin: string
   /** Aborted when the client cancels the call. */
   signal: AbortSignal
   /**
@@ -257,6 +437,12 @@ export interface McpCustomTool<TArgs = any> {
    * arguments return an error result. Omit for a tool without arguments.
    */
   inputSchema?: unknown
+  /** The shape of a successful result; an object result is then also sent as `structuredContent`. */
+  outputSchema?: unknown
+  annotations?: McpToolAnnotations
+  title?: string
+  /** Scopes the caller's principal must hold — see `McpToolOptions.scopes`. */
+  scopes?: string[]
   handler(args: TArgs, ctx: McpToolContext): unknown
 }
 
