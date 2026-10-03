@@ -73,6 +73,10 @@ export interface TableSnapshot {
   primaryKey?: { name?: string; columns: string[] }
   /** The table's comment in the database (Postgres, MySQL). */
   comment?: string
+  /** Row-level security is on (Postgres); `force` applies it to the table's owner too. */
+  rls?: { force?: true }
+  /** Row-level security policies (Postgres). */
+  policies?: PolicySnapshot[]
 }
 
 /**
@@ -118,6 +122,28 @@ export interface RelationSnapshot {
   through?: { table: string; sourceColumns: readonly string[]; targetColumns: readonly string[] }
 }
 
+/** A row-level security policy (Postgres). */
+export interface PolicySnapshot {
+  name: string
+  as: 'permissive' | 'restrictive'
+  command: 'all' | 'select' | 'insert' | 'update' | 'delete'
+  /** Role names; `public` is everyone. */
+  to: string[]
+  using?: string
+  withCheck?: string
+}
+
+/** A Postgres role the schema declares (created if missing, never dropped). */
+export interface RoleSnapshot {
+  name: string
+  login?: boolean
+  createDb?: boolean
+  createRole?: boolean
+  /** Default true: privileges of roles it's a member of apply to it. */
+  inherit?: boolean
+  bypassRls?: boolean
+}
+
 export interface ViewSnapshot {
   name: string
   /** The `SELECT`, as declared (or as the database reports it, when introspected). */
@@ -157,6 +183,8 @@ export interface SchemaSnapshot {
    * select from one declared before it. Absent when there are none.
    */
   views?: Record<string, ViewSnapshot>
+  /** Roles declared with `pgRole()` (Postgres). Absent when none. */
+  roles?: Record<string, RoleSnapshot>
   /**
    * Optional relation sidecar populated when the schema includes
    * `relations()` declarations. Absent when no relations are

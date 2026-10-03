@@ -1,6 +1,6 @@
 import { RemovedValueAsDefaultError } from '../errors'
 import { pgPrimaryKeyName, primaryKeyOf, snapshotTableName } from '../snapshot/name'
-import type { SchemaSnapshot, TableSnapshot, ViewSnapshot } from '../snapshot/types'
+import type { PolicySnapshot, SchemaSnapshot, TableSnapshot, ViewSnapshot } from '../snapshot/types'
 import type { Change, ChangeSet, PrimaryKeyShape } from './types'
 
 /**
@@ -90,7 +90,61 @@ export function diff(
   // Drop enums after every dependent table change has been emitted.
   diffEnumsDropPhase(prev, next, changes)
 
-  return withViews(prev, next, changes)
+  return withRowLevelSecurity(prev, next, withViews(prev, next, changes))
+}
+
+const policyKey = (p: PolicySnapshot) =>
+  JSON.stringify([p.as, p.command, [...p.to].toSorted(), p.using ?? null, p.withCheck ?? null])
+
+/**
+ * Roles first; then policy drops, ahead of the table changes (Postgres won't
+ * drop a column a policy uses); then, last of all, row-level security on and
+ * off and policy creates. A table whose shape changes, or that a policy's SQL
+ * names, has its policies dropped and re-created around the change.
+ */
+function withRowLevelSecurity(
+  prev: SchemaSnapshot,
+  next: SchemaSnapshot,
+  changes: Change[],
+): Change[] {
+  const roles: Change[] = []
+  for (const [name, role] of Object.entries(next.roles ?? {})) {
+    const was = prev.roles?.[name]
+    if (!was) roles.push({ kind: 'createRole', role })
+    else if (JSON.stringify(was) !== JSON.stringify(role)) roles.push({ kind: 'alterRole', role })
+  }
+
+  const touched = new Set(changes.flatMap(touchedBy))
+  const drops: Change[] = []
+  const creates: Change[] = []
+  for (const [name, t] of Object.entries(next.tables)) {
+    const before = prev.tables[name]
+    const was = new Map((before?.policies ?? []).map((p) => [p.name, p]))
+    const now = t.policies ?? []
+    // Re-create every policy on a table this migration reshapes, or whose SQL names one that is.
+    const reshaped = (p: PolicySnapshot) =>
+      touched.has(name) ||
+      [...touched].some((x) => mentions(`${p.using ?? ''} ${p.withCheck ?? ''}`, x))
+    for (const [pname, p] of was) {
+      const kept = now.find((q) => q.name === pname)
+      if (!kept || policyKey(kept) !== policyKey(p) || reshaped(p)) {
+        drops.push({ kind: 'dropPolicy', table: name, policy: p })
+      }
+    }
+    const rlsBefore = before?.rls ?? null
+    const rlsAfter = t.rls ?? null
+    if (JSON.stringify(rlsBefore) !== JSON.stringify(rlsAfter)) {
+      creates.push({ kind: 'setRowLevelSecurity', table: name, from: rlsBefore, to: rlsAfter })
+    }
+    for (const p of now) {
+      const old = was.get(p.name)
+      if (!old || policyKey(old) !== policyKey(p) || reshaped(p)) {
+        creates.push({ kind: 'createPolicy', table: name, policy: p })
+      }
+    }
+  }
+  if (roles.length === 0 && drops.length === 0 && creates.length === 0) return changes
+  return [...roles, ...drops, ...changes, ...creates]
 }
 
 /** Change kinds that don't alter a table's shape, so a view over it is unaffected. */

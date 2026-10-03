@@ -1,5 +1,5 @@
 import type { Change, ChangeSet } from '../diff/types'
-import type { ColumnSnapshot, TableSnapshot } from '../snapshot/types'
+import type { ColumnSnapshot, PolicySnapshot, RoleSnapshot, TableSnapshot } from '../snapshot/types'
 import { primaryKeyOf, snapshotTableName } from '../snapshot/name'
 import { quoteIdent, quoteLiteral } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
@@ -104,9 +104,67 @@ function emitChange(change: Change): string {
         ...(v.indexes ?? []).map((i) => emitAddIndex(v.name, i)),
       ].join('\n')
     }
+    case 'createRole':
+      return emitCreateRole(change.role)
+    case 'alterRole': {
+      const options = roleOptions(change.role)
+      // An attribute removed from the schema is left as the role has it.
+      return options ? `ALTER ROLE ${quoteIdent(change.role.name)}${options};` : ''
+    }
+    case 'setRowLevelSecurity': {
+      const t = quoteIdent(change.table)
+      const out: string[] = []
+      if (!change.from && change.to) out.push(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY;`)
+      if (change.from && !change.to) out.push(`ALTER TABLE ${t} DISABLE ROW LEVEL SECURITY;`)
+      const force = !!change.to?.force
+      if (force !== !!change.from?.force) {
+        out.push(`ALTER TABLE ${t} ${force ? '' : 'NO '}FORCE ROW LEVEL SECURITY;`)
+      }
+      return out.join('\n')
+    }
+    case 'createPolicy':
+      return emitCreatePolicy(change.table, change.policy)
+    case 'dropPolicy':
+      return `DROP POLICY ${quoteIdent(change.policy.name)} ON ${quoteIdent(change.table)};`
     case 'dropView':
       return `DROP ${change.view.materialized ? 'MATERIALIZED VIEW' : 'VIEW'} ${quoteIdent(change.view.name)};`
   }
+}
+
+/** Role attributes, as `CREATE ROLE` / `ALTER ROLE` options (attributes left unset are left alone). */
+function roleOptions(role: RoleSnapshot): string {
+  const flag = (on: boolean | undefined, word: string) =>
+    on === undefined ? '' : ` ${on ? '' : 'NO'}${word}`
+  return (
+    flag(role.login, 'LOGIN') +
+    flag(role.createDb, 'CREATEDB') +
+    flag(role.createRole, 'CREATEROLE') +
+    flag(role.inherit, 'INHERIT') +
+    flag(role.bypassRls, 'BYPASSRLS')
+  )
+}
+
+/** CREATE ROLE only when it's missing: a role is shared by every database on the server. */
+function emitCreateRole(role: RoleSnapshot): string {
+  return [
+    `DO $$ BEGIN`,
+    `  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = ${quoteLiteral(role.name)}) THEN`,
+    `    CREATE ROLE ${quoteIdent(role.name)}${roleOptions(role)};`,
+    `  END IF;`,
+    `END $$;`,
+  ].join('\n')
+}
+
+function emitCreatePolicy(table: string, p: PolicySnapshot): string {
+  const to = p.to.map((r) =>
+    r === 'public' || r === 'current_user' || r === 'session_user'
+      ? r.toUpperCase()
+      : quoteIdent(r),
+  )
+  let s = `CREATE POLICY ${quoteIdent(p.name)} ON ${quoteIdent(table)} AS ${p.as.toUpperCase()} FOR ${p.command.toUpperCase()} TO ${to.join(', ')}`
+  if (p.using) s += ` USING (${p.using})`
+  if (p.withCheck) s += ` WITH CHECK (${p.withCheck})`
+  return `${s};`
 }
 
 function commentLiteral(text: string | null | undefined): string {

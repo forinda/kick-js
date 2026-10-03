@@ -9,6 +9,9 @@ import pg from 'pg'
 import { PostgresDialect, sql } from 'kysely'
 import {
   createDbClient,
+  diff,
+  emitPg,
+  extractSnapshot,
   integer,
   jsonb,
   serial,
@@ -16,17 +19,25 @@ import {
   text,
   type KickDbClient,
 } from '@forinda/kickjs-db'
+import { policy } from '@forinda/kickjs-db/pg'
 
 const events = table('events', {
   id: serial().primaryKey(),
   data: jsonb<{ kind: string; tags: string[] }>().notNull(),
 })
-const notes = table('notes', {
-  id: serial().primaryKey(),
-  tenantId: text().notNull(),
-  body: text().notNull(),
-  n: integer(),
-})
+// ── the docs' schema: the policy is declared with the table ──
+const tenant = `current_setting('app.tenant_id', true)`
+const notes = table(
+  'notes',
+  { id: serial().primaryKey(), tenantId: text().notNull(), body: text().notNull(), n: integer() },
+  {
+    constraints: () => ({
+      tenantIsolation: policy('tenant_isolation')
+        .using(`"tenantId" = ${tenant}`)
+        .withCheck(`"tenantId" = ${tenant}`),
+    }),
+  },
+)
 const schema = { events, notes }
 
 let container: StartedPostgreSqlContainer
@@ -37,27 +48,21 @@ const make = (pool: pg.Pool) => createDbClient({ schema, dialect: new PostgresDi
 
 // ── the docs' helper ──
 function withTenant<T>(client: KickDbClient<any>, tenantId: string, fn: () => Promise<T>) {
-  return client.transaction(async () => {
-    // `true` = local to this transaction, so it can't leak to the next user of the connection.
-    await sql`select set_config('app.tenant_id', ${tenantId}, true)`.execute(client.qb)
-    return fn()
-  })
+  // Local to this transaction: it can't leak to the next user of the connection.
+  return client.transaction({ settings: { 'app.tenant_id': tenantId } }, () => fn())
 }
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:16-alpine').start()
   admin = new pg.Pool({ connectionString: container.getConnectionUri() })
   admin.on('error', () => {})
+  const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }
+  await admin.query(emitPg(diff(empty, extractSnapshot({ notes }, 'postgres'))))
   await admin.query(`
     CREATE TABLE events (id serial PRIMARY KEY, data jsonb NOT NULL);
     INSERT INTO events (data) VALUES
       ('{"kind":"signup","tags":["web"]}'), ('{"kind":"login","tags":["web","mobile"]}');
 
-    CREATE TABLE notes (id serial PRIMARY KEY, "tenantId" text NOT NULL, body text NOT NULL, n int);
-    ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
-    CREATE POLICY tenant_isolation ON notes
-      USING ("tenantId" = current_setting('app.tenant_id', true))
-      WITH CHECK ("tenantId" = current_setting('app.tenant_id', true));
 
     CREATE ROLE app LOGIN PASSWORD 'app';
     GRANT SELECT, INSERT, UPDATE, DELETE ON notes, events TO app;

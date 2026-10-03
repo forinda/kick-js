@@ -169,6 +169,34 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       t.checks = t.checks.filter((c) => c.name !== change.check.name)
       return
     }
+    case 'createRole':
+    case 'alterRole': {
+      snapshot.roles = { ...snapshot.roles, [change.role.name]: deepClone(change.role) }
+      return
+    }
+    case 'setRowLevelSecurity': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      if (change.to) t.rls = deepClone(change.to)
+      else delete t.rls
+      return
+    }
+    case 'createPolicy': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      t.policies = [
+        ...(t.policies ?? []).filter((p) => p.name !== change.policy.name),
+        deepClone(change.policy),
+      ]
+      return
+    }
+    case 'dropPolicy': {
+      const t = snapshot.tables[change.table]
+      if (!t) return
+      t.policies = (t.policies ?? []).filter((p) => p.name !== change.policy.name)
+      if (t.policies.length === 0) delete t.policies
+      return
+    }
     case 'createView': {
       snapshot.views = { ...snapshot.views, [change.view.name]: deepClone(change.view) }
       return

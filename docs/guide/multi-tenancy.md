@@ -129,26 +129,33 @@ The `Scope.REQUEST` registration ensures the factory runs once per request and t
 
 With a shared database, Postgres [row-level security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) makes the database enforce the tenant filter, so a query that forgets `where tenantId = …` still sees only one tenant's rows.
 
-Policies read the tenant from a setting:
-
-```sql
-ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON notes
-  USING ("tenantId" = current_setting('app.tenant_id', true))
-  WITH CHECK ("tenantId" = current_setting('app.tenant_id', true));
-```
-
-Set it for the length of a transaction, and run the request's work inside it:
+Declare the policy with the table ([Row-Level Security](./database/row-level-security.md)); migrations create it and turn RLS on:
 
 ```ts
-import { sql } from 'kysely'
+import { policy } from '@forinda/kickjs-db/pg'
 
+const tenant = `current_setting('app.tenant_id', true)`
+
+export const notes = table(
+  'notes',
+  { id: serial().primaryKey(), tenantId: text().notNull(), body: text().notNull() },
+  {
+    rls: { force: true }, // the owner role too
+    constraints: () => ({
+      tenantIsolation: policy('tenant_isolation')
+        .using(`"tenantId" = ${tenant}`)
+        .withCheck(`"tenantId" = ${tenant}`),
+    }),
+  },
+)
+```
+
+Set the tenant for the length of a transaction, and run the request's work inside it:
+
+```ts
 export function withTenant<T>(db: AppDb, tenantId: string, fn: () => Promise<T>) {
-  return db.transaction(async () => {
-    // `true` = local to this transaction — it can't leak to the next user of the connection
-    await sql`select set_config('app.tenant_id', ${tenantId}, true)`.execute(db.qb)
-    return fn()
-  })
+  // Local to this transaction: it can't leak to the next user of the connection.
+  return db.transaction({ settings: { 'app.tenant_id': tenantId } }, () => fn())
 }
 ```
 
@@ -163,8 +170,8 @@ list(ctx: RequestContext) {
 
 Three things to get right:
 
-- **Connect as a role the policies apply to.** Superusers bypass row-level security, and so does the table's owner unless you add `ALTER TABLE … FORCE ROW LEVEL SECURITY`. Run migrations as the owner and the app as a separate role with only the grants it needs.
-- **Outside `withTenant`, nothing is visible** — `current_setting(…, true)` is null, so the policy matches no rows. That's the safe default; admin jobs that need every tenant use the owner role.
+- **Connect as a role the policies apply to.** Superusers bypass row-level security, and so does the table's owner unless the table has `rls: { force: true }`. Or run migrations as the owner and the app as a separate role with only the grants it needs.
+- **Outside `withTenant`, nothing is visible** — `current_setting(…, true)` is null (or `''` once a transaction on that connection has set it), so the policy matches no rows. That's the safe default; admin jobs that need every tenant use the owner role.
 - **Wrap in the handler or service, not a middleware.** A route middleware's `next()` can resolve before the handler finishes, so a transaction opened there may commit while the handler is still querying.
 
 Writes are checked too: inserting a row for another tenant fails the policy's `WITH CHECK`. This recipe runs in kick/db's test suite against Postgres, as a non-owner role.

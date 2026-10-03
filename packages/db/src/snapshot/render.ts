@@ -5,6 +5,7 @@ import type {
   ForeignKeySnapshot,
   IndexSnapshot,
   SchemaSnapshot,
+  PolicySnapshot,
   TableSnapshot,
   ViewSnapshot,
 } from './types'
@@ -62,6 +63,7 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
   const pgImports = [
     ...(enumDecls.length > 0 ? ['pgEnum'] : []),
     ...(views.some((v) => v.materialized) ? ['materializedView'] : []),
+    ...(Object.values(snapshot.tables).some((t) => t.policies?.length) ? ['policy'] : []),
   ]
   if (pgImports.length > 0) {
     lines.push(`import { ${pgImports.join(', ')} } from '@forinda/kickjs-db/pg'`)
@@ -103,6 +105,17 @@ function renderView(
   }
   const factory = v.materialized ? 'materializedView' : 'view'
   return `export const ${jsIdent(v.name)} = ${factory}(${strLit(v.name)}, {\n${columns.join('\n')}\n}, { ${opts.join(', ')} })`
+}
+
+/** `policy('name').for(...).to(...).using(...)`, leaving defaults out. */
+function renderPolicyCall(p: PolicySnapshot): string {
+  let s = `policy(${strLit(p.name)})`
+  if (p.as !== 'permissive') s += `.as('${p.as}')`
+  if (p.command !== 'all') s += `.for('${p.command}')`
+  if (p.to.join() !== 'public') s += `.to(${p.to.map(strLit).join(', ')})`
+  if (p.using) s += `.using(${strLit(p.using)})`
+  if (p.withCheck) s += `.withCheck(${strLit(p.withCheck)})`
+  return s
 }
 
 /**
@@ -171,12 +184,21 @@ function renderTable(
 
   const tableArgs: string[] = [strLit(table.name), `{\n${columns.join('\n')}\n}`]
 
-  const callbacks = explicitIndexes
-    .map((i) => `    ${jsKey(i.name)}: ${renderIndexCall(i)}`)
-    .join(',\n')
-  const constraints = explicitIndexes.length > 0 ? `(t) => ({\n${callbacks},\n  })` : undefined
-  if (table.comment !== undefined) {
-    const parts = [`comment: ${strLit(table.comment)}`]
+  const callbacks = [
+    ...explicitIndexes.map((i) => `    ${jsKey(i.name)}: ${renderIndexCall(i)}`),
+    ...(table.policies ?? []).map((p) => `    ${jsKey(p.name)}: ${renderPolicyCall(p)}`),
+  ].join(',\n')
+  const constraints = callbacks ? `(t) => ({\n${callbacks},\n  })` : undefined
+  // A policy turns row-level security on by itself; say so only when it doesn't.
+  const rls = table.rls?.force
+    ? '{ force: true }'
+    : table.rls && !table.policies?.length
+      ? 'true'
+      : undefined
+  if (table.comment !== undefined || rls) {
+    const parts: string[] = []
+    if (table.comment !== undefined) parts.push(`comment: ${strLit(table.comment)}`)
+    if (rls) parts.push(`rls: ${rls}`)
     if (constraints) parts.push(`constraints: ${constraints}`)
     tableArgs.push(`{ ${parts.join(', ')} }`)
   } else if (constraints) {

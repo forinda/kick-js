@@ -1,4 +1,5 @@
 import type { IndexSnapshot } from '../snapshot/types'
+import type { PolicyDecl } from './rls'
 
 interface ColRef {
   __name: string
@@ -100,7 +101,7 @@ export interface CheckDecl {
 }
 
 /** Anything a table's constraint builder may return. */
-export type TableConstraint = IndexDecl | PrimaryKeyDecl | CheckDecl
+export type TableConstraint = IndexDecl | PrimaryKeyDecl | CheckDecl | PolicyDecl
 
 /**
  * The table's primary key, over one or more columns, in key order:

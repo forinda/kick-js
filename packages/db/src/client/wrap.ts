@@ -208,6 +208,11 @@ export function wrap<DB>(
             // Kept as before: SQLite has no isolation levels, and says so.
             await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`).execute(trx)
           }
+          // For row-level security: who the policies see, for this transaction only.
+          if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
+          for (const [key, value] of Object.entries(opts.settings ?? {})) {
+            await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
+          }
           frame.trx = trx
           return ctx.transactions.run(frame, () => fn(childFor(trx)))
         })
@@ -326,6 +331,20 @@ export function wrap<DB>(
         return Promise.reject(
           new Error(
             "kickjs-db: transaction({ readOnly: true }) inside a writable transaction can't be read-only — use nested: 'separate'",
+          ),
+        )
+      }
+      const scoped = opts.role !== undefined || opts.settings !== undefined
+      if (scoped && ctx.dialect !== 'postgres') {
+        return Promise.reject(
+          new Error('kickjs-db: transaction role and settings are Postgres-only'),
+        )
+      }
+      // They'd change the open transaction for everything else in it.
+      if (scoped && frame && nested !== 'separate') {
+        return Promise.reject(
+          new Error(
+            "kickjs-db: transaction({ role, settings }) inside an open transaction would change it for everyone in it — use nested: 'separate'",
           ),
         )
       }

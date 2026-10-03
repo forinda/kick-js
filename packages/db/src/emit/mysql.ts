@@ -105,6 +105,12 @@ function emitChange(change: Change): string {
       return `CREATE VIEW ${ident(change.view.name)} AS\n${change.view.definition};`
     case 'dropView':
       return `DROP VIEW ${ident(change.view.name)};`
+    case 'createRole':
+    case 'alterRole':
+    case 'setRowLevelSecurity':
+    case 'createPolicy':
+    case 'dropPolicy':
+      throw new Error('kickjs-db: row-level security and roles are Postgres-only')
     case 'setColumnComment': {
       // MySQL sets a comment by restating the column; a serial key keeps its
       // AUTO_INCREMENT, which MODIFY would otherwise drop.

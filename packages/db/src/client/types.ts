@@ -64,6 +64,18 @@ export interface TransactionOptions extends TransactionEvent {
    */
   readOnly?: boolean
   /**
+   * Run the transaction as this role (`SET LOCAL ROLE`, Postgres): row-level
+   * security policies `TO` that role apply. The connection's own role must be
+   * a member of it.
+   */
+  role?: string
+  /**
+   * Settings for this transaction only (`set_config(key, value, true)`,
+   * Postgres), for policies to read with `current_setting('app.user_id')`.
+   * Keys need a dot (`app.user_id`). Values are bound, never spliced into SQL.
+   */
+  settings?: Record<string, string | number | boolean>
+  /**
    * Run the whole transaction again when it fails with a retryable error —
    * a serialization failure or deadlock (`err.retryable`). `true` is three
    * attempts; waits between them back off exponentially with jitter.

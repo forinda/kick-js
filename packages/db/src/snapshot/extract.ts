@@ -2,6 +2,7 @@ import type { ColumnBuilder } from '../dsl/columns/types'
 import { derivedFkName, derivedUniqueName } from './name'
 import { qualifiedTableName, unwrapTable, type TableDecl } from '../dsl/table'
 import { isView } from '../dsl/view'
+import { isRole } from '../dsl/rls'
 import { extractRelations } from '../query/extract-relations'
 import { applyCasing, type Casing } from './casing'
 import type {
@@ -11,6 +12,7 @@ import type {
   IndexSnapshot,
   SchemaSnapshot,
   TableSnapshot,
+  RoleSnapshot,
   ViewSnapshot,
 } from './types'
 
@@ -77,10 +79,13 @@ export function extractSnapshot(
   const schemaNames = new Set<string>()
 
   const views: Record<string, ViewSnapshot> = {}
+  const roles: Record<string, RoleSnapshot> = {}
 
   for (const exported of Object.values(schema)) {
     const value = unwrapTable(exported) ?? exported
-    if (isView(value)) {
+    if (isRole(value)) {
+      if (!value.__existing) roles[value.__role.name] = { ...value.__role }
+    } else if (isView(value)) {
       if (value.__materialized && dialect !== 'postgres') {
         throw new Error(
           `kickjs-db: '${value.__name}' is a materialized view, which only Postgres has — use view()`,
@@ -116,6 +121,16 @@ export function extractSnapshot(
     }
   }
 
+  if (dialect !== 'postgres') {
+    const rlsTable = Object.values(tables).find((t) => t.rls || t.policies)
+    if (rlsTable || Object.keys(roles).length > 0) {
+      throw new Error(
+        `kickjs-db: row-level security, policies and pgRole() are Postgres-only` +
+          (rlsTable ? ` (table '${rlsTable.name}')` : ''),
+      )
+    }
+  }
+
   // SQLite stores no comments; keeping them would make migrations that do nothing.
   if (dialect === 'sqlite') {
     for (const t of Object.values(tables)) {
@@ -146,6 +161,7 @@ export function extractSnapshot(
   // Absent when empty, so snapshots without views — and their migration
   // hashes — are unchanged.
   if (Object.keys(views).length > 0) snapshot.views = views
+  if (Object.keys(roles).length > 0) snapshot.roles = roles
   return options.casing === 'snake_case' ? applyCasing(snapshot) : snapshot
 }
 
@@ -186,6 +202,8 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
   const checks = (t.__checks ?? []).map((c) => ({ name: c.name, expression: c.expression }))
   const snapshot: TableSnapshot = { name: t.__name, columns, indexes, foreignKeys, checks }
   if (t.__comment !== undefined) snapshot.comment = t.__comment
+  if (t.__rls) snapshot.rls = { ...t.__rls }
+  if (t.__policies?.length) snapshot.policies = t.__policies.map((p) => ({ ...p, to: [...p.to] }))
   if (t.__primaryKey) {
     for (const c of t.__primaryKey.columns) {
       // A key column can't be null; the database enforces it either way.

@@ -167,6 +167,12 @@ function emitChange(change: Change): string {
       return `CREATE VIEW ${quoteIdent(change.view.name)} AS\n${change.view.definition};`
     case 'dropView':
       return `DROP VIEW ${quoteIdent(change.view.name)};`
+    case 'createRole':
+    case 'alterRole':
+    case 'setRowLevelSecurity':
+    case 'createPolicy':
+    case 'dropPolicy':
+      throw new Error('kickjs-db: row-level security and roles are Postgres-only')
     case 'createEnum':
     case 'dropEnum':
     case 'addEnumValue':

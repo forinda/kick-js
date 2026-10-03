@@ -5,6 +5,7 @@ import type {
   FkAction,
   IndexSnapshot,
   SchemaSnapshot,
+  PolicySnapshot,
   TableSnapshot,
   ViewSnapshot,
 } from '../snapshot/types'
@@ -99,6 +100,7 @@ export async function introspectPg(
       foreignKeys: await readForeignKeys(client, schema, t.table_name),
       checks: [],
       ...(t.comment !== null ? { comment: t.comment } : {}),
+      ...(await readRowLevelSecurity(client, schema, t.table_name)),
     }
   }
   const enums = await readEnums(client, schema)
@@ -111,6 +113,44 @@ export async function introspectPg(
   // snapshot and invalidate every existing migration hash.
   if (Object.keys(enums).length > 0) snapshot.enums = enums
   return snapshot
+}
+
+/** A table's row-level security switch and its policies, as snapshot fields. */
+async function readRowLevelSecurity(
+  client: PgQueryRunner,
+  schema: string,
+  table: string,
+): Promise<Pick<TableSnapshot, 'rls' | 'policies'>> {
+  const flags = await client.query<{ on: boolean; force: boolean }>(
+    `SELECT relrowsecurity AS on, relforcerowsecurity AS force FROM pg_class
+     WHERE oid = format('%I.%I', $1::text, $2::text)::regclass`,
+    [schema, table],
+  )
+  const rows = await client.query<{
+    name: string
+    permissive: string
+    roles: string[]
+    cmd: string
+    qual: string | null
+    with_check: string | null
+  }>(
+    `SELECT policyname AS name, permissive, array_to_json(roles) AS roles, cmd, qual, with_check
+     FROM pg_policies WHERE schemaname = $1 AND tablename = $2 ORDER BY policyname`,
+    [schema, table],
+  )
+  const out: Pick<TableSnapshot, 'rls' | 'policies'> = {}
+  if (flags.rows[0]?.on) out.rls = flags.rows[0].force ? { force: true } : {}
+  if (rows.rows.length > 0) {
+    out.policies = rows.rows.map((r) => ({
+      name: r.name,
+      as: r.permissive === 'RESTRICTIVE' ? 'restrictive' : 'permissive',
+      command: r.cmd.toLowerCase() as PolicySnapshot['command'],
+      to: r.roles,
+      ...(r.qual !== null ? { using: r.qual } : {}),
+      ...(r.with_check !== null ? { withCheck: r.with_check } : {}),
+    }))
+  }
+  return out
 }
 
 /** Views and materialized views, with their SQL, columns and (materialized) indexes. */
