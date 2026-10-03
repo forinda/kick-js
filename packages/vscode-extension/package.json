@@ -1,5 +1,5 @@
 {
-  "name": "kickjs-devtools",
+  "name": "forinda-kickjs-devtools",
   "displayName": "KickJS DevTools",
   "description": "VS Code extension for inspecting KickJS applications — routes, DI container, metrics, and health",
   "version": "5.3.0",
@@ -417,11 +417,12 @@
     "build:icons": "node scripts/build-icons.mjs",
     "dev": "vite build --watch",
     "test": "vitest run --passWithNoTests",
-    "package": "pnpm build && vsce package"
+    "package": "pnpm build && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
     "sharp": "^0.35.4",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
