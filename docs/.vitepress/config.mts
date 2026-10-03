@@ -330,9 +330,9 @@ if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
   )
 }
 
-const SITE_OG_TITLE = "KickJS — Build Node.js backends you're not afraid to change"
+const SITE_OG_TITLE = 'KickJS — Modern type-safe backend framework, powered by Vite'
 const SITE_OG_DESCRIPTION =
-  'The progressive TypeScript framework for Node.js APIs: type-safe from database to frontend, boots in under half a second, Vite-powered dev server, and a built-in, pluggable core on Express, Fastify or h3.'
+  'A modern type-safe backend framework for TypeScript, powered by Vite. Built for developer experience and pluggable as you need: database, jobs, real-time, AI and a typed client, on Express, Fastify or h3.'
 
 /**
  * A page's first prose paragraph as plain text, for its meta description when
@@ -384,7 +384,7 @@ function truncate(text: string): string {
 export default defineConfig({
   title: 'KickJS',
   description:
-    'The progressive TypeScript framework for Node.js APIs — type-safe from database to frontend, sub-second boot, a Vite-powered dev server, and a built-in, pluggable core on Express, Fastify or h3.',
+    'A modern type-safe backend framework for TypeScript, powered by Vite. Built for developer experience and pluggable as you need: database, jobs, real-time, AI and a typed client, on Express, Fastify or h3.',
   base,
   ignoreDeadLinks: true,
   lastUpdated: true,
@@ -463,7 +463,7 @@ export default defineConfig({
       {
         property: 'og:image:alt',
         content:
-          "KickJS — Build backends you're not afraid to change. Express, Fastify, h3: one decorator API.",
+          'KickJS — Modern type-safe backend framework, powered by Vite. Built for developer experience, pluggable as you need.',
       },
     ],
     ['meta', { name: 'twitter:image', content: `${hostname}og-image.png` }],

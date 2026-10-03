@@ -28,4 +28,10 @@ const created = await api.post('/tasks', { body: { title: 'Ship it' } })
 - **Injectable fetch**: pass `{ fetch: app.fetch }` from `@forinda/kickjs/web`
   for network-free integration tests.
 
-Docs: [kickjs.app/guide/typed-client](https://kickjs.app/guide/typed-client.html)
+## Documentation
+
+[kickjs.app/guide/typed-client](https://kickjs.app/guide/typed-client)
+
+## License
+
+MIT

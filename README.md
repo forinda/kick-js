@@ -5,7 +5,8 @@
 </p>
 
 <p align="center">
-  A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.
+  Modern type-safe backend framework, powered by Vite.<br />
+  Built for developer experience. Pluggable as you need.
 </p>
 
 <p align="center">
@@ -103,39 +104,9 @@ kick add swagger pg  # install with peer deps
 
 Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive).
 
-## CLI
-
-```bash
-kick new my-api                  # scaffold (rest | minimal | fullstack)
-kick dev                         # dev server with HMR
-kick build && kick start         # production build + run
-kick g module users              # controller, service, repository, DTOs, tests
-kick g scaffold post title:string body:text:optional  # CRUD from field defs
-kick doctor                      # check project setup, with fixes
-kick info                        # versions and runtime info
-```
-
-Run `kick --help` for the full list.
-
-## Runtime Compatibility
-
-| Feature                      | Node 20+ | Bun          | Deno | Cloudflare Workers |
-| ---------------------------- | -------- | ------------ | ---- | ------------------ |
-| Production (node runtimes)   | Yes      | Yes          | —    | —                  |
-| Production (web fetch entry) | Yes      | Yes          | Yes  | Yes¹               |
-| Dev Mode (Vite HMR)          | Yes      | No           | No   | —                  |
-| Tests (Vitest)               | Yes      | Partial      | No   | —                  |
-| CLI (`kick`)                 | Yes      | Experimental | No   | —                  |
-
-> **Node 20** is the minimum supported version (LTS with native ESM).
->
-> ¹ Workers need `compatibility_flags = ["nodejs_compat"]` (AsyncLocalStorage). The
-> web fetch entry is [`@forinda/kickjs/web`](https://kickjs.app/guide/edge-deployment.html)
-> — `createWebApp({ h3, modules })` on the h3 v2 engine; Bun/Deno smoke tests run in CI.
-
 ## Documentation
 
-**[kickjs.app](https://kickjs.app/)** — start with the [Samples guide](https://kickjs.app/guide/samples), a one-page tour of the recommended patterns.
+**[kickjs.app](https://kickjs.app/)**: start with [Getting Started](https://kickjs.app/guide/getting-started), then the [Samples guide](https://kickjs.app/guide/samples), a one-page tour of the recommended patterns. The [CLI](https://kickjs.app/guide/cli-commands) and [Edge Deployment](https://kickjs.app/guide/edge-deployment) pages cover commands and runtime support (Node 20+, Bun, Deno, Workers).
 
 ## Contributing
 

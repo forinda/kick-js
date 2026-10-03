@@ -1,74 +1,45 @@
 # @forinda/kickjs-db
 
-> KickJS-native ORM — code-first schema, reversible migrations, multi-dialect SQL.
-
-Phantom-typed column builders, `SchemaToTypes<S>` for end-to-end row inference, `KickDbRegister` module augmentation, runtime lifecycle hooks (`query` / `queryError` / `slowQuery`), `customType` mapper, `pgEnum` with full migration pipeline, and `db.$extends({ model })` per-table methods.
+kick/db, the KickJS database layer: a code-first schema, fully typed queries, and migrations generated from schema changes. Works with PostgreSQL, MySQL and SQLite.
 
 ## Install
 
 ```bash
-pnpm add @forinda/kickjs-db pg          # PostgreSQL — dialect ships as the /pg subpath
+kick add db        # or: pnpm add @forinda/kickjs-db pg
 ```
 
-## Quick start
+Dialects ship as subpaths: `@forinda/kickjs-db/pg` (driver `pg`), `/mysql` (`mysql2`) and `/sqlite` (`better-sqlite3`).
+
+## Quick example
 
 ```ts
-import { table, uuid, varchar, timestamp, createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+import { createDbClient, table, timestamp, uuid, varchar } from '@forinda/kickjs-db'
+import { pgDialect } from '@forinda/kickjs-db/pg'
 import { Pool } from 'pg'
 
-// 1. Schema — phantom T flows through every column automatically.
 const users = table('users', {
   id: uuid().primaryKey().defaultRandom(),
   email: varchar(255).notNull().unique(),
   createdAt: timestamp().notNull().defaultNow(),
 })
 
-const schema = { users }
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-
-// 2. Client — DB shape inferred from schema, no manual generic.
 const db = createDbClient({
-  schema,
-  dialect: pgDialect({ pool }),
-  events: true,
-  slowQueryThresholdMs: 100,
+  schema: { users },
+  dialect: pgDialect({ pool: new Pool({ connectionString: process.env.DATABASE_URL }) }),
 })
 
-db.on('slowQuery', ({ sql, durationMs }) => {
-  console.warn({ sql, durationMs }, 'slow query')
+const user = await db.query.users.findFirst({
+  where: (_u, eb) => eb('email', '=', 'a@b.com'),
 })
-
-// 3. Query — fully typed against the schema.
-const row = await db
-  .selectFrom('users')
-  .selectAll()
-  .where('email', '=', 'a@b.com')
-  .executeTakeFirst()
-//  row?.email is string; row?.createdAt is Date
+//    ^ { id: string; email: string; createdAt: Date } | undefined
 ```
 
-## Docs
+`kick db generate` writes a migration from your schema changes, and `kick db migrate` applies it.
 
-- [Schema Types](https://kickjs.app/guide/db-schema-types) — phantom inference, `KickDbRegister`, self-references, `pgEnum`
-- [DB Extensions](https://kickjs.app/guide/db-extensions) — `customType<T>()`, `$extends({ model })`
-- [Type Generation](https://kickjs.app/guide/typegen) — `kick typegen` plugin contract + `kick/db` auto-emit
+## Documentation
 
-## Dialect subpaths
-
-Each dialect ships inside this package — no extra install beyond the driver:
-
-- `@forinda/kickjs-db/pg` — PostgreSQL (`pgDialect`, `pgAdapter`); peer driver `pg`
-- `@forinda/kickjs-db/mysql` — MySQL (`mysqlDialect`, `mysqlAdapter`); peer driver `mysql2`
-- `@forinda/kickjs-db/sqlite` — SQLite (`sqliteDialect`, `sqliteAdapter`); peer driver `better-sqlite3`
-
-> The standalone `@forinda/kickjs-db-pg` / `-db-mysql` / `-db-sqlite` packages are retired. Their last published versions still resolve, but they only re-export the subpaths above — import from the subpaths directly.
-
-## Companion packages
-
-- [`@forinda/kickjs`](https://www.npmjs.com/package/@forinda/kickjs) — framework runtime + DI container
-- [`@forinda/kickjs-cli`](https://www.npmjs.com/package/@forinda/kickjs-cli) — `kick db generate`, `kick db migrate`, `kick typegen`
+[kickjs.app/guide/database](https://kickjs.app/guide/database/): get started, schema, queries, relations, migrations, transactions, testing, and moving from Prisma, Drizzle, TypeORM or Sequelize.
 
 ## License
 
-MIT © Felix Orinda
+MIT
