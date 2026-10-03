@@ -18,8 +18,7 @@ import {
   type RequestContext,
 } from '@forinda/kickjs'
 import { McpAdapter, McpTool } from '@forinda/kickjs-mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
 const apps: Application[] = []
 const clients: Client[] = []

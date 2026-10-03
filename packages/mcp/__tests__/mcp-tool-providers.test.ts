@@ -15,9 +15,7 @@ import {
   type RequestContext,
 } from '@forinda/kickjs'
 import { MCP_ADAPTER, McpAdapter, McpTool, type McpToolProvider } from '@forinda/kickjs-mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
 const apps: Application[] = []
 const clients: Client[] = []
@@ -121,7 +119,7 @@ describe('McpAdapter — custom tool providers', () => {
     const { adapter, port } = await start()
     const client = await connect(port)
     let notified = 0
-    client.setNotificationHandler(ToolListChangedNotificationSchema, () => {
+    client.setNotificationHandler('notifications/tools/list_changed', () => {
       notified++
     })
 

@@ -17,18 +17,19 @@ import {
   type RouteEntry,
   type RouteMethod,
 } from '@forinda/kickjs'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
 import {
-  CallToolRequestSchema,
-  ErrorCode,
-  ListToolsRequestSchema,
-  McpError,
+  ProtocolError,
+  ProtocolErrorCode,
+  Server,
+  WebStandardStreamableHTTPServerTransport,
+  createMcpHandler,
   isInitializeRequest,
-} from '@modelcontextprotocol/sdk/types.js'
+  isLegacyRequest,
+  type AuthInfo,
+  type McpHttpHandler,
+  type ServerContext,
+} from '@modelcontextprotocol/server'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import {
   buildRouteTool,
   detectSchema,
@@ -301,15 +302,26 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return undefined
     }
 
-    /** Stdio MCP server instance, created in `afterStart`. */
+    /** Stdio MCP server instance, pinned when a stdio client connects. */
     let mcpServer: Server | null = null
 
     /**
-     * Stdio transport, created in `afterStart` when running via the
+     * The stdio connection, opened in `afterStart` when running via the
      * `kick mcp` CLI or with `KICK_MCP_STDIO=1`. HTTP clients each get
      * their own transport in `sessions`.
      */
-    let transport: Transport | null = null
+    let stdio: { close(): Promise<void> } | null = null
+
+    /**
+     * Serves protocol 2026-07-28 requests over HTTP: stateless, a fresh
+     * server per request. 2025 requests go to the session code instead.
+     */
+    let modern: McpHttpHandler | null = null
+    const modernHandler = (): McpHttpHandler =>
+      (modern ??= createMcpHandler(() => buildMcpServer(), {
+        legacy: 'reject',
+        onerror: (err) => log.debug(`McpAdapter: ${err.message}`),
+      }))
 
     /**
      * Open Streamable HTTP sessions, keyed by `mcp-session-id`. Each client
@@ -360,11 +372,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     /** The caller of a tool request, from what the HTTP handler attached. */
     const callContextOf = (extra: unknown): McpCallContext => {
-      const attached = (extra as { authInfo?: AuthInfo } | undefined)?.authInfo?.extra?.call
+      const ctx = extra as ServerContext | undefined
+      const attached = ctx?.http?.authInfo?.extra?.call
       if (attached) return attached as McpCallContext
-      const raw = (extra as { requestInfo?: { headers?: Record<string, string> } } | undefined)
-        ?.requestInfo?.headers
-      return raw ? requestInfoFor(raw, false) : localRequestInfo()
+      const headers = ctx?.http?.req?.headers
+      return headers ? requestInfoFor(Object.fromEntries(headers), false) : localRequestInfo()
     }
 
     /** Start the idle countdown for a session that has nothing in progress. */
@@ -517,20 +529,12 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
     }
 
     /** A header from the MCP request that carried a tool call. */
-    const requestHeader = (extra: unknown, name: string): string | undefined => {
-      const headers = (extra as { requestInfo?: { headers?: unknown } } | undefined)?.requestInfo
-        ?.headers
-      if (!headers || typeof headers !== 'object') return undefined
-      if (typeof (headers as Headers).get === 'function') {
-        return (headers as Headers).get(name) ?? undefined
-      }
-      const value = (headers as Record<string, string | string[] | undefined>)[name]
-      return Array.isArray(value) ? value.join(', ') : value
-    }
+    const requestHeader = (extra: unknown, name: string): string | undefined =>
+      (extra as ServerContext | undefined)?.http?.req?.headers.get(name) ?? undefined
 
     /** The call's abort signal, plus the tool timeout when one is set. */
     const callSignal = (extra: unknown): AbortSignal | undefined => {
-      const signal = (extra as { signal?: AbortSignal } | undefined)?.signal
+      const signal = (extra as ServerContext | undefined)?.mcpReq.signal
       if (!options.toolTimeoutMs) return signal
       const timeout = AbortSignal.timeout(options.toolTimeoutMs)
       return signal ? AbortSignal.any([signal, timeout]) : timeout
@@ -759,6 +763,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           // A client that disconnected mid-notification is cleaned up by its transport.
         })
       }
+      // 2026-07-28 clients hear about it through their subscriptions/listen stream.
+      modern?.notify.toolsChanged()
     }
 
     const registerProvider = (provider: McpToolProvider): void => {
@@ -821,8 +827,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         { capabilities: { tools: { listChanged: true } } },
       )
 
-      server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
-        const call = callContextOf(extra)
+      server.setRequestHandler('tools/list', async (_request, ctx) => {
+        const call = callContextOf(ctx)
         const listed: Array<Record<string, unknown>> = []
         for (const tool of allTools()) {
           if (await visible(tool.summary, call)) listed.push(tool.listed)
@@ -830,17 +836,20 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         return { tools: listed as never }
       })
 
-      server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+      server.setRequestHandler('tools/call', async (request, ctx) => {
         const args = request.params.arguments ?? {}
         const tool = allTools().find((t) => t.summary.name === request.params.name)
         // A tool the caller can't see answers like one that doesn't exist.
-        if (!tool || !(await visible(tool.summary, callContextOf(extra)))) {
-          throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${request.params.name}`)
+        if (!tool || !(await visible(tool.summary, callContextOf(ctx)))) {
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            `Unknown tool: ${request.params.name}`,
+          )
         }
         return (
           'route' in tool
-            ? await dispatchTool(tool.route, args, extra)
-            : await callCustomTool(tool.custom, args, extra)
+            ? await dispatchTool(tool.route, args, ctx)
+            : await callCustomTool(tool.custom, args, ctx)
         ) as never
       })
 
@@ -1001,6 +1010,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             extra: { call },
           }
 
+          // Protocol 2026-07-28: stateless by design, whatever the mode.
+          if (!(await isLegacyRequest(webRequest, parsedBody))) {
+            await ctx.sendResponse(
+              await modernHandler().fetch(webRequest, { authInfo, parsedBody }),
+            )
+            return
+          }
+
           if (options.stateless) {
             if (webRequest.method !== 'POST') {
               await sendJsonRpcError(
@@ -1148,9 +1165,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
      * wire. Logs MUST go to stderr in this mode.
      */
     const startStdioTransport = async (): Promise<void> => {
-      mcpServer = buildMcpServer()
-      transport = new StdioServerTransport()
-      await mcpServer.connect(transport)
+      // The connection's first message picks the protocol era; the server
+      // built for it is kept for list-changed notifications.
+      stdio = serveStdio(() => (mcpServer = buildMcpServer()), {
+        onerror: (err) => log.error(err, 'McpAdapter: stdio error'),
+      })
       log.info(
         `McpAdapter ready (stdio) — ${tools.length} tool(s) registered, dispatching against ${serverBaseUrl ?? 'unknown'}`,
       )
@@ -1265,11 +1284,13 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           }
         }
         try {
-          await transport?.close()
+          await stdio?.close()
+          await modern?.close()
         } catch (err) {
           log.error(err as Error, 'McpAdapter: failed to close transport')
         }
-        transport = null
+        stdio = null
+        modern = null
         mcpServer = null
         serverBaseUrl = null
         appFetch = null

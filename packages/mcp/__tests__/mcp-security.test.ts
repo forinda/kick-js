@@ -9,8 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { Application, Container, Controller, Get, Post, type RequestContext } from '@forinda/kickjs'
 import { McpAdapter, McpTool } from '@forinda/kickjs-mcp'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { matchesPathPattern } from '../src/mcp.adapter'
 
 const apps: Application[] = []
