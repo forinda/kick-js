@@ -101,4 +101,4 @@ That's the real `UserModule` (controller, service, repository) answering real HT
 - [Large Suites](./testing/large-suites.md): one app per worker, resets, database strategies, containers, independence.
 - [Testing with kick/db](./database/testing.md): an in-memory database per file, a rolled-back transaction per test.
 
-Feature guides with their own testing notes: [Asset Manager](./asset-manager.md#testing) (fixtures and the asset cache), [AI](./ai.md#testing) (a scripted provider), [MCP](./mcp.md#testing-with-mcp-inspector) (the MCP Inspector), [Context Decorators](./context-decorators.md#testing-contributors) (contributor recipes).
+Feature guides with their own testing notes: [Asset Manager](./asset-manager.md#testing) (fixtures and the asset cache), [AI](./ai.md#testing) (a scripted provider), [MCP](./mcp/testing.md) (tool tests and the MCP Inspector), [Context Decorators](./context-decorators.md#testing-contributors) (contributor recipes).

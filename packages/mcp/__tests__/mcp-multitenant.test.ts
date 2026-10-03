@@ -16,6 +16,7 @@ import {
   Controller,
   Get,
   HttpException,
+  defineRouteFlag,
   Post,
   type RequestContext,
 } from '@forinda/kickjs'
@@ -26,6 +27,7 @@ import {
   McpToolError,
   type McpAdapterInstance,
   type McpPrincipal,
+  type McpToolOptions,
 } from '@forinda/kickjs-mcp'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
@@ -347,5 +349,38 @@ describe('McpAdapter — multi-tenant surface', () => {
       isError: true,
       structuredContent: { error: { code: 'timeout' } },
     })
+  })
+
+  it('takes annotations, scopes and titles from a route flag, without @McpTool', async () => {
+    const Tool = defineRouteFlag<Partial<McpToolOptions>>('mcp.tool')
+    @Controller()
+    class PaymentController {
+      @Post('/refund')
+      @Tool({
+        description: 'Refund a payment',
+        title: 'Refund',
+        annotations: { destructiveHint: true },
+        scopes: ['payments:write'],
+      })
+      refund() {
+        return { refunded: true }
+      }
+    }
+    const adapter = McpAdapter({ name: 'pay', exposeWhen: 'mcp.tool' })
+    const app = new Application({
+      port: 0,
+      modules: [{ routes: () => ({ path: '/payments', controller: PaymentController }) }],
+      adapters: [adapter],
+    } as never)
+    await app.start()
+    apps.push(app)
+    expect(adapter.getTools()).toEqual([
+      expect.objectContaining({
+        name: 'PaymentController.refund',
+        title: 'Refund',
+        annotations: { destructiveHint: true },
+        scopes: ['payments:write'],
+      }),
+    ])
   })
 })
