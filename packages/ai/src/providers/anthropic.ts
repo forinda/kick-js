@@ -42,7 +42,7 @@ export interface AnthropicProviderOptions {
    * Vertex (set `fallbacks: false` there; they don't support it).
    */
   client?: Anthropic
-  /** Default model when `ChatInput.model` is not set. Defaults to `'claude-opus-5'`. */
+  /** Default model when `ChatInput.model` is not set. Defaults to `'claude-opus-5-5'`. */
   defaultChatModel?: string
   /**
    * Default `max_tokens` — a cap on thinking plus response text. Requests
@@ -126,7 +126,7 @@ export class AnthropicProvider implements AiProvider {
   private readonly warned = new Set<string>()
 
   constructor(private readonly options: AnthropicProviderOptions = {}) {
-    this.defaultChatModel = options.defaultChatModel ?? 'claude-opus-5'
+    this.defaultChatModel = options.defaultChatModel ?? 'claude-opus-5-5'
     this.defaultMaxTokens = options.defaultMaxTokens ?? 64000
     this.name = options.name ?? 'anthropic'
   }

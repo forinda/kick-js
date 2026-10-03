@@ -62,7 +62,7 @@ export interface ChatInput {
   messages: ChatMessage[]
   /**
    * Optional model override. If omitted, the provider uses its default
-   * model. Accepts provider-specific model IDs (e.g. `gpt-4o`, `claude-opus-5`).
+   * model. Accepts provider-specific model IDs (e.g. `gpt-4o`, `claude-opus-5-5`).
    */
   model?: string
   /**
@@ -161,6 +161,12 @@ export interface ChatChunk {
  */
 export type EmbedInput = string | string[]
 
+/** Options for `AiProvider.embed()`. */
+export interface EmbedOptions {
+  /** Cancels the request. */
+  signal?: AbortSignal
+}
+
 /**
  * Input to `AiProvider.tool()` for one-shot tool execution outside the
  * normal chat flow. Useful for programmatic workflows where you know
@@ -192,7 +198,7 @@ export interface AiProvider {
   /** Streaming chat call. Yields chunks until `done: true`. */
   stream(input: ChatInput, options?: ChatOptions): AsyncIterable<ChatChunk>
   /** Generate embeddings. Shape matches the input shape. */
-  embed(input: EmbedInput): Promise<number[][]>
+  embed(input: EmbedInput, options?: EmbedOptions): Promise<number[][]>
   /** One-shot tool execution. Optional — providers may omit. */
   tool?(input: ToolCallInput): Promise<ToolCallResponse>
 }
@@ -316,7 +322,7 @@ export interface RunAgentResult {
   /** Number of chat iterations the loop ran before terminating. */
   steps: number
   /** Aggregated usage across every provider call in the loop. */
-  usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
+  usage?: ChatUsage
   /** True if the loop stopped because `maxSteps` was reached. */
   maxStepsReached?: boolean
   /**
