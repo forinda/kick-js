@@ -39,8 +39,11 @@ export interface UpsertOptions<DB, T extends keyof DB & string> {
   where?: (eb: ExpressionBuilder<DB, T>) => Expression<SqlBool>
 }
 
-/** What `create` adds to `where`: every required column `where` leaves out. */
-type CreateRest<DB, T extends keyof DB, W> = Omit<Insertable<DB[T]>, keyof W> &
+/** The keys `where` always has — an optional one may be missing. */
+type PresentKeys<W> = { [K in keyof W]-?: {} extends Pick<W, K> ? never : K }[keyof W]
+
+/** What `create` adds to `where`: every required column `where` may leave out. */
+type CreateRest<DB, T extends keyof DB, W> = Omit<Insertable<DB[T]>, PresentKeys<W>> &
   Partial<Insertable<DB[T]>>
 
 export type FindOrCreateOptions<
@@ -49,7 +52,7 @@ export type FindOrCreateOptions<
   W extends Partial<Selectable<DB[T]>> = Partial<Selectable<DB[T]>>,
 > = {
   /** Identifies the row — columns of a unique key. Also part of what's created. */
-  where: W
+  where: W & Record<Exclude<keyof W, keyof Selectable<DB[T]>>, never>
 } & ({} extends CreateRest<DB, T, W>
   ? /** The rest of the row to create when none matches `where`. */
     { create?: CreateRest<DB, T, W> }

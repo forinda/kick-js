@@ -18,4 +18,13 @@ test('create must supply the required columns where leaves out', () => {
   void db.findOrCreate('users', { where: { email: 'a@x.io' }, create: { bio: 'hi' } })
   // @ts-expect-error not a column
   void db.findOrCreate('tags', { where: { nmae: 'urgent' } })
+  // @ts-expect-error not a column, next to one that is
+  void db.findOrCreate('tags', { where: { name: 'urgent', nmae: 'urgent' } })
+})
+
+test('a where key that may be absent stays required in create', () => {
+  const where: { email?: string; name: string } = { name: 'Ada' }
+  // @ts-expect-error email may be missing from where
+  void db.findOrCreate('users', { where })
+  void db.findOrCreate('users', { where, create: { email: 'a@x.io' } })
 })
