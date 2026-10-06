@@ -355,7 +355,20 @@ curl -b jar -OJ localhost:3000/api/v1/tasks/$TASK/attachments/$ATTACHMENT
 The test app swaps disk storage for memory. That way tests write nothing to disk, and they can see what's stored:
 
 ```ts
-// test/app.ts
+// test/app.ts — the imports from Part 4, plus the storage token
+import request from 'supertest'
+import { Container } from '@forinda/kickjs'
+import { createTestApp } from '@forinda/kickjs-testing'
+
+import { createTestDb } from './db'
+import { APP_DB } from '../src/db/token'
+import { FILE_STORAGE, memoryStorage } from '../src/storage/files'
+import { LoadUser } from '../src/auth/current-user'
+import { middlewares } from '../src/middleware'
+import { AuthModule } from '../src/modules/auth/auth.module'
+import { ProjectModule } from '../src/modules/projects/project.module'
+import { TaskModule } from '../src/modules/tasks/task.module'
+
 export async function testApp() {
   Container.reset()
   const storage = memoryStorage()

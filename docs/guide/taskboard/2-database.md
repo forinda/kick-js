@@ -155,12 +155,21 @@ A generated migration is a draft until someone has read it. Mark it reviewed, th
 
 Outside development the runner refuses unreviewed migrations, so a migration nobody looked at never reaches production. [Migrations](../database/migrations.md) covers status, rollback and the rest.
 
-In development you rarely need `migrate latest` by hand — the app applies pending migrations as it boots. That's the `kickDbAdapter` in `src/index.ts`:
+In development you rarely need `migrate latest` by hand — the app applies pending migrations as it boots. That's the `kickDbAdapter` in `src/index.ts` (`migrationAdapter` comes from `src/db/client.ts`, written in [the next section](#the-client-in-di)):
 
 ```ts
 // src/index.ts
 import { kickDbAdapter } from '@forinda/kickjs-db'
 import { migrationAdapter } from './db/client'
+
+import 'reflect-metadata'
+import './config'
+import { bootstrap, cors, expressRuntime, helmet, requestId, requestLogger } from '@forinda/kickjs'
+import express from 'express'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
+import { kickDbAdapter } from '@forinda/kickjs-db'
+import { migrationAdapter } from './db/client'
+import { modules } from './modules'
 
 export const app = await bootstrap({
   modules,
@@ -174,7 +183,7 @@ export const app = await bootstrap({
       migrationsOnBoot: process.env.NODE_ENV === 'development' ? 'apply' : 'fail-if-pending',
     }),
   ],
-  // …middlewares
+  middlewares: [helmet(), cors({ origin: '*' }), requestId(), requestLogger(), express.json()],
 })
 ```
 

@@ -192,20 +192,37 @@ export const middlewares = [
 
 ## Protected by default
 
-Register `LoadUser` for every route in `src/index.ts`:
+Register `LoadUser` for every route in `src/index.ts`, which now takes the list from `./middleware`:
 
 ```ts
+// src/index.ts
+import 'reflect-metadata'
+import './config'
+import { bootstrap, expressRuntime } from '@forinda/kickjs'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
+import { kickDbAdapter } from '@forinda/kickjs-db'
+import { migrationAdapter } from './db/client'
+import { modules } from './modules'
 import { middlewares } from './middleware'
 import { LoadUser } from './auth/current-user'
 
 export const app = await bootstrap({
   modules,
   runtime: expressRuntime(),
-  adapters: [/* DevToolsAdapter, kickDbAdapter — unchanged */],
+  adapters: [
+    DevToolsAdapter(),
+    kickDbAdapter({
+      migrationAdapter,
+      migrationsDir: 'db/migrations',
+      migrationsOnBoot: process.env.NODE_ENV === 'development' ? 'apply' : 'fail-if-pending',
+    }),
+  ],
   middlewares,
   contributors: [LoadUser.registration],
 })
 ```
+
+The middleware imports moved with the list; `express` is now imported in `src/middleware/index.ts`, not here.
 
 Now every route requires a signed-in user, including the projects and tasks routes from Part 2 — you didn't touch them. The safe default is the one you get by forgetting: a new route is protected until you mark it `@Public`, not public until you remember to protect it.
 

@@ -48,6 +48,13 @@ kick.config.ts      # CLI settings: pattern, module folder, custom commands
 
 ```ts
 // src/index.ts
+import 'reflect-metadata'
+import './config'
+import { bootstrap, cors, expressRuntime, helmet, requestId, requestLogger } from '@forinda/kickjs'
+import express from 'express'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
+import { modules } from './modules'
+
 export const app = await bootstrap({
   modules,
   runtime: expressRuntime(),
@@ -62,6 +69,8 @@ export const app = await bootstrap({
   ],
 })
 ```
+
+Each middleware comes from `@forinda/kickjs` except the body parser, which is Express's own — what they do is in [Middleware](../middleware.md).
 
 The app runs on Express here; Fastify and h3 work the same way through `runtime` — see [HTTP runtimes](../http-runtimes.md). `src/config/index.ts` declares `PORT`, `NODE_ENV` and `LOG_LEVEL` with Zod; you'll add to it in Part 3. `.env.test` is read _instead of_ `.env` when tests run, with no fallback, so a test never quietly picks up a development value.
 
