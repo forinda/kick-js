@@ -316,17 +316,31 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
 function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
   const parser = options.schemaParser ?? zodSchemaParser
 
-  /** Convert a validation schema to JSON Schema using the configured parser */
-  const toJsonSchema = (schema: unknown): Record<string, unknown> | null => {
+  /**
+   * Convert a validation schema to JSON Schema using the configured parser:
+   * `null` when the parser doesn't handle it (plain JSON Schema, which a
+   * response passes through), `undefined` when it failed to convert — that's
+   * reported, since the spec then leaves the schema out.
+   */
+  const toJsonSchema = (
+    schema: unknown,
+    io: 'input' | 'output',
+    where: string,
+  ): Record<string, unknown> | null | undefined => {
+    if (!parser.supports(schema)) return null
     try {
-      if (!parser.supports(schema)) return null
-      return parser.toJsonSchema(schema)
-    } catch {
-      return null
+      return parser.toJsonSchema(schema, { io })
+    } catch (err) {
+      console.warn(
+        `[kickjs-swagger] ${where}: schema left out of the spec — ${err instanceof Error ? err.message : String(err)}`,
+      )
+      return undefined
     }
   }
 
   const componentSchemas: Record<string, any> = {}
+  /** Each component's schema as converted, before its refs were repointed — what dedupe compares. */
+  const registeredAs = new Map<string, string>()
   let schemaCounter = 0
 
   /**
@@ -358,13 +372,33 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
     let name = baseName
     let suffix = 2
     while (componentSchemas[name]) {
-      if (JSON.stringify(componentSchemas[name]) === cleanJson) {
+      if (registeredAs.get(name) === cleanJson) {
         // Same schema body — reuse the existing slot.
         return { $ref: `#/components/schemas/${name}` }
       }
       name = `${baseName}_${suffix++}`
     }
-    componentSchemas[name] = clean
+    registeredAs.set(name, cleanJson)
+    // A recursive schema refers to itself as `#` and to its parts under
+    // `$defs` — inside an OpenAPI document `#` is the whole document, so
+    // point them at this component and its own entries.
+    const { $defs, ...body } = clean as { $defs?: Record<string, unknown> }
+    const repoint = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(repoint)
+      if (!node || typeof node !== 'object') return node
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(node)) {
+        if (k === '$ref' && v === '#') out[k] = `#/components/schemas/${name}`
+        else if (k === '$ref' && typeof v === 'string' && v.startsWith('#/$defs/'))
+          out[k] = `#/components/schemas/${name}_${v.slice('#/$defs/'.length)}`
+        else out[k] = repoint(v)
+      }
+      return out
+    }
+    for (const [key, def] of Object.entries($defs ?? {})) {
+      componentSchemas[`${name}_${key}`] = repoint(def)
+    }
+    componentSchemas[name] = repoint(body)
     return { $ref: `#/components/schemas/${name}` }
   }
 
@@ -535,7 +569,11 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
 
         // Try to get type from params validation schema
         if (route.validation?.params) {
-          const jsonSchema = toJsonSchema(route.validation.params)
+          const jsonSchema = toJsonSchema(
+            route.validation.params,
+            'input',
+            `${method.toUpperCase()} ${fullPath} params`,
+          )
           if (jsonSchema?.properties && typeof jsonSchema.properties === 'object') {
             const props = jsonSchema.properties as Record<string, any>
             if (props[paramName]) {
@@ -549,7 +587,11 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
 
       // Query parameters
       if (route.validation?.query) {
-        const jsonSchema = toJsonSchema(route.validation.query)
+        const jsonSchema = toJsonSchema(
+          route.validation.query,
+          'input',
+          `${method.toUpperCase()} ${fullPath} query`,
+        )
         if (jsonSchema?.properties && typeof jsonSchema.properties === 'object') {
           const required = Array.isArray(jsonSchema.required) ? jsonSchema.required : []
           for (const [name, propSchema] of Object.entries(
@@ -626,7 +668,11 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       // Request body
       if (route.validation?.body) {
         if (BODY_METHODS.has(method)) {
-          const bodySchema = toJsonSchema(route.validation.body)
+          const bodySchema = toJsonSchema(
+            route.validation.body,
+            'input',
+            `${method.toUpperCase()} ${fullPath} body`,
+          )
           if (bodySchema) {
             const bodyName = route.validation.name || `${route.handlerName}Body`
             const ref = registerSchema(bodySchema, bodyName)
@@ -693,10 +739,17 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
             // pass it through as-is — that's the escape hatch for
             // adopters who hand-write OpenAPI shapes without going
             // through the schema-parser layer.
-            const converted = toJsonSchema(resp.schema)
+            const converted = toJsonSchema(
+              resp.schema,
+              'output',
+              `${method.toUpperCase()} ${fullPath} ${resp.status} response`,
+            )
             const schemaName = resp.name || `${route.handlerName}Response${resp.status}`
-            const finalSchema = converted ? registerSchema(converted, schemaName) : resp.schema
-            entry.content = { 'application/json': { schema: finalSchema } }
+            // A schema the parser handles but couldn't convert is left out —
+            // never copied in as the validator's own object.
+            const finalSchema =
+              converted === null ? resp.schema : converted && registerSchema(converted, schemaName)
+            if (finalSchema) entry.content = { 'application/json': { schema: finalSchema } }
           }
           op.responses[String(resp.status)] = entry
         }
@@ -708,7 +761,11 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
         // the same declaration `kick typegen` consumes, so docs and types
         // can't drift. Explicit @ApiResponse entries above still win.
         if (route.validation?.response && defaultStatus !== '204') {
-          const converted = toJsonSchema(route.validation.response)
+          const converted = toJsonSchema(
+            route.validation.response,
+            'output',
+            `${method.toUpperCase()} ${fullPath} response`,
+          )
           if (converted) {
             const schemaName = `${route.validation.name || route.handlerName}Response`
             success.content = {

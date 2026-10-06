@@ -68,7 +68,10 @@ function descToJsonSchema(desc: any): Record<string, unknown> {
     date: 'string',
   }
 
-  const schema: Record<string, unknown> = { type: typeMap[desc.type] ?? desc.type }
+  // A type JSON Schema has no name for (`mixed`, `tuple`, `lazy`) is any value.
+  const type = typeMap[desc.type]
+  const schema: Record<string, unknown> = type ? { type } : {}
+  if (desc.type === 'date') schema.format = 'date-time'
 
   for (const test of desc.tests ?? []) {
     if (test.name === 'email') schema.format = 'email'

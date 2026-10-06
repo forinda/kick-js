@@ -77,18 +77,32 @@ function mapValibotIssues(issues: VType.BaseIssue<unknown>[]): SchemaIssue[] {
 // blocks the importer until the optional peer either loads or
 // confirms it's missing; adopters without the peer installed still
 // land at the same `_toJsonSchemaFn = null` fallback (the catch).
-let _toJsonSchemaFn: ((schema: any) => Record<string, unknown>) | null
+let _toJsonSchemaFn: ((schema: any, config?: any) => Record<string, unknown>) | null
 try {
   const mod = await import('@valibot/to-json-schema')
-  _toJsonSchemaFn = mod.toJsonSchema as (schema: any) => Record<string, unknown>
+  _toJsonSchemaFn = mod.toJsonSchema as (schema: any, config?: any) => Record<string, unknown>
 } catch (err) {
   if (!isMissingOptionalPeer(err, '@valibot/to-json-schema')) throw err
   _toJsonSchemaFn = null
 }
 
-function valibotToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<string, unknown> {
+function valibotToJsonSchema(
+  schema: any,
+  options: JsonSchemaOptions = {},
+): Record<string, unknown> {
   if (_toJsonSchemaFn) {
-    const { $schema: _, ...rest } = _toJsonSchemaFn(schema)
+    const { $schema: _, ...rest } = _toJsonSchemaFn(schema, {
+      target: options.target,
+      // What JSON Schema can't express (a Map, a transform) becomes any value
+      // instead of throwing; dates and bigints are what they are on the wire.
+      errorMode: 'ignore',
+      overrideSchema: ({ valibotSchema }: { valibotSchema: { type?: string } }) =>
+        valibotSchema.type === 'date'
+          ? { type: 'string', format: 'date-time' }
+          : valibotSchema.type === 'bigint'
+            ? { type: 'integer', format: 'int64' }
+            : undefined,
+    })
     return rest
   }
   return { type: 'object' }
