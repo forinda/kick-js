@@ -341,20 +341,26 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
   const componentSchemas: Record<string, any> = {}
   /** Each component's schema as converted, before its refs were repointed — what dedupe compares. */
   const registeredAs = new Map<string, string>()
-  let schemaCounter = 0
 
   /**
-   * Register a schema in components.schemas and return a $ref pointer.
-   * If the schema has a title/label, use that as the name. Otherwise generate one.
+   * Register a schema in components.schemas and return a $ref pointer. Its
+   * name, first that's free (or already holds this same schema):
+   *
+   * 1. `explicit` — a name given at the call site (the route's `name`,
+   *    `@ApiResponse({ name })`);
+   * 2. the schema's own `title`;
+   * 3. `fallback` — `<Class><Method><Part>`, unique per route.
+   *
+   * An explicit name or title already holding a different schema is reported
+   * and the fallback used. Only two same-named controllers with the same
+   * method can clash on the fallback; they get a numbered suffix.
    */
-  const registerSchema = (jsonSchema: Record<string, unknown>, hint?: string): any => {
-    // Try to extract a name from the schema
-    let baseName = (jsonSchema.title as string) || (jsonSchema.label as string) || hint || ''
-    if (!baseName) {
-      baseName = `Schema${++schemaCounter}`
-    }
-    // Sanitize name for OpenAPI (remove spaces, special chars)
-    baseName = baseName.replace(/[^a-zA-Z0-9]/g, '')
+  const registerSchema = (
+    jsonSchema: Record<string, unknown>,
+    { explicit, fallback }: { explicit?: string; fallback: string },
+  ): any => {
+    const sanitize = (n: string) => n.replace(/[^a-zA-Z0-9]/g, '')
+    const title = (jsonSchema.title as string) || (jsonSchema.label as string) || undefined
 
     const clean = { ...jsonSchema }
     delete clean.title
@@ -362,22 +368,20 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
     delete clean.$schema
     const cleanJson = JSON.stringify(clean)
 
-    // Resolve name collisions: if `baseName` already maps to a different
-    // schema body, suffix with `_2`, `_3`, etc. until a free slot or a
-    // structural duplicate is found. Two semantically-identical schemas
-    // (`CreateUserDTO` registered twice) collapse to one entry by
-    // JSON-equality, preserving the existing dedupe behaviour for the
-    // common case while preventing the silent overwrite that produced
-    // wrong-shape docs when two distinct DTOs hit the same hint.
-    let name = baseName
-    let suffix = 2
-    while (componentSchemas[name]) {
-      if (registeredAs.get(name) === cleanJson) {
-        // Same schema body — reuse the existing slot.
-        return { $ref: `#/components/schemas/${name}` }
+    const preferred = sanitize(explicit || title || fallback)
+    const base = sanitize(fallback)
+    const fits = (n: string) => !componentSchemas[n] || registeredAs.get(n) === cleanJson
+    let name = preferred
+    if (!fits(name)) {
+      if (preferred !== base) {
+        console.warn(
+          `[kickjs-swagger] schema name '${preferred}' already holds a different schema — using '${base}'`,
+        )
       }
-      name = `${baseName}_${suffix++}`
+      name = base
+      for (let n = 2; !fits(name); n++) name = `${base}_${n}`
     }
+    if (componentSchemas[name]) return { $ref: `#/components/schemas/${name}` }
     registeredAs.set(name, cleanJson)
     // A recursive schema refers to itself as `#` and to its parts under
     // `$defs` — inside an OpenAPI document `#` is the whole document, so
@@ -509,6 +513,8 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       // and route.path is the method-level path. @Controller path is not included here
       // because buildRoutes does not bake it into the router.
       const fullPath = joinPaths(mountPath, route.path)
+      /** `<Class><Method>` — the default prefix of this route's schema names. */
+      const routeName = `${controllerClass.name}${route.handlerName.charAt(0).toUpperCase()}${route.handlerName.slice(1)}`
 
       // Convert Express :param to OpenAPI {param}. Express's
       // path-to-regexp param-name rule is `[A-Za-z_][A-Za-z0-9_]*` —
@@ -674,8 +680,10 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
             `${method.toUpperCase()} ${fullPath} body`,
           )
           if (bodySchema) {
-            const bodyName = route.validation.name || `${route.handlerName}Body`
-            const ref = registerSchema(bodySchema, bodyName)
+            const ref = registerSchema(bodySchema, {
+              explicit: route.validation.name && `${route.validation.name}Body`,
+              fallback: `${routeName}Body`,
+            })
             op.requestBody = {
               required: true,
               content: { 'application/json': { schema: ref } },
@@ -744,7 +752,10 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
               'output',
               `${method.toUpperCase()} ${fullPath} ${resp.status} response`,
             )
-            const schemaName = resp.name || `${route.handlerName}Response${resp.status}`
+            const schemaName = {
+              explicit: resp.name,
+              fallback: `${routeName}Response${resp.status}`,
+            }
             // A schema the parser handles but couldn't convert is left out —
             // never copied in as the validator's own object.
             const finalSchema =
@@ -767,7 +778,10 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
             `${method.toUpperCase()} ${fullPath} response`,
           )
           if (converted) {
-            const schemaName = `${route.validation.name || route.handlerName}Response`
+            const schemaName = {
+              explicit: route.validation.name && `${route.validation.name}Response`,
+              fallback: `${routeName}Response`,
+            }
             success.content = {
               'application/json': { schema: registerSchema(converted, schemaName) },
             }
