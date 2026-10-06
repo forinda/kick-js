@@ -53,7 +53,7 @@ Because [transactions follow the call chain](./transactions#transactions-follow-
 ```ts
 import { createTestApp } from '@forinda/kickjs-testing'
 import request from 'supertest'
-import { APP_DB } from '../src/db/token'
+import { APP_DB } from '@/db/token'
 
 const db = createTestDb()
 const { app } = await createTestApp({
@@ -73,7 +73,7 @@ Integration tests that need Postgres behaviour — Postgres types, `serializable
 ```ts
 import { afterAll, beforeAll } from 'vitest'
 import { createPgTestDb, type PgTestDb } from '@forinda/kickjs-db/testing'
-import * as schema from '../src/db/schema'
+import * as schema from '@/db/schema'
 
 let pg: PgTestDb<typeof schema>
 

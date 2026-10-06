@@ -97,7 +97,7 @@ The user has to exist first: insert it in a `beforeAll` (with the password hashe
 When a test is about what an endpoint does, not about how users are recognised, replace the strategy list with one that trusts a test header. The recipe's adapter registers the strategies under `AUTH_STRATEGIES`, so override that token:
 
 ```ts
-import { AUTH_STRATEGIES, type AuthStrategy } from '../src/auth'
+import { AUTH_STRATEGIES, type AuthStrategy } from '@/auth'
 
 const testUser: AuthStrategy = {
   name: 'test',

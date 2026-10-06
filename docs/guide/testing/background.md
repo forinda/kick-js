@@ -142,7 +142,7 @@ Mail is your own service ([Mailer](../mailer.md)): the recipe binds a `MailerSer
 
 ```ts
 // tests/fakes/mailer.ts
-import type { MailMessage } from '../../src/mailer'
+import type { MailMessage } from '@/mailer'
 
 export class FakeMailer {
   readonly sent: MailMessage[] = []

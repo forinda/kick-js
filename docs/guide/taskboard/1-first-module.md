@@ -44,6 +44,8 @@ kick.config.ts      # CLI settings: pattern, module folder, custom commands
 .env.test           # read instead of .env under vitest
 ```
 
+`@/` is an alias for `src/`, set in `tsconfig.json` and `vite.config.ts`. This tutorial imports across folders with it — `import { db } from '@/db/client'` from anywhere — and keeps `./` for files in the same folder. It works in the app, in tests, and in the files `kick db` loads (seeds, schema, TypeScript migrations).
+
 `src/index.ts` is the whole app in one call. It imports `./config` first, so the environment schema is registered before anything reads a value, then boots:
 
 ```ts
