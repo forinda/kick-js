@@ -93,17 +93,23 @@ describe('call-chain transactions (postgres)', () => {
     let reads = 0
     let attempts = 0
     const run = (id: number) =>
-      db.transaction({ isolation: 'serializable', retry: true }, async () => {
-        attempts++
-        await db.selectFrom('counters').selectAll().execute()
-        if (++reads === 2) release()
-        await bothRead
-        await db
-          .updateTable('counters')
-          .set({ n: 1 })
-          .where('id', '=', id === 1 ? 2 : 1)
-          .execute()
-      })
+      // Room to retry: Postgres cancels the loser while the winner may still be
+      // open, so on a loaded runner a quick retry can conflict again. Three
+      // attempts with 20ms jitter (retry: true) ran out in CI.
+      db.transaction(
+        { isolation: 'serializable', retry: { attempts: 10, baseDelayMs: 50 } },
+        async () => {
+          attempts++
+          await db.selectFrom('counters').selectAll().execute()
+          if (++reads === 2) release()
+          await bothRead
+          await db
+            .updateTable('counters')
+            .set({ n: 1 })
+            .where('id', '=', id === 1 ? 2 : 1)
+            .execute()
+        },
+      )
     await Promise.all([run(1), run(2)]) // without retry, one of these rejects
     // At least one retry. Under load the retried run can conflict again before
     // the other commits, so the exact count isn't fixed.
