@@ -269,7 +269,25 @@ export const blogPosts = table('blogPosts', {
 - **Test helpers and introspection follow.** `createTestDb({ schema, casing })` takes the same option, and `kick db introspect` with `casing` set renders camelCase keys.
 - **Migrating an existing project** to `casing` renames every camelCase table and column. Generate that migration on its own and read it: it's a rename per column, which [rename prompts](./migrations.md#renames) let you confirm.
 
-A name override for a single column isn't supported; `casing` applies to all of them.
+### One column's name: `.colName()` {#column-col-name}
+
+When a single column's database name isn't its key — a legacy `EMAIL_ADDR` you'd rather call `email` — name it on the column:
+
+```ts
+export const users = table('users', {
+  id: serial().primaryKey(),
+  email: varchar(254).notNull().unique().colName('EMAIL_ADDR'),
+  fullName: text().colName('FULL_NM'),
+})
+// → CREATE TABLE "users" ("id" serial, "EMAIL_ADDR" varchar(254), "FULL_NM" text, …)
+```
+
+- **Your code keeps the key.** `db.selectFrom('users').select('email').where('email', '=', x)` runs against `EMAIL_ADDR`; a selected column comes back as `email` (it's selected as `"EMAIL_ADDR" as "email"`), and `select *` rows are renamed back too. Inserts, updates, `upsert`, `findOrCreate`, operators and `db.query` (nested rows included) all go by key.
+- **It's per table.** `users.email` can be `EMAIL_ADDR` while `posts.email` stays `email`; each reference is resolved against the tables in its query.
+- **Taken as written.** `casing` doesn't touch a `.colName()` — `EMAIL_ADDR` stays upper-case — and works alongside it for the other columns.
+- **Migrations** use the name everywhere it appears: the column, its foreign keys and indexes, and the names kick/db derives from it (`users_EMAIL_ADDR_unique`).
+- **SQL you write** names the column as the database does — `check('has_email', 'length("EMAIL_ADDR") > 0')`, `` sql`lower("EMAIL_ADDR")` ``.
+- **Introspection** writes `.colName()` where `casing` couldn't give a name back: `kick db introspect` on `EMAIL_ADDR` renders `emailAddr: ….colName('EMAIL_ADDR')`.
 
 ## Keys and constraints
 

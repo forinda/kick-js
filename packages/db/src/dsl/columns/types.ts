@@ -86,6 +86,8 @@ export interface ColumnState {
   mode?: 'bigint' | 'number' | 'string'
   /** `.comment()`: stored in the database on Postgres and MySQL. */
   comment?: string
+  /** `.colName()`: the column's name in the database, when it isn't the key (or its `casing`). */
+  colName?: string
   /** `tenantKey(tenancy)`: this is the table's tenant column. */
   tenancy?: { strategy: string; setting: string }
   /** `$defaultFn`: computed in JS for each inserted row that doesn't set it. */
@@ -305,6 +307,16 @@ export class ColumnBuilder<T = unknown> {
    */
   comment(text: string): this {
     this.state.comment = text
+    return this
+  }
+
+  /**
+   * The column's name in the database, when it isn't the key — a legacy
+   * `EMAIL_ADDR` behind an `email` key. Taken as written: `casing` doesn't
+   * change it. Queries, `db.query` and migrations use it; your code keeps the key.
+   */
+  colName(name: string): this {
+    this.state.colName = name
     return this
   }
 
