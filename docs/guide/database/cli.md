@@ -330,6 +330,33 @@ Nothing records which seeds ran — they aren't migrations, and every run runs t
 
 Seed files load the way the app's code does — TypeScript, extensionless relative imports, and the `tsconfig.json` path aliases (`@/db/client`). They aren't type-checked when they run, so keep their folder in `tsconfig.json`'s `include` for `kick typecheck` to catch a seed that misses a column added since. New projects include `db`; with a custom `seedsDir` or `migrationsDir`, add that folder. For schema changes, data fixes that must run exactly once, or anything a deploy depends on, write a migration (`kick db generate <name> --empty`) instead.
 
+### Generated sample data {#generated-sample-data}
+
+For data to develop against, `seedFake()` fills tables with rows that fit the schema — and are the same every run for the same `seed`:
+
+```ts
+// db/seeds/02_sample.ts
+import { seedFake } from '@forinda/kickjs-db'
+import { db } from '@/db/client'
+import * as schema from '@/db/schema'
+
+export default async function seed() {
+  // The same rows every run would collide on unique columns — fill once.
+  if (await db.selectFrom('tasks').select('id').limit(1).executeTakeFirst()) return
+  await seedFake(db, schema, {
+    counts: { users: 5, projects: 3, project_members: 6, tasks: 20 },
+    overrides: { project_members: { role: 'member' } },
+  })
+}
+```
+
+- **Values fit the columns** — their type, a `varchar`'s length, an enum's values; a unique column gets the row's number so no two clash, and a column named `email`, `title`, `slug`, `url`… gets text that looks like one.
+- **Relations hold.** Tables are filled parents first; a foreign key points at the parent rows made in the same call, or at rows already in the table when it isn't in `counts`. A table with several foreign keys (a junction) gets distinct combinations.
+- **The database keeps its say.** Defaults, `$defaultFn`, serial and identity keys, generated and managed columns are left to it — a uuid primary key is the exception, given a value so the rows are reproducible.
+- **Overrides** per table and column: a value, or `({ index, random }) => value`. A column it can't fill — a custom type, a vector, a CHECK it can't know about — is `null` when nullable, otherwise an error asking for one.
+
+`fakeRows(table, { count, refs })` makes the rows without a database, for tests or your own inserts.
+
 ## introspect
 
 ```text
