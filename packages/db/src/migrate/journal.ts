@@ -23,10 +23,13 @@ const FILE = '_journal.json'
 
 export async function readJournal(migrationsDir: string, dialect: Dialect): Promise<Journal> {
   const file = path.join(migrationsDir, FILE)
-  if (!existsSync(file)) {
-    return { version: 1, dialect, entries: [] }
-  }
-  const raw = JSON.parse(await readFile(file, 'utf8'))
+  return parseJournal(existsSync(file) ? await readFile(file, 'utf8') : undefined, dialect)
+}
+
+/** A journal from its text; none yet is an empty one. */
+export function parseJournal(text: string | undefined, dialect: Dialect): Journal {
+  if (text === undefined) return { version: 1, dialect, entries: [] }
+  const raw = JSON.parse(text)
   if (raw.version !== 1) {
     throw new Error(`_journal.json version ${raw.version} unsupported (expected 1)`)
   }
@@ -45,14 +48,21 @@ export async function appendJournalEntry(
 }
 
 export async function computeMigrationHash(migrationDir: string): Promise<string> {
-  const up = await readFile(path.join(migrationDir, 'up.sql'), 'utf8')
-  const down = await readFile(path.join(migrationDir, 'down.sql'), 'utf8')
-  const snap = await readFile(path.join(migrationDir, 'snapshot.json'), 'utf8')
-  const h = createHash('sha256').update(up).update('|').update(down).update('|').update(snap)
+  const code = codeMigrationFile(migrationDir)
+  return hashMigration(
+    await readFile(path.join(migrationDir, 'up.sql'), 'utf8'),
+    await readFile(path.join(migrationDir, 'down.sql'), 'utf8'),
+    await readFile(path.join(migrationDir, 'snapshot.json'), 'utf8'),
+    code ? await readFile(code, 'utf8') : undefined,
+  )
+}
+
+/** A migration's hash from its files' text. */
+export function hashMigration(up: string, down: string, snapshot: string, code?: string): string {
+  const h = createHash('sha256').update(up).update('|').update(down).update('|').update(snapshot)
   // A migration written in TypeScript is hashed with its code too. Only when
   // there is some, so every SQL migration keeps the hash it was recorded with.
-  const code = codeMigrationFile(migrationDir)
-  if (code) h.update('|').update(await readFile(code, 'utf8'))
+  if (code !== undefined) h.update('|').update(code)
   return `sha256:${h.digest('hex')}`
 }
 

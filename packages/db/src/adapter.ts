@@ -4,14 +4,18 @@ import type { InjectionToken } from '@forinda/kickjs'
 import { migrateLatest, migrateStatus } from './migrate/runner'
 import type { MigrationAdapter } from './migrate/adapter'
 import type { DriftBehavior } from './migrate/drift'
+import type { MigrationsLocation } from './migrate/source'
 
 export type MigrationsOnBoot = 'fail-if-pending' | 'apply' | 'ignore'
 
 export interface KickDbAdapterConfig {
   /** The driver-bound MigrationAdapter — pgAdapter() in @forinda/kickjs-db/pg, etc. */
   migrationAdapter: MigrationAdapter
-  /** Directory containing the generated migrations + _journal.json — or several, run as one history. */
-  migrationsDir: string | readonly string[]
+  /**
+   * Directory containing the generated migrations + _journal.json — or several,
+   * run as one history. `migrationFiles()` in place of one, for a bundled deploy.
+   */
+  migrationsDir: MigrationsLocation
   /** Boot policy. Default 'fail-if-pending' — mirror the operator-explicit philosophy. */
   migrationsOnBoot?: MigrationsOnBoot
   /** Drift detection mode. Default 'error' outside dev. */

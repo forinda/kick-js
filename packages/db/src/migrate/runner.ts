@@ -1,7 +1,4 @@
-import path from 'node:path'
-import { readFile } from 'node:fs/promises'
-
-import { readJournal, computeMigrationHash, type JournalEntry } from './journal'
+import { parseJournal, hashMigration, type JournalEntry } from './journal'
 import {
   MigrationFailedError,
   MigrationLockError,
@@ -10,7 +7,8 @@ import {
 } from './errors'
 import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
 import { enforceEnumDropGate } from './enum-drop-gate'
-import { codeMigrationFile, runCodeMigration } from './code-migration'
+import { runCodeMigration } from './code-migration'
+import { migrationFolders, type MigrationFolder, type MigrationsLocation } from './source'
 import type { MigrationAdapter } from './adapter'
 import type { SchemaSnapshot } from '../snapshot/types'
 
@@ -18,9 +16,10 @@ export interface RunnerOptions {
   adapter: MigrationAdapter
   /**
    * The migrations folder — or several, run as one history ordered by
-   * migration id. Each keeps its own journal and snapshots.
+   * migration id. Each keeps its own journal and snapshots. Bundled files
+   * (`migrationFiles()`) work in place of a folder.
    */
-  migrationsDir: string | readonly string[]
+  migrationsDir: MigrationsLocation
   /** When true, refuse to apply migrations whose meta.json.reviewed is false. Defaults to true outside dev. */
   requireReviewed?: boolean
   /** Owner string written into the lock table for diagnostics. */
@@ -46,11 +45,36 @@ interface PreparedEntry {
   tag: string
   hash: string
   /** The folder it lives in. */
-  dir: string
+  folder: MigrationFolder
 }
 
 interface LocatedEntry extends JournalEntry {
-  dir: string
+  folder: MigrationFolder
+}
+
+/** A migration's file — an error when it's missing. */
+async function readRequired(folder: MigrationFolder, id: string, file: string): Promise<string> {
+  const text = await folder.read(`${id}/${file}`)
+  if (text === undefined)
+    throw new Error(`kickjs-db: migration ${id} has no ${file} in ${folder.name}`)
+  return text
+}
+
+async function readMeta(folder: MigrationFolder, id: string) {
+  return JSON.parse(await readRequired(folder, id, 'meta.json')) as {
+    reviewed?: boolean
+    transaction?: boolean
+  }
+}
+
+/** The hash of the migration as it is now. */
+async function currentHash(folder: MigrationFolder, id: string): Promise<string> {
+  return hashMigration(
+    await readRequired(folder, id, 'up.sql'),
+    await readRequired(folder, id, 'down.sql'),
+    await readRequired(folder, id, 'snapshot.json'),
+    (await folder.code(id))?.text,
+  )
 }
 
 /**
@@ -62,29 +86,29 @@ async function readJournals(
   migrationsDir: RunnerOptions['migrationsDir'],
   dialect: SchemaSnapshot['dialect'],
 ): Promise<LocatedEntry[]> {
-  const dirs = typeof migrationsDir === 'string' ? [migrationsDir] : migrationsDir
+  const folders = migrationFolders(migrationsDir)
   const seen = new Map<string, string>()
   const entries: LocatedEntry[] = []
-  for (const dir of dirs) {
-    for (const e of (await readJournal(dir, dialect)).entries) {
+  for (const folder of folders) {
+    for (const e of parseJournal(await folder.read('_journal.json'), dialect).entries) {
       const other = seen.get(e.id)
       if (other) {
-        throw new Error(`kickjs-db: migration ${e.id} is in both ${other} and ${dir}`)
+        throw new Error(`kickjs-db: migration ${e.id} is in both ${other} and ${folder.name}`)
       }
-      seen.set(e.id, dir)
-      entries.push({ ...e, dir })
+      seen.set(e.id, folder.name)
+      entries.push({ ...e, folder })
     }
   }
-  return dirs.length > 1 ? entries.toSorted((a, b) => a.id.localeCompare(b.id)) : entries
+  return folders.length > 1 ? entries.toSorted((a, b) => a.id.localeCompare(b.id)) : entries
 }
 
 /** The folder holding an applied migration. */
-async function dirOf(id: string, opts: RunnerOptions): Promise<string> {
+async function folderOf(id: string, opts: RunnerOptions): Promise<MigrationFolder> {
   const entry = (await readJournals(opts.migrationsDir, opts.adapter.dialect)).find(
     (e) => e.id === id,
   )
   if (!entry) throw new Error(`kickjs-db: migration ${id} is applied but in no migrations folder`)
-  return entry.dir
+  return entry.folder
 }
 
 async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T> {
@@ -111,9 +135,8 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
  */
 async function verifyPending(pending: PreparedEntry[], requireReviewed: boolean): Promise<void> {
   for (const entry of pending) {
-    const dir = path.join(entry.dir, entry.id)
-    const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
-    const actualHash = await computeMigrationHash(dir)
+    const meta = await readMeta(entry.folder, entry.id)
+    const actualHash = await currentHash(entry.folder, entry.id)
     if (meta.reviewed === true) {
       if (actualHash !== entry.hash) throw new MigrationHashError(entry.id, entry.hash, actualHash)
     } else if (requireReviewed) {
@@ -125,9 +148,8 @@ async function verifyPending(pending: PreparedEntry[], requireReviewed: boolean)
 }
 
 async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptions): Promise<void> {
-  const dir = path.join(entry.dir, entry.id)
-  const upSql = await readFile(path.join(dir, 'up.sql'), 'utf8')
-  const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
+  const upSql = await readRequired(entry.folder, entry.id, 'up.sql')
+  const meta = await readMeta(entry.folder, entry.id)
   const useTx = meta.transaction !== false
 
   // Enum-drop gate runs before any DB write so the runner can refuse
@@ -142,16 +164,12 @@ async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptio
     direction: 'up' as const,
   }
   const { adapter } = opts
-  const code = codeMigrationFile(dir)
-  if (code) {
-    try {
-      await runCodeMigration(code, entry.id, 'up', adapter, useTx, { record })
-    } catch (err) {
-      throw new MigrationFailedError(entry.id, err)
-    }
-    return
-  }
   try {
+    const code = await entry.folder.code(entry.id)
+    if (code) {
+      await runCodeMigration(code, entry.id, 'up', adapter, useTx, { record })
+      return
+    }
     if (useTx && adapter.applyMigrationInTx) {
       // The row commits with the migration — a crash can't leave one without the other.
       await adapter.applyMigrationInTx(upSql, { record })
@@ -193,7 +211,7 @@ async function listPending(opts: RunnerOptions): Promise<PreparedEntry[]> {
   const appliedIds = new Set(applied.map((r) => r.id))
   return entries
     .filter((e) => !appliedIds.has(e.id))
-    .map((e) => ({ id: e.id, tag: e.tag, hash: e.hash, dir: e.dir }))
+    .map((e) => ({ id: e.id, tag: e.tag, hash: e.hash, folder: e.folder }))
 }
 
 function mergeSnapshots(a: SchemaSnapshot, b: SchemaSnapshot): SchemaSnapshot {
@@ -213,16 +231,14 @@ async function maybeCheckDrift(opts: RunnerOptions): Promise<void> {
   // recently applied migration — merged when there are several folders, each
   // owning its own tables.
   const appliedIds = new Set(applied.map((r) => r.id))
-  const latestPerDir = new Map<string, string>()
+  const latestPerDir = new Map<MigrationFolder, string>()
   for (const e of await readJournals(opts.migrationsDir, opts.adapter.dialect)) {
-    if (appliedIds.has(e.id)) latestPerDir.set(e.dir, e.id)
+    if (appliedIds.has(e.id)) latestPerDir.set(e.folder, e.id)
   }
   let expected: SchemaSnapshot | undefined
   try {
-    for (const [dir, id] of latestPerDir) {
-      const snap = JSON.parse(
-        await readFile(path.join(dir, id, 'snapshot.json'), 'utf8'),
-      ) as SchemaSnapshot
+    for (const [folder, id] of latestPerDir) {
+      const snap = JSON.parse(await readRequired(folder, id, 'snapshot.json')) as SchemaSnapshot
       expected = expected ? mergeSnapshots(expected, snap) : snap
     }
   } catch {
@@ -276,16 +292,16 @@ export interface ReversedSummary {
 }
 
 async function applyReverse(id: string, opts: RunnerOptions): Promise<void> {
-  const dir = path.join(await dirOf(id, opts), id)
-  const downSql = await readFile(path.join(dir, 'down.sql'), 'utf8')
-  const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
+  const folder = await folderOf(id, opts)
+  const downSql = await readRequired(folder, id, 'down.sql')
+  const meta = await readMeta(folder, id)
   const requireReviewed = opts.requireReviewed ?? process.env.NODE_ENV !== 'development'
   if (requireReviewed && meta.reviewed !== true) {
     throw new UnreviewedMigrationError(id)
   }
   const useTx = meta.transaction !== false
   const { adapter } = opts
-  const code = codeMigrationFile(dir)
+  const code = await folder.code(id)
   if (code) {
     await runCodeMigration(code, id, 'down', adapter, useTx, { remove: id })
     return
@@ -361,8 +377,7 @@ export async function migrateStatus(
     const row = byId.get(e.id)
     let reviewed = false
     try {
-      const meta = JSON.parse(await readFile(path.join(e.dir, e.id, 'meta.json'), 'utf8'))
-      reviewed = meta.reviewed === true
+      reviewed = (await readMeta(e.folder, e.id)).reviewed === true
     } catch {
       // Missing meta.json — treat as un-reviewed; the runner will refuse to
       // apply anyway. Don't fail status output for diagnostic purposes.

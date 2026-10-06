@@ -145,6 +145,7 @@ export {
   type TenantMigrationResult,
 } from './migrate/tenants'
 export { reviewMigration, type ReviewResult } from './migrate/review'
+export { migrationFiles, type MigrationFiles, type MigrationsLocation } from './migrate/source'
 
 export { emitPg } from './emit/pg'
 export { emitSqlite, SqliteRebuildRequiredError } from './emit/sqlite'
