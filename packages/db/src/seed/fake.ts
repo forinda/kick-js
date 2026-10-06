@@ -296,6 +296,15 @@ function uniqueKeys(table: TableDecl): Set<string> {
   return keys
 }
 
+/** The primary key or a unique index made only of foreign-key columns, or none. */
+function compositeForeignKey(table: TableDecl, fks: Map<string, ColumnRef>): string[] {
+  const candidates = [
+    table.__primaryKey?.columns ?? [],
+    ...table.__indexes.filter((i) => i.unique).map((i) => i.columns),
+  ]
+  return candidates.find((cols) => cols.length > 1 && cols.every((c) => fks.has(c))) ?? []
+}
+
 /** Foreign-key columns, by key, with the table and column they point at. */
 function foreignKeys(table: TableDecl): Map<string, ColumnRef> {
   const out = new Map<string, ColumnRef>()
@@ -324,7 +333,20 @@ export function fakeRows(tableLike: unknown, options: FakeRowsOptions): Row[] {
   const seed = options.seed ?? 1
   const unique = uniqueKeys(table)
   const fks = foreignKeys(table)
-  const fkKeys = [...fks.keys()].filter((k) => options.refs?.[k]?.length)
+  // A key made only of foreign keys (a junction's) is walked first, so its
+  // combinations are distinct; asking for more rows than there are is an error.
+  const keySet = compositeForeignKey(table, fks)
+  const fkKeys = [...fks.keys()]
+    .filter((k) => options.refs?.[k]?.length)
+    .toSorted((a, b) => Number(keySet.includes(b)) - Number(keySet.includes(a)))
+  if (keySet.length > 0 && keySet.every((k) => options.refs?.[k]?.length)) {
+    const capacity = keySet.reduce((n, k) => n * options.refs![k]!.length, 1)
+    if (options.count > capacity) {
+      throw new Error(
+        `kickjs-db: ${name} can hold ${capacity} distinct (${keySet.join(', ')}) — asked for ${options.count}`,
+      )
+    }
+  }
 
   const columns = Object.entries(table.__columns).map(([key, builder]) => ({
     key,
@@ -451,7 +473,7 @@ export async function seedFake<DB>(
 
 /** Insert and read back what the database filled in (keys, defaults). */
 async function insertRows(
-  client: { dialect: string; insertInto: (t: string) => any },
+  client: { dialect: string; insertInto: (t: string) => any; selectFrom: (t: string) => any },
   name: string,
   table: TableDecl,
   rows: Row[],
@@ -471,15 +493,25 @@ async function insertRows(
     }
     return out
   }
-  // MySQL has no RETURNING: one row at a time, taking an auto-increment key from insertId.
-  const autoKey = Object.entries(table.__columns).find(([, b]) => {
-    const s = (b as ColumnBuilder).__state()
-    return s.primaryKey && isAutoIncrement(s)
-  })?.[0]
+  // MySQL has no RETURNING: insert one row at a time, then read it back by its
+  // key (an auto-increment one from insertId) for what the database filled in.
+  const keys =
+    table.__primaryKey?.columns ??
+    Object.entries(table.__columns)
+      .filter(([, b]) => (b as ColumnBuilder).__state().primaryKey)
+      .map(([k]) => k)
+  const autoKey = keys.find((k) => isAutoIncrement((table.__columns[k] as ColumnBuilder).__state()))
   const out: Row[] = []
   for (const row of rows) {
     const result = await client.insertInto(name).values(row).executeTakeFirst()
-    out.push(autoKey ? { ...row, [autoKey]: Number(result.insertId) } : row)
+    const key: Row = { ...row, ...(autoKey ? { [autoKey]: Number(result.insertId) } : {}) }
+    if (keys.length === 0) {
+      out.push(key)
+      continue
+    }
+    let query = client.selectFrom(name).selectAll()
+    for (const k of keys) query = query.where(k, '=', key[k])
+    out.push((await query.executeTakeFirst()) ?? key)
   }
   return out
 }

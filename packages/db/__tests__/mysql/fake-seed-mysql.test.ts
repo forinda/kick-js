@@ -40,5 +40,8 @@ describe('seedFake on MySQL', () => {
     )
     expect((rows as any[])[0]).toEqual({ u: 3, p: 8, pt: 12 })
     expect(out.posts!.every((p) => typeof p.id === 'number')).toBe(true)
+    // Read back after each insert: what the database filled in is there too.
+    expect(out.posts!.every((p) => p.views === 0)).toBe(true)
+    expect(out.users!.every((u) => u.createdAt instanceof Date)).toBe(true)
   })
 })

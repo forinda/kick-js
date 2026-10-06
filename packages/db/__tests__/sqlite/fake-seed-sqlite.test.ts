@@ -12,7 +12,7 @@ import {
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
 import { pgEnum } from '@forinda/kickjs-db/pg'
 import { mysqlEnum } from '@forinda/kickjs-db/mysql'
-import { serial, table, text } from '@forinda/kickjs-db'
+import { integer, serial, table, text } from '@forinda/kickjs-db'
 import * as schema from '../setup/fake-schema'
 
 function fresh() {
@@ -90,12 +90,24 @@ describe('fakeRows', () => {
     expect(a[0]!.price).toMatch(/^\d+\.\d{2}$/)
   })
 
-  it('gives a junction distinct pairs', () => {
-    const rows = fakeRows(schema.postTags, {
-      count: 12,
-      refs: { postId: [1, 2, 3], tagId: [1, 2, 3, 4] },
-    })
+  it('gives a junction distinct pairs, and refuses more than there are', () => {
+    const refs = { postId: [1, 2, 3], tagId: [1, 2, 3, 4] }
+    const rows = fakeRows(schema.postTags, { count: 12, refs })
     expect(new Set(rows.map((r) => `${r.postId}:${r.tagId}`)).size).toBe(12)
+    expect(() => fakeRows(schema.postTags, { count: 13, refs })).toThrow(
+      'post_tags can hold 12 distinct (postId, tagId) — asked for 13',
+    )
+    // Two foreign keys that aren't a key may repeat.
+    const pair = table('pairs', {
+      id: serial().primaryKey(),
+      a: integer()
+        .notNull()
+        .references(() => schema.tags.id),
+      b: integer()
+        .notNull()
+        .references(() => schema.tags.id),
+    })
+    expect(fakeRows(pair, { count: 5, refs: { a: [1], b: [1] } })).toHaveLength(5)
   })
 
   it('names a person only on a people table', () => {
