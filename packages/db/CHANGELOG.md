@@ -1,5 +1,19 @@
 # @forinda/kickjs-db
 
+## 8.2.0
+
+### Minor Changes
+
+- [#801](https://github.com/forinda/kick-js/pull/801) [`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2) Thanks [@forinda](https://github.com/forinda)! - Re-export `sql`, `Kysely` and the query types (`Expression`, `ExpressionBuilder`, `KyselyPlugin`, `RawBuilder`, `Sql`, `SqlBool`) from `@forinda/kickjs-db`, so raw SQL and plugins need no import from `kysely`. The docs now import them from kick/db.
+
+### Patch Changes
+
+- [#804](https://github.com/forinda/kick-js/pull/804) [`95966aa`](https://github.com/forinda/kick-js/commit/95966aaa317c159a2de81e01872a91f8c8eb4440) Thanks [@forinda](https://github.com/forinda)! - `findOrCreate`'s `create` must now supply every required column that `where` leaves out. A seed or service that missed one (a column added since) compiled and then failed with `NOT NULL` at run time; it's a type error now.
+
+- [#803](https://github.com/forinda/kick-js/pull/803) [`d874839`](https://github.com/forinda/kick-js/commit/d874839a4c0705160500297cafd154da3ae47451) Thanks [@forinda](https://github.com/forinda)! - TypeScript migrations (`migration.ts`) run when `migrationsDir` is relative, as `kick.config.ts` usually gives it (`'db/migrations'`). The file was looked up as a package name and failed with "Cannot find module".
+- Updated dependencies [[`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2)]:
+  - @forinda/kickjs-cli-kit@0.1.3
+
 ## 8.1.0
 
 ### Minor Changes

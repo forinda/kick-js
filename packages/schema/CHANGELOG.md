@@ -1,5 +1,11 @@
 # @forinda/kickjs-schema
 
+## 0.2.1
+
+### Patch Changes
+
+- [#801](https://github.com/forinda/kick-js/pull/801) [`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2) Thanks [@forinda](https://github.com/forinda)! - Shorter README pointing to the documentation site.
+
 ## 0.2.0
 
 ### Minor Changes
