@@ -26,7 +26,8 @@ export function codeMigrationFile(dir: string): string | undefined {
   return CODE_MIGRATION_FILES.map((f) => path.join(dir, f)).find((f) => existsSync(f))
 }
 
-async function load(file: string, id: string): Promise<CodeMigration> {
+/** Load a migration's `migration.ts` (or `.js`) from disk. */
+export async function loadCodeMigration(file: string, id: string): Promise<CodeMigration> {
   const mod = (await loadModule(file, { fresh: true })) as Partial<CodeMigration>
   if (typeof mod.up !== 'function') {
     throw new Error(`migration ${id}: ${path.basename(file)} must export an async up(db)`)
@@ -40,14 +41,13 @@ async function load(file: string, id: string): Promise<CodeMigration> {
  * record commit or roll back together.
  */
 export async function runCodeMigration(
-  file: string,
+  { migration, file }: { migration: CodeMigration; file: string },
   id: string,
   direction: 'up' | 'down',
   adapter: MigrationAdapter,
   useTx: boolean,
   bookkeeping: { record: Omit<MigrationRow, 'appliedAt'> } | { remove: string },
 ): Promise<void> {
-  const migration = await load(file, id)
   const run = direction === 'up' ? migration.up : migration.down
   if (!run) throw new Error(`migration ${id}: ${path.basename(file)} has no down(db) to reverse it`)
   const db = adapter.kysely?.()

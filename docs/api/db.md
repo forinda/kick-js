@@ -547,6 +547,8 @@ Runner entry points — called by the CLI but also usable from custom scripts.
 
 Each returns a typed summary (`AppliedSummary`, `ReversedSummary`, `RollbackSummary`, `StatusEntry[]`).
 
+`migrationsDir` is a folder, several folders run as one history, or `migrationFiles(files, modules?)` — the migration files bundled into the app, for a deploy with no migrations folder ([No migrations folder at run time](../guide/database/ci-deploy.md#bundled-migrations)).
+
 The `adapter` argument implements the `MigrationAdapter` interface and is dialect-specific (`pgAdapter()`, `sqliteAdapter()`, `mysqlAdapter()`, or `asyncSqliteAdapter({ driver })` for libsql/Turso and Cloudflare D1, with `libsqlDriver(client)` / `d1Driver(db)` from `@forinda/kickjs-db/sqlite`). For tests, `MemoryMigrationAdapter` is available.
 
 ### `generate(options)`
@@ -708,7 +710,7 @@ Query helpers: `escapeLike`, `likePattern`.
 
 Plugins: `safeNullComparison`.
 
-Migration: `diff`, `invertChanges`, `hasAmbiguousReverse`, `emitPg`, `emitMysql`, `emitSqlite`, `introspectPg`, `introspectMysql`, `introspectSqlite`, `reviewMigration`, `extractSnapshot`, `renderSchemaSource`, `migrateLatest`, `migrateUp`, `migrateDown`, `migrateRollback`, `migrateStatus`, `generate`, `resolveDbConfig`, `MemoryMigrationAdapter`, `migrationsTableDdl`, `lockTableDdl`, `KICK_MIGRATIONS_TABLE`, `KICK_LOCK_TABLE`, `readJournal`, `appendJournalEntry`, `computeMigrationHash`, `verifyMigrationHash`, `parseEnumDropHeader`, `enforceEnumDropGate`, `checkDrift`, `detectCompositeReferences`.
+Migration: `diff`, `invertChanges`, `hasAmbiguousReverse`, `emitPg`, `emitMysql`, `emitSqlite`, `introspectPg`, `introspectMysql`, `introspectSqlite`, `reviewMigration`, `migrationFiles`, `extractSnapshot`, `renderSchemaSource`, `migrateLatest`, `migrateUp`, `migrateDown`, `migrateRollback`, `migrateStatus`, `generate`, `resolveDbConfig`, `MemoryMigrationAdapter`, `migrationsTableDdl`, `lockTableDdl`, `KICK_MIGRATIONS_TABLE`, `KICK_LOCK_TABLE`, `readJournal`, `appendJournalEntry`, `computeMigrationHash`, `verifyMigrationHash`, `parseEnumDropHeader`, `enforceEnumDropGate`, `checkDrift`, `detectCompositeReferences`.
 
 Errors: `KickDbError`, `TransactionFinishedError`, `DatabaseError`, `UniqueViolationError`, `ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`, `SerializationFailureError`, `DeadlockError`, `ConnectionError`, `translateDbError`, `SqliteRebuildRequiredError`, `RemovedValueAsDefaultError`, `RelationalQueryCancelledError`, `RelationalQueryUnknownRelationError`, `RelationalQueryAmbiguousRelationNameError`, `RelationalQueryMissingInverseError`, `RelationalQueryDepthError`, `RelationalQueryAliasCollisionError`, `RelationalQueryNotSupportedError`, `CompositeEnumReferenceError`, `MigrationError`, `MigrationDriftError`, `MigrationLockError`, `MigrationHashError`, `UnreviewedMigrationError`, `MigrationEnumDropError`.
 

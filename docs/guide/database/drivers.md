@@ -165,7 +165,7 @@ export default {
 `asyncSqliteAdapter({ driver: d1Driver(env.DB) })` runs migrations wherever you hold a D1 binding: in a Worker, or in Node through Miniflare or wrangler's `getPlatformProxy()` for a local database.
 
 - **No interactive transactions.** D1 doesn't allow `BEGIN`, so `db.transaction()` throws. A migration still applies all or nothing: the adapter sends it as one `batch`, which D1 runs atomically.
-- **Migration files are read from disk.** Running them from inside a deployed Worker needs them bundled, which kick/db doesn't do yet.
+- **Migrations inside a Worker** need their files in the bundle: pass `migrationFiles()` as `migrationsDir` ([No migrations folder at run time](./ci-deploy.md#bundled-migrations)). kick/db's CI runs D1 through Miniflare from Node, not inside a deployed Worker.
 
 ### `bun:sqlite` {#bun-sqlite}
 

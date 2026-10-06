@@ -139,6 +139,32 @@ ERROR [Process] Uncaught exception Error: kickjs-db: 1 pending migration(s); run
 
 That's the safety net for a skipped migration step: the new version never serves requests against the old schema, and your platform sees a failed start instead of a healthy one. [Migrations → Boot-time policy](./migrations.md#boot-time-policy) has the other options.
 
+### No migrations folder at run time {#bundled-migrations}
+
+A serverless or edge deploy usually ships the built bundle and nothing else, so `migrationsDir: 'db/migrations'` finds nothing there. Bundle the migration files with Vite's `import.meta.glob` and pass them with `migrationFiles()` instead of a folder:
+
+```ts
+// src/db/migrations.ts
+import { migrationFiles } from '@forinda/kickjs-db'
+
+export const migrations = migrationFiles(
+  // Every file, as its exact text — the runner hashes it to check reviewed migrations.
+  import.meta.glob('../../db/migrations/**', { query: '?raw', import: 'default', eager: true }),
+  // Migrations written in TypeScript, as modules to run.
+  import.meta.glob('../../db/migrations/*/migration.ts', { eager: true }),
+)
+```
+
+```ts
+kickDbAdapter({
+  migrationAdapter,
+  migrationsDir: migrations, // in place of 'db/migrations'
+  migrationsOnBoot: 'fail-if-pending',
+})
+```
+
+`migrateLatest()`, `migrateStatus()` and the rest take it the same way. Bundled migrations go through the same checks as a folder: an unreviewed one is refused outside development, and a reviewed one whose text changed fails its hash. An array mixes bundled files and folders as one history. The `kick db` commands still read the folder; the bundle is for the deployed app.
+
 ### Several instances
 
 Don't use `migrationsOnBoot: 'apply'` when more than one instance starts at once. The migration lock lets one run migrate; the others don't wait for it — they fail with `Another process holds the migration lock` and, since a boot-time failure stops the app, those instances don't start. A single release step avoids the race, and `fail-if-pending` on every instance is safe to run in parallel.
