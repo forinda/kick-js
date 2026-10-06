@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /**
@@ -8,9 +9,12 @@ import { pathToFileURL } from 'node:url'
  * bundler-style app code doesn't write.
  */
 export async function loadModule(
-  absPath: string,
+  file: string,
   options: { fresh?: boolean } = {},
 ): Promise<Record<string, unknown>> {
+  // A relative path (a config's `migrationsDir: 'db/migrations'`) would be
+  // read as a package name.
+  const absPath = path.resolve(file)
   const { createJiti } = await import('jiti')
   // `fresh` reads the file as it is now, not a copy cached from an earlier
   // load in the same process — a migration edited between two runs.
