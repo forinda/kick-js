@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import request from 'supertest'
+import { z } from 'zod'
 import {
   Application,
   Container,
@@ -46,6 +47,14 @@ async function boot(runtime: (() => unknown) | undefined, secret: string | false
     @Get('/fail/now')
     fail() {
       throw new Error('ping exploded')
+    }
+
+    @Post('/tasks', {
+      body: z.object({ title: z.string(), dueAt: z.coerce.date(), tags: z.array(z.string()) }),
+      query: z.object({ notify: z.coerce.boolean(), lang: z.string().optional() }),
+    })
+    createTask(ctx: RequestContext) {
+      ctx.json(ctx.body)
     }
 
     @Post('/avatar')
@@ -140,6 +149,20 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     expect(avatar.upload).toEqual({ mode: 'single', fieldName: 'avatar' })
     const get = routes.body.routes.find((r: { handler: string }) => r.handler === 'get')
     expect(get.upload).toBeUndefined()
+  })
+
+  it("sends each route's request schemas, so the runner needs no Swagger adapter", async () => {
+    const http = await boot(runtime)
+    const routes = await http.get('/_debug/routes').expect(200)
+    const create = routes.body.routes.find((r: { handler: string }) => r.handler === 'createTask')
+    expect(create.schemas.body.properties).toEqual({
+      title: { type: 'string' },
+      dueAt: { type: 'string', format: 'date-time' },
+      tags: { type: 'array', items: { type: 'string' } },
+    })
+    expect(create.schemas.query.required).toEqual(['notify'])
+    const get = routes.body.routes.find((r: { handler: string }) => r.handler === 'get')
+    expect(get.schemas).toBeUndefined()
   })
 
   it('keys latency by the matched route pattern, not the raw URL', async () => {

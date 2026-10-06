@@ -36,6 +36,7 @@ import {
   editorLink,
   historyLabel,
   openApiHints,
+  routeHints,
   pushHistory,
   type HistoryEntry,
   emptyInputs,
@@ -208,8 +209,11 @@ export const ApiRunnerPanel: Component = () => {
 
   const hints = createMemo(() => {
     const route = activeRoute()
+    if (!route) return undefined
+    // The Swagger spec when it documents the route (it has summaries), else
+    // the route's own schemas — no Swagger adapter needed.
     const spec = specs()[settings().openApiUrl]
-    return route && spec ? openApiHints(spec, route) : undefined
+    return (spec ? openApiHints(spec, route) : undefined) ?? routeHints(route)
   })
 
   // Load the route's saved inputs whenever a route is opened.

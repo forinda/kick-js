@@ -14,6 +14,7 @@ export default defineConfig({
   external: [
     '@forinda/kickjs',
     '@forinda/kickjs-devtools-kit',
+    '@forinda/kickjs-schema',
     'reflect-metadata',
     /^node:/,
   ],

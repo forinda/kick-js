@@ -7,6 +7,7 @@ import {
   exampleFromSchema,
   historyLabel,
   openApiHints,
+  routeHints,
   pushHistory,
   buildUrl,
   emptyInputs,
@@ -452,5 +453,58 @@ describe('paramsFromPath', () => {
   it('is empty when the path does not fit the pattern', () => {
     expect(paramsFromPath('/users/:id', '/teams/7')).toEqual({})
     expect(paramsFromPath('/a.b/:id', '/axb/1')).toEqual({})
+  })
+})
+
+describe("routeHints — from the route's own schemas", () => {
+  it('builds the body example and the query rows', () => {
+    const route = {
+      method: 'POST',
+      path: '/tasks',
+      schemas: {
+        body: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            done: { type: 'boolean', default: false },
+            tags: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        query: {
+          type: 'object',
+          properties: {
+            notify: { type: 'boolean', description: 'Email the team' },
+            lang: { type: 'string' },
+          },
+          required: ['notify'],
+        },
+        params: { type: 'object', properties: { id: { type: 'string', description: 'Task id' } } },
+      },
+    }
+    expect(routeHints(route)).toEqual({
+      params: { id: 'Task id' },
+      query: [
+        { name: 'notify', required: true, description: 'Email the team' },
+        { name: 'lang', required: false },
+      ],
+      body: JSON.stringify({ title: '', done: false, tags: [''] }, null, 2),
+    })
+  })
+
+  it('resolves $defs inside the body schema', () => {
+    const body = {
+      type: 'object',
+      properties: { owner: { $ref: '#/$defs/user' } },
+      $defs: { user: { type: 'object', properties: { name: { type: 'string' } } } },
+    }
+    expect(
+      JSON.parse(routeHints({ method: 'POST', path: '/x', schemas: { body } })!.body!),
+    ).toEqual({
+      owner: { name: '' },
+    })
+  })
+
+  it('is nothing without schemas', () => {
+    expect(routeHints({ method: 'GET', path: '/x' })).toBeUndefined()
   })
 })

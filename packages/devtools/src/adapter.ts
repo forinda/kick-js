@@ -38,6 +38,7 @@ import { RequestLog } from './request-log'
 import { findJobInspectors, getJob, listJobs, listJobSources, runJobAction } from './jobs'
 import { locateHandler } from './source-locator'
 import { createServerBus, type ServerBus } from './bus/server'
+import { detectSchema } from '@forinda/kickjs-schema'
 
 const log = createLogger('DevTools')
 
@@ -72,7 +73,35 @@ interface RouteInfo {
    * plain fields: `allowedTypes` may be a function and isn't serialisable.
    */
   upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
+  /**
+   * The route's request schemas as JSON Schema (OpenAPI 3.0 form, what the
+   * request accepts) — the API runner prefills from them, with or without
+   * the Swagger adapter.
+   */
+  schemas?: { body?: JsonSchema; query?: JsonSchema; params?: JsonSchema }
 }
+
+type JsonSchema = Record<string, unknown>
+
+/** A route's body, query and params schemas, each one that converts. */
+function requestSchemas(validation: RouteValidation | undefined): Pick<RouteInfo, 'schemas'> {
+  if (!validation) return {}
+  const schemas: NonNullable<RouteInfo['schemas']> = {}
+  for (const part of ['body', 'query', 'params'] as const) {
+    if (!validation[part]) continue
+    try {
+      schemas[part] = detectSchema(validation[part]).toJsonSchema({
+        target: 'openapi-3.0',
+        io: 'input',
+      })
+    } catch {
+      // Not a schema kickjs-schema knows, or one it can't convert: no prefill for it.
+    }
+  }
+  return Object.keys(schemas).length > 0 ? { schemas } : {}
+}
+
+type RouteValidation = { body?: unknown; query?: unknown; params?: unknown }
 
 /** Per-route latency stats with percentile tracking */
 interface RouteStats {
@@ -1197,7 +1226,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         if (!enabled) return
 
         const collectedRoutes = getClassMeta<
-          Array<{ method: string; path: string; handlerName: string }>
+          Array<{ method: string; path: string; handlerName: string; validation?: RouteValidation }>
         >(METADATA.ROUTES, controllerClass, [])
 
         const classMiddleware = getClassMeta<any[]>(METADATA.CLASS_MIDDLEWARES, controllerClass, [])
@@ -1221,6 +1250,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             ],
             flags: Object.fromEntries(getRouteFlags(controllerClass, route.handlerName)),
             ...uploadInfo(controllerClass, route.handlerName),
+            ...requestSchemas(route.validation),
           })
         }
       },
