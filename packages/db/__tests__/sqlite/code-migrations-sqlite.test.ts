@@ -85,6 +85,21 @@ export async function down(db) {
     expect(database.prepare('SELECT id FROM kick_migrations WHERE id = ?').get(id)).toBeUndefined()
   })
 
+  it('runs with a relative migrationsDir, as kick.config.ts gives it', async () => {
+    const { database, adapter, config, id, file } = await setup()
+    await writeFile(
+      file,
+      `export async function up(db) {
+  await db.updateTable('users').set({ status: 'active' }).execute()
+}`,
+    )
+    const migrationsDir = path.relative(process.cwd(), config.migrationsDir)
+    expect(
+      (await migrateLatest({ adapter, migrationsDir, requireReviewed: false })).applied,
+    ).toEqual([id])
+    expect(statuses(database)).toEqual([{ status: 'active' }, { status: 'active' }])
+  })
+
   it('a failing up() leaves neither its changes nor a record', async () => {
     const { database, run, id, file } = await setup()
     await writeFile(
