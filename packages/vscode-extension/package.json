@@ -420,12 +420,12 @@
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "@types/vscode": "^1.85.0",
+    "@types/node": "^26.6.4",
+    "@types/vscode": "^1.140.0",
     "@vscode/vsce": "^3.9.2",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.3"
   },
   "private": true
 }

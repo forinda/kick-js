@@ -52,13 +52,13 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.128.0",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@forinda/kickjs": "workspace:*",
-    "@swc/core": "^1.16.2",
-    "@types/node": "^26.6.2",
+    "@swc/core": "^1.16.13",
+    "@types/node": "^26.6.4",
     "typescript": "^7.0.2",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^5.0.1",
+    "vitest": "^5.0.3",
     "zod": "^4.6.5"
   },
   "publishConfig": {
