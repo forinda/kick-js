@@ -2,6 +2,8 @@ import type { Dialect } from '../snapshot/types'
 
 export const KICK_MIGRATIONS_TABLE = 'kick_migrations'
 export const KICK_LOCK_TABLE = 'kick_migrations_lock'
+/** Where `kick db push` keeps the schema it last pushed. */
+export const KICK_PUSH_TABLE = 'kick_push'
 
 /** The lock table that goes with a migrations table. */
 export function lockTableName(table: string): string {

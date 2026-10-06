@@ -3,6 +3,7 @@ import { sqliteDialect } from './dialect'
 import {
   lockTableDdl,
   lockTableName,
+  KICK_PUSH_TABLE,
   quoteTable,
   KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
@@ -83,7 +84,7 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
   const L = quoteTable(dialect, lockTableName(table))
   // Introspection must not report the bookkeeping tables as schema.
   // A dot is part of the name here, not a schema.
-  const bookkeepingTables = [table, lockTableName(table)]
+  const bookkeepingTables = [table, lockTableName(table), KICK_PUSH_TABLE]
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,

@@ -19,6 +19,7 @@ The `kick db` commands — migrations, schema diffs, introspection — ship with
 | [`migrate status`](#migrate-status)      | List applied and pending migrations                                       |       yes        |
 | [`migrate review <id>`](#migrate-review) | Mark a migration reviewed                                                 |        no        |
 | [`migrate unlock`](#migrate-unlock)      | Release a migration lock a killed run left behind                         |       yes        |
+| [`push`](#push)                          | Make a prototyping database match the schema, with no migration file      |       yes        |
 | [`seed [names...]`](#seed)               | Run the seed files in `seedsDir`                                          |       yes        |
 | [`introspect`](#introspect)              | Write a schema file from a live database                                  |       yes        |
 
@@ -168,6 +169,26 @@ The schema has 1 change no migration covers — run `kick db generate <name>`.
 ```
 
 Exit code `1` when anything is listed. The same check is exported as `checkMigrations({ config, cwd })`.
+
+## push
+
+```text
+kick db push [--rename-table old=new] [--rename-column table.old=new] [--accept-data-loss] [--no-interactive]
+```
+
+Makes the database match the schema straight away, with no migration file — for trying out a schema before committing to it. Run it again after each edit:
+
+```text
+Pushed 3 changes.
+The database already matches the schema.
+```
+
+- **Data loss is asked about.** Dropping a table or column, changing a column's type or removing an enum value asks first in a terminal, and fails otherwise — `--accept-data-loss` agrees in advance. A rename asks like [`generate`](#generate) does, or take `--rename-table` / `--rename-column`.
+- **It remembers what it pushed.** The schema it pushed is kept in a `kick_push` table and the next push diffs against it. If the database was changed some other way in between, push stops: `the database changed since the last push, outside it`.
+- **It starts from an empty database.** On one with tables push didn't create, it stops.
+- **It's refused where migrations run:** on a database with migrations applied, and with `NODE_ENV=production`.
+
+When the schema settles, write it down as a migration: `kick db generate init`, then apply it to a fresh database (or drop the prototyping one) — the pushed tables already exist, so `migrate latest` on the same database would fail. The same function is exported as `pushSchema({ adapter, schema })`.
 
 ## migrate latest
 

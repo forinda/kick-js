@@ -24,7 +24,8 @@ import { kickDbTypegen } from './cli-typegen'
 import { checkMigrations } from './cli/check'
 import { runSeeds } from './cli/seed'
 import { removeCasing } from './snapshot/casing'
-import { askRenamesInTerminal, parseRenameFlags } from './cli/renames'
+import { askRenamesInTerminal, confirmInTerminal, parseRenameFlags } from './cli/renames'
+import { loadModule } from './cli/load-module'
 
 /** Every folder the runner reads: `migrationsDir`, then `migrationsDirs`. */
 function runDirs(config: DbConfig): string | string[] {
@@ -58,6 +59,7 @@ import {
   migrateDown,
   migrateRollback,
   migrateStatus,
+  pushSchema,
   reviewMigration,
   renderSchemaSource,
   type CompositeQueryRunner,
@@ -325,6 +327,57 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
       }
       if (r.ok) console.log('Migrations are in step with the schema.')
       else process.exitCode = 1
+    })
+
+  parent
+    .command('push')
+    .description(
+      'Make the database match the schema with no migration file — for prototyping; refused on a database with migrations applied',
+    )
+    .option(
+      '--rename-table <old=new>',
+      'Treat a dropped table as renamed (repeatable)',
+      (v: string, all: string[] = []) => [...all, v],
+    )
+    .option(
+      '--rename-column <table.old=new>',
+      'Treat a dropped column as renamed (repeatable)',
+      (v: string, all: string[] = []) => [...all, v],
+    )
+    .option('--no-interactive', "Don't ask about renames or data loss, even in a terminal")
+    .option('--accept-data-loss', 'Apply changes that drop tables, columns or enum values')
+    .action(async (opts: Omit<GenerateFlags, 'empty' | 'ts'> & { acceptDataLoss?: boolean }) => {
+      const config = await getConfig()
+      const interactive = opts.interactive !== false && process.stdin.isTTY
+      const schema = await loadModule(path.resolve(process.cwd(), config.schemaPath), {
+        fresh: true,
+      })
+      const { adapter, cleanup } = await resolveAdapter(config)
+      try {
+        const r = await pushSchema({
+          adapter,
+          schema,
+          casing: config.casing,
+          renames: parseRenameFlags(opts.renameTable, opts.renameColumn),
+          askRenames: interactive ? askRenamesInTerminal : undefined,
+          confirmDataLoss: opts.acceptDataLoss
+            ? async () => true
+            : interactive
+              ? (losses) =>
+                  confirmInTerminal(
+                    `This loses data:\n${losses.map((l) => `  - ${l}`).join('\n')}\nApply it?`,
+                  )
+              : undefined,
+        })
+        const plural = r.changeCount === 1 ? '' : 's'
+        console.log(
+          r.status === 'no-changes'
+            ? 'The database already matches the schema.'
+            : `Pushed ${r.changeCount} change${plural}.`,
+        )
+      } finally {
+        await cleanup()
+      }
     })
 
   parent

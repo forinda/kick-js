@@ -70,3 +70,19 @@ export async function askRenamesInTerminal(
   }
   return hints
 }
+
+/** Ask a yes/no question in the terminal; anything but y/yes is no. */
+export async function confirmInTerminal(
+  question: string,
+  io: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream } = {
+    input: process.stdin,
+    output: process.stdout,
+  },
+): Promise<boolean> {
+  const rl = createInterface({ input: io.input, output: io.output })
+  try {
+    return /^y(es)?$/i.test((await rl.question(`${question} [y/N] `)).trim())
+  } finally {
+    rl.close()
+  }
+}

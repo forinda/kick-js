@@ -8,7 +8,7 @@ import type {
   ViewSnapshot,
 } from '../snapshot/types'
 
-const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
+const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock', 'kick_push']
 
 /** Minimal mysql2 surface introspection needs. Returns `[rows, fields]`. */
 export interface MysqlIntrospectDb {

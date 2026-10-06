@@ -11,7 +11,7 @@ import type {
 } from '../snapshot/types'
 import type { IntrospectPgOptions, PgQueryRunner } from './introspect-types'
 
-const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
+const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock', 'kick_push']
 
 interface ColumnRow {
   column_name: string
