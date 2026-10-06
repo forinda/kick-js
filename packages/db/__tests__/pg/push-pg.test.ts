@@ -37,7 +37,7 @@ describe('pushSchema on Postgres', () => {
 
     await pool.query('alter table tags add column extra text')
     await expect(pushSchema({ adapter, schema: { ...schema, tags } })).rejects.toThrow(
-      /changed since the last push/,
+      /differs from what was last pushed/,
     )
   })
 })

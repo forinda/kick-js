@@ -184,9 +184,9 @@ The database already matches the schema.
 ```
 
 - **Data loss is asked about.** Dropping a table or column, changing a column's type or removing an enum value asks first in a terminal, and fails otherwise — `--accept-data-loss` agrees in advance. A rename asks like [`generate`](#generate) does, or take `--rename-table` / `--rename-column`.
-- **It remembers what it pushed.** The schema it pushed is kept in a `kick_push` table and the next push diffs against it. If the database was changed some other way in between, push stops: `the database changed since the last push, outside it`.
+- **It remembers what it pushed.** The schema it pushed is kept in a `kick_migrations_push` table (named after your migrations table) and the next push diffs against it. If the database no longer matches it, push stops: `the database differs from what was last pushed`. That's a change made some other way, or a MySQL push that failed partway — MySQL commits each DDL statement on its own, so a failure can leave earlier ones applied. Make the database match the schema you last pushed, or start from an empty one.
 - **It starts from an empty database.** On one with tables push didn't create, it stops.
-- **It's refused where migrations run:** on a database with migrations applied, and with `NODE_ENV=production`.
+- **It's refused where migrations run:** on a database with any migration applied, and whenever `NODE_ENV=production` — either one is enough.
 
 When the schema settles, write it down as a migration: `kick db generate init`, then apply it to a fresh database (or drop the prototyping one) — the pushed tables already exist, so `migrate latest` on the same database would fail. The same function is exported as `pushSchema({ adapter, schema })`.
 

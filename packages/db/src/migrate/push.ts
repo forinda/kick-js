@@ -15,9 +15,21 @@ import type { Change } from '../diff/types'
 import type { Casing } from '../snapshot/casing'
 import type { SchemaSnapshot } from '../snapshot/types'
 import type { MigrationAdapter } from './adapter'
-import { KICK_PUSH_TABLE } from './schema'
+import { KICK_MIGRATIONS_TABLE, pushTableName, quoteTable } from './schema'
 
-const TABLE = KICK_PUSH_TABLE
+/** Where push keeps its record: beside the adapter's migrations table, excluded from introspection with it. */
+const pushTable = (adapter: MigrationAdapter) =>
+  pushTableName(adapter.migrationsTable ?? KICK_MIGRATIONS_TABLE)
+
+/** The table isn't there: Postgres 42P01, MySQL 1146, SQLite "no such table". */
+function isMissingTable(err: unknown): boolean {
+  const e = err as { code?: unknown; errno?: unknown; message?: unknown }
+  return (
+    e?.code === '42P01' ||
+    e?.errno === 1146 ||
+    (typeof e?.message === 'string' && /no such table/i.test(e.message))
+  )
+}
 
 export interface PushOptions {
   adapter: MigrationAdapter
@@ -65,17 +77,23 @@ async function readPushed(adapter: MigrationAdapter): Promise<SchemaSnapshot | u
   if (!db) throw new Error('kickjs-db: push needs a migration adapter with kysely()')
   let row: { snapshot: string } | undefined
   try {
-    row = await db.selectFrom(TABLE).select('snapshot').where('id', '=', 1).executeTakeFirst()
-  } catch {
-    return undefined // no kick_push table: nothing pushed yet
+    row = await db
+      .selectFrom(pushTable(adapter))
+      .select('snapshot')
+      .where('id', '=', 1)
+      .executeTakeFirst()
+  } catch (err) {
+    if (isMissingTable(err)) return undefined // nothing pushed yet
+    throw err
   }
   return row ? JSON.parse(Buffer.from(row.snapshot, 'hex').toString('utf8')) : undefined
 }
 
 /** The SQL that records `snapshot` as pushed — hex, so no dialect needs it quoted. */
-function recordSql(snapshot: SchemaSnapshot): string {
+function recordSql(adapter: MigrationAdapter, snapshot: SchemaSnapshot): string {
   const hex = Buffer.from(JSON.stringify(snapshot), 'utf8').toString('hex')
   const text = snapshot.dialect === 'mysql' ? 'LONGTEXT' : 'TEXT'
+  const TABLE = quoteTable(adapter.dialect, pushTable(adapter))
   return [
     `CREATE TABLE IF NOT EXISTS ${TABLE} (id INTEGER PRIMARY KEY, snapshot ${text} NOT NULL);`,
     `DELETE FROM ${TABLE};`,
@@ -120,7 +138,7 @@ export async function pushSchema(opts: PushOptions): Promise<PushResult> {
       } catch (err) {
         if (!(err instanceof MigrationDriftError)) throw err
         throw new Error(
-          `kickjs-db: the database changed since the last push, outside it — push won't guess what to keep. ${err.message}`,
+          `kickjs-db: the database differs from what was last pushed — changed outside push, or a MySQL push that failed partway (MySQL commits each DDL statement on its own). Make the database match the schema you last pushed, or start from an empty one; push won't guess what to keep. ${err.message}`,
           { cause: err },
         )
       }
@@ -151,7 +169,7 @@ export async function pushSchema(opts: PushOptions): Promise<PushResult> {
     // The schema change and the record of it commit together (Postgres,
     // SQLite; MySQL commits each DDL statement on its own).
     await adapter.applySqlInTx(
-      `${emitDdl(adapter.dialect, changes, prev, target)}\n${recordSql(target)}`,
+      `${emitDdl(adapter.dialect, changes, prev, target)}\n${recordSql(adapter, target)}`,
     )
     return { status: 'pushed', changeCount: changes.length }
   } finally {

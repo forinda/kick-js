@@ -88,7 +88,7 @@ describe('pushSchema on SQLite', () => {
     await pushSchema({ adapter, schema })
     database.exec('alter table posts add column extra text')
     await expect(pushSchema({ adapter, schema })).rejects.toThrow(
-      /changed since the last push, outside it/,
+      /differs from what was last pushed/,
     )
   })
 
@@ -114,6 +114,28 @@ describe('pushSchema on SQLite', () => {
   it('refuses in production', async () => {
     process.env.NODE_ENV = 'production'
     await expect(pushSchema({ ...fresh(), schema })).rejects.toThrow(/NODE_ENV=production/)
+  })
+
+  it("sees a user's own kick_push table", async () => {
+    const { database, adapter } = fresh()
+    database.exec('create table kick_push (id integer primary key)')
+    await expect(pushSchema({ adapter, schema })).rejects.toThrow(/tables push didn't create/)
+  })
+
+  it('reports a failed read of its record instead of starting over', async () => {
+    const { database, adapter } = fresh()
+    database.exec('create table kick_migrations_push (id integer primary key)')
+    await expect(pushSchema({ adapter, schema })).rejects.toThrow(/no such column: "snapshot"/)
+  })
+
+  it('keeps its record beside a custom migrations table', async () => {
+    const { database } = fresh()
+    const adapter = sqliteAdapter({ database, migrationsTable: 'app_migrations' })
+    await pushSchema({ adapter, schema })
+    expect(
+      database.prepare(`select name from sqlite_master where name = 'app_migrations_push'`).get(),
+    ).toBeTruthy()
+    expect(await pushSchema({ adapter, schema })).toMatchObject({ status: 'no-changes' })
   })
 
   it('leaves its own table out of introspection', async () => {

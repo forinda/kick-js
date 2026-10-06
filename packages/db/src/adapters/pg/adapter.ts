@@ -5,7 +5,7 @@ import {
   KickDbError,
   lockTableDdl,
   lockTableName,
-  KICK_PUSH_TABLE,
+  pushTableName,
   quoteTable,
   KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
@@ -109,9 +109,10 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
   const bookkeepingSchema = table.includes('.') ? table.slice(0, table.lastIndexOf('.')) : schema
   const bookkeepingTables =
     bookkeepingSchema === schema
-      ? [table, lockTableName(table)].map((t) => t.slice(t.lastIndexOf('.') + 1))
+      ? [table, lockTableName(table), pushTableName(table)].map((t) =>
+          t.slice(t.lastIndexOf('.') + 1),
+        )
       : []
-  bookkeepingTables.push(KICK_PUSH_TABLE)
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,

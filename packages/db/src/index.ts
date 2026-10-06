@@ -78,7 +78,7 @@ export {
   lockTableDdl,
   KICK_MIGRATIONS_TABLE,
   KICK_LOCK_TABLE,
-  KICK_PUSH_TABLE,
+  pushTableName,
 } from './migrate/schema'
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 export { introspectPg } from './migrate/introspect-pg'

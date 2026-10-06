@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely'
 import {
   lockTableDdl,
   lockTableName,
-  KICK_PUSH_TABLE,
+  pushTableName,
   quoteTable,
   KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
@@ -70,7 +70,7 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
   const table = opts.migrationsTable ?? KICK_MIGRATIONS_TABLE
   const T = quoteTable(dialect, table)
   const L = quoteTable(dialect, lockTableName(table))
-  const bookkeepingTables = [table, lockTableName(table), KICK_PUSH_TABLE]
+  const bookkeepingTables = [table, lockTableName(table), pushTableName(table)]
   const statements = (sql: string): SqliteStatementInput[] =>
     splitSqlStatements(sql, 'sqlite').map((s) => ({ sql: s }))
   const insertRow = (r: Omit<MigrationRow, 'appliedAt'>): SqliteStatementInput => ({
