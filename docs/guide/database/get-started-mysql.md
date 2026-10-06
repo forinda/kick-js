@@ -39,8 +39,9 @@ Give `.env.test` a `DATABASE_URL` too — it's read _instead of_ `.env` under vi
 
 The CLI connects to Postgres on its own; for MySQL, hand it an `adapter` factory:
 
-```ts
-// kick.config.ts
+::: code-group
+
+```ts [kick.config.ts]
 import { defineConfig } from '@forinda/kickjs-cli'
 import { dbCliPlugin } from '@forinda/kickjs-db/cli'
 
@@ -60,6 +61,27 @@ export default defineConfig({
   },
 })
 ```
+
+```ts [kickjs-db.config.ts]
+import { defineKickDbConfig } from '@forinda/kickjs-db/cli'
+
+export default defineKickDbConfig({
+  schemaPath: 'src/db/schema.ts',
+  migrationsDir: 'db/migrations',
+  dialect: 'mysql',
+  adapter: async () => {
+    const { createPool } = await import('mysql2/promise')
+    const { mysqlAdapter } = await import('@forinda/kickjs-db/mysql')
+    const pool = createPool({ uri: process.env.DATABASE_URL!, timezone: 'Z' })
+    // This pool belongs to the CLI run, so the adapter ends it when the command finishes.
+    return mysqlAdapter({ pool, endPoolOnClose: true })
+  },
+})
+```
+
+:::
+
+Not using the `kick` CLI? Use the `kickjs-db.config.ts` tab and run `kickjs-db <command>` where this guide says `kick db <command>` — same commands, same fields ([standalone `kickjs-db`](./cli.md#standalone-kickjs-db)). It doesn't read `.env`, so set `DATABASE_URL` in the environment.
 
 `endPoolOnClose: true` matters here. By default `mysqlAdapter` leaves the pool open, because an app shares one pool with its query client; the CLI's pool has no other owner, and an open pool would keep `kick db` from exiting.
 

@@ -48,8 +48,9 @@ const envSchema = fromZod(
 
 ## 4. Mount the db CLI
 
-```ts
-// kick.config.ts
+::: code-group
+
+```ts [kick.config.ts]
 import { defineConfig } from '@forinda/kickjs-cli'
 import { dbCliPlugin } from '@forinda/kickjs-db/cli'
 
@@ -63,6 +64,21 @@ export default defineConfig({
   },
 })
 ```
+
+```ts [kickjs-db.config.ts]
+import { defineKickDbConfig } from '@forinda/kickjs-db/cli'
+
+export default defineKickDbConfig({
+  schemaPath: 'src/db/schema.ts',
+  migrationsDir: 'db/migrations',
+  dialect: 'postgres',
+  // connectionString defaults to process.env.DATABASE_URL
+})
+```
+
+:::
+
+Not using the `kick` CLI? Use the `kickjs-db.config.ts` tab and run `kickjs-db <command>` where this guide says `kick db <command>` — same commands, same fields ([standalone `kickjs-db`](./cli.md#standalone-kickjs-db)). It doesn't read `.env`, so set `DATABASE_URL` in the environment.
 
 That's all the CLI needs: on Postgres it builds its own connection from `DATABASE_URL`, which `kick` reads from `.env`. Other dialects need an `adapter` factory here.
 

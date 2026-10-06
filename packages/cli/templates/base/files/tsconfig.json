@@ -16,5 +16,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"]
+  "include": ["src", "db", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"]
 }
