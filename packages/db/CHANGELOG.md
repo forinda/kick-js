@@ -1,5 +1,17 @@
 # @forinda/kickjs-db
 
+## 8.3.0
+
+### Minor Changes
+
+- [#806](https://github.com/forinda/kick-js/pull/806) [`370b1b7`](https://github.com/forinda/kick-js/commit/370b1b7295310667384ba3b65f81cad59e3633c9) Thanks [@forinda](https://github.com/forinda)! - Run migrations with no migrations folder at run time: `migrationFiles(files, modules?)` takes the migration files bundled into the app (Vite's `import.meta.glob` with `?raw`), and goes wherever `migrationsDir` does — `kickDbAdapter()`, `migrateLatest()` and the rest. Review and hash checks work as for a folder; an array mixes bundled files and folders.
+
+- [#808](https://github.com/forinda/kick-js/pull/808) [`c4cadbc`](https://github.com/forinda/kick-js/commit/c4cadbc2929f4f1694611ab753652b61f26b009c) Thanks [@forinda](https://github.com/forinda)! - `kick db push` (and `pushSchema()`): make a prototyping database match the schema with no migration file. Changes that lose data are asked about (`--accept-data-loss` to agree in advance), renames are asked or named with flags, and a change made to the database some other way since the last push stops it. Refused on a database with any migration applied, and whenever `NODE_ENV=production` — either one is enough.
+
+### Patch Changes
+
+- [#810](https://github.com/forinda/kick-js/pull/810) [`da45bbc`](https://github.com/forinda/kick-js/commit/da45bbc0c3fbd6894a1a67a4f5e9b72da80e9c2c) Thanks [@forinda](https://github.com/forinda)! - Seeds, the schema file and TypeScript migrations resolve the project's `tsconfig.json` path aliases (`@/db/client`), including in the app code they import. They failed with "Cannot find module '@/…'" before. Needs jiti 2.7, now the minimum.
+
 ## 8.2.0
 
 ### Minor Changes
