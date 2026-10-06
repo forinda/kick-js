@@ -1,5 +1,13 @@
 # @forinda/kickjs-db
 
+## 8.4.0
+
+### Minor Changes
+
+- [#821](https://github.com/forinda/kick-js/pull/821) [`4269691`](https://github.com/forinda/kick-js/commit/4269691956abec89591563cf5f3920394306018d) Thanks [@forinda](https://github.com/forinda)! - `.colName('EMAIL_ADDR')` on a column: its name in the database when it isn't the key. Code keeps the key — queries, `select *` rows, inserts, updates, upserts, operators and `db.query` (nested rows included) are mapped per table, so `users.email` can be `EMAIL_ADDR` while `posts.email` stays `email`. Migrations use the name for the column, its foreign keys, indexes and derived constraint names; `casing` leaves it as written; `kick db introspect` renders `.colName()` for a name `casing` can't give back.
+
+- [#819](https://github.com/forinda/kick-js/pull/819) [`632f2ed`](https://github.com/forinda/kick-js/commit/632f2edc7c94e75b50ea2750b00bc5ff5fa34a04) Thanks [@forinda](https://github.com/forinda)! - Generated sample data: `seedFake(db, schema, { counts, seed, overrides })` fills tables with rows that fit the schema — types, lengths, enums, unique columns, foreign keys (parents first, junctions with distinct pairs) — the same every run for the same seed; `fakeRows(table, { count, refs })` makes them without a database. Defaults, serial / identity keys and generated or managed columns are left to the database; a column it can't fill asks for an override.
+
 ## 8.3.0
 
 ### Minor Changes
