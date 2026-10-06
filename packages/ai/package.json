@@ -44,7 +44,7 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
-    "@forinda/kickjs-schema": "workspace:*"
+    "@forinda/kickjs-schema": "workspace:^"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.126.0",
