@@ -1,5 +1,11 @@
 # @forinda/kickjs-ai
 
+## 8.1.3
+
+### Patch Changes
+
+- [#817](https://github.com/forinda/kick-js/pull/817) [`5b96753`](https://github.com/forinda/kick-js/commit/5b96753fc3bde4197e7526b36b2c65445ba62479) Thanks [@forinda](https://github.com/forinda)! - Depend on `@forinda/kickjs-schema` by a caret range (`^0.2.x`) instead of an exact version, so these packages share one copy of it rather than installing several when their releases pin different patch versions.
+
 ## 8.1.2
 
 ### Patch Changes
