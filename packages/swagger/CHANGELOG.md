@@ -1,5 +1,12 @@
 # @forinda/kickjs-swagger
 
+## 7.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2)]:
+  - @forinda/kickjs-schema@0.2.1
+
 ## 7.2.2
 
 ### Patch Changes

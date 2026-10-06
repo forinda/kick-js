@@ -1,5 +1,15 @@
 # @forinda/kickjs-cli
 
+## 8.7.1
+
+### Patch Changes
+
+- [#804](https://github.com/forinda/kick-js/pull/804) [`95966aa`](https://github.com/forinda/kick-js/commit/95966aaa317c159a2de81e01872a91f8c8eb4440) Thanks [@forinda](https://github.com/forinda)! - New projects' `tsconfig.json` includes `db`, so `kick typecheck` covers seeds and TypeScript migrations.
+- Updated dependencies [[`95966aa`](https://github.com/forinda/kick-js/commit/95966aaa317c159a2de81e01872a91f8c8eb4440), [`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2), [`d874839`](https://github.com/forinda/kick-js/commit/d874839a4c0705160500297cafd154da3ae47451), [`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2)]:
+  - @forinda/kickjs-db@8.2.0
+  - @forinda/kickjs-cli-kit@0.1.3
+  - @forinda/kickjs@9.0.1
+
 ## 8.7.0
 
 ### Minor Changes

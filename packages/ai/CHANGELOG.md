@@ -1,5 +1,12 @@
 # @forinda/kickjs-ai
 
+## 8.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`c7c67b5`](https://github.com/forinda/kick-js/commit/c7c67b561cb92259a40f78e56c7135cc02dbcef2)]:
+  - @forinda/kickjs-schema@0.2.1
+
 ## 8.1.0
 
 ### Minor Changes
