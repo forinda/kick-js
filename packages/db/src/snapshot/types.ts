@@ -16,9 +16,9 @@ export interface ColumnSnapshot {
   comment?: string
   /**
    * Only on an introspected snapshot read back into keys: the database's own
-   * name, when `casing` wouldn't give it back — rendered as `.dbName()`.
+   * name, when `casing` wouldn't give it back — rendered as `.colName()`.
    */
-  dbName?: string
+  colName?: string
 }
 
 export interface IndexSnapshot {

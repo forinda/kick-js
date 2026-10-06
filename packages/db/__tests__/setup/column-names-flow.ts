@@ -1,4 +1,4 @@
-/** The same `.dbName()` round trip on any dialect: write, join, select *, upsert, db.query. */
+/** The same `.colName()` round trip on any dialect: write, join, select *, upsert, db.query. */
 import { expect } from 'vitest'
 import type { KickDbClient } from '@forinda/kickjs-db'
 

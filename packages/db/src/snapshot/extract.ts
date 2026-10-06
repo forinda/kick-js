@@ -74,7 +74,7 @@ export function extractSnapshot(
   options: {
     casing?: Casing
     /**
-     * Keep TypeScript keys — no `casing`, no `.dbName()` — for the client's
+     * Keep TypeScript keys — no `casing`, no `.colName()` — for the client's
      * own use. Default: the database's names, what migrations need.
      */
     keys?: boolean
@@ -172,24 +172,24 @@ export function extractSnapshot(
   if (Object.keys(views).length > 0) snapshot.views = views
   if (Object.keys(roles).length > 0) snapshot.roles = roles
   if (options.keys) return snapshot
-  const dbNames = columnDbNames(schema)
-  return options.casing === 'snake_case' || dbNames.size > 0
-    ? applyCasing(snapshot, options.casing, dbNames)
+  const colNames = colNameOverrides(schema)
+  return options.casing === 'snake_case' || colNames.size > 0
+    ? applyCasing(snapshot, options.casing, colNames)
     : snapshot
 }
 
-/** `.dbName()` overrides: table (by key) → column key → the database's name. */
-function columnDbNames(schema: Record<string, unknown>): Map<string, Map<string, string>> {
+/** `.colName()` overrides: table (by key) → column key → the database's name. */
+function colNameOverrides(schema: Record<string, unknown>): Map<string, Map<string, string>> {
   const out = new Map<string, Map<string, string>>()
   for (const exported of Object.values(schema)) {
     const t = unwrapTable(exported)
     if (!t) continue
     for (const [key, builder] of Object.entries(t.__columns)) {
-      const dbName = (builder as { __state(): { dbName?: string } }).__state().dbName
-      if (dbName === undefined) continue
+      const colName = (builder as { __state(): { colName?: string } }).__state().colName
+      if (colName === undefined) continue
       const table = qualifiedTableName(t)
       if (!out.has(table)) out.set(table, new Map())
-      out.get(table)!.set(key, dbName)
+      out.get(table)!.set(key, colName)
     }
   }
   return out
@@ -217,7 +217,7 @@ function addTenantPolicies(
       }
       const snap = tables[qualifiedTableName(t)]!
       const column =
-        (builder as { __state(): { dbName?: string } }).__state().dbName ??
+        (builder as { __state(): { colName?: string } }).__state().colName ??
         (casing === 'snake_case' ? toDbName(key) : key)
       const name = `${t.__name}_tenant`
       if (snap.policies?.some((p) => p.name === name)) continue

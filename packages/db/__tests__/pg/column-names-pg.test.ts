@@ -1,4 +1,4 @@
-/** D.21 `.dbName()` on Postgres. */
+/** D.21 `.colName()` on Postgres. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
@@ -22,7 +22,7 @@ afterAll(async () => {
   await container?.stop()
 }, 60_000)
 
-describe('.dbName() on Postgres', () => {
+describe('.colName() on Postgres', () => {
   it('creates the columns under their names and reads and writes them by key', async () => {
     const { rows } = await pool.query(
       `select column_name from information_schema.columns where table_name = 'users' order by ordinal_position`,

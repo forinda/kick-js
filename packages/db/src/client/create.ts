@@ -146,7 +146,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     plugins.unshift(casing.first)
     plugins.push(casing.last)
   }
-  // `.dbName()` columns: rewritten after casing on the way out, so a name like
+  // `.colName()` columns: rewritten after casing on the way out, so a name like
   // `EMAIL` isn't converted again; renamed back before casing on the way in.
   const columnNames = collectColumnNames(opts.schema, opts.casing)
   if (columnNames.size > 0) {
@@ -252,7 +252,7 @@ function detectDialect(dialect: KyselyDialect, override?: DialectTag): KickDbCli
 }
 
 /**
- * `.dbName()` columns by table and column, as queries name them when this
+ * `.colName()` columns by table and column, as queries name them when this
  * plugin sees them — after `casing` has converted the rest.
  */
 function collectColumnNames(schema: unknown, casing: Casing | undefined): ColumnNameMap {
@@ -262,11 +262,11 @@ function collectColumnNames(schema: unknown, casing: Casing | undefined): Column
     const t = unwrapTable(exported)
     if (!t) continue
     for (const [key, builder] of Object.entries(t.__columns)) {
-      const dbName = (builder as { __state(): { dbName?: string } }).__state().dbName
-      if (dbName === undefined) continue
+      const colName = (builder as { __state(): { colName?: string } }).__state().colName
+      if (colName === undefined) continue
       const table = qualifiedTableName(t).split('.').map(name).join('.')
       if (!out.has(table)) out.set(table, new Map())
-      out.get(table)!.set(name(key), dbName)
+      out.get(table)!.set(name(key), colName)
     }
   }
   return out

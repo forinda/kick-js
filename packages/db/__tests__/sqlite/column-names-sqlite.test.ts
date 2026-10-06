@@ -1,5 +1,5 @@
 /**
- * D.21 `.dbName()`: a column whose database name isn't its key — in
+ * D.21 `.colName()`: a column whose database name isn't its key — in
  * migrations, queries, relational reads and results, with and without casing.
  */
 import { describe, expect, it } from 'vitest'
@@ -23,9 +23,9 @@ import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
 
 const users = table('users', {
   id: serial().primaryKey(),
-  email: text().notNull().unique().dbName('EMAIL_ADDR'),
-  fullName: text().dbName('FULL_NM'),
-  updatedAt: timestamp().notNull().defaultNow().onUpdateNow().dbName('MODIFIED'),
+  email: text().notNull().unique().colName('EMAIL_ADDR'),
+  fullName: text().colName('FULL_NM'),
+  updatedAt: timestamp().notNull().defaultNow().onUpdateNow().colName('MODIFIED'),
 })
 // Same key as users.email, no rename: resolution has to go by table.
 const posts = table('posts', {
@@ -33,7 +33,7 @@ const posts = table('posts', {
   authorId: integer()
     .notNull()
     .references(() => users.id)
-    .dbName('AUTHOR'),
+    .colName('AUTHOR'),
   email: text(),
   title: text().notNull(),
 })
@@ -55,7 +55,7 @@ function make(casing?: 'snake_case') {
 }
 
 for (const casing of [undefined, 'snake_case'] as const) {
-  describe(`.dbName() — casing: ${casing ?? 'none'}`, () => {
+  describe(`.colName() — casing: ${casing ?? 'none'}`, () => {
     it('names the columns, and what derives from them, in migrations', () => {
       const { target, columns } = make(casing)
       expect(columns('users')).toEqual(['id', 'EMAIL_ADDR', 'FULL_NM', 'MODIFIED'])
@@ -155,10 +155,10 @@ for (const casing of [undefined, 'snake_case'] as const) {
 }
 
 describe('introspection', () => {
-  it('writes .dbName() where casing would not give the name back', () => {
+  it('writes .colName() where casing would not give the name back', () => {
     const { target } = make('snake_case')
     const source = renderSchemaSource(removeCasing(target))
-    expect(source).toContain(`emailAddr: text().notNull().unique().dbName('EMAIL_ADDR')`)
+    expect(source).toContain(`emailAddr: text().notNull().unique().colName('EMAIL_ADDR')`)
     expect(source).toContain(`title: text().notNull(),`)
   })
 })

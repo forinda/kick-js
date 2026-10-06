@@ -45,21 +45,21 @@ export const toKeyName = (name: string): string => conversions.toKey(name)
 export function applyCasing(
   snapshot: SchemaSnapshot,
   casing: Casing | undefined = 'snake_case',
-  /** `.dbName()` overrides: table key → column key → name. Taken as written. */
-  dbNames: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(),
+  /** `.colName()` overrides: table key → column key → name. Taken as written. */
+  colNames: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(),
 ): SchemaSnapshot {
   const rename = casing === 'snake_case' ? toDbName : (name: string) => name
   return renameSnapshot(
     snapshot,
     rename,
-    (table, column) => dbNames.get(table)?.get(column) ?? rename(column),
+    (table, column) => colNames.get(table)?.get(column) ?? rename(column),
   )
 }
 
 /**
  * The other way: a database's snapshot in TypeScript keys — for `kick db
  * introspect`. A name `casing` wouldn't give back (`EMAIL`) keeps it as
- * `dbName`, which renders as `.dbName('EMAIL')`.
+ * `colName`, which renders as `.colName('EMAIL')`.
  */
 export function removeCasing(snapshot: SchemaSnapshot): SchemaSnapshot {
   // An all-caps name (`EMAIL_ADDR`) reads better as `emailAddr` than `EMAILADDR`.
@@ -71,7 +71,7 @@ function renameSnapshot(
   snapshot: SchemaSnapshot,
   rename: (name: string) => string,
   renameColumn: (table: string, column: string) => string,
-  keepDbNames = false,
+  keepColNames = false,
 ): SchemaSnapshot {
   // Every part, schema included: Kysely's CamelCasePlugin converts a schema
   // name in a query the same way, so `pgSchema('billingApp')` is `billing_app`.
@@ -88,7 +88,7 @@ function renameSnapshot(
     for (const c of Object.values(t.columns)) {
       const renamed = col(c.name)
       columns[renamed] = { ...c, name: renamed }
-      if (keepDbNames && toDbName(renamed) !== c.name) columns[renamed]!.dbName = c.name
+      if (keepColNames && toDbName(renamed) !== c.name) columns[renamed]!.colName = c.name
     }
 
     const indexes = t.indexes.map((i): IndexSnapshot => {

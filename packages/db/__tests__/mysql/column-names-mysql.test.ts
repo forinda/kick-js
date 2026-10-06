@@ -1,4 +1,4 @@
-/** D.21 `.dbName()` on MySQL. */
+/** D.21 `.colName()` on MySQL. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { createPool, type Pool } from 'mysql2/promise'
@@ -29,7 +29,7 @@ afterAll(async () => {
   await container?.stop()
 }, 60_000)
 
-describe('.dbName() on MySQL', () => {
+describe('.colName() on MySQL', () => {
   it('creates the columns under their names and reads and writes them by key', async () => {
     const [rows] = await pool.query(
       `select column_name as c from information_schema.columns where table_schema = database() and table_name = 'users' order by ordinal_position`,

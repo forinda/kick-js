@@ -1,5 +1,5 @@
 /**
- * `.dbName()` at runtime: a column whose database name isn't its key. Unlike
+ * `.colName()` at runtime: a column whose database name isn't its key. Unlike
  * `casing`, which converts every name the same way, the mapping depends on
  * the table — `email` may be `EMAIL_ADDR` in `users` and `email` in `posts` —
  * so each column reference is resolved against the tables in scope.
@@ -132,19 +132,19 @@ class Renamer extends OperationNodeTransformer {
 
   protected override transformReference(node: ReferenceNode): ReferenceNode {
     if (!ColumnNode.is(node.column)) return super.transformReference(node)
-    const dbName = this.resolve(node.column.column.name, node.table && tableName(node.table))
+    const colName = this.resolve(node.column.column.name, node.table && tableName(node.table))
     // Not renamed: left as it is — not looked up again unqualified, where
     // another table in scope could claim the name.
-    if (dbName === undefined) return node
+    if (colName === undefined) return node
     return node.table
-      ? ReferenceNode.create(ColumnNode.create(dbName), node.table)
-      : ReferenceNode.create(ColumnNode.create(dbName))
+      ? ReferenceNode.create(ColumnNode.create(colName), node.table)
+      : ReferenceNode.create(ColumnNode.create(colName))
   }
 
   /** A bare column: an INSERT's column list, an UPDATE's SET, ON CONFLICT's target. */
   protected override transformColumn(node: ColumnNode): ColumnNode {
-    const dbName = this.resolve(node.column.name)
-    return dbName === undefined ? node : ColumnNode.create(dbName)
+    const colName = this.resolve(node.column.name)
+    return colName === undefined ? node : ColumnNode.create(colName)
   }
 
   /** A renamed column that's selected keeps its key: `"EMAIL_ADDR" as "email"`. */
@@ -198,7 +198,7 @@ export function columnNamePlugins(names: ColumnNameMap): {
         const node = renamer.transformNode(args.node)
         const back = new Map<string, string>()
         for (const table of renamer.outer) {
-          for (const [column, dbName] of names.get(table) ?? []) back.set(dbName, column)
+          for (const [column, colName] of names.get(table) ?? []) back.set(colName, column)
         }
         if (back.size > 0) pending.set(args.queryId, back)
         return node
