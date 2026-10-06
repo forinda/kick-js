@@ -210,7 +210,7 @@ Drizzle's core API imports a column object and an operator for each condition; K
 | `db.delete(users).where(…)`                       | `db.deleteFrom('users').where(…)`                                                                     |
 | `.onConflictDoUpdate({ target, set })`            | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control                 |
 | `db.$count(posts)`                                | `select((eb) => eb.fn.countAll().as('n'))`                                                            |
-| `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `kysely`                                                 |
+| `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `@forinda/kickjs-db`                                     |
 | results run with `await`                          | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()`                |
 
 [Queries](./queries.md) and [Raw SQL & Recipes](./raw-sql.md) cover the rest.

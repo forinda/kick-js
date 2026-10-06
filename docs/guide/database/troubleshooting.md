@@ -224,7 +224,7 @@ Yes. `createDbClient`, the migration runner and the standalone `kickjs-db` binar
 Postgres unless you have a reason not to; SQLite for local apps and tests; MySQL when your infrastructure already runs it — [Drivers](./drivers.md#choosing-a-dialect).
 
 **Can I write raw SQL?**
-Yes — `` sql`…` `` from `kysely`, executed with `.execute(db.qb)`, with values bound as parameters — [Raw SQL & Recipes](./raw-sql.md). In a migration, use `kick db generate <name> --empty` (and record the hash — [above](#hash-mismatch-for-migration)).
+Yes — `` sql`…` `` from `@forinda/kickjs-db`, executed with `.execute(db.qb)`, with values bound as parameters — [Raw SQL & Recipes](./raw-sql.md). In a migration, use `kick db generate <name> --empty` (and record the hash — [above](#hash-mismatch-for-migration)).
 
 **How do I seed data?**
 Put seed files in `db/seeds` and run [`kick db seed`](./cli.md#seed). Make them safe to run again with `db.upsert()` / `db.findOrCreate()`. Data a deploy depends on, that must run exactly once, belongs in a migration (`kick db generate <name> --empty`).

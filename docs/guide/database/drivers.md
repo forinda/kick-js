@@ -191,7 +191,7 @@ Neon's `Pool` speaks the Postgres protocol over WebSockets, so `pgDialect({ pool
 - **A migration is one batch:** its statements, its `kick_migrations` row, and, after a table rebuild, a foreign-key check. If any of them fails, none apply.
 - **Migration SQL is split at top-level `;`.** A hand-written trigger (`BEGIN … ; … END`) won't split correctly. Write it in a TypeScript migration as one ``sql`…`.execute(db)`` statement instead.
 - **`introspect()` works** over the driver, as it does on `better-sqlite3`.
-- **TypeScript migrations** (`migration.ts`) need a Kysely instance: pass `kysely: new Kysely({ dialect })` to `asyncSqliteAdapter`. They run in a transaction, which D1 doesn't have; set `"transaction": false` in a D1 migration's `meta.json`.
+- **TypeScript migrations** (`migration.ts`) need a Kysely instance: pass `kysely: new Kysely({ dialect })` to `asyncSqliteAdapter` (`Kysely` is exported from `@forinda/kickjs-db`). They run in a transaction, which D1 doesn't have; set `"transaction": false` in a D1 migration's `meta.json`.
 
 ## Choosing a dialect
 

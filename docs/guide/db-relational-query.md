@@ -100,7 +100,7 @@ Each clause scopes only to the inner relation — outer filters keep working ind
 `columns` picks which columns come back, and `extras` adds computed fields. Both work at every level of `with`:
 
 ```ts
-import { sql } from 'kysely'
+import { sql } from '@forinda/kickjs-db'
 
 const user = await this.db.query.users.findFirst({
   where: (_u, eb) => eb('id', '=', id),
