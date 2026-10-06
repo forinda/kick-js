@@ -1,11 +1,11 @@
 # Raw SQL and Recipes
 
-The query builder covers most queries; for everything else, write SQL. kick/db's client is built on [Kysely](https://kysely.dev), so Kysely's `sql` template and expression builder work as-is — values are always sent as parameters.
+The query builder covers most queries; for everything else, write SQL. kick/db's client is built on [Kysely](https://kysely.dev), so Kysely's `sql` template (exported from `@forinda/kickjs-db`) and expression builder work as-is — values are always sent as parameters.
 
 ## The `sql` template
 
 ```ts
-import { sql } from 'kysely'
+import { sql } from '@forinda/kickjs-db'
 
 const email = 'a@b.c'
 const { rows } = await sql<{ name: string }>`select name from users where email = ${email}`.execute(

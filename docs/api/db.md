@@ -392,8 +392,7 @@ await db
 User input in a `LIKE` pattern goes through `likePattern(input, mode)` (or `escapeLike(input)`), which escapes `%`, `_` and `\` so the text matches literally:
 
 ```ts
-import { sql } from 'kysely'
-import { likePattern } from '@forinda/kickjs-db'
+import { likePattern, sql } from '@forinda/kickjs-db'
 
 // Postgres / MySQL — backslash is the default escape character
 await db

@@ -122,6 +122,10 @@ export type { KickDbRegister, RegisteredDB } from './client/register'
 // adopters can declare read-only repos without dipping into `kysely/readonly`.
 export type { ReadonlyKysely } from 'kysely/readonly'
 
+// What queries reach for from Kysely, so adopters import it all from kick/db.
+export { Kysely, sql } from 'kysely'
+export type { Expression, ExpressionBuilder, KyselyPlugin, RawBuilder, Sql, SqlBool } from 'kysely'
+
 export {
   migrateLatest,
   migrateUp,

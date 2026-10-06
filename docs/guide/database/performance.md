@@ -148,7 +148,7 @@ db.on('slowQuery', ({ sql, durationMs }) => {
 Then ask the database what it did with one, using raw SQL:
 
 ```ts
-import { sql } from 'kysely'
+import { sql } from '@forinda/kickjs-db'
 
 // Postgres — runs the query and reports the real plan and timings
 const plan = await sql`explain analyze select * from posts where "authorId" = ${userId}`.execute(
