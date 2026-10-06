@@ -13,6 +13,7 @@ import {
   IdentifierNode,
   OperationNodeTransformer,
   ReferenceNode,
+  SelectAllNode,
   SelectionNode,
   TableNode,
   type DeleteQueryNode,
@@ -158,6 +159,25 @@ class Renamer extends OperationNodeTransformer {
   }
 }
 
+/** Whether the query's rows include a `*` (or `t.*`, `RETURNING *`), and the names it aliases. */
+function outputShape(node: OperationNode): { star: boolean; aliases: Set<string> } {
+  const root = node as {
+    selections?: readonly SelectionNode[]
+    returning?: { selections: readonly SelectionNode[] }
+  }
+  const selections = root.selections ?? root.returning?.selections ?? []
+  let star = false
+  const aliases = new Set<string>()
+  for (const { selection } of selections) {
+    if (SelectAllNode.is(selection)) star = true
+    else if (ReferenceNode.is(selection) && SelectAllNode.is(selection.column)) star = true
+    else if (AliasNode.is(selection) && IdentifierNode.is(selection.alias)) {
+      aliases.add(selection.alias.name)
+    }
+  }
+  return { star, aliases }
+}
+
 function columnName(node: OperationNode): string | undefined {
   if (ColumnNode.is(node)) return node.column.name
   if (ReferenceNode.is(node) && ColumnNode.is(node.column)) return node.column.column.name
@@ -196,9 +216,16 @@ export function columnNamePlugins(names: ColumnNameMap): {
       transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
         const renamer = new Renamer(names)
         const node = renamer.transformNode(args.node)
+        // Only `*` brings back a column under its database name; a name the
+        // query aliases itself is the query's own and stays as written.
+        const { star, aliases } = outputShape(node)
         const back = new Map<string, string>()
-        for (const table of renamer.outer) {
-          for (const [column, colName] of names.get(table) ?? []) back.set(colName, column)
+        if (star) {
+          for (const table of renamer.outer) {
+            for (const [column, colName] of names.get(table) ?? []) {
+              if (!aliases.has(colName)) back.set(colName, column)
+            }
+          }
         }
         if (back.size > 0) pending.set(args.queryId, back)
         return node

@@ -14,6 +14,7 @@ import {
   relations,
   renderSchemaSource,
   serial,
+  sql,
   table,
   text,
   timestamp,
@@ -106,6 +107,26 @@ for (const casing of [undefined, 'snake_case'] as const) {
       expect(
         await db.selectFrom('users').select('id').where(eq(users.email, 'ada@x.io')).execute(),
       ).toEqual([{ id: 1 }])
+    })
+
+    it("leaves a name the query aliases itself, even one that's a column's database name", async () => {
+      const { db } = make(casing)
+      await db.insertInto('users').values({ email: 'a@x.io', fullName: 'A' }).execute()
+      const aliased = await db
+        .selectFrom('users')
+        .select(sql<string>`'mine'`.as('EMAIL_ADDR'))
+        .executeTakeFirstOrThrow()
+      // Not turned into the key (casing converts an alias on its own, as always).
+      expect(Object.keys(aliased)).toEqual([casing ? 'emailAddr' : 'EMAIL_ADDR'])
+      expect(aliased).not.toHaveProperty('email')
+      const both = await db
+        .selectFrom('users')
+        .selectAll()
+        .select(sql<string>`'mine'`.as('FULL_NM'))
+        .executeTakeFirstOrThrow()
+      // Beside `*`: the alias stays as written. (Aliasing a column's own database
+      // name next to `*` makes two outputs with one name — the driver keeps one.)
+      expect(both).toMatchObject({ email: 'a@x.io', [casing ? 'fullNm' : 'FULL_NM']: 'mine' })
     })
 
     it('updates, upserts and deletes by key, managed columns included', async () => {
