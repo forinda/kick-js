@@ -14,6 +14,11 @@ export interface ColumnSnapshot {
   identity?: 'always' | 'byDefault'
   /** The column's comment in the database (Postgres, MySQL). */
   comment?: string
+  /**
+   * Only on an introspected snapshot read back into keys: the database's own
+   * name, when `casing` wouldn't give it back — rendered as `.dbName()`.
+   */
+  dbName?: string
 }
 
 export interface IndexSnapshot {

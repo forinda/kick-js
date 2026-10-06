@@ -22,7 +22,9 @@ import { tenancyPlugin } from './tenancy-plugin'
 import { tenantConnections } from './tenancy-connections'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
-import { casingPlugins } from '../snapshot/casing'
+import { casingPlugins, toDbName, type Casing } from '../snapshot/casing'
+import { columnNamePlugins, type ColumnNameMap } from './column-names'
+import { qualifiedTableName, unwrapTable } from '../dsl/table'
 import { ManagedColumnsPlugin, collectManaged } from './managed'
 import type { CompileTable } from '../query/compile-shared'
 import {
@@ -144,6 +146,14 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     plugins.unshift(casing.first)
     plugins.push(casing.last)
   }
+  // `.dbName()` columns: rewritten after casing on the way out, so a name like
+  // `EMAIL` isn't converted again; renamed back before casing on the way in.
+  const columnNames = collectColumnNames(opts.schema, opts.casing)
+  if (columnNames.size > 0) {
+    const named = columnNamePlugins(columnNames)
+    plugins.unshift(named.first)
+    plugins.push(named.last)
+  }
 
   const makeKysely = (dialect: KyselyDialect) =>
     new Kysely<DB>({
@@ -183,6 +193,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const tables: Record<string, CompileTable> = extractSnapshot(
     opts.schema as Record<string, unknown>,
     dialectTag,
+    { keys: true }, // the compiler works in keys; the column-name plugin maps them
   ).tables
   // The compiler skips soft-deleted rows; tell it which column marks them.
   for (const [name, m] of managed) {
@@ -238,4 +249,25 @@ function detectDialect(dialect: KyselyDialect, override?: DialectTag): KickDbCli
     `createDbClient: can't tell which SQL dialect ${dialectCtor || 'this dialect'} speaks. ` +
       `Pass dialectTag: 'postgres' | 'mysql' | 'sqlite'.`,
   )
+}
+
+/**
+ * `.dbName()` columns by table and column, as queries name them when this
+ * plugin sees them — after `casing` has converted the rest.
+ */
+function collectColumnNames(schema: unknown, casing: Casing | undefined): ColumnNameMap {
+  const out = new Map<string, Map<string, string>>()
+  const name = casing === 'snake_case' ? toDbName : (n: string) => n
+  for (const exported of Object.values((schema ?? {}) as Record<string, unknown>)) {
+    const t = unwrapTable(exported)
+    if (!t) continue
+    for (const [key, builder] of Object.entries(t.__columns)) {
+      const dbName = (builder as { __state(): { dbName?: string } }).__state().dbName
+      if (dbName === undefined) continue
+      const table = qualifiedTableName(t).split('.').map(name).join('.')
+      if (!out.has(table)) out.set(table, new Map())
+      out.get(table)!.set(name(key), dbName)
+    }
+  }
+  return out
 }

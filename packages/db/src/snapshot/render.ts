@@ -270,6 +270,7 @@ function chainSuffix(
   }
   if (inlineUnique) chain += '.unique()'
   if (col.comment !== undefined) chain += `.comment(${strLit(col.comment)})`
+  if (col.dbName !== undefined) chain += `.dbName(${strLit(col.dbName)})`
   if (fk) {
     const ref = `${jsIdent(fk.refTable)}.${jsIdent(fk.refColumns[0])}`
     const opts: string[] = []

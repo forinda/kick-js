@@ -42,29 +42,54 @@ export const toKeyName = (name: string): string => conversions.toKey(name)
  * again from the new names; names written in the schema are kept, as is SQL
  * (checks, predicates, expressions) — that is written for the database already.
  */
-export function applyCasing(snapshot: SchemaSnapshot): SchemaSnapshot {
-  return renameSnapshot(snapshot, toDbName)
+export function applyCasing(
+  snapshot: SchemaSnapshot,
+  casing: Casing | undefined = 'snake_case',
+  /** `.dbName()` overrides: table key → column key → name. Taken as written. */
+  dbNames: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(),
+): SchemaSnapshot {
+  const rename = casing === 'snake_case' ? toDbName : (name: string) => name
+  return renameSnapshot(
+    snapshot,
+    rename,
+    (table, column) => dbNames.get(table)?.get(column) ?? rename(column),
+  )
 }
 
-/** The other way: a database's snapshot in TypeScript keys — for `kick db introspect`. */
+/**
+ * The other way: a database's snapshot in TypeScript keys — for `kick db
+ * introspect`. A name `casing` wouldn't give back (`EMAIL`) keeps it as
+ * `dbName`, which renders as `.dbName('EMAIL')`.
+ */
 export function removeCasing(snapshot: SchemaSnapshot): SchemaSnapshot {
-  return renameSnapshot(snapshot, toKeyName)
+  // An all-caps name (`EMAIL_ADDR`) reads better as `emailAddr` than `EMAILADDR`.
+  const key = (column: string) => toKeyName(/[a-z]/.test(column) ? column : column.toLowerCase())
+  return renameSnapshot(snapshot, toKeyName, (_table, column) => key(column), true)
 }
 
 function renameSnapshot(
   snapshot: SchemaSnapshot,
   rename: (name: string) => string,
+  renameColumn: (table: string, column: string) => string,
+  keepDbNames = false,
 ): SchemaSnapshot {
   // Every part, schema included: Kysely's CamelCasePlugin converts a schema
   // name in a query the same way, so `pgSchema('billingApp')` is `billing_app`.
   const tableName = (qualified: string) => qualified.split('.').map(rename).join('.')
-  const col = (c: string) => (c.startsWith('(') ? c : rename(c))
 
   const tables: Record<string, TableSnapshot> = {}
   for (const [key, t] of Object.entries(snapshot.tables)) {
+    // Columns of a table — this one, or the one a foreign key points at.
+    const columnOf = (table: string) => (c: string) =>
+      c.startsWith('(') ? c : renameColumn(table, c)
+    const col = columnOf(key)
     const name = rename(t.name)
     const columns: TableSnapshot['columns'] = {}
-    for (const c of Object.values(t.columns)) columns[col(c.name)] = { ...c, name: col(c.name) }
+    for (const c of Object.values(t.columns)) {
+      const renamed = col(c.name)
+      columns[renamed] = { ...c, name: renamed }
+      if (keepDbNames && toDbName(renamed) !== c.name) columns[renamed]!.dbName = c.name
+    }
 
     const indexes = t.indexes.map((i): IndexSnapshot => {
       const derived =
@@ -88,7 +113,7 @@ function renameSnapshot(
           : f.name,
       columns: f.columns.map(col),
       refTable: tableName(f.refTable),
-      refColumns: f.refColumns.map(col),
+      refColumns: f.refColumns.map(columnOf(f.refTable)),
     }))
 
     const next: TableSnapshot = { ...t, name, columns, indexes, foreignKeys }

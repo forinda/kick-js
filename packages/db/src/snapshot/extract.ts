@@ -71,7 +71,14 @@ function isPgEnum(v: unknown): v is { enumName: string; values: readonly string[
 export function extractSnapshot(
   schema: Record<string, unknown>,
   dialect: Dialect,
-  options: { casing?: Casing } = {},
+  options: {
+    casing?: Casing
+    /**
+     * Keep TypeScript keys — no `casing`, no `.dbName()` — for the client's
+     * own use. Default: the database's names, what migrations need.
+     */
+    keys?: boolean
+  } = {},
 ): SchemaSnapshot {
   const tables: Record<string, TableSnapshot> = {}
   const enums: Record<string, EnumSnapshot> = {}
@@ -164,7 +171,28 @@ export function extractSnapshot(
   // hashes — are unchanged.
   if (Object.keys(views).length > 0) snapshot.views = views
   if (Object.keys(roles).length > 0) snapshot.roles = roles
-  return options.casing === 'snake_case' ? applyCasing(snapshot) : snapshot
+  if (options.keys) return snapshot
+  const dbNames = columnDbNames(schema)
+  return options.casing === 'snake_case' || dbNames.size > 0
+    ? applyCasing(snapshot, options.casing, dbNames)
+    : snapshot
+}
+
+/** `.dbName()` overrides: table (by key) → column key → the database's name. */
+function columnDbNames(schema: Record<string, unknown>): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>()
+  for (const exported of Object.values(schema)) {
+    const t = unwrapTable(exported)
+    if (!t) continue
+    for (const [key, builder] of Object.entries(t.__columns)) {
+      const dbName = (builder as { __state(): { dbName?: string } }).__state().dbName
+      if (dbName === undefined) continue
+      const table = qualifiedTableName(t)
+      if (!out.has(table)) out.set(table, new Map())
+      out.get(table)!.set(key, dbName)
+    }
+  }
+  return out
 }
 
 /**
@@ -188,7 +216,9 @@ function addTenantPolicies(
         throw new Error(`kickjs-db: 'rls' tenancy is Postgres-only (table '${t.__name}')`)
       }
       const snap = tables[qualifiedTableName(t)]!
-      const column = casing === 'snake_case' ? toDbName(key) : key
+      const column =
+        (builder as { __state(): { dbName?: string } }).__state().dbName ??
+        (casing === 'snake_case' ? toDbName(key) : key)
       const name = `${t.__name}_tenant`
       if (snap.policies?.some((p) => p.name === name)) continue
       const matches = `"${column.replace(/"/g, '""')}" = nullif(current_setting('${tenancy.setting.replace(/'/g, "''")}', true), '')::${snap.columns[key]!.type}`
