@@ -1,5 +1,6 @@
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
 import type { InferSchemaOutput } from '../infer.js'
+import { warnUnsatisfiableInput } from './wire.js'
 
 export function isZodSchema(schema: unknown): boolean {
   return (
@@ -48,10 +49,17 @@ function zodToJsonSchema(schema: any, options: JsonSchemaOptions = {}): Record<s
     // and bigints as what they are on the wire.
     unrepresentable: 'any',
     override: (ctx: { zodSchema: any; jsonSchema: Record<string, unknown> }) => {
-      const type = ctx.zodSchema._zod?.def?.type
-      if (type === 'date') Object.assign(ctx.jsonSchema, { type: 'string', format: 'date-time' })
-      else if (type === 'bigint')
-        Object.assign(ctx.jsonSchema, { type: 'integer', format: 'int64' })
+      const def = ctx.zodSchema._zod?.def
+      if (def?.type !== 'date' && def?.type !== 'bigint') return
+      // Only a coerced schema accepts what JSON sends; say so when one doesn't.
+      if (options.io === 'input' && !def.coerce) warnUnsatisfiableInput(def.type, 'zod')
+      Object.assign(
+        ctx.jsonSchema,
+        def.type === 'date'
+          ? { type: 'string', format: 'date-time' }
+          : // Only z.int64() is held to the 64-bit range.
+            { type: 'integer', ...(def.format === 'int64' ? { format: 'int64' } : {}) },
+      )
     },
   })
   return rest

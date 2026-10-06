@@ -1,6 +1,7 @@
 import type * as VType from 'valibot'
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
 import type { InferSchemaOutput } from '../infer.js'
+import { warnUnsatisfiableInput } from './wire.js'
 
 /**
  * Recognise the specific "optional peer not installed" rejection from
@@ -93,15 +94,18 @@ function valibotToJsonSchema(
   if (_toJsonSchemaFn) {
     const { $schema: _, ...rest } = _toJsonSchemaFn(schema, {
       target: options.target,
+      typeMode: options.io,
       // What JSON Schema can't express (a Map, a transform) becomes any value
       // instead of throwing; dates and bigints are what they are on the wire.
       errorMode: 'ignore',
-      overrideSchema: ({ valibotSchema }: { valibotSchema: { type?: string } }) =>
-        valibotSchema.type === 'date'
-          ? { type: 'string', format: 'date-time' }
-          : valibotSchema.type === 'bigint'
-            ? { type: 'integer', format: 'int64' }
-            : undefined,
+      overrideSchema: ({ valibotSchema }: { valibotSchema: { type?: string } }) => {
+        const type = valibotSchema.type
+        if (type !== 'date' && type !== 'bigint') return undefined
+        // Valibot doesn't coerce: a date or bigint schema rejects what JSON sends.
+        if (options.io === 'input') warnUnsatisfiableInput(type, 'valibot')
+        // A Valibot bigint has no 64-bit bound, so no int64 format.
+        return type === 'date' ? { type: 'string', format: 'date-time' } : { type: 'integer' }
+      },
     })
     return rest
   }

@@ -21,16 +21,24 @@ const resolve = (spec: any, s: any) =>
 
 describe('Zod schemas in the spec', () => {
   it('documents dates, bigints and other unrepresentable types', () => {
+    // What a JSON request can satisfy: coerced dates and bigints.
+    const body = z.object({
+      title: z.string(),
+      dueAt: z.coerce.date(),
+      big: z.coerce.bigint(),
+      tags: z.array(z.string()),
+      note: z.string().nullable(),
+    })
+    // What the handler returns, serialised on the way out.
     const task = z.object({
       title: z.string(),
       dueAt: z.date(),
-      big: z.bigint(),
+      big: z.int64(),
       tags: z.set(z.string()),
-      note: z.string().nullable(),
     })
     @Controller()
     class TaskController {
-      @Post('/', { body: task })
+      @Post('/', { body })
       @ApiResponse({ status: 201, description: 'Created', schema: task })
       create() {}
 
@@ -41,17 +49,22 @@ describe('Zod schemas in the spec', () => {
     const spec = buildOpenAPISpec()
 
     const post = spec.paths['/tasks'].post
-    const body = resolve(spec, post.requestBody.content['application/json'].schema)
-    expect(body.properties).toEqual({
+    const req = resolve(spec, post.requestBody.content['application/json'].schema)
+    expect(req.properties).toEqual({
       title: { type: 'string' },
       dueAt: { type: 'string', format: 'date-time' },
-      big: { type: 'integer', format: 'int64' },
-      tags: {},
+      big: { type: 'integer' }, // coerce.bigint has no 64-bit bound
+      tags: { type: 'array', items: { type: 'string' } },
       // OpenAPI 3.0's form, not draft-2020-12's type: ['string', 'null'].
       note: { type: 'string', nullable: true },
     })
     const created = resolve(spec, post.responses['201'].content['application/json'].schema)
-    expect(created.properties.dueAt).toEqual({ type: 'string', format: 'date-time' })
+    expect(created.properties).toEqual({
+      title: { type: 'string' },
+      dueAt: { type: 'string', format: 'date-time' },
+      big: { type: 'integer', format: 'int64' },
+      tags: {}, // a Set has no JSON form
+    })
 
     const since = spec.paths['/tasks'].get.parameters.find((p: any) => p.name === 'since')
     expect(since.schema).toEqual({ type: 'string', format: 'date-time' })
@@ -92,6 +105,46 @@ describe('Zod schemas in the spec', () => {
     const schema = resolve(spec, ref)
     expect(schema.properties.children.items).toEqual(ref)
     expect(JSON.stringify(spec.components.schemas)).not.toContain('"#"')
+  })
+
+  it('gives each $defs entry its own component, with refs repointed', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // A parser that hands back a schema with a definition named '2'.
+    const parser: SchemaParser = {
+      name: 'defs',
+      supports: (s) => typeof s === 'object' && s !== null && 'json' in s,
+      toJsonSchema: (s: any) => s.json,
+    }
+    const withDef = {
+      json: {
+        type: 'object',
+        properties: { n: { $ref: '#/$defs/2' } },
+        $defs: { '2': { type: 'number' } },
+      },
+    }
+    const other = { json: { type: 'object', properties: { s: { type: 'string' } } } }
+    // Two controllers with the same class name: the second's fallback is <name>_2.
+    const make = (schema: unknown) => {
+      @Controller()
+      class Same {
+        @Get('/')
+        @ApiResponse({ status: 200, description: 'OK', schema: schema as never })
+        get() {}
+      }
+      return Same
+    }
+    registerControllerForDocs(make(withDef), '/a')
+    registerControllerForDocs(make(other), '/b')
+    const spec = buildOpenAPISpec({ schemaParser: parser })
+    const schemas = spec.components.schemas
+    const a = spec.paths['/a'].get.responses['200'].content['application/json'].schema.$ref
+    const b = spec.paths['/b'].get.responses['200'].content['application/json'].schema.$ref
+    expect(resolve(spec, { $ref: b })).toEqual(other.json)
+    const defRef = resolve(spec, { $ref: a }).properties.n.$ref
+    expect(defRef).not.toBe(b)
+    expect(resolve(spec, { $ref: defRef })).toEqual({ type: 'number' })
+    expect(Object.keys(schemas)).toHaveLength(3)
+    warn.mockRestore()
   })
 
   it("leaves out a schema that fails to convert, and says so — never the validator's object", () => {

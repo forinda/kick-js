@@ -387,6 +387,20 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
     // `$defs` — inside an OpenAPI document `#` is the whole document, so
     // point them at this component and its own entries.
     const { $defs, ...body } = clean as { $defs?: Record<string, unknown> }
+    // Each definition takes a free `<name>_<key>` too — a name another
+    // component already holds would otherwise be overwritten under its refs.
+    // Reserved before anything is written, so the definitions can refer to each other.
+    const defNames = new Map<string, string>()
+    componentSchemas[name] = {}
+    for (const [key, def] of Object.entries($defs ?? {})) {
+      const defJson = JSON.stringify(def)
+      const defBase = `${name}_${key.replace(/[^a-zA-Z0-9]/g, '')}`
+      let defName = defBase
+      for (let n = 2; componentSchemas[defName]; n++) defName = `${defBase}_${n}`
+      registeredAs.set(defName, defJson)
+      componentSchemas[defName] = {}
+      defNames.set(key, defName)
+    }
     const repoint = (node: unknown): unknown => {
       if (Array.isArray(node)) return node.map(repoint)
       if (!node || typeof node !== 'object') return node
@@ -394,13 +408,13 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       for (const [k, v] of Object.entries(node)) {
         if (k === '$ref' && v === '#') out[k] = `#/components/schemas/${name}`
         else if (k === '$ref' && typeof v === 'string' && v.startsWith('#/$defs/'))
-          out[k] = `#/components/schemas/${name}_${v.slice('#/$defs/'.length)}`
+          out[k] = `#/components/schemas/${defNames.get(v.slice('#/$defs/'.length))}`
         else out[k] = repoint(v)
       }
       return out
     }
     for (const [key, def] of Object.entries($defs ?? {})) {
-      componentSchemas[`${name}_${key}`] = repoint(def)
+      componentSchemas[defNames.get(key)!] = repoint(def)
     }
     componentSchemas[name] = repoint(body)
     return { $ref: `#/components/schemas/${name}` }
