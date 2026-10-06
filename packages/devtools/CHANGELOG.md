@@ -1,5 +1,11 @@
 # @forinda/kickjs-devtools
 
+## 7.5.0
+
+### Minor Changes
+
+- [#813](https://github.com/forinda/kick-js/pull/813) [`10aa1bb`](https://github.com/forinda/kick-js/commit/10aa1bb58e47d1b6da1c16e1cd8903fe6a82167f) Thanks [@forinda](https://github.com/forinda)! - The API runner prefills a request without the Swagger adapter: `/_debug/routes` now sends each route's body, query and params schemas as JSON Schema (converted with `@forinda/kickjs-schema`, as what the request accepts), and the runner builds the example body, the query rows and the param hints from them. When the Swagger spec documents the route it still wins, for its summaries.
+
 ## 7.4.0
 
 ### Minor Changes
