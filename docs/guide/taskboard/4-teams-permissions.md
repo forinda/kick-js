@@ -149,8 +149,8 @@ The old `findPaginated` goes — nothing should list every project any more. `li
 ```ts
 // src/modules/projects/project-access.ts
 import { defineHttpContextDecorator, HttpException } from '@forinda/kickjs'
-import { APP_DB } from '../../db/token'
-import type { MemberRole } from '../../db/schema'
+import { APP_DB } from '@/db/token'
+import type { MemberRole } from '@/db/schema'
 
 declare module '@forinda/kickjs' {
   interface ContextMeta {
@@ -209,9 +209,9 @@ A project with no owner would be invisible to everyone, so the project row and i
 // src/modules/projects/project.service.ts
 import { HttpException, Inject, Service } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import { APP_DB } from '../../db/token'
-import type { AppDb } from '../../db/client'
-import type { MemberRole } from '../../db/schema'
+import { APP_DB } from '@/db/token'
+import type { AppDb } from '@/db/client'
+import type { MemberRole } from '@/db/schema'
 import { PROJECT_REPOSITORY, type ProjectRepository } from './project.repository'
 import type { ProjectResponseDTO } from './dtos/project-response.dto'
 import type { CreateProjectDTO } from './dtos/create-project.dto'
@@ -278,7 +278,7 @@ A DTO for invites — the role defaults to `member`:
 ```ts
 // src/modules/projects/dtos/add-member.dto.ts
 import { z } from 'zod'
-import { MEMBER_ROLES } from '../../../db/schema'
+import { MEMBER_ROLES } from '@/db/schema'
 
 export const addMemberSchema = z.object({
   email: z.email(),
@@ -377,7 +377,7 @@ Task routes take a task id, not a project id, so there's no `:id` for `LoadMembe
 // src/modules/tasks/task.service.ts
 import { HttpException, Inject, Service } from '@forinda/kickjs'
 import { TASK_REPOSITORY, type TaskRepository } from './task.repository'
-import { PROJECT_REPOSITORY, type ProjectRepository } from '../projects/project.repository'
+import { PROJECT_REPOSITORY, type ProjectRepository } from '@/modules/projects/project.repository'
 import type { TaskResponseDTO } from './dtos/task-response.dto'
 import type { CreateTaskDTO } from './dtos/create-task.dto'
 import type { UpdateTaskDTO } from './dtos/update-task.dto'
@@ -481,12 +481,12 @@ import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 import { createTestDb } from './db'
-import { APP_DB } from '../src/db/token'
-import { LoadUser } from '../src/auth/current-user'
-import { middlewares } from '../src/middleware'
-import { AuthModule } from '../src/modules/auth/auth.module'
-import { ProjectModule } from '../src/modules/projects/project.module'
-import { TaskModule } from '../src/modules/tasks/task.module'
+import { APP_DB } from '@/db/token'
+import { LoadUser } from '@/auth/current-user'
+import { middlewares } from '@/middleware'
+import { AuthModule } from '@/modules/auth/auth.module'
+import { ProjectModule } from '@/modules/projects/project.module'
+import { TaskModule } from '@/modules/tasks/task.module'
 
 /**
  * The whole app on a fresh in-memory database, with the same middleware and

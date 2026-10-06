@@ -257,7 +257,7 @@ In Part 1 the repository factory returned methods over a `Map`. Rewrite the bodi
 // src/modules/projects/project.repository.ts
 import { createToken, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import type { AppDb } from '../../db/client'
+import type { AppDb } from '@/db/client'
 import type { CreateProjectDTO } from './dtos/create-project.dto'
 import type { UpdateProjectDTO } from './dtos/update-project.dto'
 
@@ -347,7 +347,7 @@ The Part 1 DTOs repeated the columns by hand in Zod. Derive them from the table 
 // src/modules/projects/dtos/create-project.dto.ts
 import { insertSchema } from '@forinda/kickjs-db/schema'
 import type { InferSchemaOutput } from '@forinda/kickjs-schema'
-import { Project } from '../../../db/schema'
+import { Project } from '@/db/schema'
 
 /**
  * The request body for creating a project, derived from the table: `name` is
@@ -366,7 +366,7 @@ export type CreateProjectDTO = InferSchemaOutput<typeof createProjectSchema>
 // src/modules/projects/dtos/update-project.dto.ts
 import { updateSchema } from '@forinda/kickjs-db/schema'
 import type { InferSchemaOutput } from '@forinda/kickjs-schema'
-import { Project } from '../../../db/schema'
+import { Project } from '@/db/schema'
 
 export const updateProjectSchema = updateSchema(Project.table, {
   omit: ['id', 'createdAt', 'updatedAt'],
@@ -398,7 +398,7 @@ The task DTOs stay in Zod — the status list comes from the schema, so the API 
 ```ts
 // src/modules/tasks/dtos/create-task.dto.ts
 import { z } from 'zod'
-import { TASK_STATUSES } from '../../../db/schema'
+import { TASK_STATUSES } from '@/db/schema'
 
 export const createTaskSchema = z.object({
   projectId: z.uuid(),
@@ -413,7 +413,7 @@ export type CreateTaskDTO = z.infer<typeof createTaskSchema>
 ```ts
 // src/modules/tasks/dtos/update-task.dto.ts
 import { z } from 'zod'
-import { TASK_STATUSES } from '../../../db/schema'
+import { TASK_STATUSES } from '@/db/schema'
 
 export const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -430,8 +430,8 @@ The repository returns `Task` instances, and turns a missing project into a 404:
 // src/modules/tasks/task.repository.ts
 import { createToken, HttpException } from '@forinda/kickjs'
 import { ForeignKeyViolationError } from '@forinda/kickjs-db'
-import type { AppDb } from '../../db/client'
-import { Task } from '../../db/schema'
+import type { AppDb } from '@/db/client'
+import { Task } from '@/db/schema'
 import type { CreateTaskDTO } from './dtos/create-task.dto'
 import type { UpdateTaskDTO } from './dtos/update-task.dto'
 
@@ -532,7 +532,7 @@ Tests shouldn't touch `taskboard.db`. This helper builds the whole schema in an 
 import Database from 'better-sqlite3'
 import { createDbClient, diff, emitSqlite, extractSnapshot } from '@forinda/kickjs-db'
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
-import * as schema from '../src/db/schema'
+import * as schema from '@/db/schema'
 
 /** A fresh in-memory database with the whole schema — milliseconds to create. */
 export function createTestDb() {
@@ -553,8 +553,8 @@ A repository test calls the factory directly:
 // src/modules/tasks/__tests__/task.repository.test.ts
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDb } from '../../../../test/db'
-import { createProjectRepository } from '../../projects/project.repository'
-import { createTaskRepository, type TaskRepository } from '../task.repository'
+import { createProjectRepository } from '@/modules/projects/project.repository'
+import { createTaskRepository, type TaskRepository } from '@/modules/tasks/task.repository'
 
 describe('Task repository', () => {
   let tasks: TaskRepository
@@ -598,9 +598,9 @@ import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 import { createTestDb } from '../../../../test/db'
-import { APP_DB } from '../../../db/token'
-import { ProjectModule } from '../../projects/project.module'
-import { TaskModule } from '../task.module'
+import { APP_DB } from '@/db/token'
+import { ProjectModule } from '@/modules/projects/project.module'
+import { TaskModule } from '@/modules/tasks/task.module'
 
 describe('TaskController', () => {
   beforeEach(() => {

@@ -311,8 +311,8 @@ Runs the seed files in `seedsDir` (`db/seeds`) in name order — prefix them to 
 
 ```ts
 // db/seeds/01_admin.ts
-import { db } from '../../src/db/client'
-import { hashPassword } from '../../src/auth/password'
+import { db } from '@/db/client'
+import { hashPassword } from '@/auth/password'
 
 export default async function seed() {
   await db.findOrCreate('users', {
@@ -328,7 +328,7 @@ Ran 1 seed(s): 01_admin.ts
 
 Nothing records which seeds ran — they aren't migrations, and every run runs them all. Write them to be run again: [`db.upsert()`](./queries.md#upsert-and-find-or-create) and `db.findOrCreate()` make that one line. A seed that throws stops the run with `Seed <file> failed: <message>` and exit code `1`; `kick db seed <name>` that matches no file fails before anything runs. The command exits when the seeds finish, even though the client they imported still holds its pool.
 
-Seed files load the way the app's code does — TypeScript, extensionless relative imports. They aren't type-checked when they run, so keep their folder in `tsconfig.json`'s `include` for `kick typecheck` to catch a seed that misses a column added since. New projects include `db`; with a custom `seedsDir` or `migrationsDir`, add that folder. For schema changes, data fixes that must run exactly once, or anything a deploy depends on, write a migration (`kick db generate <name> --empty`) instead.
+Seed files load the way the app's code does — TypeScript, extensionless relative imports, and the `tsconfig.json` path aliases (`@/db/client`). They aren't type-checked when they run, so keep their folder in `tsconfig.json`'s `include` for `kick typecheck` to catch a seed that misses a column added since. New projects include `db`; with a custom `seedsDir` or `migrationsDir`, add that folder. For schema changes, data fixes that must run exactly once, or anything a deploy depends on, write a migration (`kick db generate <name> --empty`) instead.
 
 ## introspect
 

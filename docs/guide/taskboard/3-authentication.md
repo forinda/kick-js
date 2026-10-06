@@ -85,7 +85,7 @@ Three pieces, in `src/auth/current-user.ts`:
 
 ```ts
 import { defineHttpContextDecorator, defineRouteFlag, HttpException } from '@forinda/kickjs'
-import { APP_DB } from '../db/token'
+import { APP_DB } from '@/db/token'
 
 /** The signed-in user, as handlers see it. Never the password hash. */
 export interface CurrentUser {
@@ -176,7 +176,7 @@ The middleware list has grown, so move it out of `src/index.ts` into `src/middle
 // src/middleware/index.ts
 import { cors, helmet, requestId, requestLogger, session } from '@forinda/kickjs'
 import express from 'express'
-import { env } from '../config'
+import { env } from '@/config'
 
 export const middlewares = [
   helmet(),
@@ -257,10 +257,10 @@ The service, `src/modules/auth/auth.service.ts`:
 ```ts
 import { HttpException, Inject, Service } from '@forinda/kickjs'
 import { UniqueViolationError } from '@forinda/kickjs-db'
-import { APP_DB } from '../../db/token'
-import type { AppDb } from '../../db/client'
-import { hashPassword, verifyPassword } from '../../auth/password'
-import type { CurrentUser } from '../../auth/current-user'
+import { APP_DB } from '@/db/token'
+import type { AppDb } from '@/db/client'
+import { hashPassword, verifyPassword } from '@/auth/password'
+import type { CurrentUser } from '@/auth/current-user'
 import type { LoginDTO, RegisterDTO } from './dtos/auth.dto'
 
 @Service()
@@ -319,8 +319,8 @@ import {
   reply,
   type Ctx,
 } from '@forinda/kickjs'
-import { env } from '../../config'
-import { Public } from '../../auth/current-user'
+import { env } from '@/config'
+import { Public } from '@/auth/current-user'
 import { AuthService } from './auth.service'
 import { loginSchema, registerSchema } from './dtos/auth.dto'
 
@@ -436,12 +436,12 @@ import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 import { createTestDb } from './db'
-import { APP_DB } from '../src/db/token'
-import { LoadUser } from '../src/auth/current-user'
-import { middlewares } from '../src/middleware'
-import { AuthModule } from '../src/modules/auth/auth.module'
-import { ProjectModule } from '../src/modules/projects/project.module'
-import { TaskModule } from '../src/modules/tasks/task.module'
+import { APP_DB } from '@/db/token'
+import { LoadUser } from '@/auth/current-user'
+import { middlewares } from '@/middleware'
+import { AuthModule } from '@/modules/auth/auth.module'
+import { ProjectModule } from '@/modules/projects/project.module'
+import { TaskModule } from '@/modules/tasks/task.module'
 
 /**
  * The whole app on a fresh in-memory database, with the same middleware and

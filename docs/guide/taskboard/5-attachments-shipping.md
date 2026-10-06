@@ -144,7 +144,7 @@ register(container) {
 ```ts
 // src/modules/tasks/attachment.repository.ts
 import { createToken } from '@forinda/kickjs'
-import type { AppDb } from '../../db/client'
+import type { AppDb } from '@/db/client'
 
 export interface NewAttachment {
   taskId: string
@@ -209,9 +209,9 @@ You never get a row pointing at a missing file. The reverse can happen: if the c
 ```ts
 // src/modules/tasks/attachment.service.ts
 import { HttpException, Inject, Service } from '@forinda/kickjs'
-import { APP_DB } from '../../db/token'
-import type { AppDb } from '../../db/client'
-import { FILE_STORAGE, type FileStorage } from '../../storage/files'
+import { APP_DB } from '@/db/token'
+import type { AppDb } from '@/db/client'
+import { FILE_STORAGE, type FileStorage } from '@/storage/files'
 import { ATTACHMENT_REPOSITORY, type AttachmentRepository } from './attachment.repository'
 import { TaskService } from './task.service'
 
@@ -361,13 +361,13 @@ import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 import { createTestDb } from './db'
-import { APP_DB } from '../src/db/token'
-import { FILE_STORAGE, memoryStorage } from '../src/storage/files'
-import { LoadUser } from '../src/auth/current-user'
-import { middlewares } from '../src/middleware'
-import { AuthModule } from '../src/modules/auth/auth.module'
-import { ProjectModule } from '../src/modules/projects/project.module'
-import { TaskModule } from '../src/modules/tasks/task.module'
+import { APP_DB } from '@/db/token'
+import { FILE_STORAGE, memoryStorage } from '@/storage/files'
+import { LoadUser } from '@/auth/current-user'
+import { middlewares } from '@/middleware'
+import { AuthModule } from '@/modules/auth/auth.module'
+import { ProjectModule } from '@/modules/projects/project.module'
+import { TaskModule } from '@/modules/tasks/task.module'
 
 export async function testApp() {
   Container.reset()

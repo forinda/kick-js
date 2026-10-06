@@ -11,7 +11,7 @@ An integration test boots your real modules — controllers, services, middlewar
 ```ts
 import { describe, expect, it } from 'vitest'
 import { createTestApp } from '@forinda/kickjs-testing'
-import { UserModule } from '../src/modules/users/user.module'
+import { UserModule } from '@/modules/users/user.module'
 
 describe('users', () => {
   it('lists users', async () => {

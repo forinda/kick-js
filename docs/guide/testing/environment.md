@@ -208,7 +208,7 @@ make a stub take effect, drop the cache and re-parse:
 ```ts
 import { vi, beforeAll, afterAll } from 'vitest'
 import { loadEnv, resetEnvCache } from '@forinda/kickjs'
-import { envSchema } from '../src/env'
+import { envSchema } from '@/env'
 
 beforeAll(() => {
   vi.stubEnv('JWT_SECRET', 'test-secret-with-at-least-32-chars')
