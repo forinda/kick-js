@@ -34,8 +34,9 @@ The deeper references — every column type, the relational query layer, the ful
 The `kick db` command tree ships inside `@forinda/kickjs-db`, not the base CLI, and is **opt-in**. Until you mount it, `kick db generate` is not a command — this is the most common "why doesn't this work" in the setup.
 :::
 
-```ts
-// kick.config.ts
+::: code-group
+
+```ts [kick.config.ts]
 import { defineConfig } from '@forinda/kickjs-cli'
 import { dbCliPlugin } from '@forinda/kickjs-db/cli'
 
@@ -45,9 +46,34 @@ export default defineConfig({
     schemaPath: 'src/db/schema.ts',
     migrationsDir: 'db/migrations',
     dialect: 'sqlite',
+    // The CLI opens its own connection to the same file as the app.
+    adapter: async () => {
+      const Database = (await import('better-sqlite3')).default
+      const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
+      return sqliteAdapter({ database: new Database('dev.db') })
+    },
   },
 })
 ```
+
+```ts [kickjs-db.config.ts]
+import { defineKickDbConfig } from '@forinda/kickjs-db/cli'
+
+export default defineKickDbConfig({
+  schemaPath: 'src/db/schema.ts',
+  migrationsDir: 'db/migrations',
+  dialect: 'sqlite',
+  adapter: async () => {
+    const Database = (await import('better-sqlite3')).default
+    const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
+    return sqliteAdapter({ database: new Database('dev.db') })
+  },
+})
+```
+
+:::
+
+Not using the `kick` CLI? Use the `kickjs-db.config.ts` tab and run `kickjs-db <command>` where this guide says `kick db <command>` — same commands, same fields ([standalone `kickjs-db`](./cli.md#standalone-kickjs-db)).
 
 Check it took:
 
@@ -64,8 +90,6 @@ The `db` block is read by both the CLI and the migration tooling, so it is confi
 | `dialect`          | `'postgres'`         | `'postgres' \| 'sqlite' \| 'mysql'`                              |
 | `connectionString` | `$DATABASE_URL`      | Used by the built-in Postgres adapter                            |
 | `adapter`          | —                    | Factory returning a custom `MigrationAdapter` (see [CLI](./cli)) |
-
-If you would rather not mount a plugin, the same commands ship as a standalone `kickjs-db` binary — see [Database CLI](./cli).
 
 ## 3. Declare the schema
 

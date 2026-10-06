@@ -39,12 +39,21 @@ export interface UpsertOptions<DB, T extends keyof DB & string> {
   where?: (eb: ExpressionBuilder<DB, T>) => Expression<SqlBool>
 }
 
-export interface FindOrCreateOptions<DB, T extends keyof DB & string> {
+/** What `create` adds to `where`: every required column `where` leaves out. */
+type CreateRest<DB, T extends keyof DB, W> = Omit<Insertable<DB[T]>, keyof W> &
+  Partial<Insertable<DB[T]>>
+
+export type FindOrCreateOptions<
+  DB,
+  T extends keyof DB & string,
+  W extends Partial<Selectable<DB[T]>> = Partial<Selectable<DB[T]>>,
+> = {
   /** Identifies the row — columns of a unique key. Also part of what's created. */
-  where: Partial<Selectable<DB[T]>>
-  /** The rest of the row to create when none matches `where`. */
-  create?: Partial<Insertable<DB[T]>>
-}
+  where: W
+} & ({} extends CreateRest<DB, T, W>
+  ? /** The rest of the row to create when none matches `where`. */
+    { create?: CreateRest<DB, T, W> }
+  : { create: CreateRest<DB, T, W> })
 
 /** Insert `values`, or update the rows whose `target` already exists. Returns the rows as stored. */
 export async function upsert<DB, T extends keyof DB & string>(
@@ -113,10 +122,14 @@ export async function upsert<DB, T extends keyof DB & string>(
  * which can't include the winner's row, so the UniqueViolationError is
  * rethrown: retry the whole transaction.
  */
-export async function findOrCreate<DB, T extends keyof DB & string>(
+export async function findOrCreate<
+  DB,
+  T extends keyof DB & string,
+  W extends Partial<Selectable<DB[T]>>,
+>(
   db: KickDbClient<DB>,
   table: T,
-  opts: FindOrCreateOptions<DB, T>,
+  opts: FindOrCreateOptions<DB, T, W>,
 ): Promise<{ row: Selectable<DB[T]>; created: boolean }> {
   const where = Object.entries(opts.where as Row)
   if (where.length === 0) throw new Error('kickjs-db: findOrCreate() needs a where')

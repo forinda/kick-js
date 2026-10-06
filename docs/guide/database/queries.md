@@ -161,6 +161,8 @@ const { row, created } = await this.db.findOrCreate('tags', {
 })
 ```
 
+`create` must cover every required column `where` leaves out — a missing one is a type error, not a `NOT NULL` failure at run time.
+
 It's race-safe: when two requests miss at the same moment, one inserts and the other hits the unique key, catches the `UniqueViolationError` and reads the winner's row — both get the same row, `created` is `true` for one. That holds outside a transaction and inside a `READ COMMITTED` one (Postgres's default). Inside a `REPEATABLE READ` or `serializable` transaction — MySQL's default — the re-read sees the transaction's snapshot, which can't contain the winner's row, so the `UniqueViolationError` is rethrown; catch it and run the whole transaction again. `where` should be a unique key; a conflict on a different key (the row can't be created and none matches `where`) is thrown. Inside a transaction, the insert runs in a savepoint, so a lost race doesn't abort it on Postgres.
 
 Per dialect:

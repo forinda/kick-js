@@ -196,9 +196,9 @@ export interface KickDbClient<DB = RegisteredDB> {
    *
    *   const { row, created } = await db.findOrCreate('tags', { where: { name: 'urgent' } })
    */
-  findOrCreate<T extends keyof DB & string>(
+  findOrCreate<T extends keyof DB & string, W extends Partial<Selectable<DB[T]>>>(
     table: T,
-    opts: import('./upsert').FindOrCreateOptions<DB, T>,
+    opts: import('./upsert').FindOrCreateOptions<DB, T, W>,
   ): Promise<{ row: Selectable<DB[T]>; created: boolean }>
 
   /**

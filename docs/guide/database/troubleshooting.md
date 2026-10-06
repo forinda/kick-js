@@ -136,7 +136,7 @@ kickjs-db: the built-in CLI adapter only supports postgres (dialect=sqlite); sup
 kickjs-db: no config found — add a `kickjs-db.config.ts` (export default defineKickDbConfig({...})) or a `db` block to `kick.config.ts`.
 ```
 
-The standalone `kickjs-db` binary didn't find either file in the current directory. Run it from the project root. A `.ts` config also needs `jiti` installed.
+The standalone `kickjs-db` binary didn't find either file in the current directory. Run it from the project root.
 
 ## SQLite
 
