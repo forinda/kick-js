@@ -39,6 +39,14 @@ export interface RouteEntry {
   flags?: Record<string, unknown>
   /** `@FileUpload` config, when the handler declares one. */
   upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
+  /** The request's body / query / params schemas, as JSON Schema — the runner prefills from them. */
+  schemas?: RouteSchemas
+}
+
+export interface RouteSchemas {
+  body?: Record<string, unknown>
+  query?: Record<string, unknown>
+  params?: Record<string, unknown>
 }
 
 export interface ContainerRegistration {

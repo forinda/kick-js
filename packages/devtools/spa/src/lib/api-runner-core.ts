@@ -72,6 +72,12 @@ export interface RunnerRoute {
   flags?: Record<string, unknown>
   /** From `@FileUpload` — the runner starts such routes in form mode with this field. */
   upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
+  /** The route's own request schemas (JSON Schema), sent by the DevTools adapter. */
+  schemas?: {
+    body?: Record<string, unknown>
+    query?: Record<string, unknown>
+    params?: Record<string, unknown>
+  }
 }
 
 /** A request ready to send or to render as a snippet. */
@@ -516,6 +522,34 @@ export function openApiHints(spec: unknown, route: RunnerRoute): OpenApiHints | 
     params,
     query,
     ...(schema ? { body: JSON.stringify(exampleFromSchema(spec as Json, schema), null, 2) } : {}),
+  }
+}
+
+/**
+ * Hints from the route's own request schemas — what the app validates, so
+ * no Swagger adapter is needed. Each schema is its own root for `$ref`s.
+ */
+export function routeHints(route: RunnerRoute): OpenApiHints | undefined {
+  const { body, query, params } = route.schemas ?? {}
+  if (!body && !query && !params) return undefined
+  const describe = (schema: Json | undefined) =>
+    Object.fromEntries(
+      Object.entries<Json>(schema?.properties ?? {}).flatMap(([name, prop]) =>
+        prop?.description ? [[name, String(prop.description)]] : [],
+      ),
+    )
+  const required = new Set<string>(
+    Array.isArray(query?.required) ? (query.required as string[]) : [],
+  )
+  const queryDescriptions = describe(query)
+  return {
+    params: describe(params),
+    query: Object.keys((query?.properties as Json | undefined) ?? {}).map((name) => ({
+      name,
+      required: required.has(name),
+      ...(queryDescriptions[name] ? { description: queryDescriptions[name] } : {}),
+    })),
+    ...(body ? { body: JSON.stringify(exampleFromSchema(body, body), null, 2) } : {}),
   }
 }
 
