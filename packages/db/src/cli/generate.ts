@@ -31,7 +31,7 @@ import type { Change, RemoveEnumValue } from '../diff/types'
  * table rebuilds (column alters, FK add/drop) it can't express via
  * `ALTER TABLE`. Postgres/MySQL ignore them.
  */
-function emitDdl(
+export function emitDdl(
   dialect: Dialect,
   changes: ChangeSet,
   from: SchemaSnapshot,
@@ -205,10 +205,10 @@ function warnPossibleRenames(
   }
 }
 
-async function resolveRenames(
+export async function resolveRenames(
   prev: SchemaSnapshot,
   target: SchemaSnapshot,
-  opts: GenerateOptions,
+  opts: Pick<GenerateOptions, 'renames' | 'askRenames'>,
 ): Promise<DiffOptions> {
   const given = opts.renames ?? {}
   if (!opts.askRenames) return { renames: given }

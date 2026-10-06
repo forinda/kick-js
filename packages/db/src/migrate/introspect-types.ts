@@ -10,6 +10,6 @@ export interface PgQueryRunner {
 export interface IntrospectPgOptions {
   /** Default 'public'. */
   schema?: string
-  /** Migration tracking tables to skip. Default ['kick_migrations', 'kick_migrations_lock']. */
+  /** Migration tracking tables to skip. Default ['kick_migrations', 'kick_migrations_lock', 'kick_migrations_push']. */
   excludeTables?: readonly string[]
 }

@@ -78,6 +78,7 @@ export {
   lockTableDdl,
   KICK_MIGRATIONS_TABLE,
   KICK_LOCK_TABLE,
+  pushTableName,
 } from './migrate/schema'
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 export { introspectPg } from './migrate/introspect-pg'
@@ -145,6 +146,7 @@ export {
   type TenantMigrationResult,
 } from './migrate/tenants'
 export { reviewMigration, type ReviewResult } from './migrate/review'
+export { pushSchema, type PushOptions, type PushResult } from './migrate/push'
 export { migrationFiles, type MigrationFiles, type MigrationsLocation } from './migrate/source'
 
 export { emitPg } from './emit/pg'

@@ -5,6 +5,7 @@ import {
   KickDbError,
   lockTableDdl,
   lockTableName,
+  pushTableName,
   quoteTable,
   KICK_MIGRATIONS_TABLE,
   migrationsTableDdl,
@@ -257,7 +258,7 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
   const L = quoteTable(dialect, lockTableName(table))
   // Introspection must not report the bookkeeping tables as schema.
   // A dot is part of the name here, not a schema.
-  const bookkeepingTables = [table, lockTableName(table)]
+  const bookkeepingTables = [table, lockTableName(table), pushTableName(table)]
   let migrationDb: Kysely<any> | undefined
   return {
     dialect,
