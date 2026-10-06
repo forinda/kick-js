@@ -39,7 +39,7 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
-    "@forinda/kickjs-schema": "workspace:*"
+    "@forinda/kickjs-schema": "workspace:^"
   },
   "peerDependencies": {
     "@modelcontextprotocol/server": "^2.3.0",

@@ -97,7 +97,7 @@ importers:
   packages/ai:
     dependencies:
       '@forinda/kickjs-schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schema
     devDependencies:
       '@anthropic-ai/sdk':
@@ -298,7 +298,7 @@ importers:
         specifier: workspace:*
         version: link:../devtools-kit
       '@forinda/kickjs-schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schema
       reflect-metadata:
         specifier: ^0.2.2
@@ -411,7 +411,7 @@ importers:
   packages/kickjs:
     dependencies:
       '@forinda/kickjs-schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schema
       dotenv:
         specifier: ^17.0.0
@@ -490,7 +490,7 @@ importers:
   packages/mcp:
     dependencies:
       '@forinda/kickjs-schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schema
     devDependencies:
       '@forinda/kickjs':
@@ -588,7 +588,7 @@ importers:
   packages/swagger:
     dependencies:
       '@forinda/kickjs-schema':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../schema
       reflect-metadata:
         specifier: ^0.2.2
