@@ -160,6 +160,14 @@ export type { CodeMigration, MigrationDb } from './migrate/code-migration'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
 export { checkMigrations, type CheckResult } from './cli/check'
 export { listSeeds, runSeeds, type SeedResult } from './cli/seed'
+export {
+  fakeRows,
+  seedFake,
+  type FakeContext,
+  type FakeOverride,
+  type FakeRowsOptions,
+  type SeedFakeOptions,
+} from './seed/fake'
 
 export * from './dsl/columns'
 export * from './dsl/table'
