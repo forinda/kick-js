@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { z } from 'zod'
 import {
   ApiOperation,
@@ -995,7 +995,7 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     expect(markerSeen).toBe(true)
   })
 
-  it('two different DTOs with the same hint suffix-disambiguate, no overwrite', () => {
+  it('a name already holding a different DTO falls back to <Class><Method>Body, no overwrite', () => {
     @Controller()
     class CollisionController {
       @Post('/a')
@@ -1003,10 +1003,9 @@ describe('registerControllerForDocs — per-scope isolation', () => {
       @Post('/b')
       b() {}
     }
-    // Inject two distinct validation schemas under the same generated
-    // hint (`aBody` / `bBody`) with custom `name: 'Body'` to force the
-    // collision path. Both should land in components.schemas under
-    // disambiguated keys (Body + Body_2), not silently overwrite.
+    // Two distinct validation schemas under the same `name: 'Create'`: the
+    // first gets `CreateBody`, the second — a different shape — falls back to
+    // its predictable `<Class><Method>Body`, with a warning; neither is overwritten.
     const aSchema = {
       _def: {},
       safeParse: () => ({ success: true }),
@@ -1018,18 +1017,19 @@ describe('registerControllerForDocs — per-scope isolation', () => {
       toJSONSchema: () => ({ type: 'object', properties: { b: { type: 'number' } } }),
     }
     const routes: any[] = Reflect.getMetadata('kick:routes', CollisionController) ?? []
-    if (routes[0]) routes[0].validation = { body: aSchema, name: 'Body' }
-    if (routes[1]) routes[1].validation = { body: bSchema, name: 'Body' }
+    if (routes[0]) routes[0].validation = { body: aSchema, name: 'Create' }
+    if (routes[1]) routes[1].validation = { body: bSchema, name: 'Create' }
 
     registerControllerForDocs(CollisionController, '/api')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const spec = buildOpenAPISpec()
 
     const schemas = spec.components?.schemas ?? {}
-    expect(Object.keys(schemas)).toContain('Body')
-    expect(Object.keys(schemas)).toContain('Body_2')
-    // The two schema bodies must remain distinct — overwrite would have
-    // collapsed both into one.
-    expect(schemas.Body).not.toEqual(schemas.Body_2)
+    expect(Object.keys(schemas).toSorted()).toEqual(['CollisionControllerBBody', 'CreateBody'])
+    expect(schemas.CreateBody.properties).toHaveProperty('a')
+    expect(schemas.CollisionControllerBBody.properties).toHaveProperty('b')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("'CreateBody'"))
+    warn.mockRestore()
   })
 
   it('path-param regex captures digits-after-first-char identifiers', () => {
@@ -1070,7 +1070,7 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     registerControllerForDocs(IdenticalController, '/api')
     const spec = buildOpenAPISpec()
 
-    expect(Object.keys(spec.components?.schemas ?? {})).toEqual(['Shared'])
+    expect(Object.keys(spec.components?.schemas ?? {})).toEqual(['SharedBody'])
   })
 
   it('scoped clearRegisteredRoutes only flushes that scope', () => {
@@ -1121,8 +1121,8 @@ describe('declared response schema (validation.response)', () => {
     const success = op.responses['200']
     expect(success.description).toBe('Successful operation')
     const ref = success.content['application/json'].schema.$ref as string
-    expect(ref).toContain('listResponse')
-    const registered = spec.components.schemas['listResponse']
+    expect(ref).toBe('#/components/schemas/TasksControllerListResponse')
+    const registered = spec.components.schemas['TasksControllerListResponse']
     expect(registered.properties.id.type).toBe('string')
     expect(registered.properties.title.type).toBe('string')
   })

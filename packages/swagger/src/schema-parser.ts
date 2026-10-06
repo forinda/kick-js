@@ -36,8 +36,11 @@ export interface SchemaParser {
    * Convert a validation schema to a JSON Schema object.
    * Should return a plain object conforming to JSON Schema draft-07 or later.
    * Must not include the top-level `$schema` key — the builder adds it.
+   * `io` says whether the schema describes a request (`'input'`: body, query,
+   * params) or a response (`'output'`) — they differ for defaults, coercion
+   * and transforms.
    */
-  toJsonSchema(schema: unknown): Record<string, unknown>
+  toJsonSchema(schema: unknown, context?: { io: 'input' | 'output' }): Record<string, unknown>
 }
 
 /**
@@ -57,8 +60,8 @@ export const zodSchemaParser: SchemaParser = {
     }
   },
 
-  toJsonSchema(schema: unknown): Record<string, unknown> {
+  toJsonSchema(schema: unknown, context?: { io: 'input' | 'output' }): Record<string, unknown> {
     const wrapped = detectSchema(schema)
-    return wrapped.toJsonSchema({ target: 'openapi-3.0' })
+    return wrapped.toJsonSchema({ target: 'openapi-3.0', io: context?.io })
   },
 }

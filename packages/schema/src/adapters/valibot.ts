@@ -1,6 +1,7 @@
 import type * as VType from 'valibot'
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
 import type { InferSchemaOutput } from '../infer.js'
+import { warnUnsatisfiableInput } from './wire.js'
 
 /**
  * Recognise the specific "optional peer not installed" rejection from
@@ -77,18 +78,35 @@ function mapValibotIssues(issues: VType.BaseIssue<unknown>[]): SchemaIssue[] {
 // blocks the importer until the optional peer either loads or
 // confirms it's missing; adopters without the peer installed still
 // land at the same `_toJsonSchemaFn = null` fallback (the catch).
-let _toJsonSchemaFn: ((schema: any) => Record<string, unknown>) | null
+let _toJsonSchemaFn: ((schema: any, config?: any) => Record<string, unknown>) | null
 try {
   const mod = await import('@valibot/to-json-schema')
-  _toJsonSchemaFn = mod.toJsonSchema as (schema: any) => Record<string, unknown>
+  _toJsonSchemaFn = mod.toJsonSchema as (schema: any, config?: any) => Record<string, unknown>
 } catch (err) {
   if (!isMissingOptionalPeer(err, '@valibot/to-json-schema')) throw err
   _toJsonSchemaFn = null
 }
 
-function valibotToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<string, unknown> {
+function valibotToJsonSchema(
+  schema: any,
+  options: JsonSchemaOptions = {},
+): Record<string, unknown> {
   if (_toJsonSchemaFn) {
-    const { $schema: _, ...rest } = _toJsonSchemaFn(schema)
+    const { $schema: _, ...rest } = _toJsonSchemaFn(schema, {
+      target: options.target,
+      typeMode: options.io,
+      // What JSON Schema can't express (a Map, a transform) becomes any value
+      // instead of throwing; dates and bigints are what they are on the wire.
+      errorMode: 'ignore',
+      overrideSchema: ({ valibotSchema }: { valibotSchema: { type?: string } }) => {
+        const type = valibotSchema.type
+        if (type !== 'date' && type !== 'bigint') return undefined
+        // Valibot doesn't coerce: a date or bigint schema rejects what JSON sends.
+        if (options.io === 'input') warnUnsatisfiableInput(type, 'valibot')
+        // A Valibot bigint has no 64-bit bound, so no int64 format.
+        return type === 'date' ? { type: 'string', format: 'date-time' } : { type: 'integer' }
+      },
+    })
     return rest
   }
   return { type: 'object' }

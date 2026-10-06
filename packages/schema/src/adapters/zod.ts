@@ -1,5 +1,6 @@
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
 import type { InferSchemaOutput } from '../infer.js'
+import { warnUnsatisfiableInput } from './wire.js'
 
 export function isZodSchema(schema: unknown): boolean {
   return (
@@ -32,12 +33,36 @@ function mapZodIssues(error: any): SchemaIssue[] {
   })
 }
 
-function zodToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<string, unknown> {
-  if (typeof schema.toJSONSchema === 'function') {
-    const { $schema: _, ...rest } = schema.toJSONSchema()
-    return rest
-  }
-  return { type: 'object' }
+const ZOD_TARGETS = {
+  'draft-07': 'draft-7',
+  'draft-2020-12': 'draft-2020-12',
+  'openapi-3.0': 'openapi-3.0',
+} as const
+
+function zodToJsonSchema(schema: any, options: JsonSchemaOptions = {}): Record<string, unknown> {
+  if (typeof schema.toJSONSchema !== 'function') return { type: 'object' }
+  const { $schema: _, ...rest } = schema.toJSONSchema({
+    target: options.target && ZOD_TARGETS[options.target],
+    io: options.io,
+    // Zod throws on what JSON Schema can't express — a Map, a transform's
+    // result, a custom check. Describe those as any value instead, and dates
+    // and bigints as what they are on the wire.
+    unrepresentable: 'any',
+    override: (ctx: { zodSchema: any; jsonSchema: Record<string, unknown> }) => {
+      const def = ctx.zodSchema._zod?.def
+      if (def?.type !== 'date' && def?.type !== 'bigint') return
+      // Only a coerced schema accepts what JSON sends; say so when one doesn't.
+      if (options.io === 'input' && !def.coerce) warnUnsatisfiableInput(def.type, 'zod')
+      Object.assign(
+        ctx.jsonSchema,
+        def.type === 'date'
+          ? { type: 'string', format: 'date-time' }
+          : // Only z.int64() is held to the 64-bit range.
+            { type: 'integer', ...(def.format === 'int64' ? { format: 'int64' } : {}) },
+      )
+    },
+  })
+  return rest
 }
 
 /**

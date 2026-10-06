@@ -16,6 +16,12 @@ export interface KickSchema<TOutput = unknown, TInput = unknown> {
 
 export interface JsonSchemaOptions {
   readonly target?: 'draft-2020-12' | 'draft-07' | 'openapi-3.0'
+  /**
+   * Describe what the schema accepts (`'input'` — a request body, query or
+   * params) or what it produces (`'output'`, the default — a response).
+   * They differ for defaults, coercion and transforms.
+   */
+  readonly io?: 'input' | 'output'
 }
 
 export interface SchemaAdapter {

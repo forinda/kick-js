@@ -94,15 +94,21 @@ Document response statuses. Stackable — add multiple for different status code
 
 When you pass a Zod (or Joi) schema, it's converted to JSON Schema and registered in `components/schemas`.
 
-**Schema naming:** Use `name` to control the schema name in the Models section. If omitted, it's auto-generated from the handler name (e.g., `createResponse201`).
+**Schema naming:** each schema gets the first of these names that's free (or already holds the same schema):
+
+1. **A name you give** — `@ApiResponse({ name })` as it is, or the route's `name` as a prefix for its parts: `@Post('/', { name: 'CreateUser', body, response })` registers `CreateUserBody` and `CreateUserResponse`.
+2. **The schema's own title** — `z.object({…}).meta({ title: 'User' })`.
+3. **`<Class><Method><Part>`** — unique per route: `UserControllerCreateBody`, `UserControllerCreateResponse` (a declared `response`), `UserControllerCreateResponse201` (an `@ApiResponse`).
 
 ```typescript
-// Explicit name — appears as "UserResponse" in Models
+// Appears as "UserResponse" in Models
 @ApiResponse({ status: 200, schema: userSchema, name: 'UserResponse' })
 
-// Auto-generated name — appears as "getUserResponse200"
+// Appears as "UserControllerGetResponse200"
 @ApiResponse({ status: 200, schema: userSchema })
 ```
+
+The same schema used twice is one entry. A name or title already holding a _different_ schema is reported, and that schema takes its `<Class><Method><Part>` name instead. Query and path parameters are listed inline, not as named schemas.
 
 ### @ApiBearerAuth
 
