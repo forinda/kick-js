@@ -58,7 +58,7 @@
   "autocannon": "^8.0.0",
   "express": "^5.2.1",
   "lefthook": "^2.1.16",
-  "oxfmt": "^0.70.0",
+  "oxfmt": "^0.71.0",
   "oxlint": "^1.86.0",
   "reflect-metadata": "^0.2.2",
   "supertest": "^7.3.1",
