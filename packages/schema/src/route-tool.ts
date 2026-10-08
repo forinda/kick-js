@@ -47,7 +47,8 @@ const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
 function toJson(schema: unknown): JsonSchema | undefined {
   if (schema == null) return undefined
-  const { $schema: _, ...rest } = detectSchema(schema).toJsonSchema()
+  // What a caller sends: a field with a default is optional, a coerced one takes its input type.
+  const { $schema: _, ...rest } = detectSchema(schema).toJsonSchema({ io: 'input' })
   return rest
 }
 

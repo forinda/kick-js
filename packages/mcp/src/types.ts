@@ -370,7 +370,7 @@ export interface McpToolOptions {
    * the client can ask the user for more access.
    */
   scopes?: string[]
-  /** Optional usage examples shown in the tool description. */
+  /** Usage examples: their `args` are sent as the tool's `inputSchema.examples`. */
   examples?: McpToolExample[]
   /**
    * When set to `true`, exclude this tool from any `auto` exposure mode

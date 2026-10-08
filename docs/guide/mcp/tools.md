@@ -128,9 +128,12 @@ export class TaskController {
 ```
 
 - The `@Post` decorator's `body` schema is what the MCP client sees
-  as the tool's input.
-- `examples` show up in client UIs (and some clients use them for
-  few-shot guidance). Keep them small and representative.
+  as the tool's input — described as what the tool accepts: a field with a
+  `.default()` is optional, and a coerced or transformed field takes the type
+  that's sent.
+- `examples` are sent as the input schema's `examples` in `tools/list`,
+  where clients show them and models learn from them. Keep them small and
+  representative.
 - Tool names default to the route's `name` option, falling back to
   `ControllerName.methodName`.
 
@@ -307,6 +310,15 @@ handler: async ({ invoiceId }, ctx) => {
 
 Annotations are hints for the client: a client may ask for confirmation before a destructive tool, and skip it for a read-only one.
 
+A route tool starts from what its HTTP method says, and `annotations` override any of them:
+
+| Method          | Default annotations                                                    |
+| --------------- | ---------------------------------------------------------------------- |
+| `GET`, `HEAD`   | `readOnlyHint: true`, `idempotentHint: true`                           |
+| `PUT`           | `readOnlyHint: false`, `idempotentHint: true`                          |
+| `DELETE`        | `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: true` |
+| `POST`, `PATCH` | `readOnlyHint: false`                                                  |
+
 ```ts
 @Delete('/:id')
 @McpTool({
@@ -339,6 +351,8 @@ A route tool returns the route's response body as text. On top of that:
   ```
 
   A custom tool with an `outputSchema` sends an object result the same way.
+
+- **Accepted, not done.** A `202 Accepted` — an approval queue, a background job — is sent as text starting `Accepted (202)`, and never as `structuredContent`: its body isn't the tool's result, so it isn't checked against the `outputSchema`.
 
 - **Errors.** A response with status 400 or above is an error result (`isError: true`). When the body is JSON (a thrown `HttpException` answers [Problem Details](../error-handling.md)), it's sent as `structuredContent` too, so the model sees `status`, `type` and `detail` as fields:
 

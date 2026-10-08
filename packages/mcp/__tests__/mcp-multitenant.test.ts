@@ -206,7 +206,8 @@ describe('McpAdapter — multi-tenant surface', () => {
     const voidTool = res.json.result.tools.find(
       (t: { name: string }) => t.name === 'InvoiceController.void',
     )
-    expect(voidTool.annotations).toEqual({ destructiveHint: true })
+    // The method's defaults (POST: not read-only), with @McpTool's over them.
+    expect(voidTool.annotations).toEqual({ readOnlyHint: false, destructiveHint: true })
   })
 
   it('refuses a token minted for another tenant, with a resource_metadata challenge', async () => {
@@ -217,8 +218,9 @@ describe('McpAdapter — multi-tenant surface', () => {
       body: rpc('tools/list'),
     })
     expect(res.status).toBe(401)
+    // A token was sent and refused: `invalid_token`, so the client refreshes it.
     expect(res.headers['www-authenticate']).toBe(
-      'Bearer resource_metadata="http://acme.localhost/.well-known/oauth-protected-resource/mcp"',
+      'Bearer resource_metadata="http://acme.localhost/.well-known/oauth-protected-resource/mcp", error="invalid_token"',
     )
   })
 
@@ -387,7 +389,7 @@ describe('McpAdapter — multi-tenant surface', () => {
       expect.objectContaining({
         name: 'PaymentController.refund',
         title: 'Refund',
-        annotations: { destructiveHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true },
         scopes: ['payments:write'],
       }),
     ])

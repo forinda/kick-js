@@ -50,6 +50,7 @@ import type {
   McpCallContext,
   McpCustomTool,
   McpPrincipal,
+  McpToolAnnotations,
   McpToolContext,
   McpResource,
   McpResourceProvider,
@@ -104,13 +105,43 @@ function sendJsonRpcError(
   status: number,
   message: string,
   headers: Record<string, string> = {},
+  // The SDK's transport codes: -32000 for transport refusals, -32001 for an
+  // unknown session, -32603 for an internal error.
+  code = -32000,
 ): Promise<void> {
   return ctx.sendResponse(
-    new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }), {
+    new Response(JSON.stringify({ jsonrpc: '2.0', error: { code, message }, id: null }), {
       status,
       headers: { 'content-type': 'application/json', ...headers },
     }),
   )
+}
+
+/**
+ * What a route's HTTP method says about it, as MCP tool annotations — so a
+ * client can skip confirming a read. `@McpTool({ annotations })` overrides
+ * any of them.
+ */
+function methodAnnotations(method: string): McpToolAnnotations {
+  switch (method.toUpperCase()) {
+    case 'GET':
+    case 'HEAD':
+      return { readOnlyHint: true, idempotentHint: true }
+    case 'PUT':
+      return { readOnlyHint: false, idempotentHint: true }
+    case 'DELETE':
+      return { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
+    default:
+      return { readOnlyHint: false }
+  }
+}
+
+/** A tool's examples, sent where clients read them: the input schema's `examples`. */
+function withExamples(
+  inputSchema: Record<string, unknown>,
+  examples: readonly { args: unknown }[] | undefined,
+): Record<string, unknown> {
+  return examples?.length ? { ...inputSchema, examples: examples.map((e) => e.args) } : inputSchema
 }
 
 /** Headers copied from the MCP request onto tool calls by default. */
@@ -543,8 +574,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       let outputSchema: Record<string, unknown> | undefined
       if (meta?.outputSchema) {
         try {
-          outputSchema = detectSchema(meta.outputSchema).toJsonSchema()
-        } catch {
+          outputSchema = detectSchema(meta.outputSchema).toJsonSchema({ io: 'output' })
+        } catch (err) {
+          log.warn(
+            `McpAdapter: ${name}'s outputSchema can't be converted, so it isn't advertised — ${err instanceof Error ? err.message : String(err)}`,
+          )
           outputSchema = undefined
         }
       }
@@ -557,7 +591,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         httpMethod: route.method.toUpperCase(),
         mountPath: fullPath,
         examples: meta?.examples,
-        ...(meta?.annotations ? { annotations: meta.annotations } : {}),
+        annotations: { ...methodAnnotations(route.method), ...meta?.annotations },
         ...(meta?.title ? { title: meta.title } : {}),
         ...(meta?.scopes?.length ? { scopes: meta.scopes } : {}),
       }
@@ -653,6 +687,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           : await fetch(`${serverBaseUrl}${target.url}`, init)
         const text = await res.text()
         const isError = res.status >= 400
+        // 202 Accepted: taken, not done — an approval queue, a background job.
+        // Its body isn't the tool's result, so it's not offered as one.
+        const accepted = res.status === 202
         let json: unknown
         try {
           json = text ? JSON.parse(text) : undefined
@@ -663,10 +700,20 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         // error that's the Problem Details body (machine-readable `type` and
         // `status`); for a success, when the tool declares an output schema.
         const structured =
-          isJsonObject(json) && (isError || tool.outputSchema) ? { structuredContent: json } : {}
+          isJsonObject(json) && (isError || (tool.outputSchema && !accepted))
+            ? { structuredContent: json }
+            : {}
+        const body = text || `(${res.status} ${res.statusText})`
         return {
           isError,
-          content: [{ type: 'text' as const, text: text || `(${res.status} ${res.statusText})` }],
+          content: [
+            {
+              type: 'text' as const,
+              text: accepted
+                ? `Accepted (202): the request was taken but hasn't completed yet.\n${body}`
+                : body,
+            },
+          ],
           ...structured,
         }
       } catch (err) {
@@ -751,7 +798,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         elicit: async <T>(key: string, request: { message: string; schema: unknown }) => {
           const schema = detectSchema(request.schema)
           const answer = answers[key]
-          if (!answer) throw new InputNeeded(key, request.message, schema.toJsonSchema())
+          if (!answer) {
+            throw new InputNeeded(key, request.message, schema.toJsonSchema({ io: 'input' }))
+          }
           if (answer.action !== 'accept') return undefined
           const parsed = schema.safeParse(answer.content ?? {})
           if (!parsed.success)
@@ -820,7 +869,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         listed: {
           name: def.name,
           description: def.description,
-          inputSchema: def.inputSchema,
+          inputSchema: withExamples(def.inputSchema, def.examples),
           ...(def.title ? { title: def.title } : {}),
           ...(def.annotations ? { annotations: def.annotations } : {}),
           ...(def.outputSchema ? { outputSchema: def.outputSchema } : {}),
@@ -893,11 +942,16 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           )
         }
         const schema = tool.inputSchema === undefined ? undefined : detectSchema(tool.inputSchema)
-        const inputSchema = schema?.toJsonSchema() ?? { type: 'object', properties: {} }
+        // What the tool accepts, and what it returns: they differ for defaults,
+        // coercion and transforms.
+        const inputSchema = schema?.toJsonSchema({ io: 'input' }) ?? {
+          type: 'object',
+          properties: {},
+        }
         const outputSchema =
           tool.outputSchema === undefined
             ? undefined
-            : detectSchema(tool.outputSchema).toJsonSchema()
+            : detectSchema(tool.outputSchema).toJsonSchema({ io: 'output' })
         return { tool, provider: provider.name, schema, inputSchema, outputSchema }
       })
       const names = entries.map((e) => e.tool.name)
@@ -1187,13 +1241,20 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       const authorization = firstHeader(headers.authorization) ?? ''
       const credential =
         auth.type === 'bearer' ? (/^Bearer\s+(.+)$/i.exec(authorization)?.[1] ?? '') : authorization
+      // A credential that was sent and refused says so (`invalid_token`, RFC
+      // 6750 §3.1), so an OAuth client refreshes it rather than starting over.
       const unauthorized: { denied: Rejection } = {
         denied: {
           status: 401,
           message: 'Unauthorized',
           ...(auth.type === 'bearer'
             ? {
-                headers: { 'www-authenticate': challenge(info, { scope: auth.scopes?.join(' ') }) },
+                headers: {
+                  'www-authenticate': challenge(info, {
+                    ...(credential !== '' ? { error: 'invalid_token' } : {}),
+                    scope: auth.scopes?.join(' '),
+                  }),
+                },
               }
             : {}),
         },
@@ -1341,7 +1402,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           if (sessionId) {
             const session = sessions.get(sessionId)
             if (!session) {
-              await sendJsonRpcError(ctx, 404, 'Session not found')
+              await sendJsonRpcError(ctx, 404, 'Session not found', {}, -32001)
               return
             }
             session.active++
@@ -1392,7 +1453,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
-          if (!ctx.res.headersSent) await sendJsonRpcError(ctx, 500, 'MCP transport error')
+          if (!ctx.res.headersSent) {
+            await sendJsonRpcError(ctx, 500, 'MCP transport error', {}, -32603)
+          }
         }
       }
 
