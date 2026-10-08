@@ -169,6 +169,13 @@ it('remembers who signed in', async () => {
 
 Clients scoped from a cookie client (`.as()`, `.withHeaders()`) share its cookie jar. For several users at once, make one cookie client each. The default session store is in memory, so sessions don't outlive the test app.
 
+Signing in through the real endpoint tests the whole flow. To skip it in tests about something else, hand `.as()` a session you created yourself, with [the client's `auth`](./http.md):
+
+```ts
+const asUser = client({ auth: (sid) => ({ cookie: `sid=${sid}` }) })
+await asUser.as(sessionId).get('/me').expect(200)
+```
+
 ## CSRF
 
 `csrf()` is a double-submit check: the first response sets a `_csrf` cookie, and a POST, PUT, PATCH or DELETE must echo its value in the `x-csrf-token` header. Do what a browser page does:

@@ -10,6 +10,16 @@ export interface TestClientOptions {
   headers?: Record<string, string>
   /** Sent as `Authorization: Bearer <token>`. */
   bearer?: string
+  /**
+   * How `.as(credential)` authenticates, when it isn't a bearer token — the
+   * headers to send for a credential:
+   *
+   *   client({ auth: (sid) => ({ cookie: `sid=${sid}` }) }).as(sessionId)
+   *   client({ auth: (key) => ({ 'x-api-key': key }) }).as(apiKey)
+   *
+   * Default: `Authorization: Bearer <credential>`.
+   */
+  auth?: (credential: string) => Record<string, string>
   /** Prefixed to every path: `basePath: '/api/v1'`, then `.get('/users')`. */
   basePath?: string
   /**
@@ -34,8 +44,11 @@ export interface TestClient {
   delete(path: string): TestRequest
   head(path: string): TestRequest
   options(path: string): TestRequest
-  /** The same client, sending `Authorization: Bearer <token>`. */
-  as(token: string): TestClient
+  /**
+   * The same client, authenticated as `credential`: `Authorization: Bearer
+   * <credential>`, or the headers the client's `auth` option makes of it.
+   */
+  as(credential: string): TestClient
   /** The same client, with these headers added (or replaced). */
   withHeaders(headers: Record<string, string>): TestClient
 }
@@ -88,7 +101,19 @@ export function createClient(
       return test
     }
   }
-  client.as = (token) => createClient(app, request, { ...options, headers, bearer: token }, agent)
+  client.as = (credential) =>
+    options.auth
+      ? createClient(
+          app,
+          request,
+          {
+            ...options,
+            bearer: undefined,
+            headers: { ...headers, ...lowerCaseKeys(options.auth(credential)) },
+          },
+          agent,
+        )
+      : createClient(app, request, { ...options, headers, bearer: credential }, agent)
   client.withHeaders = (extra) => {
     const added = lowerCaseKeys(extra)
     // An explicit Authorization replaces the inherited bearer token.
