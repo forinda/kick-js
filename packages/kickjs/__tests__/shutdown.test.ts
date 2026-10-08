@@ -139,10 +139,8 @@ describe('Graceful shutdown with request draining', () => {
     const abortCtrl = new AbortController()
     fetch(`http://localhost:${addr.port}/hang`, { signal: abortCtrl.signal }).catch(() => {})
 
-    // Wait for the request to be received
-    await new Promise((resolve) => setTimeout(resolve, 100))
-
-    expect(hangReceived).toBe(true)
+    // Wait for the request to be received (a fixed sleep loses the race on a slow runner)
+    await vi.waitFor(() => expect(hangReceived).toBe(true), { timeout: 5000 })
     expect(app.inFlightRequests).toBeGreaterThanOrEqual(1)
 
     // Shutdown should complete after timeout even though request is stuck
