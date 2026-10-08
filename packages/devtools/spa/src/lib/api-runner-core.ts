@@ -622,7 +622,11 @@ const rows = (value: unknown): KeyValueRow[] =>
   Array.isArray(value)
     ? value.filter(
         (r): r is KeyValueRow =>
-          !!r && typeof r === 'object' && typeof (r as KeyValueRow).key === 'string',
+          !!r &&
+          typeof r === 'object' &&
+          typeof (r as KeyValueRow).key === 'string' &&
+          typeof (r as KeyValueRow).value === 'string' &&
+          typeof (r as KeyValueRow).enabled === 'boolean',
       )
     : []
 

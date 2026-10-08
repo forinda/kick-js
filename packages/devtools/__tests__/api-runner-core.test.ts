@@ -545,6 +545,23 @@ describe('environments', () => {
     expect(state.environments[0]).toMatchObject({ headers: [], variables: [], mappings: [] })
   })
 
+  it('drops stored rows without a string key, string value and boolean enabled', () => {
+    const ok = { key: 'a', value: '1', enabled: true }
+    const state = loadEnvironments(
+      {
+        environments: [
+          {
+            id: 'a',
+            name: 'dev',
+            headers: [ok, { key: 'b', enabled: true }, { key: 'c', value: 2 }],
+          },
+        ],
+      },
+      { headers: [], variables: [] },
+    )
+    expect(state.environments[0]!.headers).toEqual([ok])
+  })
+
   it('uses the pinned environment, else the active one', () => {
     const env = (id: string) => ({ id, name: id, headers: [], variables: [], mappings: [] })
     const state = { environments: [env('dev'), env('anon')], activeId: 'dev', pins: {} }
