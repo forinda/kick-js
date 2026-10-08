@@ -7,6 +7,11 @@ import {
   exampleFromSchema,
   historyLabel,
   openApiHints,
+  loadEnvironments,
+  environmentFor,
+  nextEnvironmentName,
+  fillFromEnvironment,
+  routeKey,
   routeHints,
   pushHistory,
   buildUrl,
@@ -506,5 +511,92 @@ describe("routeHints — from the route's own schemas", () => {
 
   it('is nothing without schemas', () => {
     expect(routeHints({ method: 'GET', path: '/x' })).toBeUndefined()
+  })
+})
+
+describe('environments', () => {
+  const row = (key: string, value: string) => ({ key, value, enabled: true })
+  const route = { method: 'GET', path: '/api/v1/orgs/:tenantId/users/:id' }
+
+  it('starts with one dev environment holding the old headers and variables', () => {
+    const legacy = {
+      headers: [row('Authorization', 'Bearer {{token}}')],
+      variables: [row('token', 't')],
+    }
+    expect(loadEnvironments(null, legacy)).toEqual({
+      environments: [{ id: 'dev', name: 'dev', ...legacy, mappings: [] }],
+      activeId: 'dev',
+      pins: {},
+    })
+    expect(loadEnvironments({ environments: 'nope' }, legacy).environments).toHaveLength(1)
+  })
+
+  it('drops pins and an active id that point at no environment', () => {
+    const state = loadEnvironments(
+      {
+        environments: [{ id: 'a', name: 'dev' }],
+        activeId: 'gone',
+        pins: { 'GET /x': 'a', 'GET /y': 'gone' },
+      },
+      { headers: [], variables: [] },
+    )
+    expect(state.activeId).toBe('a')
+    expect(state.pins).toEqual({ 'GET /x': 'a' })
+    expect(state.environments[0]).toMatchObject({ headers: [], variables: [], mappings: [] })
+  })
+
+  it('uses the pinned environment, else the active one', () => {
+    const env = (id: string) => ({ id, name: id, headers: [], variables: [], mappings: [] })
+    const state = { environments: [env('dev'), env('anon')], activeId: 'dev', pins: {} }
+    expect(environmentFor(state, route).id).toBe('dev')
+    expect(environmentFor({ ...state, pins: { [routeKey(route)]: 'anon' } }, route).id).toBe('anon')
+    expect(routeKey(route)).toBe('GET /api/v1/orgs/:tenantId/users/:id')
+  })
+
+  it('names a new environment dev, stage, prod, then env N', () => {
+    const named = (...names: string[]) => ({
+      environments: names.map((name) => ({
+        id: name,
+        name,
+        headers: [],
+        variables: [],
+        mappings: [],
+      })),
+      activeId: names[0]!,
+      pins: {},
+    })
+    expect(nextEnvironmentName(named('dev'))).toBe('stage')
+    expect(nextEnvironmentName(named('dev', 'stage', 'prod'))).toBe('env 4')
+  })
+
+  it('fills empty params and query values by name or mapping; what was typed wins', () => {
+    const inputs = {
+      ...emptyInputs(route),
+      params: { tenantId: '', id: '42' },
+      query: [row('lang', ''), row('page', '2'), { key: 'off', value: '', enabled: false }],
+    }
+    const vars = { orgId: 'acme', id: 'ignored', lang: 'en', off: 'x' }
+    const filled = fillFromEnvironment(inputs, vars, [row('tenantId', 'orgId')])
+    expect(filled.params).toEqual({ tenantId: 'acme', id: '42' })
+    expect(filled.query).toEqual([
+      row('lang', 'en'),
+      row('page', '2'),
+      { key: 'off', value: '', enabled: false },
+    ])
+    expect(inputs.params.tenantId).toBe('') // not written back
+  })
+
+  it('reaches the prepared request', () => {
+    const req = prepareRequest({
+      route,
+      inputs: { ...emptyInputs(route), params: { tenantId: '', id: '7' } },
+      defaults: [],
+      variables: { orgId: 'acme' },
+      mappings: [row('tenantId', 'orgId')],
+      settings: DEFAULT_SETTINGS,
+      origin: 'http://localhost:3000',
+      cookies: '',
+    })
+    expect(req.url).toBe('http://localhost:3000/api/v1/orgs/acme/users/7')
   })
 })

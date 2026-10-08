@@ -37,6 +37,12 @@ import {
   historyLabel,
   openApiHints,
   routeHints,
+  environmentFor,
+  loadEnvironments,
+  nextEnvironmentName,
+  routeKey,
+  type EnvironmentsState,
+  type RunnerEnvironment,
   pushHistory,
   type HistoryEntry,
   emptyInputs,
@@ -59,8 +65,10 @@ import {
   type RunnerSettings,
 } from './api-runner-core'
 
+// The single environment before named ones; read once, to carry it over.
 const DEFAULTS_KEY = 'kickjs-devtools:runner:defaults'
 const VARIABLES_KEY = 'kickjs-devtools:runner:variables'
+const ENVIRONMENTS_KEY = 'kickjs-devtools:runner:environments'
 const SETTINGS_KEY = 'kickjs-devtools:runner:settings'
 /** Whether default headers + variables persist across browser sessions. */
 const REMEMBER_KEY = 'kickjs-devtools:runner:remember'
@@ -180,8 +188,24 @@ export const ApiRunnerPanel: Component = () => {
   const [remember, setRemember] = createSignal(readRemember())
   const envStorage = () => (remember() ? localStorage : sessionStorage)
   const otherStorage = () => (remember() ? sessionStorage : localStorage)
-  const [defaults, setDefaults] = createSignal<KeyValueRow[]>(loadRows(envStorage, DEFAULTS_KEY))
-  const [variables, setVariables] = createSignal<KeyValueRow[]>(loadRows(envStorage, VARIABLES_KEY))
+  const [envs, setEnvs] = createSignal<EnvironmentsState>(
+    loadEnvironments(load<unknown>(envStorage, ENVIRONMENTS_KEY, null), {
+      headers: loadRows(envStorage, DEFAULTS_KEY),
+      variables: loadRows(envStorage, VARIABLES_KEY),
+    }),
+  )
+  const [managing, setManaging] = createSignal(false)
+  /** The environment the open route uses: its pin, else the active one. */
+  const env = createMemo(() => {
+    const route = activeRoute()
+    return route ? environmentFor(envs(), route) : envs().environments[0]!
+  })
+  const updateEnv = (id: string, patch: Partial<RunnerEnvironment>) =>
+    setEnvs((state) => ({
+      ...state,
+      // oxlint-disable-next-line no-map-spread
+      environments: state.environments.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    }))
   const [capture, setCapture] = createSignal({ path: '', name: '' })
   const [captureNote, setCaptureNote] = createSignal<string | null>(null)
   const [settings, setSettings] = createSignal<RunnerSettings>(
@@ -251,10 +275,13 @@ export const ApiRunnerPanel: Component = () => {
   // Write the environment where `remember` says, and clear the other storage so
   // switching the toggle moves it instead of leaving a copy behind.
   createEffect(() => {
-    save(envStorage, DEFAULTS_KEY, defaults())
-    save(envStorage, VARIABLES_KEY, variables())
-    remove(otherStorage, DEFAULTS_KEY)
-    remove(otherStorage, VARIABLES_KEY)
+    save(envStorage, ENVIRONMENTS_KEY, envs())
+    remove(otherStorage, ENVIRONMENTS_KEY)
+    // Carried over into the environments: the old keys aren't needed again.
+    for (const storage of [envStorage, otherStorage]) {
+      remove(storage, DEFAULTS_KEY)
+      remove(storage, VARIABLES_KEY)
+    }
     save(() => localStorage, REMEMBER_KEY, remember())
   })
   createEffect(() => save(() => localStorage, SETTINGS_KEY, settings()))
@@ -276,8 +303,9 @@ export const ApiRunnerPanel: Component = () => {
     return prepareRequest({
       route,
       inputs: current,
-      defaults: defaults(),
-      variables: variableMap(variables()),
+      defaults: env().headers,
+      variables: variableMap(env().variables),
+      mappings: env().mappings,
       settings: settings(),
       origin: window.location.origin,
       cookies: document.cookie,
@@ -382,13 +410,15 @@ export const ApiRunnerPanel: Component = () => {
       return
     }
     const key = name.trim()
-    const rows = variables()
-    setVariables(
-      rows.some((r) => r.key === key)
+    // Into the environment this route uses — log in under "admin", and only it gets the token.
+    const target = env()
+    const rows = target.variables
+    updateEnv(target.id, {
+      variables: rows.some((r) => r.key === key)
         ? rows.map((r) => (r.key === key ? { ...r, value, enabled: true } : r))
         : [...rows, { key, value, enabled: true }],
-    )
-    setCaptureNote(`Saved {{${key}}}`)
+    })
+    setCaptureNote(`Saved {{${key}}} in ${target.name}`)
   }
 
   /** Reopen a past request: its route, with the inputs it was sent with. */
@@ -436,6 +466,16 @@ export const ApiRunnerPanel: Component = () => {
     >
       {(route) => (
         <div class="h-full flex flex-col min-h-0">
+          <Show when={managing()}>
+            <EnvironmentsSheet
+              state={envs()}
+              setState={setEnvs}
+              selectedId={env().id}
+              remember={remember()}
+              setRemember={setRemember}
+              onClose={() => setManaging(false)}
+            />
+          </Show>
           <section
             aria-label={`Try ${route().method} ${route().path}`}
             class="h-full bg-surface-1 flex flex-col min-h-0"
@@ -502,13 +542,51 @@ export const ApiRunnerPanel: Component = () => {
                       : 'Send'}
                 </button>
               </div>
+              {/* Environment: the active one, or the one this route is pinned to. */}
+              <div class="flex items-center gap-2 mt-2 text-xs text-text-muted">
+                <label class="flex items-center gap-2">
+                  Environment
+                  <select
+                    class="bg-surface-2 border border-border-strong rounded-lg px-2 py-1 text-xs text-text-body"
+                    value={envs().pins[routeKey(route())] ?? ''}
+                    onChange={(e) => {
+                      const id = e.currentTarget.value
+                      const key = routeKey(route())
+                      setEnvs((state) => {
+                        const pins = { ...state.pins }
+                        if (id) pins[key] = id
+                        else delete pins[key]
+                        return { ...state, pins }
+                      })
+                    }}
+                  >
+                    <option value="">
+                      Active ({envs().environments.find((e) => e.id === envs().activeId)?.name})
+                    </option>
+                    <For each={envs().environments}>
+                      {(e) => <option value={e.id}>Pinned: {e.name}</option>}
+                    </For>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="underline hover:text-kick-500"
+                  onClick={() => setManaging(true)}
+                >
+                  Manage…
+                </button>
+              </div>
               <Show when={prepared() && unresolvedVariables(prepared()!).length > 0}>
                 <p class="text-xs text-amber-400 mt-2">
                   No value for{' '}
                   {unresolvedVariables(prepared()!)
                     .map((v) => `{{${v}}}`)
                     .join(', ')}{' '}
-                  — add it under Environment → Variables.
+                  in <strong>{env().name}</strong> —{' '}
+                  <button type="button" class="underline" onClick={() => setManaging(true)}>
+                    add it to the environment
+                  </button>
+                  .
                 </p>
               </Show>
             </header>
@@ -633,47 +711,12 @@ export const ApiRunnerPanel: Component = () => {
                 )}
               </Show>
 
-              <Section
-                title="Environment"
-                count={enabledCount(defaults()) + enabledCount(variables())}
-              >
-                <label class="flex items-start gap-2 text-sm mb-3">
-                  <input
-                    type="checkbox"
-                    class="mt-1"
-                    checked={remember()}
-                    onChange={(e) => setRemember(e.currentTarget.checked)}
-                  />
-                  <span>
-                    Remember on this browser
-                    <span class="block text-xs text-text-muted">
-                      {remember()
-                        ? 'Default headers and variables are saved in localStorage and survive closing the tab. They may hold tokens — turn this off on a shared machine.'
-                        : 'Default headers and variables are kept for this browser tab only.'}
-                    </span>
-                  </span>
-                </label>
-
-                <h3 class="text-xs font-semibold text-text-secondary mb-1">Default headers</h3>
-                <p class="text-xs text-text-muted mb-2">
-                  Sent with every route. A default Authorization is skipped on routes carrying a
-                  public flag.
-                </p>
-                <RowsEditor rows={defaults()} onChange={setDefaults} />
-
-                <h3 class="text-xs font-semibold text-text-secondary mt-4 mb-1">Variables</h3>
-                <p class="text-xs text-text-muted mb-2">
-                  Use <code>{'{{name}}'}</code> in any param, query, header or body value — e.g. a
-                  default header <code>Authorization: Bearer {'{{token}}'}</code>. Fill them by hand
-                  or with "Save to variable" on a response.
-                </p>
-                <RowsEditor rows={variables()} onChange={setVariables} />
-
+              <Section title="Settings">
                 <Show when={hints()}>
                   {(h) => (
                     <button
                       type="button"
-                      class={`${secondaryButton} mt-4`}
+                      class={secondaryButton}
                       onClick={() => update(applyHints(inputs()!, h()))}
                     >
                       Fill empty inputs from OpenAPI
@@ -681,8 +724,7 @@ export const ApiRunnerPanel: Component = () => {
                   )}
                 </Show>
 
-                <h3 class="text-xs font-semibold text-text-secondary mt-4 mb-1">Settings</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   <label class="flex flex-col gap-1 text-xs text-text-muted">
                     Public route flags (comma-separated)
                     <input
@@ -984,6 +1026,8 @@ const FormEditor: Component<{
 const RowsEditor: Component<{
   rows: KeyValueRow[]
   onChange: (rows: KeyValueRow[]) => void
+  keyPlaceholder?: string
+  valuePlaceholder?: string
 }> = (props) => {
   const rows = () => [...props.rows, { key: '', value: '', enabled: true }]
   const set = (index: number, patch: Partial<KeyValueRow>) => {
@@ -1005,19 +1049,221 @@ const RowsEditor: Component<{
             />
             <input
               class={inputClass}
-              placeholder="name"
+              placeholder={props.keyPlaceholder ?? 'name'}
               value={row().key}
               onInput={(e) => set(i, { key: e.currentTarget.value })}
             />
             <input
               class={inputClass}
-              placeholder="value"
+              placeholder={props.valuePlaceholder ?? 'value'}
               value={row().value}
               onInput={(e) => set(i, { value: e.currentTarget.value })}
             />
           </div>
         )}
       </Index>
+    </div>
+  )
+}
+
+/**
+ * The environments, in a sheet of their own: each one's default headers,
+ * variables and param mappings, which one is active, and adding, duplicating,
+ * renaming and removing them.
+ */
+const EnvironmentsSheet: Component<{
+  state: EnvironmentsState
+  setState: (update: (state: EnvironmentsState) => EnvironmentsState) => void
+  /** Shown first: the environment the open route uses. */
+  selectedId: string
+  remember: boolean
+  setRemember: (remember: boolean) => void
+  onClose: () => void
+}> = (props) => {
+  const [selected, setSelected] = createSignal(props.selectedId)
+  const current = () =>
+    props.state.environments.find((e) => e.id === selected()) ?? props.state.environments[0]!
+  const patch = (update: Partial<RunnerEnvironment>) =>
+    props.setState((state) => ({
+      ...state,
+      // oxlint-disable-next-line no-map-spread
+      environments: state.environments.map((e) =>
+        e.id === current().id ? { ...e, ...update } : e,
+      ),
+    }))
+  const copyRows = (list: KeyValueRow[]) => list.map((r) => ({ ...r }))
+  const add = (from?: RunnerEnvironment) => {
+    const id = `env-${Date.now().toString(36)}`
+    props.setState((state) => ({
+      ...state,
+      environments: [
+        ...state.environments,
+        {
+          id,
+          name: from ? `${from.name} copy` : nextEnvironmentName(state),
+          headers: from ? copyRows(from.headers) : [],
+          variables: from ? copyRows(from.variables) : [],
+          mappings: from ? copyRows(from.mappings) : [],
+        },
+      ],
+    }))
+    setSelected(id)
+  }
+  const removeCurrent = () => {
+    const id = current().id
+    props.setState((state) => {
+      const environments = state.environments.filter((e) => e.id !== id)
+      // Routes pinned to it go back to the active environment.
+      const pins = Object.fromEntries(Object.entries(state.pins).filter(([, pin]) => pin !== id))
+      const activeId = state.activeId === id ? environments[0]!.id : state.activeId
+      return { environments, activeId, pins }
+    })
+    setSelected(props.state.environments[0]!.id)
+  }
+  const pinnedCount = (id: string) =>
+    Object.values(props.state.pins).filter((pin) => pin === id).length
+
+  return (
+    <div
+      class="fixed inset-0 z-70 flex justify-end bg-black/45"
+      onClick={(e) => e.target === e.currentTarget && props.onClose()}
+      onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Environments"
+        class="h-full w-full max-w-2xl bg-surface-1 border-l border-border flex flex-col"
+      >
+        <header class="px-5 py-4 border-b border-border flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-base font-semibold text-text-body">Environments</h2>
+            <p class="text-xs text-text-muted mt-1">
+              What requests carry — default headers, <code>{'{{variables}}'}</code> and param
+              mappings. One is active; a route can be pinned to another from its runner.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="text-text-muted hover:text-text-strong p-1 text-lg leading-none"
+            aria-label="Close"
+            onClick={() => props.onClose()}
+          >
+            ✕
+          </button>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+          <label class="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              class="mt-1"
+              checked={props.remember}
+              onChange={(e) => props.setRemember(e.currentTarget.checked)}
+            />
+            <span>
+              Remember on this browser
+              <span class="block text-xs text-text-muted">
+                {props.remember
+                  ? 'Saved in localStorage and kept after the tab closes. Environments may hold tokens — turn this off on a shared machine.'
+                  : 'Kept for this browser tab only.'}
+              </span>
+            </span>
+          </label>
+
+          <div class="flex flex-wrap items-center gap-1" role="tablist" aria-label="Environment">
+            <For each={props.state.environments}>
+              {(e) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={e.id === current().id}
+                  onClick={() => setSelected(e.id)}
+                  class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                    e.id === current().id
+                      ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
+                      : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+                  }`}
+                >
+                  {e.name || '(unnamed)'}
+                  {e.id === props.state.activeId ? ' · active' : ''}
+                </button>
+              )}
+            </For>
+            <button type="button" class={secondaryButton} onClick={() => add()}>
+              + Add
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-end gap-2">
+            <label class="flex flex-col gap-1 text-xs text-text-muted grow">
+              Name
+              <input
+                class={inputClass}
+                value={current().name}
+                onInput={(e) => patch({ name: e.currentTarget.value })}
+              />
+            </label>
+            <button
+              type="button"
+              class={secondaryButton}
+              disabled={current().id === props.state.activeId}
+              onClick={() => props.setState((state) => ({ ...state, activeId: current().id }))}
+            >
+              {current().id === props.state.activeId ? 'Active' : 'Make active'}
+            </button>
+            <button type="button" class={secondaryButton} onClick={() => add(current())}>
+              Duplicate
+            </button>
+            <button
+              type="button"
+              class={secondaryButton}
+              disabled={props.state.environments.length === 1}
+              title={
+                pinnedCount(current().id)
+                  ? `${pinnedCount(current().id)} pinned route(s) go back to the active environment`
+                  : undefined
+              }
+              onClick={removeCurrent}
+            >
+              Delete
+            </button>
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-text-secondary mb-1">Default headers</h3>
+            <p class="text-xs text-text-muted mb-2">
+              Sent with every route using this environment. A default Authorization is skipped on
+              routes carrying a public flag; leave it out entirely for an anonymous environment.
+            </p>
+            <RowsEditor rows={current().headers} onChange={(headers) => patch({ headers })} />
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-text-secondary mb-1">Variables</h3>
+            <p class="text-xs text-text-muted mb-2">
+              <code>{'{{name}}'}</code> in any param, query, header or body value — e.g.{' '}
+              <code>Authorization: Bearer {'{{token}}'}</code>. A variable named like a path or
+              query param also fills it when it's left empty.
+            </p>
+            <RowsEditor rows={current().variables} onChange={(variables) => patch({ variables })} />
+          </div>
+
+          <div>
+            <h3 class="text-xs font-semibold text-text-secondary mb-1">Param mappings</h3>
+            <p class="text-xs text-text-muted mb-2">
+              For names that differ: an empty <code>:tenantId</code> takes the variable{' '}
+              <code>orgId</code>. Typed values always win.
+            </p>
+            <RowsEditor
+              rows={current().mappings}
+              onChange={(mappings) => patch({ mappings })}
+              keyPlaceholder="param or query name"
+              valuePlaceholder="variable"
+            />
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
