@@ -1,5 +1,23 @@
 # @forinda/kickjs-mcp
 
+## 9.1.0
+
+### Minor Changes
+
+- [#825](https://github.com/forinda/kick-js/pull/825) [`f191bb6`](https://github.com/forinda/kick-js/commit/f191bb68a939f2a7e83d5f702332bb45c990d17d) Thanks [@forinda](https://github.com/forinda)! - What MCP clients are told about a tool, made accurate:
+  
+  - Tool input schemas describe what the tool accepts (`io: 'input'`): a `.default()` field is optional and a coerced or transformed field takes the type that's sent. This also fixes route tools in `@forinda/kickjs-ai`, which share `buildRouteTool`.
+  - `@McpTool({ examples })` reach `tools/list`, as the input schema's `examples`.
+  - A route tool's annotations start from its HTTP method (`GET` read-only and idempotent, `DELETE` destructive and idempotent, …); `annotations` override them.
+  - A `202 Accepted` answer is reported as accepted and never sent as `structuredContent`. On a tool with an `outputSchema` it's marked `isError`, since clients check a success against that schema.
+  - The bearer 401 challenge says `error="invalid_token"` when a token was sent and refused.
+  - Transport errors use the SDK's codes: `-32001` for an unknown session, `-32603` for an internal error; other refusals keep `-32000`. An `outputSchema` that can't be converted is warned about instead of silently dropped.
+
+### Patch Changes
+
+- Updated dependencies [[`f191bb6`](https://github.com/forinda/kick-js/commit/f191bb68a939f2a7e83d5f702332bb45c990d17d)]:
+  - @forinda/kickjs-schema@0.2.3
+
 ## 9.0.3
 
 ### Patch Changes

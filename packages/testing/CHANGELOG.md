@@ -1,5 +1,11 @@
 # @forinda/kickjs-testing
 
+## 8.2.0
+
+### Minor Changes
+
+- [#823](https://github.com/forinda/kick-js/pull/823) [`e8f9aa1`](https://github.com/forinda/kick-js/commit/e8f9aa1031e2ceb38609a98daee4eca3184622bb) Thanks [@forinda](https://github.com/forinda)! - The test client's `.as(credential)` isn't bearer-only any more: `client({ auth: (sid) => ({ cookie: `sid=${sid}` }) })` (or an API-key header, or any scheme) sets what `.as()` sends. Without `auth`, it's `Authorization: Bearer <credential>` as before.
+
 ## 8.1.0
 
 ### Minor Changes
