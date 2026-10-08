@@ -246,15 +246,21 @@ export function prepareRequest(input: {
   origin: string
   cookies: string
   variables?: Record<string, string>
+  /**
+   * Param or query name → the variable that fills it, when the names differ.
+   * A variable named like the param fills it anyway — see {@link fillFromEnvironment}.
+   */
+  mappings?: KeyValueRow[]
 }): PreparedRequest {
   const { route, settings, origin, cookies } = input
   const vars = input.variables ?? {}
   const fill = (text: string) => interpolate(text, vars)
   const fillRows = (rows: KeyValueRow[]) =>
     rows.map((r) => ({ ...r, key: fill(r.key), value: fill(r.value) }))
+  const filled = fillFromEnvironment(input.inputs, vars, input.mappings ?? [])
   const inputs: RouteInputs = {
-    params: Object.fromEntries(Object.entries(input.inputs.params).map(([k, v]) => [k, fill(v)])),
-    query: fillRows(input.inputs.query),
+    params: Object.fromEntries(Object.entries(filled.params).map(([k, v]) => [k, fill(v)])),
+    query: fillRows(filled.query),
     headers: fillRows(input.inputs.headers),
     body: fill(input.inputs.body),
     bodyMode: input.inputs.bodyMode,
@@ -578,4 +584,128 @@ export function applyHints(inputs: RouteInputs, hints: OpenApiHints): RouteInput
 export function editorLink(template: string, file: string, line: number): string {
   const path = file.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')
   return template.replace('{file}', encodeURI(path)).replace('{line}', String(line))
+}
+
+// ── Environments ──────────────────────────────────────────────────────────
+
+/**
+ * A named set of what requests carry — default headers, variables and param
+ * mappings: `dev` / `stage` / `prod`, or `anonymous` / `admin`. One is active;
+ * a route can be pinned to another.
+ */
+export interface RunnerEnvironment {
+  id: string
+  name: string
+  /** Sent with every route; a default Authorization is skipped on public routes. */
+  headers: KeyValueRow[]
+  /** `{{name}}` values. */
+  variables: KeyValueRow[]
+  /** Param or query name (key) ← the variable (value) that fills it, when the names differ. */
+  mappings: KeyValueRow[]
+}
+
+export interface EnvironmentsState {
+  environments: RunnerEnvironment[]
+  activeId: string
+  /** Route (`GET /path`) → the environment it's pinned to. */
+  pins: Record<string, string>
+}
+
+/** The names offered for a new environment, in order. */
+export const ENVIRONMENT_NAMES = ['dev', 'stage', 'prod'] as const
+
+/** A route's key for pins: `GET /api/v1/users/:id`. */
+export const routeKey = (route: RunnerRoute): string =>
+  `${route.method.toUpperCase()} ${route.path}`
+
+const rows = (value: unknown): KeyValueRow[] =>
+  Array.isArray(value)
+    ? value.filter(
+        (r): r is KeyValueRow =>
+          !!r &&
+          typeof r === 'object' &&
+          typeof (r as KeyValueRow).key === 'string' &&
+          typeof (r as KeyValueRow).value === 'string' &&
+          typeof (r as KeyValueRow).enabled === 'boolean',
+      )
+    : []
+
+/**
+ * Environments from storage. Anything unusable starts over with one `dev`
+ * environment holding the old single environment's headers and variables,
+ * so upgrading keeps what was there.
+ */
+export function loadEnvironments(
+  raw: unknown,
+  legacy: { headers: KeyValueRow[]; variables: KeyValueRow[] },
+): EnvironmentsState {
+  const state = raw as Partial<EnvironmentsState> | null
+  const environments = (Array.isArray(state?.environments) ? state.environments : [])
+    .filter((e) => e && typeof e.id === 'string' && typeof e.name === 'string')
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      headers: rows(e.headers),
+      variables: rows(e.variables),
+      mappings: rows(e.mappings),
+    }))
+  if (environments.length === 0) {
+    return {
+      environments: [{ id: 'dev', name: 'dev', ...legacy, mappings: [] }],
+      activeId: 'dev',
+      pins: {},
+    }
+  }
+  const ids = new Set(environments.map((e) => e.id))
+  const pins = Object.fromEntries(
+    Object.entries(state?.pins ?? {}).filter(([, id]) => typeof id === 'string' && ids.has(id)),
+  )
+  const activeId = ids.has(state?.activeId as string)
+    ? (state!.activeId as string)
+    : environments[0]!.id
+  return { environments, activeId, pins }
+}
+
+/** The environment a route uses: the one it's pinned to, else the active one. */
+export function environmentFor(state: EnvironmentsState, route: RunnerRoute): RunnerEnvironment {
+  const byId = (id: string | undefined) => state.environments.find((e) => e.id === id)
+  return byId(state.pins[routeKey(route)]) ?? byId(state.activeId) ?? state.environments[0]!
+}
+
+/** A name for a new environment: the first of dev / stage / prod not taken, else `env N`. */
+export function nextEnvironmentName(state: EnvironmentsState): string {
+  const taken = new Set(state.environments.map((e) => e.name))
+  const free = ENVIRONMENT_NAMES.find((n) => !taken.has(n))
+  if (free) return free
+  let n = state.environments.length + 1
+  while (taken.has(`env ${n}`)) n++
+  return `env ${n}`
+}
+
+/**
+ * Fill empty path params and empty query values from the environment: a
+ * variable with the param's name, or the one a mapping names for it. What
+ * was typed always wins; nothing is written back into the inputs.
+ */
+export function fillFromEnvironment(
+  inputs: RouteInputs,
+  variables: Record<string, string>,
+  mappings: KeyValueRow[],
+): Pick<RouteInputs, 'params' | 'query'> {
+  const mapped = variableMap(mappings)
+  const valueFor = (name: string): string | undefined => {
+    const variable = mapped[name] ?? name
+    return Object.prototype.hasOwnProperty.call(variables, variable)
+      ? variables[variable]
+      : undefined
+  }
+  const params = Object.fromEntries(
+    Object.entries(inputs.params).map(([name, value]) => [name, value || (valueFor(name) ?? '')]),
+  )
+  const query = inputs.query.map((row) =>
+    row.enabled && row.key && !row.value && valueFor(row.key) !== undefined
+      ? { ...row, value: valueFor(row.key)! }
+      : row,
+  )
+  return { params, query }
 }

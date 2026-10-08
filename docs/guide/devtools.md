@@ -451,33 +451,39 @@ Selecting a route on the Routes tab opens the runner beside the list — drag th
 - **Path params** — one field per `:param`; the resolved URL updates as you type.
 - **Query** and **Headers** — key/value rows you can switch off without deleting.
 - **Body** — for `POST` / `PUT` / `PATCH` / `DELETE`, either **Raw** text (JSON gets `Content-Type: application/json`) or **Form data**: `multipart/form-data` rows that are text fields or **file pickers**. A route with `@FileUpload` opens in form mode with its declared field ready, and says how many files it takes. Picked files are kept in memory only, so pick them again after reopening; the snippets use `-F 'field=@file'` (curl) and a `FormData` (fetch).
-- **Environment** — default headers sent with every route (an `Authorization` token, a tenant header), variables, and settings. Kept for the browser tab only, unless you tick **Remember on this browser** (see below).
+- **Environment** — which [environment](#environments) the request uses: the active one, or one this route is pinned to. **Manage…** opens them.
+- **Settings** — the public flags, CSRF names, OpenAPI URL and editor link.
 - **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
 - **Response** — status, time, headers and the body (JSON pretty-printed), plus **Save to variable**.
 - **History** — the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Entries keep `{{variables}}` as written, not their values.
 
-The header names the handler (`UsersController.list`): click it to **open the handler in your editor**. The dashboard asks the app where the class is declared under `src/`, then follows a `vscode://file{file}:{line}` link. For another editor, change **Editor link** under _Environment → Settings_ — e.g. `cursor://file{file}:{line}`, `windsurf://file{file}:{line}`, or `idea://open?file={file}&line={line}`.
+The header names the handler (`UsersController.list`): click it to **open the handler in your editor**. The dashboard asks the app where the class is declared under `src/`, then follows a `vscode://file{file}:{line}` link. For another editor, change **Editor link** under _Settings_ — e.g. `cursor://file{file}:{line}`, `windsurf://file{file}:{line}`, or `idea://open?file={file}&line={line}`.
 
-#### OpenAPI prefill
+#### Prefill
 
-When the [Swagger adapter](./swagger.md) serves a spec (`/openapi.json` by default; change **OpenAPI spec URL** in settings if yours differs), the runner reads the route's operation:
+A route opened for the first time is prefilled from its own request schemas — the `body`, `query` and `params` it validates — so no Swagger adapter is needed. When the [Swagger adapter](./swagger.md) serves a spec (`/openapi.json` by default; change **OpenAPI spec URL** in settings if yours differs) and documents the route, the runner reads the operation instead, for its summaries:
 
 - a route opened for the first time gets its query parameters as rows (switched on when required) and an example JSON body built from the request schema — `example`, `default` or the first `enum` value where the schema gives one, a blank of the right type otherwise;
 - the summary shows under the route, path-param descriptions show as placeholders, and query parameters are listed with their descriptions;
-- **Fill empty inputs from OpenAPI** (under _Environment_) applies it later. It only fills empty fields and adds missing query rows — it never overwrites what you typed.
+- **Fill empty inputs from OpenAPI** (under _Settings_) applies it later. It only fills empty fields and adds missing query rows — it never overwrites what you typed.
 
-#### Variables and saved auth
+#### Environments {#environments}
 
-Like environments in Postman or Insomnia, variables save you re-typing the same values:
+Like environments in Postman or Insomnia: named sets of what requests carry — `dev` / `stage` / `prod`, or `anonymous` / `member` / `admin`. **Manage…** next to the runner's environment opens them in a sheet of their own, where each has:
 
-- Write `{{name}}` in any param, query, header or body value, and set `name` under _Environment → Variables_. A `{{name}}` with no value is left as written and flagged under the URL.
-- **Save to variable** on a response reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable from it.
-- Together: send your login route once, save `data.accessToken` as `token`, and add a default header `Authorization: Bearer {{token}}` — every route now sends it, and logging in again updates it everywhere.
-- **Remember on this browser** keeps default headers and variables in `localStorage`, so they survive closing the tab. They often hold tokens: leave it off on a shared machine. Switching it moves them rather than copying.
+- **Default headers** — sent with every route using it: an `Authorization: Bearer {{token}}`, a tenant header. Leave Authorization out for an anonymous environment.
+- **Variables** — `{{name}}` in any param, query, header or body value. A `{{name}}` with no value is left as written and flagged under the URL, naming the environment.
+- **Param mappings** — a variable named like a path or query param (`tenantId` for `:tenantId`) fills it whenever it's left empty; a mapping covers names that differ (`:tenantId` ← `orgId`). What you type always wins.
+
+One environment is **active**; the runner's picker can **pin** a route to another — a public route to `anonymous`, an admin route to `admin` — and the pin is remembered per route. Add, duplicate, rename, make active or delete them in the sheet; deleting one sends its pinned routes back to the active one.
+
+- **Save to variable** on a response reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable in the environment the route uses — log in under `admin` and only `admin` gets the token.
+- Together: send your login route once, save `data.accessToken` as `token`, and with `Authorization: Bearer {{token}}` as a default header every route using that environment sends it; logging in again updates it everywhere.
+- **Remember on this browser** (in the sheet) keeps environments in `localStorage`, so they survive closing the tab. They often hold tokens: leave it off on a shared machine. Switching it moves them rather than copying. Headers and variables from before environments existed become the first one, `dev`.
 
 It handles the framework's conventions for you:
 
-- **CSRF** — for unsafe methods it reads the `_csrf` cookie and sends it as `x-csrf-token`, the `csrf()` / `csrfGuard()` defaults. Change the names under _Environment → Settings_ if your app overrides them.
+- **CSRF** — for unsafe methods it reads the `_csrf` cookie and sends it as `x-csrf-token`, the `csrf()` / `csrfGuard()` defaults. Change the names under _Settings_ if your app overrides them.
 - **Public routes** — on a route carrying a public [route flag](./route-flags.md), a default `Authorization` header is left out, so you see the route work without credentials. The flag name defaults to `auth.public`; list several (comma-separated) if your app uses more than one.
 - **Data-changing requests** — `DELETE`, `PUT` and `PATCH` need a second click before they are sent. They run against whatever the app is connected to.
 - **The devtools token is never sent** to your routes.
