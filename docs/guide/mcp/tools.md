@@ -352,7 +352,7 @@ A route tool returns the route's response body as text. On top of that:
 
   A custom tool with an `outputSchema` sends an object result the same way.
 
-- **Accepted, not done.** A `202 Accepted` — an approval queue, a background job — is sent as text starting `Accepted (202)`, and never as `structuredContent`: its body isn't the tool's result, so it isn't checked against the `outputSchema`.
+- **Accepted, not done.** A `202 Accepted` — an approval queue, a background job — is sent as text starting `Accepted (202)`, and never as `structuredContent`: its body isn't the tool's result. On a tool with an `outputSchema` it's also marked `isError`, since a success has to match that schema and clients check it.
 
 - **Errors.** A response with status 400 or above is an error result (`isError: true`). When the body is JSON (a thrown `HttpException` answers [Problem Details](../error-handling.md)), it's sent as `structuredContent` too, so the model sees `status`, `type` and `detail` as fields:
 

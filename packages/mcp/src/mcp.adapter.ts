@@ -686,10 +686,12 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           ? await appFetch(new Request(new URL(target.url, callContextOf(extra).origin), init))
           : await fetch(`${serverBaseUrl}${target.url}`, init)
         const text = await res.text()
-        const isError = res.status >= 400
         // 202 Accepted: taken, not done — an approval queue, a background job.
-        // Its body isn't the tool's result, so it's not offered as one.
+        // Its body isn't the tool's result, so it's not offered as one. A tool
+        // with an output schema owes a result matching it, which a 202 doesn't
+        // have, so there it's an error (clients check a success against the schema).
         const accepted = res.status === 202
+        const isError = res.status >= 400 || (accepted && !!tool.outputSchema)
         let json: unknown
         try {
           json = text ? JSON.parse(text) : undefined
@@ -700,7 +702,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         // error that's the Problem Details body (machine-readable `type` and
         // `status`); for a success, when the tool declares an output schema.
         const structured =
-          isJsonObject(json) && (isError || (tool.outputSchema && !accepted))
+          isJsonObject(json) && !accepted && (isError || tool.outputSchema)
             ? { structuredContent: json }
             : {}
         const body = text || `(${res.status} ${res.statusText})`

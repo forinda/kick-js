@@ -93,8 +93,11 @@ describe('McpAdapter — what tools/list says about a tool', () => {
 
   it("says a 202 was accepted, and doesn't pass its body off as the result", async () => {
     const client = await connect(await start({ stateless: true }))
+    // Listed first, so the client holds the tool's output schema.
+    await client.listTools()
     const res = (await client.callTool({ name: 'ItemController.job', arguments: {} })) as any
-    expect(res.isError).toBeFalsy()
+    // It has an output schema, which a 202 can't meet: not a success.
+    expect(res.isError).toBe(true)
     expect(res.structuredContent).toBeUndefined()
     expect(res.content[0].text).toMatch(/^Accepted \(202\)/)
     expect(res.content[0].text).toContain('"ticket":"t-1"')

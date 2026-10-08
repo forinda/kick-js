@@ -23,7 +23,7 @@ McpAdapter({
 - **`type: 'bearer'`** passes the token from `Authorization: Bearer <token>`. A missing or malformed header is refused without calling `validate`.
 - **`type: 'custom'`** passes the raw `Authorization` value (`''` when absent).
 
-A refused request gets 401 with `WWW-Authenticate: Bearer`, plus `error="invalid_token"` when a token was sent and refused, so an OAuth client refreshes it instead of starting a new sign-in. The check runs on every request, so a revoked token stops working mid-session.
+A refused request gets 401. Under `type: 'bearer'` it also carries `WWW-Authenticate: Bearer`, plus `error="invalid_token"` when a token was sent and refused, so an OAuth client refreshes it instead of starting a new sign-in. The check runs on every request, so a revoked token stops working mid-session.
 
 ## Who is calling: `auth.authenticate`
 
