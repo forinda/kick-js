@@ -102,6 +102,28 @@ describe.each(runtimes)('client() on $name', ({ make }) => {
     expect(keyed.body).toMatchObject({ auth: null, key: 'k-1', tenant: 't1' })
     // A second .as() replaces the first.
     expect((await byKey.as('k-1').as('k-2').get('/echo/headers')).body.key).toBe('k-2')
+
+    // A new credential replaces the old one whole: a starting bearer token…
+    const both = client({
+      basePath: '/api/v1',
+      bearer: 'old',
+      auth: (sid) => ({ cookie: `sid=${sid}` }),
+    })
+    expect((await both.get('/echo/headers')).body.auth).toBe('Bearer old')
+    expect((await both.as('new').get('/echo/headers')).body).toMatchObject({
+      auth: null,
+      cookie: 'sid=new',
+    })
+    // …and headers an earlier .as() sent under another name.
+    const byKind = client({
+      basePath: '/api/v1',
+      auth: (c): Record<string, string> =>
+        c.startsWith('key:') ? { 'x-api-key': c.slice(4) } : { cookie: `sid=${c}` },
+    })
+    expect((await byKind.as('key:k-1').as('s-1').get('/echo/headers')).body).toMatchObject({
+      key: null,
+      cookie: 'sid=s-1',
+    })
   })
 
   it('keeps cookies between requests when asked, and not otherwise', async () => {
