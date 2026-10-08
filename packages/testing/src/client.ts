@@ -10,6 +10,16 @@ export interface TestClientOptions {
   headers?: Record<string, string>
   /** Sent as `Authorization: Bearer <token>`. */
   bearer?: string
+  /**
+   * How `.as(credential)` authenticates, when it isn't a bearer token — the
+   * headers to send for a credential:
+   *
+   *   client({ auth: (sid) => ({ cookie: `sid=${sid}` }) }).as(sessionId)
+   *   client({ auth: (key) => ({ 'x-api-key': key }) }).as(apiKey)
+   *
+   * Default: `Authorization: Bearer <credential>`.
+   */
+  auth?: (credential: string) => Record<string, string>
   /** Prefixed to every path: `basePath: '/api/v1'`, then `.get('/users')`. */
   basePath?: string
   /**
@@ -34,8 +44,11 @@ export interface TestClient {
   delete(path: string): TestRequest
   head(path: string): TestRequest
   options(path: string): TestRequest
-  /** The same client, sending `Authorization: Bearer <token>`. */
-  as(token: string): TestClient
+  /**
+   * The same client, authenticated as `credential`: `Authorization: Bearer
+   * <credential>`, or the headers the client's `auth` option makes of it.
+   */
+  as(credential: string): TestClient
   /** The same client, with these headers added (or replaced). */
   withHeaders(headers: Record<string, string>): TestClient
 }
@@ -59,10 +72,16 @@ export async function loadSupertest(): Promise<Supertest | null> {
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const
 
+/** A scoped client's state: the options, and the credential `.as()` gave it. */
+type ClientState = TestClientOptions & {
+  /** The credential from the last `.as()`, when `auth` turns it into headers. */
+  credential?: string
+}
+
 export function createClient(
   app: Application,
   request: Supertest | null,
-  options: TestClientOptions = {},
+  options: ClientState = {},
   sharedAgent?: Record<string, (path: string) => TestRequest>,
 ): TestClient {
   if (!request) {
@@ -75,9 +94,17 @@ export function createClient(
   // it, so `.as()` / `.withHeaders()` keep the same cookie jar. Otherwise a
   // fresh request each call.
   const agent = options.cookies ? (sharedAgent ?? request.agent(handler)) : undefined
-  // Header names are case-insensitive: kept lower-case so a later one replaces an earlier one.
-  const headers = lowerCaseKeys(options.headers)
-  if (options.bearer) headers.authorization = `Bearer ${options.bearer}`
+  // Header names are case-insensitive: kept lower-case so a later one replaces
+  // an earlier one. The credential's headers are made from it here, never
+  // carried in `options.headers`, so a new credential replaces the old one
+  // whole — a bearer token, or what an earlier `.as()` sent.
+  const own = lowerCaseKeys(options.headers)
+  const headers = { ...own }
+  if (options.credential !== undefined && options.auth) {
+    Object.assign(headers, lowerCaseKeys(options.auth(options.credential)))
+  } else if (options.bearer) {
+    headers.authorization = `Bearer ${options.bearer}`
+  }
   const base = options.basePath?.replace(/\/$/, '') ?? ''
 
   const client = {} as TestClient
@@ -88,17 +115,20 @@ export function createClient(
       return test
     }
   }
-  client.as = (token) => createClient(app, request, { ...options, headers, bearer: token }, agent)
+  client.as = (credential) =>
+    createClient(
+      app,
+      request,
+      options.auth
+        ? { ...options, headers: own, bearer: undefined, credential }
+        : { ...options, headers: own, bearer: credential, credential: undefined },
+      agent,
+    )
   client.withHeaders = (extra) => {
     const added = lowerCaseKeys(extra)
     // An explicit Authorization replaces the inherited bearer token.
     const bearer = 'authorization' in added ? undefined : options.bearer
-    return createClient(
-      app,
-      request,
-      { ...options, bearer, headers: { ...headers, ...added } },
-      agent,
-    )
+    return createClient(app, request, { ...options, bearer, headers: { ...own, ...added } }, agent)
   }
   return client
 }

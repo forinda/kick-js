@@ -53,6 +53,16 @@ await api.withHeaders({ 'x-tenant': 'acme' }).get('/projects')
 
 `.as(token)` sends `Authorization: Bearer <token>`, and `.withHeaders({...})` adds headers. Both return a new client and leave the one they came from unchanged, so one base client serves every user in a test.
 
+An app that doesn't authenticate by bearer token tells the client how, once, with `auth` — `.as()` then sends those headers instead:
+
+```ts
+const bySession = client({ auth: (sid) => ({ cookie: `sid=${sid}` }) })
+const byKey = client({ auth: (key) => ({ 'x-api-key': key }) })
+
+await bySession.as(sessionId).get('/me').expect(200)
+await byKey.as(apiKey).get('/reports').expect(200)
+```
+
 The token is one your app would accept. Auth is your own code in KickJS (there's no built-in auth package since v8), so the test signs a token the same way your login does, with the secret your auth adapter verifies against. In tests that secret comes from `.env.test`:
 
 ```ts
