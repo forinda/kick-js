@@ -55,7 +55,7 @@ const TYPE_MAP: Record<string, { ts: string; zod: string }> = {
 }
 
 export function parseFields(raw: string[]): FieldDef[] {
-  return raw.map((f) => {
+  const fields = raw.map((f): FieldDef => {
     const colonIdx = f.indexOf(':')
     if (colonIdx === -1) {
       throw new Error(`Invalid field: "${f}". Use format: name:type (e.g. title:string)`)
@@ -118,6 +118,14 @@ export function parseFields(raw: string[]): FieldDef[] {
       optional,
     }
   })
+  const seen = new Set<string>()
+  for (const { name } of fields) {
+    if (seen.has(name)) {
+      throw new Error(`Duplicate field: "${name}". Each field name may appear once.`)
+    }
+    seen.add(name)
+  }
+  return fields
 }
 
 // ── Scaffold Generator ──────────────────────────────────────────────────

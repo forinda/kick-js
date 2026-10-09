@@ -19,3 +19,11 @@ describe('scaffold field types', () => {
     expect(schema('z.uuid()').safeParse('nope').success).toBe(false)
   })
 })
+
+describe('scaffold field names', () => {
+  it('rejects a field named twice, whatever its type or optional marker', () => {
+    expect(() => parseFields(['title:string', 'title:string'])).toThrow('Duplicate field: "title"')
+    expect(() => parseFields(['title:string', 'title?:text'])).toThrow('Duplicate field: "title"')
+    expect(parseFields(['title:string', 'body:text'])).toHaveLength(2)
+  })
+})
