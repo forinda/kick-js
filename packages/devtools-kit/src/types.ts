@@ -169,7 +169,10 @@ export interface RuntimeSnapshot {
   memory: NodeJS.MemoryUsage
   /** `process.cpuUsage()` deltas in microseconds since the previous sample. */
   cpu: { userMicros: number; systemMicros: number }
-  /** Event-loop delay percentiles in milliseconds. */
+  /**
+   * Event-loop delay percentiles in milliseconds — how late the loop ran,
+   * beyond the monitor's own timer period, so an idle app reads ~0.
+   */
   eventLoop: { p50: number; p95: number; p99: number; max: number }
   /** GC counter + cumulative pause time in milliseconds since process start. */
   gc: { count: number; totalPauseMs: number }

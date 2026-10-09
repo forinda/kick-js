@@ -41,7 +41,9 @@ export interface RuntimeSamplerOptions {
 export class RuntimeSampler {
   private readonly intervalMs: number
   private readonly bufferSize: number
-  private readonly histogram = monitorEventLoopDelay({ resolution: 20 })
+  private readonly histogram: ReturnType<typeof monitorEventLoopDelay>
+  /** The histogram's timer period, in ms — an idle loop reads this much "delay". */
+  private readonly resolutionMs: number
   private readonly buffer: RuntimeSnapshot[] = []
 
   /** Cumulative GC stats updated by the PerformanceObserver. */
@@ -63,9 +65,8 @@ export class RuntimeSampler {
   constructor(opts: RuntimeSamplerOptions = {}) {
     this.intervalMs = opts.intervalMs ?? 1000
     this.bufferSize = opts.bufferSize ?? 60
-    if (opts.eventLoopResolutionMs !== undefined) {
-      this.histogram = monitorEventLoopDelay({ resolution: opts.eventLoopResolutionMs })
-    }
+    this.resolutionMs = opts.eventLoopResolutionMs ?? 20
+    this.histogram = monitorEventLoopDelay({ resolution: this.resolutionMs })
   }
 
   /**
@@ -152,11 +153,14 @@ export class RuntimeSampler {
     this.prevCpu = currentCpu
 
     // Histogram values are in nanoseconds — convert to ms for display.
+    // The histogram times its own `resolution`-ms timer, so an idle loop reads
+    // ~resolution ms. Subtract it to report the delay the app actually adds.
+    const delay = (ns: number): number => Math.max(0, ns / 1_000_000 - this.resolutionMs)
     const eventLoop = {
-      p50: this.histogram.percentile(50) / 1_000_000,
-      p95: this.histogram.percentile(95) / 1_000_000,
-      p99: this.histogram.percentile(99) / 1_000_000,
-      max: this.histogram.max / 1_000_000,
+      p50: delay(this.histogram.percentile(50)),
+      p95: delay(this.histogram.percentile(95)),
+      p99: delay(this.histogram.percentile(99)),
+      max: delay(this.histogram.max),
     }
     // Reset the histogram so each sample reports the lag accumulated
     // during the most recent interval, not since the sampler started.

@@ -20,3 +20,4 @@ DevTools dashboard: fewer tabs, a readable dependency graph, and two fixes.
 - **API runner:** a route's **Settings** says they apply to every route and save in this browser, and each field — CSRF cookie and header, OpenAPI URL, editor link, Fill empty inputs from OpenAPI — explains what it does.
 - **API runner:** disabled buttons (Save now before a response, Active, Delete on the last environment) look disabled.
 - **API runner, Form data:** each row shows its type, name, value or file picker, and a ✕ to remove it — the Text / File dropdown used to stretch across the row and push the rest out of view. A file field with nothing picked shows in the code snippet as `-F 'file=@<file>'` instead of vanishing.
+- **Fix:** event-loop delay no longer reads ~20 ms on an idle app. `monitorEventLoopDelay` times its own 20 ms timer, so every value carried that period; `RuntimeSampler` now subtracts it, and an idle loop reads ~0.
