@@ -1,6 +1,7 @@
 import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
 import { mountThemeEffect, resolvedTheme, setTheme, themeMode, type ThemeMode } from './lib/theme'
 import { densityMode, setDensity, mountDensityEffect, type DensityMode } from './lib/density'
+import { fontOverrides, mountFontEffect, setFont } from './lib/fonts'
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
 import { OverviewTab } from './tabs/OverviewTab'
 import { RuntimeTab } from './tabs/RuntimeTab'
@@ -259,6 +260,7 @@ export const App: Component = () => {
     // Apply data-theme + data-density to <html> on change.
     mountThemeEffect()
     mountDensityEffect()
+    mountFontEffect()
   })
 
   const switchTo = (id: string): void => {
@@ -659,6 +661,34 @@ const SettingsMenu: Component = () => {
               </For>
             </div>
             <div class="dt-settings-hint">Controls spacing &amp; font scale. Default: Small.</div>
+          </div>
+          <div class="dt-settings-section">
+            <div class="dt-settings-label">Fonts</div>
+            <For
+              each={
+                [
+                  ['sans', 'Interface', 'e.g. Inter'],
+                  ['mono', 'Code & editors', 'e.g. JetBrains Mono'],
+                ] as const
+              }
+            >
+              {([slot, label, placeholder]) => (
+                <label class="dt-settings-field">
+                  <span>{label}</span>
+                  <input
+                    type="text"
+                    spellcheck={false}
+                    placeholder={placeholder}
+                    value={fontOverrides()[slot]}
+                    onInput={(e) => setFont(slot, e.currentTarget.value)}
+                  />
+                </label>
+              )}
+            </For>
+            <div class="dt-settings-hint">
+              Fonts installed on this computer, comma-separated. Ours stay as the fallback, so a
+              name that isn't installed changes nothing. Empty = default.
+            </div>
           </div>
         </div>
       </Show>
