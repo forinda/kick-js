@@ -14,6 +14,7 @@ import { Chart } from '../lib/chart'
 import { post, rpc, subscribe, type ProcessInfo } from '../lib/rpc'
 import { formatBytes, formatMs, formatPercent, formatUptime, severityTone } from '../lib/format'
 import { InfoTip } from '../lib/info'
+import { mergeSamples } from '../lib/stats'
 
 const HISTORY = 60
 
@@ -24,7 +25,7 @@ export const RuntimeTab: Component = () => {
   const [unavailable, setUnavailable] = createSignal(false)
 
   const ingest = (snaps: RuntimeSnapshot[]): void => {
-    setHistory((prev) => [...prev, ...snaps].slice(-HISTORY))
+    setHistory((prev) => mergeSamples(prev, snaps, HISTORY))
   }
 
   onMount(() => {

@@ -225,6 +225,33 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     expect(text).toContain('"type":"metrics"')
   })
 
+  it('re-sends metrics on a timer while the app is idle', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval'] })
+    try {
+      const { app } = await boot(runtime)
+      const server = createServer((req, res) => app.handle(req, res))
+      await new Promise<void>((resolve) => server.listen(0, resolve))
+      const { port } = server.address() as AddressInfo
+      const abort = new AbortController()
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/_debug/stream`, { signal: abort.signal })
+        const reader = res.body!.getReader()
+        let text = ''
+        const count = () => text.split('"type":"metrics"').length - 1
+        while (count() < 1) text += new TextDecoder().decode((await reader.read()).value)
+        vi.advanceTimersByTime(5000)
+        while (count() < 2) text += new TextDecoder().decode((await reader.read()).value)
+        expect(count()).toBe(2)
+      } finally {
+        abort.abort()
+        server.closeAllConnections()
+        await new Promise((resolve) => server.close(resolve))
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('guards the API with the token and leaves the page and assets open', async () => {
     const http = await boot(runtime, 's3cret')
 

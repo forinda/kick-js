@@ -187,6 +187,9 @@ function raceWithTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
  * Long enough for a typical DB ping or remote check, short enough that
  * one misbehaving adapter can't stall the dashboard endpoint.
  */
+/** How often `/stream` re-sends the counters even when nothing changed. */
+const METRICS_TICK_MS = 5000
+
 const PEER_HEALTHCHECK_TIMEOUT_MS = 1500
 
 /**
@@ -1122,12 +1125,16 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           const stopErrWatch = watch(errorCount, () => sendMetrics())
 
           const heartbeat = setInterval(() => sse.comment('heartbeat'), 30000)
+          // An idle app changes no counter, so without this tick the
+          // dashboard's uptime and "Updated" time would freeze.
+          const tick = setInterval(sendMetrics, METRICS_TICK_MS)
 
           sse.onClose(() => {
             unsubContainer?.()
             stopRequestWatch()
             stopErrWatch()
             clearInterval(heartbeat)
+            clearInterval(tick)
           })
         })
 

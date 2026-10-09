@@ -14,3 +14,5 @@ DevTools dashboard: fewer tabs, a readable dependency graph, and two fixes.
 - Remembered `topology` and `graph` tabs open Runtime and Container.
 - **Fix:** uptime keeps counting. It was a `computed()` over the process clock, which is not reactive, so it cached its first read; Overview, the DevToolsAdapter card and `/_debug/health` showed the same few seconds forever.
 - **Fix:** the dashboard ships its own favicon, so opening `/_debug` no longer requests `/favicon.ico` from the app — that 404 showed up in Requests and Recent failures.
+- **Fix:** the live stream re-sends the counters every 5 seconds, so on an idle app the Overview's uptime and the header's "Updated" time keep moving instead of freezing at the last request.
+- **Fix:** the Runtime CPU chart no longer spikes into the thousands of percent after the tab opens. The stream re-sent the sample the history ended with, and a duplicate divided its CPU time by a ~0ms gap; samples now merge by timestamp.
