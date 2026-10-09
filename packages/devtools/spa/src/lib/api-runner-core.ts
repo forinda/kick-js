@@ -742,3 +742,12 @@ export function fillFromEnvironment(
   )
   return { params, query }
 }
+
+/** Pretty-printed JSON, or `undefined` when `text` isn't JSON (e.g. an unquoted `{{variable}}`). */
+export function formatJson(text: string): string | undefined {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2)
+  } catch {
+    return undefined
+  }
+}

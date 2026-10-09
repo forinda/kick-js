@@ -10,3 +10,4 @@ API runner and Routes tab:
 - Controller groups in the Routes list collapse (remembered), with **Collapse all**; a search shows every match.
 - The public route flags setting explains what it does.
 - Fix: opening a route could save the previous route's inputs under the new route (a never-opened route inherited its body and Save to variable), depending on the order the runner's effects ran in.
+- Hover the request body for **Format** (pretty-print JSON) and **Copy**, and the response body for **Copy** (the whole body, formatted).

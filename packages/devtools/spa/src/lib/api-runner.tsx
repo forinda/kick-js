@@ -49,6 +49,7 @@ import {
   type HistoryEntry,
   emptyInputs,
   formatBody,
+  formatJson,
   inputsKey,
   storableInputs,
   readJsonPath,
@@ -767,12 +768,23 @@ export const ApiRunnerPanel: Component = () => {
                         <Show
                           when={current().bodyMode === 'form'}
                           fallback={
-                            <textarea
-                              class={`${inputClass} font-mono min-h-40`}
-                              placeholder='{ "name": "value" }'
-                              value={current().body}
-                              onInput={(e) => update({ body: e.currentTarget.value })}
-                            />
+                            <div class="group relative">
+                              <textarea
+                                class={`${inputClass} font-mono min-h-40`}
+                                placeholder='{ "name": "value" }'
+                                value={current().body}
+                                onInput={(e) => update({ body: e.currentTarget.value })}
+                              />
+                              <HoverActions>
+                                <Show when={current().body.trim()}>
+                                  <FormatButton
+                                    text={() => current().body}
+                                    onFormat={(body) => update({ body })}
+                                  />
+                                  <CopyButton text={() => current().body} label="Copy body" />
+                                </Show>
+                              </HoverActions>
+                            </div>
                           }
                         >
                           <FormEditor
@@ -919,9 +931,25 @@ export const ApiRunnerPanel: Component = () => {
                         </tbody>
                       </table>
                     </details>
-                    <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
-                      {res().body || '(empty body)'}
-                    </pre>
+                    <div class="group relative">
+                      <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
+                        {res().body || '(empty body)'}
+                      </pre>
+                      <Show when={res().raw}>
+                        <HoverActions>
+                          {/* The whole body, formatted — not the on-screen copy, which may be truncated. */}
+                          <CopyButton
+                            label="Copy response"
+                            text={() =>
+                              formatBody(
+                                res().raw,
+                                res().headers.find(([k]) => k === 'content-type')?.[1] ?? null,
+                              )
+                            }
+                          />
+                        </HoverActions>
+                      </Show>
+                    </div>
                     <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs">
                       <span class="text-text-secondary font-semibold shrink-0">
                         Save to variable
@@ -1504,5 +1532,51 @@ const EnvironmentsSheet: Component<{
 
 const inputClass =
   'w-full min-w-0 bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500'
+const hoverButton =
+  'px-2 py-0.5 text-[0.68rem] font-semibold rounded-md border bg-surface-1 text-text-secondary border-border-strong hover:text-text-body'
+
+/** Top-right actions over a block: shown on hover or keyboard focus (always on touch-sized screens). */
+const HoverActions: Component<{ children: JSX.Element }> = (props) => (
+  <div class="absolute top-2 right-2 flex gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+    {props.children}
+  </div>
+)
+
+/** Pretty-prints a JSON body in place; says so briefly when it isn't JSON. */
+const FormatButton: Component<{ text: () => string; onFormat: (text: string) => void }> = (
+  props,
+) => {
+  const [failed, setFailed] = createSignal(false)
+  const format = () => {
+    const pretty = formatJson(props.text())
+    if (pretty !== undefined) return props.onFormat(pretty)
+    setFailed(true)
+    setTimeout(() => setFailed(false), 1500)
+  }
+  return (
+    <button type="button" class={hoverButton} title="Pretty-print the JSON body" onClick={format}>
+      {failed() ? 'Not JSON' : 'Format'}
+    </button>
+  )
+}
+
+const CopyButton: Component<{ text: () => string; label: string }> = (props) => {
+  const [state, setState] = createSignal<string | null>(null)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(props.text())
+      setState('Copied')
+    } catch {
+      setState('Copy failed')
+    }
+    setTimeout(() => setState(null), 1500)
+  }
+  return (
+    <button type="button" class={hoverButton} aria-label={props.label} onClick={copy}>
+      {state() ?? 'Copy'}
+    </button>
+  )
+}
+
 const secondaryButton =
   'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'

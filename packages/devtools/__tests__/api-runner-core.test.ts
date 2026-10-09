@@ -18,6 +18,7 @@ import {
   buildUrl,
   emptyInputs,
   formatBody,
+  formatJson,
   needsConfirmation,
   pathParams,
   prepareRequest,
@@ -637,5 +638,12 @@ describe('moveRow', () => {
     expect(moveRow(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
     expect(moveRow(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
     expect(moveRow(['a', 'b'], 0, 5)).toEqual(['a', 'b'])
+  })
+})
+
+describe('formatJson', () => {
+  it('pretty-prints JSON and declines anything else', () => {
+    expect(formatJson('{"a":1,"b":[2]}')).toBe('{\n  "a": 1,\n  "b": [\n    2\n  ]\n}')
+    expect(formatJson('{ "id": {{id}} }')).toBeUndefined()
   })
 })
