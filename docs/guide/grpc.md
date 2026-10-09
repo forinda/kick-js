@@ -229,4 +229,4 @@ grpc.listServices() // ['user.v1.UserService']
 grpc.getStats() // { services, methods, callsTotal, callsFailed, byMethod }
 ```
 
-The adapter implements `introspect()`, so it also appears in the [DevTools](./devtools.md) topology view.
+The adapter implements `introspect()`, so it also appears in the **Plugged in** list on the [DevTools](./devtools.md) Runtime tab.

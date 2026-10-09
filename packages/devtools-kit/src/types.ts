@@ -55,6 +55,12 @@ export interface IntrospectionSnapshot {
   metrics?: Record<string, number>
   /** Self-reported memory footprint estimate, in bytes. Optional. */
   memoryBytes?: number
+  /**
+   * Lifecycle hooks the primitive implements (`beforeStart`, `middleware`,
+   * `shutdown`, …). Filled in by DevTools, not by `introspect()`, so a
+   * primitive without `introspect()` still shows what it plugs into.
+   */
+  hooks?: readonly string[]
 }
 
 /**

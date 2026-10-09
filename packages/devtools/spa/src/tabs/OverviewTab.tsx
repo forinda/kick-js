@@ -226,14 +226,12 @@ export const OverviewTab: Component = () => {
                     {([name, status]) => (
                       <div class="flex items-center gap-2 py-0.5" title={status}>
                         <span
-                          class={`h-2 w-2 shrink-0 rounded-full ${
-                            status === 'running' ? 'bg-emerald-500' : 'bg-amber-500'
-                          }`}
+                          class={`h-2 w-2 shrink-0 rounded-full ${adapterTone(status).dot}`}
                           aria-hidden="true"
                         />
                         <span class="min-w-0 flex-1 truncate text-text-secondary">{name}</span>
                         <Show when={status !== 'running'}>
-                          <span class="text-xs text-amber-500">{status}</span>
+                          <span class={`text-xs ${adapterTone(status).text}`}>{status}</span>
                         </Show>
                       </div>
                     )}
@@ -289,4 +287,15 @@ function badgeForStatus(status: string): string {
   if (status === 'healthy') return 'badge-ok'
   if (status === 'degraded') return 'badge-warn'
   return 'badge-critical'
+}
+
+/**
+ * `running` means mounted; `up` / `down` / `degraded` come from the adapter's
+ * own `onHealthCheck()`.
+ */
+function adapterTone(status: string): { dot: string; text: string } {
+  if (status === 'running' || status === 'up')
+    return { dot: 'bg-emerald-500', text: 'text-emerald-500' }
+  if (status === 'down' || status === 'stopped') return { dot: 'bg-red-500', text: 'text-red-500' }
+  return { dot: 'bg-amber-500', text: 'text-amber-500' }
 }

@@ -57,6 +57,25 @@ export interface CollectTopologyOptions {
 
 const DEFAULT_INTROSPECT_TIMEOUT_MS = 100
 
+/** Lifecycle hooks of `AppAdapter` and `KickPlugin`, in the order they run. */
+const HOOKS = [
+  'register',
+  'modules',
+  'adapters',
+  'setup',
+  'middleware',
+  'contributors',
+  'beforeMount',
+  'onRouteMount',
+  'beforeStart',
+  'afterStart',
+  'onReady',
+  'onResponse',
+  'onError',
+  'onHealthCheck',
+  'shutdown',
+] as const
+
 /**
  * Collect a {@link TopologySnapshot} for the given application.
  *
@@ -100,10 +119,12 @@ async function snapshotFor(
   errors: TopologyError[],
 ): Promise<IntrospectionSnapshot> {
   const name = primitive.name ?? '(unnamed)'
+  const hooks = HOOKS.filter((h) => typeof (primitive as Record<string, unknown>)[h] === 'function')
   const stub: IntrospectionSnapshot = {
     protocolVersion: PROTOCOL_VERSION,
     name,
     kind,
+    hooks,
   }
   if (typeof primitive.introspect !== 'function') return stub
 
@@ -132,6 +153,7 @@ async function snapshotFor(
         tokens: snap.tokens,
         metrics: snap.metrics,
         memoryBytes: snap.memoryBytes,
+        hooks,
       }
     }
     return stub

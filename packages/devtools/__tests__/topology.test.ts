@@ -82,7 +82,25 @@ describe('collectTopologySnapshot', () => {
       protocolVersion: PROTOCOL_VERSION,
       name: 'PlainAdapter',
       kind: 'adapter',
+      hooks: ['middleware'],
     })
+  })
+
+  it('lists the hooks a primitive implements, with or without introspect()', async () => {
+    const Hooked = defineAdapter({
+      name: 'HookedAdapter',
+      build: () => ({
+        beforeStart: () => {},
+        shutdown: () => {},
+        introspect: (): IntrospectionSnapshot => ({
+          protocolVersion: PROTOCOL_VERSION,
+          name: 'HookedAdapter',
+          kind: 'adapter',
+        }),
+      }),
+    })
+    const snap = await collectTopologySnapshot({ app: fakeAppLike([Hooked()], []), container })
+    expect(snap.adapters[0]?.hooks).toEqual(['beforeStart', 'shutdown'])
   })
 
   it('collects an error entry when introspect() throws', async () => {

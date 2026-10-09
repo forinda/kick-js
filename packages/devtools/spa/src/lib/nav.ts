@@ -7,12 +7,16 @@ import { createSignal } from 'solid-js'
 const KEY = 'kickjs-devtools-tab'
 
 /** Tabs that were merged into another — a remembered old id opens the new one. */
-const MERGED: Record<string, string> = { memory: 'runtime' }
+export const MERGED_TABS: Record<string, string> = {
+  memory: 'runtime',
+  topology: 'runtime',
+  graph: 'container',
+}
 
 function initialTab(): string {
   try {
     const saved = localStorage.getItem(KEY) ?? 'overview'
-    return MERGED[saved] ?? saved
+    return MERGED_TABS[saved] ?? saved
   } catch {
     return 'overview'
   }
@@ -21,7 +25,8 @@ function initialTab(): string {
 const [activeTab, setActiveTab] = createSignal<string>(initialTab())
 export { activeTab }
 
-export function switchTab(id: string): void {
+export function switchTab(tab: string): void {
+  const id = MERGED_TABS[tab] ?? tab
   setActiveTab(id)
   try {
     localStorage.setItem(KEY, id)

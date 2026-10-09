@@ -1,7 +1,8 @@
 /**
- * Topology — what's plugged into the app: plugins, adapters and context
- * contributors side by side. Each plugin / adapter card shows its version,
- * the state and counters its `introspect()` reports, and the DI tokens it
+ * What's plugged into the app — plugins, adapters and context contributors
+ * side by side, under the process charts on the Runtime tab. Each plugin /
+ * adapter card shows its version, the lifecycle hooks it implements, the
+ * state and counters its `introspect()` reports, and the DI tokens it
  * provides and requires; hovering a token highlights every card that
  * provides or requires it, and clicking one opens it in Container.
  *
@@ -44,6 +45,9 @@ export const TopologyTab: Component = () => {
   return (
     <div class="flex flex-col gap-3">
       <div class="flex items-center gap-3 text-xs text-text-muted">
+        <h2 class="text-[0.66rem] font-semibold uppercase tracking-wider text-text-muted">
+          Plugged in
+        </h2>
         <Show when={snap()}>
           {(s) => (
             <span>
@@ -159,7 +163,8 @@ const PrimitiveCard: Component<{
     state().length +
       metrics().length +
       (props.p.tokens?.provides.length ?? 0) +
-      (props.p.tokens?.requires.length ?? 0) >
+      (props.p.tokens?.requires.length ?? 0) +
+      (props.p.hooks?.length ?? 0) >
     0
 
   return (
@@ -177,6 +182,13 @@ const PrimitiveCard: Component<{
           <span class="dt-tone dt-tone-gray">v{props.p.version}</span>
         </Show>
       </header>
+      <Show when={props.p.hooks?.length}>
+        <div class="mt-1 flex flex-wrap gap-1" title="Lifecycle hooks it implements">
+          <For each={props.p.hooks}>
+            {(h) => <span class="font-mono text-[0.66rem] text-text-muted">{h}</span>}
+          </For>
+        </div>
+      </Show>
       <Show when={metrics().length}>
         <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
           <For each={metrics()}>

@@ -11,7 +11,6 @@ import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
 import { QueuesTab } from './tabs/QueuesTab'
 import { DatabaseTab } from './tabs/DatabaseTab'
-import { GraphTab } from './tabs/GraphTab'
 import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
@@ -19,7 +18,7 @@ import { startUnifiedStream } from './lib/unified-stream'
 import { startTrafficSampler } from './lib/traffic'
 import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
-import { activeTab, switchTab } from './lib/nav'
+import { activeTab, MERGED_TABS, switchTab } from './lib/nav'
 import { Icon } from './lib/icons'
 import { AuthGate } from './lib/auth-gate'
 import { CommandPalette, openCommandPalette } from './lib/command-palette'
@@ -30,14 +29,12 @@ import { openToken } from './lib/token-detail'
 type BuiltInTabId =
   | 'overview'
   | 'runtime'
-  | 'topology'
   | 'routes'
   | 'requests'
   | 'metrics'
   | 'container'
   | 'queues'
   | 'database'
-  | 'graph'
   | 'activity'
 
 interface BuiltInTabSpec {
@@ -45,6 +42,13 @@ interface BuiltInTabSpec {
   label: string
   /** Reactive count thunk; renders as a badge next to the tab label when truthy. */
   count?: () => number | undefined
+  /** Fed only by optional sources — dimmed in the sidebar while its count is empty. */
+  quiet?: true
+}
+
+/** Sidebar title and dimming for a built-in tab with nothing to show yet. */
+function idle(t: BuiltInTabSpec, active: boolean): boolean {
+  return !!t.quiet && !active && !t.count?.()
 }
 
 /**
@@ -56,7 +60,6 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
   return [
     { id: 'overview', label: 'Overview' },
     { id: 'runtime', label: 'Runtime' },
-    { id: 'topology', label: 'Topology' },
     { id: 'routes', label: 'Routes', count: () => store.routes().length || undefined },
     { id: 'metrics', label: 'Metrics' },
     { id: 'requests', label: 'Requests' },
@@ -68,30 +71,31 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
     {
       id: 'queues',
       label: 'Queues',
+      quiet: true,
       count: () => store.queues().queues.length || undefined,
     },
     {
       id: 'database',
       label: 'Database',
+      quiet: true,
       count: () =>
         recentBusEvents()().filter((e) => e.type === 'db:query' || e.type === 'db:query-error')
           .length || undefined,
     },
     {
-      id: 'graph',
-      label: 'Graph',
-      count: () => store.container().length || undefined,
-    },
-    {
       id: 'activity',
       label: 'Activity',
+      quiet: true,
       count: () => recentBusEvents()().length || undefined,
     },
   ]
 }
 
 /** Reserved built-in IDs so a custom tab can't shadow them. */
-const RESERVED: ReadonlySet<string> = new Set(builtInTabs().map((t) => t.id))
+const RESERVED: ReadonlySet<string> = new Set([
+  ...builtInTabs().map((t) => t.id),
+  ...Object.keys(MERGED_TABS),
+])
 
 /**
  * Sidebar grouping of the built-in tabs. A `label: null` group renders its
@@ -104,8 +108,8 @@ interface TabGroup {
 }
 const TAB_GROUPS: readonly TabGroup[] = [
   { label: null, ids: ['overview'] },
-  { label: 'Runtime', ids: ['runtime', 'topology', 'metrics', 'requests'] },
-  { label: 'Architecture', ids: ['routes', 'container', 'graph'] },
+  { label: 'Runtime', ids: ['runtime', 'metrics', 'requests'] },
+  { label: 'Architecture', ids: ['routes', 'container'] },
   { label: 'Data & Jobs', ids: ['database', 'queues'] },
   { label: null, ids: ['activity'] },
 ]
@@ -117,7 +121,6 @@ const FLUSH_TABS: ReadonlySet<string> = new Set([
   'routes',
   'requests',
   'container',
-  'graph',
   'activity',
   'database',
   'queues',
@@ -233,7 +236,7 @@ export const App: Component = () => {
       })
       .catch(() => {
         // Tabs endpoint may 503 during startup — silent fall back to
-        // built-ins-only. The Topology tab will surface the same
+        // built-ins-only. The Runtime tab's plugin list will surface the same
         // error if the issue is persistent.
       })
 
@@ -365,9 +368,15 @@ export const App: Component = () => {
                               type="button"
                               role="tab"
                               data-tab-id={id}
-                              class={`dt-nav-item ${active() === id ? 'active' : ''}`}
+                              class={`dt-nav-item ${active() === id ? 'active' : ''} ${
+                                idle(t(), active() === id) ? 'opacity-50' : ''
+                              }`}
                               aria-selected={active() === id}
-                              title={t().label}
+                              title={
+                                idle(t(), active() === id)
+                                  ? `${t().label} — nothing reported yet`
+                                  : t().label
+                              }
                               onClick={() => switchTo(id)}
                             >
                               <span class="dt-nav-main">
@@ -413,9 +422,15 @@ export const App: Component = () => {
                                   type="button"
                                   role="tab"
                                   data-tab-id={id}
-                                  class={`dt-nav-item nested ${active() === id ? 'active' : ''}`}
+                                  class={`dt-nav-item nested ${active() === id ? 'active' : ''} ${
+                                    idle(t(), active() === id) ? 'opacity-50' : ''
+                                  }`}
                                   aria-selected={active() === id}
-                                  title={t().label}
+                                  title={
+                                    idle(t(), active() === id)
+                                      ? `${t().label} — nothing reported yet`
+                                      : t().label
+                                  }
                                   onClick={() => switchTo(id)}
                                 >
                                   <span class="dt-nav-main">
@@ -483,10 +498,10 @@ export const App: Component = () => {
             <OverviewTab />
           </Show>
           <Show when={active() === 'runtime'}>
-            <RuntimeTab />
-          </Show>
-          <Show when={active() === 'topology'}>
-            <TopologyTab />
+            <div class="flex flex-col gap-6">
+              <RuntimeTab />
+              <TopologyTab />
+            </div>
           </Show>
           <Show when={active() === 'routes'}>
             <RoutesTab />
@@ -505,9 +520,6 @@ export const App: Component = () => {
           </Show>
           <Show when={active() === 'database'}>
             <DatabaseTab />
-          </Show>
-          <Show when={active() === 'graph'}>
-            <GraphTab />
           </Show>
           <Show when={active() === 'activity'}>
             <ActivityLogTab />
