@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 8.7.5
+
+### Patch Changes
+
+- [#829](https://github.com/forinda/kick-js/pull/829) [`4b3d8e4`](https://github.com/forinda/kick-js/commit/4b3d8e4f669daca84cc4b86ad0e51b5ffc8d7d86) Thanks [@forinda](https://github.com/forinda)! - Generated DTOs use Zod 4's top-level string formats: `date` fields emit `z.iso.datetime()`, and `email`, `url` and `uuid` emit `z.email()`, `z.url()` and `z.uuid()`. The old `z.string().datetime()` / `.email()` / `.url()` / `.uuid()` forms are deprecated in Zod 4. The scaffolded `src/config/index.ts` examples use `z.url()` too.
+  
+  `kick g scaffold` rejects a field named twice (`title:string title:text`) with `Duplicate field: "title"` instead of generating it twice.
+
 ## 8.7.4
 
 ### Patch Changes
