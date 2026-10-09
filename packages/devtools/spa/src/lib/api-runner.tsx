@@ -803,6 +803,49 @@ export const ApiRunnerPanel: Component = () => {
                 )}
               </Show>
 
+              <Section
+                title="Save to variable"
+                open={!!(capture().path || capture().name)}
+                count={capture().path && capture().name ? 1 : undefined}
+              >
+                <p class="text-xs text-text-muted mb-2">
+                  Set this up before you send. With both filled in, every 2xx response from this
+                  route copies the value at the JSON path into that variable of the environment it
+                  was sent with — log in once and routes using <code>{'{{token}}'}</code> pick it
+                  up. New variables start masked. Saved for this route only.
+                </p>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+                  <input
+                    class={inputClass}
+                    aria-label="JSON path"
+                    placeholder="JSON path, e.g. data.accessToken"
+                    value={capture().path}
+                    onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
+                  />
+                  <input
+                    class={inputClass}
+                    aria-label="Variable name"
+                    placeholder="variable, e.g. token"
+                    value={capture().name}
+                    onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
+                  />
+                  <button
+                    type="button"
+                    class={`${secondaryButton} shrink-0`}
+                    disabled={!result()}
+                    title={result() ? 'Copy from the response shown now' : 'Send the request first'}
+                    onClick={captureVariable}
+                  >
+                    Save now
+                  </button>
+                </div>
+                <Show when={captureNote()}>
+                  <p class="text-xs text-text-muted mt-1" role="status">
+                    {captureNote()}
+                  </p>
+                </Show>
+              </Section>
+
               <Section title="Settings">
                 <p class="text-xs text-text-muted mb-3">
                   These apply to every route, not just this one, and save as you type in this
@@ -977,37 +1020,6 @@ export const ApiRunnerPanel: Component = () => {
                         </HoverActions>
                       </Show>
                     </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs">
-                      <span class="text-text-secondary font-semibold shrink-0">
-                        Save to variable
-                      </span>
-                      <input
-                        class={inputClass}
-                        placeholder="JSON path, e.g. data.accessToken"
-                        value={capture().path}
-                        onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
-                      />
-                      <input
-                        class={inputClass}
-                        placeholder="variable, e.g. token"
-                        value={capture().name}
-                        onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
-                      />
-                      <button type="button" class={secondaryButton} onClick={captureVariable}>
-                        Save
-                      </button>
-                    </div>
-                    <p class="text-xs text-text-muted mt-1">
-                      Fill in both and every 2xx response from this route copies the value at the
-                      path into that variable of the environment it was sent with — log in once and
-                      routes using <code>{'{{token}}'}</code> pick it up. <strong>Save</strong>{' '}
-                      copies from the response above now. Saved for this route only.
-                    </p>
-                    <Show when={captureNote()}>
-                      <p class="text-xs text-text-muted mt-1" role="status">
-                        {captureNote()}
-                      </p>
-                    </Show>
                     <Show when={res().truncated}>
                       <p class="mt-1 text-xs text-text-muted">
                         Body truncated to {MAX_BODY_CHARS.toLocaleString()} characters.
@@ -1542,8 +1554,8 @@ const EnvironmentsSheet: Component<{
               query param also fills it when it's left empty.
             </p>
             <p class="text-xs text-text-muted mb-2">
-              Type values here, or let a route fill one: <strong>Save to variable</strong> under a
-              route's response copies a value from it (say, the token a login returns) into this
+              Type values here, or let a route fill one: a route's <strong>Save to variable</strong>{' '}
+              copies a value from its response (say, the token a login returns) into this
               environment after every successful send. New variables it adds start masked.
             </p>
             <RowsEditor
@@ -1622,4 +1634,4 @@ const CopyButton: Component<{ text: () => string; label: string }> = (props) => 
 }
 
 const secondaryButton =
-  'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+  'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-text-secondary'

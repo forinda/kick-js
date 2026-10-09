@@ -452,7 +452,8 @@ Selecting a route on the Routes tab opens the runner beside the list — drag th
 - **Environment** — which [environment](#environments) the request uses: the active one, or one this route is pinned to. **Manage…** opens them.
 - **Settings** — the public flags, CSRF cookie and header names, OpenAPI URL and editor link. They apply to every route, not just the open one, and save as you type in this browser (`localStorage`). **Fill empty inputs from OpenAPI** is the exception: it fills only the open route.
 - **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
-- **Response** — status, time, headers and the body (JSON pretty-printed), plus this route's **Save to variable**. Hover the body for **Copy**: the whole body, formatted, even when the view is truncated.
+- **Save to variable** — a JSON path and a variable name; set it up before you send. See [Environments](#environments).
+- **Response** — status, time, headers and the body (JSON pretty-printed). Hover the body for **Copy**: the whole body, formatted, even when the view is truncated.
 - **History** — the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Entries keep `{{variables}}` as written, not their values.
 
 ![The login route's Headers: the environment's Authorization starts unticked on a public route, X-Tenant is sent, and the curl snippet shows only what is sent](./images/devtools/route-defaults.webp)
@@ -477,7 +478,7 @@ Like environments in Postman or Insomnia: named sets of what requests carry — 
 
 One environment is **active**; the runner's picker can **pin** a route to another — a public route to `anonymous`, an admin route to `admin` — and the pin is remembered per route. Add, duplicate, rename, make active or delete them in the sheet; deleting one sends its pinned routes back to the active one.
 
-- **Save to variable** on a response reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable in the environment the route uses — log in under `admin` and only `admin` gets the token. It belongs to the route: once set on your login route, every 2xx response from it saves the variable again, and other routes don't carry it. A saved variable starts out secret.
+- **Save to variable** in a route's runner reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable in the environment the route uses — log in under `admin` and only `admin` gets the token. It belongs to the route: once set on your login route, every 2xx response from it saves the variable again, and other routes don't carry it. **Save now** copies from the response on screen. A saved variable starts out secret.
 - Together: on your login route, save `data.accessToken` as `token`, and with `Authorization: Bearer {{token}}` as a default header every route using that environment sends it (public routes only when ticked); logging in again updates it everywhere.
 
 ![Animated: an environment with Authorization: Bearer {{token}} as a default header; the login route's response saved to {{token}} with Save to variable; then the profile route sent with the token filled in, answering 200](./images/devtools/login-flow.webp)
