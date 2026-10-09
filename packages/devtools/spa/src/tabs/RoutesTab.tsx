@@ -1,7 +1,7 @@
 /**
  * Routes — a searchable list on the left, grouped by controller, and the API
- * runner for the selected route on the right. The divider position is
- * remembered.
+ * runner for the selected route on the right. The divider position and the
+ * collapsed groups are remembered.
  *
  * Reads the shared store (`store.routes()`, fed by the unified stream).
  */
@@ -11,6 +11,17 @@ import { store, type RouteEntry } from '../lib/store'
 import { ApiRunnerPanel, openApiRunner, runnerRoute } from '../lib/api-runner'
 import { methodColor } from '../lib/format'
 import { SplitPane } from '../lib/split-pane'
+
+const COLLAPSED_KEY = 'kickjs-devtools:routes:collapsed'
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]')
+    return new Set(Array.isArray(raw) ? raw.filter((c) => typeof c === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
 
 const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 type MethodFilter = (typeof METHODS)[number]
@@ -49,6 +60,24 @@ export const RoutesTab: Component = () => {
     return [...byController]
   })
 
+  const [collapsed, setCollapsed] = createSignal(loadCollapsed())
+  const setAll = (next: Set<string>) => {
+    setCollapsed(next)
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+    } catch {
+      /* storage unavailable */
+    }
+  }
+  const toggle = (controller: string) => {
+    const next = new Set(collapsed())
+    if (!next.delete(controller)) next.add(controller)
+    setAll(next)
+  }
+  /** A search or method filter shows every match, collapsed or not. */
+  const isOpen = (controller: string) =>
+    !!search().trim() || method() !== 'ALL' || !collapsed().has(controller)
+
   const isSelected = (r: RouteEntry) => {
     const s = runnerRoute()
     return !!s && s.method === r.method && s.path === r.path
@@ -85,6 +114,18 @@ export const RoutesTab: Component = () => {
         <div class="text-xs text-text-muted">
           <Show when={search() || method() !== 'ALL'}>{filtered().length} matched · </Show>
           {store.routes().length} routes
+          <Show when={groups().length > 1}>
+            {' · '}
+            <button
+              type="button"
+              class="underline hover:text-text-body"
+              onClick={() =>
+                setAll(collapsed().size ? new Set() : new Set(groups().map(([c]) => c)))
+              }
+            >
+              {collapsed().size ? 'Expand all' : 'Collapse all'}
+            </button>
+          </Show>
         </div>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
@@ -99,10 +140,16 @@ export const RoutesTab: Component = () => {
           <For each={groups()}>
             {([controller, routes]) => (
               <>
-                <div class="sticky top-0 z-1 border-b border-border bg-surface-2 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-wide text-text-muted">
+                <button
+                  type="button"
+                  aria-expanded={isOpen(controller)}
+                  onClick={() => toggle(controller)}
+                  class="sticky top-0 z-1 flex w-full cursor-pointer items-center gap-1.5 border-0 border-b border-border bg-surface-2 px-2.5 py-1 text-left text-[0.66rem] font-bold uppercase tracking-wide text-text-muted hover:text-text-body"
+                >
+                  <span class="inline-block w-2.5">{isOpen(controller) ? '▾' : '▸'}</span>
                   {controller} <span class="font-normal">({routes.length})</span>
-                </div>
-                <For each={routes}>
+                </button>
+                <For each={isOpen(controller) ? routes : []}>
                   {(r) => (
                     <button
                       type="button"

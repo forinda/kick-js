@@ -8,6 +8,7 @@ import {
   historyLabel,
   openApiHints,
   loadEnvironments,
+  moveRow,
   environmentFor,
   nextEnvironmentName,
   fillFromEnvironment,
@@ -17,6 +18,7 @@ import {
   buildUrl,
   emptyInputs,
   formatBody,
+  formatJson,
   needsConfirmation,
   pathParams,
   prepareRequest,
@@ -87,6 +89,19 @@ describe('prepareRequest', () => {
         { defaults: [row('Authorization', 'Bearer t')] },
       ).headers,
     ).toEqual({ authorization: 'Bearer x' })
+  })
+
+  it('sends the default headers a route ticks and leaves off those it unticks, flags or not', () => {
+    const defaults = [row('Authorization', 'Bearer t'), row('X-Tenant', 'a')]
+    const login = { method: 'POST', path: '/api/v1/login' }
+    expect(
+      prepare(login, { defaultHeaders: { authorization: false } }, { defaults }).headers,
+    ).toEqual({ 'X-Tenant': 'a' })
+    // A public route starts with Authorization off; ticking it sends it.
+    const health = { method: 'GET', path: '/health', flags: { 'auth.public': true } }
+    expect(
+      prepare(health, { defaultHeaders: { authorization: true } }, { defaults }).headers,
+    ).toEqual({ Authorization: 'Bearer t', 'X-Tenant': 'a' })
   })
 
   it('accepts several public flag names, as a list or a comma-separated string', () => {
@@ -615,5 +630,20 @@ describe('environments', () => {
       cookies: '',
     })
     expect(req.url).toBe('http://localhost:3000/api/v1/orgs/acme/users/7')
+  })
+})
+
+describe('moveRow', () => {
+  it('moves an item to the target index, ignoring out-of-range moves', () => {
+    expect(moveRow(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
+    expect(moveRow(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
+    expect(moveRow(['a', 'b'], 0, 5)).toEqual(['a', 'b'])
+  })
+})
+
+describe('formatJson', () => {
+  it('pretty-prints JSON and declines anything else', () => {
+    expect(formatJson('{"a":1,"b":[2]}')).toBe('{\n  "a": 1,\n  "b": [\n    2\n  ]\n}')
+    expect(formatJson('{ "id": {{id}} }')).toBeUndefined()
   })
 })

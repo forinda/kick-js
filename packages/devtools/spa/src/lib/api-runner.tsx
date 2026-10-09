@@ -16,6 +16,7 @@
 
 import {
   createEffect,
+  on,
   createMemo,
   createSignal,
   For,
@@ -29,6 +30,7 @@ import { store, type RouteEntry } from './store'
 import { rpc } from './rpc'
 import { methodColor, statusPill } from './format'
 import { switchTab } from './nav'
+import { Icon } from './icons'
 import {
   DEFAULT_SETTINGS,
   acceptsBody,
@@ -47,12 +49,15 @@ import {
   type HistoryEntry,
   emptyInputs,
   formatBody,
+  formatJson,
   inputsKey,
   storableInputs,
   readJsonPath,
   unresolvedVariables,
   variableMap,
   isPublicRoute,
+  sendsDefault,
+  moveRow,
   needsConfirmation,
   pathParams,
   prepareRequest,
@@ -206,7 +211,8 @@ export const ApiRunnerPanel: Component = () => {
       // oxlint-disable-next-line no-map-spread
       environments: state.environments.map((e) => (e.id === id ? { ...e, ...patch } : e)),
     }))
-  const [capture, setCapture] = createSignal({ path: '', name: '' })
+  const capture = () => inputs()?.capture ?? { path: '', name: '' }
+  const setCapture = (value: { path: string; name: string }) => update({ capture: value })
   const [captureNote, setCaptureNote] = createSignal<string | null>(null)
   const [settings, setSettings] = createSignal<RunnerSettings>(
     load(() => localStorage, SETTINGS_KEY, DEFAULT_SETTINGS),
@@ -240,6 +246,14 @@ export const ApiRunnerPanel: Component = () => {
     return (spec ? openApiHints(spec, route) : undefined) ?? routeHints(route)
   })
 
+  /**
+   * The storage key the current inputs were loaded for. On a route change the
+   * save effect can run before the load effect (Solid doesn't promise their
+   * order), and would write the previous route's inputs under the new route's
+   * key — which the load effect would then read back.
+   */
+  let loadedKey: string | null = null
+
   // Load the route's saved inputs whenever a route is opened.
   createEffect(() => {
     const route = activeRoute()
@@ -256,8 +270,10 @@ export const ApiRunnerPanel: Component = () => {
     pendingInputs = null
     // Keep params in sync with the path even if the saved inputs are older.
     const params = Object.fromEntries(pathParams(route.path).map((p) => [p, saved.params[p] ?? '']))
+    loadedKey = inputsKey(route)
     setInputs({ ...saved, params })
     setAwaitingPrefill(isNew)
+    setCaptureNote(null)
     setEditorNote(null)
     setResult(null)
     setError(null)
@@ -270,7 +286,9 @@ export const ApiRunnerPanel: Component = () => {
   createEffect(() => {
     const route = activeRoute()
     const current = inputs()
-    if (route && current) save(() => localStorage, inputsKey(route), storableInputs(current))
+    if (route && current && loadedKey === inputsKey(route)) {
+      save(() => localStorage, inputsKey(route), storableInputs(current))
+    }
   })
   // Write the environment where `remember` says, and clear the other storage so
   // switching the toggle moves it instead of leaving a copy behind.
@@ -333,6 +351,8 @@ export const ApiRunnerPanel: Component = () => {
     const sentIn = generation
     const route = activeRoute()!
     const sentInputs = inputs()!
+    // Captured into the environment the request went out with, even if another is picked meanwhile.
+    const sentEnvId = env().id
     const record = (outcome: Partial<HistoryEntry>) =>
       setHistory((list) =>
         pushHistory(list, {
@@ -363,6 +383,8 @@ export const ApiRunnerPanel: Component = () => {
         body: formatBody(text.slice(0, MAX_BODY_CHARS), res.headers.get('content-type')),
         truncated: text.length > MAX_BODY_CHARS,
       })
+      // The route's own "Save to variable" runs after every success: log in, and the token's set.
+      if (res.ok && sentInputs.capture) captureInto(text, sentInputs.capture, sentEnvId)
     } catch (err) {
       record({ error: err instanceof Error ? err.message : String(err) })
       if (sentIn !== generation) return
@@ -395,11 +417,17 @@ export const ApiRunnerPanel: Component = () => {
   // add) the variable — log in once, then {{token}} fills every request.
   function captureVariable(): void {
     const res = result()
-    const { path, name } = capture()
-    if (!res || !path.trim() || !name.trim()) return
+    if (res) captureInto(res.raw, capture(), env().id)
+  }
+
+  /** Read `capture.path` out of a response body into variable `capture.name` of environment `envId`. */
+  function captureInto(raw: string, capture: { path: string; name: string }, envId: string): void {
+    const path = capture.path
+    const name = capture.name
+    if (!path.trim() || !name.trim()) return
     let json: unknown
     try {
-      json = JSON.parse(res.raw)
+      json = JSON.parse(raw)
     } catch {
       setCaptureNote('The response is not JSON')
       return
@@ -411,12 +439,13 @@ export const ApiRunnerPanel: Component = () => {
     }
     const key = name.trim()
     // Into the environment this route uses — log in under "admin", and only it gets the token.
-    const target = env()
+    const target = envs().environments.find((e) => e.id === envId)
+    if (!target) return
     const rows = target.variables
     updateEnv(target.id, {
       variables: rows.some((r) => r.key === key)
         ? rows.map((r) => (r.key === key ? { ...r, value, enabled: true } : r))
-        : [...rows, { key, value, enabled: true }],
+        : [...rows, { key, value, enabled: true, secret: true }],
     })
     setCaptureNote(`Saved {{${key}}} in ${target.name}`)
   }
@@ -502,7 +531,10 @@ export const ApiRunnerPanel: Component = () => {
                       {route().controller}.{route().handler}
                     </button>
                     <Show when={editorNote()}> · {editorNote()}</Show>
-                    <Show when={isPublic()}> · public route — default Authorization not sent</Show>
+                    <Show when={isPublic()}>
+                      {' '}
+                      · public route — default Authorization off unless ticked under Headers
+                    </Show>
                   </p>
                   <Show when={hints()?.summary}>
                     <p class="text-sm text-text-secondary mt-1">{hints()!.summary}</p>
@@ -626,7 +658,11 @@ export const ApiRunnerPanel: Component = () => {
                     </Show>
 
                     <Section title="Query" count={enabledCount(current().query)}>
-                      <RowsEditor rows={current().query} onChange={(query) => update({ query })} />
+                      <RowsEditor
+                        rows={current().query}
+                        onChange={(query) => update({ query })}
+                        context={routeKey(route())}
+                      />
                       <Show when={hints()?.query.length}>
                         <ul class="text-xs text-text-muted mt-2 flex flex-col gap-0.5">
                           <For each={hints()!.query}>
@@ -646,7 +682,52 @@ export const ApiRunnerPanel: Component = () => {
                       <RowsEditor
                         rows={current().headers}
                         onChange={(headers) => update({ headers })}
+                        context={routeKey(route())}
                       />
+                      <Show when={env().headers.some((h) => h.enabled && h.key)}>
+                        <div class="mt-3 text-xs">
+                          <p class="text-text-muted mb-1">
+                            From <strong>{env().name}</strong> — untick to leave one off this route
+                            only:
+                          </p>
+                          <For each={env().headers.filter((h) => h.enabled && h.key)}>
+                            {(h) => {
+                              const name = h.key.toLowerCase()
+                              const sent = () => sendsDefault(route(), current(), settings(), name)
+                              return (
+                                <label class="flex items-center gap-2 font-mono text-text-secondary">
+                                  <input
+                                    type="checkbox"
+                                    checked={sent()}
+                                    onChange={(e) =>
+                                      update({
+                                        defaultHeaders: {
+                                          ...current().defaultHeaders,
+                                          [name]: e.currentTarget.checked,
+                                        },
+                                      })
+                                    }
+                                  />
+                                  <span class={sent() ? '' : 'line-through text-text-muted'}>
+                                    {h.key}: {h.secret ? '••••••' : h.value}
+                                  </span>
+                                  <Show
+                                    when={
+                                      name === 'authorization' &&
+                                      isPublic() &&
+                                      current().defaultHeaders?.[name] === undefined
+                                    }
+                                  >
+                                    <span class="font-sans text-text-muted">
+                                      (off by default: public route)
+                                    </span>
+                                  </Show>
+                                </label>
+                              )
+                            }}
+                          </For>
+                        </div>
+                      </Show>
                     </Section>
 
                     <Show when={acceptsBody(route().method)}>
@@ -687,12 +768,23 @@ export const ApiRunnerPanel: Component = () => {
                         <Show
                           when={current().bodyMode === 'form'}
                           fallback={
-                            <textarea
-                              class={`${inputClass} font-mono min-h-40`}
-                              placeholder='{ "name": "value" }'
-                              value={current().body}
-                              onInput={(e) => update({ body: e.currentTarget.value })}
-                            />
+                            <div class="group relative">
+                              <textarea
+                                class={`${inputClass} font-mono min-h-40`}
+                                placeholder='{ "name": "value" }'
+                                value={current().body}
+                                onInput={(e) => update({ body: e.currentTarget.value })}
+                              />
+                              <HoverActions>
+                                <Show when={current().body.trim()}>
+                                  <FormatButton
+                                    text={() => current().body}
+                                    onFormat={(body) => update({ body })}
+                                  />
+                                  <CopyButton text={() => current().body} label="Copy body" />
+                                </Show>
+                              </HoverActions>
+                            </div>
                           }
                         >
                           <FormEditor
@@ -727,6 +819,12 @@ export const ApiRunnerPanel: Component = () => {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   <label class="flex flex-col gap-1 text-xs text-text-muted">
                     Public route flags (comma-separated)
+                    <span class="text-[0.7rem]">
+                      On routes carrying one of these flags (e.g. <code>auth.public</code> from your
+                      auth setup), the environment's default Authorization header starts unticked —
+                      a login route needs no token — and is sent only if you tick it under the
+                      route's Headers. Names your app uses; the runner adds no flags to the request.
+                    </span>
                     <input
                       class={inputClass}
                       value={publicFlagNames(settings().publicFlag).join(', ')}
@@ -833,9 +931,25 @@ export const ApiRunnerPanel: Component = () => {
                         </tbody>
                       </table>
                     </details>
-                    <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
-                      {res().body || '(empty body)'}
-                    </pre>
+                    <div class="group relative">
+                      <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
+                        {res().body || '(empty body)'}
+                      </pre>
+                      <Show when={res().raw}>
+                        <HoverActions>
+                          {/* The whole body, formatted — not the on-screen copy, which may be truncated. */}
+                          <CopyButton
+                            label="Copy response"
+                            text={() =>
+                              formatBody(
+                                res().raw,
+                                res().headers.find(([k]) => k === 'content-type')?.[1] ?? null,
+                              )
+                            }
+                          />
+                        </HoverActions>
+                      </Show>
+                    </div>
                     <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs">
                       <span class="text-text-secondary font-semibold shrink-0">
                         Save to variable
@@ -1028,37 +1142,176 @@ const RowsEditor: Component<{
   onChange: (rows: KeyValueRow[]) => void
   keyPlaceholder?: string
   valuePlaceholder?: string
+  /** What the rows belong to (a route, an environment): a change resets reveal and expand. */
+  context?: string
 }> = (props) => {
-  const rows = () => [...props.rows, { key: '', value: '', enabled: true }]
+  const rows = (): KeyValueRow[] => [...props.rows, { key: '', value: '', enabled: true }]
   const set = (index: number, patch: Partial<KeyValueRow>) => {
     // Copy-on-write on purpose: mutating a row in place would not re-render it.
     // oxlint-disable-next-line no-map-spread
     const next = rows().map((row, i) => (i === index ? { ...row, ...patch } : row))
     props.onChange(next.filter((row) => row.key || row.value))
   }
+  // Per row, not saved: a revealed secret is masked again on reopen.
+  const [revealed, setRevealed] = createSignal<ReadonlySet<number>>(new Set())
+  const [expanded, setExpanded] = createSignal<number | null>(null)
+  // Both are by index: kept across a switch, they'd reveal another set's row 0.
+  createEffect(
+    on(
+      () => props.context,
+      () => {
+        setRevealed(new Set<number>())
+        setExpanded(null)
+      },
+      { defer: true },
+    ),
+  )
+  const flip = (i: number) => {
+    const next = new Set(revealed())
+    if (!next.delete(i)) next.add(i)
+    setRevealed(next)
+  }
+  const masked = (i: number) => !!rows()[i]?.secret && !revealed().has(i)
+  const remove = (i: number) => {
+    setRevealed(new Set<number>())
+    setExpanded(null)
+    props.onChange(props.rows.filter((_, j) => j !== i))
+  }
+  const iconButton = 'shrink-0 p-1 text-text-muted hover:text-text-body'
+  // Drag by the handle to reorder: order matters, a later header replaces an earlier one.
+  const [dragging, setDragging] = createSignal<number | null>(null)
+  const move = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= props.rows.length) return
+    setRevealed(new Set<number>())
+    setExpanded(null)
+    props.onChange(moveRow(props.rows, from, to))
+  }
+  const drop = (to: number) => {
+    const from = dragging()
+    setDragging(null)
+    if (from !== null) move(from, to)
+  }
+  let list: HTMLDivElement | undefined
+  /** Keyboard reorder: ↑ / ↓ on the handle, which keeps focus as its row moves. */
+  const nudge = (e: KeyboardEvent, i: number) => {
+    const to = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : null
+    if (to === null || to < 0 || to >= props.rows.length) return
+    e.preventDefault()
+    move(i, to)
+    list?.querySelectorAll<HTMLElement>('[data-handle]')[to]?.focus()
+  }
   return (
-    <div class="flex flex-col gap-2">
+    <div class="flex flex-col gap-2" ref={(el) => (list = el)}>
       <Index each={rows()}>
         {(row, i) => (
-          <div class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              aria-label="Enabled"
-              checked={row().enabled}
-              onChange={(e) => set(i, { enabled: e.currentTarget.checked })}
-            />
-            <input
-              class={inputClass}
-              placeholder={props.keyPlaceholder ?? 'name'}
-              value={row().key}
-              onInput={(e) => set(i, { key: e.currentTarget.value })}
-            />
-            <input
-              class={inputClass}
-              placeholder={props.valuePlaceholder ?? 'value'}
-              value={row().value}
-              onInput={(e) => set(i, { value: e.currentTarget.value })}
-            />
+          <div
+            class={`flex flex-col gap-1 ${dragging() === i ? 'opacity-50' : ''}`}
+            onDragOver={(e) => {
+              if (dragging() !== null && i < props.rows.length) e.preventDefault()
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              drop(i)
+            }}
+          >
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                data-handle
+                draggable={i < props.rows.length}
+                tabIndex={i < props.rows.length ? 0 : -1}
+                aria-label={`Move row ${i + 1}: drag, or press up or down arrow`}
+                title="Drag, or ↑ / ↓, to reorder"
+                class={`shrink-0 select-none border-0 bg-transparent p-0 text-text-muted ${
+                  i < props.rows.length ? 'cursor-grab' : 'invisible'
+                }`}
+                onKeyDown={(e) => nudge(e, i)}
+                onDragStart={(e) => {
+                  setDragging(i)
+                  e.dataTransfer?.setData('text/plain', String(i))
+                }}
+                onDragEnd={() => setDragging(null)}
+              >
+                ⠿
+              </button>
+              <input
+                type="checkbox"
+                aria-label="Enabled"
+                checked={row().enabled}
+                onChange={(e) => set(i, { enabled: e.currentTarget.checked })}
+              />
+              <input
+                class={inputClass}
+                placeholder={props.keyPlaceholder ?? 'name'}
+                value={row().key}
+                onInput={(e) => set(i, { key: e.currentTarget.value })}
+              />
+              <input
+                class={inputClass}
+                type={masked(i) ? 'password' : 'text'}
+                autocomplete="off"
+                placeholder={props.valuePlaceholder ?? 'value'}
+                value={row().value}
+                onInput={(e) => set(i, { value: e.currentTarget.value })}
+              />
+              {/* The trailing blank row is where new rows are typed: no actions on it. */}
+              <div class={`flex items-center ${i === props.rows.length ? 'invisible' : ''}`}>
+                <Show when={row().secret}>
+                  <button
+                    type="button"
+                    class={iconButton}
+                    aria-pressed={!masked(i)}
+                    aria-label={masked(i) ? 'Show value' : 'Hide value'}
+                    title={masked(i) ? 'Show value' : 'Hide value'}
+                    onClick={() => flip(i)}
+                  >
+                    <Icon name="eye" size={14} />
+                  </button>
+                </Show>
+                <button
+                  type="button"
+                  class={iconButton}
+                  aria-pressed={!!row().secret}
+                  aria-label={row().secret ? 'Secret: masked' : 'Mark as secret'}
+                  title={row().secret ? 'Secret: masked — click to stop masking' : 'Mark as secret'}
+                  onClick={() => set(i, { secret: !row().secret })}
+                >
+                  <Icon name={row().secret ? 'lock' : 'unlock'} size={14} />
+                </button>
+                <button
+                  type="button"
+                  class={iconButton}
+                  aria-expanded={expanded() === i}
+                  aria-label="Edit the whole value"
+                  title="Edit the whole value"
+                  onClick={() => setExpanded(expanded() === i ? null : i)}
+                >
+                  <Icon name="maximize" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class={iconButton}
+                  aria-label="Remove row"
+                  title="Remove row"
+                  onClick={() => remove(i)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            {/* Long values (a JWT) don't fit the inline box: the whole value, wrapped. */}
+            <Show when={expanded() === i}>
+              <textarea
+                class={`${inputClass} font-mono text-xs min-h-24 break-all`}
+                aria-label={`${row().key || 'value'} — whole value`}
+                value={masked(i) ? '•'.repeat(Math.min(row().value.length, 64)) : row().value}
+                readOnly={masked(i)}
+                onInput={(e) => set(i, { value: e.currentTarget.value })}
+              />
+              <Show when={masked(i)}>
+                <p class="text-xs text-text-muted">Masked — show it to read or edit.</p>
+              </Show>
+            </Show>
           </div>
         )}
       </Index>
@@ -1233,10 +1486,14 @@ const EnvironmentsSheet: Component<{
           <div>
             <h3 class="text-xs font-semibold text-text-secondary mb-1">Default headers</h3>
             <p class="text-xs text-text-muted mb-2">
-              Sent with every route using this environment. A default Authorization is skipped on
-              routes carrying a public flag; leave it out entirely for an anonymous environment.
+              Sent with every route using this environment. A route can untick any of them under its
+              own Headers; on routes carrying a public flag, Authorization starts unticked.
             </p>
-            <RowsEditor rows={current().headers} onChange={(headers) => patch({ headers })} />
+            <RowsEditor
+              rows={current().headers}
+              onChange={(headers) => patch({ headers })}
+              context={current().id}
+            />
           </div>
 
           <div>
@@ -1246,7 +1503,11 @@ const EnvironmentsSheet: Component<{
               <code>Authorization: Bearer {'{{token}}'}</code>. A variable named like a path or
               query param also fills it when it's left empty.
             </p>
-            <RowsEditor rows={current().variables} onChange={(variables) => patch({ variables })} />
+            <RowsEditor
+              rows={current().variables}
+              onChange={(variables) => patch({ variables })}
+              context={current().id}
+            />
           </div>
 
           <div>
@@ -1258,6 +1519,7 @@ const EnvironmentsSheet: Component<{
             <RowsEditor
               rows={current().mappings}
               onChange={(mappings) => patch({ mappings })}
+              context={current().id}
               keyPlaceholder="param or query name"
               valuePlaceholder="variable"
             />
@@ -1270,5 +1532,51 @@ const EnvironmentsSheet: Component<{
 
 const inputClass =
   'w-full min-w-0 bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500'
+const hoverButton =
+  'px-2 py-0.5 text-[0.68rem] font-semibold rounded-md border bg-surface-1 text-text-secondary border-border-strong hover:text-text-body'
+
+/** Top-right actions over a block: shown on hover or keyboard focus (always on touch-sized screens). */
+const HoverActions: Component<{ children: JSX.Element }> = (props) => (
+  <div class="absolute top-2 right-2 flex gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+    {props.children}
+  </div>
+)
+
+/** Pretty-prints a JSON body in place; says so briefly when it isn't JSON. */
+const FormatButton: Component<{ text: () => string; onFormat: (text: string) => void }> = (
+  props,
+) => {
+  const [failed, setFailed] = createSignal(false)
+  const format = () => {
+    const pretty = formatJson(props.text())
+    if (pretty !== undefined) return props.onFormat(pretty)
+    setFailed(true)
+    setTimeout(() => setFailed(false), 1500)
+  }
+  return (
+    <button type="button" class={hoverButton} title="Pretty-print the JSON body" onClick={format}>
+      {failed() ? 'Not JSON' : 'Format'}
+    </button>
+  )
+}
+
+const CopyButton: Component<{ text: () => string; label: string }> = (props) => {
+  const [state, setState] = createSignal<string | null>(null)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(props.text())
+      setState('Copied')
+    } catch {
+      setState('Copy failed')
+    }
+    setTimeout(() => setState(null), 1500)
+  }
+  return (
+    <button type="button" class={hoverButton} aria-label={props.label} onClick={copy}>
+      {state() ?? 'Copy'}
+    </button>
+  )
+}
+
 const secondaryButton =
   'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
