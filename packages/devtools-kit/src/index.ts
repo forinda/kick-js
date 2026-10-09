@@ -20,6 +20,7 @@ export {
   type IntrospectFn,
   type IntrospectionKind,
   type IntrospectionSnapshot,
+  type LifecycleHook,
   type MemoryHealth,
   type RpcError,
   type RpcFailure,

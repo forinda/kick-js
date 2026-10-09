@@ -60,8 +60,26 @@ export interface IntrospectionSnapshot {
    * `shutdown`, …). Filled in by DevTools, not by `introspect()`, so a
    * primitive without `introspect()` still shows what it plugs into.
    */
-  hooks?: readonly string[]
+  hooks?: readonly LifecycleHook[]
 }
+
+/** A lifecycle hook of `AppAdapter` or `KickPlugin`, as listed in {@link IntrospectionSnapshot.hooks}. */
+export type LifecycleHook =
+  | 'register'
+  | 'modules'
+  | 'adapters'
+  | 'setup'
+  | 'middleware'
+  | 'contributors'
+  | 'beforeMount'
+  | 'onRouteMount'
+  | 'beforeStart'
+  | 'afterStart'
+  | 'onReady'
+  | 'onResponse'
+  | 'onError'
+  | 'onHealthCheck'
+  | 'shutdown'
 
 /**
  * The optional method an adapter or plugin implements to expose itself

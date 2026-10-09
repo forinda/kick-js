@@ -15,6 +15,7 @@ import type { AppAdapter, Container, KickPlugin } from '@forinda/kickjs'
 import {
   PROTOCOL_VERSION,
   type IntrospectionSnapshot,
+  type LifecycleHook,
   type TopologyContributorEntry,
   type TopologyError,
   type TopologySnapshot,
@@ -58,7 +59,7 @@ export interface CollectTopologyOptions {
 const DEFAULT_INTROSPECT_TIMEOUT_MS = 100
 
 /** Lifecycle hooks of `AppAdapter` and `KickPlugin`, in the order they run. */
-const HOOKS = [
+const HOOKS: readonly LifecycleHook[] = [
   'register',
   'modules',
   'adapters',
@@ -74,7 +75,7 @@ const HOOKS = [
   'onError',
   'onHealthCheck',
   'shutdown',
-] as const
+]
 
 /**
  * Collect a {@link TopologySnapshot} for the given application.

@@ -12,6 +12,7 @@
 import { createMemo, createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
 import type {
   IntrospectionSnapshot,
+  LifecycleHook,
   TopologyContributorEntry,
   TopologySnapshot,
 } from '@forinda/kickjs-devtools-kit'
@@ -183,9 +184,17 @@ const PrimitiveCard: Component<{
         </Show>
       </header>
       <Show when={props.p.hooks?.length}>
-        <div class="mt-1 flex flex-wrap gap-1" title="Lifecycle hooks it implements">
+        <div class="mt-1.5 flex flex-wrap items-center gap-1">
+          <span class="w-14 text-[0.66rem] text-text-muted">hooks</span>
           <For each={props.p.hooks}>
-            {(h) => <span class="font-mono text-[0.66rem] text-text-muted">{h}</span>}
+            {(h) => (
+              <span
+                class="cursor-help rounded border border-border px-1.5 font-mono text-[0.68rem] text-text-secondary"
+                title={HOOK_INFO[h] ?? h}
+              >
+                {h}
+              </span>
+            )}
           </For>
         </div>
       </Show>
@@ -232,6 +241,25 @@ const PrimitiveCard: Component<{
       </Show>
     </article>
   )
+}
+
+/** What each lifecycle hook does — shown on hover. */
+const HOOK_INFO: Record<LifecycleHook, string> = {
+  register: 'register() — adds DI bindings before modules load',
+  modules: 'modules() — contributes modules (and their routes)',
+  adapters: 'adapters() — brings its own adapters',
+  setup: 'setup() — mounts modules conditionally at boot',
+  middleware: 'middleware() — adds global middleware',
+  contributors: 'contributors() — adds ctx values before handlers run',
+  beforeMount: 'beforeMount() — runs before global middleware, e.g. to register early routes',
+  onRouteMount: 'onRouteMount() — called for each mounted controller',
+  beforeStart: 'beforeStart() — runs before the server starts listening',
+  afterStart: 'afterStart() — runs once the server is listening',
+  onReady: 'onReady() — runs after the app has fully bootstrapped',
+  onResponse: 'onResponse() — sees every response',
+  onError: 'onError() — sees every unhandled error',
+  onHealthCheck: 'onHealthCheck() — reports up / down to /health',
+  shutdown: 'shutdown() — cleans up when the app stops',
 }
 
 const TokenChips: Component<{
