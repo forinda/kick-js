@@ -61,6 +61,11 @@ export interface IntrospectionSnapshot {
    * primitive without `introspect()` still shows what it plugs into.
    */
   hooks?: readonly LifecycleHook[]
+  /**
+   * Names of the plugins / adapters this one declared it must run after
+   * (`dependsOn`). Filled in by DevTools, like `hooks`.
+   */
+  dependsOn?: readonly string[]
 }
 
 /** A lifecycle hook of `AppAdapter` or `KickPlugin`, as listed in {@link IntrospectionSnapshot.hooks}. */

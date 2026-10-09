@@ -83,6 +83,7 @@ describe('collectTopologySnapshot', () => {
       name: 'PlainAdapter',
       kind: 'adapter',
       hooks: ['middleware'],
+      dependsOn: [],
     })
   })
 
@@ -101,6 +102,15 @@ describe('collectTopologySnapshot', () => {
     })
     const snap = await collectTopologySnapshot({ app: fakeAppLike([Hooked()], []), container })
     expect(snap.adapters[0]?.hooks).toEqual(['beforeStart', 'shutdown'])
+  })
+
+  it("carries a primitive's dependsOn", async () => {
+    const After = defineAdapter({
+      name: 'AfterAdapter',
+      build: () => ({ dependsOn: ['FirstPlugin'] }),
+    })
+    const snap = await collectTopologySnapshot({ app: fakeAppLike([After()], []), container })
+    expect(snap.adapters[0]?.dependsOn).toEqual(['FirstPlugin'])
   })
 
   it('collects an error entry when introspect() throws', async () => {

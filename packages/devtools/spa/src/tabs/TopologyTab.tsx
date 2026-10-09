@@ -40,8 +40,10 @@ export const TopologyTab: Component = () => {
     onCleanup(() => clearInterval(timer))
   })
 
-  const touches = (p: IntrospectionSnapshot, token: string | null): boolean =>
-    !!token && (!!p.tokens?.provides.includes(token) || !!p.tokens?.requires.includes(token))
+  /** A hovered token it provides or requires, or a hovered plugin / adapter name that is this one. */
+  const touches = (p: IntrospectionSnapshot, key: string | null): boolean =>
+    !!key &&
+    (key === p.name || !!p.tokens?.provides.includes(key) || !!p.tokens?.requires.includes(key))
 
   return (
     <div class="flex flex-col gap-3">
@@ -165,7 +167,8 @@ const PrimitiveCard: Component<{
       metrics().length +
       (props.p.tokens?.provides.length ?? 0) +
       (props.p.tokens?.requires.length ?? 0) +
-      (props.p.hooks?.length ?? 0) >
+      (props.p.hooks?.length ?? 0) +
+      (props.p.dependsOn?.length ?? 0) >
     0
 
   return (
@@ -183,6 +186,29 @@ const PrimitiveCard: Component<{
           <span class="dt-tone dt-tone-gray">v{props.p.version}</span>
         </Show>
       </header>
+      <Show when={props.p.dependsOn?.length}>
+        <div
+          class="mt-1.5 flex flex-wrap items-center gap-1"
+          title="Declared dependsOn — runs after these"
+        >
+          <span class="w-14 text-[0.66rem] text-text-muted">after</span>
+          <For each={props.p.dependsOn}>
+            {(d) => (
+              <span
+                class={`rounded border px-1.5 font-mono text-[0.68rem] ${
+                  props.hover === d
+                    ? 'border-kick-500 text-kick-500'
+                    : 'border-border-strong text-text-secondary'
+                }`}
+                onMouseEnter={() => props.onHover(d)}
+                onMouseLeave={() => props.onHover(null)}
+              >
+                {d}
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
       <Show when={props.p.hooks?.length}>
         <div class="mt-1.5 flex flex-wrap items-center gap-1">
           <span class="w-14 text-[0.66rem] text-text-muted">hooks</span>

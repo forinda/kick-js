@@ -121,11 +121,13 @@ async function snapshotFor(
 ): Promise<IntrospectionSnapshot> {
   const name = primitive.name ?? '(unnamed)'
   const hooks = HOOKS.filter((h) => typeof (primitive as Record<string, unknown>)[h] === 'function')
+  const dependsOn = Array.isArray(primitive.dependsOn) ? [...primitive.dependsOn] : []
   const stub: IntrospectionSnapshot = {
     protocolVersion: PROTOCOL_VERSION,
     name,
     kind,
     hooks,
+    dependsOn,
   }
   if (typeof primitive.introspect !== 'function') return stub
 
@@ -155,6 +157,7 @@ async function snapshotFor(
         metrics: snap.metrics,
         memoryBytes: snap.memoryBytes,
         hooks,
+        dependsOn,
       }
     }
     return stub
