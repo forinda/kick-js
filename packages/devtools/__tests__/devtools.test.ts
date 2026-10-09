@@ -94,6 +94,15 @@ describe('DevToolsAdapter', () => {
       expect(adapter.uptimeSeconds.value).toBeGreaterThanOrEqual(before)
     })
 
+    it('keeps counting after the first read', () => {
+      const adapter = createAdapter()
+      const spy = vi.spyOn(process, 'uptime').mockReturnValue(10)
+      expect(adapter.uptimeSeconds.value).toBe(10)
+      spy.mockReturnValue(1200)
+      expect(adapter.uptimeSeconds.value).toBe(1200)
+      spy.mockRestore()
+    })
+
     it('should invoke onErrorRateExceeded callback when threshold is crossed', () => {
       const callback = vi.fn()
       const adapter = createAdapter({

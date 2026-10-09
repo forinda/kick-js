@@ -421,12 +421,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     // `beforeMount` re-runs on every HMR rebuild / SSR re-bootstrap, which used
     // to reset `startedAt` and pin uptime near 0s. `process.uptime()` is
     // monotonic from process start, so it reports the real server uptime across
-    // reloads. `tick` makes the computed re-evaluate when the reactive graph
-    // refreshes; the value itself comes from the live process clock.
-    const uptimeSeconds = computed(() => {
-      void startedAt.value // keep the dependency so DevTools polls re-read it
-      return Math.floor(process.uptime())
-    })
+    // reloads. Not a `computed()`: the process clock is not reactive, so a
+    // computed would cache its first read and report a frozen uptime forever.
+    const uptimeSeconds: ComputedRef<number> = {
+      get value() {
+        return Math.floor(process.uptime())
+      },
+      toJSON() {
+        return this.value
+      },
+      dispose() {},
+    }
 
     // ── Internal mutable state ─────────────────────────────────────
     let routes: RouteInfo[] = []
