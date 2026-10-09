@@ -1129,7 +1129,7 @@ const FormEditor: Component<{
             />
             <select
               aria-label="Field type"
-              class={`${inputClass} w-24 shrink-0`}
+              class={selectClass}
               value={row().type}
               onChange={(e) =>
                 set(i, { type: e.currentTarget.value as FormRow['type'], value: '', files: [] })
@@ -1169,6 +1169,17 @@ const FormEditor: Component<{
                   : 'Choose file…'}
               </label>
             </Show>
+            <button
+              type="button"
+              class={`shrink-0 p-1 text-text-muted hover:text-text-body ${
+                i === props.rows.length ? 'invisible' : ''
+              }`}
+              aria-label="Remove field"
+              title="Remove field"
+              onClick={() => props.onChange(props.rows.filter((_, j) => j !== i))}
+            >
+              ✕
+            </button>
           </div>
         )}
       </Index>
@@ -1585,6 +1596,9 @@ const EnvironmentsSheet: Component<{
   )
 }
 
+/** A fixed-width dropdown beside full-width inputs — `inputClass` would stretch it. */
+const selectClass =
+  'w-24 shrink-0 bg-surface-2 border border-border-strong rounded-lg px-2 py-1.5 text-sm text-text-body focus:outline-none focus:border-kick-500'
 const inputClass =
   'w-full min-w-0 bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500'
 const hoverButton =

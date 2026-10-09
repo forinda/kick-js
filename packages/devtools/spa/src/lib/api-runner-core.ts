@@ -347,6 +347,9 @@ export function prepareRequest(input: {
   return { method, url, headers, ...(body !== undefined ? { body } : {}) }
 }
 
+/** Stands in for a file field's path in the snippets until a file is picked. */
+export const FILE_PLACEHOLDER = '<file>'
+
 /** Build the multipart body from the enabled rows, plus the description the snippets use. */
 function buildForm(rows: FormRow[]): { body: FormData; form: FormPart[] } {
   const body = new FormData()
@@ -358,6 +361,8 @@ function buildForm(rows: FormRow[]): { body: FormData; form: FormPart[] } {
         body.append(row.key, file, file.name)
         form.push({ name: row.key, fileName: file.name })
       }
+      // Nothing picked: nothing to send, but the snippet still shows the field.
+      if (!row.files?.length) form.push({ name: row.key, fileName: FILE_PLACEHOLDER })
     } else {
       body.append(row.key, row.value)
       form.push({ name: row.key, value: row.value })
