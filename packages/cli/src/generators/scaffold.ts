@@ -28,10 +28,10 @@ export interface FieldDef {
  *   int       → z.number().int()
  *   float     → z.number()
  *   boolean   → z.boolean()
- *   date      → z.string().datetime()
- *   email     → z.string().email()
- *   url       → z.string().url()
- *   uuid      → z.string().uuid()
+ *   date      → z.iso.datetime()
+ *   email     → z.email()
+ *   url       → z.url()
+ *   uuid      → z.uuid()
  *   json      → z.any()
  *   enum:a,b  → z.enum(['a','b'])
  *
@@ -47,10 +47,10 @@ const TYPE_MAP: Record<string, { ts: string; zod: string }> = {
   int: { ts: 'number', zod: 'z.number().int()' },
   float: { ts: 'number', zod: 'z.number()' },
   boolean: { ts: 'boolean', zod: 'z.boolean()' },
-  date: { ts: 'string', zod: 'z.string().datetime()' },
-  email: { ts: 'string', zod: 'z.string().email()' },
-  url: { ts: 'string', zod: 'z.string().url()' },
-  uuid: { ts: 'string', zod: 'z.string().uuid()' },
+  date: { ts: 'string', zod: 'z.iso.datetime()' },
+  email: { ts: 'string', zod: 'z.email()' },
+  url: { ts: 'string', zod: 'z.url()' },
+  uuid: { ts: 'string', zod: 'z.uuid()' },
   json: { ts: 'any', zod: 'z.any()' },
 }
 
