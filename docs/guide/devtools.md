@@ -450,7 +450,7 @@ Selecting a route on the Routes tab opens the runner beside the list — drag th
 - **Query** and **Headers** — key/value rows. Untick one to switch it off, **✕** removes it, drag **⠿** to reorder (or focus it and press ↑ / ↓) (a later header replaces an earlier one of the same name). The lock marks a value secret: masked until the eye shows it. The code snippet still holds the real value, since it's the request as sent. The expand button opens the whole value — a JWT — in a box that wraps. Under _Headers_, the environment's default headers are listed with a tick each: untick one to leave it off this route only (a login route without the global `Authorization`), tick it to send it. The tick is the route's own and wins over everything else.
 - **Body** — for `POST` / `PUT` / `PATCH` / `DELETE`, either **Raw** text (JSON gets `Content-Type: application/json`) or **Form data**: `multipart/form-data` rows that are text fields or **file pickers**. A route with `@FileUpload` opens in form mode with its declared field ready, and says how many files it takes. Picked files are kept in memory only, so pick them again after reopening; the snippets use `-F 'field=@file'` (curl) and a `FormData` (fetch). Hover the raw body for **Format** (pretty-prints JSON; a body with an unquoted `{{variable}}` isn't JSON and is left alone) and **Copy**.
 - **Environment** — which [environment](#environments) the request uses: the active one, or one this route is pinned to. **Manage…** opens them.
-- **Settings** — the public flags, CSRF names, OpenAPI URL and editor link.
+- **Settings** — the public flags, CSRF cookie and header names, OpenAPI URL and editor link. They apply to every route, not just the open one, and save as you type in this browser (`localStorage`). **Fill empty inputs from OpenAPI** is the exception: it fills only the open route.
 - **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
 - **Response** — status, time, headers and the body (JSON pretty-printed), plus this route's **Save to variable**. Hover the body for **Copy**: the whole body, formatted, even when the view is truncated.
 - **History** — the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Entries keep `{{variables}}` as written, not their values.
@@ -484,6 +484,7 @@ One environment is **active**; the runner's picker can **pin** a route to anothe
 
 ![The token variable marked secret, shown with the eye and opened in full with the expand button](./images/devtools/secrets.webp)
 
+- Everything in the sheet saves as you type — there is no Save button. Without **Remember on this browser** it lasts for this browser tab only.
 - **Remember on this browser** (in the sheet) keeps environments in `localStorage`, so they survive closing the tab. They often hold tokens: leave it off on a shared machine. Switching it moves them rather than copying. Headers and variables from before environments existed become the first one, `dev`.
 
 It handles the framework's conventions for you:

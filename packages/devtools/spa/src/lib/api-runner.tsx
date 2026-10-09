@@ -804,15 +804,25 @@ export const ApiRunnerPanel: Component = () => {
               </Show>
 
               <Section title="Settings">
+                <p class="text-xs text-text-muted mb-3">
+                  These apply to every route, not just this one, and save as you type in this
+                  browser (kept after the tab closes).
+                </p>
                 <Show when={hints()}>
                   {(h) => (
-                    <button
-                      type="button"
-                      class={secondaryButton}
-                      onClick={() => update(applyHints(inputs()!, h()))}
-                    >
-                      Fill empty inputs from OpenAPI
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        class={secondaryButton}
+                        onClick={() => update(applyHints(inputs()!, h()))}
+                      >
+                        Fill empty inputs from OpenAPI
+                      </button>
+                      <span class="text-[0.7rem] text-text-muted">
+                        This route only: adds the query params the spec lists and an example body if
+                        the body is empty. Never overwrites what you typed.
+                      </span>
+                    </div>
                   )}
                 </Show>
 
@@ -839,16 +849,33 @@ export const ApiRunnerPanel: Component = () => {
                   <For
                     each={
                       [
-                        ['csrfCookie', 'CSRF cookie'],
-                        ['csrfHeader', 'CSRF header'],
-                        ['openApiUrl', 'OpenAPI spec URL'],
-                        ['editorUrl', 'Editor link ({file}, {line})'],
+                        [
+                          'csrfCookie',
+                          'CSRF cookie',
+                          'For csrf() / csrfGuard(): on POST, PUT, PATCH and DELETE the runner reads this cookie…',
+                        ],
+                        [
+                          'csrfHeader',
+                          'CSRF header',
+                          '…and sends its value in this header, unless the route already sets it.',
+                        ],
+                        [
+                          'openApiUrl',
+                          'OpenAPI spec URL',
+                          'Where the Swagger adapter serves the spec. A route with nothing saved starts from its examples.',
+                        ],
+                        [
+                          'editorUrl',
+                          'Editor link ({file}, {line})',
+                          "What the handler link under the route's title opens; {file} and {line} are filled in.",
+                        ],
                       ] as const
                     }
                   >
-                    {([key, label]) => (
+                    {([key, label, help]) => (
                       <label class="flex flex-col gap-1 text-xs text-text-muted">
                         {label}
+                        <span class="text-[0.7rem]">{help}</span>
                         <input
                           class={inputClass}
                           value={settings()[key]}
@@ -970,6 +997,12 @@ export const ApiRunnerPanel: Component = () => {
                         Save
                       </button>
                     </div>
+                    <p class="text-xs text-text-muted mt-1">
+                      Fill in both and every 2xx response from this route copies the value at the
+                      path into that variable of the environment it was sent with — log in once and
+                      routes using <code>{'{{token}}'}</code> pick it up. <strong>Save</strong>{' '}
+                      copies from the response above now. Saved for this route only.
+                    </p>
                     <Show when={captureNote()}>
                       <p class="text-xs text-text-muted mt-1" role="status">
                         {captureNote()}
@@ -1395,6 +1428,11 @@ const EnvironmentsSheet: Component<{
               What requests carry — default headers, <code>{'{{variables}}'}</code> and param
               mappings. One is active; a route can be pinned to another from its runner.
             </p>
+            <p class="text-xs text-text-muted mt-1">
+              Changes save as you type — there is no Save button. Where they're kept depends on{' '}
+              <strong class="font-semibold text-text-secondary">Remember on this browser</strong>{' '}
+              below.
+            </p>
           </div>
           <button
             type="button"
@@ -1502,6 +1540,11 @@ const EnvironmentsSheet: Component<{
               <code>{'{{name}}'}</code> in any param, query, header or body value — e.g.{' '}
               <code>Authorization: Bearer {'{{token}}'}</code>. A variable named like a path or
               query param also fills it when it's left empty.
+            </p>
+            <p class="text-xs text-text-muted mb-2">
+              Type values here, or let a route fill one: <strong>Save to variable</strong> under a
+              route's response copies a value from it (say, the token a login returns) into this
+              environment after every successful send. New variables it adds start masked.
             </p>
             <RowsEditor
               rows={current().variables}
