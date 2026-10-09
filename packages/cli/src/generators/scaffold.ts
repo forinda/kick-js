@@ -28,10 +28,10 @@ export interface FieldDef {
  *   int       → z.number().int()
  *   float     → z.number()
  *   boolean   → z.boolean()
- *   date      → z.string().datetime()
- *   email     → z.string().email()
- *   url       → z.string().url()
- *   uuid      → z.string().uuid()
+ *   date      → z.iso.datetime()
+ *   email     → z.email()
+ *   url       → z.url()
+ *   uuid      → z.uuid()
  *   json      → z.any()
  *   enum:a,b  → z.enum(['a','b'])
  *
@@ -47,15 +47,15 @@ const TYPE_MAP: Record<string, { ts: string; zod: string }> = {
   int: { ts: 'number', zod: 'z.number().int()' },
   float: { ts: 'number', zod: 'z.number()' },
   boolean: { ts: 'boolean', zod: 'z.boolean()' },
-  date: { ts: 'string', zod: 'z.string().datetime()' },
-  email: { ts: 'string', zod: 'z.string().email()' },
-  url: { ts: 'string', zod: 'z.string().url()' },
-  uuid: { ts: 'string', zod: 'z.string().uuid()' },
+  date: { ts: 'string', zod: 'z.iso.datetime()' },
+  email: { ts: 'string', zod: 'z.email()' },
+  url: { ts: 'string', zod: 'z.url()' },
+  uuid: { ts: 'string', zod: 'z.uuid()' },
   json: { ts: 'any', zod: 'z.any()' },
 }
 
 export function parseFields(raw: string[]): FieldDef[] {
-  return raw.map((f) => {
+  const fields = raw.map((f): FieldDef => {
     const colonIdx = f.indexOf(':')
     if (colonIdx === -1) {
       throw new Error(`Invalid field: "${f}". Use format: name:type (e.g. title:string)`)
@@ -118,6 +118,14 @@ export function parseFields(raw: string[]): FieldDef[] {
       optional,
     }
   })
+  const seen = new Set<string>()
+  for (const { name } of fields) {
+    if (seen.has(name)) {
+      throw new Error(`Duplicate field: "${name}". Each field name may appear once.`)
+    }
+    seen.add(name)
+  }
+  return fields
 }
 
 // ── Scaffold Generator ──────────────────────────────────────────────────

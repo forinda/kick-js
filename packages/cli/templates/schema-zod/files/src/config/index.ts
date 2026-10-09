@@ -13,16 +13,16 @@ import { z } from 'zod'
  * `process.env.FOO` typed.
  *
  * @example
- *   DATABASE_URL: z.string().url(),
+ *   DATABASE_URL: z.url(),
  *   JWT_SECRET: z.string().min(32),
- *   REDIS_URL: z.string().url().optional(),
+ *   REDIS_URL: z.url().optional(),
  */
 const envSchema = fromZod(
   z.object({
     PORT: z.coerce.number().default(3000),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.string().default('info'),
-    // DATABASE_URL: z.string().url(),
+    // DATABASE_URL: z.url(),
   }),
 )
 

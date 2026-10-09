@@ -621,10 +621,10 @@ kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
 | `int`        | `number`            | `z.number().int()`      | `age:int`                     |
 | `float`      | `number`            | `z.number()`            | `rating:float`                |
 | `boolean`    | `boolean`           | `z.boolean()`           | `active:boolean`              |
-| `date`       | `string`            | `z.string().datetime()` | `createdAt:date`              |
-| `email`      | `string`            | `z.string().email()`    | `email:email`                 |
-| `url`        | `string`            | `z.string().url()`      | `website:url`                 |
-| `uuid`       | `string`            | `z.string().uuid()`     | `externalId:uuid`             |
+| `date`       | `string`            | `z.iso.datetime()`      | `createdAt:date`              |
+| `email`      | `string`            | `z.email()`             | `email:email`                 |
+| `url`        | `string`            | `z.url()`               | `website:url`                 |
+| `uuid`       | `string`            | `z.uuid()`              | `externalId:uuid`             |
 | `json`       | `any`               | `z.any()`               | `metadata:json`               |
 | `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])` | `status:enum:draft,published` |
 

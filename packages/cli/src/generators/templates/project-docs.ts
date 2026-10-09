@@ -829,7 +829,7 @@ people lose time on. The manual checks below are the same reasoning.
    \`\`\`ts
    import { loadEnvFromSchema } from '@forinda/kickjs/config'
    import { fromZod } from '@forinda/kickjs-schema/zod'
-   const envSchema = fromZod(z.object({ DATABASE_URL: z.string().url() }))
+   const envSchema = fromZod(z.object({ DATABASE_URL: z.url() }))
    export const env = loadEnvFromSchema(envSchema)
    \`\`\`
    (\`loadEnv(zodSchema)\` from \`@forinda/kickjs\` is the equivalent for a bare Zod
