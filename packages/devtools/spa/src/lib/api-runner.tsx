@@ -16,6 +16,7 @@
 
 import {
   createEffect,
+  on,
   createMemo,
   createSignal,
   For,
@@ -349,6 +350,8 @@ export const ApiRunnerPanel: Component = () => {
     const sentIn = generation
     const route = activeRoute()!
     const sentInputs = inputs()!
+    // Captured into the environment the request went out with, even if another is picked meanwhile.
+    const sentEnvId = env().id
     const record = (outcome: Partial<HistoryEntry>) =>
       setHistory((list) =>
         pushHistory(list, {
@@ -380,9 +383,7 @@ export const ApiRunnerPanel: Component = () => {
         truncated: text.length > MAX_BODY_CHARS,
       })
       // The route's own "Save to variable" runs after every success: log in, and the token's set.
-      if (res.ok && sentInputs.capture?.path.trim() && sentInputs.capture.name.trim()) {
-        captureVariable()
-      }
+      if (res.ok && sentInputs.capture) captureInto(text, sentInputs.capture, sentEnvId)
     } catch (err) {
       record({ error: err instanceof Error ? err.message : String(err) })
       if (sentIn !== generation) return
@@ -415,11 +416,17 @@ export const ApiRunnerPanel: Component = () => {
   // add) the variable — log in once, then {{token}} fills every request.
   function captureVariable(): void {
     const res = result()
-    const { path, name } = capture()
-    if (!res || !path.trim() || !name.trim()) return
+    if (res) captureInto(res.raw, capture(), env().id)
+  }
+
+  /** Read `capture.path` out of a response body into variable `capture.name` of environment `envId`. */
+  function captureInto(raw: string, capture: { path: string; name: string }, envId: string): void {
+    const path = capture.path
+    const name = capture.name
+    if (!path.trim() || !name.trim()) return
     let json: unknown
     try {
-      json = JSON.parse(res.raw)
+      json = JSON.parse(raw)
     } catch {
       setCaptureNote('The response is not JSON')
       return
@@ -431,7 +438,8 @@ export const ApiRunnerPanel: Component = () => {
     }
     const key = name.trim()
     // Into the environment this route uses — log in under "admin", and only it gets the token.
-    const target = env()
+    const target = envs().environments.find((e) => e.id === envId)
+    if (!target) return
     const rows = target.variables
     updateEnv(target.id, {
       variables: rows.some((r) => r.key === key)
@@ -649,7 +657,11 @@ export const ApiRunnerPanel: Component = () => {
                     </Show>
 
                     <Section title="Query" count={enabledCount(current().query)}>
-                      <RowsEditor rows={current().query} onChange={(query) => update({ query })} />
+                      <RowsEditor
+                        rows={current().query}
+                        onChange={(query) => update({ query })}
+                        context={routeKey(route())}
+                      />
                       <Show when={hints()?.query.length}>
                         <ul class="text-xs text-text-muted mt-2 flex flex-col gap-0.5">
                           <For each={hints()!.query}>
@@ -669,6 +681,7 @@ export const ApiRunnerPanel: Component = () => {
                       <RowsEditor
                         rows={current().headers}
                         onChange={(headers) => update({ headers })}
+                        context={routeKey(route())}
                       />
                       <Show when={env().headers.some((h) => h.enabled && h.key)}>
                         <div class="mt-3 text-xs">
@@ -795,10 +808,10 @@ export const ApiRunnerPanel: Component = () => {
                   <label class="flex flex-col gap-1 text-xs text-text-muted">
                     Public route flags (comma-separated)
                     <span class="text-[0.7rem]">
-                      Routes carrying one of these flags (e.g. <code>auth.public</code> from your
-                      auth setup) don't get the environment's default Authorization header — a login
-                      route needs no token. Names your app uses; the runner adds no flags to the
-                      request.
+                      On routes carrying one of these flags (e.g. <code>auth.public</code> from your
+                      auth setup), the environment's default Authorization header starts unticked —
+                      a login route needs no token — and is sent only if you tick it under the
+                      route's Headers. Names your app uses; the runner adds no flags to the request.
                     </span>
                     <input
                       class={inputClass}
@@ -1101,6 +1114,8 @@ const RowsEditor: Component<{
   onChange: (rows: KeyValueRow[]) => void
   keyPlaceholder?: string
   valuePlaceholder?: string
+  /** What the rows belong to (a route, an environment): a change resets reveal and expand. */
+  context?: string
 }> = (props) => {
   const rows = (): KeyValueRow[] => [...props.rows, { key: '', value: '', enabled: true }]
   const set = (index: number, patch: Partial<KeyValueRow>) => {
@@ -1112,6 +1127,17 @@ const RowsEditor: Component<{
   // Per row, not saved: a revealed secret is masked again on reopen.
   const [revealed, setRevealed] = createSignal<ReadonlySet<number>>(new Set())
   const [expanded, setExpanded] = createSignal<number | null>(null)
+  // Both are by index: kept across a switch, they'd reveal another set's row 0.
+  createEffect(
+    on(
+      () => props.context,
+      () => {
+        setRevealed(new Set<number>())
+        setExpanded(null)
+      },
+      { defer: true },
+    ),
+  )
   const flip = (i: number) => {
     const next = new Set(revealed())
     if (!next.delete(i)) next.add(i)
@@ -1126,16 +1152,28 @@ const RowsEditor: Component<{
   const iconButton = 'shrink-0 p-1 text-text-muted hover:text-text-body'
   // Drag by the handle to reorder: order matters, a later header replaces an earlier one.
   const [dragging, setDragging] = createSignal<number | null>(null)
-  const drop = (to: number) => {
-    const from = dragging()
-    setDragging(null)
-    if (from === null || from === to || to >= props.rows.length) return
+  const move = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= props.rows.length) return
     setRevealed(new Set<number>())
     setExpanded(null)
     props.onChange(moveRow(props.rows, from, to))
   }
+  const drop = (to: number) => {
+    const from = dragging()
+    setDragging(null)
+    if (from !== null) move(from, to)
+  }
+  let list: HTMLDivElement | undefined
+  /** Keyboard reorder: ↑ / ↓ on the handle, which keeps focus as its row moves. */
+  const nudge = (e: KeyboardEvent, i: number) => {
+    const to = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : null
+    if (to === null || to < 0 || to >= props.rows.length) return
+    e.preventDefault()
+    move(i, to)
+    list?.querySelectorAll<HTMLElement>('[data-handle]')[to]?.focus()
+  }
   return (
-    <div class="flex flex-col gap-2">
+    <div class="flex flex-col gap-2" ref={(el) => (list = el)}>
       <Index each={rows()}>
         {(row, i) => (
           <div
@@ -1149,13 +1187,17 @@ const RowsEditor: Component<{
             }}
           >
             <div class="flex items-center gap-2">
-              <span
+              <button
+                type="button"
+                data-handle
                 draggable={i < props.rows.length}
-                aria-hidden="true"
-                title="Drag to reorder"
-                class={`shrink-0 select-none text-text-muted ${
+                tabIndex={i < props.rows.length ? 0 : -1}
+                aria-label={`Move row ${i + 1}: drag, or press up or down arrow`}
+                title="Drag, or ↑ / ↓, to reorder"
+                class={`shrink-0 select-none border-0 bg-transparent p-0 text-text-muted ${
                   i < props.rows.length ? 'cursor-grab' : 'invisible'
                 }`}
+                onKeyDown={(e) => nudge(e, i)}
                 onDragStart={(e) => {
                   setDragging(i)
                   e.dataTransfer?.setData('text/plain', String(i))
@@ -1163,7 +1205,7 @@ const RowsEditor: Component<{
                 onDragEnd={() => setDragging(null)}
               >
                 ⠿
-              </span>
+              </button>
               <input
                 type="checkbox"
                 aria-label="Enabled"
@@ -1419,7 +1461,11 @@ const EnvironmentsSheet: Component<{
               Sent with every route using this environment. A route can untick any of them under its
               own Headers; on routes carrying a public flag, Authorization starts unticked.
             </p>
-            <RowsEditor rows={current().headers} onChange={(headers) => patch({ headers })} />
+            <RowsEditor
+              rows={current().headers}
+              onChange={(headers) => patch({ headers })}
+              context={current().id}
+            />
           </div>
 
           <div>
@@ -1429,7 +1475,11 @@ const EnvironmentsSheet: Component<{
               <code>Authorization: Bearer {'{{token}}'}</code>. A variable named like a path or
               query param also fills it when it's left empty.
             </p>
-            <RowsEditor rows={current().variables} onChange={(variables) => patch({ variables })} />
+            <RowsEditor
+              rows={current().variables}
+              onChange={(variables) => patch({ variables })}
+              context={current().id}
+            />
           </div>
 
           <div>
@@ -1441,6 +1491,7 @@ const EnvironmentsSheet: Component<{
             <RowsEditor
               rows={current().mappings}
               onChange={(mappings) => patch({ mappings })}
+              context={current().id}
               keyPlaceholder="param or query name"
               valuePlaceholder="variable"
             />

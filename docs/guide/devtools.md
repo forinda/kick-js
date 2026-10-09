@@ -449,7 +449,7 @@ The server emits `audit:entry` on the same bus — `@Inject(DEVTOOLS_BUS) bus` (
 Selecting a route on the Routes tab opens the runner beside the list — drag the divider to resize; the width is remembered. The bar at its top shows the method and resolved URL with **Send**. It sends a request to that route, from the browser, on the same origin — so it behaves the same on Express, Fastify and h3, and needs no extra endpoint. Each part of the request is a collapsible section:
 
 - **Path params** — one field per `:param`; the resolved URL updates as you type.
-- **Query** and **Headers** — key/value rows. Untick one to switch it off, **✕** removes it, drag **⠿** to reorder (a later header replaces an earlier one of the same name). The lock marks a value secret: masked until the eye shows it. The code snippet still holds the real value, since it's the request as sent. The expand button opens the whole value — a JWT — in a box that wraps. Under _Headers_, the environment's default headers are listed with a tick each: untick one to leave it off this route only (a login route without the global `Authorization`), tick it to send it. The tick is the route's own and wins over everything else.
+- **Query** and **Headers** — key/value rows. Untick one to switch it off, **✕** removes it, drag **⠿** to reorder (or focus it and press ↑ / ↓) (a later header replaces an earlier one of the same name). The lock marks a value secret: masked until the eye shows it. The code snippet still holds the real value, since it's the request as sent. The expand button opens the whole value — a JWT — in a box that wraps. Under _Headers_, the environment's default headers are listed with a tick each: untick one to leave it off this route only (a login route without the global `Authorization`), tick it to send it. The tick is the route's own and wins over everything else.
 - **Body** — for `POST` / `PUT` / `PATCH` / `DELETE`, either **Raw** text (JSON gets `Content-Type: application/json`) or **Form data**: `multipart/form-data` rows that are text fields or **file pickers**. A route with `@FileUpload` opens in form mode with its declared field ready, and says how many files it takes. Picked files are kept in memory only, so pick them again after reopening; the snippets use `-F 'field=@file'` (curl) and a `FormData` (fetch).
 - **Environment** — which [environment](#environments) the request uses: the active one, or one this route is pinned to. **Manage…** opens them.
 - **Settings** — the public flags, CSRF names, OpenAPI URL and editor link.
@@ -473,14 +473,14 @@ A route opened for the first time is prefilled from its own request schemas — 
 
 Like environments in Postman or Insomnia: named sets of what requests carry — `dev` / `stage` / `prod`, or `anonymous` / `member` / `admin`. **Manage…** next to the runner's environment opens them in a sheet of their own, where each has:
 
-- **Default headers** — sent with every route using it: an `Authorization: Bearer {{token}}`, a tenant header. Leave Authorization out for an anonymous environment.
+- **Default headers** — sent with every route using it, unless the route unticks one under its _Headers_; on a public route `Authorization` starts unticked. An `Authorization: Bearer {{token}}`, a tenant header. Leave Authorization out for an anonymous environment.
 - **Variables** — `{{name}}` in any param, query, header or body value. A `{{name}}` with no value is left as written and flagged under the URL, naming the environment.
 - **Param mappings** — a variable named like a path or query param (`tenantId` for `:tenantId`) fills it whenever it's left empty; a mapping covers names that differ (`:tenantId` ← `orgId`). What you type always wins.
 
 One environment is **active**; the runner's picker can **pin** a route to another — a public route to `anonymous`, an admin route to `admin` — and the pin is remembered per route. Add, duplicate, rename, make active or delete them in the sheet; deleting one sends its pinned routes back to the active one.
 
 - **Save to variable** on a response reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable in the environment the route uses — log in under `admin` and only `admin` gets the token. It belongs to the route: once set on your login route, every 2xx response from it saves the variable again, and other routes don't carry it. A saved variable starts out secret.
-- Together: on your login route, save `data.accessToken` as `token`, and with `Authorization: Bearer {{token}}` as a default header every route using that environment sends it; logging in again updates it everywhere.
+- Together: on your login route, save `data.accessToken` as `token`, and with `Authorization: Bearer {{token}}` as a default header every route using that environment sends it (public routes only when ticked); logging in again updates it everywhere.
 
 ![Animated: an environment with Authorization: Bearer {{token}} as a default header; the login route's response saved to {{token}} with Save to variable; then the profile route sent with the token filled in, answering 200](./images/devtools/login-flow.webp)
 
