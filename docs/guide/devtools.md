@@ -457,6 +457,8 @@ Selecting a route on the Routes tab opens the runner beside the list — drag th
 - **Response** — status, time, headers and the body (JSON pretty-printed), plus this route's **Save to variable**.
 - **History** — the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Entries keep `{{variables}}` as written, not their values.
 
+![The login route's Headers: the environment's Authorization starts unticked on a public route, X-Tenant is sent, and the curl snippet shows only what is sent](./images/devtools/route-defaults.webp)
+
 The header names the handler (`UsersController.list`): click it to **open the handler in your editor**. The dashboard asks the app where the class is declared under `src/`, then follows a `vscode://file{file}:{line}` link. For another editor, change **Editor link** under _Settings_ — e.g. `cursor://file{file}:{line}`, `windsurf://file{file}:{line}`, or `idea://open?file={file}&line={line}`.
 
 #### Prefill
@@ -479,6 +481,11 @@ One environment is **active**; the runner's picker can **pin** a route to anothe
 
 - **Save to variable** on a response reads a JSON path (`accessToken`, `data.token`, `items[0].id`) and sets a variable in the environment the route uses — log in under `admin` and only `admin` gets the token. It belongs to the route: once set on your login route, every 2xx response from it saves the variable again, and other routes don't carry it. A saved variable starts out secret.
 - Together: on your login route, save `data.accessToken` as `token`, and with `Authorization: Bearer {{token}}` as a default header every route using that environment sends it; logging in again updates it everywhere.
+
+![Animated: an environment with Authorization: Bearer {{token}} as a default header; the login route's response saved to {{token}} with Save to variable; then the profile route sent with the token filled in, answering 200](./images/devtools/login-flow.webp)
+
+![The token variable marked secret, shown with the eye and opened in full with the expand button](./images/devtools/secrets.webp)
+
 - **Remember on this browser** (in the sheet) keeps environments in `localStorage`, so they survive closing the tab. They often hold tokens: leave it off on a shared machine. Switching it moves them rather than copying. Headers and variables from before environments existed become the first one, `dev`.
 
 It handles the framework's conventions for you:

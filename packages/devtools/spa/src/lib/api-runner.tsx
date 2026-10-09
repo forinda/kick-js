@@ -244,6 +244,14 @@ export const ApiRunnerPanel: Component = () => {
     return (spec ? openApiHints(spec, route) : undefined) ?? routeHints(route)
   })
 
+  /**
+   * The storage key the current inputs were loaded for. On a route change the
+   * save effect can run before the load effect (Solid doesn't promise their
+   * order), and would write the previous route's inputs under the new route's
+   * key — which the load effect would then read back.
+   */
+  let loadedKey: string | null = null
+
   // Load the route's saved inputs whenever a route is opened.
   createEffect(() => {
     const route = activeRoute()
@@ -260,8 +268,10 @@ export const ApiRunnerPanel: Component = () => {
     pendingInputs = null
     // Keep params in sync with the path even if the saved inputs are older.
     const params = Object.fromEntries(pathParams(route.path).map((p) => [p, saved.params[p] ?? '']))
+    loadedKey = inputsKey(route)
     setInputs({ ...saved, params })
     setAwaitingPrefill(isNew)
+    setCaptureNote(null)
     setEditorNote(null)
     setResult(null)
     setError(null)
@@ -274,7 +284,9 @@ export const ApiRunnerPanel: Component = () => {
   createEffect(() => {
     const route = activeRoute()
     const current = inputs()
-    if (route && current) save(() => localStorage, inputsKey(route), storableInputs(current))
+    if (route && current && loadedKey === inputsKey(route)) {
+      save(() => localStorage, inputsKey(route), storableInputs(current))
+    }
   })
   // Write the environment where `remember` says, and clear the other storage so
   // switching the toggle moves it instead of leaving a copy behind.
@@ -1404,8 +1416,8 @@ const EnvironmentsSheet: Component<{
           <div>
             <h3 class="text-xs font-semibold text-text-secondary mb-1">Default headers</h3>
             <p class="text-xs text-text-muted mb-2">
-              Sent with every route using this environment. A default Authorization is skipped on
-              routes carrying a public flag; leave it out entirely for an anonymous environment.
+              Sent with every route using this environment. A route can untick any of them under its
+              own Headers; on routes carrying a public flag, Authorization starts unticked.
             </p>
             <RowsEditor rows={current().headers} onChange={(headers) => patch({ headers })} />
           </div>
