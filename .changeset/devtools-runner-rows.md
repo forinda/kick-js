@@ -1,0 +1,11 @@
+---
+'@forinda/kickjs-devtools': minor
+---
+
+API runner and Routes tab:
+
+- Key/value rows can be removed (✕), reordered by dragging, marked secret (masked until revealed), and expanded to read or edit a long value such as a JWT.
+- Under a route's _Headers_, each environment default header can be unticked for that route only — a login route without the global `Authorization`.
+- **Save to variable** belongs to the route it's set on, and reruns on every 2xx response from it. A saved variable starts out secret.
+- Controller groups in the Routes list collapse (remembered), with **Collapse all**; a search shows every match.
+- The public route flags setting explains what it does.

@@ -8,6 +8,7 @@ import {
   historyLabel,
   openApiHints,
   loadEnvironments,
+  moveRow,
   environmentFor,
   nextEnvironmentName,
   fillFromEnvironment,
@@ -87,6 +88,15 @@ describe('prepareRequest', () => {
         { defaults: [row('Authorization', 'Bearer t')] },
       ).headers,
     ).toEqual({ authorization: 'Bearer x' })
+  })
+
+  it('leaves off the default headers a route unticks, by name in any case', () => {
+    const req = prepare(
+      { method: 'POST', path: '/api/v1/login' },
+      { skipDefaults: ['authorization'] },
+      { defaults: [row('Authorization', 'Bearer t'), row('X-Tenant', 'a')] },
+    )
+    expect(req.headers).toEqual({ 'X-Tenant': 'a' })
   })
 
   it('accepts several public flag names, as a list or a comma-separated string', () => {
@@ -615,5 +625,13 @@ describe('environments', () => {
       cookies: '',
     })
     expect(req.url).toBe('http://localhost:3000/api/v1/orgs/acme/users/7')
+  })
+})
+
+describe('moveRow', () => {
+  it('moves an item to the target index, ignoring out-of-range moves', () => {
+    expect(moveRow(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
+    expect(moveRow(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
+    expect(moveRow(['a', 'b'], 0, 5)).toEqual(['a', 'b'])
   })
 })

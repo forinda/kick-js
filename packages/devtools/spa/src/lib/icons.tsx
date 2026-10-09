@@ -27,6 +27,10 @@ const PATHS: Record<string, string> = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
   action: 'M13 2L3 14h9l-1 8 10-12h-9z',
   editor: 'M16 18l6-6-6-6M8 6l-6 6 6 6',
+  lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+  unlock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.75-1.4',
+  eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  maximize: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
 }
 
 export const Icon: Component<{ name: string; size?: number; class?: string }> = (props) => (

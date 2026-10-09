@@ -29,6 +29,7 @@ import { store, type RouteEntry } from './store'
 import { rpc } from './rpc'
 import { methodColor, statusPill } from './format'
 import { switchTab } from './nav'
+import { Icon } from './icons'
 import {
   DEFAULT_SETTINGS,
   acceptsBody,
@@ -53,6 +54,7 @@ import {
   unresolvedVariables,
   variableMap,
   isPublicRoute,
+  moveRow,
   needsConfirmation,
   pathParams,
   prepareRequest,
@@ -206,7 +208,8 @@ export const ApiRunnerPanel: Component = () => {
       // oxlint-disable-next-line no-map-spread
       environments: state.environments.map((e) => (e.id === id ? { ...e, ...patch } : e)),
     }))
-  const [capture, setCapture] = createSignal({ path: '', name: '' })
+  const capture = () => inputs()?.capture ?? { path: '', name: '' }
+  const setCapture = (value: { path: string; name: string }) => update({ capture: value })
   const [captureNote, setCaptureNote] = createSignal<string | null>(null)
   const [settings, setSettings] = createSignal<RunnerSettings>(
     load(() => localStorage, SETTINGS_KEY, DEFAULT_SETTINGS),
@@ -363,6 +366,10 @@ export const ApiRunnerPanel: Component = () => {
         body: formatBody(text.slice(0, MAX_BODY_CHARS), res.headers.get('content-type')),
         truncated: text.length > MAX_BODY_CHARS,
       })
+      // The route's own "Save to variable" runs after every success: log in, and the token's set.
+      if (res.ok && sentInputs.capture?.path.trim() && sentInputs.capture.name.trim()) {
+        captureVariable()
+      }
     } catch (err) {
       record({ error: err instanceof Error ? err.message : String(err) })
       if (sentIn !== generation) return
@@ -416,7 +423,7 @@ export const ApiRunnerPanel: Component = () => {
     updateEnv(target.id, {
       variables: rows.some((r) => r.key === key)
         ? rows.map((r) => (r.key === key ? { ...r, value, enabled: true } : r))
-        : [...rows, { key, value, enabled: true }],
+        : [...rows, { key, value, enabled: true, secret: true }],
     })
     setCaptureNote(`Saved {{${key}}} in ${target.name}`)
   }
@@ -647,6 +654,45 @@ export const ApiRunnerPanel: Component = () => {
                         rows={current().headers}
                         onChange={(headers) => update({ headers })}
                       />
+                      <Show when={env().headers.some((h) => h.enabled && h.key)}>
+                        <div class="mt-3 text-xs">
+                          <p class="text-text-muted mb-1">
+                            From <strong>{env().name}</strong> — untick to leave one off this route:
+                          </p>
+                          <For each={env().headers.filter((h) => h.enabled && h.key)}>
+                            {(h) => {
+                              const name = h.key.toLowerCase()
+                              const skipped = () => (current().skipDefaults ?? []).includes(name)
+                              return (
+                                <label class="flex items-center gap-2 font-mono text-text-secondary">
+                                  <input
+                                    type="checkbox"
+                                    checked={!skipped()}
+                                    onChange={(e) => {
+                                      const rest = (current().skipDefaults ?? []).filter(
+                                        (n) => n !== name,
+                                      )
+                                      update({
+                                        skipDefaults: e.currentTarget.checked
+                                          ? rest
+                                          : [...rest, name],
+                                      })
+                                    }}
+                                  />
+                                  <span class={skipped() ? 'line-through text-text-muted' : ''}>
+                                    {h.key}: {h.secret ? '••••••' : h.value}
+                                  </span>
+                                  <Show when={name === 'authorization' && isPublic()}>
+                                    <span class="font-sans text-text-muted">
+                                      (not sent: public route)
+                                    </span>
+                                  </Show>
+                                </label>
+                              )
+                            }}
+                          </For>
+                        </div>
+                      </Show>
                     </Section>
 
                     <Show when={acceptsBody(route().method)}>
@@ -727,6 +773,12 @@ export const ApiRunnerPanel: Component = () => {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                   <label class="flex flex-col gap-1 text-xs text-text-muted">
                     Public route flags (comma-separated)
+                    <span class="text-[0.7rem]">
+                      Routes carrying one of these flags (e.g. <code>auth.public</code> from your
+                      auth setup) don't get the environment's default Authorization header — a login
+                      route needs no token. Names your app uses; the runner adds no flags to the
+                      request.
+                    </span>
                     <input
                       class={inputClass}
                       value={publicFlagNames(settings().publicFlag).join(', ')}
@@ -1029,36 +1081,146 @@ const RowsEditor: Component<{
   keyPlaceholder?: string
   valuePlaceholder?: string
 }> = (props) => {
-  const rows = () => [...props.rows, { key: '', value: '', enabled: true }]
+  const rows = (): KeyValueRow[] => [...props.rows, { key: '', value: '', enabled: true }]
   const set = (index: number, patch: Partial<KeyValueRow>) => {
     // Copy-on-write on purpose: mutating a row in place would not re-render it.
     // oxlint-disable-next-line no-map-spread
     const next = rows().map((row, i) => (i === index ? { ...row, ...patch } : row))
     props.onChange(next.filter((row) => row.key || row.value))
   }
+  // Per row, not saved: a revealed secret is masked again on reopen.
+  const [revealed, setRevealed] = createSignal<ReadonlySet<number>>(new Set())
+  const [expanded, setExpanded] = createSignal<number | null>(null)
+  const flip = (i: number) => {
+    const next = new Set(revealed())
+    if (!next.delete(i)) next.add(i)
+    setRevealed(next)
+  }
+  const masked = (i: number) => !!rows()[i]?.secret && !revealed().has(i)
+  const remove = (i: number) => {
+    setRevealed(new Set<number>())
+    setExpanded(null)
+    props.onChange(props.rows.filter((_, j) => j !== i))
+  }
+  const iconButton = 'shrink-0 p-1 text-text-muted hover:text-text-body'
+  // Drag by the handle to reorder: order matters, a later header replaces an earlier one.
+  const [dragging, setDragging] = createSignal<number | null>(null)
+  const drop = (to: number) => {
+    const from = dragging()
+    setDragging(null)
+    if (from === null || from === to || to >= props.rows.length) return
+    setRevealed(new Set<number>())
+    setExpanded(null)
+    props.onChange(moveRow(props.rows, from, to))
+  }
   return (
     <div class="flex flex-col gap-2">
       <Index each={rows()}>
         {(row, i) => (
-          <div class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              aria-label="Enabled"
-              checked={row().enabled}
-              onChange={(e) => set(i, { enabled: e.currentTarget.checked })}
-            />
-            <input
-              class={inputClass}
-              placeholder={props.keyPlaceholder ?? 'name'}
-              value={row().key}
-              onInput={(e) => set(i, { key: e.currentTarget.value })}
-            />
-            <input
-              class={inputClass}
-              placeholder={props.valuePlaceholder ?? 'value'}
-              value={row().value}
-              onInput={(e) => set(i, { value: e.currentTarget.value })}
-            />
+          <div
+            class={`flex flex-col gap-1 ${dragging() === i ? 'opacity-50' : ''}`}
+            onDragOver={(e) => {
+              if (dragging() !== null && i < props.rows.length) e.preventDefault()
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              drop(i)
+            }}
+          >
+            <div class="flex items-center gap-2">
+              <span
+                draggable={i < props.rows.length}
+                aria-hidden="true"
+                title="Drag to reorder"
+                class={`shrink-0 select-none text-text-muted ${
+                  i < props.rows.length ? 'cursor-grab' : 'invisible'
+                }`}
+                onDragStart={(e) => {
+                  setDragging(i)
+                  e.dataTransfer?.setData('text/plain', String(i))
+                }}
+                onDragEnd={() => setDragging(null)}
+              >
+                ⠿
+              </span>
+              <input
+                type="checkbox"
+                aria-label="Enabled"
+                checked={row().enabled}
+                onChange={(e) => set(i, { enabled: e.currentTarget.checked })}
+              />
+              <input
+                class={inputClass}
+                placeholder={props.keyPlaceholder ?? 'name'}
+                value={row().key}
+                onInput={(e) => set(i, { key: e.currentTarget.value })}
+              />
+              <input
+                class={inputClass}
+                type={masked(i) ? 'password' : 'text'}
+                autocomplete="off"
+                placeholder={props.valuePlaceholder ?? 'value'}
+                value={row().value}
+                onInput={(e) => set(i, { value: e.currentTarget.value })}
+              />
+              {/* The trailing blank row is where new rows are typed: no actions on it. */}
+              <div class={`flex items-center ${i === props.rows.length ? 'invisible' : ''}`}>
+                <Show when={row().secret}>
+                  <button
+                    type="button"
+                    class={iconButton}
+                    aria-pressed={!masked(i)}
+                    aria-label={masked(i) ? 'Show value' : 'Hide value'}
+                    title={masked(i) ? 'Show value' : 'Hide value'}
+                    onClick={() => flip(i)}
+                  >
+                    <Icon name="eye" size={14} />
+                  </button>
+                </Show>
+                <button
+                  type="button"
+                  class={iconButton}
+                  aria-pressed={!!row().secret}
+                  aria-label={row().secret ? 'Secret: masked' : 'Mark as secret'}
+                  title={row().secret ? 'Secret: masked — click to stop masking' : 'Mark as secret'}
+                  onClick={() => set(i, { secret: !row().secret })}
+                >
+                  <Icon name={row().secret ? 'lock' : 'unlock'} size={14} />
+                </button>
+                <button
+                  type="button"
+                  class={iconButton}
+                  aria-expanded={expanded() === i}
+                  aria-label="Edit the whole value"
+                  title="Edit the whole value"
+                  onClick={() => setExpanded(expanded() === i ? null : i)}
+                >
+                  <Icon name="maximize" size={14} />
+                </button>
+                <button
+                  type="button"
+                  class={iconButton}
+                  aria-label="Remove row"
+                  title="Remove row"
+                  onClick={() => remove(i)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            {/* Long values (a JWT) don't fit the inline box: the whole value, wrapped. */}
+            <Show when={expanded() === i}>
+              <textarea
+                class={`${inputClass} font-mono text-xs min-h-24 break-all`}
+                aria-label={`${row().key || 'value'} — whole value`}
+                value={masked(i) ? '•'.repeat(Math.min(row().value.length, 64)) : row().value}
+                readOnly={masked(i)}
+                onInput={(e) => set(i, { value: e.currentTarget.value })}
+              />
+              <Show when={masked(i)}>
+                <p class="text-xs text-text-muted">Masked — show it to read or edit.</p>
+              </Show>
+            </Show>
           </div>
         )}
       </Index>

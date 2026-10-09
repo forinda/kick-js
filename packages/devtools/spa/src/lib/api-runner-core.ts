@@ -11,6 +11,16 @@ export interface KeyValueRow {
   key: string
   value: string
   enabled: boolean
+  /** Masked in the editor until revealed — tokens, passwords. */
+  secret?: boolean
+}
+
+/** `list` with the item at `from` moved to `to` — dragging a row into place. */
+export function moveRow<T>(list: readonly T[], from: number, to: number): T[] {
+  const next = [...list]
+  if (from < 0 || from >= next.length || to < 0 || to >= next.length) return next
+  next.splice(to, 0, ...next.splice(from, 1))
+  return next
 }
 
 /** What the user typed for one route. */
@@ -37,6 +47,10 @@ export interface RouteInputs {
   /** `raw` sends `body` as text; `form` sends `form` as multipart/form-data. */
   bodyMode?: BodyMode
   form?: FormRow[]
+  /** Environment default headers (lowercased names) this route doesn't send. */
+  skipDefaults?: string[]
+  /** "Save to variable" for this route: a JSON path read out of each 2xx response. */
+  capture?: { path: string; name: string }
 }
 
 /** Runner settings — names an app can change from the framework defaults. */
@@ -268,7 +282,8 @@ export function prepareRequest(input: {
     // oxlint-disable-next-line no-map-spread
     form: (input.inputs.form ?? []).map((r) => ({ ...r, key: fill(r.key), value: fill(r.value) })),
   }
-  const defaults = fillRows(input.defaults)
+  const skip = new Set(input.inputs.skipDefaults ?? [])
+  const defaults = fillRows(input.defaults.filter((r) => !skip.has(r.key.toLowerCase())))
   const method = route.method.toUpperCase()
   const isPublic = isPublicRoute(route, settings)
 
