@@ -90,13 +90,17 @@ describe('prepareRequest', () => {
     ).toEqual({ authorization: 'Bearer x' })
   })
 
-  it('leaves off the default headers a route unticks, by name in any case', () => {
-    const req = prepare(
-      { method: 'POST', path: '/api/v1/login' },
-      { skipDefaults: ['authorization'] },
-      { defaults: [row('Authorization', 'Bearer t'), row('X-Tenant', 'a')] },
-    )
-    expect(req.headers).toEqual({ 'X-Tenant': 'a' })
+  it('sends the default headers a route ticks and leaves off those it unticks, flags or not', () => {
+    const defaults = [row('Authorization', 'Bearer t'), row('X-Tenant', 'a')]
+    const login = { method: 'POST', path: '/api/v1/login' }
+    expect(
+      prepare(login, { defaultHeaders: { authorization: false } }, { defaults }).headers,
+    ).toEqual({ 'X-Tenant': 'a' })
+    // A public route starts with Authorization off; ticking it sends it.
+    const health = { method: 'GET', path: '/health', flags: { 'auth.public': true } }
+    expect(
+      prepare(health, { defaultHeaders: { authorization: true } }, { defaults }).headers,
+    ).toEqual({ Authorization: 'Bearer t', 'X-Tenant': 'a' })
   })
 
   it('accepts several public flag names, as a list or a comma-separated string', () => {

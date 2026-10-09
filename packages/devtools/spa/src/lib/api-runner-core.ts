@@ -47,8 +47,11 @@ export interface RouteInputs {
   /** `raw` sends `body` as text; `form` sends `form` as multipart/form-data. */
   bodyMode?: BodyMode
   form?: FormRow[]
-  /** Environment default headers (lowercased names) this route doesn't send. */
-  skipDefaults?: string[]
+  /**
+   * Environment default headers (lowercased name) ticked or unticked for this
+   * route. Unset, a header is sent — except `Authorization` on a public route.
+   */
+  defaultHeaders?: Record<string, boolean>
   /** "Save to variable" for this route: a JSON path read out of each 2xx response. */
   capture?: { path: string; name: string }
 }
@@ -122,6 +125,22 @@ export function publicFlagNames(setting: string | string[]): string[] {
 }
 
 /** Whether the route carries any of the configured public flags. */
+/**
+ * Whether a route sends one of the environment's default headers: the route's
+ * own tick if it has one, else yes — but no `Authorization` on a public route.
+ */
+export function sendsDefault(
+  route: RunnerRoute,
+  inputs: RouteInputs,
+  settings: RunnerSettings,
+  name: string,
+): boolean {
+  const key = name.toLowerCase()
+  return (
+    inputs.defaultHeaders?.[key] ?? !(key === 'authorization' && isPublicRoute(route, settings))
+  )
+}
+
 export function isPublicRoute(route: RunnerRoute, settings: RunnerSettings): boolean {
   return publicFlagNames(settings.publicFlag).some((name) => route.flags?.[name] !== undefined)
 }
@@ -282,16 +301,15 @@ export function prepareRequest(input: {
     // oxlint-disable-next-line no-map-spread
     form: (input.inputs.form ?? []).map((r) => ({ ...r, key: fill(r.key), value: fill(r.value) })),
   }
-  const skip = new Set(input.inputs.skipDefaults ?? [])
-  const defaults = fillRows(input.defaults.filter((r) => !skip.has(r.key.toLowerCase())))
+  const defaults = fillRows(
+    input.defaults.filter((r) => sendsDefault(route, input.inputs, settings, r.key)),
+  )
   const method = route.method.toUpperCase()
-  const isPublic = isPublicRoute(route, settings)
 
   const headers: Record<string, string> = {}
-  const set = (rows: KeyValueRow[], skipAuth: boolean) => {
+  const set = (rows: KeyValueRow[]) => {
     for (const row of rows) {
       if (!row.enabled || !row.key) continue
-      if (skipAuth && row.key.toLowerCase() === 'authorization') continue
       // Header names are case-insensitive: a later row replaces an earlier one.
       for (const existing of Object.keys(headers)) {
         if (existing.toLowerCase() === row.key.toLowerCase()) delete headers[existing]
@@ -299,8 +317,8 @@ export function prepareRequest(input: {
       headers[row.key] = row.value
     }
   }
-  set(defaults, isPublic)
-  set(inputs.headers, false)
+  set(defaults)
+  set(inputs.headers)
 
   const has = (name: string) => Object.keys(headers).some((k) => k.toLowerCase() === name)
 

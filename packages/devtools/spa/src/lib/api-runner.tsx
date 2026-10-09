@@ -54,6 +54,7 @@ import {
   unresolvedVariables,
   variableMap,
   isPublicRoute,
+  sendsDefault,
   moveRow,
   needsConfirmation,
   pathParams,
@@ -509,7 +510,10 @@ export const ApiRunnerPanel: Component = () => {
                       {route().controller}.{route().handler}
                     </button>
                     <Show when={editorNote()}> · {editorNote()}</Show>
-                    <Show when={isPublic()}> · public route — default Authorization not sent</Show>
+                    <Show when={isPublic()}>
+                      {' '}
+                      · public route — default Authorization off unless ticked under Headers
+                    </Show>
                   </p>
                   <Show when={hints()?.summary}>
                     <p class="text-sm text-text-secondary mt-1">{hints()!.summary}</p>
@@ -657,34 +661,39 @@ export const ApiRunnerPanel: Component = () => {
                       <Show when={env().headers.some((h) => h.enabled && h.key)}>
                         <div class="mt-3 text-xs">
                           <p class="text-text-muted mb-1">
-                            From <strong>{env().name}</strong> — untick to leave one off this route:
+                            From <strong>{env().name}</strong> — untick to leave one off this route
+                            only:
                           </p>
                           <For each={env().headers.filter((h) => h.enabled && h.key)}>
                             {(h) => {
                               const name = h.key.toLowerCase()
-                              const skipped = () => (current().skipDefaults ?? []).includes(name)
+                              const sent = () => sendsDefault(route(), current(), settings(), name)
                               return (
                                 <label class="flex items-center gap-2 font-mono text-text-secondary">
                                   <input
                                     type="checkbox"
-                                    checked={!skipped()}
-                                    onChange={(e) => {
-                                      const rest = (current().skipDefaults ?? []).filter(
-                                        (n) => n !== name,
-                                      )
+                                    checked={sent()}
+                                    onChange={(e) =>
                                       update({
-                                        skipDefaults: e.currentTarget.checked
-                                          ? rest
-                                          : [...rest, name],
+                                        defaultHeaders: {
+                                          ...current().defaultHeaders,
+                                          [name]: e.currentTarget.checked,
+                                        },
                                       })
-                                    }}
+                                    }
                                   />
-                                  <span class={skipped() ? 'line-through text-text-muted' : ''}>
+                                  <span class={sent() ? '' : 'line-through text-text-muted'}>
                                     {h.key}: {h.secret ? '••••••' : h.value}
                                   </span>
-                                  <Show when={name === 'authorization' && isPublic()}>
+                                  <Show
+                                    when={
+                                      name === 'authorization' &&
+                                      isPublic() &&
+                                      current().defaultHeaders?.[name] === undefined
+                                    }
+                                  >
                                     <span class="font-sans text-text-muted">
-                                      (not sent: public route)
+                                      (off by default: public route)
                                     </span>
                                   </Show>
                                 </label>
