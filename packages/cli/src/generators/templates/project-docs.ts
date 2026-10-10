@@ -618,7 +618,7 @@ routes() {
 
 **Red flags** (stop and ask):
 - File created as \`<name>.ts\` instead of \`<name>.module.ts\` — Vite plugin's \`*.module.[tj]sx?\` glob doesn't pick it up; every save becomes a full restart.
-- \`@Controller('/path')\` with a path argument combined with module \`routes().path\` — duplicates the prefix. The decorator path is OpenAPI metadata only.
+- \`@Controller('/path')\` with a path argument — removed in v4; passing a path is a TypeScript error. The prefix comes from the module's \`routes().path\`.
 - \`TodosModule\` instead of \`TodosModule()\` for a module that takes config — refused, since the bare name would silently select the defaults. A module with no config accepts either, but prefer the invoked form for consistency.
 - \`routes()\` returning \`router: …\` when a \`controller:\` would do — controller form is required for OpenAPI/Swagger introspection.
 - Module not registered in \`src/modules/index.ts\`.`,
@@ -1549,7 +1549,7 @@ Customisation goes in \`.local.md\` siblings (\`AGENTS.local.md\`, \`skills/<slu
 - \`class implements KickPlugin\` / function returning \`KickPlugin\` → use \`definePlugin()\`.
 - \`class implements AppModule\` for new code → use \`defineModule()\`.
 - \`bootstrap({ adapters: [MyAdapter] })\` (factory) → \`MyAdapter()\` (instance, with parens).
-- \`@Controller('/path')\` with a path argument → drop the path; set the mount via \`routes().path\`. The decorator path is OpenAPI metadata only.
+- \`@Controller('/path')\` with a path argument → drop the path (it was removed in v4 and is a TypeScript error); set the mount via \`routes().path\`.
 - Module file named \`<name>.ts\` (no \`.module\` suffix) → rename to \`<name>.module.ts\`. Vite HMR's glob doesn't pick up the unsuffixed form.
 
 **DI**:

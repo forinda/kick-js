@@ -24,7 +24,7 @@ const createUserSchema = z.object({
   name: z.string().min(1),
 })
 
-@Controller('/users')
+@Controller()
 export class UserController {
   @Post('/', { body: createUserSchema })
   create(ctx: Ctx<KickRoutes.UserController['create']>) {
@@ -223,7 +223,7 @@ A plain `ctx: RequestContext` doesn't type `ctx.body`. To get the validated type
 import { Controller, Post, type Ctx } from '@forinda/kickjs'
 import { createUserSchema } from './user.dtos'
 
-@Controller('/users')
+@Controller()
 export class UserController {
   @Post('/', { body: createUserSchema })
   create(ctx: Ctx<KickRoutes.UserController['create']>) {
