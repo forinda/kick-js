@@ -203,15 +203,15 @@ mistakes:
   The \`kick/\` prefix is reserved for first-party packages; this project
   owns its own scope (\`app/\`, your domain name, etc.).
 
-- **\`@Controller()\`** takes **no path argument**. Mount prefix comes from
-  the module's \`routes()\` return value, not the decorator. \`@Controller('/users')\`
-  is a v3 leftover; the linter and codegen reject it.
+- **\`@Controller()\`** takes **no arguments**. Set the route prefix with the
+  module's \`routes().path\`.
 
-- **Env wiring** — \`src/config/index.ts\` calls \`loadEnv(envSchema)\` as a
-  side effect. \`src/index.ts\` MUST have \`import './config'\` as its **first**
-  import (before \`bootstrap()\`). Without it, \`ConfigService.get('YOUR_KEY')\`
-  returns \`undefined\` and \`@Value()\` only works via raw \`process.env\` fallback
-  (Zod coercion + defaults silently skipped).
+- **Env** — the schema lives in \`src/config/index.ts\`. \`src/index.ts\` imports
+  it once, as its **first** import (\`import './config'\`, before \`bootstrap()\`);
+  tests that read config import it too (\`import '@/config'\`). Nothing else
+  imports from \`src/config\`: read values with \`getEnv('KEY')\`, an injected
+  \`ConfigService\` (\`config.get('KEY')\`), or \`@Value('KEY')\` typed as
+  \`Env<'KEY'>\` — never \`process.env\`. Add a key to the schema before reading it.
 
 - **Module entry files MUST be named \`<name>.module.ts\`** — see the Vite
   HMR contract at the top of "Module Pattern" below. The CLI enforces this;
@@ -618,7 +618,7 @@ routes() {
 
 **Red flags** (stop and ask):
 - File created as \`<name>.ts\` instead of \`<name>.module.ts\` — Vite plugin's \`*.module.[tj]sx?\` glob doesn't pick it up; every save becomes a full restart.
-- \`@Controller('/path')\` with a path argument — removed in v4; passing a path is a TypeScript error. The prefix comes from the module's \`routes().path\`.
+- \`@Controller('/path')\` with a path argument — \`@Controller()\` takes no arguments; the prefix goes in the module's \`routes().path\`.
 - \`TodosModule\` instead of \`TodosModule()\` for a module that takes config — refused, since the bare name would silently select the defaults. A module with no config accepts either, but prefer the invoked form for consistency.
 - \`routes()\` returning \`router: …\` when a \`controller:\` would do — controller form is required for OpenAPI/Swagger introspection.
 - Module not registered in \`src/modules/index.ts\`.`,
@@ -832,9 +832,7 @@ people lose time on. The manual checks below are the same reasoning.
    const envSchema = fromZod(z.object({ DATABASE_URL: z.url() }))
    export const env = loadEnvFromSchema(envSchema)
    \`\`\`
-   (\`loadEnv(zodSchema)\` from \`@forinda/kickjs\` is the equivalent for a bare Zod
-   object. Either is fine — what matters is that it RUNS at module load.)
-3. The new key MUST be declared in the Zod schema. \`@Value('NEW_KEY')\` accepts any string at the type level and **falls back to raw \`process.env\`** when the schema doesn't know the key — silently skipping Zod coercion.
+3. The new key MUST be declared in the schema. \`@Value('NEW_KEY')\` accepts any string at the type level and **falls back to raw \`process.env\`** when the schema doesn't know the key — silently skipping its parsing and defaults.
 4. After adding a key, re-run \`kick typegen\` (or restart \`kick dev\` if the typegen watcher missed it) so the global \`KickEnv\` augmentation picks it up.
 
 5. **In a test?** \`createTestApp\` never loads \`src/index.ts\`, so the entry's
@@ -853,8 +851,6 @@ people lose time on. The manual checks below are the same reasoning.
 - \`resetEnvCache()\` — drops the registered schema entirely. **Test-only.** Calling it between dev requests drops the project's keys.
 
 **Nuances**:
-- \`loadEnv()\` cache is **sticky**: once \`loadEnv(extendedSchema)\` runs anywhere, no-arg calls reuse it — but only if it actually ran. Schema downgrades silently if \`src/config/index.ts\` isn't imported.
-- \`createConfigService(envSchema)\` is deprecated; the typegen-driven \`ConfigService\` covers it.
 - \`dotenv\` is an **optional peer dep** in v5+ — projects upgrading from older versions may need to add it explicitly.
 - For HMR-friendly \`.env\` edits, add \`envWatchPlugin()\` to \`vite.config.ts\` — calls \`reloadEnv()\` automatically.
 
@@ -1549,7 +1545,7 @@ Customisation goes in \`.local.md\` siblings (\`AGENTS.local.md\`, \`skills/<slu
 - \`class implements KickPlugin\` / function returning \`KickPlugin\` → use \`definePlugin()\`.
 - \`class implements AppModule\` for new code → use \`defineModule()\`.
 - \`bootstrap({ adapters: [MyAdapter] })\` (factory) → \`MyAdapter()\` (instance, with parens).
-- \`@Controller('/path')\` with a path argument → drop the path (it was removed in v4 and is a TypeScript error); set the mount via \`routes().path\`.
+- \`@Controller('/path')\` with a path argument → \`@Controller()\`, with the prefix in \`routes().path\`.
 - Module file named \`<name>.ts\` (no \`.module\` suffix) → rename to \`<name>.module.ts\`. Vite HMR's glob doesn't pick up the unsuffixed form.
 
 **DI**:
