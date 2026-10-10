@@ -10,3 +10,4 @@ Schema detection fixes, and docs that match the code.
 - **Valibot `expected` / `received`:** issues no longer carry the literal string `"null"` when Valibot reports none.
 - **`@valibot/to-json-schema`:** now a declared optional peer, installed by `kick new`'s Valibot template. Without it, Valibot schemas are still described as `{ type: 'object' }`, but a one-time warning now says why.
 - **CLI:** `kick g config` writes `schemaValidator: 'kickjs-schema'` like `kick new`. Generated Zod DTOs pass messages as `{ error: '…' }` (Zod 4).
+- **Generated README:** explains reading env: the schema in `src/config/index.ts` is imported once for its side effect, then values are read anywhere with `getEnv()`, `ConfigService` or `@Value()` (typed with `Env<'KEY'>`) rather than `process.env`. The variable table now lists `LOG_LEVEL`.
