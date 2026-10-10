@@ -199,9 +199,12 @@ export const DependencyGraph: Component<{
   const onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 0) return
     const id = (e.target as Element).closest('[data-node]')?.getAttribute('data-node')
+    // A token a refresh just removed (or a narrowed chain left out) has no
+    // position: ignore the press rather than start a drag from nowhere.
+    const from = id ? position().get(id) : undefined
+    if (id && !from) return
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-    if (id) {
-      const from = position().get(id)!
+    if (id && from) {
       gesture = { kind: 'node', id, sx: e.clientX, sy: e.clientY, from, dragged: false }
     } else {
       gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, view: view() }

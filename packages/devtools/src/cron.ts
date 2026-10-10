@@ -42,6 +42,12 @@ type Container = Parameters<typeof listCronJobs>[0] & { resolve(token: unknown):
 const TRACKED = Symbol.for('kickjs.devtools.cronTracked')
 const stats = new Map<string, CronJobStats>()
 
+/**
+ * By class *name*, like KickJS's own cron registry and `runCronJob`'s running
+ * set: `listCronJobs` holds one class per name so an HMR reload replaces the
+ * old class, and keying stats the same way keeps a job's counts across
+ * reloads (the class is new; the job isn't).
+ */
 const keyOf = (job: Pick<CronJob, 'target' | 'handlerName'>): string =>
   `${job.target.name}.${job.handlerName}`
 

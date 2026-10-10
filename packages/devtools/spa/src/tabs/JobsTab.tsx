@@ -5,7 +5,7 @@
  * remembered.
  */
 
-import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
+import { createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js'
 import { rpc, type CronJobEntry } from '../lib/rpc'
 import { store, storeActions } from '../lib/store'
 import { ago, formatMs, formatUptime } from '../lib/format'
@@ -143,28 +143,29 @@ const CronPanel: Component = () => {
             </tr>
           </thead>
           <tbody>
-            <For each={store.cron()}>
+            {/* <Index>: a refresh brings new objects; rows update in place, so an armed Run now keeps focus. */}
+            <Index each={store.cron()}>
               {(job) => (
                 <tr
-                  class={`border-t border-border/60 align-top ${job.enabled ? '' : 'opacity-60'}`}
+                  class={`border-t border-border/60 align-top ${job().enabled ? '' : 'opacity-60'}`}
                 >
                   <td class="py-1.5 pr-3">
-                    <div class="font-mono text-text-strong">{job.name}</div>
-                    <Show when={job.description}>
-                      <div class="text-xs text-text-muted">{job.description}</div>
+                    <div class="font-mono text-text-strong">{job().name}</div>
+                    <Show when={job().description}>
+                      <div class="text-xs text-text-muted">{job().description}</div>
                     </Show>
-                    <Show when={!job.enabled}>
+                    <Show when={!job().enabled}>
                       <span class="dt-tone dt-tone-gray">disabled</span>
                     </Show>
                   </td>
                   <td class="py-1.5 pr-3 font-mono whitespace-nowrap">
-                    {job.expression}
-                    <Show when={job.timezone}>
-                      <div class="text-xs text-text-muted">{job.timezone}</div>
+                    {job().expression}
+                    <Show when={job().timezone}>
+                      <div class="text-xs text-text-muted">{job().timezone}</div>
                     </Show>
                   </td>
                   <td class="py-1.5 pr-3 whitespace-nowrap text-text-secondary">
-                    <Show when={job.nextRunAt} fallback={<span class="text-text-muted">—</span>}>
+                    <Show when={job().nextRunAt} fallback={<span class="text-text-muted">—</span>}>
                       {(at) => (
                         <span title={new Date(at()).toLocaleString()}>{until(at(), now())}</span>
                       )}
@@ -172,28 +173,28 @@ const CronPanel: Component = () => {
                   </td>
                   <td class="py-1.5 pr-3">
                     <Show
-                      when={job.stats.running > 0}
+                      when={job().stats.running > 0}
                       fallback={
                         <Show
-                          when={job.stats.lastStartedAt}
+                          when={job().stats.lastStartedAt}
                           fallback={<span class="text-text-muted">not since start</span>}
                         >
                           {(at) => (
                             <span class="whitespace-nowrap">
                               <span
                                 class={
-                                  job.stats.lastOutcome === 'failed'
+                                  job().stats.lastOutcome === 'failed'
                                     ? 'text-red-500'
                                     : 'text-emerald-500'
                                 }
                               >
-                                {job.stats.lastOutcome === 'failed' ? '✕ failed' : '✓ ok'}
+                                {job().stats.lastOutcome === 'failed' ? '✕ failed' : '✓ ok'}
                               </span>{' '}
                               <span class="text-text-muted">
                                 {ago(at(), now())}
-                                <Show when={job.stats.lastDurationMs !== undefined}>
+                                <Show when={job().stats.lastDurationMs !== undefined}>
                                   {' · '}
-                                  {formatMs(job.stats.lastDurationMs!)}
+                                  {formatMs(job().stats.lastDurationMs!)}
                                 </Show>
                               </span>
                             </span>
@@ -203,39 +204,39 @@ const CronPanel: Component = () => {
                     >
                       <span class="text-blue-500">running…</span>
                     </Show>
-                    <Show when={job.stats.lastOutcome === 'failed' && job.stats.lastError}>
+                    <Show when={job().stats.lastOutcome === 'failed' && job().stats.lastError}>
                       <div
                         class="max-w-md truncate text-xs text-red-500"
-                        title={job.stats.lastError}
+                        title={job().stats.lastError}
                       >
-                        {job.stats.lastError}
+                        {job().stats.lastError}
                       </div>
                     </Show>
                   </td>
                   <td class="py-1.5 pr-3 text-right tabular-nums">
-                    {job.stats.runs}
-                    <Show when={job.stats.failures}>
-                      <span class="text-red-500"> · {job.stats.failures} failed</span>
+                    {job().stats.runs}
+                    <Show when={job().stats.failures}>
+                      <span class="text-red-500"> · {job().stats.failures} failed</span>
                     </Show>
                   </td>
                   <td class="py-1.5 text-right">
                     <button
                       type="button"
-                      disabled={!job.enabled || (job.stats.running > 0 && !job.overlap)}
-                      onClick={() => void runNow(job)}
-                      onBlur={() => armed() === job.name && setArmed(null)}
+                      disabled={!job().enabled || (job().stats.running > 0 && !job().overlap)}
+                      onClick={() => void runNow(job())}
+                      onBlur={() => armed() === job().name && setArmed(null)}
                       class={`whitespace-nowrap rounded-md border px-2 py-0.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
-                        armed() === job.name
+                        armed() === job().name
                           ? 'border-amber-500/50 bg-amber-500/15 text-amber-500'
                           : 'border-border-strong bg-surface-2 text-text-secondary hover:text-text-strong'
                       }`}
                     >
-                      {armed() === job.name ? 'Run it?' : 'Run now'}
+                      {armed() === job().name ? 'Run it?' : 'Run now'}
                     </button>
                   </td>
                 </tr>
               )}
-            </For>
+            </Index>
           </tbody>
         </table>
       </Show>
