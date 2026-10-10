@@ -381,6 +381,14 @@ export class OpenAIProvider implements AiProvider {
     if (toolCalls && toolCalls.length > 0) result.toolCalls = toolCalls
     if (data.usage) result.usage = normalizeUsage(data.usage)
     if (choice?.finish_reason) result.finishReason = normalizeFinishReason(choice.finish_reason)
+    // A declined request (with `response_format` especially) comes back as
+    // `refusal`, `content: null` and usually finish_reason `stop`. Report it
+    // as a refusal — not an empty answer, which would read as bad JSON and be
+    // retried.
+    if (typeof message?.refusal === 'string' && message.refusal) {
+      result.finishReason = 'content_filter'
+      result.refusal = { category: null, explanation: message.refusal }
+    }
     return result
   }
 }
@@ -473,7 +481,7 @@ interface OpenAIToolCall {
 
 interface OpenAIChatResponse {
   choices?: Array<{
-    message?: { content?: string; tool_calls?: OpenAIToolCall[] }
+    message?: { content?: string | null; refusal?: string | null; tool_calls?: OpenAIToolCall[] }
     finish_reason?: string
   }>
   usage?: {

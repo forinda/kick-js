@@ -73,6 +73,38 @@ describe('OpenAIProvider with a schema', () => {
     expect(err.raw).toBe('still not json')
   })
 
+  it('returns a refusal as a refusal — not retried, no object', async () => {
+    const bodies: unknown[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      bodies.push(init?.body)
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: { content: null, refusal: "I can't help with that." },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 9, completion_tokens: 4, total_tokens: 13 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    })
+    const provider = new OpenAIProvider({ apiKey: 'sk-test' })
+    const res = await provider.chat({ messages: ask, schema: Advice })
+    expect(res).toMatchObject({
+      content: '',
+      finishReason: 'content_filter',
+      refusal: { category: null, explanation: "I can't help with that." },
+      usage: { totalTokens: 13 },
+    })
+    expect(res.object).toBeUndefined()
+    expect(bodies).toHaveLength(1)
+    await expect(chatObject(provider, { messages: ask, schema: Advice })).rejects.toThrow(
+      /declined: I can't help with that/,
+    )
+  })
+
   it('wraps a non-object schema as { value } and unwraps the answer', async () => {
     const { provider, bodies } = setup(['{"value":["a","b"]}'])
     const steps = await chatObject(provider, { messages: ask, schema: z.array(z.string()) })
