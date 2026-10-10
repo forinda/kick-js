@@ -25,5 +25,6 @@ DevTools dashboard: fewer tabs, a readable dependency graph, and two fixes.
 - **Runtime, Plugged in:** plugin and adapter cards show their `dependsOn` as **after** chips, like contributors do; hovering one lights up that plugin's card. `IntrospectionSnapshot` gains an optional `dependsOn`, filled in by DevTools.
 - **Fonts:** the header's settings take an interface font and a code / editor font. They go ahead of the dashboard's own fonts, which stay as the fallback; remembered per browser.
 - **Jobs tab** (was Queues): a **Scheduled** view lists every `@Cron` job whatever runs it — schedule, next run (with `croner` installed), last run with outcome, duration and error, runs and failures — with **Run now**. DevTools counts runs by wrapping each job's method once. New endpoints `GET /_debug/cron` and `POST /_debug/cron/run?name=`. The queue browser is the **Queues** view.
-- **Sockets tab:** `WsAdapter`'s namespaces with open connections and events, and a client — connect (query with `{{variables}}` from the active environment), send `{ event, data }`, watch frames in and out.
+- **Sockets tab:** `WsAdapter`'s namespaces with open connections and events, and a client — connect (query and subprotocols with `{{variables}}` from the active environment — e.g. `bearer, {{token}}`), send `{ event, data }`, watch frames in and out.
 - **ws:** `getStats().namespaces[path].events` lists the `@OnMessage` events each namespace answers.
+- **Sidebar:** each tab's accessible name is its label; in the icon rail a tab with a count used to be announced as just the number.

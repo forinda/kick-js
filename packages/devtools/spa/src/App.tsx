@@ -383,6 +383,7 @@ export const App: Component = () => {
                                 idle(t(), active() === id) ? 'opacity-50' : ''
                               }`}
                               aria-selected={active() === id}
+                              aria-label={t().label}
                               title={
                                 idle(t(), active() === id)
                                   ? `${t().label} — nothing reported yet`
@@ -437,6 +438,7 @@ export const App: Component = () => {
                                     idle(t(), active() === id) ? 'opacity-50' : ''
                                   }`}
                                   aria-selected={active() === id}
+                                  aria-label={t().label}
                                   title={
                                     idle(t(), active() === id)
                                       ? `${t().label} — nothing reported yet`
@@ -473,6 +475,7 @@ export const App: Component = () => {
                   data-tab-id={tab.id}
                   class={`dt-nav-item ${active() === tab.id ? 'active' : ''}`}
                   aria-selected={active() === tab.id}
+                  aria-label={tab.title}
                   onClick={() => switchTo(tab.id)}
                   title={tab.title}
                 >

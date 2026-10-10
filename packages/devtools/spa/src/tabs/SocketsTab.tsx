@@ -20,6 +20,8 @@ const inputKey = (path: string) => `kickjs-devtools:sockets:${path}`
 
 interface SocketInputs {
   query: string
+  /** Comma-separated subprotocols — where apps often take a token (`bearer, {{token}}`). */
+  protocols: string
   event: string
   data: string
 }
@@ -35,11 +37,12 @@ function loadInputs(path: string): SocketInputs {
     const raw = JSON.parse(localStorage.getItem(inputKey(path)) ?? '{}') as Partial<SocketInputs>
     return {
       query: typeof raw.query === 'string' ? raw.query : '',
+      protocols: typeof raw.protocols === 'string' ? raw.protocols : '',
       event: typeof raw.event === 'string' ? raw.event : '',
       data: typeof raw.data === 'string' ? raw.data : '',
     }
   } catch {
-    return { query: '', event: '', data: '' }
+    return { query: '', protocols: '', event: '', data: '' }
   }
 }
 
@@ -50,8 +53,9 @@ const button =
 
 export const SocketsTab: Component = () => {
   const [selected, setSelected] = createSignal<string | null>(null)
-  const namespaces = () =>
-    Object.entries(store.ws().namespaces ?? {}).toSorted(([a], [b]) => a.localeCompare(b))
+  // Paths, not entries: a poll then updates rows in place instead of rebuilding them.
+  const paths = () => Object.keys(store.ws().namespaces ?? {}).toSorted()
+  const ns = (path: string) => store.ws().namespaces?.[path]
 
   const refresh = async (): Promise<void> => {
     try {
@@ -77,9 +81,9 @@ export const SocketsTab: Component = () => {
           </div>
         }
       >
-        <Show when={namespaces().length} fallback={<div class="empty">No namespaces yet</div>}>
-          <For each={namespaces()}>
-            {([path, ns]) => (
+        <Show when={paths().length} fallback={<div class="empty">No namespaces yet</div>}>
+          <For each={paths()}>
+            {(path) => (
               <button
                 type="button"
                 onClick={() => setSelected(path)}
@@ -92,12 +96,12 @@ export const SocketsTab: Component = () => {
                 <span class="flex items-center gap-2">
                   <span class="min-w-0 flex-1 truncate font-mono text-text-body">{path}</span>
                   <span class="text-[0.7rem] text-text-muted tabular-nums">
-                    {ns.connections} open
+                    {ns(path)?.connections ?? 0} open
                   </span>
                 </span>
-                <Show when={ns.events?.length}>
+                <Show when={ns(path)?.events?.length}>
                   <span class="flex flex-wrap gap-1">
-                    <For each={ns.events}>
+                    <For each={ns(path)?.events}>
                       {(e) => (
                         <span class="rounded border border-border px-1.5 font-mono text-[0.66rem] text-text-secondary">
                           {e}
@@ -135,7 +139,7 @@ export const SocketsTab: Component = () => {
         <>
           <div class="border-b border-border p-2 text-xs text-text-muted">
             <Show when={store.ws().enabled}>
-              {namespaces().length} namespaces · {store.ws().activeConnections ?? 0} open ·{' '}
+              {paths().length} namespaces · {store.ws().activeConnections ?? 0} open ·{' '}
               {(store.ws().messagesReceived ?? 0) + (store.ws().messagesSent ?? 0)} messages
             </Show>
           </div>
@@ -180,9 +184,21 @@ const SocketClient: Component<{ path: string; events: string[] }> = (props) => {
   const connect = (): void => {
     if (socket) return
     const target = url()
+    const protocols = interpolate(inputs().protocols, activeEnvironmentVariables())
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean)
     setState('connecting')
     push('info', `Connecting to ${props.path}…`)
-    const ws = new WebSocket(target)
+    let ws: WebSocket
+    try {
+      ws = new WebSocket(target, protocols)
+    } catch (err) {
+      // A subprotocol with characters a protocol name can't hold throws here.
+      setState('closed')
+      push('info', err instanceof Error ? err.message : String(err))
+      return
+    }
     socket = ws
     ws.addEventListener('open', () => {
       setState('open')
@@ -249,6 +265,14 @@ const SocketClient: Component<{ path: string; events: string[] }> = (props) => {
             disabled={state() !== 'closed'}
             onInput={(e) => update({ query: e.currentTarget.value })}
           />
+          <input
+            class={inputClass}
+            aria-label="Subprotocols"
+            placeholder="protocols, e.g. bearer, {{token}}"
+            value={inputs().protocols}
+            disabled={state() !== 'closed'}
+            onInput={(e) => update({ protocols: e.currentTarget.value })}
+          />
           <Show
             when={state() === 'closed'}
             fallback={
@@ -264,7 +288,9 @@ const SocketClient: Component<{ path: string; events: string[] }> = (props) => {
         </div>
         <p class="text-xs text-text-muted">
           <code>{'{{variables}}'}</code> come from the API runner's active environment. Browsers
-          can't set headers on a WebSocket, so pass a token in the query or rely on cookies.
+          can't set headers on a WebSocket: pass a token as subprotocols (
+          <code>{'bearer, {{token}}'}</code>), in the query, or rely on cookies — whichever your app
+          reads.
         </p>
       </div>
 
