@@ -61,7 +61,7 @@ export const METRIC_DEFS: Record<string, MetricDefinition> = {
   },
   // Event loop / GC
   'event-loop.p99': {
-    short: '99% of event-loop ticks completed within this time.',
+    short: 'How late the event loop ran, at the 99th percentile — about 0 when idle.',
     detail:
       'Sustained values above ~50ms mean some synchronous operation is blocking the loop. ' +
       'Common culprits: large JSON.parse, sync crypto, blocking DB drivers.',

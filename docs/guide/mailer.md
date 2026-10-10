@@ -332,7 +332,7 @@ export const MailerObservabilityAdapter = defineAdapter({
 })
 ```
 
-Mount alongside `MailerPlugin()`. The DevTools topology view shows `sent` / `failed` counters live.
+Mount alongside `MailerPlugin()`. The **Plugged in** list on the DevTools Runtime tab shows `sent` / `failed` counters live.
 
 ## What you give up by going BYO
 

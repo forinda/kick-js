@@ -153,7 +153,7 @@ export const NotificationsObservabilityAdapter = defineAdapter({
 })
 ```
 
-Mount alongside `NotificationsPlugin()`. The topology view shows per-channel `sent` / `failed` counts live.
+Mount alongside `NotificationsPlugin()`. The **Plugged in** list on the DevTools Runtime tab shows per-channel `sent` / `failed` counts live.
 
 ## What you give up by going BYO
 

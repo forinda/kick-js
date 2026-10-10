@@ -82,4 +82,15 @@ describe('RuntimeSampler', () => {
     expect(snap.gc.count).toBeGreaterThanOrEqual(0)
     expect(snap.gc.totalPauseMs).toBeGreaterThanOrEqual(0)
   })
+
+  it('reports event-loop delay beyond the monitor period — an idle loop reads ~0', async () => {
+    sampler = new RuntimeSampler({ intervalMs: 60_000, eventLoopResolutionMs: 20 })
+    sampler.start()
+    sampler.takeSample() // drop what start() accumulated
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const idle = sampler.takeSample()
+    // Raw histogram values sit at ~20ms (its own timer); reported delay must not.
+    expect(idle.eventLoop.p50).toBeLessThan(10)
+    expect(idle.eventLoop.p50).toBeGreaterThanOrEqual(0)
+  })
 })

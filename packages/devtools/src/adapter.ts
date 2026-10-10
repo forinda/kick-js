@@ -31,6 +31,7 @@ import {
   RuntimeSampler,
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
+import { cronSnapshot, runCronJobNow, trackContainerCronJobs } from './cron'
 import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
@@ -187,6 +188,9 @@ function raceWithTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
  * Long enough for a typical DB ping or remote check, short enough that
  * one misbehaving adapter can't stall the dashboard endpoint.
  */
+/** How often `/stream` re-sends the counters even when nothing changed. */
+const METRICS_TICK_MS = 5000
+
 const PEER_HEALTHCHECK_TIMEOUT_MS = 1500
 
 /**
@@ -421,12 +425,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     // `beforeMount` re-runs on every HMR rebuild / SSR re-bootstrap, which used
     // to reset `startedAt` and pin uptime near 0s. `process.uptime()` is
     // monotonic from process start, so it reports the real server uptime across
-    // reloads. `tick` makes the computed re-evaluate when the reactive graph
-    // refreshes; the value itself comes from the live process clock.
-    const uptimeSeconds = computed(() => {
-      void startedAt.value // keep the dependency so DevTools polls re-read it
-      return Math.floor(process.uptime())
-    })
+    // reloads. Not a `computed()`: the process clock is not reactive, so a
+    // computed would cache its first read and report a frozen uptime forever.
+    const uptimeSeconds: ComputedRef<number> = {
+      get value() {
+        return Math.floor(process.uptime())
+      },
+      toJSON() {
+        return this.value
+      },
+      dispose() {},
+    }
 
     // ── Internal mutable state ─────────────────────────────────────
     let routes: RouteInfo[] = []
@@ -1012,6 +1021,20 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           ctx.json(r.body, r.status)
         })
 
+        // ── @Cron jobs — whatever schedules them ────────────────────
+        router.get('/cron', (ctx: RequestContext) => {
+          ctx.json({ jobs: container ? cronSnapshot(container) : [] })
+        })
+        router.post('/cron/run', (ctx: RequestContext) => {
+          const name = query(ctx).name
+          if (!container || typeof name !== 'string') {
+            ctx.json({ error: 'name is required' }, 400)
+            return
+          }
+          const r = runCronJobNow(container, name)
+          ctx.json(r.body, r.status)
+        })
+
         // ── Topology RPC (architecture.md §23) ──────────────────────
         // Aggregates plugins + adapters + contributors + DI tokens
         // into one snapshot; calls each primitive's introspect() in
@@ -1117,12 +1140,16 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           const stopErrWatch = watch(errorCount, () => sendMetrics())
 
           const heartbeat = setInterval(() => sse.comment('heartbeat'), 30000)
+          // An idle app changes no counter, so without this tick the
+          // dashboard's uptime and "Updated" time would freeze.
+          const tick = setInterval(sendMetrics, METRICS_TICK_MS)
 
           sse.onClose(() => {
             unsubContainer?.()
             stopRequestWatch()
             stopErrWatch()
             clearInterval(heartbeat)
+            clearInterval(tick)
           })
         })
 
@@ -1275,6 +1302,8 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           if (typeof name !== 'string' || name === 'DevToolsAdapter') continue
           adapterStatuses[name] = 'running'
         }
+        // Count @Cron runs from the first tick, before anyone opens the Jobs tab.
+        if (container) trackContainerCronJobs(container)
 
         log.info(
           `DevTools ready — ${routes.length} routes tracked, ` +

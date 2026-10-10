@@ -189,7 +189,7 @@ export const OtelAdapter = defineAdapter<OtelAdapterOptions>({
 })
 ```
 
-The DevTools topology tab will show OtelAdapter alongside other adapters with a live counter for `spansEmitted` / `exporterErrors`. Adopt `devtoolsTabs()` if you want a dedicated panel (e.g. a button to manually flush spans for debugging).
+The **Plugged in** list on the DevTools Runtime tab will show OtelAdapter alongside other adapters with a live counter for `spansEmitted` / `exporterErrors`. Adopt `devtoolsTabs()` if you want a dedicated panel (e.g. a button to manually flush spans for debugging).
 
 ## What you give up by going BYO
 

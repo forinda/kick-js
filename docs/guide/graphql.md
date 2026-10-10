@@ -187,7 +187,7 @@ export const GraphqlAdapter = defineAdapter<GraphqlAdapterOptions>({
 })
 ```
 
-The topology view shows live query/mutation rates next to the rest of the app's adapters.
+The **Plugged in** list on the DevTools Runtime tab shows live query/mutation rates next to the rest of the app's adapters.
 
 ## Recommended runtimes
 

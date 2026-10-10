@@ -1,14 +1,16 @@
 /**
- * Graph — the DI dependency graph on a canvas, laid out in columns from what
- * nothing depends on (controllers, usually) to leaves.
+ * The DI dependency graph on a canvas, laid out in columns from what nothing
+ * depends on (controllers, usually) to leaves. Container shows it beside its
+ * token list.
  *
- * Canvas: drag a token to move it (positions are remembered per browser),
- * drag the background or scroll to pan, ⌘/Ctrl + scroll or pinch to zoom.
- * **Fit** frames everything; **Reset layout** drops moved positions.
+ * With a token selected the graph narrows to its chain — everything it
+ * depends on and everything that depends on it, all the way — and frames it,
+ * so a big app stays readable. With nothing selected it shows every token.
  *
- * Selecting a token keeps its dependents and dependencies (all the way down)
- * in focus, dims the rest, and shows its details beside the graph. Edges that
- * close a cycle are dashed red.
+ * Canvas: drag a token to move it (whole-graph positions are remembered per
+ * browser), drag the background or scroll to pan, ⌘/Ctrl + scroll or pinch to
+ * zoom. **Fit** frames everything; **Reset layout** drops moved positions.
+ * Edges that close a cycle are dashed red.
  */
 
 import {
@@ -21,12 +23,10 @@ import {
   Show,
   type Component,
 } from 'solid-js'
-import { store } from '../lib/store'
-import { kindTone } from '../lib/format'
-import { SplitPane } from '../lib/split-pane'
-import { TokenDetail } from '../lib/token-detail'
-import { edgeKey, layoutGraph } from '../lib/graph-layout'
-import { fitView, zoomAt, type View } from '../lib/viewport'
+import { store } from './store'
+import { kindTone } from './format'
+import { edgeKey, layoutGraph } from './graph-layout'
+import { fitView, zoomAt, type View } from './viewport'
 
 const NODE_W = 164
 const NODE_H = 26
@@ -40,7 +40,12 @@ const KIND_COLOURS: Record<string, string> = {
   controller: '#8b5cf6',
   service: '#3b82f6',
   repository: '#14b8a6',
+  other: '#9ca3af',
 }
+const colourOf = (kind: string | undefined): string =>
+  KIND_COLOURS[kind ?? ''] ?? KIND_COLOURS.other!
+/** Zoom a chain is framed at, at most — fitting a short chain shouldn't blow it up. */
+const MAX_FIT_ZOOM = 1
 
 type Point = { x: number; y: number }
 type Gesture =
@@ -55,27 +60,74 @@ function loadMoved(): Record<string, Point> {
   }
 }
 
-export const GraphTab: Component = () => {
-  const [selected, setSelected] = createSignal<string | null>(null)
-  const [search, setSearch] = createSignal('')
-  const [moved, setMoved] = createSignal<Record<string, Point>>(loadMoved())
+export const DependencyGraph: Component<{
+  selected: string | null
+  onSelect: (token: string | null) => void
+}> = (props) => {
+  const selected = () => props.selected
+  const setSelected = (t: string | null): void => props.onSelect(t)
+  const [saved, setSaved] = createSignal<Record<string, Point>>(loadMoved())
+  /** Positions moved while a chain is shown — dropped when the selection changes. */
+  const [chainMoved, setChainMoved] = createSignal<Record<string, Point>>({})
+  const moved = () => (selected() ? chainMoved() : saved())
+  const setMoved = (fn: (m: Record<string, Point>) => Record<string, Point>): void => {
+    if (selected()) setChainMoved(fn)
+    else setSaved(fn)
+  }
   const [view, setView] = createSignal<View>({ x: 0, y: 0, k: 1 })
   const [panning, setPanning] = createSignal(false)
   let canvas: HTMLDivElement | undefined
 
   const nodes = createMemo(() => store.container())
   const byId = createMemo(() => new Map(nodes().map((n) => [n.token, n])))
-  const edges = createMemo(() =>
+  const allEdges = createMemo(() =>
     nodes().flatMap((n) =>
       (n.dependencies ?? []).filter((d) => byId().has(d)).map((d) => ({ from: n.token, to: d })),
     ),
   )
-  const layout = createMemo(() =>
-    layoutGraph(
-      nodes().map((n) => n.token),
+
+  /** The selected token, everything it depends on, and everything that depends on it. */
+  const chain = createMemo<Set<string> | null>(() => {
+    const s = selected()
+    if (!s || !byId().has(s)) return null
+    const walk = (next: (id: string) => string[]): Set<string> => {
+      const seen = new Set<string>([s])
+      const stack = [s]
+      while (stack.length) {
+        for (const m of next(stack.pop()!)) {
+          if (seen.has(m)) continue
+          seen.add(m)
+          stack.push(m)
+        }
+      }
+      return seen
+    }
+    const down = walk(
+      (id) =>
+        byId()
+          .get(id)
+          ?.dependencies?.filter((d) => byId().has(d)) ?? [],
+    )
+    const up = walk((id) =>
+      allEdges()
+        .filter((e) => e.to === id)
+        .map((e) => e.from),
+    )
+    return new Set([...down, ...up])
+  })
+  const edges = createMemo(() => {
+    const c = chain()
+    return c ? allEdges().filter((e) => c.has(e.from) && c.has(e.to)) : allEdges()
+  })
+  const layout = createMemo(() => {
+    const c = chain()
+    return layoutGraph(
+      nodes()
+        .map((n) => n.token)
+        .filter((t) => !c || c.has(t)),
       edges(),
-    ),
-  )
+    )
+  })
   /** Auto-layout positions, with anything the user dragged where they left it. */
   const position = createMemo(() => {
     const pos = new Map<string, Point>()
@@ -98,10 +150,30 @@ export const GraphTab: Component = () => {
       w: Math.max(...ps.map((p) => p.x)) + NODE_W - x,
       h: Math.max(...ps.map((p) => p.y)) + NODE_H - y,
     }
-    setView(fitView(box, canvas.clientWidth, canvas.clientHeight))
+    const v = fitView(box, canvas.clientWidth, canvas.clientHeight)
+    if (chain() && v.k > MAX_FIT_ZOOM) {
+      // Centre a short chain at full size instead of blowing it up.
+      const k = MAX_FIT_ZOOM
+      setView({
+        k,
+        x: (canvas.clientWidth - box.w * k) / 2 - box.x * k,
+        y: (canvas.clientHeight - box.h * k) / 2 - box.y * k,
+      })
+    } else setView(v)
   }
   // Frame the graph on open, and once it first has nodes.
   onMount(() => requestAnimationFrame(fit))
+  // A new selection narrows the graph to another chain — frame it.
+  createEffect(
+    on(
+      selected,
+      () => {
+        setChainMoved({})
+        requestAnimationFrame(fit)
+      },
+      { defer: true },
+    ),
+  )
   createEffect(
     on(
       () => position().size > 0,
@@ -112,7 +184,8 @@ export const GraphTab: Component = () => {
   )
 
   const saveMoved = (next: Record<string, Point>): void => {
-    setMoved(next)
+    if (selected()) return // chain positions last until the selection changes
+    setSaved(next)
     try {
       localStorage.setItem(MOVED_KEY, JSON.stringify(next))
     } catch {
@@ -126,9 +199,12 @@ export const GraphTab: Component = () => {
   const onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 0) return
     const id = (e.target as Element).closest('[data-node]')?.getAttribute('data-node')
+    // A token a refresh just removed (or a narrowed chain left out) has no
+    // position: ignore the press rather than start a drag from nowhere.
+    const from = id ? position().get(id) : undefined
+    if (id && !from) return
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-    if (id) {
-      const from = position().get(id)!
+    if (id && from) {
       gesture = { kind: 'node', id, sx: e.clientX, sy: e.clientY, from, dragged: false }
     } else {
       gesture = { kind: 'pan', sx: e.clientX, sy: e.clientY, view: view() }
@@ -155,9 +231,7 @@ export const GraphTab: Component = () => {
     setPanning(false)
     if (g?.kind === 'node') {
       if (g.dragged) saveMoved(moved())
-      else setSelected((s) => (s === g.id ? null : g.id))
-    } else if (g?.kind === 'pan' && g.view === view()) {
-      setSelected(null) // a click on empty canvas clears the focus
+      else if (g.id !== selected()) setSelected(g.id)
     }
   }
   const onWheel = (e: WheelEvent): void => {
@@ -178,52 +252,6 @@ export const GraphTab: Component = () => {
     setView((v) => zoomAt(v, factor, canvas!.clientWidth / 2, canvas!.clientHeight / 2))
   }
 
-  /** The selected node, everything it depends on, and everything that depends on it. */
-  const focus = createMemo<Set<string> | null>(() => {
-    const s = selected()
-    if (!s) return null
-    const walk = (start: string, next: (id: string) => string[]): Set<string> => {
-      const seen = new Set<string>([start])
-      const stack = [start]
-      while (stack.length) {
-        for (const m of next(stack.pop()!)) {
-          if (seen.has(m)) continue
-          seen.add(m)
-          stack.push(m)
-        }
-      }
-      return seen
-    }
-    const down = walk(s, (id) =>
-      edges()
-        .filter((e) => e.from === id)
-        .map((e) => e.to),
-    )
-    const up = walk(s, (id) =>
-      edges()
-        .filter((e) => e.to === id)
-        .map((e) => e.from),
-    )
-    return new Set([...down, ...up])
-  })
-  const dimmed = (id: string): boolean => !!focus() && !focus()!.has(id)
-
-  const jump = (): void => {
-    const q = search().trim().toLowerCase()
-    const hit = q && nodes().find((n) => n.token.toLowerCase().includes(q))
-    if (!hit) return
-    setSelected(hit.token)
-    const p = position().get(hit.token)
-    if (p && canvas) {
-      const k = view().k
-      setView({
-        k,
-        x: canvas.clientWidth / 2 - (p.x + NODE_W / 2) * k,
-        y: canvas.clientHeight / 2 - (p.y + NODE_H / 2) * k,
-      })
-    }
-  }
-
   const edgePath = (from: string, to: string): string => {
     const a = position().get(from)!
     const b = position().get(to)!
@@ -239,16 +267,27 @@ export const GraphTab: Component = () => {
     'rounded-md border border-border-strong bg-surface-2 px-2 py-0.5 text-xs text-text-secondary hover:text-text-strong'
 
   const graph = (
-    <div class="flex h-full flex-col">
+    <div class="flex min-h-0 flex-1 flex-col">
       <div class="flex flex-wrap items-center gap-2 border-b border-border p-2">
-        <input
-          type="text"
-          placeholder="Find a token — Enter to jump"
-          value={search()}
-          onInput={(e) => setSearch(e.currentTarget.value)}
-          onKeyDown={(e) => e.key === 'Enter' && jump()}
-          class="w-52 bg-surface-2 border border-border-strong rounded-lg px-3 py-1 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
-        />
+        <Show
+          when={chain()}
+          fallback={
+            <span class="text-xs text-text-muted">
+              All {nodes().length} tokens — select one to see just its chain
+            </span>
+          }
+        >
+          {(c) => (
+            <>
+              <span class="text-xs text-text-muted">
+                {selected()}'s chain · {c().size} tokens
+              </span>
+              <button type="button" class={toolButton} onClick={() => setSelected(null)}>
+                Whole graph
+              </button>
+            </>
+          )}
+        </Show>
         <For each={Object.entries(KIND_COLOURS)}>
           {([kind, colour]) => (
             <span class="flex items-center gap-1 text-xs text-text-muted">
@@ -343,7 +382,6 @@ export const GraphTab: Component = () => {
                       stroke-width={selected() === e.from || selected() === e.to ? 2 : 1.25}
                       stroke-dasharray={cyc() ? '4 3' : undefined}
                       marker-end="url(#dt-arrow)"
-                      opacity={dimmed(e.from) || dimmed(e.to) ? 0.15 : 1}
                     />
                   )
                 }}
@@ -357,7 +395,6 @@ export const GraphTab: Component = () => {
                       data-node={id}
                       transform={`translate(${p().x} ${p().y})`}
                       class="cursor-move"
-                      opacity={dimmed(id) ? 0.25 : 1}
                     >
                       <title>{id} — drag to move, click to focus</title>
                       <rect
@@ -370,12 +407,7 @@ export const GraphTab: Component = () => {
                         }
                         stroke-width={selected() === id ? 2 : 1}
                       />
-                      <rect
-                        width="4"
-                        height={NODE_H}
-                        rx="2"
-                        fill={KIND_COLOURS[kind()] ?? 'var(--color-text-muted)'}
-                      />
+                      <rect width="4" height={NODE_H} rx="2" fill={colourOf(kind())} />
                       <text
                         x="12"
                         y={NODE_H / 2 + 4}
@@ -421,22 +453,5 @@ export const GraphTab: Component = () => {
     </div>
   )
 
-  const detail = (
-    <Show
-      when={selected()}
-      fallback={
-        <div class="dt-panel-grid">
-          <div class="card text-sm text-text-muted">Select a token to trace its dependencies</div>
-        </div>
-      }
-    >
-      {(t) => (
-        <div class="h-full overflow-y-auto bg-surface-1">
-          <TokenDetail token={t()} onSelect={setSelected} />
-        </div>
-      )}
-    </Show>
-  )
-
-  return <SplitPane storageKey="graph" defaultLeft={720} left={graph} right={detail} />
+  return graph
 }

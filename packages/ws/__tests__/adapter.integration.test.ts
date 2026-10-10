@@ -217,6 +217,11 @@ describe('WsAdapter authentication', () => {
 })
 
 describe('WsAdapter stats and rooms', () => {
+  it("lists each namespace's @OnMessage events", async () => {
+    const { adapter } = await boot()
+    expect(adapter.getStats().namespaces['/ws/a']?.events).toEqual(['ping', 'shout'])
+  })
+
   it('counts frames sent through the context and through rooms', async () => {
     const { url, adapter } = await boot()
     const ws = await connect(url('/ws/a'))

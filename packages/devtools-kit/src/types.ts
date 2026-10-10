@@ -55,7 +55,36 @@ export interface IntrospectionSnapshot {
   metrics?: Record<string, number>
   /** Self-reported memory footprint estimate, in bytes. Optional. */
   memoryBytes?: number
+  /**
+   * Lifecycle hooks the primitive implements (`beforeStart`, `middleware`,
+   * `shutdown`, …). Filled in by DevTools, not by `introspect()`, so a
+   * primitive without `introspect()` still shows what it plugs into.
+   */
+  hooks?: readonly LifecycleHook[]
+  /**
+   * Names of the plugins / adapters this one declared it must run after
+   * (`dependsOn`). Filled in by DevTools, like `hooks`.
+   */
+  dependsOn?: readonly string[]
 }
+
+/** A lifecycle hook of `AppAdapter` or `KickPlugin`, as listed in {@link IntrospectionSnapshot.hooks}. */
+export type LifecycleHook =
+  | 'register'
+  | 'modules'
+  | 'adapters'
+  | 'setup'
+  | 'middleware'
+  | 'contributors'
+  | 'beforeMount'
+  | 'onRouteMount'
+  | 'beforeStart'
+  | 'afterStart'
+  | 'onReady'
+  | 'onResponse'
+  | 'onError'
+  | 'onHealthCheck'
+  | 'shutdown'
 
 /**
  * The optional method an adapter or plugin implements to expose itself
@@ -145,7 +174,10 @@ export interface RuntimeSnapshot {
   memory: NodeJS.MemoryUsage
   /** `process.cpuUsage()` deltas in microseconds since the previous sample. */
   cpu: { userMicros: number; systemMicros: number }
-  /** Event-loop delay percentiles in milliseconds. */
+  /**
+   * Event-loop delay percentiles in milliseconds — how late the loop ran,
+   * beyond the monitor's own timer period, so an idle app reads ~0.
+   */
   eventLoop: { p50: number; p95: number; p99: number; max: number }
   /** GC counter + cumulative pause time in milliseconds since process start. */
   gc: { count: number; totalPauseMs: number }

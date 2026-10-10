@@ -117,6 +117,20 @@ const [openCount, setOpenCount] = createSignal(0)
  * Open the runner for a route: select it and show the Routes tab. `params`
  * fills its path params over the saved inputs — a replayed request.
  */
+/**
+ * The active environment's enabled variables, read from where the runner keeps
+ * them — for other tools (the Sockets client) to fill `{{name}}` the same way.
+ */
+export function activeEnvironmentVariables(): Record<string, string> {
+  const storage = () => (readRemember() ? localStorage : sessionStorage)
+  const state = loadEnvironments(load<unknown>(storage, ENVIRONMENTS_KEY, null), {
+    headers: loadRows(storage, DEFAULTS_KEY),
+    variables: loadRows(storage, VARIABLES_KEY),
+  })
+  const env = state.environments.find((e) => e.id === state.activeId) ?? state.environments[0]!
+  return variableMap(env.variables)
+}
+
 export function openApiRunner(route: RouteEntry, params?: Record<string, string>): void {
   if (params) {
     const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
@@ -803,16 +817,69 @@ export const ApiRunnerPanel: Component = () => {
                 )}
               </Show>
 
+              <Section
+                title="Save to variable"
+                open={!!(capture().path || capture().name)}
+                count={capture().path && capture().name ? 1 : undefined}
+              >
+                <p class="text-xs text-text-muted mb-2">
+                  Set this up before you send. With both filled in, every 2xx response from this
+                  route copies the value at the JSON path into that variable of the environment it
+                  was sent with — log in once and routes using <code>{'{{token}}'}</code> pick it
+                  up. New variables start masked. Saved for this route only.
+                </p>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+                  <input
+                    class={inputClass}
+                    aria-label="JSON path"
+                    placeholder="JSON path, e.g. data.accessToken"
+                    value={capture().path}
+                    onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
+                  />
+                  <input
+                    class={inputClass}
+                    aria-label="Variable name"
+                    placeholder="variable, e.g. token"
+                    value={capture().name}
+                    onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
+                  />
+                  <button
+                    type="button"
+                    class={`${secondaryButton} shrink-0`}
+                    disabled={!result()}
+                    title={result() ? 'Copy from the response shown now' : 'Send the request first'}
+                    onClick={captureVariable}
+                  >
+                    Save now
+                  </button>
+                </div>
+                <Show when={captureNote()}>
+                  <p class="text-xs text-text-muted mt-1" role="status">
+                    {captureNote()}
+                  </p>
+                </Show>
+              </Section>
+
               <Section title="Settings">
+                <p class="text-xs text-text-muted mb-3">
+                  These apply to every route, not just this one, and save as you type in this
+                  browser (kept after the tab closes).
+                </p>
                 <Show when={hints()}>
                   {(h) => (
-                    <button
-                      type="button"
-                      class={secondaryButton}
-                      onClick={() => update(applyHints(inputs()!, h()))}
-                    >
-                      Fill empty inputs from OpenAPI
-                    </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        class={secondaryButton}
+                        onClick={() => update(applyHints(inputs()!, h()))}
+                      >
+                        Fill empty inputs from OpenAPI
+                      </button>
+                      <span class="text-[0.7rem] text-text-muted">
+                        This route only: adds the query params the spec lists and an example body if
+                        the body is empty. Never overwrites what you typed.
+                      </span>
+                    </div>
                   )}
                 </Show>
 
@@ -839,16 +906,33 @@ export const ApiRunnerPanel: Component = () => {
                   <For
                     each={
                       [
-                        ['csrfCookie', 'CSRF cookie'],
-                        ['csrfHeader', 'CSRF header'],
-                        ['openApiUrl', 'OpenAPI spec URL'],
-                        ['editorUrl', 'Editor link ({file}, {line})'],
+                        [
+                          'csrfCookie',
+                          'CSRF cookie',
+                          'For csrf() / csrfGuard(): on POST, PUT, PATCH and DELETE the runner reads this cookie…',
+                        ],
+                        [
+                          'csrfHeader',
+                          'CSRF header',
+                          '…and sends its value in this header, unless the route already sets it.',
+                        ],
+                        [
+                          'openApiUrl',
+                          'OpenAPI spec URL',
+                          'Where the Swagger adapter serves the spec. A route with nothing saved starts from its examples.',
+                        ],
+                        [
+                          'editorUrl',
+                          'Editor link ({file}, {line})',
+                          "What the handler link under the route's title opens; {file} and {line} are filled in.",
+                        ],
                       ] as const
                     }
                   >
-                    {([key, label]) => (
+                    {([key, label, help]) => (
                       <label class="flex flex-col gap-1 text-xs text-text-muted">
                         {label}
+                        <span class="text-[0.7rem]">{help}</span>
                         <input
                           class={inputClass}
                           value={settings()[key]}
@@ -950,31 +1034,6 @@ export const ApiRunnerPanel: Component = () => {
                         </HoverActions>
                       </Show>
                     </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 text-xs">
-                      <span class="text-text-secondary font-semibold shrink-0">
-                        Save to variable
-                      </span>
-                      <input
-                        class={inputClass}
-                        placeholder="JSON path, e.g. data.accessToken"
-                        value={capture().path}
-                        onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
-                      />
-                      <input
-                        class={inputClass}
-                        placeholder="variable, e.g. token"
-                        value={capture().name}
-                        onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
-                      />
-                      <button type="button" class={secondaryButton} onClick={captureVariable}>
-                        Save
-                      </button>
-                    </div>
-                    <Show when={captureNote()}>
-                      <p class="text-xs text-text-muted mt-1" role="status">
-                        {captureNote()}
-                      </p>
-                    </Show>
                     <Show when={res().truncated}>
                       <p class="mt-1 text-xs text-text-muted">
                         Body truncated to {MAX_BODY_CHARS.toLocaleString()} characters.
@@ -1084,7 +1143,7 @@ const FormEditor: Component<{
             />
             <select
               aria-label="Field type"
-              class={`${inputClass} w-24 shrink-0`}
+              class={selectClass}
               value={row().type}
               onChange={(e) =>
                 set(i, { type: e.currentTarget.value as FormRow['type'], value: '', files: [] })
@@ -1124,6 +1183,17 @@ const FormEditor: Component<{
                   : 'Choose file…'}
               </label>
             </Show>
+            <button
+              type="button"
+              class={`shrink-0 p-1 text-text-muted hover:text-text-body ${
+                i === props.rows.length ? 'invisible' : ''
+              }`}
+              aria-label="Remove field"
+              title="Remove field"
+              onClick={() => props.onChange(props.rows.filter((_, j) => j !== i))}
+            >
+              ✕
+            </button>
           </div>
         )}
       </Index>
@@ -1395,6 +1465,11 @@ const EnvironmentsSheet: Component<{
               What requests carry — default headers, <code>{'{{variables}}'}</code> and param
               mappings. One is active; a route can be pinned to another from its runner.
             </p>
+            <p class="text-xs text-text-muted mt-1">
+              Changes save as you type — there is no Save button. Where they're kept depends on{' '}
+              <strong class="font-semibold text-text-secondary">Remember on this browser</strong>{' '}
+              below.
+            </p>
           </div>
           <button
             type="button"
@@ -1503,6 +1578,11 @@ const EnvironmentsSheet: Component<{
               <code>Authorization: Bearer {'{{token}}'}</code>. A variable named like a path or
               query param also fills it when it's left empty.
             </p>
+            <p class="text-xs text-text-muted mb-2">
+              Type values here, or let a route fill one: a route's <strong>Save to variable</strong>{' '}
+              copies a value from its response (say, the token a login returns) into this
+              environment after every successful send. New variables it adds start masked.
+            </p>
             <RowsEditor
               rows={current().variables}
               onChange={(variables) => patch({ variables })}
@@ -1530,6 +1610,9 @@ const EnvironmentsSheet: Component<{
   )
 }
 
+/** A fixed-width dropdown beside full-width inputs — `inputClass` would stretch it. */
+const selectClass =
+  'w-24 shrink-0 bg-surface-2 border border-border-strong rounded-lg px-2 py-1.5 text-sm text-text-body focus:outline-none focus:border-kick-500'
 const inputClass =
   'w-full min-w-0 bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500'
 const hoverButton =
@@ -1579,4 +1662,4 @@ const CopyButton: Component<{ text: () => string; label: string }> = (props) => 
 }
 
 const secondaryButton =
-  'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+  'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-text-secondary'

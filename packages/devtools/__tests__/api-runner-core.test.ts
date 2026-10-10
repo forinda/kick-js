@@ -244,6 +244,15 @@ describe('multipart form bodies', () => {
     ])
   })
 
+  it('keeps a file field with nothing picked out of the body but in the snippet', () => {
+    const req = prepare(route, {
+      form: [{ key: 'avatar', value: '', enabled: true, type: 'file' }],
+    })
+    expect((req.body as FormData).has('avatar')).toBe(false)
+    expect(req.form).toEqual([{ name: 'avatar', fileName: '<file>' }])
+    expect(toCurl(req)).toContain("-F 'avatar=@<file>'")
+  })
+
   it('renders -F parts in curl and a FormData block in fetch', () => {
     const req = prepare(route, inputs())
     expect(toCurl(req)).toBe(

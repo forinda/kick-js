@@ -466,6 +466,7 @@ html[data-density='lg'] {
   right: 0;
   z-index: 50;
   min-width: 220px;
+  width: 16rem;
   padding: calc(var(--spacing) * 3);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-strong);
@@ -509,6 +510,30 @@ html[data-density='lg'] {
 .dt-seg-item.active {
   background: var(--color-kick-500);
   color: #fff;
+}
+.dt-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 1);
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+.dt-settings-field + .dt-settings-field {
+  margin-top: calc(var(--spacing) * 2);
+}
+.dt-settings-field input {
+  width: 100%;
+  min-width: 0;
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-2);
+  color: var(--color-text-body);
+  font-size: 0.78rem;
+}
+.dt-settings-field input:focus {
+  outline: none;
+  border-color: var(--color-kick-500);
 }
 .dt-settings-hint {
   margin-top: calc(var(--spacing) * 1.5);

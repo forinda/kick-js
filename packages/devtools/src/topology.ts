@@ -15,6 +15,7 @@ import type { AppAdapter, Container, KickPlugin } from '@forinda/kickjs'
 import {
   PROTOCOL_VERSION,
   type IntrospectionSnapshot,
+  type LifecycleHook,
   type TopologyContributorEntry,
   type TopologyError,
   type TopologySnapshot,
@@ -56,6 +57,25 @@ export interface CollectTopologyOptions {
 }
 
 const DEFAULT_INTROSPECT_TIMEOUT_MS = 100
+
+/** Lifecycle hooks of `AppAdapter` and `KickPlugin`, in the order they run. */
+const HOOKS: readonly LifecycleHook[] = [
+  'register',
+  'modules',
+  'adapters',
+  'setup',
+  'middleware',
+  'contributors',
+  'beforeMount',
+  'onRouteMount',
+  'beforeStart',
+  'afterStart',
+  'onReady',
+  'onResponse',
+  'onError',
+  'onHealthCheck',
+  'shutdown',
+]
 
 /**
  * Collect a {@link TopologySnapshot} for the given application.
@@ -100,10 +120,14 @@ async function snapshotFor(
   errors: TopologyError[],
 ): Promise<IntrospectionSnapshot> {
   const name = primitive.name ?? '(unnamed)'
+  const hooks = HOOKS.filter((h) => typeof (primitive as Record<string, unknown>)[h] === 'function')
+  const dependsOn = Array.isArray(primitive.dependsOn) ? [...primitive.dependsOn] : []
   const stub: IntrospectionSnapshot = {
     protocolVersion: PROTOCOL_VERSION,
     name,
     kind,
+    hooks,
+    dependsOn,
   }
   if (typeof primitive.introspect !== 'function') return stub
 
@@ -132,6 +156,8 @@ async function snapshotFor(
         tokens: snap.tokens,
         metrics: snap.metrics,
         memoryBytes: snap.memoryBytes,
+        hooks,
+        dependsOn,
       }
     }
     return stub

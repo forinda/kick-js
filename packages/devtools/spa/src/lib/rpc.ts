@@ -126,6 +126,30 @@ async function get<T>(path: string): Promise<T> {
  * POST to a dashboard endpoint. Throws the server's `{ error }` message
  * (or the status line) on a non-2xx; the caller reads the body it expects.
  */
+/** One `@Cron` job as `/_debug/cron` reports it. */
+export interface CronJobEntry {
+  name: string
+  className: string
+  handler: string
+  expression: string
+  timezone?: string
+  description?: string
+  enabled: boolean
+  overlap: boolean
+  runOnInit: boolean
+  /** Epoch ms of the next tick; null when the app has no `croner` to work it out. */
+  nextRunAt: number | null
+  stats: {
+    runs: number
+    failures: number
+    running: number
+    lastStartedAt?: number
+    lastDurationMs?: number
+    lastOutcome?: 'ok' | 'failed'
+    lastError?: string
+  }
+}
+
 export async function post(path: string): Promise<Response> {
   const res = await fetch(withToken(`${getBasePath()}${path}`), {
     method: 'POST',
@@ -275,6 +299,10 @@ export const rpc = {
       uptime: number
       adapters: Record<string, string>
     }>('/health'),
+  /** Every `@Cron` job the container can resolve, with its next run and run stats. */
+  cron: () => get<{ jobs: CronJobEntry[] }>('/cron'),
+  /** Start one cron job now; resolves once it has started, not finished. */
+  cronRun: (name: string) => post(`/cron/run?name=${encodeURIComponent(name)}`),
   /** Queue stats — present only when QueueAdapter is mounted. */
   queues: () =>
     get<{
@@ -298,7 +326,7 @@ export const rpc = {
       totalConnections?: number
       messagesReceived?: number
       messagesSent?: number
-      namespaces?: Record<string, { connections: number; handlers: number }>
+      namespaces?: Record<string, { connections: number; handlers: number; events?: string[] }>
     }>('/ws'),
   tabs: () =>
     get<{

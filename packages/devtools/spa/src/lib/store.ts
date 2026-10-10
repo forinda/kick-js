@@ -10,6 +10,7 @@
  */
 
 import { createSignal } from 'solid-js'
+import type { CronJobEntry } from './rpc'
 
 export type ConnectionStatus = 'connecting' | 'live' | 'polling' | 'disconnected'
 
@@ -79,7 +80,8 @@ export interface WsStats {
   totalConnections?: number
   messagesReceived?: number
   messagesSent?: number
-  namespaces?: Record<string, { connections: number; handlers: number }>
+  /** Per path; `events` (its `@OnMessage` names) needs @forinda/kickjs-ws with event listing. */
+  namespaces?: Record<string, { connections: number; handlers: number; events?: string[] }>
 }
 
 const [connectionStatus, setConnectionStatus] = createSignal<ConnectionStatus>('connecting')
@@ -95,6 +97,7 @@ const [queues, setQueues] = createSignal<{ enabled: boolean; queues: QueueStats[
   queues: [],
 })
 const [ws, setWs] = createSignal<WsStats>({ enabled: false })
+const [cron, setCron] = createSignal<CronJobEntry[]>([])
 
 export const store = {
   connectionStatus,
@@ -107,6 +110,7 @@ export const store = {
   container,
   queues,
   ws,
+  cron,
 }
 
 export const storeActions = {
@@ -120,6 +124,7 @@ export const storeActions = {
   setContainer,
   setQueues,
   setWs,
+  setCron,
   /** Mark "we just received fresh data from the server". */
   touch(): void {
     setLastUpdate(new Date())

@@ -106,3 +106,19 @@ export function hashColor(name: string): string {
   // 12 hues 30° apart: a few namespaces stay tellable apart, unlike raw hash % 360.
   return `hsl(${(Math.abs(hash) % 12) * 30} 60% 50%)`
 }
+
+/**
+ * A request path with long id segments (ULIDs, UUIDs, hashes) cut to their
+ * first characters, so the route's shape stays readable in a narrow list:
+ * `/work/items/01J9ZK…/comments`.
+ */
+export function shortPath(path: string, max = 12): string {
+  const q = path.indexOf('?')
+  const [pathname, query] = q === -1 ? [path, ''] : [path.slice(0, q), path.slice(q)]
+  return (
+    pathname
+      .split('/')
+      .map((seg) => (seg.length > max && /\d/.test(seg) ? `${seg.slice(0, 6)}…` : seg))
+      .join('/') + query
+  )
+}

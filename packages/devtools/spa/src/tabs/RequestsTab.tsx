@@ -9,7 +9,7 @@ import { rpc, type RequestLogEntry } from '../lib/rpc'
 import { store, type RouteEntry } from '../lib/store'
 import { openApiRunner } from '../lib/api-runner'
 import { paramsFromPath } from '../lib/api-runner-core'
-import { formatMs, methodColor, statusPill } from '../lib/format'
+import { formatMs, methodColor, shortPath, statusPill } from '../lib/format'
 import { SplitPane } from '../lib/split-pane'
 import { switchTab } from '../lib/nav'
 
@@ -168,7 +168,9 @@ export const RequestsTab: Component = () => {
                 >
                   {e.method}
                 </span>
-                <span class="min-w-0 flex-1 truncate font-mono">{e.path}</span>
+                <span class="min-w-0 flex-1 truncate font-mono" title={e.path}>
+                  {shortPath(e.path)}
+                </span>
                 <Show when={e.error}>
                   <span class="text-red-500 text-[0.66rem]" title={e.error!.message}>
                     ●
