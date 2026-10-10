@@ -10,6 +10,13 @@ import type { RouteFlagTest } from '@forinda/kickjs'
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
+  /**
+   * Images and documents sent with a `user` message, ahead of `content` —
+   * an uploaded invoice to read, a screenshot to describe. Build one from an
+   * upload with `attachmentFromFile(ctx.file)`. Only `user` messages carry
+   * attachments; providers reject them elsewhere.
+   */
+  attachments?: ContentPart[]
   /** Tool call ID if `role === 'tool'`. Set by the framework during tool loops. */
   toolCallId?: string
   /** True on a `tool` message whose call failed. Providers that support it tell the model. */
@@ -377,3 +384,18 @@ export interface AiAdapterExtensions {
  * {@link AiAdapterExtensions} agent-loop / tool-inspection surface.
  */
 export type AiAdapterInstance = import('@forinda/kickjs').AppAdapter & AiAdapterExtensions
+
+/**
+ * Part of a `user` message besides its `content` text — the common shape
+ * other AI SDKs use, so parts built elsewhere work here unchanged.
+ *
+ * `data` is raw bytes, base64, a `data:` URL, or an `http(s)://` URL. What a
+ * file is comes from its bytes — PNG, JPEG, GIF, WebP and PDF by signature,
+ * anything valid UTF-8 as text (CSV, JSON, Markdown, code, …) — so
+ * `mimeType` only matters for URLs. Other formats (xlsx, docx) are the app's
+ * to normalize to text first; see `attachmentFromFile`'s `normalize`.
+ */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: Uint8Array | string; mimeType: string }
+  | { type: 'file'; data: Uint8Array | string; mimeType: string; filename?: string }

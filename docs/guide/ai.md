@@ -308,6 +308,54 @@ const rag = new RagService(ai.getProvider('orders-bot'), new InMemoryVectorStore
 The example is exercised as a test in
 `packages/ai/__tests__/example-local-provider.test.ts`.
 
+### Several adapters
+
+Registered providers share one adapter: the same tools, the same
+`exposeWhen` / `hideWhen` rules, the same defaults. When two parts of an app
+need different ones — a support bot that may open tickets, a billing bot that
+may refund — mount the adapter more than once with `.scoped(name, options)`.
+Each instance registers under its own tokens and is injected separately:
+
+```ts
+import { Inject, Service, bootstrap } from '@forinda/kickjs'
+import {
+  AiAdapter,
+  AnthropicProvider,
+  OpenAIProvider,
+  aiAdapterToken,
+  type AiAdapterInstance,
+} from '@forinda/kickjs-ai'
+
+bootstrap({
+  modules,
+  adapters: [
+    AiAdapter.scoped('support', {
+      provider: new AnthropicProvider(),
+      hideWhen: ['billing'], // routes mounted with the `billing` flag aren't its tools
+    }),
+    AiAdapter.scoped('billing', {
+      provider: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY! }),
+      exposeWhen: ['billing'],
+    }),
+  ],
+})
+
+@Service()
+export class SupportBot {
+  constructor(@Inject(aiAdapterToken('support')) private readonly ai: AiAdapterInstance) {}
+}
+```
+
+- `aiAdapterToken(scope)` resolves a scoped adapter, `aiProviderToken(scope)`
+  its default provider. The same scope always gives the same token.
+- `AI_ADAPTER` and `AI_PROVIDER` belong to the unscoped adapter only. Mount one
+  next to scoped ones if code injects those; with only scoped adapters, they
+  aren't registered.
+- Each instance has its own provider registry, tools and defaults:
+  `registerProvider` on one doesn't reach another.
+- `@AiTool` methods are exposed by every instance unless its `hideWhen` hides
+  them; `exposeWhen` adds flagged routes on top.
+
 ### Streaming
 
 Every provider implements `stream()` and yields `ChatChunk`s. Wire a
@@ -339,6 +387,141 @@ export class ChatController {
     sse.close()
   }
 }
+```
+
+### Files and images
+
+Some flows start with a file: read an uploaded invoice, describe a
+screenshot, answer questions about a CSV export. Put files on a `user`
+message's `attachments`. `content` stays the text of the message, so existing
+code and stored histories are unchanged:
+
+```ts
+import { Controller, FileUpload, Inject, Post, type RequestContext } from '@forinda/kickjs'
+import { AI_ADAPTER, attachmentFromFile, type AiAdapterInstance } from '@forinda/kickjs-ai'
+
+@Controller()
+export class InvoiceController {
+  constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
+
+  @Post('/invoices/read')
+  @FileUpload({ mode: 'single', fieldName: 'invoice' })
+  async read(ctx: RequestContext) {
+    const res = await this.ai.getProvider().chat({
+      messages: [
+        {
+          role: 'user',
+          content: 'List the line items as JSON.',
+          attachments: [attachmentFromFile(ctx.file!)],
+        },
+      ],
+    })
+    ctx.json({ items: res.content })
+  }
+}
+```
+
+An attachment is a content part in the shape other AI SDKs use, so parts
+built elsewhere work here as they are:
+
+```ts
+type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: Uint8Array | string; mimeType: string }
+  | { type: 'file'; data: Uint8Array | string; mimeType: string; filename?: string }
+```
+
+`data` is raw bytes, base64, a `data:` URL, or an `http(s)://` URL. Files go
+ahead of the message's text, which is where models read them best.
+
+#### What is sent, by default
+
+What a file is comes from its **bytes**, not the MIME type it arrived with —
+browsers disagree (a Windows `.csv` arrives as `application/vnd.ms-excel`):
+
+| The bytes are                                                           | Anthropic                               | OpenAI                            |
+| ----------------------------------------------------------------------- | --------------------------------------- | --------------------------------- |
+| PNG, JPEG, GIF or WebP                                                  | image block                             | `image_url` (data URL)            |
+| a PDF                                                                   | document block — text and page images   | `file` part                       |
+| valid UTF-8 — CSV, TSV, JSON, Markdown, XML, YAML, SQL, logs, code, SVG | text document titled with the file name | text part headed by the file name |
+| anything else — xlsx, docx, pptx, zip, audio, video                     | throws, naming the file                 | throws, naming the file           |
+
+URLs have no bytes to inspect, so `mimeType` decides: an image or PDF URL is
+passed to the provider to fetch. Anything else by URL throws — fetch it and
+send the contents.
+
+Limitations of the default handling:
+
+- **Office files, archives, audio and video aren't read.** Neither provider
+  takes them inline. Convert them to text first (below).
+- **Text is read as UTF-8 unless the upload says otherwise.** A file that
+  declares a charset (`text/csv; charset=windows-1252`, `utf-16le`) is decoded
+  as that. One in another encoding that declares nothing — a Latin-1 CSV from
+  an old spreadsheet — isn't valid UTF-8, so it's refused rather than garbled;
+  decode it in `normalize`.
+- **Text is sent as text, not parsed.** A 50,000-row CSV becomes 50,000 rows
+  of prompt — it costs tokens and may not fit the model's context. Summarise
+  or sample large files first.
+- **Only images and PDFs can be sent by URL**, and OpenAI's Chat Completions
+  can't fetch a PDF by URL at all.
+- **Provider limits still apply** — file size, PDF page count, images per
+  request. Exceeding them is a provider error (`ProviderError`), not a
+  framework one.
+- **Attachments only go on `user` messages**; a provider throws for any other
+  role.
+- **Memory keeps them.** With `runAgentWithMemory()` the file is stored with
+  the message and sent again every turn — summarise a large file once rather
+  than keeping it in history.
+
+#### Converting other formats
+
+The framework doesn't bundle converters: which library, which sheet, which
+parts of a document matter is the app's call. Pass `normalize` to
+`attachmentFromFile`. It runs only for files the default doesn't read, and
+returns text, a content part, or `undefined` to refuse the file:
+
+```ts
+import * as XLSX from 'xlsx' // SheetJS
+import mammoth from 'mammoth'
+
+const part = attachmentFromFile(ctx.file!, {
+  normalize: (file) => {
+    if (file.originalname?.endsWith('.xlsx')) {
+      const book = XLSX.read(file.buffer)
+      // Every sheet as CSV, headed by its name.
+      return book.SheetNames.map(
+        (name) => `# ${name}\n${XLSX.utils.sheet_to_csv(book.Sheets[name]!)}`,
+      ).join('\n\n')
+    }
+    return undefined // anything else: refuse it, with the default error
+  },
+})
+```
+
+`mammoth` is asynchronous, so convert a Word document before building the part:
+
+```ts
+import mammoth from 'mammoth'
+import { attachmentFromFile, type ContentPart } from '@forinda/kickjs-ai'
+
+const file = ctx.file!
+const attachments: ContentPart[] = []
+
+if (file.originalname.endsWith('.docx')) {
+  const { value: text } = await mammoth.extractRawText({ buffer: file.buffer })
+  attachments.push({
+    type: 'file',
+    data: Buffer.from(text),
+    mimeType: 'text/plain',
+    filename: file.originalname,
+  })
+} else {
+  attachments.push(attachmentFromFile(file))
+}
+
+const res = await this.ai.getProvider().chat({
+  messages: [{ role: 'user', content: 'Summarise this document.', attachments }],
+})
 ```
 
 ## Tools + agent loop

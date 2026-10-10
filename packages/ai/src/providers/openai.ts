@@ -1,4 +1,5 @@
 import type {
+  ContentPart,
   AiProvider,
   ChatChunk,
   ChatInput,
@@ -9,6 +10,7 @@ import type {
   EmbedOptions,
 } from '../types'
 import { postJson, postJsonStream, ProviderError, type RetryOptions } from './base'
+import { assertAttachmentsAllowed, resolvePart } from '../attachments'
 
 /**
  * Configuration for the built-in OpenAI provider.
@@ -272,6 +274,17 @@ export class OpenAIProvider implements AiProvider {
    * normalized form on `ChatMessage`.
    */
   private toOpenAIMessage(m: ChatMessage): OpenAIMessage {
+    assertAttachmentsAllowed(m.role, m.attachments)
+    if (m.role === 'user' && m.attachments?.length) {
+      return {
+        role: 'user',
+        content: [
+          // Files first: the model reads them before the question about them.
+          ...m.attachments.map(toOpenAIPart),
+          ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+        ],
+      }
+    }
     if (m.role === 'tool') {
       return {
         role: 'tool',
@@ -354,8 +367,44 @@ interface OpenAIChatRequest {
   }>
 }
 
+type OpenAIContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | { type: 'file'; file: { filename: string; file_data: string } }
+
+/**
+ * A content part as a Chat Completions part: an image as a URL or data URL, a
+ * PDF as an inline file, text as text (headed by its file name). Chat
+ * Completions can't fetch a PDF by URL, so that throws instead of being dropped.
+ */
+function toOpenAIPart(part: ContentPart): OpenAIContentPart {
+  const r = resolvePart(part)
+  if (r.kind === 'image') {
+    return {
+      type: 'image_url',
+      image_url: { url: r.url ?? `data:${r.mediaType};base64,${r.base64}` },
+    }
+  }
+  if (r.kind === 'pdf') {
+    if (r.url) {
+      throw new Error(
+        'OpenAIProvider: Chat Completions does not fetch PDFs by URL — download it and send the contents.',
+      )
+    }
+    return {
+      type: 'file',
+      file: {
+        filename: r.filename ?? 'document.pdf',
+        file_data: `data:application/pdf;base64,${r.base64}`,
+      },
+    }
+  }
+  return { type: 'text', text: r.filename ? `${r.filename}:\n${r.text}` : r.text }
+}
+
 type OpenAIMessage =
   | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'user'; content: OpenAIContentPart[] }
   | {
       role: 'assistant'
       content: string

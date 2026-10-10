@@ -13,7 +13,7 @@ import {
   type RouteFlagTest,
   type RouteFlags,
 } from '@forinda/kickjs'
-import { AI_ADAPTER, AI_PROVIDER } from './constants'
+import { AI_ADAPTER, AI_PROVIDER, aiAdapterToken, aiProviderToken } from './constants'
 import { getAiToolMeta } from './decorators'
 import type { RunAgentWithMemoryOptions } from './memory/types'
 import { buildRouteTool, type RouteTool } from '@forinda/kickjs-schema'
@@ -113,7 +113,11 @@ function toolNameFor(name: string, handler: string): string {
  */
 export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
   name: 'AiAdapter',
-  build: (options) => {
+  build: (options, { name, scoped }) => {
+    // `AiAdapter.scoped('support', …)` is named `AiAdapter:support`; it
+    // registers under that scope's tokens and leaves AI_ADAPTER / AI_PROVIDER
+    // to the unscoped adapter, so several can run side by side.
+    const scope = scoped ? name.slice(name.indexOf(':') + 1) : undefined
     // A mixed-polarity list fails here, where the adapter is configured,
     // not later inside startup where the error would be swallowed.
     if (options.exposeWhen) assertFlagTest(options.exposeWhen, 'AiAdapter.exposeWhen')
@@ -509,8 +513,15 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
       beforeStart({ container, fetch: contextFetch }) {
         appFetch = contextFetch ?? null
-        container.registerFactory(AI_PROVIDER, () => provider, Scope.SINGLETON)
-        container.registerInstance(AI_ADAPTER, publicSurface)
+        container.registerFactory(
+          scope === undefined ? AI_PROVIDER : aiProviderToken(scope),
+          () => provider,
+          Scope.SINGLETON,
+        )
+        container.registerInstance(
+          scope === undefined ? AI_ADAPTER : aiAdapterToken(scope),
+          publicSurface,
+        )
 
         for (const { controller, mountPath } of mountedControllers) {
           const routes = getClassMeta<RouteDefinition[]>(METADATA.ROUTES, controller, [])
@@ -520,7 +531,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
           }
         }
 
-        log.info(`AiAdapter ready — provider: ${provider.name}, ${tools.length} tool(s) discovered`)
+        log.info(`${name} ready — provider: ${provider.name}, ${tools.length} tool(s) discovered`)
       },
 
       afterStart(ctx) {

@@ -1,4 +1,4 @@
-import { createToken } from '@forinda/kickjs'
+import { createToken, type InjectionToken } from '@forinda/kickjs'
 import type { VectorStore } from './rag/types'
 import type { AiAdapterInstance, AiProvider, AiToolOptions } from './types'
 
@@ -67,6 +67,43 @@ export const AI_PROVIDER = createToken<AiProvider>('kick/ai/provider')
  * ```
  */
 export const AI_ADAPTER = createToken<AiAdapterInstance>('kick/ai/adapter')
+
+const scopedAdapterTokens = new Map<string, InjectionToken<AiAdapterInstance>>()
+const scopedProviderTokens = new Map<string, InjectionToken<AiProvider>>()
+
+/**
+ * DI token for a scoped AI adapter — `AiAdapter.scoped('support', { ... })`
+ * registers itself under `aiAdapterToken('support')`, so several adapters
+ * (different providers, tools exposed, defaults) can run side by side and be
+ * injected separately. `AI_ADAPTER` stays the unscoped adapter's token.
+ *
+ * @example
+ * ```ts
+ * bootstrap({
+ *   adapters: [
+ *     AiAdapter.scoped('support', { provider: claude, exposeWhen: ['ai.support'] }),
+ *     AiAdapter.scoped('billing', { provider: gpt, exposeWhen: ['ai.billing'] }),
+ *   ],
+ * })
+ *
+ * @Service()
+ * class SupportBot {
+ *   constructor(@Inject(aiAdapterToken('support')) private ai: AiAdapterInstance) {}
+ * }
+ * ```
+ */
+export function aiAdapterToken(scope: string): InjectionToken<AiAdapterInstance> {
+  let token = scopedAdapterTokens.get(scope)
+  if (!token) scopedAdapterTokens.set(scope, (token = createToken(`kick/ai/adapter:${scope}`)))
+  return token
+}
+
+/** DI token for a scoped AI adapter's default provider — see {@link aiAdapterToken}. */
+export function aiProviderToken(scope: string): InjectionToken<AiProvider> {
+  let token = scopedProviderTokens.get(scope)
+  if (!token) scopedProviderTokens.set(scope, (token = createToken(`kick/ai/provider:${scope}`)))
+  return token
+}
 
 /**
  * DI token for the active vector store backend.
