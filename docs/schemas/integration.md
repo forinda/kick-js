@@ -109,7 +109,7 @@ A `body` schema on GET, HEAD, DELETE or OPTIONS is left out of the spec, because
 
 ### Custom parsers (deprecated)
 
-`SwaggerAdapter({ schemaParser })` still accepts a `SchemaParser` (`name`, `supports(schema)`, `toJsonSchema(schema, { io })`) for libraries `detectSchema` can't read. It's deprecated: register an adapter with `registerAdapter()` instead (see [Schema Adapters](./adapters.md)), so validation, tools and typegen pick the library up too.
+`SwaggerAdapter({ schemaParser })` still accepts a `SchemaParser` (`name`, `supports(schema)`, `toJsonSchema(schema, { io })`) for libraries `detectSchema` can't read. It's deprecated: register an adapter with `registerAdapter()` instead (see [Schema Adapters](./adapters.md)), so validation and tools pick the library up too. `registerAdapter()` works at runtime only: typegen infers a route's types from the schema's static type, so a raw schema from a custom library stays untyped unless the value you pass to the route carries a type `InferSchemaOutput` recognises — for example `const body = detectSchema(rawSchema) as KickSchema<CreateUser>`.
 
 See [Swagger](../guide/swagger.md) for the adapter itself.
 

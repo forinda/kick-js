@@ -152,7 +152,7 @@ issue.message       → SchemaIssue.message
 
 ## Joi
 
-There is no built-in Joi adapter. Joi has no static type inference, so a Joi schema can't give you a typed `ctx.body`. If you still want Joi, wrap it yourself and register it with [`registerAdapter()`](#writing-a-custom-adapter), casting the result to `KickSchema<T>` for types.
+There is no built-in Joi adapter. Joi has no static type inference, so a Joi schema can't give you a typed `ctx.body`. If you still want Joi, wrap it yourself and register it with [`registerAdapter()`](#writing-a-custom-adapter). That makes Joi schemas validate; it doesn't type them. Typegen reads the static type of what you pass to the route, so to get a typed `ctx.body`, pass a value typed `KickSchema<T>` — `const body = detectSchema(joiSchema) as KickSchema<CreateUser>` — rather than the raw Joi schema.
 
 ## Auto-detection
 

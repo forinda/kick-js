@@ -305,12 +305,13 @@ Environment validation failed:
 The same applies to any adapter whose library treats unknown keys as an error.
 :::
 
-### Typing: parameterise `wrap`
+### Typing: cast the schema you pass
 
 `InferSchemaOutput` has no Joi branch, so a raw Joi schema infers `unknown` —
-`KickEnv` stays empty and `ctx.body` is untyped. The first branch reads
-`KickSchema<TOutput>`, so declaring the output on the wrapper is what restores
-inference:
+`KickEnv` stays empty and `ctx.body` is untyped. Registering the adapter
+doesn't change that: it works at runtime, while typegen reads the static type
+of the value you hand to `loadEnvFromSchema` or a route. Its first branch reads
+`KickSchema<TOutput>`, so typing that value is what restores inference:
 
 ```ts
 interface AppEnv {
@@ -320,6 +321,10 @@ interface AppEnv {
 
 const envSchema = detectSchema(joiEnv) as KickSchema<AppEnv>
 // InferSchemaOutput<typeof envSchema> === AppEnv → typed KickEnv, typed @Value()
+
+// The same for a route: pass the typed value, not the raw Joi schema.
+const createUser = detectSchema(joiCreateUser) as KickSchema<CreateUser>
+// @Post('/', { body: createUser }) → ctx.body: CreateUser
 ```
 
 Joi has no static inference of its own, so `AppEnv` is written by hand and the
