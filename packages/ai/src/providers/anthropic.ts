@@ -75,6 +75,12 @@ export interface AnthropicProviderOptions {
   fallbacks?: 'default' | false
   /** Provider name override. Defaults to `'anthropic'`. */
   name?: string
+  /**
+   * Sends every request instead of the global `fetch` — a proxy or custom
+   * TLS, tracing, extra headers. Passed to the SDK client the provider
+   * creates; ignored when you pass your own `client` (give it `fetch` there).
+   */
+  fetch?: typeof fetch
 }
 
 /** Models whose safety classifiers can decline a request, and that support `fallbacks`. */
@@ -205,6 +211,7 @@ export class AnthropicProvider implements AiProvider {
         new mod.default({
           ...(this.options.apiKey ? { apiKey: this.options.apiKey } : {}),
           ...(this.options.baseURL ? { baseURL: this.options.baseURL } : {}),
+          ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
         }),
       (err) => {
         this.clientPromise = undefined

@@ -93,15 +93,22 @@ function retryDelay(attempt: number, baseMs: number, maxMs: number): number {
 async function postWithRetry(
   url: string,
   body: unknown,
-  options: { headers?: Record<string, string>; signal?: AbortSignal; retry?: RetryOptions },
+  options: {
+    headers?: Record<string, string>
+    signal?: AbortSignal
+    retry?: RetryOptions
+    fetch?: typeof fetch
+  },
   accept?: string,
 ): Promise<Response> {
   const maxRetries = options.retry?.maxRetries ?? DEFAULT_MAX_RETRIES
   const baseDelayMs = options.retry?.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
   const maxDelayMs = options.retry?.maxDelayMs ?? DEFAULT_MAX_DELAY_MS
 
+  // Looked up per call, so code that swaps or spies on the global still works.
+  const send = options.fetch ?? globalThis.fetch
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, {
+    const res = await send(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -148,6 +155,8 @@ export async function postJson<T>(
     headers?: Record<string, string>
     signal?: AbortSignal
     retry?: RetryOptions
+    /** Sends the request instead of the global `fetch`. */
+    fetch?: typeof fetch
   } = {},
 ): Promise<T> {
   const res = await postWithRetry(url, body, options)
@@ -192,6 +201,8 @@ export async function* postJsonStream(
     headers?: Record<string, string>
     signal?: AbortSignal
     retry?: RetryOptions
+    /** Sends the request instead of the global `fetch`. */
+    fetch?: typeof fetch
   } = {},
 ): AsyncGenerator<string> {
   const res = await postWithRetry(url, body, options, 'text/event-stream')

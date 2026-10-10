@@ -42,6 +42,12 @@ export interface OpenAIProviderOptions {
   name?: string
   /** Retries for transient failures (429, 5xx). Defaults to 3 with backoff; `{ maxRetries: 0 }` disables. */
   retry?: RetryOptions
+  /**
+   * Sends every request instead of the global `fetch` — a proxy or custom
+   * TLS (an undici `Agent`), tracing, extra headers, or a runtime without a
+   * global `fetch`. Called the way `fetch` is; retries and streaming use it too.
+   */
+  fetch?: typeof fetch
 }
 
 /**
@@ -89,6 +95,7 @@ export class OpenAIProvider implements AiProvider {
    */
   private readonly headers: Record<string, string>
   private readonly retry?: RetryOptions
+  private readonly fetch?: typeof fetch
 
   constructor(options: OpenAIProviderOptions) {
     if (!options.apiKey) {
@@ -99,6 +106,7 @@ export class OpenAIProvider implements AiProvider {
     this.defaultEmbedModel = options.defaultEmbedModel ?? 'text-embedding-3-small'
     this.name = options.name ?? 'openai'
     this.retry = options.retry
+    this.fetch = options.fetch
     this.headers = {
       authorization: `Bearer ${options.apiKey}`,
       ...(options.organization ? { 'openai-organization': options.organization } : {}),
@@ -119,6 +127,7 @@ export class OpenAIProvider implements AiProvider {
       headers: this.headers,
       signal: options.signal,
       retry: this.retry,
+      fetch: this.fetch,
     })
     return this.normalizeChatResponse(data)
   }
@@ -138,6 +147,7 @@ export class OpenAIProvider implements AiProvider {
       headers: this.headers,
       signal: options.signal,
       retry: this.retry,
+      fetch: this.fetch,
     })
 
     let sawAnyChunk = false
@@ -216,7 +226,7 @@ export class OpenAIProvider implements AiProvider {
         model: this.defaultEmbedModel,
         input: inputs,
       },
-      { headers: this.headers, signal: options.signal, retry: this.retry },
+      { headers: this.headers, signal: options.signal, retry: this.retry, fetch: this.fetch },
     )
 
     if (!data.data || !Array.isArray(data.data)) {
