@@ -12,17 +12,6 @@ Install once (`@forinda/kickjs-schema` ships with `kick new`), then bring whiche
 Or mix them per call site — one DTO with Zod, another with Valibot, env with Yup. `detectSchema()` figures out the right adapter at runtime.
 :::
 
-## Why this package exists
-
-Before the schema package landed, every kickjs subsystem hard-coded Zod:
-
-- `@Post('/', { body: zodSchema })` validated only Zod
-- `loadEnv(zodSchema)` only Zod
-- The Swagger spec generator only understood Zod
-- `kick typegen` emitted `z.infer<typeof Schema>` literally
-
-That made the framework opinionated about Zod **and** silently broke for the small but real fraction of teams that already shipped on Valibot or Yup. The schema package decouples the framework from any specific validator: each subsystem normalises whatever the adopter passes through `detectSchema()`, which wraps the input as a `KickSchema` and routes calls to the right adapter.
-
 ## Quick start
 
 ```ts
@@ -86,7 +75,7 @@ interface SchemaIssue {
 }
 ```
 
-`safeParse` powers validation. `toJsonSchema` powers OpenAPI generation. `_raw` carries the underlying library's schema instance — adapter authors can read it back for library-specific operations (e.g. swagger's `$ref` naming) without leaking the source library through the framework's public types.
+`safeParse` powers validation. `toJsonSchema` powers OpenAPI generation. `_raw` optionally holds the library's own schema — for your own code, such as a custom adapter; the framework doesn't read it.
 
 ## Adapters
 
@@ -104,9 +93,7 @@ wrapped.toJsonSchema({ target: 'openapi-3.0' }) // what Swagger asks for
 
 `toJsonSchema(options)` takes a `target` — `'draft-2020-12'` (Zod's default), `'draft-07'` or `'openapi-3.0'` — and `io`: `'output'` (the default) describes what the schema produces, `'input'` what it accepts; they differ for defaults, coercion and transforms. A nullable string is `type: ['string', 'null']` in 2020-12 and `nullable: true` in OpenAPI 3.0. What JSON Schema can't express (a `Map`, a transform's result) is described as any value; dates are `string` / `date-time` and bigints `integer`.
 
-Detection: the schema is a non-null object with a `safeParse` function and a `_def` property (Zod's internal brand).
-
-Output inference: `InferSchemaOutput<TSchema>` reads the Standard Schema brand (`~standard.types.output`) on Zod v4, falls back to `_output` for Zod v3. The single inferring overload pulls the parsed shape from the call site so `fromZod(z.object({...}))` lands at `KickSchema<{ ... }>`, not `KickSchema<unknown>`. Spell the output explicitly with a cast when you need to:
+A raw Zod schema is recognised wherever a schema is accepted; `fromZod` is only needed when you want the `KickSchema` itself. It's typed from the schema: `fromZod(z.object({...}))` is a `KickSchema<{ ... }>`. Spell the output explicitly with a cast when you need to:
 
 ```ts
 import type { KickSchema } from '@forinda/kickjs-schema'
@@ -128,7 +115,7 @@ const wrapped = fromValibot(
 )
 ```
 
-Detection: a non-null object with `kind`, `type`, and `async` properties (Valibot's internal brand). Output inference reads Valibot's Standard Schema brand directly.
+A raw Valibot schema is recognised wherever a schema is accepted, and `fromValibot` is typed from the schema.
 
 **Default behaviour.** `v.optional(<pipe>, default)` validates the default _through_ the pipe — so `v.optional(v.pipe(v.string(), v.transform(Number)), '3000')` yields `3000: number` for `undefined` input, not the raw `'3000'` string. The output type is consistent with the transform.
 
@@ -148,13 +135,12 @@ const wrapped = fromYup(
 )
 ```
 
-Detection: a non-null object with `validateSync`, `describe`, and `isValidSync` functions (Yup's API surface).
+A raw Yup schema is recognised wherever a schema is accepted.
 
 **Caveats.**
 
 - Yup's `.url()` only matches http/https. For database connection strings like `postgres://…` use `.string().required()` or `.matches(/^[a-z]+:\/\/…/)`.
-- Yup's `__outputType` types `.required()` fields as `T | undefined` because `.required()` is enforced at runtime, not in the type. The validate middleware still rejects undefined at runtime; the type-level looseness only surfaces in tests that bypass validation.
-- `fromYup.toJsonSchema()` walks `describe()` output rather than reading native JSON Schema (Yup doesn't ship one). Coverage is good for primitives, enums, `min`/`max`, `oneOf`, and nested objects/arrays. Anything exotic (custom tests, `.when()` conditionals) falls back to the base type.
+- Yup has no JSON Schema of its own, so KickJS builds one. It covers primitives, enums, `min`/`max`, `oneOf`, and nested objects and arrays; anything more (custom tests, `.when()` conditionals) is described by its base type, and `target` / `io` don't change the output.
 
 ## `detectSchema(schema)` — runtime adapter routing
 
@@ -170,14 +156,14 @@ const wrapped = detectSchema(myYupSchema) // → fromYup(myYupSchema)
 
 Resolution order:
 
-1. **`isKickSchema(schema)`** — already wrapped, returned as-is.
-2. **Custom adapters** registered via `registerAdapter(adapter)`.
-3. **`isZodSchema(schema)`** → `fromZod`
-4. **`isValibotSchema(schema)`** → `fromValibot`
-5. **`isYupSchema(schema)`** → `fromYup`
-6. **`hasStandardSchema(schema)`** → `fromStandardSchema` (any Standard Schema v1 implementer not covered above)
-7. **`typeof schema === 'function'`** → wrapped as a plain validator; the function receives the data and either returns the validated value or throws.
-8. **`safeParse`-only duck-type** → wrapped via `fromSafeParseDuckType` (a generic fallback for schema libraries that look like Zod but aren't).
+1. **Already a `KickSchema`** — returned as-is.
+2. **Custom adapters** registered with `registerAdapter(adapter)`, in registration order.
+3. **Zod** → as `fromZod`
+4. **Valibot** → as `fromValibot`
+5. **Yup** → as `fromYup`
+6. **Any other Standard Schema** — ArkType and other Standard Schema v1 libraries.
+7. **A plain function** — called with the data; it returns the validated value or throws.
+8. **Any other object with a `safeParse()` method** — a fallback for libraries shaped like Zod.
 
 Failure falls through to a thrown `Error` with the message `Unrecognized schema. Wrap it with fromZod(), fromValibot(), etc., or implement the StandardSchemaV1 interface.`.
 
@@ -354,14 +340,10 @@ Type-level inference of a schema's parsed output. `kick typegen` runs this again
 
 Resolution order (top wins):
 
-1. `T extends KickSchema<infer O>` → `O`
-2. `T extends { '~standard': { types?: { output: infer O } } }` → `O` (Zod v4, Valibot, any Standard Schema implementer)
-3. `T extends { '~output': infer O }` → `O` (Zod v4 fallback)
-4. `T extends { _output: infer O }` → `O` (Zod v3)
-5. `T extends { __outputType: infer O }` → `O` (Yup)
-6. `unknown`
-
-The Standard Schema branch sits ahead of Zod's `_output` because Zod v4 sometimes types `_output` as `never` on object schemas — falling through to `~standard` lands at the real output shape.
+1. a `KickSchema<O>` — its declared output `O`
+2. a Standard Schema's output type — Zod 4, Valibot, Yup, ArkType and others
+3. Zod 3's and Yup's own output types
+4. otherwise `unknown`
 
 ## How the framework wires it up
 

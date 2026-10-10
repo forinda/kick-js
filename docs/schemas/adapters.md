@@ -160,10 +160,10 @@ When a raw (unwrapped) schema reaches `validate()`, a route decorator, `loadEnvF
 
 1. **Already a `KickSchema`** — an object with `safeParse()` and `toJsonSchema()` methods. Returned as-is.
 2. **Registered adapters** — every `registerAdapter()` entry, in registration order. The first `detect()` that returns `true` wins.
-3. **Zod** — has `safeParse()` and `_def`.
-4. **Valibot** — has `kind`, `type` and `async`.
-5. **Yup** — has `validateSync()`, `describe()` and `isValidSync()`.
-6. **Standard Schema** — an object or function with a `~standard` property.
+3. **Zod**
+4. **Valibot**
+5. **Yup**
+6. **Any other Standard Schema** — ArkType and other Standard Schema v1 libraries (callable ones included).
 7. **Plain function** — called with the data; its return value becomes `data`, and a thrown error becomes one issue with `code: 'custom'`. JSON Schema is `{ type: 'object' }`.
 8. **Anything with `safeParse()`** — a duck-typed fallback. Issues are read from `result.error.issues` or `result.issues`, `code` defaults to `'unknown'`, and JSON Schema comes from `toJSONSchema()` if present, else `{ type: 'object' }`.
 

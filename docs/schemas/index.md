@@ -79,10 +79,10 @@ Async validation is not supported. If a Standard Schema's `validate` returns a P
 
 1. **Already a `KickSchema`**: an object with `safeParse` and `toJsonSchema` methods. Returned unchanged.
 2. **Adapters added with `registerAdapter()`**, in the order you registered them.
-3. **Zod**: an object with a `safeParse` method and a `_def` property.
-4. **Valibot**: an object with `kind`, `type` and `async` properties.
-5. **Yup**: an object with `validateSync`, `describe` and `isValidSync` methods.
-6. **Standard Schema**: an object _or function_ with a `~standard` property. Functions count because ArkType types are callable.
+3. **Zod**
+4. **Valibot**
+5. **Yup**
+6. **Any other Standard Schema**: ArkType and other Standard Schema v1 libraries (callable ones included).
 7. **A plain function**: called with the value. Its return value is the parsed data, and a throw becomes one issue with `code: 'custom'`.
 8. **Any other object with `safeParse`**: read as `{ success, data }` or `{ success: false, error: { issues } }`.
 
@@ -185,11 +185,10 @@ On failure, `loadEnvFromSchema` throws an `Error` listing each issue as `path: m
 
 With `typegen.schemaValidator: 'kickjs-schema'` in `kick.config.ts` (the `kick new` default), typegen types each route's `body`, `query` and `params` as `InferSchemaOutput<typeof schema>`. That works for every supported library. `InferSchemaOutput<T>` resolves in this order:
 
-1. `KickSchema<O>`
-2. Standard Schema `~standard.types.output`
-3. Zod's `~output`, then `_output`
-4. Yup's `__outputType`
-5. otherwise `unknown`
+1. a `KickSchema<O>` — its declared output `O`
+2. a Standard Schema's output type — Zod 4, Valibot, Yup, ArkType and others
+3. Zod 3's and Yup's own output types
+4. otherwise `unknown`
 
 `schemaValidator: 'zod'`, which the `kick typegen` command falls back to when `kick.config.ts` doesn't set one, emits `z.infer<typeof schema>` instead. That only works for Zod.
 

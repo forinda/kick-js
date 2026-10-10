@@ -209,11 +209,10 @@ How a schema becomes a type depends on `typegen.schemaValidator` in `kick.config
 
 `InferSchemaOutput<T>` checks, in order:
 
-1. `KickSchema<O>`
-2. Standard Schema `~standard.types.output`
-3. Zod's `~output`, then `_output`
-4. Yup's `__outputType`
-5. otherwise `unknown`
+1. a `KickSchema<O>` — its declared output `O`
+2. a Standard Schema's output type — Zod 4, Valibot, Yup, ArkType and others
+3. Zod 3's and Yup's own output types
+4. otherwise `unknown`
 
 ### Typed handlers
 
