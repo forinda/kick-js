@@ -93,7 +93,10 @@ export function requestLogger(options: RequestLoggerOptions = {}) {
       // Both are optional, so the pair still needs a floor — otherwise the
       // line reads `GET undefined` again, just via a different route.
       const path = req.originalUrl ?? req.url ?? '/'
-      log[level](`${req.method} ${path} ${status} ${duration}ms ${requestId}`)
+      // The same line as always, with the parts as fields too — a provider
+      // writing JSON (`LOG_FORMAT=json`, pino) gets queryable columns.
+      const fields = log.child({ method: req.method, path, status, ms: duration, requestId })
+      fields[level](`${req.method} ${path} ${status} ${duration}ms ${requestId}`)
     })
 
     next()

@@ -167,7 +167,7 @@ bootstrap({
     helmet(), // Security headers (X-Frame-Options, HSTS, etc.)
     cors({ origin: ['https://app.example.com'] }), // CORS with spec-correct behavior
     requestId(), // X-Request-Id generation/propagation
-    requestLogger(), // Pino-based request logging (method, URL, status, duration)
+    requestLogger(), // Request logging (method, URL, status, duration) — fields too under LOG_FORMAT=json
     csrf(), // CSRF protection (double-submit cookie)
     rateLimit(), // Rate limiting with pluggable store
     express.json(), // Body parsing

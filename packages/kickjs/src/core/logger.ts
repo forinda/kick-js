@@ -36,8 +36,12 @@ export interface LoggerProvider {
   debug(msg: string, ...args: any[]): void
   trace?(msg: string, ...args: any[]): void
   fatal?(msg: string, ...args: any[]): void
-  /** Return a child provider scoped to the given component name */
-  child(bindings: { component: string }): LoggerProvider
+  /**
+   * Return a child provider scoped to the given component name. `bindings`
+   * may also carry fields from `logger.child({ ... })` (a request id, a job
+   * name) — a provider that ignores them keeps working as before.
+   */
+  child(bindings: { component: string; [field: string]: unknown }): LoggerProvider
 }
 
 // ── Log levels ─────────────────────────────────────────────────────────
@@ -70,6 +74,128 @@ function thresholdRank(): number {
   return LEVEL_RANK[level] ?? LEVEL_RANK.info
 }
 
+/** `LOG_FORMAT=json` switches the default provider to one JSON object per line. */
+function jsonFormat(): boolean {
+  return (
+    (typeof process !== 'undefined' ? process.env?.LOG_FORMAT : undefined)?.toLowerCase() === 'json'
+  )
+}
+
+/** A plain `{ ... }` object — merged into a JSON line as fields. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+/**
+ * An error as a JSON field — `type`, `message`, `stack`, own enumerable
+ * properties (a driver's `code`), and its `cause` chain, depth-capped and
+ * cycle-guarded like {@link describeError}.
+ */
+export function serializeError(err: unknown, depth = 4, seen = new Set<unknown>()): unknown {
+  if (!(err instanceof Error)) return err
+  if (seen.has(err) || depth <= 0) return '[circular cause]'
+  seen.add(err)
+  const out: Record<string, unknown> = { type: err.name, message: err.message, stack: err.stack }
+  for (const [key, value] of Object.entries(err)) if (!(key in out)) out[key] = value
+  const cause = (err as { cause?: unknown }).cause
+  if (cause !== undefined) out.cause = serializeError(cause, depth - 1, seen)
+  return out
+}
+
+/**
+ * Fill printf-style placeholders the way `console.log` does (`%s %d %i %f
+ * %j %o %O`, `%%`), then append what's left — so `log.info('hi %s', name)`
+ * reads the same in JSON as on a terminal.
+ */
+function formatMessage(msg: string, args: unknown[]): string {
+  let i = 0
+  const filled = msg.replace(/%[sdifjoO%]/g, (token) => {
+    if (token === '%%') return '%'
+    if (i >= args.length) return token
+    const value = args[i++]
+    if (token === '%d' || token === '%i') return String(Math.trunc(Number(value)))
+    if (token === '%f') return String(Number(value))
+    if (token === '%s') return typeof value === 'string' ? value : safeStringify(value)
+    return safeStringify(value)
+  })
+  const rest = args.slice(i).map((a) => (typeof a === 'string' ? a : safeStringify(a)))
+  return rest.length ? `${filled} ${rest.join(' ')}` : filled
+}
+
+/** Keys of a JSON line only the logger writes — see {@link jsonLine}. */
+const RESERVED_FIELDS = new Set(['level', 'time', 'component', 'msg', 'err'])
+
+/**
+ * One JSON log line, field-compatible with pino (`level` 10–60, `time` in
+ * epoch ms, `msg`) so `pino-pretty` and log shippers read it as-is. Trailing
+ * plain objects become fields, an `Error` becomes `err`, and anything else
+ * fills the message's placeholders or is appended to it.
+ */
+export function jsonLine(
+  level: keyof typeof LEVEL_RANK,
+  component: string,
+  bindings: Record<string, unknown>,
+  msg: string,
+  args: unknown[],
+): string {
+  // Null prototype: a `__proto__` key in logged data stays a plain field.
+  const fields: Record<string, unknown> = Object.create(null)
+  const rest: unknown[] = []
+  let err: unknown
+  for (const arg of args) {
+    if (arg instanceof Error) err ??= serializeError(arg)
+    else if (isPlainObject(arg)) Object.assign(fields, arg)
+    else rest.push(arg)
+  }
+  const line: Record<string, unknown> = {
+    level: LEVEL_RANK[level],
+    time: Date.now(),
+    ...(component ? { component } : {}),
+  }
+  // Logged data is often untrusted (a request body): it must not rewrite the
+  // line's level, time, source or message, or pass a plain object off as the
+  // error. Those come from the logger only; a field with one of those names is
+  // dropped.
+  for (const source of [bindings, fields]) {
+    for (const key of Object.keys(source)) {
+      if (!RESERVED_FIELDS.has(key)) line[key] = source[key]
+    }
+  }
+  if (err !== undefined) line.err = err
+  line.msg = formatMessage(msg, rest)
+  try {
+    return JSON.stringify(line, bigintSafe)
+  } catch {
+    // Something can't be written (a circular field). Drop only that: every
+    // other field stays, and `err` — usually why the line exists — keeps at
+    // least its type, message and stack.
+    const safe: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(line)) {
+      try {
+        JSON.stringify(value, bigintSafe)
+        safe[key] = value
+      } catch {
+        safe[key] =
+          key === 'err' && value && typeof value === 'object'
+            ? pick(value as Record<string, unknown>, ['type', 'message', 'stack'])
+            : '[unserializable]'
+      }
+    }
+    return JSON.stringify(safe, bigintSafe)
+  }
+}
+
+const bigintSafe = (_key: string, value: unknown): unknown =>
+  typeof value === 'bigint' ? value.toString() : value
+
+function pick(obj: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of keys) if (typeof obj[key] === 'string') out[key] = obj[key]
+  return out
+}
+
 // ── ConsoleLoggerProvider (default) ────────────────────────────────────
 
 /**
@@ -81,6 +207,12 @@ function thresholdRank(): number {
  * appears with `LOG_LEVEL=debug`. `error`/`fatal` always print unless
  * `LOG_LEVEL=silent`.
  *
+ * `LOG_FORMAT=json` writes one pino-compatible JSON object per line instead
+ * (all levels through `console.log`, so one stream carries them): fields
+ * from `logger.child({ ... })` and from trailing plain-object arguments, and
+ * an `Error` argument as `err` with its stack and `cause` chain. The default
+ * text output is unchanged.
+ *
  * Swap it for pino, winston, bunyan, or anything else by implementing
  * the `LoggerProvider` interface and calling `Logger.setProvider()`
  * before `bootstrap()`.
@@ -88,11 +220,21 @@ function thresholdRank(): number {
 export class ConsoleLoggerProvider implements LoggerProvider {
   private prefix: string
   private useColor: boolean
+  /** Fields from `logger.child({ ... })` — written on JSON lines. */
+  private bindings: Record<string, unknown>
 
-  constructor(prefix?: string) {
+  constructor(prefix?: string, bindings: Record<string, unknown> = {}) {
     this.prefix = prefix ?? ''
+    this.bindings = bindings
     this.useColor =
       typeof process !== 'undefined' && process.stdout?.isTTY === true && !process.env.NO_COLOR
+  }
+
+  /** Write `msg` as a JSON line when `LOG_FORMAT=json`; returns whether it did. */
+  private json(level: keyof typeof LEVEL_RANK, msg: string, args: unknown[]): boolean {
+    if (!jsonFormat()) return false
+    console.log(jsonLine(level, this.prefix, this.bindings, msg, args))
+    return true
   }
 
   private fmt(level: string, color: string, msg: string): string {
@@ -109,26 +251,32 @@ export class ConsoleLoggerProvider implements LoggerProvider {
   }
 
   info(msg: string, ...args: any[]) {
-    if (this.enabled(LEVEL_RANK.info)) console.log(this.fmt('INFO', '\x1b[32m', msg), ...args)
+    if (!this.enabled(LEVEL_RANK.info) || this.json('info', msg, args)) return
+    console.log(this.fmt('INFO', '\x1b[32m', msg), ...args)
   }
   warn(msg: string, ...args: any[]) {
-    if (this.enabled(LEVEL_RANK.warn)) console.warn(this.fmt('WARN', '\x1b[33m', msg), ...args)
+    if (!this.enabled(LEVEL_RANK.warn) || this.json('warn', msg, args)) return
+    console.warn(this.fmt('WARN', '\x1b[33m', msg), ...args)
   }
   error(msg: string, ...args: any[]) {
-    if (this.enabled(LEVEL_RANK.error)) console.error(this.fmt('ERROR', '\x1b[31m', msg), ...args)
+    if (!this.enabled(LEVEL_RANK.error) || this.json('error', msg, args)) return
+    console.error(this.fmt('ERROR', '\x1b[31m', msg), ...args)
   }
   debug(msg: string, ...args: any[]) {
-    if (this.enabled(LEVEL_RANK.debug)) console.debug(this.fmt('DEBUG', '\x1b[90m', msg), ...args)
+    if (!this.enabled(LEVEL_RANK.debug) || this.json('debug', msg, args)) return
+    console.debug(this.fmt('DEBUG', '\x1b[90m', msg), ...args)
   }
   trace(msg: string, ...args: any[]) {
-    if (this.enabled(LEVEL_RANK.trace)) console.trace(this.fmt('TRACE', '\x1b[90m', msg), ...args)
+    if (!this.enabled(LEVEL_RANK.trace) || this.json('trace', msg, args)) return
+    console.trace(this.fmt('TRACE', '\x1b[90m', msg), ...args)
   }
   fatal(msg: string, ...args: any[]) {
-    if (this.enabled(LEVEL_RANK.fatal))
-      console.error(this.fmt('FATAL', '\x1b[1m\x1b[31m', msg), ...args)
+    if (!this.enabled(LEVEL_RANK.fatal) || this.json('fatal', msg, args)) return
+    console.error(this.fmt('FATAL', '\x1b[1m\x1b[31m', msg), ...args)
   }
-  child(bindings: { component: string }): LoggerProvider {
-    return new ConsoleLoggerProvider(bindings.component)
+  child(bindings: { component: string; [field: string]: unknown }): LoggerProvider {
+    const { component, ...fields } = bindings
+    return new ConsoleLoggerProvider(component, { ...this.bindings, ...fields })
   }
 }
 
@@ -167,21 +315,29 @@ export class Logger {
   private _provider: LoggerProvider
   private _providerVersion: number
   private _name?: string
+  private _fields?: Record<string, unknown>
 
   /** Incremented on every setProvider/resetProvider so instances know to refresh */
   private static _providerVersion = 0
 
-  constructor(name?: string) {
+  constructor(name?: string, fields?: Record<string, unknown>) {
     this._name = name
+    this._fields = fields
     this._providerVersion = Logger._providerVersion
-    this._provider = name ? activeProvider.child({ component: name }) : activeProvider
+    this._provider = this.derive()
+  }
+
+  /** The active provider's child for this logger's name and fields. */
+  private derive(): LoggerProvider {
+    if (!this._name && !this._fields) return activeProvider
+    return activeProvider.child({ ...this._fields, component: this._name ?? '' })
   }
 
   /** Re-derive the provider if setProvider() was called since construction/last access */
   private get provider(): LoggerProvider {
     if (this._providerVersion !== Logger._providerVersion) {
       this._providerVersion = Logger._providerVersion
-      this._provider = this._name ? activeProvider.child({ component: this._name }) : activeProvider
+      this._provider = this.derive()
     }
     return this._provider
   }
@@ -228,8 +384,16 @@ export class Logger {
   }
 
   /** Create a child logger with a sub-component name */
-  child(name: string): Logger {
-    return new Logger(name)
+  child(name: string): Logger
+  /**
+   * Create a child logger carrying `fields` on every line it writes — a
+   * request id, a job name. Keeps this logger's name and fields. Written as
+   * JSON fields under `LOG_FORMAT=json`; the default text output is unchanged.
+   */
+  child(fields: Record<string, unknown>): Logger
+  child(nameOrFields: string | Record<string, unknown>): Logger {
+    if (typeof nameOrFields === 'string') return new Logger(nameOrFields)
+    return new Logger(this._name, { ...this._fields, ...nameOrFields })
   }
 
   info(msg: string, ...args: any[]) {
