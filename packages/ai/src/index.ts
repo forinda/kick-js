@@ -13,6 +13,7 @@ export { AnthropicProvider, type AnthropicProviderOptions } from './providers/an
 export { ProviderError, type RetryOptions } from './providers/base'
 export { ScriptedProvider, type ScriptedTurn } from './testing'
 export { createPrompt, Prompt } from './prompts'
+export { StructuredOutputError, chatObject } from './structured'
 export {
   attachmentFromFile,
   type AttachmentFromFileOptions,

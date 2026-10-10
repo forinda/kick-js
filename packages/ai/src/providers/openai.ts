@@ -11,6 +11,13 @@ import type {
 } from '../types'
 import { postJson, postJsonStream, ProviderError, type RetryOptions } from './base'
 import { assertAttachmentsAllowed, resolvePart } from '../attachments'
+import {
+  SCHEMA_STREAM_ERROR,
+  chatWithSchema,
+  isStrictCompatible,
+  outputSchema,
+  type OutputSchema,
+} from '../structured'
 
 /**
  * Configuration for the built-in OpenAI provider.
@@ -122,7 +129,20 @@ export class OpenAIProvider implements AiProvider {
    * can decide whether to feed them back into a tool registry.
    */
   async chat(input: ChatInput, options: ChatOptions = {}): Promise<ChatResponse> {
-    const payload = this.buildChatPayload(input, options, /* stream */ false)
+    if (input.schema === undefined) return this.chatOnce(input, options)
+    const schema = outputSchema(input.schema, input.schemaName)
+    return chatWithSchema(input, schema, async (attempt) => {
+      const response = await this.chatOnce(attempt, options, schema)
+      return { response, answer: response.content }
+    })
+  }
+
+  private async chatOnce(
+    input: ChatInput,
+    options: ChatOptions,
+    schema?: OutputSchema,
+  ): Promise<ChatResponse> {
+    const payload = this.buildChatPayload(input, options, /* stream */ false, schema)
     const data = await postJson<OpenAIChatResponse>(`${this.baseURL}/chat/completions`, payload, {
       headers: this.headers,
       signal: options.signal,
@@ -142,6 +162,7 @@ export class OpenAIProvider implements AiProvider {
    * throws `AbortError`.
    */
   async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
+    if (input.schema !== undefined) throw new Error(SCHEMA_STREAM_ERROR)
     const payload = this.buildChatPayload(input, options, /* stream */ true)
     const events = postJsonStream(`${this.baseURL}/chat/completions`, payload, {
       headers: this.headers,
@@ -244,6 +265,7 @@ export class OpenAIProvider implements AiProvider {
     input: ChatInput,
     options: ChatOptions,
     stream: boolean,
+    schema?: OutputSchema,
   ): OpenAIChatRequest {
     const payload: OpenAIChatRequest = {
       model: input.model ?? this.defaultChatModel,
@@ -272,6 +294,19 @@ export class OpenAIProvider implements AiProvider {
           parameters: t.inputSchema,
         },
       }))
+    }
+
+    if (schema) {
+      payload.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          name: schema.name,
+          schema: schema.jsonSchema,
+          // Strict guarantees the shape, but only accepts closed objects
+          // with every property required; other schemas go without it.
+          strict: isStrictCompatible(schema.jsonSchema),
+        },
+      }
     }
 
     return payload
@@ -367,6 +402,10 @@ interface OpenAIChatRequest {
   max_completion_tokens?: number
   top_p?: number
   stop?: string[]
+  response_format?: {
+    type: 'json_schema'
+    json_schema: { name: string; schema: Record<string, unknown>; strict: boolean }
+  }
   tools?: Array<{
     type: 'function'
     function: {
