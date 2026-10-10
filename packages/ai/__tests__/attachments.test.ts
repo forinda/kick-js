@@ -1,63 +1,77 @@
 /**
- * Files sent to the model with a user message: building attachments from an
- * upload, and the exact wire shapes each provider sends.
+ * Content parts sent with a user message: what a file is (from its bytes, not
+ * its claimed MIME type), attachmentFromFile for uploads, and the exact wire
+ * shapes each provider sends.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
 import { AnthropicProvider, OpenAIProvider, attachmentFromFile } from '@forinda/kickjs-ai'
-import type { Attachment, ChatMessage } from '@forinda/kickjs-ai'
+import type { ChatMessage, ContentPart } from '@forinda/kickjs-ai'
 
-const png = Buffer.from([0x89, 0x50, 0x4e, 0x47])
-const b64 = (s: string | Buffer) => Buffer.from(s).toString('base64')
-
-const attachments: Attachment[] = [
-  { type: 'image', data: b64(png), mediaType: 'image/png' },
-  { type: 'image', url: 'https://example.com/a.jpg' },
-  { type: 'document', data: b64('%PDF-1.7'), mediaType: 'application/pdf', name: 'invoice.pdf' },
-  { type: 'document', data: b64('line one'), mediaType: 'text/plain', name: 'notes.txt' },
-]
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const pdf = Buffer.from('%PDF-1.7\n')
+const csv = Buffer.from('name,qty\nwidget,3\n')
+const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]) // what an xlsx / docx is
+const b64 = (b: Buffer) => b.toString('base64')
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('attachmentFromFile', () => {
-  it('turns an upload into an image or document attachment', () => {
-    expect(attachmentFromFile({ buffer: png, mimetype: 'image/png' })).toEqual({
-      type: 'image',
-      data: b64(png),
-      mediaType: 'image/png',
+  it('trusts the bytes, not the MIME type the upload claimed', () => {
+    // A Windows browser sends a .csv as application/vnd.ms-excel.
+    const sheet = attachmentFromFile({
+      buffer: csv,
+      mimetype: 'application/vnd.ms-excel',
+      originalname: 'stock.csv',
     })
-    expect(attachmentFromFile({ buffer: png, mimetype: 'image/jpg' })).toMatchObject({
-      mediaType: 'image/jpeg',
+    expect(sheet).toEqual({
+      type: 'file',
+      data: csv,
+      mimeType: 'application/vnd.ms-excel',
+      filename: 'stock.csv',
     })
-    expect(
-      attachmentFromFile({
-        buffer: Buffer.from('%PDF'),
-        mimetype: 'application/pdf',
-        originalname: 'a.pdf',
-      }),
-    ).toEqual({ type: 'document', data: b64('%PDF'), mediaType: 'application/pdf', name: 'a.pdf' })
-    expect(
-      attachmentFromFile({ buffer: Buffer.from('hi'), mimetype: 'text/plain; charset=utf-8' }),
-    ).toMatchObject({ type: 'document', mediaType: 'text/plain' })
+    expect(attachmentFromFile({ buffer: png, mimetype: 'application/octet-stream' })).toMatchObject(
+      {
+        type: 'file',
+      },
+    )
   })
 
-  it('names the type it cannot send', () => {
-    expect(() =>
-      attachmentFromFile({
-        buffer: Buffer.from('x'),
-        mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        originalname: 'brief.docx',
-      }),
-    ).toThrow(/brief\.docx.*Supported: image\/png/)
+  it('refuses what no model reads inline, naming the file, unless the app normalizes it', () => {
+    const xlsx = { buffer: zip, mimetype: 'application/vnd.ms-excel', originalname: 'q3.xlsx' }
+    expect(() => attachmentFromFile(xlsx)).toThrow(/"q3\.xlsx".*Normalize it first/)
+    expect(attachmentFromFile(xlsx, { normalize: () => 'region,total\neast,10' })).toEqual({
+      type: 'file',
+      data: new TextEncoder().encode('region,total\neast,10'),
+      mimeType: 'text/plain',
+      filename: 'q3.xlsx',
+    })
+    const part: ContentPart = { type: 'text', text: 'converted elsewhere' }
+    expect(attachmentFromFile(xlsx, { normalize: () => part })).toBe(part)
+    expect(() => attachmentFromFile(xlsx, { normalize: () => undefined })).toThrow(/q3\.xlsx/)
   })
 })
+
+/** Every kind of part, in the shapes other SDKs use: bytes, base64, data URL, URL. */
+const parts: ContentPart[] = [
+  { type: 'image', data: png, mimeType: 'image/png' },
+  { type: 'image', data: 'https://example.com/a.jpg', mimeType: 'image/jpeg' },
+  {
+    type: 'file',
+    data: `data:application/pdf;base64,${b64(pdf)}`,
+    mimeType: 'application/pdf',
+    filename: 'invoice.pdf',
+  },
+  { type: 'file', data: b64(csv), mimeType: 'text/csv', filename: 'stock.csv' },
+  { type: 'text', text: 'Context: Q3 numbers.' },
+]
 
 describe('AnthropicProvider with attachments', () => {
   function setup() {
     const bodies: any[] = []
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       bodies.push(JSON.parse(String(init?.body)))
-      // Status 400 ends the call right after the request is captured.
+      // A 400 ends the call once the request is captured.
       return new Response(JSON.stringify({ type: 'error', error: { type: 'x', message: 'x' } }), {
         status: 400,
         headers: { 'content-type': 'application/json' },
@@ -67,10 +81,10 @@ describe('AnthropicProvider with attachments', () => {
     return { provider: new AnthropicProvider({ client }), bodies }
   }
 
-  it('sends image and document blocks ahead of the text', async () => {
+  it('sends image, document and text blocks ahead of the message text', async () => {
     const { provider, bodies } = setup()
     await provider
-      .chat({ messages: [{ role: 'user', content: 'Summarise these.', attachments }] })
+      .chat({ messages: [{ role: 'user', content: 'Summarise these.', attachments: parts }] })
       .catch(() => {})
     expect(bodies[0].messages).toEqual([
       {
@@ -80,14 +94,15 @@ describe('AnthropicProvider with attachments', () => {
           { type: 'image', source: { type: 'url', url: 'https://example.com/a.jpg' } },
           {
             type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: b64('%PDF-1.7') },
+            source: { type: 'base64', media_type: 'application/pdf', data: b64(pdf) },
             title: 'invoice.pdf',
           },
           {
             type: 'document',
-            source: { type: 'text', media_type: 'text/plain', data: 'line one' },
-            title: 'notes.txt',
+            source: { type: 'text', media_type: 'text/plain', data: csv.toString() },
+            title: 'stock.csv',
           },
+          { type: 'text', text: 'Context: Q3 numbers.' },
           { type: 'text', text: 'Summarise these.' },
         ],
       },
@@ -97,10 +112,10 @@ describe('AnthropicProvider with attachments', () => {
   it('sends a file alone without an empty text block, and refuses attachments off user turns', async () => {
     const { provider, bodies } = setup()
     await provider
-      .chat({ messages: [{ role: 'user', content: '', attachments: [attachments[0]!] }] })
+      .chat({ messages: [{ role: 'user', content: '', attachments: [parts[0]!] }] })
       .catch(() => {})
     expect(bodies[0].messages[0].content).toHaveLength(1)
-    const system: ChatMessage = { role: 'system', content: 'x', attachments: [attachments[0]!] }
+    const system: ChatMessage = { role: 'system', content: 'x', attachments: [parts[0]!] }
     await expect(
       provider.chat({ messages: [system, { role: 'user', content: 'hi' }] }),
     ).rejects.toThrow(/user messages; this one is "system"/)
@@ -120,11 +135,10 @@ describe('OpenAIProvider with attachments', () => {
     return { provider: new OpenAIProvider({ apiKey: 'sk-test' }), bodies }
   }
 
-  it('sends image_url, file and text parts ahead of the text', async () => {
+  it('sends image_url, file and text parts ahead of the message text', async () => {
     const { provider, bodies } = setup()
-    const sendable = attachments.filter((a) => !(a.type === 'document' && 'url' in a))
     await provider.chat({
-      messages: [{ role: 'user', content: 'Summarise these.', attachments: sendable }],
+      messages: [{ role: 'user', content: 'Summarise these.', attachments: parts }],
     })
     expect(bodies[0].messages).toEqual([
       {
@@ -134,30 +148,44 @@ describe('OpenAIProvider with attachments', () => {
           { type: 'image_url', image_url: { url: 'https://example.com/a.jpg' } },
           {
             type: 'file',
-            file: {
-              filename: 'invoice.pdf',
-              file_data: `data:application/pdf;base64,${b64('%PDF-1.7')}`,
-            },
+            file: { filename: 'invoice.pdf', file_data: `data:application/pdf;base64,${b64(pdf)}` },
           },
-          { type: 'text', text: 'notes.txt:\nline one' },
+          { type: 'text', text: `stock.csv:\n${csv.toString()}` },
+          { type: 'text', text: 'Context: Q3 numbers.' },
           { type: 'text', text: 'Summarise these.' },
         ],
       },
     ])
   })
 
-  it('refuses a document by URL, which Chat Completions cannot fetch', async () => {
-    const { provider } = setup()
+  it('refuses a PDF by URL and a binary it cannot read, before any request', async () => {
+    const { provider, bodies } = setup()
     await expect(
       provider.chat({
         messages: [
           {
             role: 'user',
             content: 'x',
-            attachments: [{ type: 'document', url: 'https://e.com/a.pdf' }],
+            attachments: [
+              { type: 'file', data: 'https://e.com/a.pdf', mimeType: 'application/pdf' },
+            ],
           },
         ],
       }),
-    ).rejects.toThrow(/does not fetch documents by URL/)
+    ).rejects.toThrow(/does not fetch PDFs by URL/)
+    await expect(
+      provider.chat({
+        messages: [
+          {
+            role: 'user',
+            content: 'x',
+            attachments: [
+              { type: 'file', data: zip, mimeType: 'application/zip', filename: 'a.zip' },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/"a\.zip" isn't an image, a PDF or text/)
+    expect(bodies).toHaveLength(0)
   })
 })

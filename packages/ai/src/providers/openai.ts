@@ -1,5 +1,5 @@
 import type {
-  Attachment,
+  ContentPart,
   AiProvider,
   ChatChunk,
   ChatInput,
@@ -10,7 +10,7 @@ import type {
   EmbedOptions,
 } from '../types'
 import { postJson, postJsonStream, ProviderError, type RetryOptions } from './base'
-import { assertAttachmentsAllowed } from '../attachments'
+import { assertAttachmentsAllowed, resolvePart } from '../attachments'
 
 /**
  * Configuration for the built-in OpenAI provider.
@@ -373,33 +373,33 @@ type OpenAIContentPart =
   | { type: 'file'; file: { filename: string; file_data: string } }
 
 /**
- * An attachment as a Chat Completions content part. Images go as a URL or a
- * data URL; a PDF as an inline file; plain text as text. Chat Completions
- * can't fetch a document by URL, so that throws instead of being dropped.
+ * A content part as a Chat Completions part: an image as a URL or data URL, a
+ * PDF as an inline file, text as text (headed by its file name). Chat
+ * Completions can't fetch a PDF by URL, so that throws instead of being dropped.
  */
-function toOpenAIPart(a: Attachment): OpenAIContentPart {
-  if (a.type === 'image') {
+function toOpenAIPart(part: ContentPart): OpenAIContentPart {
+  const r = resolvePart(part)
+  if (r.kind === 'image') {
     return {
       type: 'image_url',
-      image_url: { url: 'url' in a ? a.url : `data:${a.mediaType};base64,${a.data}` },
+      image_url: { url: r.url ?? `data:${r.mediaType};base64,${r.base64}` },
     }
   }
-  if ('url' in a) {
-    throw new Error(
-      'OpenAIProvider: Chat Completions does not fetch documents by URL — download it and send `data` instead.',
-    )
+  if (r.kind === 'pdf') {
+    if (r.url) {
+      throw new Error(
+        'OpenAIProvider: Chat Completions does not fetch PDFs by URL — download it and send the contents.',
+      )
+    }
+    return {
+      type: 'file',
+      file: {
+        filename: r.filename ?? 'document.pdf',
+        file_data: `data:application/pdf;base64,${r.base64}`,
+      },
+    }
   }
-  if (a.mediaType === 'text/plain') {
-    const text = Buffer.from(a.data, 'base64').toString('utf8')
-    return { type: 'text', text: a.name ? `${a.name}:\n${text}` : text }
-  }
-  return {
-    type: 'file',
-    file: {
-      filename: a.name ?? 'document.pdf',
-      file_data: `data:application/pdf;base64,${a.data}`,
-    },
-  }
+  return { type: 'text', text: r.filename ? `${r.filename}:\n${r.text}` : r.text }
 }
 
 type OpenAIMessage =

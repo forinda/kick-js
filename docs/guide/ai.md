@@ -344,9 +344,9 @@ export class ChatController {
 ### Files and images
 
 Some flows start with a file: read an uploaded invoice, describe a
-screenshot, answer questions about a PDF. Put files on a `user` message's
-`attachments`. `content` stays the text of the message, so existing code
-and stored histories are unchanged:
+screenshot, answer questions about a CSV export. Put files on a `user`
+message's `attachments`. `content` stays the text of the message, so existing
+code and stored histories are unchanged:
 
 ```ts
 import { Controller, FileUpload, Inject, Post, type RequestContext } from '@forinda/kickjs'
@@ -357,7 +357,7 @@ export class InvoiceController {
   constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
 
   @Post('/invoices/read')
-  @FileUpload({ mode: 'single', fieldName: 'invoice', allowedTypes: ['pdf', 'png', 'jpg'] })
+  @FileUpload({ mode: 'single', fieldName: 'invoice' })
   async read(ctx: RequestContext) {
     const res = await this.ai.getProvider().chat({
       messages: [
@@ -373,24 +373,94 @@ export class InvoiceController {
 }
 ```
 
-`attachmentFromFile()` takes `ctx.file` on any runtime and returns an
-attachment, or throws naming the file when its type can't be sent (a
-`.docx`, say), before any call is made. You can also build one by hand:
+An attachment is a content part in the shape other AI SDKs use, so parts
+built elsewhere work here as they are:
 
-| Attachment                                                  | Anthropic                             | OpenAI                      |
-| ----------------------------------------------------------- | ------------------------------------- | --------------------------- |
-| `{ type: 'image', data, mediaType }` (png, jpeg, gif, webp) | image block                           | `image_url` with a data URL |
-| `{ type: 'image', url }`                                    | image block from the URL              | `image_url`                 |
-| `{ type: 'document', data, mediaType: 'application/pdf' }`  | document block (text and page images) | `file` part                 |
-| `{ type: 'document', data, mediaType: 'text/plain' }`       | text document block                   | text part                   |
-| `{ type: 'document', url }` (a PDF)                         | document block from the URL           | not supported — throws      |
+```ts
+type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: Uint8Array | string; mimeType: string }
+  | { type: 'file'; data: Uint8Array | string; mimeType: string; filename?: string }
+```
 
-- `data` is base64. Files go ahead of the message's text, which is where
-  models read them best.
-- Only `user` messages take attachments; a provider throws for any other role.
-- Attachments work with `runAgent()` and `runAgentWithMemory()` too. A
-  memory store keeps them with the message, so every later turn sends the file
-  again — summarise a large file once rather than keeping it in history.
+`data` is raw bytes, base64, a `data:` URL, or an `http(s)://` URL. Files go
+ahead of the message's text, which is where models read them best.
+
+#### What is sent, by default
+
+What a file is comes from its **bytes**, not the MIME type it arrived with —
+browsers disagree (a Windows `.csv` arrives as `application/vnd.ms-excel`):
+
+| The bytes are                                                           | Anthropic                               | OpenAI                            |
+| ----------------------------------------------------------------------- | --------------------------------------- | --------------------------------- |
+| PNG, JPEG, GIF or WebP                                                  | image block                             | `image_url` (data URL)            |
+| a PDF                                                                   | document block — text and page images   | `file` part                       |
+| valid UTF-8 — CSV, TSV, JSON, Markdown, XML, YAML, SQL, logs, code, SVG | text document titled with the file name | text part headed by the file name |
+| anything else — xlsx, docx, pptx, zip, audio, video                     | throws, naming the file                 | throws, naming the file           |
+
+URLs have no bytes to inspect, so `mimeType` decides: an image or PDF URL is
+passed to the provider to fetch. Anything else by URL throws — fetch it and
+send the contents.
+
+Limitations of the default handling:
+
+- **Office files, archives, audio and video aren't read.** Neither provider
+  takes them inline. Convert them to text first (below).
+- **Text must be UTF-8.** A file in another encoding (a Latin-1 CSV from an
+  old spreadsheet) has no NUL bytes but isn't valid UTF-8, so it's refused;
+  decode it in `normalize`.
+- **Text is sent as text, not parsed.** A 50,000-row CSV becomes 50,000 rows
+  of prompt — it costs tokens and may not fit the model's context. Summarise
+  or sample large files first.
+- **Only images and PDFs can be sent by URL**, and OpenAI's Chat Completions
+  can't fetch a PDF by URL at all.
+- **Provider limits still apply** — file size, PDF page count, images per
+  request. Exceeding them is a provider error (`ProviderError`), not a
+  framework one.
+- **Attachments only go on `user` messages**; a provider throws for any other
+  role.
+- **Memory keeps them.** With `runAgentWithMemory()` the file is stored with
+  the message and sent again every turn — summarise a large file once rather
+  than keeping it in history.
+
+#### Converting other formats
+
+The framework doesn't bundle converters: which library, which sheet, which
+parts of a document matter is the app's call. Pass `normalize` to
+`attachmentFromFile`. It runs only for files the default doesn't read, and
+returns text, a content part, or `undefined` to refuse the file:
+
+```ts
+import * as XLSX from 'xlsx' // SheetJS
+import mammoth from 'mammoth'
+
+const part = attachmentFromFile(ctx.file!, {
+  normalize: (file) => {
+    if (file.originalname?.endsWith('.xlsx')) {
+      const book = XLSX.read(file.buffer)
+      // Every sheet as CSV, headed by its name.
+      return book.SheetNames.map(
+        (name) => `# ${name}\n${XLSX.utils.sheet_to_csv(book.Sheets[name]!)}`,
+      ).join('\n\n')
+    }
+    return undefined // anything else: refuse it, with the default error
+  },
+})
+```
+
+`mammoth` is asynchronous, so convert a Word document before building the part:
+
+```ts
+if (ctx.file!.originalname.endsWith('.docx')) {
+  const { value: text } = await mammoth.extractRawText({ buffer: ctx.file!.buffer })
+  attachments.push({
+    type: 'file',
+    data: Buffer.from(text),
+    mimeType: 'text/plain',
+    filename: ctx.file!.originalname,
+  })
+}
+```
 
 ## Tools + agent loop
 

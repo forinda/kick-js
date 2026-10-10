@@ -16,7 +16,7 @@ export interface ChatMessage {
    * upload with `attachmentFromFile(ctx.file)`. Only `user` messages carry
    * attachments; providers reject them elsewhere.
    */
-  attachments?: Attachment[]
+  attachments?: ContentPart[]
   /** Tool call ID if `role === 'tool'`. Set by the framework during tool loops. */
   toolCallId?: string
   /** True on a `tool` message whose call failed. Providers that support it tell the model. */
@@ -385,18 +385,17 @@ export interface AiAdapterExtensions {
  */
 export type AiAdapterInstance = import('@forinda/kickjs').AppAdapter & AiAdapterExtensions
 
-/** Image types every supported provider accepts. */
-export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
-
-/** Document types every supported provider accepts inline. */
-export type DocumentMediaType = 'application/pdf' | 'text/plain'
-
 /**
- * A file sent to the model with a `user` message. `data` is base64; `url` is
- * fetched by the provider (Anthropic: images and PDFs; OpenAI: images only).
+ * Part of a `user` message besides its `content` text — the common shape
+ * other AI SDKs use, so parts built elsewhere work here unchanged.
+ *
+ * `data` is raw bytes, base64, a `data:` URL, or an `http(s)://` URL. What a
+ * file is comes from its bytes — PNG, JPEG, GIF, WebP and PDF by signature,
+ * anything valid UTF-8 as text (CSV, JSON, Markdown, code, …) — so
+ * `mimeType` only matters for URLs. Other formats (xlsx, docx) are the app's
+ * to normalize to text first; see `attachmentFromFile`'s `normalize`.
  */
-export type Attachment =
-  | { type: 'image'; data: string; mediaType: ImageMediaType }
-  | { type: 'image'; url: string }
-  | { type: 'document'; data: string; mediaType: DocumentMediaType; name?: string }
-  | { type: 'document'; url: string; name?: string }
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: Uint8Array | string; mimeType: string }
+  | { type: 'file'; data: Uint8Array | string; mimeType: string; filename?: string }

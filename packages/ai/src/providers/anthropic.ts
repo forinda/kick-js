@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import type {
   AiProvider,
-  Attachment,
+  ContentPart,
   ChatChunk,
   ChatInput,
   ChatMessage,
@@ -12,7 +12,7 @@ import type {
   EmbedInput,
 } from '../types'
 import { ProviderError } from './base'
-import { assertAttachmentsAllowed } from '../attachments'
+import { assertAttachmentsAllowed, resolvePart } from '../attachments'
 
 type BetaMessage = Anthropic.Beta.Messages.BetaMessage
 type BetaMessageParam = Anthropic.Beta.Messages.BetaMessageParam
@@ -406,31 +406,39 @@ function toAnthropicMessages(messages: ChatMessage[]): BetaMessageParam[] {
   return out
 }
 
-/** An attachment as a Messages API image or document block. */
-function toAnthropicBlock(a: Attachment): BetaContentBlockParam {
-  if (a.type === 'image') {
-    return 'url' in a
-      ? { type: 'image', source: { type: 'url', url: a.url } }
-      : { type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.data } }
+/** A content part as a Messages API image, document or text block. */
+function toAnthropicBlock(part: ContentPart): BetaContentBlockParam {
+  const r = resolvePart(part)
+  if (r.kind === 'image') {
+    return r.url
+      ? { type: 'image', source: { type: 'url', url: r.url } }
+      : {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: r.mediaType as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+            data: r.base64!,
+          },
+        }
   }
-  const title = a.name ? { title: a.name } : {}
-  if ('url' in a) return { type: 'document', source: { type: 'url', url: a.url }, ...title }
-  if (a.mediaType === 'text/plain') {
-    return {
-      type: 'document',
-      source: { type: 'text', media_type: 'text/plain', data: decodeBase64(a.data) },
-      ...title,
-    }
+  const title = r.filename ? { title: r.filename } : {}
+  if (r.kind === 'pdf') {
+    return r.url
+      ? { type: 'document', source: { type: 'url', url: r.url }, ...title }
+      : {
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: r.base64! },
+          ...title,
+        }
   }
-  return {
-    type: 'document',
-    source: { type: 'base64', media_type: 'application/pdf', data: a.data },
-    ...title,
-  }
-}
-
-function decodeBase64(data: string): string {
-  return Buffer.from(data, 'base64').toString('utf8')
+  // A named file is a document the model can cite; a bare text part is just text.
+  return r.filename
+    ? {
+        type: 'document',
+        source: { type: 'text', media_type: 'text/plain', data: r.text },
+        ...title,
+      }
+    : { type: 'text', text: r.text }
 }
 
 /** SDK API errors → ProviderError (status + body); anything else unchanged. */
