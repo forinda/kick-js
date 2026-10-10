@@ -1,5 +1,12 @@
 # @forinda/kickjs-queue
 
+## 8.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`f1cd595`](https://github.com/forinda/kick-js/commit/f1cd59580feecfa6f9493ef8bd3c5c1337dec349)]:
+  - @forinda/kickjs-devtools-kit@7.2.0
+
 ## 8.0.0
 
 ### Major Changes
