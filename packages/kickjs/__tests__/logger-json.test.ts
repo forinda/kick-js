@@ -93,9 +93,19 @@ describe('LOG_FORMAT=json', () => {
     const loop: Record<string, unknown> = {}
     loop.self = loop
     Logger.for('X').debug('hidden')
-    Logger.for('X').info('kept', loop)
+    const err = Object.assign(new Error('db down'), { request: loop })
+    Logger.for('X').error('kept', { loop, id: 7, big: 10n }, err)
     expect(lines).toHaveLength(1)
-    expect(lines[0]).toMatchObject({ component: 'X', msg: 'kept' })
+    // Only what can't be written is dropped: other fields stay, err keeps its essentials.
+    expect(lines[0]).toMatchObject({
+      component: 'X',
+      msg: 'kept',
+      id: 7,
+      big: '10',
+      loop: '[unserializable]',
+      err: { type: 'Error', message: 'db down' },
+    })
+    expect(lines[0]!.err.stack).toContain('db down')
   })
 
   it('gives the request logger queryable fields', () => {

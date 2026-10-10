@@ -166,13 +166,34 @@ export function jsonLine(
   if (err !== undefined) line.err = err
   line.msg = formatMessage(msg, rest)
   try {
-    return JSON.stringify(line, (_key, value: unknown) =>
-      typeof value === 'bigint' ? value.toString() : value,
-    )
+    return JSON.stringify(line, bigintSafe)
   } catch {
-    // A circular field: keep the line, drop what can't be written.
-    return JSON.stringify({ level: line.level, time: line.time, component, msg: line.msg })
+    // Something can't be written (a circular field). Drop only that: every
+    // other field stays, and `err` — usually why the line exists — keeps at
+    // least its type, message and stack.
+    const safe: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(line)) {
+      try {
+        JSON.stringify(value, bigintSafe)
+        safe[key] = value
+      } catch {
+        safe[key] =
+          key === 'err' && value && typeof value === 'object'
+            ? pick(value as Record<string, unknown>, ['type', 'message', 'stack'])
+            : '[unserializable]'
+      }
+    }
+    return JSON.stringify(safe, bigintSafe)
   }
+}
+
+const bigintSafe = (_key: string, value: unknown): unknown =>
+  typeof value === 'bigint' ? value.toString() : value
+
+function pick(obj: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of keys) if (typeof obj[key] === 'string') out[key] = obj[key]
+  return out
 }
 
 // ── ConsoleLoggerProvider (default) ────────────────────────────────────
