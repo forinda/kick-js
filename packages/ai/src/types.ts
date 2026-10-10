@@ -84,6 +84,21 @@ export interface ChatInput {
    * - Omitted — no tool-calling in this request.
    */
   tools?: 'auto' | ChatToolDefinition[]
+  /**
+   * Answer with JSON matching this schema — Zod, Valibot, Yup, any Standard
+   * Schema, or a plain JSON Schema object. The answer is parsed and
+   * validated into `ChatResponse.object`. OpenAI-compatible providers send
+   * it as `response_format`; Anthropic as a forced tool call. `chat()` only.
+   */
+  schema?: unknown
+  /** Name for the schema on the wire (tool / format name). Defaults to `'response'`. */
+  schemaName?: string
+  /**
+   * How many times an answer that isn't JSON or doesn't validate is sent back
+   * to the model, with what was wrong, before `StructuredOutputError`.
+   * Defaults to 1.
+   */
+  schemaRetries?: number
 }
 
 /** Runtime options for a chat call. */
@@ -108,9 +123,11 @@ export interface ChatOptions {
 }
 
 /** Normalized response from a non-streaming chat call. */
-export interface ChatResponse {
-  /** The assistant's text output. */
+export interface ChatResponse<T = unknown> {
+  /** The assistant's text output. With a `schema`, the answer as JSON text. */
   content: string
+  /** With a `schema`: the answer, parsed and validated. */
+  object?: T
   /** Any tool calls the model made. Usually executed by the agent loop. */
   toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
   /** Provider-reported token usage. */

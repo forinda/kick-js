@@ -420,6 +420,57 @@ export class ChatController {
 }
 ```
 
+### Structured output
+
+When the answer has to come back as data, pass a `schema` — Zod, Valibot,
+Yup, any Standard Schema, or a plain JSON Schema object. The answer is parsed
+and validated into `response.object`. A plain JSON Schema has no validator
+here, so its answers are only checked to be JSON; use a schema library when
+the shape must be enforced:
+
+```ts
+import { z } from 'zod'
+import { chatObject } from '@forinda/kickjs-ai'
+
+const Advice = z.object({
+  summary: z.string(),
+  steps: z.array(z.string()),
+  risk: z.enum(['low', 'medium', 'high']),
+})
+
+const res = await ai.getProvider().chat({ messages, schema: Advice })
+res.object // { summary, steps, risk } — validated
+
+// Or just the typed answer:
+const advice = await chatObject(ai.getProvider(), { messages, schema: Advice })
+advice.risk // 'low' | 'medium' | 'high'
+```
+
+How each provider sends it:
+
+- **OpenAI and compatible endpoints** (Ollama, vLLM, …) — as
+  `response_format: { type: 'json_schema' }`. `strict` is on when OpenAI's
+  strict mode accepts the schema — every object closed with all properties
+  required, and only the keywords it supports (no `allOf`, `not`,
+  `minLength`, `default`, unsupported `format`s). A plain `z.object` of
+  strings, numbers, arrays and enums qualifies. Other schemas are sent without
+  `strict` rather than rejected; the answer is still validated here.
+- **Anthropic** — as a tool the model is forced to call, whose input is the
+  answer. Thinking is off for that call (the API doesn't combine the two),
+  and `schema` can't be mixed with `tools` there: run tools first with
+  `runAgent`, then ask for the structured answer.
+
+A schema that isn't an object at the root (an array, a string) travels as
+`{ value: … }` — both APIs want an object — and comes back unwrapped.
+
+An answer that isn't JSON or doesn't validate is sent back to the model with
+what was wrong and asked again — `schemaRetries` times (default 1). After
+that, `chat()` throws `StructuredOutputError`, with `issues` and the `raw`
+answer. A refusal or an answer cut off by `maxTokens` isn't retried; it comes
+back as usual (`finishReason`, `refusal`), without `object` — `chatObject`
+throws `StructuredOutputError` for those. `schema` works with `chat()`, not
+`stream()`.
+
 ### Files and images
 
 Some flows start with a file: read an uploaded invoice, describe a

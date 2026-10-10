@@ -13,6 +13,7 @@ import type {
 } from '../types'
 import { ProviderError } from './base'
 import { assertAttachmentsAllowed, resolvePart } from '../attachments'
+import { SCHEMA_STREAM_ERROR, chatWithSchema, outputSchema, type OutputSchema } from '../structured'
 
 type BetaMessage = Anthropic.Beta.Messages.BetaMessage
 type BetaMessageParam = Anthropic.Beta.Messages.BetaMessageParam
@@ -140,9 +141,42 @@ export class AnthropicProvider implements AiProvider {
   }
 
   async chat(input: ChatInput, options: ChatOptions = {}): Promise<ChatResponse> {
+    if (input.schema === undefined) return this.chatOnce(input, options)
+    if (Array.isArray(input.tools) && input.tools.length > 0) {
+      // The answer is a forced call to one tool, so the model couldn't use these.
+      throw new Error(
+        "AnthropicProvider: schema and tools can't be combined in one call — the answer is a forced tool call. " +
+          'Run the tools first (runAgent), then ask for the structured answer.',
+      )
+    }
+    const schema = outputSchema(input.schema, input.schemaName)
+    return chatWithSchema(input, schema, async (attempt) => {
+      const response = await this.chatOnce(attempt, options, schema)
+      const call = response.toolCalls?.find((c) => c.name === schema.name)
+      if (!call) return { response, answer: response.content }
+      // The forced call *is* the answer: report it as text and an object, not a tool to run.
+      const { toolCalls: _calls, providerContent: _native, ...rest } = response
+      return {
+        response: {
+          ...rest,
+          content: JSON.stringify(call.arguments),
+          // The call finishing is the answer finishing. A cut-off call keeps
+          // `length`, so it isn't retried or taken for a complete answer.
+          finishReason: rest.finishReason === 'tool_call' ? 'stop' : rest.finishReason,
+        },
+        answer: call.arguments,
+      }
+    })
+  }
+
+  private async chatOnce(
+    input: ChatInput,
+    options: ChatOptions,
+    schema?: OutputSchema,
+  ): Promise<ChatResponse> {
     const client = await this.client()
     try {
-      const stream = client.beta.messages.stream(this.buildParams(input, options, false), {
+      const stream = client.beta.messages.stream(this.buildParams(input, options, false, schema), {
         signal: options.signal,
       })
       return this.normalize(await stream.finalMessage())
@@ -152,6 +186,7 @@ export class AnthropicProvider implements AiProvider {
   }
 
   async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
+    if (input.schema !== undefined) throw new Error(SCHEMA_STREAM_ERROR)
     const client = await this.client()
     const toolIds = new Map<number, string>()
     try {
@@ -228,6 +263,7 @@ export class AnthropicProvider implements AiProvider {
     input: ChatInput,
     options: ChatOptions,
     eagerToolInput: boolean,
+    schema?: OutputSchema,
   ): StreamParams {
     const model = input.model ?? this.defaultChatModel
     const system = input.messages
@@ -275,6 +311,19 @@ export class AnthropicProvider implements AiProvider {
         // `length` finish reason.
         ...(eagerToolInput ? { eager_input_streaming: true } : {}),
       }))
+    }
+
+    if (schema) {
+      params.tools = [
+        {
+          name: schema.name,
+          description: 'Give your answer by calling this tool with it.',
+          input_schema: schema.jsonSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
+        },
+      ]
+      params.tool_choice = { type: 'tool', name: schema.name }
+      // The API rejects thinking together with a forced tool call.
+      params.thinking = { type: 'disabled' }
     }
 
     if (FALLBACK_MODELS.test(model) && this.options.fallbacks !== false) {
