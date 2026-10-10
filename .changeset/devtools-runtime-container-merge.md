@@ -11,7 +11,7 @@ DevTools dashboard: fewer tabs, a readable dependency graph, and two fixes.
 - **Container list:** sort by resolves, last resolve or name; a **never resolved** filter; empty filter chips are hidden; rows show `factory` / `instance` for tokens registered that way, not `other`; the full token name shows on hover.
 - **Overview:** an adapter reporting `up` from its health check is green, not amber; `down` / `stopped` are red.
 - **Requests:** long id segments in paths are cut short (`/items/01J9ZK…/comments`), the full path on hover.
-- **Sidebar:** Database, Queues and Activity are dimmed until something reports to them.
+- **Sidebar:** Sockets, Database, Jobs and Activity are dimmed until something reports to them.
 - Remembered `topology` and `graph` tabs open Runtime and Container.
 - **Fix:** uptime keeps counting. It was a `computed()` over the process clock, which is not reactive, so it cached its first read; Overview, the DevToolsAdapter card and `/_debug/health` showed the same few seconds forever.
 - **Fix:** the dashboard ships its own favicon, so opening `/_debug` no longer requests `/favicon.ico` from the app — that 404 showed up in Requests and Recent failures.

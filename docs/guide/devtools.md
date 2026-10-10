@@ -500,7 +500,7 @@ Per-route inputs are saved in `localStorage`. Routes mounted through a hand-buil
 
 ### Layout
 
-The sidebar is a column of icons — hover for the tab's name, and the small numbers are counts (routes, DI tokens). **Database**, **Queues** and **Activity** are dimmed until something reports to them. The arrow at its foot shows labels instead; the choice is remembered. When the app stops answering (a restart, a crash), a banner says so and the dashboard keeps retrying until it's back.
+The sidebar is a column of icons — hover for the tab's name, and the small numbers are counts (routes, DI tokens). **Sockets**, **Database**, **Jobs** and **Activity** are dimmed until something reports to them. The arrow at its foot shows labels instead; the choice is remembered. When the app stops answering (a restart, a crash), a banner says so and the dashboard keeps retrying until it's back.
 
 The gear in the header holds **Density** (spacing and type scale) and **Fonts**: name fonts installed on your computer for the interface and for code and editors (request and response bodies, snippets, the graph), comma-separated. Yours come first and the dashboard's stay as the fallback, so a name that isn't installed changes nothing; leave a field empty for the default. Both are remembered per browser.
 
