@@ -509,8 +509,8 @@ export function resetEnvCache(): void {
 
 /**
  * Schema-agnostic env loader. Accepts any schema supported by
- * `@forinda/kickjs-schema` (Zod, Valibot, Yup, Joi, Standard Schema,
- * KickSchema adapters, or plain validator functions).
+ * `@forinda/kickjs-schema` (Zod, Valibot, Yup, any Standard Schema, a
+ * KickSchema or one from a registered adapter, or a plain validator function).
  *
  * Unlike `loadEnv()` which uses Zod's `.parse()` and throws a
  * `ZodError`, this function uses `detectSchema().safeParse()` and

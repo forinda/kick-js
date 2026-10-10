@@ -64,8 +64,10 @@ function mapValibotIssues(issues: VType.BaseIssue<unknown>[]): SchemaIssue[] {
       message: issue.message ?? 'Validation failed',
       code: issue.type ?? 'unknown',
     }
-    if (issue.expected !== undefined) mapped.expected = String(issue.expected)
-    if (issue.received !== undefined) mapped.received = String(issue.received)
+    // Valibot sets `expected: null` for checks with no expected value
+    // (email, integer) — that's absent, not the string "null".
+    if (issue.expected != null) mapped.expected = String(issue.expected)
+    if (issue.received != null) mapped.received = String(issue.received)
     return mapped
   })
 }
@@ -109,8 +111,18 @@ function valibotToJsonSchema(
     })
     return rest
   }
+  if (!warnedNoConverter) {
+    warnedNoConverter = true
+    console.warn(
+      '[kickjs-schema] Valibot schemas are described as { type: "object" } because ' +
+        '@valibot/to-json-schema is not installed — Swagger and AI tools show no fields. ' +
+        'Run `pnpm add @valibot/to-json-schema`.',
+    )
+  }
   return { type: 'object' }
 }
+
+let warnedNoConverter = false
 
 /** Wrap a Valibot schema as a {@link KickSchema}. See `fromZod` for the
  * inference rationale — `TOutput` flows from the schema's Standard

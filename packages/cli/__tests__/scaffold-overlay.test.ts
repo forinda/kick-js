@@ -271,7 +271,10 @@ describe('the shipped layers', () => {
     for (const lib of ['zod', 'valibot', 'yup'] as const) {
       const project = renderLayers([`schema-${lib}`])
       expect(project.files.get('src/config/index.ts')).toContain(`from '${lib}'`)
-      expect(project.dependencies).toEqual([lib])
+      // Valibot's JSON Schema converter ships with it — Swagger reads Valibot schemas through it.
+      expect(project.dependencies).toEqual(
+        lib === 'valibot' ? ['valibot', '@valibot/to-json-schema'] : [lib],
+      )
     }
   })
 })

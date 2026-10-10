@@ -482,11 +482,11 @@ export interface RouteDefinition {
   path: string
   handlerName: string
   validation?: {
-    /** JSON Schema object for validating the request body */
+    /** Schema validating the request body — Zod, Valibot, Yup, any Standard Schema or KickSchema. */
     body?: any
-    /** JSON Schema object for validating query parameters */
+    /** Schema validating query parameters — any library `detectSchema` accepts. */
     query?: any
-    /** JSON Schema object for validating URL params */
+    /** Schema validating URL params — any library `detectSchema` accepts. */
     params?: any
     /**
      * DECLARED response schema — never validated at runtime. Feeds two

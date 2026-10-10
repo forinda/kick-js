@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-schema",
   "version": "0.2.3",
-  "description": "Schema-agnostic validation abstraction for KickJS — use Zod, Valibot, Yup, Joi, or any Standard Schema library",
+  "description": "Schema-agnostic validation abstraction for KickJS \u2014 use Zod, Valibot, Yup, or any Standard Schema library",
   "keywords": [
     "kickjs",
     "schema",
@@ -9,7 +9,6 @@
     "zod",
     "valibot",
     "yup",
-    "joi",
     "standard-schema",
     "json-schema",
     "typescript"
@@ -48,11 +47,15 @@
   },
   "dependencies": {},
   "peerDependencies": {
+    "@valibot/to-json-schema": ">=1.0.0",
     "valibot": ">=1.0.0",
     "yup": ">=1.0.0",
     "zod": ">=3.23.0"
   },
   "peerDependenciesMeta": {
+    "@valibot/to-json-schema": {
+      "optional": true
+    },
     "valibot": {
       "optional": true
     },
