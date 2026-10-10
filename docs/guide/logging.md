@@ -153,40 +153,110 @@ export default defineConfig({
 <PmCommand add="winston" />
 
 ```ts
+import { format } from 'node:util'
 import winston from 'winston'
 import { Logger, type LoggerProvider } from '@forinda/kickjs'
 
 const root = winston.createLogger({
   level: process.env.LOG_LEVEL ?? 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json(),
-  ),
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
   transports: [new winston.transports.Console()],
 })
 
+/**
+ * Winston keeps only the first object argument, glues an Error's message onto
+ * the line, and fills `%s` only with `format.splat()`. Hand it one finished
+ * message and one object of fields instead.
+ */
+function toWinston(msg: string, args: unknown[]): [string, Record<string, unknown>] {
+  const fields: Record<string, unknown> = {}
+  const rest: unknown[] = []
+  for (const arg of args) {
+    if (arg instanceof Error)
+      fields.err = { type: arg.name, message: arg.message, stack: arg.stack }
+    else if (arg && typeof arg === 'object' && !Array.isArray(arg)) Object.assign(fields, arg)
+    else rest.push(arg)
+  }
+  return [format(msg, ...rest), fields]
+}
+
 class WinstonProvider implements LoggerProvider {
   constructor(private w: winston.Logger = root) {}
-  info(msg: string, ...args: any[]) {
-    this.w.info(msg, ...args)
+  private write(level: string, msg: string, args: unknown[]) {
+    const [message, fields] = toWinston(msg, args)
+    this.w.log(level, message, fields)
   }
-  warn(msg: string, ...args: any[]) {
-    this.w.warn(msg, ...args)
+  info(msg: string, ...args: unknown[]) {
+    this.write('info', msg, args)
   }
-  error(msg: string, ...args: any[]) {
-    this.w.error(msg, ...args)
+  warn(msg: string, ...args: unknown[]) {
+    this.write('warn', msg, args)
   }
-  debug(msg: string, ...args: any[]) {
-    this.w.debug(msg, ...args)
+  error(msg: string, ...args: unknown[]) {
+    this.write('error', msg, args)
   }
-  child({ component }: { component: string }) {
-    return new WinstonProvider(this.w.child({ component }))
+  debug(msg: string, ...args: unknown[]) {
+    this.write('debug', msg, args)
+  }
+  child(bindings: { component: string; [field: string]: unknown }) {
+    return new WinstonProvider(this.w.child(bindings))
   }
 }
 
 Logger.setProvider(new WinstonProvider())
 ```
+
+## Where logs go
+
+Every option above writes to stdout by default. On a container platform (Docker, Kubernetes, Fly, Render, Railway) that is usually right: the platform collects stdout and ships it on. Use `LOG_FORMAT=json` (or pino / winston's JSON) so whatever reads it gets fields, not sentences.
+
+To send logs somewhere else as well — files, an errors-only file, a log service — let the logger library do it; the KickJS adapter stays the same.
+
+**Pino** — one transport with several targets, each with its own level. `pino/file` ships with pino; it writes from a worker thread, so the request path never waits on disk:
+
+```ts
+const root = pino(
+  { level: process.env.LOG_LEVEL ?? 'info' },
+  pino.transport({
+    targets: [
+      { target: 'pino/file', level: 'info', options: { destination: 1 } }, // stdout
+      {
+        target: 'pino/file',
+        level: 'info',
+        options: { destination: './logs/app.log', mkdir: true },
+      },
+      {
+        target: 'pino/file',
+        level: 'error',
+        options: { destination: './logs/error.log', mkdir: true },
+      },
+    ],
+  }),
+)
+```
+
+Rotation and services are more targets: `pino-roll` (rotating files), `pino-loki`, `pino-datadog-transport`, `pino-elasticsearch`, … — install one and add `{ target: 'pino-roll', options: { … } }`.
+
+**Winston** — one transport per destination, each with its own level. `Stream` takes any writable stream:
+
+```ts
+import { createWriteStream } from 'node:fs'
+
+const root = winston.createLogger({
+  level: process.env.LOG_LEVEL ?? 'info',
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'logs/app.log' }),
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.Stream({ stream: createWriteStream('logs/audit.log', { flags: 'a' }) }),
+  ],
+})
+```
+
+Rotation is `winston-daily-rotate-file`; services have their own transports (`winston-loki`, `@datadog/winston`, …).
+
+**The built-in logger** writes only to stdout. For a file without another library, redirect it — `node dist/index.js >> logs/app.log` — and rotate with the system's `logrotate`, or pipe JSON lines into a shipper (Vector, Fluent Bit, the Datadog agent).
 
 ## Recipe: silent (tests, CLI scripts)
 

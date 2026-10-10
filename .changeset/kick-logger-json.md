@@ -9,4 +9,5 @@ The logger gains JSON output and fields, with the default output unchanged.
 - **`requestLogger()`** writes the same line, with `method`, `path`, `status`, `ms` and `requestId` as fields.
 - **`LoggerProvider.child()`** receives the fields alongside `component`; a provider that reads only `component` keeps working.
 - **Nothing changes by default:** without `LOG_FORMAT=json` the text lines are the same as before, written through the same `console` methods.
-- **Docs:** the pino recipe in the logging guide dropped errors and fields, because pino reads extra arguments only as `%s` values. It now moves them into the logged object.
+- **Logged data can't rewrite a line:** `level`, `time`, `component`, `msg` and `err` come from the logger, so a logged object — often a request body — can't change a line's severity or source, or pose as the error.
+- **Docs:** the pino and winston recipes in the logging guide lost errors, fields or placeholders; both now hand their library a finished message and an object of fields. A new "Where logs go" section covers files, an errors-only file, streams, rotation and log services with pino targets and winston transports.

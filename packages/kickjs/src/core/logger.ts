@@ -124,6 +124,9 @@ function formatMessage(msg: string, args: unknown[]): string {
   return rest.length ? `${filled} ${rest.join(' ')}` : filled
 }
 
+/** Keys of a JSON line only the logger writes — see {@link jsonLine}. */
+const RESERVED_FIELDS = new Set(['level', 'time', 'component', 'msg', 'err'])
+
 /**
  * One JSON log line, field-compatible with pino (`level` 10–60, `time` in
  * epoch ms, `msg`) so `pino-pretty` and log shippers read it as-is. Trailing
@@ -137,21 +140,31 @@ export function jsonLine(
   msg: string,
   args: unknown[],
 ): string {
-  const fields: Record<string, unknown> = {}
+  // Null prototype: a `__proto__` key in logged data stays a plain field.
+  const fields: Record<string, unknown> = Object.create(null)
   const rest: unknown[] = []
+  let err: unknown
   for (const arg of args) {
-    if (arg instanceof Error && fields.err === undefined) fields.err = serializeError(arg)
+    if (arg instanceof Error) err ??= serializeError(arg)
     else if (isPlainObject(arg)) Object.assign(fields, arg)
     else rest.push(arg)
   }
-  const line = {
+  const line: Record<string, unknown> = {
     level: LEVEL_RANK[level],
     time: Date.now(),
     ...(component ? { component } : {}),
-    ...bindings,
-    ...fields,
-    msg: formatMessage(msg, rest),
   }
+  // Logged data is often untrusted (a request body): it must not rewrite the
+  // line's level, time, source or message, or pass a plain object off as the
+  // error. Those come from the logger only; a field with one of those names is
+  // dropped.
+  for (const source of [bindings, fields]) {
+    for (const key of Object.keys(source)) {
+      if (!RESERVED_FIELDS.has(key)) line[key] = source[key]
+    }
+  }
+  if (err !== undefined) line.err = err
+  line.msg = formatMessage(msg, rest)
   try {
     return JSON.stringify(line, (_key, value: unknown) =>
       typeof value === 'bigint' ? value.toString() : value,

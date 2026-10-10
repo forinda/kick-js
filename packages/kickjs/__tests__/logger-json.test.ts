@@ -69,6 +69,24 @@ describe('LOG_FORMAT=json', () => {
     expect(lines[1]).toMatchObject({ requestId: 'r1', tenant: 'a', step: 2, msg: 'done' })
   })
 
+  it('never lets logged data rewrite level, time, component, msg or err', () => {
+    process.env.LOG_FORMAT = 'json'
+    const lines = captureJson()
+    const body = JSON.parse(
+      '{"level":10,"time":0,"component":"Auth","msg":"fine","err":"none","__proto__":{"x":1},"name":"a"}',
+    )
+    Logger.for('Signup').child({ level: 10 }).error('signup failed', body, new Error('boom'))
+    expect(lines[0]).toMatchObject({
+      level: 50,
+      component: 'Signup',
+      msg: 'signup failed',
+      name: 'a',
+      err: { message: 'boom' },
+    })
+    expect(lines[0]!.time).toBeGreaterThan(0)
+    expect(({} as Record<string, unknown>).x).toBeUndefined()
+  })
+
   it('respects LOG_LEVEL and survives circular fields', () => {
     process.env.LOG_FORMAT = 'json'
     const lines = captureJson()
