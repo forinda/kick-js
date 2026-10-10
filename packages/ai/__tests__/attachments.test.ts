@@ -76,6 +76,17 @@ describe('attachmentFromFile', () => {
     const part: ContentPart = { type: 'text', text: 'converted elsewhere' }
     expect(attachmentFromFile(xlsx, { normalize: () => part })).toBe(part)
     expect(() => attachmentFromFile(xlsx, { normalize: () => undefined })).toThrow(/q3\.xlsx/)
+    // What normalize returns is checked too, up front and naming the upload.
+    expect(() =>
+      attachmentFromFile(xlsx, {
+        normalize: () => ({ type: 'file', data: zip, mimeType: 'application/zip' }),
+      }),
+    ).toThrow(/normalize\(\) for "q3\.xlsx" returned a part the model can't read/)
+    expect(() =>
+      attachmentFromFile(xlsx, {
+        normalize: () => ({ type: 'file', data: 'https://e.com/q3.csv', mimeType: 'text/csv' }),
+      }),
+    ).toThrow(/"q3\.xlsx".*only image and PDF URLs/)
   })
 })
 

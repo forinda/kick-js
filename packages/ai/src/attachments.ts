@@ -168,13 +168,27 @@ export function attachmentFromFile(
   } catch (err) {
     const normalized = options.normalize?.(file)
     if (normalized === undefined) throw err
-    if (typeof normalized !== 'string') return normalized
-    return {
-      type: 'file',
-      data: new TextEncoder().encode(normalized),
-      mimeType: 'text/plain',
-      ...(file.originalname ? { filename: file.originalname } : {}),
+    const out: ContentPart =
+      typeof normalized === 'string'
+        ? {
+            type: 'file',
+            data: new TextEncoder().encode(normalized),
+            mimeType: 'text/plain',
+            ...(file.originalname ? { filename: file.originalname } : {}),
+          }
+        : normalized
+    // What normalize returns must be sendable too — fail here, naming the
+    // upload, not later inside a provider.
+    try {
+      resolvePart(out)
+    } catch (cause) {
+      throw new Error(
+        `normalize() for ${file.originalname ? `"${file.originalname}"` : 'this file'} returned a part ` +
+          `the model can't read: ${cause instanceof Error ? cause.message : String(cause)}`,
+        { cause },
+      )
     }
+    return out
   }
 }
 
