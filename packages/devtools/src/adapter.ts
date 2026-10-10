@@ -31,6 +31,7 @@ import {
   RuntimeSampler,
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
+import { cronSnapshot, runCronJobNow, trackContainerCronJobs } from './cron'
 import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
@@ -1020,6 +1021,20 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           ctx.json(r.body, r.status)
         })
 
+        // ── @Cron jobs — whatever schedules them ────────────────────
+        router.get('/cron', (ctx: RequestContext) => {
+          ctx.json({ jobs: container ? cronSnapshot(container) : [] })
+        })
+        router.post('/cron/run', (ctx: RequestContext) => {
+          const name = query(ctx).name
+          if (!container || typeof name !== 'string') {
+            ctx.json({ error: 'name is required' }, 400)
+            return
+          }
+          const r = runCronJobNow(container, name)
+          ctx.json(r.body, r.status)
+        })
+
         // ── Topology RPC (architecture.md §23) ──────────────────────
         // Aggregates plugins + adapters + contributors + DI tokens
         // into one snapshot; calls each primitive's introspect() in
@@ -1287,6 +1302,8 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           if (typeof name !== 'string' || name === 'DevToolsAdapter') continue
           adapterStatuses[name] = 'running'
         }
+        // Count @Cron runs from the first tick, before anyone opens the Jobs tab.
+        if (container) trackContainerCronJobs(container)
 
         log.info(
           `DevTools ready — ${routes.length} routes tracked, ` +

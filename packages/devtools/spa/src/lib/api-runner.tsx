@@ -117,6 +117,20 @@ const [openCount, setOpenCount] = createSignal(0)
  * Open the runner for a route: select it and show the Routes tab. `params`
  * fills its path params over the saved inputs — a replayed request.
  */
+/**
+ * The active environment's enabled variables, read from where the runner keeps
+ * them — for other tools (the Sockets client) to fill `{{name}}` the same way.
+ */
+export function activeEnvironmentVariables(): Record<string, string> {
+  const storage = () => (readRemember() ? localStorage : sessionStorage)
+  const state = loadEnvironments(load<unknown>(storage, ENVIRONMENTS_KEY, null), {
+    headers: loadRows(storage, DEFAULTS_KEY),
+    variables: loadRows(storage, VARIABLES_KEY),
+  })
+  const env = state.environments.find((e) => e.id === state.activeId) ?? state.environments[0]!
+  return variableMap(env.variables)
+}
+
 export function openApiRunner(route: RouteEntry, params?: Record<string, string>): void {
   if (params) {
     const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))

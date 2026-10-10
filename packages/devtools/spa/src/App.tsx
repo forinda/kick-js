@@ -10,7 +10,8 @@ import { RoutesTab } from './tabs/RoutesTab'
 import { RequestsTab } from './tabs/RequestsTab'
 import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
-import { QueuesTab } from './tabs/QueuesTab'
+import { JobsTab } from './tabs/JobsTab'
+import { SocketsTab } from './tabs/SocketsTab'
 import { DatabaseTab } from './tabs/DatabaseTab'
 import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
@@ -31,6 +32,7 @@ type BuiltInTabId =
   | 'overview'
   | 'runtime'
   | 'routes'
+  | 'sockets'
   | 'requests'
   | 'metrics'
   | 'container'
@@ -62,6 +64,12 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
     { id: 'overview', label: 'Overview' },
     { id: 'runtime', label: 'Runtime' },
     { id: 'routes', label: 'Routes', count: () => store.routes().length || undefined },
+    {
+      id: 'sockets',
+      label: 'Sockets',
+      quiet: true,
+      count: () => Object.keys(store.ws().namespaces ?? {}).length || undefined,
+    },
     { id: 'metrics', label: 'Metrics' },
     { id: 'requests', label: 'Requests' },
     {
@@ -71,9 +79,9 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
     },
     {
       id: 'queues',
-      label: 'Queues',
+      label: 'Jobs',
       quiet: true,
-      count: () => store.queues().queues.length || undefined,
+      count: () => store.queues().queues.length + store.cron().length || undefined,
     },
     {
       id: 'database',
@@ -110,7 +118,7 @@ interface TabGroup {
 const TAB_GROUPS: readonly TabGroup[] = [
   { label: null, ids: ['overview'] },
   { label: 'Runtime', ids: ['runtime', 'metrics', 'requests'] },
-  { label: 'Architecture', ids: ['routes', 'container'] },
+  { label: 'Architecture', ids: ['routes', 'sockets', 'container'] },
   { label: 'Data & Jobs', ids: ['database', 'queues'] },
   { label: null, ids: ['activity'] },
 ]
@@ -120,6 +128,7 @@ const RAIL_KEY = 'kickjs-devtools-sidebar-mode'
 /** Tabs that lay out their own panes and fill the main area. */
 const FLUSH_TABS: ReadonlySet<string> = new Set([
   'routes',
+  'sockets',
   'requests',
   'container',
   'activity',
@@ -508,6 +517,9 @@ export const App: Component = () => {
           <Show when={active() === 'routes'}>
             <RoutesTab />
           </Show>
+          <Show when={active() === 'sockets'}>
+            <SocketsTab />
+          </Show>
           <Show when={active() === 'requests'}>
             <RequestsTab />
           </Show>
@@ -518,7 +530,7 @@ export const App: Component = () => {
             <ContainerTab />
           </Show>
           <Show when={active() === 'queues'}>
-            <QueuesTab />
+            <JobsTab />
           </Show>
           <Show when={active() === 'database'}>
             <DatabaseTab />

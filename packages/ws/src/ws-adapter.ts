@@ -53,7 +53,8 @@ export interface WsAdapterExtensions {
     messagesReceived: number
     messagesSent: number
     errors: number
-    namespaces: Record<string, { connections: number; handlers: number }>
+    /** Per namespace path: open sockets, handler count, and the `@OnMessage` events it answers. */
+    namespaces: Record<string, { connections: number; handlers: number; events: string[] }>
     rooms: ReturnType<RoomManager['getAllRooms']>
   }
   /** Room name used for per-user broadcasting. */
@@ -200,11 +201,16 @@ export const WsAdapter = defineAdapter<WsAdapterOptions, WsAdapterExtensions>({
     })
 
     const getStats = () => {
-      const namespaceStats: Record<string, { connections: number; handlers: number }> = {}
+      const namespaceStats: Record<
+        string,
+        { connections: number; handlers: number; events: string[] }
+      > = {}
       for (const [path, entry] of namespaces) {
         namespaceStats[path] = {
           connections: entry.sockets.size,
           handlers: entry.handlers.length,
+          // The `@OnMessage` events it answers — what a client can send.
+          events: entry.handlers.flatMap((h) => (h.type === 'message' && h.event ? [h.event] : [])),
         }
       }
       return {

@@ -94,6 +94,7 @@ async function refetchSnapshots(): Promise<void> {
     rpc.container(),
     rpc.queues(),
     rpc.ws(),
+    rpc.cron(),
   ])
   // If every fetch came back AUTH_REQUIRED, raise the auth gate so
   // the user can paste a token. Per-endpoint 403 (e.g. devtools
@@ -121,7 +122,7 @@ async function refetchSnapshots(): Promise<void> {
     storeActions.setAuthRequired(false)
     storeActions.setAuthError(null)
   }
-  const [health, metrics, routes, container, queues, ws] = results
+  const [health, metrics, routes, container, queues, ws, cron] = results
   if (health.status === 'fulfilled') {
     storeActions.setHealth({
       status: health.value.status,
@@ -155,6 +156,7 @@ async function refetchSnapshots(): Promise<void> {
   if (ws.status === 'fulfilled') {
     storeActions.setWs(ws.value)
   }
+  if (cron.status === 'fulfilled') storeActions.setCron(cron.value.jobs)
   storeActions.touch()
 }
 
