@@ -6,6 +6,7 @@ export { AnthropicProvider, type AnthropicProviderOptions } from './providers/an
 export { ProviderError, type RetryOptions } from './providers/base'
 export { ScriptedProvider, type ScriptedTurn } from './testing'
 export { createPrompt, Prompt } from './prompts'
+export { attachmentFromFile, type UploadedFileForAi } from './attachments'
 export type { CreatePromptOptions } from './prompts'
 export { InMemoryChatMemory, SlidingWindowChatMemory } from './memory'
 export type {
@@ -44,6 +45,9 @@ export type {
   AiAdapterOptions,
   AiToolOptions,
   AiToolDefinition,
+  Attachment,
+  DocumentMediaType,
+  ImageMediaType,
   ChatInput,
   ChatOptions,
   ChatResponse,

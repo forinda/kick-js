@@ -10,6 +10,13 @@ import type { RouteFlagTest } from '@forinda/kickjs'
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
+  /**
+   * Images and documents sent with a `user` message, ahead of `content` —
+   * an uploaded invoice to read, a screenshot to describe. Build one from an
+   * upload with `attachmentFromFile(ctx.file)`. Only `user` messages carry
+   * attachments; providers reject them elsewhere.
+   */
+  attachments?: Attachment[]
   /** Tool call ID if `role === 'tool'`. Set by the framework during tool loops. */
   toolCallId?: string
   /** True on a `tool` message whose call failed. Providers that support it tell the model. */
@@ -377,3 +384,19 @@ export interface AiAdapterExtensions {
  * {@link AiAdapterExtensions} agent-loop / tool-inspection surface.
  */
 export type AiAdapterInstance = import('@forinda/kickjs').AppAdapter & AiAdapterExtensions
+
+/** Image types every supported provider accepts. */
+export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+
+/** Document types every supported provider accepts inline. */
+export type DocumentMediaType = 'application/pdf' | 'text/plain'
+
+/**
+ * A file sent to the model with a `user` message. `data` is base64; `url` is
+ * fetched by the provider (Anthropic: images and PDFs; OpenAI: images only).
+ */
+export type Attachment =
+  | { type: 'image'; data: string; mediaType: ImageMediaType }
+  | { type: 'image'; url: string }
+  | { type: 'document'; data: string; mediaType: DocumentMediaType; name?: string }
+  | { type: 'document'; url: string; name?: string }

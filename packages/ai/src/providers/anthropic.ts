@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import type {
   AiProvider,
+  Attachment,
   ChatChunk,
   ChatInput,
   ChatMessage,
@@ -11,6 +12,7 @@ import type {
   EmbedInput,
 } from '../types'
 import { ProviderError } from './base'
+import { assertAttachmentsAllowed } from '../attachments'
 
 type BetaMessage = Anthropic.Beta.Messages.BetaMessage
 type BetaMessageParam = Anthropic.Beta.Messages.BetaMessageParam
@@ -353,6 +355,7 @@ export class AnthropicProvider implements AiProvider {
 function toAnthropicMessages(messages: ChatMessage[]): BetaMessageParam[] {
   const out: BetaMessageParam[] = []
   for (const m of messages) {
+    assertAttachmentsAllowed(m.role, m.attachments)
     if (m.role === 'system') continue
 
     if (m.role === 'tool') {
@@ -389,9 +392,45 @@ function toAnthropicMessages(messages: ChatMessage[]): BetaMessageParam[] {
       continue
     }
 
-    out.push({ role: 'user', content: [{ type: 'text', text: m.content }] })
+    out.push({
+      role: 'user',
+      content: [
+        // Files first: the model reads them before the question about them.
+        ...(m.attachments ?? []).map(toAnthropicBlock),
+        ...(m.content || !m.attachments?.length
+          ? [{ type: 'text' as const, text: m.content }]
+          : []),
+      ],
+    })
   }
   return out
+}
+
+/** An attachment as a Messages API image or document block. */
+function toAnthropicBlock(a: Attachment): BetaContentBlockParam {
+  if (a.type === 'image') {
+    return 'url' in a
+      ? { type: 'image', source: { type: 'url', url: a.url } }
+      : { type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.data } }
+  }
+  const title = a.name ? { title: a.name } : {}
+  if ('url' in a) return { type: 'document', source: { type: 'url', url: a.url }, ...title }
+  if (a.mediaType === 'text/plain') {
+    return {
+      type: 'document',
+      source: { type: 'text', media_type: 'text/plain', data: decodeBase64(a.data) },
+      ...title,
+    }
+  }
+  return {
+    type: 'document',
+    source: { type: 'base64', media_type: 'application/pdf', data: a.data },
+    ...title,
+  }
+}
+
+function decodeBase64(data: string): string {
+  return Buffer.from(data, 'base64').toString('utf8')
 }
 
 /** SDK API errors → ProviderError (status + body); anything else unchanged. */

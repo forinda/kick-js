@@ -341,6 +341,57 @@ export class ChatController {
 }
 ```
 
+### Files and images
+
+Some flows start with a file: read an uploaded invoice, describe a
+screenshot, answer questions about a PDF. Put files on a `user` message's
+`attachments`. `content` stays the text of the message, so existing code
+and stored histories are unchanged:
+
+```ts
+import { Controller, FileUpload, Inject, Post, type RequestContext } from '@forinda/kickjs'
+import { AI_ADAPTER, attachmentFromFile, type AiAdapterInstance } from '@forinda/kickjs-ai'
+
+@Controller()
+export class InvoiceController {
+  constructor(@Inject(AI_ADAPTER) private readonly ai: AiAdapterInstance) {}
+
+  @Post('/invoices/read')
+  @FileUpload({ mode: 'single', fieldName: 'invoice', allowedTypes: ['pdf', 'png', 'jpg'] })
+  async read(ctx: RequestContext) {
+    const res = await this.ai.getProvider().chat({
+      messages: [
+        {
+          role: 'user',
+          content: 'List the line items as JSON.',
+          attachments: [attachmentFromFile(ctx.file!)],
+        },
+      ],
+    })
+    ctx.json({ items: res.content })
+  }
+}
+```
+
+`attachmentFromFile()` takes `ctx.file` on any runtime and returns an
+attachment, or throws naming the file when its type can't be sent (a
+`.docx`, say), before any call is made. You can also build one by hand:
+
+| Attachment                                                  | Anthropic                             | OpenAI                      |
+| ----------------------------------------------------------- | ------------------------------------- | --------------------------- |
+| `{ type: 'image', data, mediaType }` (png, jpeg, gif, webp) | image block                           | `image_url` with a data URL |
+| `{ type: 'image', url }`                                    | image block from the URL              | `image_url`                 |
+| `{ type: 'document', data, mediaType: 'application/pdf' }`  | document block (text and page images) | `file` part                 |
+| `{ type: 'document', data, mediaType: 'text/plain' }`       | text document block                   | text part                   |
+| `{ type: 'document', url }` (a PDF)                         | document block from the URL           | not supported — throws      |
+
+- `data` is base64. Files go ahead of the message's text, which is where
+  models read them best.
+- Only `user` messages take attachments; a provider throws for any other role.
+- Attachments work with `runAgent()` and `runAgentWithMemory()` too. A
+  memory store keeps them with the message, so every later turn sends the file
+  again — summarise a large file once rather than keeping it in history.
+
 ## Tools + agent loop
 
 The `@AiTool` decorator promotes a controller method into a
