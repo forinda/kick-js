@@ -90,21 +90,74 @@ function rooted(schema: Record<string, unknown>): {
   }
 }
 
+/** Keywords OpenAI's strict mode accepts in a schema node. */
+const STRICT_KEYWORDS = new Set([
+  'type',
+  'properties',
+  'required',
+  'additionalProperties',
+  'items',
+  'enum',
+  'const',
+  'anyOf',
+  '$ref',
+  '$defs',
+  'definitions',
+  'description',
+  'title',
+  'pattern',
+  'format',
+  'multipleOf',
+  'maximum',
+  'exclusiveMaximum',
+  'minimum',
+  'exclusiveMinimum',
+  'minItems',
+  'maxItems',
+])
+
+/** `format` values OpenAI's strict mode accepts. */
+const STRICT_FORMATS = new Set([
+  'date-time',
+  'time',
+  'date',
+  'duration',
+  'email',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'uuid',
+])
+
 /**
- * Whether OpenAI's strict mode accepts the schema: every object lists all its
- * properties as required and allows no others. Strict guarantees the shape;
- * a schema that isn't strict-compatible is still sent, just not strictly.
+ * Whether OpenAI's strict mode accepts the schema: only supported keywords
+ * (no `allOf`, `not`, `patternProperties`, `minLength`, `default`, …) and
+ * formats, and every object closed with all its properties required. Strict
+ * guarantees the shape; a schema it would reject is sent without it instead —
+ * an API error there couldn't be retried — and the answer is still validated
+ * here.
  */
 export function isStrictCompatible(node: unknown): boolean {
-  if (Array.isArray(node)) return node.every(isStrictCompatible)
-  if (!node || typeof node !== 'object') return true
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return false
   const n = node as Record<string, unknown>
+  for (const key of Object.keys(n)) if (!STRICT_KEYWORDS.has(key)) return false
+  if (typeof n.format === 'string' && !STRICT_FORMATS.has(n.format)) return false
+
   if (n.type === 'object' || n.properties) {
-    const props = Object.keys((n.properties as Record<string, unknown>) ?? {})
+    const props = (n.properties ?? {}) as Record<string, unknown>
     const required = new Set((n.required as string[]) ?? [])
-    if (n.additionalProperties !== false || props.some((p) => !required.has(p))) return false
+    if (n.additionalProperties !== false) return false
+    if (Object.keys(props).some((p) => !required.has(p))) return false
+    if (!Object.values(props).every(isStrictCompatible)) return false
   }
-  return Object.values(n).every(isStrictCompatible)
+  if (n.items !== undefined && !isStrictCompatible(n.items)) return false
+  if (n.anyOf !== undefined) {
+    if (!Array.isArray(n.anyOf) || !n.anyOf.every(isStrictCompatible)) return false
+  }
+  for (const defs of [n.$defs, n.definitions]) {
+    if (defs !== undefined && !Object.values(defs as object).every(isStrictCompatible)) return false
+  }
+  return true
 }
 
 /**

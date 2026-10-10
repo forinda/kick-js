@@ -424,7 +424,9 @@ export class ChatController {
 
 When the answer has to come back as data, pass a `schema` — Zod, Valibot,
 Yup, any Standard Schema, or a plain JSON Schema object. The answer is parsed
-and validated into `response.object`:
+and validated into `response.object`. A plain JSON Schema has no validator
+here, so its answers are only checked to be JSON; use a schema library when
+the shape must be enforced:
 
 ```ts
 import { z } from 'zod'
@@ -447,10 +449,12 @@ advice.risk // 'low' | 'medium' | 'high'
 How each provider sends it:
 
 - **OpenAI and compatible endpoints** (Ollama, vLLM, …) — as
-  `response_format: { type: 'json_schema' }`. `strict` is on when the schema
-  allows it (every object closed, every property required — a plain
-  `z.object` is), which guarantees the shape; otherwise the schema is sent
-  without it.
+  `response_format: { type: 'json_schema' }`. `strict` is on when OpenAI's
+  strict mode accepts the schema — every object closed with all properties
+  required, and only the keywords it supports (no `allOf`, `not`,
+  `minLength`, `default`, unsupported `format`s). A plain `z.object` of
+  strings, numbers, arrays and enums qualifies. Other schemas are sent without
+  `strict` rather than rejected; the answer is still validated here.
 - **Anthropic** — as a tool the model is forced to call, whose input is the
   answer. Thinking is off for that call (the API doesn't combine the two),
   and `schema` can't be mixed with `tools` there: run tools first with

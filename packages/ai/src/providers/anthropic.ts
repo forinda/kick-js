@@ -157,7 +157,13 @@ export class AnthropicProvider implements AiProvider {
       // The forced call *is* the answer: report it as text and an object, not a tool to run.
       const { toolCalls: _calls, providerContent: _native, ...rest } = response
       return {
-        response: { ...rest, content: JSON.stringify(call.arguments), finishReason: 'stop' },
+        response: {
+          ...rest,
+          content: JSON.stringify(call.arguments),
+          // The call finishing is the answer finishing. A cut-off call keeps
+          // `length`, so it isn't retried or taken for a complete answer.
+          finishReason: rest.finishReason === 'tool_call' ? 'stop' : rest.finishReason,
+        },
         answer: call.arguments,
       }
     })

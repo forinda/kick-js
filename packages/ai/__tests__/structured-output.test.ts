@@ -12,11 +12,48 @@ import {
   StructuredOutputError,
   chatObject,
 } from '@forinda/kickjs-ai'
+import { isStrictCompatible } from '../src/structured'
 
 const Advice = z.object({ summary: z.string(), steps: z.array(z.string()) })
 const ask = [{ role: 'user' as const, content: 'How do I rotate my API keys?' }]
 
 afterEach(() => vi.restoreAllMocks())
+
+describe('isStrictCompatible', () => {
+  const closed = (props: Record<string, unknown>) => ({
+    type: 'object',
+    properties: props,
+    required: Object.keys(props),
+    additionalProperties: false,
+  })
+  it('accepts closed objects with supported keywords, nested anyOf and $defs', () => {
+    expect(
+      isStrictCompatible({
+        ...closed({
+          id: { type: 'string', format: 'uuid' },
+          note: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          tags: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+          owner: { $ref: '#/$defs/user' },
+        }),
+        $defs: { user: closed({ name: { type: 'string' } }) },
+      }),
+    ).toBe(true)
+  })
+  it('refuses what strict mode rejects, anywhere in the tree', () => {
+    const inside = (node: unknown) => closed({ x: node })
+    for (const bad of [
+      { type: 'string', minLength: 1 },
+      { type: 'string', format: 'uri' },
+      { allOf: [{ type: 'string' }] },
+      { not: { type: 'null' } },
+      { type: 'object', patternProperties: {}, additionalProperties: false },
+      { type: 'string', default: 'x' },
+      { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false },
+    ]) {
+      expect(isStrictCompatible(inside(bad)), JSON.stringify(bad)).toBe(false)
+    }
+  })
+})
 
 describe('OpenAIProvider with a schema', () => {
   function setup(answers: string[]) {
@@ -136,7 +173,7 @@ describe('OpenAIProvider with a schema', () => {
 })
 
 /** Messages API SSE for one assistant turn that calls `tool` with `input`. */
-function toolUseStream(tool: string, input: unknown): Response {
+function toolUseStream(tool: string, input: unknown, stopReason = 'tool_use'): Response {
   const events = [
     {
       type: 'message_start',
@@ -164,7 +201,7 @@ function toolUseStream(tool: string, input: unknown): Response {
     { type: 'content_block_stop', index: 0 },
     {
       type: 'message_delta',
-      delta: { stop_reason: 'tool_use', stop_sequence: null },
+      delta: { stop_reason: stopReason, stop_sequence: null },
       usage: { output_tokens: 5 },
     },
     { type: 'message_stop' },
@@ -211,6 +248,19 @@ describe('AnthropicProvider with a schema', () => {
     expect(res.object).toEqual({ summary: 'ok', steps: [] })
     expect(bodies).toHaveLength(2)
     expect(JSON.stringify(bodies[1].messages.at(-1))).toContain('summary')
+  })
+
+  it('keeps a cut-off answer as length — not retried, not returned as complete', async () => {
+    const bodies: unknown[] = []
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(init?.body)
+      return toolUseStream('response', { summary: 'Rot' }, 'max_tokens')
+    })
+    const client = new Anthropic({ apiKey: 'sk-test', fetch: fetch as never, maxRetries: 0 })
+    const res = await new AnthropicProvider({ client }).chat({ messages: ask, schema: Advice })
+    expect(res.finishReason).toBe('length')
+    expect(res.object).toBeUndefined()
+    expect(bodies).toHaveLength(1)
   })
 
   it('refuses tools alongside a schema', async () => {
