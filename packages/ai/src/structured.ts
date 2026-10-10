@@ -119,9 +119,11 @@ export async function chatWithSchema(
   send: (input: ChatInput) => Promise<{ response: ChatResponse; answer: unknown }>,
 ): Promise<ChatResponse> {
   const retries = input.schemaRetries ?? 1
-  let messages = input.messages
+  // One copy for the whole loop; corrections are appended to it, not to the caller's array.
+  const messages = [...input.messages]
   for (let attempt = 0; ; attempt++) {
-    const { response, answer } = await send({ ...input, messages })
+    // A snapshot per attempt: a later correction mustn't change what an earlier attempt sent.
+    const { response, answer } = await send({ ...input, messages: messages.slice() })
     // A refusal or a cut-off answer isn't the model getting the shape wrong.
     if (response.finishReason === 'content_filter' || response.finishReason === 'length') {
       return response
@@ -163,7 +165,7 @@ export async function chatWithSchema(
           'Answer again with JSON that matches it exactly.',
       },
     ]
-    messages = [...messages, ...correction]
+    messages.push(...correction)
   }
 }
 
