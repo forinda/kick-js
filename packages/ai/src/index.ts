@@ -1,6 +1,13 @@
 export { AiAdapter } from './ai.adapter'
 export { AiTool, getAiToolMeta, isAiTool } from './decorators'
-export { AI_ADAPTER, AI_PROVIDER, AI_TOOL_METADATA, VECTOR_STORE } from './constants'
+export {
+  AI_ADAPTER,
+  AI_PROVIDER,
+  AI_TOOL_METADATA,
+  VECTOR_STORE,
+  aiAdapterToken,
+  aiProviderToken,
+} from './constants'
 export { OpenAIProvider, type OpenAIProviderOptions } from './providers/openai'
 export { AnthropicProvider, type AnthropicProviderOptions } from './providers/anthropic'
 export { ProviderError, type RetryOptions } from './providers/base'

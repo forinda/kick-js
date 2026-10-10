@@ -308,6 +308,54 @@ const rag = new RagService(ai.getProvider('orders-bot'), new InMemoryVectorStore
 The example is exercised as a test in
 `packages/ai/__tests__/example-local-provider.test.ts`.
 
+### Several adapters
+
+Registered providers share one adapter: the same tools, the same
+`exposeWhen` / `hideWhen` rules, the same defaults. When two parts of an app
+need different ones — a support bot that may open tickets, a billing bot that
+may refund — mount the adapter more than once with `.scoped(name, options)`.
+Each instance registers under its own tokens and is injected separately:
+
+```ts
+import { Inject, Service, bootstrap } from '@forinda/kickjs'
+import {
+  AiAdapter,
+  AnthropicProvider,
+  OpenAIProvider,
+  aiAdapterToken,
+  type AiAdapterInstance,
+} from '@forinda/kickjs-ai'
+
+bootstrap({
+  modules,
+  adapters: [
+    AiAdapter.scoped('support', {
+      provider: new AnthropicProvider(),
+      hideWhen: ['billing'], // routes mounted with the `billing` flag aren't its tools
+    }),
+    AiAdapter.scoped('billing', {
+      provider: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY! }),
+      exposeWhen: ['billing'],
+    }),
+  ],
+})
+
+@Service()
+export class SupportBot {
+  constructor(@Inject(aiAdapterToken('support')) private readonly ai: AiAdapterInstance) {}
+}
+```
+
+- `aiAdapterToken(scope)` resolves a scoped adapter, `aiProviderToken(scope)`
+  its default provider. The same scope always gives the same token.
+- `AI_ADAPTER` and `AI_PROVIDER` belong to the unscoped adapter only. Mount one
+  next to scoped ones if code injects those; with only scoped adapters, they
+  aren't registered.
+- Each instance has its own provider registry, tools and defaults:
+  `registerProvider` on one doesn't reach another.
+- `@AiTool` methods are exposed by every instance unless its `hideWhen` hides
+  them; `exposeWhen` adds flagged routes on top.
+
 ### Streaming
 
 Every provider implements `stream()` and yields `ChatChunk`s. Wire a

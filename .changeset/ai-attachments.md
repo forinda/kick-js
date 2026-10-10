@@ -15,3 +15,4 @@ Send files to the model. A `user` message's new `attachments` takes content part
 - **OpenAI:** `image_url`, a `file` part for PDFs, and text parts. A PDF by URL throws, because Chat Completions can't fetch one.
 - **Roles:** attachments are allowed on `user` messages only.
 - **Compatible:** `ChatMessage.content` is still a string, so existing code and stored histories are unaffected.
+- **Several adapters:** `AiAdapter.scoped(name, options)` now registers under `aiAdapterToken(name)` / `aiProviderToken(name)` instead of overwriting `AI_ADAPTER` / `AI_PROVIDER`. Separate instances — different providers, tools exposed, defaults — run side by side and are injected separately. The unscoped adapter keeps the existing tokens.
