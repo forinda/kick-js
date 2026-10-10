@@ -156,6 +156,37 @@ Anthropic does not ship an embeddings API — calling `embed()` on this
 provider throws a descriptive error. For RAG workflows, pair it with
 `OpenAIProvider` for embeddings and keep Anthropic for chat.
 
+### Your own `fetch`
+
+Both providers take a `fetch` option that sends every request in place of
+the global `fetch` — for a proxy or custom TLS, tracing model calls, adding
+headers for an API gateway, or a runtime without a global `fetch`. Retries
+and streaming go through it too:
+
+```ts
+import { Agent, fetch as undiciFetch } from 'undici'
+
+const dispatcher = new Agent({ connect: { ca: corporateCa } })
+
+new OpenAIProvider({
+  apiKey: getEnv('OPENAI_API_KEY'),
+  fetch: (url, init) => undiciFetch(url, { ...init, dispatcher }) as unknown as Promise<Response>,
+})
+
+new AnthropicProvider({
+  fetch: async (url, init) => {
+    const started = performance.now()
+    const res = await fetch(url, init)
+    log.debug('anthropic', { status: res.status, ms: performance.now() - started })
+    return res
+  },
+})
+```
+
+Without it, the global `fetch` is used, looked up on every call. `AnthropicProvider`
+passes `fetch` to the SDK client it creates; if you pass your own `client`,
+give that client its `fetch` instead.
+
 ### Custom providers
 
 Any model can back the adapter: implement `AiProvider` and pass it to
