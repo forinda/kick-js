@@ -283,7 +283,7 @@ const schemasSidebar = [
   {
     text: 'Schema Abstraction',
     items: [
-      { text: 'Overview & RFC', link: '/schemas/' },
+      { text: 'Overview', link: '/schemas/' },
       { text: 'Standard Schema v1', link: '/schemas/standard-schema' },
       { text: 'Adapters', link: '/schemas/adapters' },
       { text: 'Error Format', link: '/schemas/error-format' },

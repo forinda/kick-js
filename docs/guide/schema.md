@@ -33,7 +33,7 @@ import { z } from 'zod'
 
 const envSchema = fromZod(
   z.object({
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.url(),
     JWT_SECRET: z.string().min(32),
   }),
 )
@@ -45,22 +45,24 @@ export default envSchema
 The same `envSchema` shape works for body / query / params validation — pass the **raw library schema** (not the wrapped one) to the route decorator; `detectSchema()` wraps it on the way in:
 
 ```ts
-import { Controller, Post } from '@forinda/kickjs'
+import { Controller, Post, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
 })
 
 @Controller()
 export class UserController {
   @Post('/', { body: createUserSchema })
-  create(ctx) {
+  create(ctx: Ctx<KickRoutes.UserController['create']>) {
     // ctx.body is typed { name: string; email: string }
   }
 }
 ```
+
+The body is validated at runtime either way. Its _type_ comes from `kick typegen`, which generates the global `KickRoutes` namespace from your route decorators — see [Type Generation](typegen.md). A handler typed as plain `RequestContext` gets an untyped `ctx.body`.
 
 ## The `KickSchema` interface
 
@@ -96,14 +98,19 @@ import { z } from 'zod'
 
 const wrapped = fromZod(z.object({ name: z.string() }))
 wrapped.safeParse({ name: 'Ada' }) // { success: true, data: { name: 'Ada' } }
-wrapped.toJsonSchema() // emits the OpenAPI-3.0-compatible JSON Schema
+wrapped.toJsonSchema() // JSON Schema draft 2020-12
+wrapped.toJsonSchema({ target: 'openapi-3.0' }) // what Swagger asks for
 ```
+
+`toJsonSchema(options)` takes a `target` — `'draft-2020-12'` (Zod's default), `'draft-07'` or `'openapi-3.0'` — and `io`: `'output'` (the default) describes what the schema produces, `'input'` what it accepts; they differ for defaults, coercion and transforms. A nullable string is `type: ['string', 'null']` in 2020-12 and `nullable: true` in OpenAPI 3.0. What JSON Schema can't express (a `Map`, a transform's result) is described as any value; dates are `string` / `date-time` and bigints `integer`.
 
 Detection: the schema is a non-null object with a `safeParse` function and a `_def` property (Zod's internal brand).
 
 Output inference: `InferSchemaOutput<TSchema>` reads the Standard Schema brand (`~standard.types.output`) on Zod v4, falls back to `_output` for Zod v3. The single inferring overload pulls the parsed shape from the call site so `fromZod(z.object({...}))` lands at `KickSchema<{ ... }>`, not `KickSchema<unknown>`. Spell the output explicitly with a cast when you need to:
 
 ```ts
+import type { KickSchema } from '@forinda/kickjs-schema'
+
 const wrapped = fromZod(z.string()) as KickSchema<MyBranded>
 ```
 
@@ -125,7 +132,7 @@ Detection: a non-null object with `kind`, `type`, and `async` properties (Valibo
 
 **Default behaviour.** `v.optional(<pipe>, default)` validates the default _through_ the pipe — so `v.optional(v.pipe(v.string(), v.transform(Number)), '3000')` yields `3000: number` for `undefined` input, not the raw `'3000'` string. The output type is consistent with the transform.
 
-**JSON Schema.** `fromValibot.toJsonSchema()` delegates to `@valibot/to-json-schema`. The peer dep is loaded lazily so apps that never call `toJsonSchema()` (no swagger) don't pay the import cost.
+**JSON Schema.** `toJsonSchema()` delegates to `@valibot/to-json-schema`, an optional peer that `kick new` installs with Valibot. Add it yourself to an existing app — `pnpm add @valibot/to-json-schema` — or Swagger and AI tools see every Valibot schema as `{ type: 'object' }` (a one-time warning says so). Both `valibot` and the converter are loaded when the package is imported, if they're installed.
 
 ### `fromYup`
 
@@ -177,7 +184,7 @@ Failure falls through to a thrown `Error` with the message `Unrecognized schema.
 ## Registering a custom adapter
 
 ```ts
-import { registerAdapter, type SchemaAdapter } from '@forinda/kickjs-schema'
+import { registerAdapter, type KickSchema, type SchemaAdapter } from '@forinda/kickjs-schema'
 import Joi from 'joi'
 import joiToJson from 'joi-to-json'
 
@@ -395,19 +402,21 @@ export type {
 }
 
 // Runtime
-export { detectSchema, isKickSchema, registerAdapter }
+export { detectSchema, isKickSchema, registerAdapter, buildRouteTool }
 ```
+
+`buildRouteTool` turns a route's `params`, `query` and `body` schemas into one input JSON Schema for a tool call — what the MCP and AI adapters expose routes with.
 
 ### Subpath exports
 
-| Specifier                        | Exports                                            | Notes                                       |
-| -------------------------------- | -------------------------------------------------- | ------------------------------------------- |
-| `@forinda/kickjs-schema`         | Types + `detectSchema`                             | Always available; no library peer required. |
-| `@forinda/kickjs-schema/zod`     | `fromZod`, `isZodSchema`, `zodAdapter`             | Requires `zod` as a peer in your app.       |
-| `@forinda/kickjs-schema/valibot` | `fromValibot`, `isValibotSchema`, `valibotAdapter` | Requires `valibot` as a peer.               |
-| `@forinda/kickjs-schema/yup`     | `fromYup`, `isYupSchema`, `yupAdapter`             | Requires `yup` as a peer.                   |
+| Specifier                        | Exports                                            | Notes                                                          |
+| -------------------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| `@forinda/kickjs-schema`         | Types + `detectSchema`                             | Always available; no library peer required.                    |
+| `@forinda/kickjs-schema/zod`     | `fromZod`, `isZodSchema`, `zodAdapter`             | Requires `zod` as a peer in your app.                          |
+| `@forinda/kickjs-schema/valibot` | `fromValibot`, `isValibotSchema`, `valibotAdapter` | Requires `valibot`; `@valibot/to-json-schema` for JSON Schema. |
+| `@forinda/kickjs-schema/yup`     | `fromYup`, `isYupSchema`, `yupAdapter`             | Requires `yup` as a peer.                                      |
 
-All three library peers are declared `optional` in the package's `peerDependenciesMeta`, so installing one doesn't drag in the others.
+All library peers — and `@valibot/to-json-schema` — are declared `optional` in the package's `peerDependenciesMeta`, so installing one doesn't drag in the others. The root entry imports all three adapters (to detect any schema), but `zod` and `yup` are never imported by them; `valibot` is, when it's installed.
 
 ## See also
 

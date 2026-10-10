@@ -1,190 +1,45 @@
-# Schema Abstraction (RFC)
+# Schemas
 
-KickJS ships with Zod as the default validation library, but the framework is designed to be **schema-agnostic**. This reference documents the industry standards, the interfaces involved, and how KickJS will support any validation library going forward.
+`@forinda/kickjs-schema` is the layer between KickJS and your validation library. You write schemas in Zod, Valibot, Yup, or any library that implements [Standard Schema](./standard-schema.md) (ArkType, for example). The framework wraps each one in a `KickSchema`, and request validation, env loading, Swagger, MCP and AI tools, and `kick typegen` all read it through that interface.
 
-## Why Schema-Agnostic?
-
-Tying a framework to a single schema library means:
-
-- Users inherit that library's bundle size, API style, and release cadence
-- Switching libraries requires rewriting every DTO, not just swapping an import
-- Community innovation (Valibot's 1 kB tree-shaking, ArkType's 100x perf, TypeBox's native JSON Schema) can't be leveraged
-
-The goal: **users pick their schema library; the framework adapts.**
-
-## Standard Schema v1 (Industry Standard)
-
-[Standard Schema](https://github.com/standard-schema/standard-schema) is a ~60-line TypeScript interface spec created by the maintainers of Zod, Valibot, and ArkType. It solves the N x M problem (N validators x M consumers) by defining one universal contract.
-
-### The Interface
+`kick new` installs the package along with the library you pick. Most of the time you never import it: you pass a raw schema to a route decorator, and the framework detects the library for you.
 
 ```ts
-interface StandardSchemaV1<Input = unknown, Output = Input> {
-  readonly '~standard': {
-    readonly version: 1
-    readonly vendor: string
-    readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>
-    readonly types?: { readonly input: Input; readonly output: Output }
-  }
-}
+import { Controller, Post, type RequestContext } from '@forinda/kickjs'
+import { z } from 'zod'
 
-type Result<Output> =
-  | { readonly value: Output; readonly issues?: undefined }
-  | { readonly issues: ReadonlyArray<Issue> }
+export const createUserSchema = z.object({
+  email: z.email(),
+  name: z.string().min(1),
+})
 
-interface Issue {
-  readonly message: string
-  readonly path?: ReadonlyArray<PropertyKey | { readonly key: PropertyKey }>
-}
-```
-
-### Adoption Status
-
-**Schema libraries implementing Standard Schema:**
-
-| Library       | Version               | Bundle | Notes                                 |
-| ------------- | --------------------- | ------ | ------------------------------------- |
-| Zod           | v3.23+ (native in v4) | ~13 kB | Most popular, `.toJSONSchema()` in v4 |
-| Valibot       | v1+                   | ~1 kB  | Tree-shakable, modular                |
-| ArkType       | v2+                   | ~5 kB  | Fastest runtime validation            |
-| Effect Schema | via adapter           | ~20 kB | Bidirectional encode/decode           |
-| TypeBox       | community adapter     | ~8 kB  | Schemas ARE JSON Schema at runtime    |
-
-**Frameworks consuming Standard Schema:**
-
-| Consumer        | Version                               | Integration                      |
-| --------------- | ------------------------------------- | -------------------------------- |
-| tRPC            | v11                                   | Input/output validators          |
-| Hono            | `@hono/standard-validator`            | Middleware validators            |
-| React Hook Form | `@hookform/resolvers/standard-schema` | Form validation                  |
-| TanStack Form   | v1+                                   | Field validators                 |
-| TanStack Router | v1+                                   | Search param validation          |
-| oRPC            | v1                                    | Full-stack type safety + OpenAPI |
-| Drizzle ORM     | proposed                              | Insert/select schemas            |
-
-### Standard JSON Schema (for OpenAPI)
-
-A companion spec for JSON Schema generation:
-
-```ts
-interface StandardJSONSchemaV1<Input = unknown, Output = Input> {
-  readonly '~standard': {
-    readonly version: 1
-    readonly vendor: string
-    readonly validate: (value: unknown) => any
-    readonly jsonSchema: {
-      input(options?: {
-        target?: 'draft-2020-12' | 'draft-07' | 'openapi-3.0'
-      }): Record<string, unknown>
-      output(options?: {
-        target?: 'draft-2020-12' | 'draft-07' | 'openapi-3.0'
-      }): Record<string, unknown>
-    }
-    readonly types?: { readonly input: Input; readonly output: Output }
+@Controller()
+export class UserController {
+  @Post('/', { body: createUserSchema })
+  create(ctx: RequestContext) {
+    ctx.created(ctx.body)
   }
 }
 ```
 
-## How Other Frameworks Handle This
+To type `ctx.body` from the schema, use `Ctx<KickRoutes.UserController['create']>` and run `kick typegen`. See [Typed routes](#typed-routes-kick-typegen).
 
-### tRPC (Duck-Typed Priority Chain)
-
-tRPC accepts schemas via priority-ordered duck-typing:
-
-```ts
-// 1. Standard Schema (~standard.validate)
-// 2. ZodEsque (.parse() + ._input/_output)
-// 3. YupEsque (.validateSync() + __outputType)
-// 4. CustomValidator (bare function)
-```
-
-Key insight: tRPC does NOT require wrapping. Raw Zod, Valibot, or ArkType schemas work directly because they all implement Standard Schema.
-
-### Hono (Standard Schema Middleware)
-
-```ts
-import { sValidator } from '@hono/standard-validator'
-
-// Works with ANY Standard Schema library
-app.post('/users', sValidator('json', mySchema), (c) => {
-  const data = c.req.valid('json') // fully typed
-})
-```
-
-Accepts targets: `'json'`, `'query'`, `'param'`, `'header'`, `'cookie'`, `'form'`.
-
-### React Hook Form (Resolver Pattern)
-
-```ts
-import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-
-// One resolver for ALL Standard Schema libraries
-const form = useForm({
-  resolver: standardSchemaResolver(anySchema),
-})
-```
-
-### Elysia (TypeBox-Only, Deliberate)
-
-Elysia couples to TypeBox deliberately -- schemas ARE JSON Schema at runtime, eliminating any conversion step. This is optimal for performance but sacrifices library choice.
-
-### NestJS (Pipe Pattern)
-
-NestJS is NOT schema-agnostic at the framework level. Each library needs its own `PipeTransform` implementation. No Standard Schema integration exists.
-
-## KickJS Current State
-
-### Already Schema-Agnostic (Duck-Typed)
-
-The `validate()` middleware accepts any object with `.safeParse()`:
-
-```ts
-// packages/kickjs/src/http/middleware/validate.ts
-interface ValidationSchema {
-  body?: any // anything with .safeParse(data)
-  query?: any
-  params?: any
-}
-```
-
-Protocol: `.safeParse(data)` returns `{ success: true, data }` or `{ success: false, error: { issues } }`.
-
-### Already Pluggable (Swagger)
-
-The Swagger package has a `SchemaParser` interface:
-
-```ts
-// packages/swagger/src/schema-parser.ts
-interface SchemaParser {
-  readonly name: string
-  supports(schema: unknown): boolean
-  toJsonSchema(schema: unknown): Record<string, unknown>
-}
-```
-
-### Still Zod-Coupled (To Fix)
-
-| Integration Point        | Coupling                                          |
-| ------------------------ | ------------------------------------------------- |
-| MCP tool registration    | Passes raw Zod to SDK, uses `.toJSONSchema()`     |
-| Config/env (`defineEnv`) | Uses `z.object()`, `z.infer<T>`, `z.coerce`       |
-| Error formatting         | Assumes Zod issue shape `{ path, message, code }` |
-| Route type inference     | `Ctx<>` relies on Zod-style `_output` type        |
-
-## Proposed KickJS Schema Interface
-
-### Core Types (`@forinda/kickjs-schema`)
+## The `KickSchema` interface
 
 ```ts
 interface KickSchema<TOutput = unknown, TInput = unknown> {
-  /** Validate input -- return typed output or structured errors */
+  /** Validate synchronously: the parsed value, or the issues. */
   safeParse(data: TInput): SchemaResult<TOutput>
-
-  /** Convert to JSON Schema (for Swagger, MCP, AI tools) */
-  toJsonSchema(options?: { target?: 'draft-2020-12' | 'openapi-3.0' }): JsonSchema
-
-  /** Original schema for SDK passthrough (MCP SDK expects raw Zod) */
+  /** Describe the schema as JSON Schema (Swagger, MCP and AI tools read this). */
+  toJsonSchema(options?: JsonSchemaOptions): Record<string, unknown>
+  /** The schema you passed in, unwrapped. */
   readonly _raw?: unknown
+}
+
+interface JsonSchemaOptions {
+  readonly target?: 'draft-2020-12' | 'draft-07' | 'openapi-3.0'
+  /** 'input' for a request body, query or params; 'output' (the default) for a response. */
+  readonly io?: 'input' | 'output'
 }
 
 type SchemaResult<T> = { success: true; data: T } | { success: false; issues: SchemaIssue[] }
@@ -198,137 +53,195 @@ interface SchemaIssue {
 }
 ```
 
-### Adapters
+`io` matters wherever input and output differ: defaults, coercion and transforms. A field with a default is optional on input but always present on output.
+
+`toJsonSchema()` never includes a top-level `$schema` key. When you pass no `target`, each library uses its own default: Zod and Standard JSON Schema libraries use draft 2020-12, and `@valibot/to-json-schema` uses draft-07. Swagger always passes `target: 'openapi-3.0'`.
+
+## Supported libraries
+
+| Library                  | How it is wrapped                | Validation | JSON Schema                                                                                                     |
+| ------------------------ | -------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------- |
+| Zod 4                    | built-in adapter (`fromZod`)     | yes        | Zod's `toJSONSchema()`, with `target` and `io`                                                                  |
+| Zod 3 (3.23+)            | built-in adapter (`fromZod`)     | yes        | only `{ type: 'object' }`: Zod 3 has no `toJSONSchema()`                                                        |
+| Valibot 1                | built-in adapter (`fromValibot`) | yes        | `@valibot/to-json-schema`, with `target` and `io`; `{ type: 'object' }` and a one-time warning if it is missing |
+| Yup 1                    | built-in adapter (`fromYup`)     | yes        | KickJS's own converter, built from `describe()`; `target` is ignored                                            |
+| Other Standard Schema v1 | generic Standard Schema wrapper  | sync only  | `~standard.jsonSchema.input/output({ target })` if the library implements Standard JSON Schema                  |
+
+All four library peers are optional. Install the ones you use.
+
+The Zod adapter describes what JSON Schema can't express (a `Map`, a transform's result) as "any value" instead of throwing. It writes dates as `{ type: 'string', format: 'date-time' }` and bigints as `{ type: 'integer' }`. When a request schema has a date or bigint field that JSON can't send, both the Zod and Valibot adapters log a one-time warning. Use `z.coerce.date()` / `z.iso.datetime()` in Zod or `v.pipe(v.string(), v.isoTimestamp())` in Valibot.
+
+Async validation is not supported. If a Standard Schema's `validate` returns a Promise, `safeParse()` throws.
+
+## How a schema is detected
+
+`detectSchema(schema)` returns a `KickSchema` for whatever you pass. It checks in this order, and the first match wins:
+
+1. **Already a `KickSchema`**: an object with `safeParse` and `toJsonSchema` methods. Returned unchanged.
+2. **Adapters added with `registerAdapter()`**, in the order you registered them.
+3. **Zod**: an object with a `safeParse` method and a `_def` property.
+4. **Valibot**: an object with `kind`, `type` and `async` properties.
+5. **Yup**: an object with `validateSync`, `describe` and `isValidSync` methods.
+6. **Standard Schema**: an object _or function_ with a `~standard` property. Functions count because ArkType types are callable.
+7. **A plain function**: called with the value. Its return value is the parsed data, and a throw becomes one issue with `code: 'custom'`.
+8. **Any other object with `safeParse`**: read as `{ success, data }` or `{ success: false, error: { issues } }`.
+
+Anything else throws `Unrecognized schema`.
+
+Zod, Valibot and Yup all implement Standard Schema too, but their own adapters win. Those adapters report richer issues (`expected`, `received`) and produce better JSON Schema than the generic Standard Schema path.
+
+You can wrap a schema explicitly instead of relying on detection. The result is the same `KickSchema`, typed from the schema:
 
 ```ts
-import { fromZod } from '@forinda/kickjs-schema/zod'
-import { fromYup } from '@forinda/kickjs-schema/yup'
 import { fromValibot } from '@forinda/kickjs-schema/valibot'
-import { fromJoi } from '@forinda/kickjs-schema/joi'
-import { fromStandard } from '@forinda/kickjs-schema/standard'
+import * as v from 'valibot'
 
-// Wrap once, use everywhere
-const CreateUser = fromZod(z.object({ name: z.string() }))
-const CreateUser = fromValibot(v.object({ name: v.string() }))
-const CreateUser = fromStandard(anyStandardSchemaV1Object)
+export const createTaskSchema = fromValibot(
+  v.object({
+    title: v.pipe(v.string(), v.minLength(1)),
+    due: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  }),
+)
 ```
 
-### Type Inference
+### Adding a library
 
-Each adapter preserves full type inference:
+Register an adapter for a library KickJS doesn't recognise. `detect` decides whether the adapter handles a value, and `wrap` turns it into a `KickSchema`:
 
 ```ts
-function fromZod<T extends z.ZodType>(schema: T): KickSchema<z.infer<T>>
-function fromYup<T extends yup.Schema>(schema: T): KickSchema<yup.InferType<T>>
-function fromValibot<T extends v.BaseSchema>(schema: T): KickSchema<v.InferOutput<T>>
-function fromStandard<T extends StandardSchemaV1>(
-  schema: T,
-): KickSchema<StandardSchemaV1.InferOutput<T>>
+import { registerAdapter, type KickSchema } from '@forinda/kickjs-schema'
+
+class Slug {
+  readonly pattern = /^[a-z0-9-]+$/
+}
+
+registerAdapter({
+  name: 'slug',
+  detect: (schema) => schema instanceof Slug,
+  wrap: (schema): KickSchema<string> => ({
+    safeParse: (data) =>
+      typeof data === 'string' && (schema as Slug).pattern.test(data)
+        ? { success: true, data }
+        : { success: false, issues: [{ path: [], message: 'Not a slug', code: 'slug' }] },
+    toJsonSchema: () => ({ type: 'string', pattern: (schema as Slug).pattern.source }),
+  }),
+})
 ```
 
-### Error Normalization
+Register it before the first request, for example in the file that calls `bootstrap()`. [Schema-agnostic validation](../guide/schema.md#registering-a-custom-adapter) has a complete Joi example.
 
-All adapters normalize errors to `SchemaIssue[]`:
+## Exports
+
+| Import path                      | Exports                                                                                                                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@forinda/kickjs-schema`         | `detectSchema`, `isKickSchema`, `registerAdapter`, `buildRouteTool`; types `KickSchema`, `SchemaResult`, `SchemaIssue`, `JsonSchemaOptions`, `SchemaAdapter`, `InferSchemaOutput`, `RouteTool`, `RouteToolRequest`, `RouteToolSource` |
+| `@forinda/kickjs-schema/zod`     | `fromZod`, `isZodSchema`, `zodAdapter`                                                                                                                                                                                                |
+| `@forinda/kickjs-schema/valibot` | `fromValibot`, `isValibotSchema`, `valibotAdapter`                                                                                                                                                                                    |
+| `@forinda/kickjs-schema/yup`     | `fromYup`, `isYupSchema`, `yupAdapter`                                                                                                                                                                                                |
+
+There is no `/standard` or `/joi` subpath. Pass Standard Schema objects unwrapped. Joi needs a [custom adapter](../guide/schema.md#joi-for-request-bodies).
+
+### What gets loaded
+
+The root entry imports all three built-in adapters, because `detectSchema()` needs them, so importing `@forinda/kickjs-schema` loads all three. `@forinda/kickjs` imports the root entry, which means every KickJS app loads the adapters. Loading them is cheap:
+
+- **Zod and Yup** are never imported by the package. Their adapters detect schemas by shape and call methods on the schema you pass, so neither library is needed unless you use it.
+- **Valibot** and **`@valibot/to-json-schema`** are imported when the module loads, if they are installed. A missing package is skipped quietly. `fromValibot()` then throws an install hint, and Valibot JSON Schema falls back to `{ type: 'object' }` with a one-time warning. Any other import error is rethrown.
+
+`kick new` with Valibot installs both `valibot` and `@valibot/to-json-schema`.
+
+## Where the framework uses it
+
+| Consumer                        | What it does with the schema                                                                                                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Route decorators / `validate()` | `@Get/@Post/...('/path', { body, query, params })` runs `detectSchema(x).safeParse()` on each part and replaces it with the parsed value                                                                                                   |
+| `loadEnvFromSchema(schema)`     | Validates `process.env` with any supported schema (`@forinda/kickjs/config`). `defineEnv` / `loadEnv` are the Zod-only helpers                                                                                                             |
+| Swagger                         | `detectSchema(x).toJsonSchema({ target: 'openapi-3.0', io })`: `io: 'input'` for request parts, `'output'` for `response`                                                                                                                  |
+| MCP and AI tools                | `buildRouteTool()` merges a route's params, query and body schemas into one tool input schema (`io: 'input'`) and turns tool arguments back into a request. Tool `inputSchema` / `outputSchema` go through `detectSchema().toJsonSchema()` |
+| `kick typegen`                  | Emits `InferSchemaOutput<typeof schema>` for route and env types                                                                                                                                                                           |
+
+### Environment variables
 
 ```ts
-// Zod:  error.issues[].path → string[], error.issues[].message, error.issues[].code
-// Yup:  error.inner[].path → split('.'), error.inner[].message, error.inner[].type
-// Joi:  error.details[].path → string[], error.details[].message, error.details[].type
-// Valibot: issues[].path[].key → string[], issues[].message, issues[].type
-// Standard Schema: issues[].path → mapped, issues[].message, code = 'validation'
+// src/config/index.ts
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromZod } from '@forinda/kickjs-schema/zod'
+import { z } from 'zod'
+
+const envSchema = fromZod(
+  z.object({
+    PORT: z.coerce.number().default(3000),
+    DATABASE_URL: z.url(),
+  }),
+)
+
+export const env = loadEnvFromSchema(envSchema)
+export default envSchema
 ```
 
-HTTP response always:
+On failure, `loadEnvFromSchema` throws an `Error` listing each issue as `path: message`. See [Configuration](../guide/configuration.md) for how the env module is wired into `src/index.ts`.
+
+### Typed routes (`kick typegen`)
+
+With `typegen.schemaValidator: 'kickjs-schema'` in `kick.config.ts` (the `kick new` default), typegen types each route's `body`, `query` and `params` as `InferSchemaOutput<typeof schema>`. That works for every supported library. `InferSchemaOutput<T>` resolves in this order:
+
+1. `KickSchema<O>`
+2. Standard Schema `~standard.types.output`
+3. Zod's `~output`, then `_output`
+4. Yup's `__outputType`
+5. otherwise `unknown`
+
+`schemaValidator: 'zod'`, which the `kick typegen` command falls back to when `kick.config.ts` doesn't set one, emits `z.infer<typeof schema>` instead. That only works for Zod.
+
+## Validation errors
+
+When a body, query or params schema fails, `validate()` passes an `HttpException` with status 422 to the error handler. The default handler answers with RFC 9457 problem details:
 
 ```json
 {
   "status": 422,
-  "message": "Validation failed",
+  "detail": "Invalid email address",
+  "type": "about:blank",
+  "title": "Unprocessable Entity",
   "errors": [
-    { "field": "email", "message": "Invalid email", "code": "pattern" },
-    { "field": "age", "message": "Must be >= 18", "code": "min" }
+    { "field": "email", "message": "Invalid email address" },
+    { "field": "age", "message": "Too small: expected number to be >=18" }
   ]
 }
 ```
 
-### Custom Error Formatter
+- `detail` is the first issue's message for a body. A failed query gives `Invalid query parameters`, and failed params give `Invalid path parameters`.
+- `field` is the issue path joined with `.`.
+- `errors` is left out when `NODE_ENV=production`, so request shapes don't leak.
+- The HTTP body has no `code`, `expected` or `received`. Those are only on `SchemaIssue`.
+
+`code` comes straight from each library, so the same mistake can have a different code under Zod, Valibot and Yup. Don't branch on it across libraries. [Validation errors](./error-format.md) has the details.
+
+To change the response, pass your own error handler to `bootstrap()`. It replaces the default handler:
 
 ```ts
-bootstrap({
-  validation: {
-    formatError: (issues: SchemaIssue[]) => ({
-      type: 'https://api.example.com/problems/validation',
-      title: 'Validation Error',
-      violations: issues.map((i) => ({ property: i.path.join('.'), message: i.message })),
-    }),
+import { bootstrap, errorHandler, HttpException } from '@forinda/kickjs'
+import { modules } from './modules'
+
+const defaultHandler = errorHandler()
+
+export const app = await bootstrap({
+  modules,
+  onError: (err, req, res, next) => {
+    if (err instanceof HttpException && err.status === 422) {
+      res.status(422).json({ message: err.message, violations: err.details })
+      return
+    }
+    defaultHandler(err, req, res, next)
   },
 })
 ```
 
-## Integration Map
+## See also
 
-| Integration Point       | Current                           | After                                                  |
-| ----------------------- | --------------------------------- | ------------------------------------------------------ |
-| `validate()` middleware | Duck-types `.safeParse()`         | Accepts `KickSchema` or `StandardSchemaV1`             |
-| Route decorators        | `@Post('/', { body: zodSchema })` | `@Post('/', { body: KickSchema \| StandardSchemaV1 })` |
-| Swagger/OpenAPI         | `SchemaParser` interface          | Calls `schema.toJsonSchema()` directly                 |
-| MCP tool registration   | `zodToJsonSchema()` + raw Zod     | `schema.toJsonSchema()` + `schema._raw` fallback       |
-| Config/env              | Deep Zod (keep internally)        | `defineEnv()` stays Zod (framework plumbing)           |
-| Error handler           | Assumes Zod issue shape           | Reads normalized `SchemaIssue[]`                       |
-
-## Package Structure
-
-```text
-packages/schema/
-  src/
-    types.ts              # KickSchema, SchemaResult, SchemaIssue
-    infer.ts              # InferSchemaOutput<T> utility type
-    detect.ts             # detectSchema() auto-detection + registerAdapter()
-    adapters/
-      zod.ts             # fromZod()
-      valibot.ts         # fromValibot()
-      yup.ts             # fromYup()
-```
-
-Separate export paths for tree-shaking:
-
-```json
-{
-  "exports": {
-    ".": "./dist/index.mjs",
-    "./zod": "./dist/zod.mjs",
-    "./valibot": "./dist/valibot.mjs",
-    "./yup": "./dist/yup.mjs"
-  }
-}
-```
-
-## Migration Path (Non-Breaking)
-
-1. **Raw Zod schemas continue to work** -- auto-detect wraps them transparently
-2. **`SchemaParser` deprecated** -- `schema.toJsonSchema()` replaces it
-3. **MCP SDK passthrough** uses `schema._raw` when Zod, falls back to JSON Schema
-4. **No breaking changes** -- existing apps upgrading to v5.x need zero modifications
-
-## Decision: Standard Schema vs Custom Interface
-
-| Approach                          | Pros                                                                 | Cons                                                                         |
-| --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Accept Standard Schema directly   | Zero wrapping for Zod/Valibot/ArkType, industry standard             | No JSON Schema in base spec (need companion spec), no `code` field on issues |
-| Custom `KickSchema` with adapters | Richer error info, JSON Schema built-in                              | Users must wrap schemas                                                      |
-| Both (recommended)                | Best DX -- unwrapped Standard Schema works, adapters add JSON Schema | Slightly more code                                                           |
-
-**Recommendation**: Accept both. If a schema has `~standard`, use it directly. If it also has `.toJsonSchema()` (KickSchema adapter or StandardJSONSchemaV1), use that for OpenAPI. Fallback: auto-detect Zod/Yup/Joi via duck-typing for backwards compat.
-
-## References
-
-- [Standard Schema Spec](https://github.com/standard-schema/standard-schema)
-- [Standard Schema Docs](https://standardschema.dev)
-- [tRPC Validators](https://trpc.io/docs/server/validators)
-- [Hono Standard Validator](https://www.npmjs.com/package/@hono/standard-validator)
-- [React Hook Form Resolvers](https://github.com/react-hook-form/resolvers)
-- [Valibot v1](https://valibot.dev)
-- [ArkType](https://arktype.io)
-- [TypeBox](https://github.com/sinclairzx81/typebox)
-- [Effect Schema](https://effect.website/docs/schema/introduction)
-- [oRPC](https://orpc.dev)
+- [Standard Schema v1](./standard-schema.md): the spec, and how KickJS reads it
+- [Adapters](./adapters.md)
+- [Validation errors](./error-format.md)
+- [Framework integration](./integration.md)
+- [Schema-agnostic validation guide](../guide/schema.md)
+- [Error handling](../guide/error-handling.md)

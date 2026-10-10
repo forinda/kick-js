@@ -27,7 +27,7 @@ import { Controller, Post, Put, Get, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createTodoSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200),
+  title: z.string().min(1, { error: 'Title is required' }).max(200),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 
@@ -69,7 +69,7 @@ Path parameters can also be validated:
 
 ```ts
 const idParamsSchema = z.object({
-  id: z.string().uuid('Invalid ID format'),
+  id: z.uuid({ error: 'Invalid ID format' }),
 })
 
 @Get('/:id', { params: idParamsSchema })
@@ -84,7 +84,7 @@ All three can be validated on the same route:
 
 ```ts
 @Put('/:id', {
-  params: z.object({ id: z.string().uuid() }),
+  params: z.object({ id: z.uuid() }),
   body: updateTodoSchema,
   query: z.object({ notify: z.coerce.boolean().optional() }),
 })
@@ -163,7 +163,7 @@ Define schemas in dedicated DTO files and extract the TypeScript type with the l
 import { z } from 'zod'
 
 export const createTodoSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200),
+  title: z.string().min(1, { error: 'Title is required' }).max(200),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
 })
 
