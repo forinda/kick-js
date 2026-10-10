@@ -32,8 +32,25 @@ function sniff(bytes: Uint8Array): string | undefined {
   return undefined
 }
 
-/** Valid UTF-8 with no NUL bytes is text; anything else isn't. */
-function decodeText(bytes: Uint8Array): string | undefined {
+/** The `charset` a MIME type declares (`text/csv; charset=windows-1252`), if any. */
+function charsetOf(mimeType: string): string | undefined {
+  return /;\s*charset\s*=\s*"?([^";\s]+)/i.exec(mimeType)?.[1]?.toLowerCase()
+}
+
+/**
+ * Text in the declared charset — a Latin-1 or UTF-16 file decoded as what
+ * it says it is — or, with none declared, valid UTF-8 with no NUL bytes.
+ * Anything else isn't text. Never decodes lossily: bytes that don't fit the
+ * charset are refused, not turned into replacement characters.
+ */
+function decodeText(bytes: Uint8Array, charset?: string): string | undefined {
+  if (charset && charset !== 'utf-8' && charset !== 'utf8') {
+    try {
+      return new TextDecoder(charset, { fatal: true }).decode(bytes).replace(/^\uFEFF/, '')
+    } catch {
+      // An unknown label or bytes that don't fit it: try UTF-8 below.
+    }
+  }
   if (bytes.includes(0)) return undefined
   try {
     // Strip a byte-order mark; it isn't part of the text.
@@ -88,7 +105,7 @@ export function resolvePart(part: ContentPart): ResolvedPart {
     return { kind: 'pdf', base64: Buffer.from(bytes).toString('base64'), filename }
   }
   if (type) return { kind: 'image', mediaType: type, base64: Buffer.from(bytes).toString('base64') }
-  const text = decodeText(bytes)
+  const text = decodeText(bytes, charsetOf(part.mimeType))
   if (text !== undefined) return { kind: 'text', text, filename }
   throw new Error(
     `${label} isn't an image, a PDF or text, so the model can't read it inline. ` +

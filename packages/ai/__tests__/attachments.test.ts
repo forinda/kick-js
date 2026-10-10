@@ -37,6 +37,33 @@ describe('attachmentFromFile', () => {
     )
   })
 
+  it('decodes text in the charset the upload declares, and never lossily', async () => {
+    const latin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9]) // "café" in ISO-8859-1
+    const utf16 = Buffer.from('\uFEFFnaïve', 'utf16le')
+    const sent: string[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      sent.push(JSON.parse(String(init?.body)).messages[0].content[0].text)
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const provider = new OpenAIProvider({ apiKey: 'sk-test' })
+    for (const [data, mimeType] of [
+      [latin1, 'text/plain; charset=ISO-8859-1'],
+      [utf16, 'text/csv; charset="utf-16le"'],
+    ] as const) {
+      await provider.chat({
+        messages: [{ role: 'user', content: '', attachments: [{ type: 'file', data, mimeType }] }],
+      })
+    }
+    expect(sent).toEqual(['café', 'naïve'])
+    // No charset declared: Latin-1 bytes aren't UTF-8, so the file is refused, not mangled.
+    expect(() =>
+      attachmentFromFile({ buffer: latin1, mimetype: 'text/plain', originalname: 'old.csv' }),
+    ).toThrow(/"old\.csv"/)
+  })
+
   it('refuses what no model reads inline, naming the file, unless the app normalizes it', () => {
     const xlsx = { buffer: zip, mimetype: 'application/vnd.ms-excel', originalname: 'q3.xlsx' }
     expect(() => attachmentFromFile(xlsx)).toThrow(/"q3\.xlsx".*Normalize it first/)

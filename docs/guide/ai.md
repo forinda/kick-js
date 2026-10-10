@@ -454,8 +454,10 @@ Limitations of the default handling:
 
 - **Office files, archives, audio and video aren't read.** Neither provider
   takes them inline. Convert them to text first (below).
-- **Text must be UTF-8.** A file in another encoding (a Latin-1 CSV from an
-  old spreadsheet) has no NUL bytes but isn't valid UTF-8, so it's refused;
+- **Text is read as UTF-8 unless the upload says otherwise.** A file that
+  declares a charset (`text/csv; charset=windows-1252`, `utf-16le`) is decoded
+  as that. One in another encoding that declares nothing — a Latin-1 CSV from
+  an old spreadsheet — isn't valid UTF-8, so it's refused rather than garbled;
   decode it in `normalize`.
 - **Text is sent as text, not parsed.** A 50,000-row CSV becomes 50,000 rows
   of prompt — it costs tokens and may not fit the model's context. Summarise
