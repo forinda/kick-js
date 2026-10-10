@@ -499,15 +499,27 @@ const part = attachmentFromFile(ctx.file!, {
 `mammoth` is asynchronous, so convert a Word document before building the part:
 
 ```ts
-if (ctx.file!.originalname.endsWith('.docx')) {
-  const { value: text } = await mammoth.extractRawText({ buffer: ctx.file!.buffer })
+import mammoth from 'mammoth'
+import { attachmentFromFile, type ContentPart } from '@forinda/kickjs-ai'
+
+const file = ctx.file!
+const attachments: ContentPart[] = []
+
+if (file.originalname.endsWith('.docx')) {
+  const { value: text } = await mammoth.extractRawText({ buffer: file.buffer })
   attachments.push({
     type: 'file',
     data: Buffer.from(text),
     mimeType: 'text/plain',
-    filename: ctx.file!.originalname,
+    filename: file.originalname,
   })
+} else {
+  attachments.push(attachmentFromFile(file))
 }
+
+const res = await this.ai.getProvider().chat({
+  messages: [{ role: 'user', content: 'Summarise this document.', attachments }],
+})
 ```
 
 ## Tools + agent loop
