@@ -308,6 +308,8 @@ export default defineConfig({
 })
 ```
 
+If your client file already exports a migration adapter, return that instead and keep one connection: `adapter: async () => (await import('./src/db/client')).migrationAdapter`. That file must import your env config itself (`import '../config'`) if it reads `getEnv` — `kick db` doesn't run `src/index.ts` ([Getting started](./index.md#_4-create-the-client)).
+
 The `adapter` factory takes precedence over `connectionString` when both are set. See [Drivers](./drivers) for the per-dialect adapter factories and their connection options.
 
 A factory that opens a pool — MySQL, or Postgres through your own `pg.Pool` — should pass `endPoolOnClose: true`, so the pool closes when the command finishes and `kick db` exits:
