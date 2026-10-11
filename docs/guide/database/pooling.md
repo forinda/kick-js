@@ -46,7 +46,7 @@ In **transaction** mode, PgBouncer gives your process a server connection for th
 
 - Each query outside a transaction, and each `db.transaction()`, gets one server connection.
 - The migration lock is a row in `kick_migrations_lock`, not a session-level advisory lock, so migrations work through the pooler too.
-- Kysely doesn't use named prepared statements, which transaction mode doesn't support.
+- kick/db doesn't use named prepared statements, which transaction mode doesn't support.
 
 What doesn't survive transaction mode is anything you set on the session yourself: a `SET` outside a transaction, `LISTEN`, or session advisory locks. Use `SET LOCAL` inside a transaction instead. Point `kick db migrate` at the pooler or straight at Postgres; either works.
 

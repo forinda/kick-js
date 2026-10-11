@@ -1,6 +1,6 @@
 # Database
 
-`@forinda/kickjs-db` is the first-party database layer for KickJS — a code-first ORM built on [Kysely](https://kysely.dev). You declare your schema in TypeScript, get typed queries with no codegen step, and ship reversible migrations through the `kick db` CLI.
+`@forinda/kickjs-db` is the first-party database layer for KickJS — a code-first ORM. You declare your schema in TypeScript, get typed queries with no codegen step, and ship reversible migrations through the `kick db` CLI.
 
 This page is one continuous path: install → schema → migration → query, with nothing assumed between the steps. It uses **SQLite** so you can finish it without provisioning anything. The same path on a server database: [PostgreSQL](./get-started-postgres.md), [MySQL](./get-started-mysql.md). Not starting fresh? [Start Here](./start-here.md) lists the other ways in.
 

@@ -111,12 +111,12 @@ export async function down(db: MigrationDb): Promise<void> {
 }
 ```
 
-- **Transactions.** `db` is Kysely on the migration's transaction, and the migration is recorded on the same one, so a throw in `up()` leaves neither its changes nor a record. With `"transaction": false` in `meta.json` it runs on the connection instead.
-- **Untyped `db`.** It's `Kysely<any>`: the schema keeps changing after the migration is written, so typing it against today's tables would break it later.
+- **Transactions.** `db` is a query builder on the migration's transaction, and the migration is recorded on the same one, so a throw in `up()` leaves neither its changes nor a record. With `"transaction": false` in `meta.json` it runs on the connection instead.
+- **Untyped `db`.** It's typed `Kysely<any>`: the schema keeps changing after the migration is written, so typing it against today's tables would break it later.
 - **Data, not schema.** The snapshot is carried over as with `--empty`, so schema changes still belong in generated migrations. A table changed here shows up as drift.
 - **Review and hashing.** `migration.ts` is hashed with the migration's other files, so an edit after `kick db migrate review` is refused like an SQL edit. `up.sql` / `down.sql` stay as placeholders and aren't run.
 - **Rolling back.** Leave out `down()` if the change can't be reversed; `migrate down` then fails with a clear message.
-- **Runtime.** It loads through jiti like the schema, so extensionless imports of your own code work. It needs a migration adapter with `kysely()`; the Postgres, MySQL and SQLite adapters have one.
+- **Runtime.** It loads like the schema, so extensionless imports of your own code work. The Postgres, MySQL and SQLite migration adapters run it; an async SQLite adapter needs the `kysely` option ([Drivers](./drivers.md#notes-for-async-sqlite-drivers)).
 
 ### The review gate
 

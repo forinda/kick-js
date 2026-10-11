@@ -41,7 +41,7 @@ Each run applies the pending migrations as one **batch**, which `rollback` rever
 
 The same schema feeds the client. `createDbClient({ schema, dialect })` infers each table's row type from the column builders — `varchar().notNull()` is `string`, a nullable `timestamp()` is `Date | null` — so the query builder, the relational `db.query` layer and inserts are checked against your columns with no code generation. When the client is injected by token across files, `KickDbRegister` carries the types; [Schema Types](../db-schema-types) explains it.
 
-The client is [Kysely](https://kysely.dev) underneath, wrapped with:
+The client is a typed SQL query builder — `selectFrom`, `insertInto`, `updateTable`, `deleteFrom` — with:
 
 - **relational reads** — `db.query.users.findMany({ with: { posts: true } })`, compiled to one query from your `relations()`;
 - **transactions that follow the call chain** — code holding the plain client joins the transaction its caller opened;

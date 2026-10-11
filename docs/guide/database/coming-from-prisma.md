@@ -4,7 +4,7 @@ description: Coming to kick/db from Prisma — how schema.prisma, migrate, the g
 
 # Coming from Prisma
 
-Prisma and kick/db agree on the big idea: one schema is the source of truth, migrations are generated from it, and every query is checked against it. They differ in where that schema lives and what you query with. Prisma has its own schema language and a client generated from it; kick/db's schema is ordinary TypeScript, and the client's types are inferred from it — there is no generate step. Queries go through a SQL-shaped builder ([Kysely](https://kysely.dev)) rather than nested objects, with a Prisma-like relational API for reads that load related rows.
+Prisma and kick/db agree on the big idea: one schema is the source of truth, migrations are generated from it, and every query is checked against it. They differ in where that schema lives and what you query with. Prisma has its own schema language and a client generated from it; kick/db's schema is ordinary TypeScript, and the client's types are inferred from it — there is no generate step. Queries go through a SQL-shaped builder rather than nested objects, with a Prisma-like relational API for reads that load related rows.
 
 The examples use Postgres. Everything kick/db shown here runs as written.
 
@@ -327,12 +327,12 @@ Each error names the `constraint`, `table` and `columns`, the same on Postgres, 
 
 ## Extending the client
 
-| Prisma                                 | kick/db                                                                                                                  |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `$extends({ model: { user: { … } } })` | `db.$extends({ model: { users: { … } } })` ([Extensions](../db-extensions.md))                                           |
-| `$extends({ result: { … } })`          | result extensions, same page                                                                                             |
-| `$extends({ query: … })`, `$use`       | lifecycle events (`beforeQuery`, `query`, `slowQuery`, …) or a Kysely plugin ([Events and Plugins](./events-plugins.md)) |
-| query logging (`log: ['query']`)       | `events: true` and `db.on('query', …)`                                                                                   |
+| Prisma                                 | kick/db                                                                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `$extends({ model: { user: { … } } })` | `db.$extends({ model: { users: { … } } })` ([Extensions](../db-extensions.md))                                          |
+| `$extends({ result: { … } })`          | result extensions, same page                                                                                            |
+| `$extends({ query: … })`, `$use`       | lifecycle events (`beforeQuery`, `query`, `slowQuery`, …) or a query plugin ([Events and Plugins](./events-plugins.md)) |
+| query logging (`log: ['query']`)       | `events: true` and `db.on('query', …)`                                                                                  |
 
 ## Not there (yet)
 
