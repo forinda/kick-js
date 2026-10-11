@@ -46,12 +46,8 @@ export default defineConfig({
     schemaPath: 'src/db/schema.ts',
     migrationsDir: 'db/migrations',
     dialect: 'sqlite',
-    // The CLI opens its own connection to the same file as the app.
-    adapter: async () => {
-      const Database = (await import('better-sqlite3')).default
-      const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
-      return sqliteAdapter({ database: new Database('dev.db') })
-    },
+    // `kick db` uses the app's own connection — src/db/client.ts, written in step 4.
+    adapter: async () => (await import('./src/db/client')).migrationAdapter,
   },
 })
 ```
@@ -63,11 +59,7 @@ export default defineKickDbConfig({
   schemaPath: 'src/db/schema.ts',
   migrationsDir: 'db/migrations',
   dialect: 'sqlite',
-  adapter: async () => {
-    const Database = (await import('better-sqlite3')).default
-    const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
-    return sqliteAdapter({ database: new Database('dev.db') })
-  },
+  adapter: async () => (await import('./src/db/client')).migrationAdapter,
 })
 ```
 
@@ -109,7 +101,41 @@ export const users = table('users', {
 
 Each column's type flows through to the client: `name` is `string | null` because it has no `.notNull()`, and `createdAt` is a generated `Date` you never pass on insert. Every builder is in [Schema](./schema).
 
-## 4. Generate and apply the first migration
+## 4. Create the client
+
+Add the database file to the env schema in `src/config/index.ts`:
+
+```ts
+DB_FILE: z.string().default('dev.db'),
+```
+
+Then open it once, for both the client and migrations:
+
+```ts
+// src/db/client.ts
+import '../config' // registers the env schema — `kick db` loads this file without src/index.ts
+import Database from 'better-sqlite3'
+import { getEnv } from '@forinda/kickjs'
+import { createDbClient } from '@forinda/kickjs-db'
+import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import * as schema from './schema'
+
+const database = new Database(getEnv('DB_FILE'))
+
+export const db = createDbClient({
+  schema,
+  dialect: sqliteDialect({ database }),
+})
+
+// The same connection runs migrations — the app's and `kick db`'s (step 2).
+export const migrationAdapter = sqliteAdapter({ database })
+```
+
+`createDbClient` infers the database shape from `schema`, so there is no generic to pass and nothing to regenerate when the schema changes.
+
+Import `../config` here, not only from `src/index.ts`: `kick db` loads this file on its own, and without the schema `getEnv('DB_FILE')` is `undefined` — SQLite then opens an empty in-memory database and every migration looks pending.
+
+## 5. Generate and apply the first migration
 
 ```bash
 kick db generate init
@@ -123,28 +149,6 @@ kick db migrate latest    # apply
 ```
 
 Later changes are the same two commands: edit the schema, `kick db generate <name>`, read the SQL, `kick db migrate latest`. [Migrations](./migrations) covers rollback, batches, drift detection and the review gate.
-
-## 5. Create the client
-
-```ts
-// src/db/client.ts
-import Database from 'better-sqlite3'
-import { createDbClient } from '@forinda/kickjs-db'
-import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
-import * as schema from './schema'
-
-const database = new Database('dev.db')
-
-export const db = createDbClient({
-  schema,
-  dialect: sqliteDialect({ database }),
-})
-
-// The same handle feeds the migration adapter — one connection, not two.
-export const migrationAdapter = sqliteAdapter({ database })
-```
-
-`createDbClient` infers the database shape from `schema`, so there is no generic to pass and nothing to regenerate when the schema changes.
 
 ## 6. Make it injectable
 
@@ -241,7 +245,7 @@ Only three things differ from the SQLite path above:
 | ---------------- | ----------------------------- | ----------------------------------- |
 | install (step 1) | `kick add sqlite`             | `kick add pg`                       |
 | `db.dialect`     | `'sqlite'`                    | `'postgres'` (+ `connectionString`) |
-| client (step 5)  | `sqliteDialect({ database })` | `pgDialect({ pool })`               |
+| client (step 4)  | `sqliteDialect({ database })` | `pgDialect({ pool })`               |
 
 ```ts
 import { Pool } from 'pg'
