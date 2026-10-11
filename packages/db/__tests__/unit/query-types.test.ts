@@ -11,7 +11,7 @@
 
 import { describe, expectTypeOf, it } from 'vitest'
 import type { Generated } from 'kysely'
-import type { FindManyOptions, FindManyRow } from '../../src/query/types'
+import type { FindManyOptions, FindManyRow, TableRefs } from '../../src/query/types'
 
 // ── Fixture DB shape ────────────────────────────────────────────────────
 interface FixtureDB {
@@ -125,7 +125,7 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
       {
         with: {
           posts: {
-            where: (p: FixtureDB['posts']) => never
+            where: (p: TableRefs<FixtureDB, 'posts'>) => never
             limit: 5
           }
         }

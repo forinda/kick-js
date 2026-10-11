@@ -61,6 +61,12 @@ function makeControllers() {
       return { via: 'return-must-be-ignored' }
     }
 
+    @Get('/bigint')
+    // A database count or bigint column: sent as its decimal string, not a 500.
+    bigint(_ctx: RequestContext) {
+      return { count: 2n ** 64n, rows: [{ id: 7n }] }
+    }
+
     @Get('/void')
     // Returns undefined AND writes via ctx — prior behavior untouched.
     voidStyle(ctx: RequestContext) {
@@ -132,6 +138,13 @@ for (const rt of RUNTIMES) {
       expect(res.body).toEqual({ via: 'ctx' })
     })
 
+    it('sends a bigint as its decimal string', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).get('/api/v1/r/bigint').expect(200)
+      expect(res.body).toEqual({ count: '18446744073709551616', rows: [{ id: '7' }] })
+      expect(res.headers['content-type']).toMatch(/json/)
+    })
+
     it('imperative style is untouched', async () => {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).get('/api/v1/r/void').expect(200)
@@ -161,5 +174,9 @@ describe('return-value handlers — web entry (fetch)', () => {
 
     const ctxWins = await app.fetch(new Request('http://x/api/v1/r/ctx-wins'))
     expect(await ctxWins.json()).toEqual({ via: 'ctx' })
+
+    const big = await app.fetch(new Request('http://x/api/v1/r/bigint'))
+    expect(big.status).toBe(200)
+    expect(await big.json()).toEqual({ count: '18446744073709551616', rows: [{ id: '7' }] })
   })
 })

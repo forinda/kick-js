@@ -21,7 +21,7 @@ import { createRequire } from 'node:module'
 
 import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
-import { publishMatchedRoute } from '../runtime'
+import { publishMatchedRoute, stringifyJson } from '../runtime'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
@@ -82,7 +82,7 @@ class NodeResDriver implements RuntimeResponse {
     if (!this.res.headersSent && !this.res.getHeader('content-type')) {
       this.res.setHeader('content-type', 'application/json; charset=utf-8')
     }
-    this.res.end(JSON.stringify(data))
+    this.res.end(stringifyJson(data))
     return this
   }
   send(data: unknown): this {

@@ -31,7 +31,7 @@
  * exceeds `maxDepth`.
  */
 
-import type { Expression, ExpressionBuilder, SelectQueryBuilder } from 'kysely'
+import type { Expression, ExpressionBuilder, SelectQueryBuilder, SelectType } from 'kysely'
 import type { RegisteredDB } from '../client/register'
 
 /**
@@ -109,16 +109,13 @@ export type TableRelations<Table extends string> = Table extends keyof Registere
 export type QueryOps<DB, Table extends keyof DB & string> = ExpressionBuilder<DB, Table>
 
 /**
- * The table-bound shape passed as the first arg to callbacks. The
- * declared shape is `DB[Table]`, so `u.id` resolves to the row
- * field's TS type at compile time — handy for type-narrowing in
- * adapter-side helpers. At runtime, the same `u` is a Proxy whose
- * property reads return Kysely column refs (`eb.ref('users.id')`),
- * so `eb('id', '=', u.id)` Just Works for either layer-1 or
- * relational-query call sites. Most adopters keep the first arg
- * underscored and reach for `eb('col', op, value)` directly.
+ * The table-bound shape passed as the first arg to callbacks: each column
+ * is a reference typed with its value — `u.id` is an `Expression<number>`,
+ * so `eq(u.id, 1)` checks the value and `eb('id', '=', u.id)` works too.
  */
-export type TableRefs<DB, Table extends keyof DB & string> = DB[Table]
+export type TableRefs<DB, Table extends keyof DB & string> = {
+  [K in keyof DB[Table]]: Expression<SelectType<DB[Table][K]>>
+}
 
 /**
  * Options bag for `findMany` / `findFirst` / `findUnique`.

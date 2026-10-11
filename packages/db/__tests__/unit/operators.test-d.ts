@@ -4,9 +4,12 @@ import type { SqlBool, Expression } from 'kysely'
 import {
   alias,
   and,
+  between,
   eq,
   inArray,
   integer,
+  isNull,
+  like,
   serial,
   table,
   text,
@@ -29,6 +32,26 @@ test('operands are checked against the column type', () => {
   // @ts-expect-error inArray takes values of the column type
   inArray(users.id, ['1'])
   expectTypeOf(and(eq(users.id, 1), undefined)).toMatchTypeOf<Expression<SqlBool>>()
+})
+
+test('two values do not compile — one side must be a column or an expression', () => {
+  const id = 1
+  // @ts-expect-error 'id' is a string value, not the id column
+  eq('id', id)
+  // @ts-expect-error same for like
+  like('name', 'A%')
+  // @ts-expect-error and inArray
+  inArray('id', [id])
+  // @ts-expect-error nor an empty list across from a value
+  inArray('id', [])
+  // @ts-expect-error between needs a column somewhere
+  between(1, 2, 3)
+  expectTypeOf(inArray(users.id, [])).toMatchTypeOf<Expression<SqlBool>>()
+  expectTypeOf(between(users.id, 1, 9)).toMatchTypeOf<Expression<SqlBool>>()
+  // @ts-expect-error isNull needs a column
+  isNull('managerId')
+  expectTypeOf(eq(1, users.id)).toMatchTypeOf<Expression<SqlBool>>()
+  expectTypeOf(isNull(users.managerId)).toMatchTypeOf<Expression<SqlBool>>()
 })
 
 test("db.query's row argument works as an operand, generated columns included", () => {

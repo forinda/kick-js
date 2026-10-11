@@ -1,7 +1,13 @@
 /// <reference types="multer" />
 import type { Request, NextFunction } from 'express'
 import { ROUTE_SLOT } from '../core/route-flag'
-import type { ActiveRuntime, MatchedRoute, RuntimeResponse } from './runtime'
+import {
+  isBigIntJsonError,
+  stringifyJson,
+  type ActiveRuntime,
+  type MatchedRoute,
+  type RuntimeResponse,
+} from './runtime'
 import {
   type ContextMetaKey,
   type ExecutionContext,
@@ -716,11 +722,22 @@ export class RequestContext<
   }
 
   json(data: any, status = 200) {
-    return this._response.status(status).json(data)
+    return this.sendJson(status, data)
   }
 
   created(data: any) {
-    return this._response.status(201).json(data)
+    return this.sendJson(201, data)
+  }
+
+  private sendJson(status: number, data: unknown): RuntimeResponse {
+    try {
+      return this._response.status(status).json(data)
+    } catch (err) {
+      // Express serialises inside `res.json` and throws on a bigint before
+      // anything is written; the other runtimes' drivers use stringifyJson.
+      if (!isBigIntJsonError(err) || this._response.headersSent) throw err
+      return this._response.status(status).json(JSON.parse(stringifyJson(data)))
+    }
   }
 
   noContent() {

@@ -20,7 +20,7 @@ import { createRequire } from 'node:module'
 import { HttpException } from '../../core/errors'
 import { unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
-import { publishMatchedRoute } from '../runtime'
+import { publishMatchedRoute, stringifyJson } from '../runtime'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
@@ -51,6 +51,8 @@ interface FastifyReplyLike {
   send(payload?: unknown): FastifyReplyLike
   header(name: string, value: unknown): FastifyReplyLike
   type(contentType: string): FastifyReplyLike
+  serializer(fn: (payload: unknown) => string): FastifyReplyLike
+  getHeader(name: string): unknown
   hijack(): void
   readonly sent: boolean
   readonly raw: ServerResponse
@@ -129,7 +131,10 @@ class FastifyReplyDriver implements RuntimeResponse {
     return this
   }
   json(data: unknown): this {
-    this.reply.send(data)
+    // A custom serializer drops Fastify's default content-type; keep one the
+    // caller chose (`application/problem+json`).
+    if (!this.reply.getHeader('content-type')) this.reply.type('application/json; charset=utf-8')
+    this.reply.serializer(stringifyJson).send(data)
     return this
   }
   send(data: unknown): this {

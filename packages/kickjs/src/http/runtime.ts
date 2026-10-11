@@ -178,6 +178,27 @@ export type RouteTable = { mountPath: string; routes: RouteEntry[] }[]
  * The terminal methods return `RuntimeResponse` for fluent chaining (Express's
  * `Response` is assignable, since it is a superset).
  */
+/** True for the TypeError `JSON.stringify` throws on a bigint. */
+export function isBigIntJsonError(err: unknown): boolean {
+  return err instanceof TypeError && /BigInt/.test(err.message)
+}
+
+/**
+ * `JSON.stringify` that writes a bigint as its decimal string instead of
+ * throwing — database counts and `bigint` columns reach responses as bigints.
+ * Plain `JSON.stringify` runs first, so a body without one costs nothing extra.
+ */
+export function stringifyJson(data: unknown): string {
+  try {
+    return JSON.stringify(data)
+  } catch (err) {
+    if (!isBigIntJsonError(err)) throw err
+    return JSON.stringify(data, (_key, value) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    )
+  }
+}
+
 export interface RuntimeResponse {
   status(code: number): RuntimeResponse
   json(data: unknown): RuntimeResponse
