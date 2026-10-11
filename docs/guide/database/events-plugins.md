@@ -38,7 +38,7 @@ db.on('queryError', ({ sql, error }) => {
 | `transactionRollback` | `{ isolation?, error }`                        | it rolls back                                  |
 | `transactionRetry`    | `{ isolation?, attempt, error, delayMs }`      | a `retry` transaction is about to run again    |
 
-Pass the DevTools event bus as `createDbClient({ bus })` and queries are republished as `db:query`, `db:query-error` and `db:slow-query` — what the DevTools **Database** tab shows. A `bus` or `slowQueryThresholdMs` turns events on by itself.
+While the [DevTools](../devtools.md) adapter runs, every client reports its queries to it as `db:query`, `db:query-error` and `db:slow-query` — what the **Database** tab shows. Nothing to wire: it works for a client created at import time too. To send them to a bus of your own instead, pass it as `createDbClient({ bus })`. A `bus` or `slowQueryThresholdMs` turns events on by itself.
 
 ## Plugins
 

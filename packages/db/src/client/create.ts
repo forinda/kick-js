@@ -43,39 +43,33 @@ import { extractSnapshot } from '../snapshot/extract'
 // typeof dbClient` cycle that would otherwise resolve to `unknown`.
 // KickDbRegister is only consulted when consumers reference `KickDbClient`
 // with no explicit generic.
+/** The DevTools event bus type, as the `bus` option declares it. */
+type KickEventBus = NonNullable<CreateDbClientOptions<unknown, unknown>['bus']>
+
+/** The DevTools adapter's process-wide bus slot (shared via `Symbol.for`; see devtools-kit). */
+const ACTIVE_DEVTOOLS_BUS = Symbol.for('kickjs.devtools.bus')
+
 export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   opts: CreateDbClientOptions<TSchema, DB>,
 ): KickDbClient<DB> {
-  // `slowQueryThresholdMs` and `bus` both imply events — listeners can't
-  // subscribe to slowQuery / queryError, and the bus republisher can't
-  // observe them, without the emitter being live.
+  // Local listeners (`db.on(...)`) need the emitter; `slowQueryThresholdMs`
+  // and an explicit `bus` keep implying it, as before.
   const eventsEnabled = opts.events || opts.slowQueryThresholdMs != null || opts.bus != null
   const events = eventsEnabled ? new KickDbEventEmitter() : null
   const slowThreshold = opts.slowQueryThresholdMs ?? null
-  const bus = opts.bus ?? null
+  const dialectTag = detectDialect(opts.dialect, opts.dialectTag)
+  /**
+   * Where DevTools events go: the `bus` passed in, else the DevTools bus while
+   * the DevTools adapter runs. Looked up per query, so a client created at
+   * import time — before DevTools starts — still reports to the panel.
+   */
+  const devtoolsBus = (): KickEventBus | undefined =>
+    opts.bus ?? (globalThis as Record<symbol, KickEventBus | undefined>)[ACTIVE_DEVTOOLS_BUS]
 
-  // Republish to the DevTools event bus when wired. Mirror the local
-  // event names under a `db:` namespace so adopter tabs / cross-cutting
-  // log consumers know they came from kickjs-db.
-  if (events && bus) {
-    events.on('slowQuery', (payload) => {
-      bus.emit('db:slow-query', payload)
-    })
-    events.on('queryError', (payload) => {
-      bus.emit('db:query-error', payload)
-    })
-  }
-
-  // Kysely's `log` config fires on every query — both success
-  // (level 'query') and failure (level 'error') — with the compiled
-  // SQL, params, and timing. Cleanest hook for the lifecycle events;
-  // a full KyselyPlugin (transformQuery / transformResult) is heavier
-  // and only worth it when we need to mutate the SQL tree.
   // Build customType codec maps once. Both transforms short-circuit
   // when their map is empty so the plugin is free of per-row /
   // per-query cost when no customType is in play. Plugin only
   // attached when at least one side has work to do.
-  const dialectTag = detectDialect(opts.dialect, opts.dialectTag)
   const decoders = buildDecoderMap(opts.schema, dialectTag)
   const encoders = buildEncoderMap(opts.schema, dialectTag)
   const dates = (opts.dialect as { [KICK_DIALECT_DATES]?: DialectDateOptions } | undefined)?.[
@@ -92,26 +86,6 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
           nestedDecoders,
         )
       : null
-
-  // Detect dialect early — needed both to pick the relational query
-  // compiler (below) and to decide whether the JSON-results plugin
-  // ships in the Kysely plugin chain.
-  //
-  // SQLite + MySQL drivers return JSON columns as TEXT, so the
-  // kysely/helpers/<dialect> jsonArrayFrom / jsonObjectFrom won't
-  // round-trip without ParseJSONResultsPlugin. PG decodes JSON
-  // natively — skip the plugin there to keep the chain minimal.
-
-  // Unified per-query stream for the DevTools "Database" tab — every
-  // successful query republished as `db:query` with the dialect tag so
-  // the tab can render duration / SQL / dialect. Failures keep flowing on
-  // `db:query-error` (wired above); the tab subscribes to both. Tagging
-  // here (rather than the block above) keeps `dialectTag` in scope.
-  if (events && bus) {
-    events.on('query', (payload) => {
-      bus.emit('db:query', { ...payload, dialect: dialectTag })
-    })
-  }
 
   const managed = collectManaged(opts.schema)
   const plugins: KyselyPlugin[] = []
@@ -160,28 +134,29 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
       // Driver failures surface as typed errors (UniqueViolationError, …).
       dialect: translatingDialect(tenantConnections(dialect, opts.tenancy), dialectTag),
       plugins: plugins.length > 0 ? plugins : undefined,
-      log: events
-        ? (event) => {
-            if (event.level === 'query') {
-              const durationMs = event.queryDurationMillis
-              const payload = {
-                sql: event.query.sql,
-                parameters: event.query.parameters,
-                durationMs,
-              }
-              events.emit('query', payload)
-              if (slowThreshold != null && durationMs >= slowThreshold) {
-                events.emit('slowQuery', { ...payload, thresholdMs: slowThreshold })
-              }
-            } else if (event.level === 'error') {
-              events.emit('queryError', {
-                sql: event.query.sql,
-                parameters: event.query.parameters,
-                error: event.error,
-              })
-            }
+      // Always installed: whether DevTools is listening is only known per query.
+      log: (event) => {
+        const bus = devtoolsBus()
+        if (!events && !bus) return
+        if (event.level === 'query') {
+          const durationMs = event.queryDurationMillis
+          const payload = { sql: event.query.sql, parameters: event.query.parameters, durationMs }
+          const slow = slowThreshold != null && durationMs >= slowThreshold
+          events?.emit('query', payload)
+          if (slow) events?.emit('slowQuery', { ...payload, thresholdMs: slowThreshold })
+          // Mirrored under `db:` so DevTools tabs know they came from kick/db.
+          bus?.emit('db:query', { ...payload, dialect: dialectTag })
+          if (slow) bus?.emit('db:slow-query', { ...payload, thresholdMs: slowThreshold })
+        } else if (event.level === 'error') {
+          const payload = {
+            sql: event.query.sql,
+            parameters: event.query.parameters,
+            error: event.error,
           }
-        : undefined,
+          events?.emit('queryError', payload)
+          bus?.emit('db:query-error', payload)
+        }
+      },
     })
   const kysely = makeKysely(opts.dialect)
   const replicas = (opts.replica === undefined ? [] : [opts.replica].flat()).map(makeKysely)

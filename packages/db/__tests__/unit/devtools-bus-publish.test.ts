@@ -17,6 +17,7 @@ import {
 
 import { createDbClient, table, serial, varchar } from '../../src/index'
 import { createInMemoryBus } from '@forinda/kickjs-devtools-kit/bus'
+import { setActiveDevtoolsBus } from '@forinda/kickjs-devtools-kit/bus/token'
 
 // `import` keeps Vitest happy without forcing a runtime augmentation —
 // the registry typing isn't asserted in these tests; the wire-level
@@ -147,5 +148,50 @@ describe('createDbClient — bus republishing', () => {
     expect(payload).toHaveProperty('sql')
     expect(payload).toHaveProperty('error')
     expect((payload.error as Error).message).toMatch(/synthetic driver failure/)
+  })
+})
+
+describe('createDbClient — the running DevTools bus, without wiring', () => {
+  const record = () => {
+    const bus = createInMemoryBus()
+    const types: string[] = []
+    bus.onAny((e) => types.push(e.type))
+    return { bus, types }
+  }
+
+  it('reports to the DevTools bus that starts after the client was created', async () => {
+    // Created at import time, as an app's db client usually is.
+    const db = createDbClient({ schema: { users }, dialect: dummy })
+    const devtools = record()
+    try {
+      await db.selectFrom('users').selectAll().execute()
+      expect(devtools.types).toEqual([]) // no DevTools yet
+
+      setActiveDevtoolsBus(devtools.bus) // the DevTools adapter starts
+      await db.selectFrom('users').selectAll().execute()
+      expect(devtools.types).toEqual(['db:query'])
+
+      setActiveDevtoolsBus(undefined) // and stops
+      await db.selectFrom('users').selectAll().execute()
+      expect(devtools.types).toEqual(['db:query'])
+    } finally {
+      setActiveDevtoolsBus(undefined)
+      await db.destroy()
+    }
+  })
+
+  it('an explicit bus wins over the running DevTools bus', async () => {
+    const own = record()
+    const devtools = record()
+    setActiveDevtoolsBus(devtools.bus)
+    const db = createDbClient({ schema: { users }, dialect: dummy, bus: own.bus })
+    try {
+      await db.selectFrom('users').selectAll().execute()
+      expect(own.types).toEqual(['db:query'])
+      expect(devtools.types).toEqual([])
+    } finally {
+      setActiveDevtoolsBus(undefined)
+      await db.destroy()
+    }
   })
 })

@@ -143,7 +143,7 @@ db.on('slowQuery', ({ sql, durationMs }) => {
 })
 ```
 
-`query` events carry `durationMs` for every query, which is handy for counting queries per request while you hunt an N+1. In development, the [DevTools](../devtools.md) **Database** tab lists each query with its timing — pass the DevTools bus as `createDbClient({ bus })` ([Events and Plugins](./events-plugins.md)).
+`query` events carry `durationMs` for every query, which is handy for counting queries per request while you hunt an N+1. In development, the [DevTools](../devtools.md) **Database** tab lists each query with its timing, with no wiring ([Events and Plugins](./events-plugins.md)).
 
 Then ask the database what it did with one, using raw SQL:
 
