@@ -110,7 +110,18 @@ export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
 
   const fanOut = (envelope: TaggedEnvelope): void => {
     if (clients.size === 0) return
-    const text = JSON.stringify(envelope)
+    // Emitters call this synchronously — kick/db does from inside a query —
+    // so it must never throw. A bigint (a bigint column's value) goes out as
+    // a string; an event JSON can't hold at all (a circular payload) is
+    // dropped for the dashboard, not the caller.
+    let text: string
+    try {
+      text = JSON.stringify(envelope, (_key, value: unknown) =>
+        typeof value === 'bigint' ? value.toString() : value,
+      )
+    } catch {
+      return
+    }
     for (const client of clients) {
       // OPEN === 1 in the ws spec; reusing the import for the type
       // guard keeps this readable without pulling in WebSocket consts.

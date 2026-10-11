@@ -115,6 +115,29 @@ describe('createServerBus — WebSocket transport', () => {
     ws.close()
   })
 
+  it('never throws into the emitter: bigints go out as strings, unserialisable events are dropped', async () => {
+    const { bus, port } = await startHarness()
+    const ws = await connectClient(port)
+    const received: Array<{ type: string; payload: unknown }> = []
+    ws.on('message', (msg) => received.push(JSON.parse(String(msg))))
+    await waitFor(() => bus.clientCount() === 1)
+
+    // kick/db emits from inside the query, so a throw here fails the insert.
+    expect(() => bus.emit('db:query', { sql: 'insert', params: [9007199254740993n] })).not.toThrow()
+    const loop: Record<string, unknown> = {}
+    loop.self = loop
+    expect(() => bus.emit('circular', loop)).not.toThrow()
+    bus.emit('after', { ok: true })
+
+    await waitFor(() => received.some((e) => e.type === 'after'))
+    expect(received.find((e) => e.type === 'db:query')?.payload).toEqual({
+      sql: 'insert',
+      params: ['9007199254740993'],
+    })
+    expect(received.some((e) => e.type === 'circular')).toBe(false)
+    ws.close()
+  })
+
   it('client-emitted messages dispatch to local subscribers', async () => {
     const { bus, port } = await startHarness()
     const ws = await connectClient(port)
