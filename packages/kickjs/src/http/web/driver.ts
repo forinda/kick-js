@@ -5,7 +5,7 @@
 // shared by the h3 v2 runtime (`runtimes/h3-web.ts`, node bootstrap) and the
 // `@forinda/kickjs/web` fetch entry (edge/Bun/Deno).
 
-import type { RuntimeResponse } from '../runtime'
+import { stringifyJson, type RuntimeResponse } from '../runtime'
 
 /**
  * Presents a web `Request` as the express-shaped `req` object that
@@ -108,7 +108,7 @@ export class WebResponseDriver implements RuntimeResponse {
   json(data: unknown): this {
     if (!this.headers.has('content-type'))
       this.headers.set('content-type', 'application/json; charset=utf-8')
-    return this.finish(JSON.stringify(data))
+    return this.finish(stringifyJson(data))
   }
 
   send(data: unknown): this {

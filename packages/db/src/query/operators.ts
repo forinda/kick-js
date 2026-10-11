@@ -9,6 +9,10 @@
  *   - the row argument of a `db.query` callback (`(u) => eq(u.email, x)`);
  *   - any Kysely expression (`eb.ref('email')`, `sql\`lower(email)\``);
  *   - otherwise a value, sent as a bound parameter.
+ *
+ * At least one operand must be a column or an expression. A string is a value,
+ * not a column name — `eq('id', id)` would compare the text `'id'` — so two
+ * values fail to compile, and throw when the types are bypassed.
  */
 import { sql, type Expression, type RawBuilder, type SelectType, type SqlBool } from 'kysely'
 import type { ColumnRef, TypedColumnRef } from '../dsl/columns/types'
@@ -21,6 +25,14 @@ type Comparable<O> = Operand<SelectType<ValueOf<O>>>
 
 /** A column, a Kysely expression, or a value. */
 export type Operand<T = unknown> = TypedColumnRef<T> | Expression<T> | T
+
+/** A column or an expression — anything but a plain value. */
+type Ref<T = any> = TypedColumnRef<T> | Expression<T>
+
+/** What may sit across from `L`: anything comparable, but only a column or expression across from a value. */
+type Across<L> = [L] extends [TypedColumnRef<any> | Expression<any>]
+  ? Comparable<L>
+  : Ref<SelectType<ValueOf<L>>>
 
 type Condition = RawBuilder<SqlBool>
 
@@ -41,6 +53,19 @@ function isColumnRef(value: unknown): value is ColumnRef {
   )
 }
 
+function isRef(operand: unknown): boolean {
+  return isExpression(operand) || isColumnRef(operand)
+}
+
+/** Throws when no operand is a column or an expression — a comparison of values. */
+function assertRef(helper: string, ...operands: unknown[]): void {
+  if (operands.some(isRef)) return
+  throw new TypeError(
+    `${helper}() got only values — one side must be a column (\`users.email\`) or an expression. ` +
+      `A string is a value, not a column name: write \`.where('email', '=', x)\` to name a column.`,
+  )
+}
+
 /** An operand as SQL: a qualified column reference, the expression itself, or a parameter. */
 function toSql(operand: unknown): Expression<unknown> {
   if (isExpression(operand)) return operand
@@ -48,45 +73,60 @@ function toSql(operand: unknown): Expression<unknown> {
   return sql.val(operand)
 }
 
-function binary(op: string) {
-  return <L>(left: L, right: Comparable<L>): Condition =>
-    sql<SqlBool>`${toSql(left)} ${sql.raw(op)} ${toSql(right)}`
+function binary(name: string, op: string) {
+  return <L>(left: L, right: Across<L>): Condition => {
+    assertRef(name, left, right)
+    return sql<SqlBool>`${toSql(left)} ${sql.raw(op)} ${toSql(right)}`
+  }
 }
 
-export const eq = binary('=')
-export const ne = binary('<>')
-export const gt = binary('>')
-export const gte = binary('>=')
-export const lt = binary('<')
-export const lte = binary('<=')
+export const eq = binary('eq', '=')
+export const ne = binary('ne', '<>')
+export const gt = binary('gt', '>')
+export const gte = binary('gte', '>=')
+export const lt = binary('lt', '<')
+export const lte = binary('lte', '<=')
+
+function likeOp(name: string, op: string) {
+  return <L>(left: L, pattern: [L] extends [Ref] ? Operand<string> : Ref<string>): Condition => {
+    assertRef(name, left, pattern)
+    return sql<SqlBool>`${toSql(left)} ${sql.raw(op)} ${toSql(pattern)}`
+  }
+}
 
 /** `left LIKE pattern` — escape user input with `escapeLike()`. */
-export const like = <L>(left: L, pattern: Operand<string>): Condition =>
-  sql<SqlBool>`${toSql(left)} like ${toSql(pattern)}`
-export const notLike = <L>(left: L, pattern: Operand<string>): Condition =>
-  sql<SqlBool>`${toSql(left)} not like ${toSql(pattern)}`
+export const like = likeOp('like', 'like')
+export const notLike = likeOp('notLike', 'not like')
 /** Case-insensitive `LIKE` (Postgres). */
-export const ilike = <L>(left: L, pattern: Operand<string>): Condition =>
-  sql<SqlBool>`${toSql(left)} ilike ${toSql(pattern)}`
+export const ilike = likeOp('ilike', 'ilike')
 
-export const isNull = (operand: unknown): Condition => sql<SqlBool>`${toSql(operand)} is null`
-export const isNotNull = (operand: unknown): Condition =>
-  sql<SqlBool>`${toSql(operand)} is not null`
+export const isNull = (operand: Ref | ColumnRef): Condition => {
+  assertRef('isNull', operand)
+  return sql<SqlBool>`${toSql(operand)} is null`
+}
+export const isNotNull = (operand: Ref | ColumnRef): Condition => {
+  assertRef('isNotNull', operand)
+  return sql<SqlBool>`${toSql(operand)} is not null`
+}
 
 /** `left IN (…)`. An empty list matches nothing, rather than being invalid SQL. */
-export function inArray<L>(left: L, values: readonly Comparable<L>[]): Condition {
+export function inArray<L>(left: L, values: readonly Across<L>[]): Condition {
+  assertRef('inArray', left, ...values)
   if (values.length === 0) return sql<SqlBool>`1 = 0`
   return sql<SqlBool>`${toSql(left)} in (${sql.join(values.map(toSql))})`
 }
 
 /** `left NOT IN (…)`. An empty list matches everything. */
-export function notInArray<L>(left: L, values: readonly Comparable<L>[]): Condition {
+export function notInArray<L>(left: L, values: readonly Across<L>[]): Condition {
+  assertRef('notInArray', left, ...values)
   if (values.length === 0) return sql<SqlBool>`1 = 1`
   return sql<SqlBool>`${toSql(left)} not in (${sql.join(values.map(toSql))})`
 }
 
-export const between = <L>(left: L, low: Comparable<L>, high: Comparable<L>): Condition =>
-  sql<SqlBool>`${toSql(left)} between ${toSql(low)} and ${toSql(high)}`
+export const between = <L>(left: L, low: Comparable<L>, high: Comparable<L>): Condition => {
+  assertRef('between', left, low, high)
+  return sql<SqlBool>`${toSql(left)} between ${toSql(low)} and ${toSql(high)}`
+}
 
 /**
  * All of the conditions. `undefined` entries are skipped, so a filter can be

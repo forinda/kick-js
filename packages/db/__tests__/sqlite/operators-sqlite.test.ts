@@ -74,6 +74,20 @@ async function make() {
 const names = (rows: { name: string }[]) => rows.map((r) => r.name)
 
 describe('condition helpers', () => {
+  it('refuse a comparison of two values — a string is not a column name', async () => {
+    const db = await make()
+    const id = 1 as unknown
+    // eq('id', id) would compile to `'id' = ?` and never match.
+    expect(() => eq('name' as never, 'Ada' as never)).toThrow(/eq\(\) got only values/)
+    expect(() => inArray('id' as never, [id] as never)).toThrow(/inArray\(\) got only values/)
+    expect(() => isNull('deletedAt' as never)).toThrow(/isNull\(\) got only values/)
+    // A value across from a column, or an expression, is fine.
+    expect(
+      names(await db.selectFrom('users').select('name').where(eq('Ada', users.name)).execute()),
+    ).toEqual(['Ada'])
+    expect(() => eq(sql<number>`1`, 1)).not.toThrow()
+  })
+
   it('work in .where() with schema columns', async () => {
     const db = await make()
     const q = () => db.selectFrom('users').select('name').orderBy('id')

@@ -101,6 +101,7 @@ await db.query.users.findMany({
 | `and(…)`, `or(…)`, `not(…)`               | grouped in parentheses          |
 | `exists(subquery)`, `notExists(subquery)` | `EXISTS (…)`                    |
 
+- **One side is a column or an expression.** A string is a value, not a column name: `eq('id', id)` would compare the text `'id'` with `id`, so it doesn't compile, and it throws if the types are bypassed. Name the column (`eq(users.id, id)`) or write `.where('id', '=', id)`.
 - **Operands are type-checked.** `eq(users.name, 1)` doesn't compile. An expression (`eb.ref('email')`, `` sql`lower(email)` ``, `sql.ref('users.id')`) is accepted wherever a column is.
 - **Edge cases stay valid SQL.** `and()` and `or()` skip `undefined`, so a filter can be built conditionally: `and(eq(t.a, a), b ? eq(t.b, b) : undefined)`. With nothing left, `and()` matches every row and `or()` matches none. An empty `inArray` matches nothing, and an empty `notInArray` matches everything.
 - **Use the right column reference.** Inside `db.query`, use the row argument rather than `users.email`. The relational reader aliases each table (`users_0`), so a reference to the bare table name wouldn't resolve.
