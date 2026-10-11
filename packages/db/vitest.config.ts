@@ -16,6 +16,10 @@ export default defineConfig({
       // Array form preserves order — more-specific subpaths must match
       // BEFORE the bare-package alias.
       {
+        find: '@forinda/kickjs-devtools-kit/bus/token',
+        replacement: path.resolve(__dirname, '../devtools-kit/src/bus/token.ts'),
+      },
+      {
         find: '@forinda/kickjs-devtools-kit/bus',
         replacement: path.resolve(__dirname, '../devtools-kit/src/bus.ts'),
       },

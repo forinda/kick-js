@@ -32,7 +32,11 @@ import {
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
 import { cronSnapshot, runCronJobNow, trackContainerCronJobs } from './cron'
-import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
+import {
+  DEVTOOLS_BUS,
+  getActiveDevtoolsBus,
+  setActiveDevtoolsBus,
+} from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs, runTabAction } from './devtools-tabs'
 import { RequestLog } from './request-log'
@@ -601,7 +605,9 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // Lazy resolve — reuses the existing bus when the same
         // container is reused across HMR rebuilds, otherwise creates
         // and registers a fresh instance. See `ensureBus` for why.
-        ensureBus(containerArg)
+        // Also published process-wide, so a kick/db client created at import
+        // time — before any container exists — reports its queries here.
+        setActiveDevtoolsBus(ensureBus(containerArg))
         startedAt.value = Date.now()
         // Clear routes on rebuild/restart to prevent HMR duplication
         routes = []
@@ -1316,6 +1322,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         stopErrorWatch?.()
         runtimeSampler?.stop()
         memoryAnalyzer?.stop()
+        if (bus && getActiveDevtoolsBus() === bus) setActiveDevtoolsBus(undefined)
         bus?.close()
         adapterStatuses['DevToolsAdapter'] = 'stopped'
       },
