@@ -9,7 +9,7 @@ Every part of KickJS that reads a schema goes through `@forinda/kickjs-schema`:
 - env loading
 - `kick typegen`
 
-Each one calls `detectSchema(schema)` and works with the `KickSchema` it returns. That's why one Zod, Valibot, Yup or Standard Schema object works everywhere without extra config. This page describes what each integration does with that schema.
+At runtime, each of these calls `detectSchema(schema)` and works with the `KickSchema` it returns — that's why one Zod, Valibot, Yup or Standard Schema object works everywhere without extra config. `kick typegen` is the exception: it reads your source without running it, finds the schemas your routes and env reference, and types them through `InferSchemaOutput` (see [Type Generation](#type-generation)). This page describes what each integration does with the schema.
 
 ## Request Validation
 
