@@ -68,7 +68,7 @@ await this.db.deleteFrom('posts').where('id', '=', id).execute()
 ```
 
 ::: tip The full query builder
-For anything not on the client itself, `this.db.qb` is the full query builder (`Kysely<DB>`, exported from `@forinda/kickjs-db`). You rarely need it — `selectFrom` / `insertInto` / `updateTable` / `deleteFrom` cover the common surface.
+For anything not on the client itself, `this.db.qb` is the full query builder. You rarely need it — `selectFrom` / `insertInto` / `updateTable` / `deleteFrom` cover the common surface.
 :::
 
 ## Condition helpers
