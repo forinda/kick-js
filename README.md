@@ -118,6 +118,10 @@ pnpm install && pnpm build && pnpm test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Acknowledgements
+
+kick/db's query builder is built on [Kysely](https://github.com/kysely-org/kysely) (MIT).
+
 ## License
 
 MIT — see [LICENSE](LICENSE)

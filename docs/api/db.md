@@ -117,7 +117,7 @@ const db = createDbClient({
 | Option                 | Type                                | Description                                                                                                                         |
 | ---------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `schema`               | `TSchema`                           | Schema record — used for type inference                                                                                             |
-| `dialect`              | `Dialect`                           | A dialect handle from a peer adapter (e.g. `pgDialect({ pool })`), or any Kysely dialect                                            |
+| `dialect`              | `Dialect`                           | A dialect handle from a peer adapter (e.g. `pgDialect({ pool })`), or a third-party dialect                                         |
 | `dialectTag`           | `'postgres' \| 'mysql' \| 'sqlite'` | Which SQL `dialect` speaks, for a dialect kick/db can't place ([Drivers](../guide/database/drivers.md#serverless-and-edge-drivers)) |
 | `events`               | `boolean`                           | Enable lifecycle event emission. Zero-overhead when off                                                                             |
 | `slowQueryThresholdMs` | `number \| null`                    | Fire `slowQuery` above this duration                                                                                                |
@@ -319,7 +319,7 @@ CREATE TABLE "billing"."invoices" ( ... );
 CREATE TABLE "users" ( ... );
 ```
 
-and keys the row type by the qualified name, which Kysely reads as
+and keys the row type by the qualified name, which the query builder reads as
 schema-qualified:
 
 ```ts
@@ -379,7 +379,7 @@ Inferred column types end-to-end from your schema — `name` autocompletes again
 
 ### Layer 2 — Expressions and safe `LIKE`
 
-Compound conditions use Kysely's expression builder:
+Compound conditions use the expression builder:
 
 ```ts
 await db
@@ -459,7 +459,7 @@ async showFull(ctx: RequestContext) {
 
 `RequestContext.signal` is provided by `@forinda/kickjs` ≥5.6.0.
 
-Cancellation is JS-side on every dialect: the promise rejects at once, but a query already sent keeps running on the database until it finishes and its connection returns to the pool (PostgreSQL, MySQL). SQLite runs synchronously, so the signal can only stop work before a statement starts. For true server-side cancellation of a long PostgreSQL or MySQL query, call Kysely directly through `db.qb` with `inflightQueryAbortStrategy: 'cancel query'`.
+Cancellation is JS-side on every dialect: the promise rejects at once, but a query already sent keeps running on the database until it finishes and its connection returns to the pool (PostgreSQL, MySQL). SQLite runs synchronously, so the signal can only stop work before a statement starts. For true server-side cancellation of a long PostgreSQL or MySQL query, call the full query builder through `db.qb` with `inflightQueryAbortStrategy: 'cancel query'`.
 
 ## Plugins
 

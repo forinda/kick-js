@@ -1,6 +1,6 @@
 # Raw SQL and Recipes
 
-The query builder covers most queries; for everything else, write SQL. kick/db's client is built on [Kysely](https://kysely.dev), so Kysely's `sql` template (exported from `@forinda/kickjs-db`) and expression builder work as-is — values are always sent as parameters.
+The query builder covers most queries; for everything else, write SQL. The `sql` template (exported from `@forinda/kickjs-db`) and the expression builder mix SQL into any query — values are always sent as parameters.
 
 ## The `sql` template
 
@@ -234,4 +234,3 @@ Every example on this page except the MySQL upsert runs in kick/db's test suite,
 
 - [Queries](./queries) — the query builder, relational queries, transactions
 - [Errors](./errors)
-- [Kysely's recipes](https://kysely.dev/docs/category/recipes) — more patterns that apply unchanged

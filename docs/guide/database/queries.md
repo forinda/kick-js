@@ -1,6 +1,6 @@
 # Queries
 
-`KickDbClient` is a thin wrapper over a [Kysely](https://kysely.dev) instance. It exposes Kysely's typed query builder directly — `selectFrom`, `insertInto`, `updateTable`, `deleteFrom` — plus the relational `db.query` layer.
+`KickDbClient` is a typed query builder — `selectFrom`, `insertInto`, `updateTable`, `deleteFrom` — plus the relational `db.query` layer.
 
 All examples assume an injected client:
 
@@ -67,13 +67,13 @@ await this.db
 await this.db.deleteFrom('posts').where('id', '=', id).execute()
 ```
 
-::: tip The raw Kysely instance
-For anything not surfaced on the wrapper, `this.db.qb` is the underlying `Kysely<DB>`. You rarely need it — `selectFrom` / `insertInto` / `updateTable` / `deleteFrom` cover the common surface.
+::: tip The full query builder
+For anything not on the client itself, `this.db.qb` is the full query builder (`Kysely<DB>`, exported from `@forinda/kickjs-db`). You rarely need it — `selectFrom` / `insertInto` / `updateTable` / `deleteFrom` cover the common surface.
 :::
 
 ## Condition helpers
 
-Besides Kysely's `where('email', '=', x)` and `eb(…)`, conditions can be built with standalone helpers. Their operands are a table's columns (`users.email`) or plain values, and they return an expression, so they work in `.where()`, a join's `.on()`, `having` and `db.query`:
+Besides `where('email', '=', x)` and the expression builder `eb(…)`, conditions can be built with standalone helpers. Their operands are a table's columns (`users.email`) or plain values, and they return an expression, so they work in `.where()`, a join's `.on()`, `having` and `db.query`:
 
 ```ts
 import { and, eq, gt, inArray, isNull, like, or } from '@forinda/kickjs-db'
@@ -101,7 +101,7 @@ await db.query.users.findMany({
 | `and(…)`, `or(…)`, `not(…)`               | grouped in parentheses          |
 | `exists(subquery)`, `notExists(subquery)` | `EXISTS (…)`                    |
 
-- **Operands are type-checked.** `eq(users.name, 1)` doesn't compile. A Kysely expression (`eb.ref('email')`, `` sql`lower(email)` ``, `sql.ref('users.id')`) is accepted wherever a column is.
+- **Operands are type-checked.** `eq(users.name, 1)` doesn't compile. An expression (`eb.ref('email')`, `` sql`lower(email)` ``, `sql.ref('users.id')`) is accepted wherever a column is.
 - **Edge cases stay valid SQL.** `and()` and `or()` skip `undefined`, so a filter can be built conditionally: `and(eq(t.a, a), b ? eq(t.b, b) : undefined)`. With nothing left, `and()` matches every row and `or()` matches none. An empty `inArray` matches nothing, and an empty `notInArray` matches everything.
 - **Use the right column reference.** Inside `db.query`, use the row argument rather than `users.email`. The relational reader aliases each table (`users_0`), so a reference to the bare table name wouldn't resolve.
 - **Escape `like` patterns.** Pass user input through `escapeLike()` first ([Raw SQL](./raw-sql.md)).

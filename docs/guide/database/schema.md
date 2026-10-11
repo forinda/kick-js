@@ -178,7 +178,7 @@ timestamp().defaultNow() // DEFAULT CURRENT_TIMESTAMP (milliseconds on SQLite)
 timestamptz().defaultNow()
 ```
 
-A column with a default wraps in Kysely's `Generated<T>` in the inferred row type, so it is optional on insert but always present on select. Chaining works in either order:
+A column with a default is optional on insert but always present on select. Chaining works in either order:
 
 ```ts
 uuid().primaryKey().defaultRandom()
@@ -200,7 +200,7 @@ export const orders = table('orders', {
 ```
 
 - **Stored or virtual.** Stored (the default) computes the value on write and keeps it, so it can be indexed. `{ stored: false }` computes it on read: MySQL, SQLite and Postgres 18+.
-- **Read-only.** It types as Kysely's `GeneratedAlways<T>`, so `insertInto` / `updateTable` reject it at compile time. `insertSchema` and `updateSchema` leave it out, and the database refuses a write to it.
+- **Read-only.** Its type makes `insertInto` / `updateTable` reject it at compile time. `insertSchema` and `updateSchema` leave it out, and the database refuses a write to it.
 - **The SQL is passed through.** Name columns as the database knows them, and write the expression for your dialect.
 - **Changing it.**
   - On Postgres, a new expression is applied in place with `SET EXPRESSION` (Postgres 17+).
@@ -263,7 +263,7 @@ export const blogPosts = table('blogPosts', {
 ```
 
 - **Migrations** name tables, columns, keys and foreign keys in snake_case. Names kick/db derives (`blog_posts_author_id_fk`) follow; names you write (`index('posts_by_author')`) are kept as written.
-- **Queries** convert both ways: `db.selectFrom('blogPosts').select('postTitle')` runs `select "post_title" from "blog_posts"`, and every row (raw SQL results and `db.query` nested rows included) comes back with camelCase keys. It's Kysely's `CamelCasePlugin`, applied after kick/db's own plugins on the way out and before them on the way back.
+- **Queries** convert both ways: `db.selectFrom('blogPosts').select('postTitle')` runs `select "post_title" from "blog_posts"`, and every row (raw SQL results and `db.query` nested rows included) comes back with camelCase keys. The conversion runs after your plugins on the way out and before them on the way back.
 - **SQL you write stays SQL.** CHECK expressions, `where` predicates of partial indexes, `generatedAlwaysAs` and `sql` templates name columns as the database does: `check('positive', 'post_count >= 0')`.
 - **Keys must be camelCase.** A key that is already snake_case (`created_at`) comes back from the database as `createdAt`.
 - **Test helpers and introspection follow.** `createTestDb({ schema, casing })` takes the same option, and `kick db introspect` with `casing` set renders camelCase keys.

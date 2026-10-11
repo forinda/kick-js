@@ -6,7 +6,7 @@ description: Coming to kick/db from Drizzle — how pgTable, relations, db.query
 
 Of the established ORMs, Drizzle is closest to kick/db. Both are code-first — the schema is TypeScript, the types come from it with no generate step — both sit on a SQL-shaped query builder, and both offer a relational `db.query` API with `with`. `relations()` is even spelled the same way.
 
-The differences are in the details: kick/db's builder is [Kysely](https://kysely.dev), so columns are usually named with strings (`where('email', '=', x)`), though the same imported operators work too (`eq(users.email, x)`); migrations are reviewed before they run and can be rolled back; database errors arrive as typed classes; and the client plugs into KickJS's DI, transactions and lifecycle.
+The differences are in the details: kick/db's builder usually names columns with strings (`where('email', '=', x)`), though the same imported operators work too (`eq(users.email, x)`); migrations are reviewed before they run and can be rolled back; database errors arrive as typed classes; and the client plugs into KickJS's DI, transactions and lifecycle.
 
 The examples use Postgres. Everything kick/db shown here runs as written.
 
@@ -146,7 +146,7 @@ The snapshots don't interchange. To move an existing project, baseline rather th
 
 ### The relational API
 
-`db.query` works the way you know, with Kysely's expression builder in place of Drizzle's operator helpers:
+`db.query` works the way you know, with the expression builder in place of Drizzle's operator helpers:
 
 ::: code-group
 
@@ -193,7 +193,7 @@ const user = await db.query.users.findFirst({
 
 ### The query builder
 
-Drizzle's core API imports a column object and an operator for each condition; Kysely names the column and the operator as strings, checked against the schema:
+Drizzle's core API imports a column object and an operator for each condition; kick/db's builder names the column and the operator as strings, checked against the schema:
 
 | Drizzle                                           | kick/db                                                                                               |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -347,7 +347,7 @@ try {
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `logger: true`, a custom logger | `events: true` and `db.on('query' \| 'slowQuery' \| 'queryError', …)` ([Events and Plugins](./events-plugins.md)) |
 | —                               | `db.$extends({ model: { users: { … } } })` — per-table methods ([Extensions](../db-extensions.md))                |
-| —                               | Kysely plugins via `createDbClient({ plugins })`                                                                  |
+| —                               | query plugins via `createDbClient({ plugins })`                                                                   |
 
 ## Not there (yet)
 

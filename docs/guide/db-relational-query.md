@@ -6,14 +6,14 @@ The runtime ships for **PostgreSQL**, **SQLite**, and **MySQL 8+** as of v5.4.0.
 
 ## When to reach for it
 
-| Pattern                                                     | Use this                                      | Use Kysely                           |
+| Pattern                                                     | Use this                                      | Use the query builder                |
 | ----------------------------------------------------------- | --------------------------------------------- | ------------------------------------ |
 | "Get task X plus its comments, assignees, labels"           | `db.query.tasks.findUnique({ with: { … } })`  | —                                    |
 | "Get the 20 newest projects with their tasks and lead user" | `db.query.projects.findMany({ with: { … } })` | —                                    |
 | "Count tasks by status across a workspace"                  | —                                             | `db.selectFrom('tasks').select(...)` |
 | "Update + return"                                           | —                                             | `db.updateTable(...).returningAll()` |
 
-The relational layer is read-only. Inserts, updates, deletes, and any non-trivial aggregation continue to flow through Kysely — `db.selectFrom` / `insertInto` / `updateTable` etc. The two coexist on the same `KickDbClient`.
+The relational layer is read-only. Inserts, updates, deletes, and any non-trivial aggregation continue to flow through the query builder — `db.selectFrom` / `insertInto` / `updateTable` etc. The two coexist on the same `KickDbClient`.
 
 ## First findMany
 
@@ -231,7 +231,7 @@ The options bag:
 
 | Field         | Type                                        | Notes                                                                                                                  |
 | ------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `where`       | `(table, eb) => Expression`                 | `eb` is Kysely's expression builder — `eb('col', '=', v)`                                                              |
+| `where`       | `(table, eb) => Expression`                 | `eb` is the expression builder — `eb('col', '=', v)`                                                                   |
 | `orderBy`     | `(table, eb) => Expression \| Expression[]` | `eb.ref('col')`, wrapped in `desc()` / `asc()` for direction                                                           |
 | `limit`       | `number`                                    |                                                                                                                        |
 | `offset`      | `number`                                    |                                                                                                                        |
@@ -318,9 +318,9 @@ The `with` shape is enforced by the typegen registry — the registry stays in s
 
 ## Narrowing the client
 
-Kysely 0.29 ships three compile-time narrowing helpers — `$pickTables<...>()`, `$omitTables<...>()`, and the `ReadonlyKysely<DB>` type — and `@forinda/kickjs-db` surfaces all three on the bare-import path.
+Three compile-time narrowing helpers limit what a repository can touch: `$pickTables<...>()`, `$omitTables<...>()`, and the `ReadonlyKysely<DB>` type exported from `@forinda/kickjs-db`.
 
-Reach the table-set narrowers through the underlying Kysely escape hatch (`db.qb`):
+Reach the table-set narrowers through the full query builder (`db.qb`):
 
 ```ts
 import { Service, Inject } from '@forinda/kickjs'
@@ -342,7 +342,7 @@ export class WorkspacesAuditRepository {
 }
 ```
 
-For a fully read-only handle, annotate `db.qb` as `ReadonlyKysely<KickDb>`. The runtime is the same Kysely instance — the type just strips `insertInto` / `updateTable` / `deleteFrom` / `mergeInto`:
+For a fully read-only handle, annotate `db.qb` as `ReadonlyKysely<KickDb>`. The runtime is the same client — the type just strips `insertInto` / `updateTable` / `deleteFrom` / `mergeInto`:
 
 ```ts
 import { Service, Inject } from '@forinda/kickjs'

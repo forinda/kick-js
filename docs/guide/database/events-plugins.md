@@ -42,7 +42,7 @@ While the [DevTools](../devtools.md) adapter runs, every client reports its quer
 
 ## Plugins
 
-`createDbClient({ plugins })` takes [Kysely plugins](https://kysely.dev/docs/plugins), which transform each query before it's compiled and each result after it returns. kick/db ships one.
+`createDbClient({ plugins })` takes query plugins (`KyselyPlugin`, exported from `@forinda/kickjs-db`), which transform each query before it's compiled and each result after it returns. kick/db ships one.
 
 ### Safe NULL comparison
 
@@ -59,7 +59,7 @@ const db = createDbClient({
 ```
 
 ::: warning Use the kickjs version
-Import `safeNullComparison()` from `@forinda/kickjs-db`, **not** Kysely's `SafeNullComparisonPlugin` — the upstream version is broken on Postgres.
+Import `safeNullComparison()` from `@forinda/kickjs-db`, **not** a `SafeNullComparisonPlugin` from elsewhere — other versions are broken on Postgres.
 :::
 
 ## Related

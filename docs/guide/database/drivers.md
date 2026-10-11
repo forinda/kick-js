@@ -112,7 +112,7 @@ Notes:
 
 ## Serverless and edge drivers
 
-`createDbClient` takes any Kysely dialect, so the serverless drivers that ship one work as they are. kick/db tells which SQL to compile from the dialect's Kysely adapter (Postgres, MySQL or SQLite). A dialect it can't place throws, and asks for `dialectTag`:
+`createDbClient` takes a third-party dialect as well as its own, so the serverless drivers that ship one work as they are. kick/db tells which SQL to compile from the dialect (Postgres, MySQL or SQLite). A dialect it can't place throws, and asks for `dialectTag`:
 
 ```ts
 createDbClient({ schema, dialect: myDialect, dialectTag: 'postgres' })
@@ -180,7 +180,7 @@ export const db = createDbClient({ schema, dialect: sqliteDialect({ database }) 
 export const migrationAdapter = sqliteAdapter({ database })
 ```
 
-The same factories as `better-sqlite3`: `sqliteDialect` adapts Bun's statements to what Kysely expects.
+The same factories as `better-sqlite3`: `sqliteDialect` adapts Bun's statements.
 
 ### Neon and PlanetScale
 
@@ -191,7 +191,7 @@ Neon's `Pool` speaks the Postgres protocol over WebSockets, so `pgDialect({ pool
 - **A migration is one batch:** its statements, its `kick_migrations` row, and, after a table rebuild, a foreign-key check. If any of them fails, none apply.
 - **Migration SQL is split at top-level `;`.** A hand-written trigger (`BEGIN … ; … END`) won't split correctly. Write it in a TypeScript migration as one ``sql`…`.execute(db)`` statement instead.
 - **`introspect()` works** over the driver, as it does on `better-sqlite3`.
-- **TypeScript migrations** (`migration.ts`) need a Kysely instance: pass `kysely: new Kysely({ dialect })` to `asyncSqliteAdapter` (`Kysely` is exported from `@forinda/kickjs-db`). They run in a transaction, which D1 doesn't have; set `"transaction": false` in a D1 migration's `meta.json`.
+- **TypeScript migrations** (`migration.ts`) need a query builder: pass `kysely: new Kysely({ dialect })` to `asyncSqliteAdapter` (`Kysely` is exported from `@forinda/kickjs-db`). They run in a transaction, which D1 doesn't have; set `"transaction": false` in a D1 migration's `meta.json`.
 
 ## Choosing a dialect
 
