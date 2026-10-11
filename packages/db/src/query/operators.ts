@@ -34,6 +34,11 @@ type Across<L> = [L] extends [TypedColumnRef<any> | Expression<any>]
   ? Comparable<L>
   : Ref<SelectType<ValueOf<L>>>
 
+/** The list across from `L`: with a value on the left, a non-empty list of columns or expressions. */
+type AcrossList<L> = [L] extends [TypedColumnRef<any> | Expression<any>]
+  ? readonly Comparable<L>[]
+  : readonly [Across<L>, ...Across<L>[]]
+
 type Condition = RawBuilder<SqlBool>
 
 function isExpression(value: unknown): value is Expression<unknown> {
@@ -110,20 +115,21 @@ export const isNotNull = (operand: Ref | ColumnRef): Condition => {
 }
 
 /** `left IN (…)`. An empty list matches nothing, rather than being invalid SQL. */
-export function inArray<L>(left: L, values: readonly Across<L>[]): Condition {
+export function inArray<L>(left: L, values: AcrossList<L>): Condition {
   assertRef('inArray', left, ...values)
   if (values.length === 0) return sql<SqlBool>`1 = 0`
   return sql<SqlBool>`${toSql(left)} in (${sql.join(values.map(toSql))})`
 }
 
 /** `left NOT IN (…)`. An empty list matches everything. */
-export function notInArray<L>(left: L, values: readonly Across<L>[]): Condition {
+export function notInArray<L>(left: L, values: AcrossList<L>): Condition {
   assertRef('notInArray', left, ...values)
   if (values.length === 0) return sql<SqlBool>`1 = 1`
   return sql<SqlBool>`${toSql(left)} not in (${sql.join(values.map(toSql))})`
 }
 
-export const between = <L>(left: L, low: Comparable<L>, high: Comparable<L>): Condition => {
+/** With a value on the left, `low` must be a column or an expression. */
+export const between = <L>(left: L, low: Across<L>, high: Comparable<L>): Condition => {
   assertRef('between', left, low, high)
   return sql<SqlBool>`${toSql(left)} between ${toSql(low)} and ${toSql(high)}`
 }

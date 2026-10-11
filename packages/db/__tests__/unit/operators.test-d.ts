@@ -4,6 +4,7 @@ import type { SqlBool, Expression } from 'kysely'
 import {
   alias,
   and,
+  between,
   eq,
   inArray,
   integer,
@@ -41,6 +42,12 @@ test('two values do not compile — one side must be a column or an expression',
   like('name', 'A%')
   // @ts-expect-error and inArray
   inArray('id', [id])
+  // @ts-expect-error nor an empty list across from a value
+  inArray('id', [])
+  // @ts-expect-error between needs a column somewhere
+  between(1, 2, 3)
+  expectTypeOf(inArray(users.id, [])).toMatchTypeOf<Expression<SqlBool>>()
+  expectTypeOf(between(users.id, 1, 9)).toMatchTypeOf<Expression<SqlBool>>()
   // @ts-expect-error isNull needs a column
   isNull('managerId')
   expectTypeOf(eq(1, users.id)).toMatchTypeOf<Expression<SqlBool>>()
