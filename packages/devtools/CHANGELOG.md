@@ -1,5 +1,17 @@
 # @forinda/kickjs-devtools
 
+## 7.9.0
+
+### Minor Changes
+
+- [#841](https://github.com/forinda/kick-js/pull/841) [`3b3c442`](https://github.com/forinda/kick-js/commit/3b3c4422fe07b0985e8cdca0f9dd70addc6f0f71) Thanks [@forinda](https://github.com/forinda)! - kick/db queries show in the DevTools **Database** tab with no wiring. While the DevTools adapter runs, every `createDbClient` reports `db:query`, `db:slow-query` and `db:query-error` to it — including a client created at import time, before DevTools started. An explicit `createDbClient({ bus })` still takes precedence. devtools-kit adds `getActiveDevtoolsBus()` / `setActiveDevtoolsBus()` in `@forinda/kickjs-devtools-kit/bus/token`.
+
+### Patch Changes
+
+- [#840](https://github.com/forinda/kick-js/pull/840) [`cf318ab`](https://github.com/forinda/kick-js/commit/cf318ab2ed016ef78bf4c5490708c80d9df5ef56) Thanks [@forinda](https://github.com/forinda)! - The DevTools event bus never throws into whoever emits an event. With a dashboard tab open, a kick/db query with a `bigint` parameter (an insert into a `bigint` column) used to fail with `TypeError: Do not know how to serialize a BigInt`, because the bus serialised the event inside the query. Bigints now go to the dashboard as strings, and an event JSON can't hold at all (a circular payload) is dropped for the dashboard instead of failing the caller.
+- Updated dependencies [[`3b3c442`](https://github.com/forinda/kick-js/commit/3b3c4422fe07b0985e8cdca0f9dd70addc6f0f71)]:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.8.0
 
 ### Minor Changes

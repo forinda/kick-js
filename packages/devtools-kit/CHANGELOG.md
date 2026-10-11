@@ -1,5 +1,11 @@
 # @forinda/kickjs-devtools-kit
 
+## 7.3.0
+
+### Minor Changes
+
+- [#841](https://github.com/forinda/kick-js/pull/841) [`3b3c442`](https://github.com/forinda/kick-js/commit/3b3c4422fe07b0985e8cdca0f9dd70addc6f0f71) Thanks [@forinda](https://github.com/forinda)! - kick/db queries show in the DevTools **Database** tab with no wiring. While the DevTools adapter runs, every `createDbClient` reports `db:query`, `db:slow-query` and `db:query-error` to it — including a client created at import time, before DevTools started. An explicit `createDbClient({ bus })` still takes precedence. devtools-kit adds `getActiveDevtoolsBus()` / `setActiveDevtoolsBus()` in `@forinda/kickjs-devtools-kit/bus/token`.
+
 ## 7.2.0
 
 ### Minor Changes
