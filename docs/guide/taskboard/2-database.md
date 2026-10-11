@@ -402,7 +402,7 @@ import { TASK_STATUSES } from '@/db/schema'
 
 export const createTaskSchema = z.object({
   projectId: z.uuid(),
-  title: z.string().min(1, 'Title is required').max(200),
+  title: z.string().min(1, { error: 'Title is required' }).max(200),
   status: z.enum(TASK_STATUSES).optional(),
   labels: z.array(z.string().min(1).max(30)).max(10).optional(),
 })

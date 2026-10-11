@@ -201,7 +201,7 @@ The request schemas are Zod:
 ```ts
 // src/modules/projects/dtos/create-project.dto.ts
 export const createProjectSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(200),
+  name: z.string().min(1, { error: 'Name is required' }).max(200),
 })
 
 export type CreateProjectDTO = z.infer<typeof createProjectSchema>

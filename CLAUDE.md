@@ -109,7 +109,7 @@ Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, 
 ### Decorators
 
 ```ts
-@Controller('/path')       // Route prefix
+@Controller()              // No path — the prefix comes from the module's routes().path
 @Get('/'), @Post('/'), @Put('/'), @Delete('/'), @Patch('/')
 @Service()                 // DI-registered singleton
 @Repository()              // DI-registered singleton (semantic)

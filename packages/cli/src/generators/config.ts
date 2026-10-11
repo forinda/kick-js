@@ -38,7 +38,8 @@ export default defineConfig({
   },
 
   typegen: {
-    schemaValidator: 'zod',
+    // Infers request/response types from any schema library @forinda/kickjs-schema reads.
+    schemaValidator: 'kickjs-schema',
   },
 
   commands: [

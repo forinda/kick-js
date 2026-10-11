@@ -110,6 +110,8 @@ export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: stri
   // Schema libraries: `@forinda/kickjs-schema` adapts one major each.
   zod: { fallback: '^4.3.6', cap: '^4' },
   valibot: { fallback: '^1.4.1', cap: '^1' },
+  // Valibot's JSON Schema converter — Swagger needs it for Valibot schemas.
+  '@valibot/to-json-schema': { fallback: '^1.8.0', cap: '^1' },
   yup: { fallback: '^1.7.1', cap: '^1' },
   // Peers of the optional packages (`--packages ws,queue`), capped at the
   // major those packages peer on.

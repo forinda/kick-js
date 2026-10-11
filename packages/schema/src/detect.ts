@@ -1,4 +1,4 @@
-import type { KickSchema, SchemaAdapter } from './types.js'
+import type { JsonSchemaOptions, KickSchema, SchemaAdapter } from './types.js'
 import { isZodSchema, fromZod } from './adapters/zod.js'
 import { isValibotSchema, fromValibot } from './adapters/valibot.js'
 import { isYupSchema, fromYup } from './adapters/yup.js'
@@ -18,8 +18,17 @@ export function isKickSchema(schema: unknown): schema is KickSchema {
   )
 }
 
+/**
+ * A Standard Schema implementer. Functions count: ArkType's types are
+ * callable, and treating one as a plain validator function would accept
+ * every value (it returns errors instead of throwing).
+ */
 function hasStandardSchema(schema: unknown): boolean {
-  return schema != null && typeof schema === 'object' && '~standard' in (schema as any)
+  return (
+    schema != null &&
+    (typeof schema === 'object' || typeof schema === 'function') &&
+    '~standard' in (schema as any)
+  )
 }
 
 function fromStandardSchema(schema: any): KickSchema {
@@ -44,9 +53,15 @@ function fromStandardSchema(schema: any): KickSchema {
       return { success: false, issues }
     },
 
-    toJsonSchema() {
-      if (std.jsonSchema && typeof std.jsonSchema.input === 'function') {
-        return std.jsonSchema.input()
+    toJsonSchema(options: JsonSchemaOptions = {}) {
+      // Standard JSON Schema: `input` / `output` take a required `target`.
+      // Pass the caller's, so Swagger's `openapi-3.0` reaches the library.
+      const convert = options.io === 'input' ? std.jsonSchema?.input : std.jsonSchema?.output
+      if (typeof convert === 'function') {
+        const { $schema: _, ...rest } = convert.call(std.jsonSchema, {
+          target: options.target ?? 'draft-2020-12',
+        })
+        return rest
       }
       if (typeof schema.toJSONSchema === 'function') {
         const { $schema: _, ...rest } = schema.toJSONSchema()

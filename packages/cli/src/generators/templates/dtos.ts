@@ -23,7 +23,7 @@ export const SCHEMA_SHAPES: Record<
 > = {
   zod: {
     import: `import { z } from 'zod'`,
-    required: `z.string().min(1, 'Name is required').max(200)`,
+    required: `z.string().min(1, { error: 'Name is required' }).max(200)`,
     optional: `z.string().min(1).max(200).optional()`,
     infer: (schema) => `z.infer<typeof ${schema}>`,
     hint: [
