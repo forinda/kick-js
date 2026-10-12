@@ -104,7 +104,7 @@
     "@testcontainers/mysql": "^12.2.0",
     "@testcontainers/postgresql": "^12.2.0",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
     "kysely": "^0.29.6",
