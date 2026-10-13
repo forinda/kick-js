@@ -144,17 +144,17 @@ dates), the runtime types will be richer than the map claims.
 
 ### Expansion depth
 
-A response is expanded inline up to 12 levels; past that it is emitted as
-`unknown` and the route is named in a warning. Truncation is loud and safe —
-`unknown` has to be narrowed by the consumer, so it can never be mistaken for a
-type the server does not return.
+Response types are emitted exact, however deep they nest. Named types,
+recursive types, and any type nested deeper than 12 levels inline each get a
+declaration of their own (`interface __Tn` or `type __Tn`), referenced by name,
+so the emitted file stays shallow and nothing is cut off.
 
-The default is rarely reached. Recursive types and named types both hoist into
-their own `interface __Tn`, which costs one level instead of the whole budget,
-so only deep _anonymous_ nesting spends it. On a 1,940-route app the emitted map
-is byte-identical at 12, 24, 48 and 96.
+The one exception is a type that never repeats, such as a generic that yields
+a new type at every level (`type Deep<T> = { next: Deep<[T]> }`). That route is
+emitted as `unknown` and named in a warning; declare a response schema on it
+for an exact type.
 
-Raise it if a route tells you it hit the limit:
+`maxDepth` sets how deeply types nest inline before they are hoisted:
 
 ```ts
 // kick.config.ts
@@ -163,9 +163,10 @@ export default defineConfig({
 })
 ```
 
-The object form is on unless you say otherwise, so `{ maxDepth: 24 }` on its own
-also enables the map; `{ enabled: false }` turns it off. Changing the depth
-changes what is emitted, so it invalidates the cache and rebuilds.
+It changes the shape of the file, not the types in it. The object form is on
+unless you say otherwise, so `{ maxDepth: 24 }` on its own also enables the
+map; `{ enabled: false }` turns it off. Changing the depth changes what is
+emitted, so it invalidates the cache and rebuilds.
 
 ::: warning `types` replaces automatic `@types` inclusion
 Listing anything in `types` switches off TypeScript's automatic inclusion of
