@@ -12,8 +12,9 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { defineAdapter, type RequestContext } from '@forinda/kickjs'
+import { defineAdapter, Logger, type RequestContext } from '@forinda/kickjs'
 import { setInertiaRuntime, requestUrl, type Page } from './inertia'
 import { defaultTemplate, devHead, manifestHead, pageBody, type HtmlTemplate } from './html'
 
@@ -38,10 +39,31 @@ export interface InertiaAdapterOptions {
   title: string
   /** Replace the HTML shell entirely. */
   template?: HtmlTemplate
+  /**
+   * Render pages on the server. `entry` is a module whose default export is
+   * `(page) => Promise<{ head: string[]; body: string }>` — what
+   * `createInertiaApp({ page, render: renderToString, ... })` returns. Loaded
+   * through Vite in dev; in production from `bundle`, the output of
+   * `vite build --ssr <entry>` (default `'dist/ssr/ssr.js'`). A render that
+   * throws falls back to client rendering for that request.
+   */
+  ssr?: { entry: string; bundle?: string }
 }
+
+/** What an SSR entry's default export returns. */
+export interface SsrResult {
+  head: string[]
+  body: string
+}
+
+type SsrRender = (page: Page) => Promise<SsrResult>
+
+const log = Logger.for('InertiaAdapter')
 
 interface ViteDevServerLike {
   transformIndexHtml(url: string, html: string): Promise<string>
+  ssrLoadModule(url: string): Promise<Record<string, unknown>>
+  ssrFixStacktrace(err: Error): void
 }
 
 function viteServer(): ViteDevServerLike | null {
@@ -127,11 +149,42 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
           version = typeof v === 'function' ? v : () => v
         }
 
+        const ssr = config.ssr
+        let prodRender: Promise<SsrRender> | undefined
+        const loadRender = async (): Promise<SsrRender> => {
+          if (vite) {
+            // Every request in dev, so an edited page renders fresh.
+            const mod = await vite.ssrLoadModule(`/${ssr!.entry.replace(/^\/+/, '')}`)
+            return mod.default as SsrRender
+          }
+          const url = pathToFileURL(resolve(ssr!.bundle ?? 'dist/ssr/ssr.js')).href
+          // The app's own build output, chosen at runtime — nothing for Vite to analyze.
+          prodRender ??= import(/* @vite-ignore */ url).then((mod) => mod.default as SsrRender)
+          return prodRender
+        }
+        const render = async (page: Page): Promise<SsrResult | null> => {
+          if (!ssr) return null
+          try {
+            return await (
+              await loadRender()
+            )(page)
+          } catch (err) {
+            if (vite && err instanceof Error) vite.ssrFixStacktrace(err)
+            log.error(err, `SSR failed for ${page.component} — sending it client-rendered`)
+            return null
+          }
+        }
+
         setInertiaRuntime({
           version: () => version(),
           share: config.share,
           async renderHtml(page, ctx) {
-            const html = template({ head: head(page), body: pageBody(page), page })
+            const rendered = await render(page)
+            const html = template({
+              head: [head(page), ...(rendered?.head ?? [])].join('\n    '),
+              body: rendered?.body ?? pageBody(page),
+              page,
+            })
             return vite ? vite.transformIndexHtml(requestUrl(ctx.req), html) : html
           },
         })

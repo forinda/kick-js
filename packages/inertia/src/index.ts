@@ -1,4 +1,4 @@
-export { InertiaAdapter, type InertiaAdapterOptions } from './adapter'
+export { InertiaAdapter, type InertiaAdapterOptions, type SsrResult } from './adapter'
 export {
   inertia,
   redirect,

@@ -60,7 +60,7 @@ function clientBuild(): string {
   return dir
 }
 
-async function makeApp(options: { version?: string | null } = {}) {
+async function makeApp(options: { version?: string | null; ssrBundle?: string } = {}) {
   @Controller()
   class PagesController {
     @Get('/users')
@@ -117,6 +117,9 @@ async function makeApp(options: { version?: string | null } = {}) {
         clientDir: clientBuild(),
         ...(options.version === null ? {} : { version: options.version ?? 'v1' }),
         share: () => ({ appName: 'Kick' }),
+        ...(options.ssrBundle
+          ? { ssr: { entry: 'src/client/ssr.tsx', bundle: options.ssrBundle } }
+          : {}),
       }),
     ],
     onError: inertiaErrorHandler(),
@@ -301,6 +304,37 @@ describe('InertiaAdapter', () => {
     const res = await request(app.handle.bind(app)).get('/away').set(X).expect(409)
     expect(res.headers['x-inertia-location']).toBe('https://example.com/out')
     await request(app.handle.bind(app)).get('/away').expect(302)
+  })
+
+  it('server-renders the page through the SSR bundle', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-inertia-ssr-'))
+    const bundle = join(dir, 'ssr.mjs')
+    writeFileSync(
+      bundle,
+      `export default async (page) => ({
+        head: ['<title inertia>' + page.component + '</title>'],
+        body: '<div data-server-rendered="true" id="app"><h1>' + page.props.users.length + ' users</h1></div>',
+      })`,
+    )
+    const app = await makeApp({ ssrBundle: bundle })
+    const res = await request(app.handle.bind(app)).get('/users').expect(200)
+    expect(res.text).toContain('<title inertia>Users/Index</title>')
+    expect(res.text).toContain('<div data-server-rendered="true" id="app"><h1>1 users</h1></div>')
+    expect(res.text).toContain('<script type="module" src="/assets/main-abc.js"></script>')
+
+    // Inertia visits are JSON; SSR only shapes the first HTML response.
+    const json = await request(app.handle.bind(app)).get('/users').set(X).expect(200)
+    expect(json.body.component).toBe('Users/Index')
+  })
+
+  it('falls back to client rendering when the SSR bundle throws', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-inertia-ssr-'))
+    const bundle = join(dir, 'ssr.mjs')
+    writeFileSync(bundle, `export default async () => { throw new Error('boom') }`)
+    const app = await makeApp({ ssrBundle: bundle })
+    const res = await request(app.handle.bind(app)).get('/users').expect(200)
+    expect(res.text).toContain('<script data-page="app" type="application/json">')
+    expect(res.text).toContain('<div id="app"></div>')
   })
 
   it('serves the built assets', async () => {
