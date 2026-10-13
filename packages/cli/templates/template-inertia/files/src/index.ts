@@ -24,6 +24,8 @@ export const app = await bootstrap({
     InertiaAdapter({
       title: '{{name}}',
       entry: 'src/client/main.tsx',
+      // On every page. Per-page titles and meta: Inertia's <Head> component.
+      head: '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />',
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),
       ssr: { entry: 'src/client/ssr.tsx' },

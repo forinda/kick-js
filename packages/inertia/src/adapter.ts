@@ -37,6 +37,11 @@ export interface InertiaAdapterOptions {
   share?: (ctx: RequestContext) => Record<string, unknown> | Promise<Record<string, unknown>>
   /** `<title>` of the default HTML shell. */
   title: string
+  /**
+   * Tags added to every page's `<head>` — a favicon, meta tags, fonts. Per-page
+   * titles and meta belong in the page, with Inertia's `<Head>` component.
+   */
+  head?: string
   /** Replace the HTML shell entirely. */
   template?: HtmlTemplate
   /**
@@ -177,7 +182,10 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
             .digest('hex')
             .slice(0, 12)
           version = () => hash
-          http.serveStatic('/assets', join(clientDir, 'assets'))
+          // The whole build: hashed `assets/` plus what Vite copied from
+          // `public/` — favicon, robots.txt, a static sitemap. Dotfiles are not
+          // served, so `.vite/manifest.json` stays private.
+          http.serveStatic('/', clientDir)
         }
         if (config.version !== undefined) {
           const v = config.version
@@ -217,7 +225,9 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
             const rendered = await render(page)
             const styles = vite && rendered && ssr ? devStylesheets(vite, ssr.entry) : []
             const html = template({
-              head: [head(page), ...styles, ...(rendered?.head ?? [])].join('\n    '),
+              head: [config.head ?? '', head(page), ...styles, ...(rendered?.head ?? [])]
+                .filter(Boolean)
+                .join('\n    '),
               body: rendered?.body ?? pageBody(page),
               page,
             })

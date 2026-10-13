@@ -46,6 +46,8 @@ function clientBuild(): string {
   mkdirSync(join(dir, '.vite'))
   mkdirSync(join(dir, 'assets'))
   writeFileSync(join(dir, 'assets', 'main-abc.js'), 'console.log(1)')
+  // Copied by Vite from public/.
+  writeFileSync(join(dir, 'robots.txt'), 'User-agent: *')
   writeFileSync(
     join(dir, '.vite', 'manifest.json'),
     JSON.stringify({
@@ -117,6 +119,7 @@ async function makeApp(options: { version?: string | null; ssrBundle?: string } 
         clientDir: clientBuild(),
         ...(options.version === null ? {} : { version: options.version ?? 'v1' }),
         share: () => ({ appName: 'Kick' }),
+        head: '<link rel="icon" href="/favicon.svg" />',
         ...(options.ssrBundle
           ? { ssr: { entry: 'src/client/ssr.tsx', bundle: options.ssrBundle } }
           : {}),
@@ -337,9 +340,18 @@ describe('InertiaAdapter', () => {
     expect(res.text).toContain('<div id="app"></div>')
   })
 
-  it('serves the built assets', async () => {
+  it('serves the built assets and public files, but not the manifest', async () => {
     const app = await makeApp()
     const res = await request(app.handle.bind(app)).get('/assets/main-abc.js').expect(200)
     expect(res.text).toBe('console.log(1)')
+    const robots = await request(app.handle.bind(app)).get('/robots.txt').expect(200)
+    expect(robots.text).toBe('User-agent: *')
+    await request(app.handle.bind(app)).get('/.vite/manifest.json').expect(404)
+  })
+
+  it('adds the head option to every page', async () => {
+    const app = await makeApp()
+    const res = await request(app.handle.bind(app)).get('/users').expect(200)
+    expect(res.text).toContain('<link rel="icon" href="/favicon.svg" />')
   })
 })

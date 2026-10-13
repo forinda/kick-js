@@ -286,6 +286,8 @@ describe('the shipped layers', () => {
       'src/client/main.tsx',
       'src/client/ssr.tsx',
       'vite.client.config.ts',
+      'public/favicon.svg',
+      'public/robots.txt',
     ]) {
       expect(project.files.has(path), path).toBe(true)
     }
