@@ -109,8 +109,8 @@ export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: stri
   '@types/express': { fallback: '^5.0.6', cap: '^5' },
   fastify: { fallback: '^5.0.0', cap: '^5' },
   '@fastify/middie': { fallback: '^9.0.0', cap: '^9' },
-  // h3 v2 is a different runtime (`./h3-web`), not an upgrade of this one.
-  h3: { fallback: '^1.0.0', cap: '^1' },
+  // h3Runtime() runs either major; new apps start on v2.
+  h3: { fallback: '^2.0.2', cap: '^2' },
   'serve-static': { fallback: '^2.2.0', cap: '^2' },
   // Schema libraries: `@forinda/kickjs-schema` adapts one major each.
   zod: { fallback: '^4.3.6', cap: '^4' },
