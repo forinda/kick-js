@@ -59,7 +59,7 @@
     "@forinda/kickjs": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
     "@swc/core": "^1.16.13",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
     "ioredis": "^6.0.0",
     "socket.io": "^4.8.4",
