@@ -277,9 +277,10 @@ describe('the shipped layers', () => {
       /middlewares: \[\n\s+requestId\(\),[\s\S]*express\.json\(\),[\s\S]*session\(/,
     )
     expect(entry).toContain(
-      "import { InertiaAdapter, inertiaErrorHandler } from '@forinda/kickjs-inertia'",
+      "import { InertiaAdapter, inertiaErrorHandler, inertiaNotFound } from '@forinda/kickjs-inertia'",
     )
     expect(entry).toContain('onError: inertiaErrorHandler()')
+    expect(entry).toContain('onNotFound: inertiaNotFound()')
 
     for (const path of [
       'src/modules/pages/pages.controller.ts',

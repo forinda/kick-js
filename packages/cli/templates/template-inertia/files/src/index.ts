@@ -29,7 +29,8 @@ export const app = await bootstrap({
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),
       ssr: { entry: 'src/client/ssr.tsx' },
-      // Unknown URLs and thrown errors render src/client/pages/Error.tsx.
+      // Unknown URLs and thrown errors render src/client/pages/Error.tsx
+      // (through inertiaNotFound / inertiaErrorHandler below).
       errorPage: 'Error',
     }),
     // @kick:adapter
@@ -37,4 +38,6 @@ export const app = await bootstrap({
   // A failed validation on an Inertia visit goes back to the form with
   // `props.errors` instead of answering 422.
   onError: inertiaErrorHandler(),
+  // Unknown URLs: the Error page for browsers, the usual 404 / 405 for API calls.
+  onNotFound: inertiaNotFound(),
 })

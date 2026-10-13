@@ -410,6 +410,9 @@ importers:
 
   packages/inertia:
     devDependencies:
+      '@fastify/middie':
+        specifier: ^9.3.4
+        version: 9.3.4
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../kickjs
@@ -425,6 +428,12 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      fastify:
+        specifier: ^5.12.5
+        version: 5.12.5
+      h3:
+        specifier: 1.15.11
+        version: 1.15.11
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2

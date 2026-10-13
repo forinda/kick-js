@@ -146,13 +146,6 @@ export function registerInitCommand(program: Command): void {
 
       // ── HTTP runtime ──────────────────────────────────────────────
       let runtime = opts.runtime
-      // The Inertia adapter is verified on Express only for now.
-      if (template === 'inertia') {
-        if (runtime && runtime !== 'express') {
-          log.warn(`The inertia template runs on Express for now — ignoring --runtime ${runtime}.`)
-        }
-        runtime = 'express'
-      }
       if (!runtime) {
         if (yes) {
           runtime = 'express'

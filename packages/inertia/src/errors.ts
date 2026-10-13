@@ -92,3 +92,26 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
     return fallback(err, req, res, next)
   }
 }
+
+type NotFoundHandler = (req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
+
+/**
+ * Pass to `bootstrap({ onNotFound: inertiaNotFound() })`. A browser or Inertia
+ * request for an unknown URL gets the adapter's `errorPage` with 404; anything
+ * else — API calls, other methods — goes on to the built-in 404 / 405.
+ */
+export function inertiaNotFound(): NotFoundHandler {
+  return (req, res, next) => {
+    const component = inertiaRuntime()?.errorPage
+    const method = req?.method ?? 'GET'
+    if (
+      !component ||
+      (method !== 'GET' && method !== 'HEAD') ||
+      !isPageRequest(req.headers ?? {})
+    ) {
+      return next()
+    }
+    const ctx = new RequestContext(req, res as never, next, res)
+    Promise.resolve(errorPage(component, 404)[RESPOND](ctx)).catch(next)
+  }
+}
