@@ -144,15 +144,18 @@ dates), the runtime types will be richer than the map claims.
 
 ### Expansion depth
 
-Response types are emitted exact, however deep they nest. Named types,
-recursive types, and any type nested deeper than 12 levels inline each get a
-declaration of their own (`interface __Tn` or `type __Tn`), referenced by name,
-so the emitted file stays shallow and nothing is cut off.
+Deep response types are not cut off at a fixed depth. Named types, recursive
+types, and any type nested deeper than 12 levels inline each get a declaration
+of their own (`interface __Tn` or `type __Tn`), referenced by name, so the
+emitted file stays shallow and the types stay exact.
 
-The one exception is a type that never repeats, such as a generic that yields
-a new type at every level (`type Deep<T> = { next: Deep<[T]> }`). That route is
-emitted as `unknown` and named in a warning; declare a response schema on it
-for an exact type.
+Each of those depth hoists spends from a per-route budget of 1,000 that bounds
+the work. A type that never repeats, such as a generic that yields a new type
+at every level (`type Deep<T> = { next: Deep<[T]> }`), always exhausts it, and
+a response that nests more than 1,000 distinct types beyond the depth limit
+does too. Such a route is emitted as `unknown` and named in a warning. Raising
+`maxDepth` hoists fewer types; declaring a response schema on the route gives
+an exact type either way.
 
 `maxDepth` sets how deeply types nest inline before they are hoisted:
 
@@ -163,7 +166,8 @@ export default defineConfig({
 })
 ```
 
-It changes the shape of the file, not the types in it. The object form is on
+It changes the shape of the file and how much of the budget a route spends,
+not the types themselves. The object form is on
 unless you say otherwise, so `{ maxDepth: 24 }` on its own also enables the
 map; `{ enabled: false }` turns it off. Changing the depth changes what is
 emitted, so it invalidates the cache and rebuilds.

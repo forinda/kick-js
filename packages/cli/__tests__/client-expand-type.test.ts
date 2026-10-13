@@ -35,6 +35,7 @@ function expand(
   source: string,
   opts: {
     maxDepth?: number
+    truncationBudget?: number
     compilerOptions?: ts.CompilerOptions
     onWarn?: (msg: string) => void
   } = {},
@@ -379,6 +380,20 @@ describe('TypeExpander', () => {
 })
 
 describe('TypeExpander — expansion budget', () => {
+  it('lets a large finite response exhaust the budget too', () => {
+    // The budget bounds hoists, not endless types: two hoists past a budget
+    // of one stop a perfectly finite type.
+    const warnings: string[] = []
+    const out = expand('type Target = { a: { b: { c: { d: string } } } }', {
+      maxDepth: 0,
+      truncationBudget: 1,
+      onWarn: (m) => warnings.push(m),
+    })
+    expect(out.text).toBe('unknown')
+    expect(out.hoisted).toEqual([])
+    expect(warnings[0]).toMatch(/nests more distinct types than the budget allows/)
+  })
+
   it('expands a fan-out once per type, not once per path', () => {
     // Three references to each next level was exponential when every path
     // re-rendered inline; hoisting memoizes the type, so the work is linear.

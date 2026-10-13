@@ -265,7 +265,9 @@ export interface TypegenConfig {
    *
    * Pass an object to tune the expansion. `{ maxDepth }` sets how deeply a
    * response type nests inline before the type at that point is hoisted to a
-   * declaration of its own — the types stay exact either way:
+   * declaration of its own. Hoists spend a per-route budget of 1,000; a route
+   * that exhausts it — an endlessly growing generic, or a very large response
+   * — is emitted as `unknown` with a warning:
    *
    * ```ts
    * typegen: { client: { maxDepth: 24 } }
@@ -280,8 +282,9 @@ export interface ClientTypegenConfig {
   enabled?: boolean
   /**
    * Levels of inline nesting before a type is hoisted to its own declaration
-   * (`interface __Tn` / `type __Tn`). Shapes the file, never the types: a
-   * deeper response is not cut off. Default 12.
+   * (`interface __Tn` / `type __Tn`). Each hoist spends from a per-route budget
+   * of 1,000, so a higher value hoists fewer types and lets a larger response
+   * through. Default 12.
    */
   maxDepth?: number
 }

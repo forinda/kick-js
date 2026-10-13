@@ -16,12 +16,13 @@
  *    becomes one `interface __T<n>` and is referenced by name.
  * 3. **Hoisting is also cycle termination.** `Student.school.students` is
  *    infinite to inline; a type already being expanded already has a name.
- * 4. **Depth hoists, it never degrades.** Anonymous types (inferred rows, zod
- *    output, object literals) render inline; once inline nesting reaches
+ * 4. **Depth hoists rather than degrades.** Anonymous types (inferred rows,
+ *    zod output, object literals) render inline; once inline nesting reaches
  *    `maxDepth`, the type at that point becomes its own declaration and the
- *    nesting restarts. The emitted file stays shallow and every type stays
- *    exact, however deep the response. Only a type family with no end — a
- *    generic that yields a new type at every level — runs out of budget.
+ *    nesting restarts. The emitted file stays shallow and the types stay
+ *    exact. Each hoist spends from a per-route budget that bounds the work: a
+ *    type family with no end always exhausts it, and a very large finite
+ *    response can too.
  *
  * @module @forinda/kickjs-cli/typegen/client/expand-type
  */
@@ -33,8 +34,9 @@ export interface TypeExpanderOptions {
   /** Inline nesting depth at which a type is hoisted to its own declaration. Default 12. */
   maxDepth?: number
   /**
-   * Depth hoists tolerated per route before the expansion is abandoned — only
-   * a type family with no end reaches it.
+   * Depth hoists tolerated per route before the expansion is abandoned. Bounds
+   * the work: a type family with no end always reaches it, and a large enough
+   * finite response can too.
    */
   truncationBudget?: number
   onWarn?: (msg: string) => void
@@ -43,9 +45,10 @@ export interface TypeExpanderOptions {
 /**
  * Depth hoists tolerated in one route before the expansion is abandoned.
  *
- * Each distinct type is hoisted at most once, so even a very deep response
- * needs a handful. Thousands means the types never repeat — a generic that
- * yields a new instantiation at every level — and the walk would not end.
+ * Each distinct type is hoisted at most once, so even a deep response needs a
+ * handful. A generic that yields a new instantiation at every level never
+ * repeats and would never end; this stops it. A finite response with more
+ * than this many distinct types nested beyond `maxDepth` stops here too.
  */
 const TRUNCATION_BUDGET = 1000
 const BUDGET_EXHAUSTED = Symbol('kick/client: expansion budget exhausted')
@@ -119,8 +122,10 @@ export class TypeExpander {
       // One clear line beats a flood.
       this.opts.onWarn?.(
         `expansion abandoned after ${this.budget} depth hoists — emitting 'unknown'. ` +
-          `The response type never repeats (a generic that grows at every level). ` +
-          `Declare a response schema on the route for an exact type.`,
+          `Either the response type never repeats (a generic that grows at every ` +
+          `level) or it nests more distinct types than the budget allows; raising ` +
+          `maxDepth hoists fewer of them. Declare a response schema on the route ` +
+          `for an exact type.`,
       )
       return 'unknown'
     }
