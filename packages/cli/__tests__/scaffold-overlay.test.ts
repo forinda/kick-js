@@ -281,6 +281,7 @@ describe('the shipped layers', () => {
     )
     expect(entry).toContain('onError: inertiaErrorHandler()')
     expect(entry).toContain('onNotFound: inertiaNotFound()')
+    expect(entry).toContain('notFoundFallthrough: false')
 
     for (const path of [
       'src/modules/pages/pages.controller.ts',

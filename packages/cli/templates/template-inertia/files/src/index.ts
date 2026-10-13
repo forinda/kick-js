@@ -40,4 +40,7 @@ export const app = await bootstrap({
   onError: inertiaErrorHandler(),
   // Unknown URLs: the Error page for browsers, the usual 404 / 405 for API calls.
   onNotFound: inertiaNotFound(),
+  // Answer unknown URLs here in dev too — not by handing them back to Vite —
+  // so `kick dev` shows the same Error page as production on every runtime.
+  notFoundFallthrough: false,
 })

@@ -267,6 +267,13 @@ export interface RuntimeAppOptions {
    * shapes (or normalize X-Forwarded-For themselves — see spec §10 Q1).
    */
   trustProxy?: boolean | string | number | string[] | ((ip: string, hopIndex: number) => boolean)
+  /**
+   * When the app is mounted inside another handler (`kick dev`'s Vite server,
+   * `app.handle(req, res, next)` in a host server), hand requests no route
+   * matched back to it — `true`, the default — or answer them here with the
+   * app's not-found handling — `false`. Express always answers.
+   */
+  notFoundFallthrough?: boolean
 }
 
 /** Where a connect middleware sits and what it scopes to. */

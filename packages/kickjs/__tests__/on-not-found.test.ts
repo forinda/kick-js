@@ -83,3 +83,52 @@ for (const rt of RUNTIMES) {
     })
   })
 }
+
+/**
+ * Mounted inside a host handler (as `kick dev` mounts it in Vite), Fastify and
+ * h3 hand unmatched requests back by default; `notFoundFallthrough: false`
+ * answers them in the app, like Express always does.
+ */
+for (const rt of RUNTIMES) {
+  describe(`notFoundFallthrough — ${rt.name}`, () => {
+    async function mounted(notFoundFallthrough?: boolean) {
+      @Controller()
+      class PingController {
+        @Get('/')
+        ping() {
+          return { pong: true }
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/ping', controller: PingController }) } as never],
+        notFoundFallthrough,
+      })
+      await app.setup()
+      // The host: whatever the app hands back answers 418.
+      return (req: any, res: any) =>
+        app.handle(req, res, () => {
+          res.statusCode = 418
+          res.end('host')
+        })
+    }
+
+    it(`${rt.name === 'express' ? 'answers' : 'hands back'} unmatched requests by default`, async () => {
+      const res = await request(await mounted()).get('/nope')
+      expect(res.status).toBe(rt.name === 'express' ? 404 : 418)
+    })
+
+    it('answers unmatched requests with notFoundFallthrough: false', async () => {
+      const res = await request(await mounted(false))
+        .get('/nope')
+        .expect(404)
+      expect(res.headers['content-type']).toMatch(/problem\+json/)
+    })
+
+    it('still routes matched requests', async () => {
+      await request(await mounted(false))
+        .get('/api/v1/ping')
+        .expect(200)
+    })
+  })
+}

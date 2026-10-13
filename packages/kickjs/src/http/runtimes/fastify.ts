@@ -108,6 +108,8 @@ const NEXT = Symbol('kickjs.fastify.next')
 // nodeHandler knows to register @fastify/multipart before ready().
 const NEEDS_MULTIPART = Symbol('kickjs.fastify.needsMultipart')
 const NOOP_NEXT = (): void => {}
+/** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
+const NO_FALLTHROUGH = Symbol('kickjs.fastify.noFallthrough')
 
 // A @fastify/multipart part as we consume it from `request.parts()`.
 interface MultipartPart {
@@ -402,6 +404,9 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         )
       }
 
+      if (options.notFoundFallthrough === false) {
+        ;(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH] = true
+      }
       return app
     },
 
@@ -473,7 +478,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
     setNotFound(app, mw: ConnectMiddleware) {
       app.setNotFoundHandler((request, reply) => {
         const next = (request.raw as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT]
-        if (next) {
+        if (next && !(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH]) {
           // Vite dev fall-through: hand the request back to the outer chain.
           reply.hijack()
           next()

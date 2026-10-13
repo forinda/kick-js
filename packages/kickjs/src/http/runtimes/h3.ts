@@ -60,6 +60,8 @@ const ROUTER = Symbol('kickjs.h3.router')
 const NOTFOUND_MW = Symbol('kickjs.h3.notFoundMw')
 const ASSEMBLED = Symbol('kickjs.h3.assembled')
 const NOOP_NEXT = (): void => {}
+/** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
+const NO_FALLTHROUGH = Symbol('kickjs.h3.noFallthrough')
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /**
@@ -402,7 +404,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           const thrownByHandler = (error as { cause?: unknown } | undefined)?.cause instanceof Error
           if (status === 404 && !thrownByHandler) {
             const next = (event.node.req as IncomingMessage & { [NEXT]?: () => void })[NEXT]
-            if (next) {
+            if (next && !(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH]) {
               next()
               return
             }
@@ -433,6 +435,8 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
       // Stash the setting for mountRoutes — h3 has no app-level config object
       // of its own to hang it on.
       ;(app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY] = options.trustProxy
+      ;(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH] =
+        options.notFoundFallthrough === false
       return app as H3AppLike
     },
 

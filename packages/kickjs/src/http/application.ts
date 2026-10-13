@@ -325,6 +325,19 @@ export interface ApplicationOptions {
 
   runtime?: HttpRuntime
 
+  /**
+   * Requests no route matched, when the app runs inside another handler —
+   * `kick dev`'s Vite server, or `app.handle(req, res, next)` in a host server.
+   *
+   * - `true` (default): Fastify and h3 hand them back to that handler.
+   * - `false`: they are answered here — `onNotFound`, or the built-in 404 /
+   *   405 — the same as in production. Express always answers.
+   *
+   * Set `false` when the app owns its URLs, e.g. pages with an error page,
+   * so dev answers unknown URLs the way production does.
+   */
+  notFoundFallthrough?: boolean
+
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   /** Maximum JSON body size (only used when middleware is not provided) */
@@ -634,7 +647,10 @@ export class Application {
     // `this.app` is the engine-native app; typed Express here (the default) for
     // the legacy escape hatches. Under another runtime it holds that engine's
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
-    this.app = this.runtime.createApp({ trustProxy: options.trustProxy }) as Express
+    this.app = this.runtime.createApp({
+      trustProxy: options.trustProxy,
+      notFoundFallthrough: options.notFoundFallthrough,
+    }) as Express
     this.container = Container.getInstance()
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
@@ -1411,7 +1427,10 @@ export class Application {
     try {
       Container.reset()
       this.container = Container.getInstance()
-      this.app = this.runtime.createApp({ trustProxy: this.options.trustProxy }) as Express
+      this.app = this.runtime.createApp({
+        trustProxy: this.options.trustProxy,
+        notFoundFallthrough: this.options.notFoundFallthrough,
+      }) as Express
       await this.setup()
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
