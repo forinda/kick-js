@@ -24,11 +24,9 @@ export default defineConfig({
     include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
   },
   // @kick:vite-option
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-  },
+  // Aliases come from tsconfig.json `paths` — one list for the server,
+  // the pages and the editor.
+  resolve: { tsconfigPaths: true },
   build: {
     target: 'node20',
     ssr: true,

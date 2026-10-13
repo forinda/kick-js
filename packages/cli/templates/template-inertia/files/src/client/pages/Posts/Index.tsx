@@ -1,5 +1,5 @@
 import { Deferred, useForm } from '@inertiajs/react'
-import { Layout } from '../../Layout'
+import { Layout } from '~/Layout'
 
 interface Post {
   id: number

@@ -11,6 +11,8 @@ export default defineConfig(({ isSsrBuild }) => ({
   // development builds. The browser bundle needs nothing from it.
   envDir: false,
   plugins: [react()],
+  // Same aliases as the dev server: tsconfig.json `paths`.
+  resolve: { tsconfigPaths: true },
   build: isSsrBuild
     ? { outDir: 'dist/ssr' }
     : { outDir: 'dist/client', manifest: true, rollupOptions: { input: 'src/client/main.tsx' } },

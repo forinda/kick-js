@@ -60,10 +60,45 @@ type SsrRender = (page: Page) => Promise<SsrResult>
 
 const log = Logger.for('InertiaAdapter')
 
+interface ViteModuleLike {
+  url: string
+  id: string | null
+  importedModules: Set<ViteModuleLike>
+}
+
 interface ViteDevServerLike {
+  config: { root: string }
+  environments: { ssr: { moduleGraph: { getModuleById(id: string): ViteModuleLike | undefined } } }
   transformIndexHtml(url: string, html: string): Promise<string>
   ssrLoadModule(url: string): Promise<Record<string, unknown>>
   ssrFixStacktrace(err: Error): void
+}
+
+const CSS_REQUEST = /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/
+
+/**
+ * Dev only: the stylesheets the SSR entry imports, as `<link>` tags. In dev
+ * Vite injects CSS from JavaScript, so server-rendered HTML would show
+ * unstyled until the scripts run. `data-vite-dev-id` lets Vite's client
+ * recognize these and not inject the same styles again.
+ */
+function devStylesheets(vite: ViteDevServerLike, entry: string): string[] {
+  const root = vite.environments.ssr.moduleGraph.getModuleById(resolve(vite.config.root, entry))
+  if (!root) return []
+  const links: string[] = []
+  const seen = new Set<ViteModuleLike>()
+  const walk = (mod: ViteModuleLike) => {
+    if (seen.has(mod)) return
+    seen.add(mod)
+    if (CSS_REQUEST.test(mod.url)) {
+      const devId = mod.id ? ` data-vite-dev-id="${mod.id.replace(/"/g, '&quot;')}"` : ''
+      links.push(`<link rel="stylesheet" href="${mod.url}"${devId} />`)
+      return
+    }
+    for (const imported of mod.importedModules) walk(imported)
+  }
+  walk(root)
+  return links
 }
 
 function viteServer(): ViteDevServerLike | null {
@@ -180,8 +215,9 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
           share: config.share,
           async renderHtml(page, ctx) {
             const rendered = await render(page)
+            const styles = vite && rendered && ssr ? devStylesheets(vite, ssr.entry) : []
             const html = template({
-              head: [head(page), ...(rendered?.head ?? [])].join('\n    '),
+              head: [head(page), ...styles, ...(rendered?.head ?? [])].join('\n    '),
               body: rendered?.body ?? pageBody(page),
               page,
             })

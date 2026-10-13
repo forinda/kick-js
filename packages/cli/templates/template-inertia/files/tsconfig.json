@@ -14,7 +14,8 @@
     "emitDecoratorMetadata": true,
     "outDir": "dist",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "~/*": ["./src/client/*"]
     }
   },
   "include": ["src", "db", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"]

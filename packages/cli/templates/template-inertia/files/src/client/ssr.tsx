@@ -1,3 +1,5 @@
+// Also imported here, so the dev server can link it in server-rendered HTML.
+import './app.css'
 import { createInertiaApp } from '@inertiajs/react'
 import type { Page } from '@inertiajs/core'
 import { renderToString } from 'react-dom/server'
