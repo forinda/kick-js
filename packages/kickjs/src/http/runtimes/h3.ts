@@ -302,7 +302,7 @@ function makeEventHandler(
       if (res.writableEnded) return
       const result = await entry.handler(ctx)
       // Return-value handlers (reply.ts): auto-send when nothing was written.
-      if (!res.writableEnded && !res.headersSent) applyHandlerResult(ctx, result)
+      if (!res.writableEnded && !res.headersSent) await applyHandlerResult(ctx, result)
     })
   }
 }

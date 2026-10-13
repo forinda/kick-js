@@ -6,7 +6,7 @@ import * as h3v2 from 'h3-v2'
 import { Application } from '../src/http/application'
 import { Container } from '../src/core/container'
 import { Controller, Get, Post } from '../src/core/decorators'
-import { reply } from '../src/http/reply'
+import { reply, RESPOND } from '../src/http/reply'
 import { expressRuntime } from '../src/http/runtimes/express'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
@@ -65,6 +65,27 @@ function makeControllers() {
     // A database count or bigint column: sent as its decimal string, not a 500.
     bigint(_ctx: RequestContext) {
       return { count: 2n ** 64n, rows: [{ id: 7n }] }
+    }
+
+    @Get('/respondable')
+    // A value that writes its own response, asynchronously.
+    respondable(_ctx: RequestContext) {
+      return {
+        async [RESPOND](ctx: RequestContext) {
+          await Promise.resolve()
+          ctx.setHeader('x-self', 'yes')
+          ctx.html('<p>self</p>', 201)
+        },
+      }
+    }
+
+    @Get('/respondable-throws')
+    respondableThrows(_ctx: RequestContext) {
+      return {
+        async [RESPOND]() {
+          throw new Error('render failed')
+        },
+      }
     }
 
     @Get('/void')
@@ -145,6 +166,18 @@ for (const rt of RUNTIMES) {
       expect(res.headers['content-type']).toMatch(/json/)
     })
 
+    it('a respondable writes its own response', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).get('/api/v1/r/respondable').expect(201)
+      expect(res.text).toBe('<p>self</p>')
+      expect(res.headers['x-self']).toBe('yes')
+    })
+
+    it('a respondable that throws reaches the error handler', async () => {
+      const app = await makeApp()
+      await request(app.handle.bind(app)).get('/api/v1/r/respondable-throws').expect(500)
+    })
+
     it('imperative style is untouched', async () => {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).get('/api/v1/r/void').expect(200)
@@ -174,6 +207,10 @@ describe('return-value handlers — web entry (fetch)', () => {
 
     const ctxWins = await app.fetch(new Request('http://x/api/v1/r/ctx-wins'))
     expect(await ctxWins.json()).toEqual({ via: 'ctx' })
+
+    const self = await app.fetch(new Request('http://x/api/v1/r/respondable'))
+    expect(self.status).toBe(201)
+    expect(await self.text()).toBe('<p>self</p>')
 
     const big = await app.fetch(new Request('http://x/api/v1/r/bigint'))
     expect(big.status).toBe(200)

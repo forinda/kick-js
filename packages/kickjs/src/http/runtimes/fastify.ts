@@ -298,7 +298,7 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
       if (reply.sent) return
       const result = await entry.handler(ctx)
       // Return-value handlers (reply.ts): auto-send when nothing was written.
-      if (!reply.sent) applyHandlerResult(ctx, result)
+      if (!reply.sent) await applyHandlerResult(ctx, result)
     })
   }
 }

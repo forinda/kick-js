@@ -95,18 +95,49 @@ export function isReply(value: unknown): value is Reply {
 }
 
 /**
+ * Key of the method a self-sending result carries. A returned value with
+ * `[RESPOND](ctx)` writes its own response — how an integration (an Inertia
+ * page, a rendered view) works as a return value without the framework
+ * knowing its format. Registry symbol, so a second copy of the package still
+ * matches.
+ */
+export const RESPOND: unique symbol = Symbol.for('kickjs.respond') as never
+
+/** A handler return value that writes its own response. */
+export interface Respondable {
+  [RESPOND](ctx: RequestContext): void | Promise<void>
+}
+
+export function isRespondable(value: unknown): value is Respondable {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<symbol, unknown>)[RESPOND] === 'function'
+  )
+}
+
+/**
  * Send a handler's RETURN value when the pipeline finished without anything
  * having written a response. Callers guard on "driver/response unsettled" —
  * this only decides how to send:
  *
  * - `undefined` → not handled (returns false; runtime keeps today's behavior)
+ * - `Respondable` → its `[RESPOND](ctx)` writes the response (may be async)
  * - `Reply` wrapper → status + body (204 → `ctx.noContent()`)
  * - anything else → `ctx.json(value)` (200)
  *
- * Returns true when a response was produced.
+ * Returns true when a response was produced — a promise of it for an async
+ * `Respondable`, which callers await so its errors reach the error handler.
  */
-export function applyHandlerResult(ctx: RequestContext, result: unknown): boolean {
+export function applyHandlerResult(
+  ctx: RequestContext,
+  result: unknown,
+): boolean | Promise<boolean> {
   if (result === undefined) return false
+  if (isRespondable(result)) {
+    const sent = result[RESPOND](ctx)
+    return sent instanceof Promise ? sent.then(() => true) : true
+  }
   if (isReply(result)) {
     // Only 204 maps to noContent — an undefined body must NOT coerce the
     // declared status (reply(304, undefined) keeps its 304; the json body
