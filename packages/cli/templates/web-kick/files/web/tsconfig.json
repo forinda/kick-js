@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
-    "types": ["../server/.kickjs/types/kick__client"]
+    "types": ["vite/client", "../server/.kickjs/types/kick__client"]
   },
   "include": ["src"]
 }

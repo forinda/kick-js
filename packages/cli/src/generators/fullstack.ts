@@ -6,7 +6,7 @@
 //               @forinda/kickjs-client + the server's generated KickRoutes.Api
 //
 // The type loop: server controllers use return-value handlers → `kick
-// typegen` (run here once, re-run by `kick dev`) emits
+// typegen` (run here once, then by the root `build` script — not by `kick dev`) emits
 // server/.kickjs/types/kick__client.d.ts → web tsconfig `types` (ambient)
 // side-effect-imports that file (type-only, erased at runtime) → the web
 // client calls `api.get('/hello')` with the handler's actual response type.
@@ -214,7 +214,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     const { runTypegen } = await import('../typegen')
     await runTypegen({ cwd: join(dir, 'server'), allowDuplicates: true, silent: true })
   } catch {
-    // Non-fatal — `kick dev` in server/ retries on boot.
+    // Non-fatal — `kick typegen` in server/ (or the root `build`) writes it later.
   }
 
   // ── git (root) ──────────────────────────────────────────────────────
@@ -252,7 +252,8 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     log(`  ${FRONTEND_WIRING_URL}`)
   } else {
     log('The web app calls the API through @forinda/kickjs-client —')
-    log("edit server/src/modules/hello and watch web/src/App.tsx's types follow.")
+    log('edit server/src/modules/hello, run `kick typegen` in server/, and')
+    log("web/src/App.tsx's types follow.")
   }
   log('')
 }
