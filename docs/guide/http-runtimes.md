@@ -74,7 +74,7 @@ Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs
 [h3](https://h3.dev) is the HTTP layer behind Nitro / Nuxt. It ships as a
 subpath too:
 
-<PmCommand add="h3" />
+<PmCommand add="h3@^1" />
 
 ```ts
 import { h3Runtime } from '@forinda/kickjs/h3'
@@ -82,7 +82,9 @@ import { h3Runtime } from '@forinda/kickjs/h3'
 export const app = await bootstrap({ modules, runtime: h3Runtime() })
 ```
 
-The binding targets **h3 v1** (the stable, node-based surface).
+The binding targets **h3 v1** (the node-based surface, maintained on h3's `1x`
+line). Pin it: h3 v2 is now `latest`, so a bare `h3` installs v2, which this
+runtime does not run on — for v2, use the web-standards runtime below.
 
 Same surface as Fastify: routing, JSON / HTML, connect middleware (via h3's
 `fromNodeMiddleware`), context decorators, errors / 404, SSE, body validation,
