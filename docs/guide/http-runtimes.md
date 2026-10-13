@@ -107,9 +107,9 @@ export const app = await bootstrap({ modules, runtime: h3WebRuntime() })
 Each runtime fail-fasts with guidance when the wrong h3 major is installed.
 The v2 runtime shares its request pipeline with the
 [`@forinda/kickjs/web` fetch entry](./edge-deployment.md), which is how the
-same app deploys to Cloudflare Workers, Bun, and Deno. One caveat vs v1: no
-Vite dev-server fall-through (h3 v2 owns the full request) — use the v1 h3
-runtime or Express for Vite-integrated dev.
+same app deploys to Cloudflare Workers, Bun, and Deno. Under `kick dev` and
+behind a host server it behaves like the v1 runtime, including handing
+unmatched requests back unless `notFoundFallthrough: false`.
 
 ### Calling the app through `fetch`
 
@@ -149,7 +149,7 @@ clear error rather than failing silently.
 | File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                                 |
 | File download (`ctx.download`) | ✅           | ✅                      | ✅                      | ✅                                                  |
 | Edge / Bun / Deno deploy       | ❌           | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
-| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅                      | — (the platform's server)                           |
+| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅                      | ✅ (node); the platform's server on edge            |
 
 ## HTTPS and HTTP/2
 
