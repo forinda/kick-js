@@ -103,6 +103,11 @@ function makeControllers() {
       ctx.send(new Uint8Array([1, 2, 3]), { type: 'application/octet-stream' })
     }
 
+    @Get('/go')
+    go(ctx: RequestContext) {
+      ctx.redirect('/api/v1/r/plain', 303)
+    }
+
     @Get('/void')
     // Returns undefined AND writes via ctx — prior behavior untouched.
     voidStyle(ctx: RequestContext) {
@@ -212,6 +217,12 @@ for (const rt of RUNTIMES) {
         })
         .expect(200)
       expect([...(bytes.body as Buffer)]).toEqual([1, 2, 3])
+    })
+
+    it('ctx.redirect() sends the status and the Location', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).get('/api/v1/r/go').expect(303)
+      expect(res.headers.location).toBe('/api/v1/r/plain')
     })
 
     it('imperative style is untouched', async () => {

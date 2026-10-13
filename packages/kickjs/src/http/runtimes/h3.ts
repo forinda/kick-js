@@ -339,6 +339,40 @@ async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Bu
   return Buffer.concat(chunks)
 }
 
+/**
+ * Run an error / not-found handler and settle once it has answered. h3 awaits
+ * its `onError` hook and then sends its own error response unless the reply
+ * is finished, so a handler that answers asynchronously (rendering a page,
+ * saving a session first) would lose that race. A handler that calls `next()`
+ * instead of answering settles too, and h3's fallback answers.
+ */
+function answered(res: ServerResponse, run: (done: () => void) => void): Promise<void> {
+  return new Promise<void>((resolve) => {
+    // h3 already holds a 'close' listener per connect middleware until the
+    // response closes, so ours can cross Node's default of 10 and print a
+    // leak warning. Ours are removed in `done`; budget for exactly them.
+    res.setMaxListeners(res.getMaxListeners() + 1)
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      res.removeListener('finish', done)
+      res.removeListener('close', done)
+      res.setMaxListeners(Math.max(0, res.getMaxListeners() - 1))
+      resolve()
+    }
+    res.once('finish', done)
+    res.once('close', done)
+    try {
+      run(done)
+    } catch (err) {
+      done()
+      throw err
+    }
+    if (res.writableEnded) done()
+  })
+}
+
 export function h3Runtime(): HttpRuntime<H3AppLike> {
   return {
     name: 'h3',
@@ -346,7 +380,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
     createApp(options: RuntimeAppOptions = {}): H3AppLike {
       const { createApp } = h3()
       const app = createApp({
-        onError: (error: unknown, event: H3EventLike) => {
+        onError: (error: unknown, event: H3EventLike): Promise<void> | void => {
           const res = event.node.res
           if (res.writableEnded) return
           const state = app as {
@@ -374,21 +408,24 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
             }
             const nf = state[NOTFOUND_MW]
             if (nf) {
-              ;(nf as (req: unknown, res: unknown, next: () => void) => void)(
-                event.node.req,
-                resDriver(res),
-                NOOP_NEXT,
+              return answered(res, (done) =>
+                (nf as (req: unknown, res: unknown, next: () => void) => void)(
+                  event.node.req,
+                  resDriver(res),
+                  done,
+                ),
               )
-              return
             }
           }
           const mw = state[ERROR_MW]
           if (mw) {
-            ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
-              unwrapH3Error(error),
-              event.node.req,
-              resDriver(res),
-              NOOP_NEXT,
+            return answered(res, (done) =>
+              (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
+                unwrapH3Error(error),
+                event.node.req,
+                resDriver(res),
+                done,
+              ),
             )
           }
         },

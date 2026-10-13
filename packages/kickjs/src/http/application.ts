@@ -387,6 +387,10 @@ export interface ApplicationOptions {
    *   },
    * })
    * ```
+   *
+   * Calling `next()` hands the request to the built-in handler — the usual
+   * 404, or the 405 with `Allow` when the path exists under another method —
+   * so a custom handler can answer some requests and leave the rest.
    */
   onNotFound?: (req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
 
@@ -1224,7 +1228,17 @@ export class Application {
       for (const mw of adapter.middleware?.() ?? []) offerRoutePolicy(mw.handler, this.routePolicy)
     }
 
-    this.runtime.setNotFound(this.app, this.options.onNotFound ?? notFoundHandler(mountedPaths))
+    const builtInNotFound = notFoundHandler(mountedPaths)
+    const customNotFound = this.options.onNotFound
+    this.runtime.setNotFound(
+      this.app,
+      customNotFound
+        ? (req: any, res: RuntimeResponse, next: (err?: unknown) => void) =>
+            customNotFound(req, res, (err?: unknown) =>
+              err === undefined ? builtInNotFound(req, res, next as () => void) : next(err),
+            )
+        : builtInNotFound,
+    )
     this.runtime.setErrorHandler(this.app, observeErrors(this.options.onError ?? errorHandler()))
   }
 

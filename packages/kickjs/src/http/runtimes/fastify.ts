@@ -167,7 +167,12 @@ class FastifyReplyDriver implements RuntimeResponse {
     return this.reply.raw.write(chunk as never)
   }
   end(data?: unknown): this {
-    this.reply.raw.end(data as never)
+    // After writeHead (streaming, SSE) the reply is hijacked and the raw
+    // socket is ours to finish. Otherwise finish through the reply, so the
+    // status and headers set on it are sent — `ctx.redirect()` writes its
+    // Location with setHeader() and then calls end().
+    if (this.reply.raw.headersSent) this.reply.raw.end(data as never)
+    else this.reply.send(data ?? '')
     return this
   }
   once(event: string, listener: (...args: unknown[]) => void): this {
