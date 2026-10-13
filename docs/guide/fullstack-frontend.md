@@ -57,7 +57,7 @@ Paths in `types` resolve relative to the config file, so a config in a subdirect
 Producing the map builds a TypeScript program over the whole server, so it is a build step, not a per-save one:
 
 - `kick new` writes it once, and the root `build` script runs `kick typegen` before building `web/`, so a production build always has a current map.
-- **`kick dev` does not refresh it.** After you add a route or change what a handler returns, run `kick typegen` in `server/` — `pnpm --filter ./server exec kick typegen` from the root — and the web app's types follow.
+- **`kick dev` writes it when it starts, not on save.** After you add a route or change what a handler returns, run `kick typegen` in `server/` — `pnpm --filter ./server exec kick typegen` from the root — and the web app's types follow.
 - `kick typegen --check` fails when the map is stale; put it in CI.
 - On TypeScript 7 the map needs the TypeScript 6 compiler API. The fullstack server already has `@typescript/typescript6` as a dev dependency; without it, `kick typegen` warns and skips the map.
 
@@ -73,7 +73,7 @@ import { createClient } from '@forinda/kickjs-client'
 // module-mount-relative paths; the '/api/v1' prefix the server adds lives
 // here. VITE_API_URL is empty unless the API is on another origin.
 export const api = createClient<KickClientApi.Api>({
-  baseUrl: `${import.meta.env.VITE_API_URL ?? ''}/api/v1`,
+  baseUrl: `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api/v1`,
 })
 ```
 
@@ -149,7 +149,7 @@ For cookies — a session, a CSRF token — the browser only sends them cross-or
 ```ts
 // web/src/api.ts
 export const api = createClient<KickClientApi.Api>({
-  baseUrl: `${import.meta.env.VITE_API_URL ?? ''}/api/v1`,
+  baseUrl: `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api/v1`,
   fetch: (request) => fetch(request, { credentials: 'include' }),
 })
 ```

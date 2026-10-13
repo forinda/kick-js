@@ -114,8 +114,8 @@ app in \`web/\`. Run both with \`${pm === 'pnpm' ? 'pnpm dev' : `${pm} run dev:s
 The type loop (do not break it):
 1. \`server/\` handlers RETURN their payloads → \`kick typegen\` emits
    \`server/.kickjs/types/kick__client.d.ts\`: the ambient \`KickClientApi\`
-   namespace, every response resolved to a plain shape. \`kick dev\` does NOT
-   refresh it — run \`kick typegen\` in \`server/\` after changing a route or a
+   namespace, every response resolved to a plain shape. \`kick dev\` writes it
+   at startup but NOT on save — run \`kick typegen\` in \`server/\` after changing a route or a
    response (the root \`build\` script runs it too).
 2. \`web/tsconfig.json\` lists that file in \`compilerOptions.types\`.
 3. \`web/src/api.ts\` = \`createClient<KickClientApi.Api>({ baseUrl })\`

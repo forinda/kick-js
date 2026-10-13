@@ -13,5 +13,5 @@ import { createClient } from '@forinda/kickjs-client'
 // Prefer an explicit import? The same file exports the type:
 //   import type { Api } from '../../server/.kickjs/types/kick__client'
 export const api = createClient<KickClientApi.Api>({
-  baseUrl: `${import.meta.env.VITE_API_URL ?? ''}/api/v1`,
+  baseUrl: `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api/v1`,
 })
