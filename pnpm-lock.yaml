@@ -213,8 +213,8 @@ importers:
         specifier: workspace:*
         version: link:../kickjs
       h3-v2:
-        specifier: npm:h3@2.0.1-rc.22
-        version: h3@2.0.1-rc.22
+        specifier: npm:h3@2.0.2
+        version: h3@2.0.2
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -434,6 +434,9 @@ importers:
       h3:
         specifier: 1.15.11
         version: 1.15.11
+      h3-v2:
+        specifier: npm:h3@2.0.2
+        version: h3@2.0.2
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -493,8 +496,8 @@ importers:
         specifier: 1.15.11
         version: 1.15.11
       h3-v2:
-        specifier: npm:h3@2.0.1-rc.22
-        version: h3@2.0.1-rc.22
+        specifier: npm:h3@2.0.2
+        version: h3@2.0.2
       multer:
         specifier: ^2.4.0
         version: 2.4.0
@@ -4575,14 +4578,17 @@ packages:
   h3@1.15.11:
     resolution: {integrity: sha512-L3THSe2MPeBwgIZVSH5zLdBBU90TOxarvhK9d04IDY2AmVS8j2Jz2LIWtwsGOU3lu2I5jCN7FNvVfY2+XyF+mg==}
 
-  h3@2.0.1-rc.22:
-    resolution: {integrity: sha512-Esv0DMIuPkCTSWCA0vO73vcTqwzH1wjSrAO1TXNu/K3up1sZHa9EKMapbmxCDYBeymC3fVTk4qxp7ogQWQ+KgA==}
-    engines: {node: '>=20.11.1'}
+  h3@2.0.2:
+    resolution: {integrity: sha512-+/zvHSNldYpNURuUUG+y1KzdASUhNnSd1VpqxYFVY40ov3YzuBnCETaUQaT+QbKkoxhh9LRa6AEQdB14LALwdA==}
+    engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
-      crossws: ^0.4.1
+      crossws: ^0.4.12
+      ocache: '>=0.3.0'
     peerDependenciesMeta:
       crossws:
+        optional: true
+      ocache:
         optional: true
 
   has-async-hooks@1.0.0:
@@ -5714,8 +5720,9 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
-  rou3@0.8.1:
-    resolution: {integrity: sha512-ePa+XGk00/3HuCqrEnK3LxJW7I0SdNg6EFzKUJG73hMAdDcOUC/i/aSz7LSDwLrGr33kal/rqOGydzwl6U7zBA==}
+  rou3@1.0.0:
+    resolution: {integrity: sha512-ySeaQkSrua+ut9g+65I7FHqOFBaY8tV0FmccXItoq0q21se32Q3u4YiW7/RqXSosWgYJaaKwRHXy3BST9PeCNQ==}
+    engines: {node: '>=20.19.0'}
 
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
@@ -5904,8 +5911,8 @@ packages:
     resolution: {integrity: sha512-6CKD38c31SENivxOADeMNLdukOnUxUcflKtzVWzace7Riv1v7cAEym5Cx9Q7gYZ3ezIJI7ZpqecQq8cqNeSSFg==}
     engines: {bun: '>=1.0.0', deno: '>=2.0.0', node: '>=12.0.0'}
 
-  srvx@0.11.21:
-    resolution: {integrity: sha512-GWTHjKMeekX8CwJf4VU9Oo6mJpSGaflGMddbCvR+Cmmh9sslRMiGbAoqqZacE0r1ncARh6buCEETr2W52F8b1w==}
+  srvx@1.0.5:
+    resolution: {integrity: sha512-KvSKRpgPG/oaq3cyT614OQ2bAa7DynuGamivCZeoZzIUULOdbQz6wUtnnVuC4+DCx2Zglzo8v5gBYmWIWYhDxA==}
     engines: {node: '>=20.16.0'}
     hasBin: true
 
@@ -10009,10 +10016,10 @@ snapshots:
       ufo: 1.6.4
       uncrypto: 0.1.3
 
-  h3@2.0.1-rc.22:
+  h3@2.0.2:
     dependencies:
-      rou3: 0.8.1
-      srvx: 0.11.21
+      rou3: 1.0.0
+      srvx: 1.0.5
 
   has-async-hooks@1.0.0: {}
 
@@ -11178,7 +11185,7 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.59.0
       fsevents: 2.3.3
 
-  rou3@0.8.1: {}
+  rou3@1.0.0: {}
 
   router@2.2.0:
     dependencies:
@@ -11455,7 +11462,7 @@ snapshots:
 
   sql-escaper@1.5.2: {}
 
-  srvx@0.11.21: {}
+  srvx@1.0.5: {}
 
   ssh-remote-port-forward@1.0.4:
     dependencies:

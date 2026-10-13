@@ -7,6 +7,8 @@ import { Controller, Get, Post } from '../src/core/decorators'
 import { expressRuntime } from '../src/http/runtimes/express'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
+import { h3WebRuntime } from '../src/http/runtimes/h3-web'
+import * as h3v2 from 'h3-v2'
 import type { HttpRuntime, RuntimeResponse } from '../src/http/runtime'
 
 /**
@@ -18,6 +20,8 @@ const RUNTIMES: Array<{ name: string; make: () => HttpRuntime }> = [
   { name: 'express', make: () => expressRuntime() },
   { name: 'fastify', make: () => fastifyRuntime() },
   { name: 'h3', make: () => h3Runtime() },
+  // h3 v2, through the npm alias — the installed `h3` peer is v1.
+  { name: 'h3-web', make: () => h3WebRuntime({ h3: h3v2 }) },
 ]
 
 beforeEach(() => Container.reset())

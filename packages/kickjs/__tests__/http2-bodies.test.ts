@@ -19,6 +19,8 @@ import {
 } from '../src/index'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
+import { h3WebRuntime } from '../src/http/runtimes/h3-web'
+import * as h3v2 from 'h3-v2'
 
 let server: http2.Http2Server | undefined
 
@@ -86,6 +88,8 @@ function post(
 describe.each([
   ['fastify', fastifyRuntime],
   ['h3', h3Runtime],
+  // h3 v2, through the npm alias — the installed `h3` peer is v1.
+  ['h3-web', () => h3WebRuntime({ h3: h3v2 })],
 ] as const)('request bodies over HTTP/2 under %s', (_name, runtime) => {
   it('reads a JSON body sent without content-length', async () => {
     const port = await boot(runtime)

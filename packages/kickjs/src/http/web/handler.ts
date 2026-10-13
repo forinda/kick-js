@@ -24,6 +24,13 @@ export interface WebRouteInvocation {
   request: Request
   url: URL
   params: Record<string, string>
+  /**
+   * The request object the app's connect middleware wrote to — the node
+   * `req` behind a node server, the per-event shim on the fetch path.
+   * Whatever it set (`session`, `user`, `requestId`, an adapter's symbol)
+   * reads through on the route's request.
+   */
+  carry?: object
 }
 
 export interface WebRouteHooks {
@@ -84,6 +91,23 @@ function isProduction(): boolean {
  * Everything derivable at route-build time (validator, upload config) is
  * hoisted here — per-request work is shim + store + pipeline only.
  */
+/**
+ * The route's request, with anything it does not set itself read from
+ * `carry` — the object connect middleware wrote to. Writes stay on the route's
+ * own request. A declared-but-unset field (`requestId`) counts as not set.
+ */
+export function readThrough(shim: WebRequestShim, carry: object): WebRequestShim {
+  return new Proxy(shim, {
+    get(target, prop, receiver) {
+      const own = Reflect.get(target, prop, receiver)
+      return own !== undefined ? own : Reflect.get(carry, prop, carry)
+    },
+    has(target, prop) {
+      return Reflect.has(target, prop) || Reflect.has(carry, prop)
+    },
+  })
+}
+
 export function compileWebRoute(
   entry: RouteEntry,
   hooks?: WebRouteHooks,
@@ -91,8 +115,9 @@ export function compileWebRoute(
   const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
   const upload = entry.meta.upload && entry.meta.upload.mode !== 'none' ? entry.meta.upload : null
 
-  return async ({ request, url, params }) => {
-    const req = new WebRequestShim(request, url)
+  return async ({ request, url, params, carry }) => {
+    const shim = new WebRequestShim(request, url)
+    const req = carry ? readThrough(shim, carry) : shim
     req.params = params
     let bodyError: unknown
 
@@ -111,7 +136,12 @@ export function compileWebRoute(
               fieldname: name,
               filename: value.name ?? '',
               mimetype: value.type || 'application/octet-stream',
-              buffer: new Uint8Array(await value.arrayBuffer()) as unknown as Buffer,
+              // A real Buffer where the runtime has one (Node, Bun, Deno), so
+              // `file.buffer.toString()` is the content as on every other
+              // engine — a bare Uint8Array stringifies as "80,78,71,…".
+              buffer: (typeof Buffer === 'function'
+                ? Buffer.from(await value.arrayBuffer())
+                : new Uint8Array(await value.arrayBuffer())) as unknown as Buffer,
             })
           }
         }

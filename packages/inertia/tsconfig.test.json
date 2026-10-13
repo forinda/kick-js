@@ -7,6 +7,7 @@
       "@forinda/kickjs": ["../kickjs/src/index.ts"],
       "@forinda/kickjs/fastify": ["../kickjs/src/http/runtimes/fastify.ts"],
       "@forinda/kickjs/h3": ["../kickjs/src/http/runtimes/h3.ts"],
+      "@forinda/kickjs/h3-web": ["../kickjs/src/http/runtimes/h3-web.ts"],
       "@forinda/kickjs/*": ["../kickjs/src/*"],
       "@forinda/kickjs-inertia": ["./src/index.ts"]
     }

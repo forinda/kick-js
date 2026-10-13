@@ -74,7 +74,7 @@ Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs
 [h3](https://h3.dev) is the HTTP layer behind Nitro / Nuxt. It ships as a
 subpath too:
 
-<PmCommand add="h3" />
+<PmCommand add="h3@^1" />
 
 ```ts
 import { h3Runtime } from '@forinda/kickjs/h3'
@@ -82,7 +82,9 @@ import { h3Runtime } from '@forinda/kickjs/h3'
 export const app = await bootstrap({ modules, runtime: h3Runtime() })
 ```
 
-The binding targets **h3 v1** (the stable, node-based surface).
+The binding targets **h3 v1** (the node-based surface, maintained on h3's `1x`
+line). Pin it: h3 v2 is now `latest`, so a bare `h3` installs v2, which this
+runtime does not run on — for v2, use the web-standards runtime below.
 
 Same surface as Fastify: routing, JSON / HTML, connect middleware (via h3's
 `fromNodeMiddleware`), context decorators, errors / 404, SSE, body validation,
@@ -105,9 +107,9 @@ export const app = await bootstrap({ modules, runtime: h3WebRuntime() })
 Each runtime fail-fasts with guidance when the wrong h3 major is installed.
 The v2 runtime shares its request pipeline with the
 [`@forinda/kickjs/web` fetch entry](./edge-deployment.md), which is how the
-same app deploys to Cloudflare Workers, Bun, and Deno. One caveat vs v1: no
-Vite dev-server fall-through (h3 v2 owns the full request) — use the v1 h3
-runtime or Express for Vite-integrated dev.
+same app deploys to Cloudflare Workers, Bun, and Deno. Under `kick dev` and
+behind a host server it behaves like the v1 runtime, including handing
+unmatched requests back unless `notFoundFallthrough: false`.
 
 ### Calling the app through `fetch`
 
@@ -147,7 +149,7 @@ clear error rather than failing silently.
 | File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                                 |
 | File download (`ctx.download`) | ✅           | ✅                      | ✅                      | ✅                                                  |
 | Edge / Bun / Deno deploy       | ❌           | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
-| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅                      | — (the platform's server)                           |
+| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅                      | ✅ (node); the platform's server on edge            |
 
 ## HTTPS and HTTP/2
 

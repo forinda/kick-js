@@ -14,6 +14,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@forinda/kickjs/fastify': path.resolve(__dirname, '../kickjs/src/http/runtimes/fastify.ts'),
+      '@forinda/kickjs/h3-web': path.resolve(__dirname, '../kickjs/src/http/runtimes/h3-web.ts'),
       '@forinda/kickjs/h3': path.resolve(__dirname, '../kickjs/src/http/runtimes/h3.ts'),
       '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
       '@forinda/kickjs-inertia': path.resolve(__dirname, 'src/index.ts'),
