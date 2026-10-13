@@ -61,7 +61,7 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
     session
       .save()
       .then(() => {
-        res.status(303).setHeader('location', previousUrl(session, req.headers.referer))
+        res.status(303).setHeader('location', previousUrl(session, req.headers))
         res.end()
       })
       .catch((saveErr) => fallback(saveErr, req, res, next))

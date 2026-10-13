@@ -27,6 +27,7 @@ import {
   optional,
   redirect,
 } from '@forinda/kickjs-inertia'
+import { previousUrl } from '../src/inertia'
 
 /** A minimal Standard Schema: `title` must be a non-empty string. */
 const titleSchema = {
@@ -102,7 +103,15 @@ async function makeApp(options: { version?: string | null } = {}) {
         routes: () => ({ path: '/', prefix: false, version: false, controller: PagesController }),
       } as never,
     ],
-    middlewares: [express.json(), session({ secret: 'test-secret-test-secret' })],
+    middlewares: [
+      // Stands in for cors(): a Vary set by another layer must survive.
+      (_req: any, res: any, next: () => void) => {
+        res.setHeader('Vary', 'Origin')
+        next()
+      },
+      express.json(),
+      session({ secret: 'test-secret-test-secret' }),
+    ],
     adapters: [
       InertiaAdapter({
         clientDir: clientBuild(),
@@ -149,7 +158,7 @@ describe('InertiaAdapter', () => {
     const res = await request(app.handle.bind(app)).get('/users').set(X).expect(200)
 
     expect(res.headers['x-inertia']).toBe('true')
-    expect(res.headers.vary).toMatch(/X-Inertia/)
+    expect(res.headers.vary).toBe('Origin, X-Inertia')
     expect(res.body.component).toBe('Users/Index')
     expect(res.body.props).not.toHaveProperty('stats') // optional: only when asked
     expect(res.body.props).not.toHaveProperty('activity') // deferred
@@ -221,10 +230,10 @@ describe('InertiaAdapter', () => {
 
     const res = await agent
       .post('/posts')
-      .set({ ...X, Referer: '/posts/new' })
+      .set({ ...X, Host: 'app.test', Referer: 'http://app.test/posts/new?draft=1' })
       .send({ title: '' })
       .expect(303)
-    expect(res.headers.location).toBe('/posts/new')
+    expect(res.headers.location).toBe('/posts/new?draft=1')
 
     const next = await agent.get('/posts').set(X).expect(200)
     expect(next.body.props.errors).toEqual({ title: 'Title is required' })
@@ -239,6 +248,23 @@ describe('InertiaAdapter', () => {
     await agent.get('/users').set(X).expect(200)
     const res = await agent.post('/posts').set(X).send({}).expect(303)
     expect(res.headers.location).toBe('/users')
+  })
+
+  it('never sends a failed submit back to another site', async () => {
+    const app = await makeApp()
+    const res = await request(app.handle.bind(app))
+      .post('/posts')
+      .set({ ...X, Host: 'app.test', Referer: 'https://evil.example/phish' })
+      .send({})
+      .expect(303)
+    expect(res.headers.location).toBe('/')
+  })
+
+  it('treats a protocol-relative stored URL as another site', () => {
+    const session = { data: { __inertia_previous: '//evil.example/x' } }
+    expect(previousUrl(session, {})).toBe('/')
+    expect(previousUrl({ data: { __inertia_previous: '/\\evil.example' } }, {})).toBe('/')
+    expect(previousUrl({ data: { __inertia_previous: '/posts?page=2' } }, {})).toBe('/posts?page=2')
   })
 
   it('scopes errors to the error bag the client names', async () => {

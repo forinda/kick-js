@@ -50,6 +50,16 @@ function viteServer(): ViteDevServerLike | null {
   )
 }
 
+function appendVary(res: ServerResponse, field: string): void {
+  const current = res.getHeader('Vary')
+  const list = (Array.isArray(current) ? current.join(',') : String(current ?? ''))
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+  if (list.includes('*') || list.some((v) => v.toLowerCase() === field.toLowerCase())) return
+  res.setHeader('Vary', [...list, field].join(', '))
+}
+
 type NodeMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
 export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
@@ -65,8 +75,12 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
     let version: () => string | null = () => null
 
     const protocol: NodeMiddleware = (req, res, next) => {
+      // The same URL answers HTML or JSON depending on X-Inertia, so a shared
+      // cache must key on it. Appended, not set: replacing a Vary another
+      // layer added (Origin, Accept-Encoding) lets a cache serve one
+      // client's variant to another.
+      appendVary(res, 'X-Inertia')
       if (req.headers['x-inertia'] !== 'true') return next()
-      res.setHeader('Vary', 'X-Inertia')
 
       const current = version()
       if (req.method === 'GET' && current && req.headers['x-inertia-version'] !== current) {

@@ -180,7 +180,8 @@ export function inertia(
       // Remembered for back(): helmet's default Referrer-Policy (no-referrer)
       // means the browser sends no Referer to go back to.
       if (ctx.session) ctx.session.data[PREVIOUS_KEY] = page.url
-      ctx.setHeader('Vary', 'X-Inertia')
+      // `Vary: X-Inertia` is added by the adapter's middleware, which can
+      // append to a Vary another layer set instead of replacing it.
       if (isInertiaRequest(ctx)) {
         ctx.setHeader('X-Inertia', 'true')
         ctx.json(page)
@@ -206,18 +207,49 @@ export function redirect(url: string): Respondable {
   }
 }
 
-/** Where "back" is: the last page this session rendered, else the Referer. */
+/** A path on this site — not `//host` or `/\\host`, which browsers treat as another origin. */
+function localPath(value: unknown): string | undefined {
+  return typeof value === 'string' && /^\/(?![/\\])/.test(value) ? value : undefined
+}
+
+/** The path of a Referer, only when it points at this host. */
+function sameOriginPath(referer: string | undefined, host: string | undefined): string | undefined {
+  if (!referer || !host) return undefined
+  try {
+    const url = new URL(referer)
+    return url.host === host ? localPath(url.pathname + url.search) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Where "back" is: the last page this session rendered, else a same-origin
+ * Referer, else `fallback`. Never another site — a form on another site that
+ * posts here must not be able to choose where the user lands.
+ */
 export function previousUrl(
   session: { data: Record<string, unknown> } | undefined,
-  referer: string | undefined,
+  headers: { referer?: string | string[]; host?: string | string[] },
   fallback = '/',
 ): string {
-  return (session?.data[PREVIOUS_KEY] as string | undefined) ?? referer ?? fallback
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+  return (
+    localPath(session?.data[PREVIOUS_KEY]) ??
+    sameOriginPath(one(headers.referer), one(headers.host)) ??
+    fallback
+  )
 }
 
 /** Redirect back to the page the request came from. */
 export function back(ctx: RequestContext, fallback = '/'): Respondable {
-  return redirect(previousUrl(ctx.session, header(ctx, 'referer'), fallback))
+  return redirect(
+    previousUrl(
+      ctx.session,
+      { referer: header(ctx, 'referer'), host: header(ctx, 'host') },
+      fallback,
+    ),
+  )
 }
 
 /**
