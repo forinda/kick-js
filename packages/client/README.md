@@ -18,6 +18,10 @@ const task = await api.get('/tasks/:id', { params: { id: '42' } })
 const created = await api.post('/tasks', { body: { title: 'Ship it' } })
 ```
 
+A frontend in its own project uses `KickClientApi.Api` from the generated
+`kick__client.d.ts` instead — same types, without compiling the server. See
+[Typed client](https://kickjs.app/guide/typed-client.html#frontends-outside-the-server-s-typescript-program).
+
 - **Paths + params + body typed** from the generated `KickRoutes.Api`; response
   types flow from your controller handlers (return-value style) via
   `InferHandlerResponse`.

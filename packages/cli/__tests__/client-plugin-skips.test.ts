@@ -115,8 +115,8 @@ describe('kick/client plugin', () => {
 
   it('stays quiet when the project never had a client map', async () => {
     // This plugin runs for every adopter, and most do not consume the map:
-    // the fullstack template's web app is wired to the ambient KickRoutes.Api,
-    // and rest/minimal have no frontend at all. Warning on every
+    // only the fullstack template's web app reads it (KickClientApi.Api), and
+    // rest/minimal have no frontend at all. Warning on every
     // `kick typegen` about a file they do not use is pure noise — and the
     // compiler API it needs pulls a second TypeScript, so "just install it"
     // is not a free answer either.

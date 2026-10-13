@@ -10,7 +10,7 @@ Everything below assumes the fullstack setup:
 // src/api.ts
 import { createClient } from '@forinda/kickjs-client'
 
-export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
+export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
 ```
 
 ## TanStack Query (React Query v5)
@@ -165,7 +165,7 @@ package:
 import axios from 'axios'
 import { createClient } from '@forinda/kickjs-client'
 
-export const api = createClient<KickApi>({
+export const api = createClient<KickClientApi.Api>({
   baseUrl: '/api/v1',
   fetch: async (request) => {
     const res = await axios({
@@ -223,7 +223,7 @@ Two of the usual reasons are already covered without the dependency:
 - **Auth interceptors** — `headers` accepts an async factory that runs per
   request, so token refresh needs no interceptor:
   ```ts
-  createClient<KickApi>({
+  createClient<KickClientApi.Api>({
     baseUrl: '/api/v1',
     headers: async () => ({ authorization: `Bearer ${await getToken()}` }),
   })
@@ -260,8 +260,9 @@ already configures.
 - **Tests**: [`createTestClient`](./typed-client.md#network-free-testing) +
   a `QueryClientProvider` wrapper gives fully-typed hook tests with zero
   network.
-- **Separate repo or a frontend that typechecks slowly?** Add
-  `.kickjs/types/kick__client.d.ts` to your tsconfig `include` and swap
-  `KickApi` for `KickClientApi.Api` — same types, no server source in your
-  `tsc` run, and every example on this page works unchanged. See
+- **`KickClientApi.Api` comes from `kick__client.d.ts`** in your tsconfig
+  `types` — see
   [frontends outside the server's TypeScript program](./typed-client.md#frontends-outside-the-server-s-typescript-program).
+  Code that already compiles with the server's source, like the server's own
+  tests, can use the global `KickApi` instead — same types, and every example
+  on this page works unchanged.

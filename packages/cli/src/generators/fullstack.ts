@@ -3,7 +3,7 @@
 //   my-app/
 //     server/   KickJS API (the standard scaffold, minus its own git/install)
 //     web/      Vite + React frontend typed end-to-end via
-//               @forinda/kickjs-client + the server's generated KickRoutes.Api
+//               @forinda/kickjs-client + the server's generated KickClientApi.Api
 //
 // The type loop: server controllers use return-value handlers → `kick
 // typegen` (run here once, then by the root `build` script and `kick dev` startup — not on save) emits
@@ -209,7 +209,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     }
   }
 
-  // ── typegen (server) so web's KickRoutes.Api resolves immediately ──
+  // ── typegen (server) so web's KickClientApi.Api resolves immediately ──
   try {
     const { runTypegen } = await import('../typegen')
     await runTypegen({ cwd: join(dir, 'server'), allowDuplicates: true, silent: true })
