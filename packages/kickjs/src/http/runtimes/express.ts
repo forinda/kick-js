@@ -102,7 +102,7 @@ export function materializeRouter(entries: RouteEntry[]): Router {
         const result = await entry.handler(ctx)
         // Return-value handlers (reply.ts): auto-send the returned payload
         // when the handler wrote nothing. `undefined` keeps prior behavior.
-        if (!res.headersSent) applyHandlerResult(ctx, result)
+        if (!res.headersSent) await applyHandlerResult(ctx, result)
       } catch (err) {
         next(err)
       }

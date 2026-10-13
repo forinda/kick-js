@@ -205,7 +205,7 @@ export function compileWebRoute(
       const result = await entry.handler(ctx)
       // Return-value handlers (reply.ts): auto-send when nothing was written.
       // `undefined` falls through to the canonical 404 below.
-      if (!driver.settled) applyHandlerResult(ctx, result)
+      if (!driver.settled) await applyHandlerResult(ctx, result)
     })
 
     try {

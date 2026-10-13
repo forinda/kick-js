@@ -27,7 +27,7 @@ export function registerInitCommand(program: Command): void {
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
-    .option('-t, --template <type>', 'Project template: rest | minimal | fullstack')
+    .option('-t, --template <type>', 'Project template: rest | minimal | fullstack | inertia')
     .option('--runtime <engine>', 'HTTP runtime: express | fastify | h3')
     .option('-r, --repo <type>', 'Repository name (inmemory, or any DB name e.g. postgres)')
     .option(
@@ -134,6 +134,11 @@ export function registerInitCommand(program: Command): void {
                 label: 'Fullstack',
                 hint: 'server + Vite React web, typed client',
               },
+              {
+                value: 'inertia',
+                label: 'Inertia',
+                hint: 'server-driven React pages, one app, SSR',
+              },
             ],
           })
         }
@@ -202,6 +207,13 @@ export function registerInitCommand(program: Command): void {
       // author ergonomics — `zod` is the default for the widest
       // ecosystem reach.
       let schemaLib: 'zod' | 'valibot' | 'yup' = opts.schema
+      // The inertia template's example form validates with zod.
+      if (template === 'inertia') {
+        if (schemaLib && schemaLib !== 'zod') {
+          log.warn(`The inertia template uses zod — ignoring --schema ${schemaLib}.`)
+        }
+        schemaLib = 'zod'
+      }
       if (!schemaLib) {
         if (yes) {
           schemaLib = 'zod'

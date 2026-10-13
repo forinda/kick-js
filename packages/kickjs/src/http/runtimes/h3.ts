@@ -60,6 +60,8 @@ const ROUTER = Symbol('kickjs.h3.router')
 const NOTFOUND_MW = Symbol('kickjs.h3.notFoundMw')
 const ASSEMBLED = Symbol('kickjs.h3.assembled')
 const NOOP_NEXT = (): void => {}
+/** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
+const NO_FALLTHROUGH = Symbol('kickjs.h3.noFallthrough')
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /**
@@ -302,7 +304,7 @@ function makeEventHandler(
       if (res.writableEnded) return
       const result = await entry.handler(ctx)
       // Return-value handlers (reply.ts): auto-send when nothing was written.
-      if (!res.writableEnded && !res.headersSent) applyHandlerResult(ctx, result)
+      if (!res.writableEnded && !res.headersSent) await applyHandlerResult(ctx, result)
     })
   }
 }
@@ -339,6 +341,51 @@ async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Bu
   return Buffer.concat(chunks)
 }
 
+/**
+ * Run an error / not-found handler and settle once it has answered. h3 awaits
+ * its `onError` hook and then sends its own error response unless the reply
+ * is finished, so a handler that answers asynchronously (rendering a page,
+ * saving a session first) would lose that race. A handler that calls `next()`
+ * instead of answering settles too, and h3's fallback answers.
+ */
+function answered(res: ServerResponse, run: (done: () => void) => unknown): Promise<void> {
+  return new Promise<void>((resolve) => {
+    // h3 already holds a 'close' listener per connect middleware until the
+    // response closes, so ours can cross Node's default of 10 and print a
+    // leak warning. Ours are removed in `done`; budget for exactly them.
+    res.setMaxListeners(res.getMaxListeners() + 1)
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      res.removeListener('finish', done)
+      res.removeListener('close', done)
+      res.setMaxListeners(Math.max(0, res.getMaxListeners() - 1))
+      resolve()
+    }
+    res.once('finish', done)
+    res.once('close', done)
+    // A handler that rejects never answers: answer 500 so the request ends.
+    const failed = () => {
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.end()
+      }
+      done()
+    }
+    try {
+      const returned = run(done)
+      if (typeof (returned as PromiseLike<void> | undefined)?.then === 'function') {
+        Promise.resolve(returned).then(undefined, failed)
+      }
+    } catch (err) {
+      done()
+      throw err
+    }
+    if (res.writableEnded) done()
+  })
+}
+
 export function h3Runtime(): HttpRuntime<H3AppLike> {
   return {
     name: 'h3',
@@ -346,7 +393,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
     createApp(options: RuntimeAppOptions = {}): H3AppLike {
       const { createApp } = h3()
       const app = createApp({
-        onError: (error: unknown, event: H3EventLike) => {
+        onError: (error: unknown, event: H3EventLike): Promise<void> | void => {
           const res = event.node.res
           if (res.writableEnded) return
           const state = app as {
@@ -368,27 +415,30 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           const thrownByHandler = (error as { cause?: unknown } | undefined)?.cause instanceof Error
           if (status === 404 && !thrownByHandler) {
             const next = (event.node.req as IncomingMessage & { [NEXT]?: () => void })[NEXT]
-            if (next) {
+            if (next && !(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH]) {
               next()
               return
             }
             const nf = state[NOTFOUND_MW]
             if (nf) {
-              ;(nf as (req: unknown, res: unknown, next: () => void) => void)(
-                event.node.req,
-                resDriver(res),
-                NOOP_NEXT,
+              return answered(res, (done) =>
+                (nf as (req: unknown, res: unknown, next: () => void) => unknown)(
+                  event.node.req,
+                  resDriver(res),
+                  done,
+                ),
               )
-              return
             }
           }
           const mw = state[ERROR_MW]
           if (mw) {
-            ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
-              unwrapH3Error(error),
-              event.node.req,
-              resDriver(res),
-              NOOP_NEXT,
+            return answered(res, (done) =>
+              (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
+                unwrapH3Error(error),
+                event.node.req,
+                resDriver(res),
+                done,
+              ),
             )
           }
         },
@@ -396,6 +446,8 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
       // Stash the setting for mountRoutes — h3 has no app-level config object
       // of its own to hang it on.
       ;(app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY] = options.trustProxy
+      ;(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH] =
+        options.notFoundFallthrough === false
       return app as H3AppLike
     },
 

@@ -77,7 +77,10 @@ export {
   reply,
   isReply,
   applyHandlerResult,
+  RESPOND,
+  isRespondable,
   type Reply,
+  type Respondable,
   type InferHandlerResponse,
 } from './http/reply'
 

@@ -1,5 +1,5 @@
 import type { ModuleStyle } from './types'
-type ProjectTemplate = 'rest' | 'minimal' | 'fullstack'
+type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
 /**
  * Generate CLAUDE.md.

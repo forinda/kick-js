@@ -109,6 +109,19 @@ const NEXT = Symbol('kickjs.fastify.next')
 const NEEDS_MULTIPART = Symbol('kickjs.fastify.needsMultipart')
 const NOOP_NEXT = (): void => {}
 
+/**
+ * An async error / not-found handler that rejects never answers; answer 500
+ * so the request ends instead of hanging until the client gives up.
+ */
+function settleOrFail(reply: FastifyReplyLike, returned: unknown): void {
+  if (typeof (returned as PromiseLike<void> | undefined)?.then !== 'function') return
+  Promise.resolve(returned).then(undefined, () => {
+    if (!reply.sent && !reply.raw.headersSent) reply.code(500).send()
+  })
+}
+/** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
+const NO_FALLTHROUGH = Symbol('kickjs.fastify.noFallthrough')
+
 // A @fastify/multipart part as we consume it from `request.parts()`.
 interface MultipartPart {
   type: 'file' | 'field'
@@ -167,7 +180,12 @@ class FastifyReplyDriver implements RuntimeResponse {
     return this.reply.raw.write(chunk as never)
   }
   end(data?: unknown): this {
-    this.reply.raw.end(data as never)
+    // After writeHead (streaming, SSE) the reply is hijacked and the raw
+    // socket is ours to finish. Otherwise finish through the reply, so the
+    // status and headers set on it are sent — `ctx.redirect()` writes its
+    // Location with setHeader() and then calls end().
+    if (this.reply.raw.headersSent) this.reply.raw.end(data as never)
+    else this.reply.send(data ?? '')
     return this
   }
   once(event: string, listener: (...args: unknown[]) => void): this {
@@ -298,7 +316,7 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
       if (reply.sent) return
       const result = await entry.handler(ctx)
       // Return-value handlers (reply.ts): auto-send when nothing was written.
-      if (!reply.sent) applyHandlerResult(ctx, result)
+      if (!reply.sent) await applyHandlerResult(ctx, result)
     })
   }
 }
@@ -397,6 +415,9 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         )
       }
 
+      if (options.notFoundFallthrough === false) {
+        ;(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH] = true
+      }
       return app
     },
 
@@ -468,7 +489,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
     setNotFound(app, mw: ConnectMiddleware) {
       app.setNotFoundHandler((request, reply) => {
         const next = (request.raw as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT]
-        if (next) {
+        if (next && !(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH]) {
           // Vite dev fall-through: hand the request back to the outer chain.
           reply.hijack()
           next()
@@ -476,10 +497,13 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         }
         // Pass the reply DRIVER (not raw res) so the connect-style
         // notFoundHandler's `res.status().json()` lands on the Fastify reply.
-        ;(mw as (req: unknown, res: unknown, next: () => void) => void)(
-          request.raw,
-          replyDriver(reply),
-          NOOP_NEXT,
+        settleOrFail(
+          reply,
+          (mw as (req: unknown, res: unknown, next: () => void) => unknown)(
+            request.raw,
+            replyDriver(reply),
+            NOOP_NEXT,
+          ),
         )
       })
     },
@@ -488,11 +512,14 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       app.setErrorHandler((err, request, reply) => {
         // Reply driver (not raw res) so the connect-style errorHandler's
         // `res.status().json()` / `setHeader` land on the Fastify reply.
-        ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
-          err,
-          request.raw,
-          replyDriver(reply),
-          NOOP_NEXT,
+        settleOrFail(
+          reply,
+          (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
+            err,
+            request.raw,
+            replyDriver(reply),
+            NOOP_NEXT,
+          ),
         )
       })
     },

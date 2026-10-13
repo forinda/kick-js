@@ -12,7 +12,7 @@ import {
 import { loadKickConfig } from '../config'
 import type { ModuleStyle } from './templates/types'
 
-type ProjectTemplate = 'rest' | 'minimal' | 'fullstack'
+type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
 /**
  * Subdirectory (relative to the project root) where every shared
@@ -54,7 +54,7 @@ export interface GenerateAgentDocsOptions {
   force?: boolean
 }
 
-const VALID_TEMPLATES = new Set<ProjectTemplate>(['rest', 'minimal', 'fullstack'])
+const VALID_TEMPLATES = new Set<ProjectTemplate>(['rest', 'minimal', 'fullstack', 'inertia'])
 
 function detectName(outDir: string, override?: string): string {
   if (override) return override

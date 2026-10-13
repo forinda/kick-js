@@ -35,7 +35,12 @@ function pinned(names: readonly string[], versions: SiblingVersions): Record<str
 export function generatePackageJson(
   name: string,
   versions: SiblingVersions,
-  packages: { dependencies: readonly string[]; devDependencies: readonly string[] },
+  packages: {
+    dependencies: readonly string[]
+    devDependencies: readonly string[]
+    /** Scripts a scaffold layer adds or replaces. */
+    scripts?: Record<string, string>
+  },
 ): string {
   return JSON.stringify(
     {
@@ -68,6 +73,7 @@ export function generatePackageJson(
         // src/serverless.ts and writes the platform's build output.
         'build:netlify': 'kick build && kick build:netlify',
         'build:vercel': 'kick build && kick build:vercel',
+        ...packages.scripts,
       },
       dependencies: pinned(packages.dependencies, versions),
       devDependencies: pinned(packages.devDependencies, versions),
