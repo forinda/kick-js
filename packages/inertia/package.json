@@ -39,7 +39,7 @@
     "@types/supertest": "^7.2.1",
     "express": "^5.1.0",
     "fastify": "^5.12.5",
-    "h3": "1.15.11",
+    "h3": "2.0.2",
     "h3-v2": "npm:h3@2.0.2",
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.3.1",
