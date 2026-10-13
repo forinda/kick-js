@@ -288,6 +288,7 @@ describe('the shipped layers', () => {
       'vite.client.config.ts',
       'public/favicon.svg',
       'public/robots.txt',
+      'src/client/pages/Error.tsx',
     ]) {
       expect(project.files.has(path), path).toBe(true)
     }

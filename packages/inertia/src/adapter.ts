@@ -14,8 +14,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { defineAdapter, Logger, type RequestContext } from '@forinda/kickjs'
-import { setInertiaRuntime, requestUrl, type Page } from './inertia'
+import { defineAdapter, Logger, RequestContext, RESPOND } from '@forinda/kickjs'
+import { errorPage, isPageRequest, setInertiaRuntime, requestUrl, type Page } from './inertia'
 import { defaultTemplate, devHead, manifestHead, pageBody, type HtmlTemplate } from './html'
 
 export interface InertiaAdapterOptions {
@@ -44,6 +44,13 @@ export interface InertiaAdapterOptions {
   head?: string
   /** Replace the HTML shell entirely. */
   template?: HtmlTemplate
+  /**
+   * Page component for errors and unknown URLs, e.g. `'Error'`. It receives
+   * `{ status, message }`. Unmatched page requests get it with 404; thrown
+   * errors get it through `inertiaErrorHandler()`. API and asset requests
+   * keep the usual JSON answers.
+   */
+  errorPage?: string
   /**
    * Render pages on the server. `entry` is a module whose default export is
    * `(page) => Promise<{ head: string[]; body: string }>` — what
@@ -248,6 +255,7 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
         setInertiaRuntime({
           version: () => version(),
           share: config.share,
+          errorPage: config.errorPage,
           async renderHtml(page, ctx) {
             const rendered = await render(page)
             const styles = vite && rendered && ssr ? devStylesheets(vite, ssr.entry) : []
@@ -264,7 +272,18 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
       },
 
       middleware() {
-        return [{ handler: protocol as never, phase: 'afterGlobal' as const }]
+        const pages = [{ handler: protocol as never, phase: 'afterGlobal' as const }]
+        if (!config.errorPage) return pages
+        const component = config.errorPage
+        // Runs after every route: a page request that reaches it matched none.
+        const notFound: NodeMiddleware = (req, res, next) => {
+          if ((req.method !== 'GET' && req.method !== 'HEAD') || !isPageRequest(req.headers)) {
+            return next()
+          }
+          const ctx = new RequestContext(req as never, res as never, next as never)
+          Promise.resolve(errorPage(component, 404)[RESPOND](ctx)).catch(next)
+        }
+        return [...pages, { handler: notFound as never, phase: 'afterRoutes' as const }]
       },
 
       shutdown() {

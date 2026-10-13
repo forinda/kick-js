@@ -34,6 +34,8 @@ export interface PageOptions {
   encryptHistory?: boolean
   /** Wipe the browser's Inertia history, e.g. after logout. */
   clearHistory?: boolean
+  /** Response status. Default 200; error pages send theirs (404, 500). */
+  status?: number
 }
 
 /** What the adapter hands the page renderer. Set in `beforeMount`. */
@@ -41,6 +43,8 @@ export interface InertiaRuntime {
   version(): string | null
   share?(ctx: RequestContext): Record<string, unknown> | Promise<Record<string, unknown>>
   renderHtml(page: Page, ctx: RequestContext): Promise<string>
+  /** Component that renders error and not-found pages, when configured. */
+  errorPage?: string
 }
 
 // ponytail: one active adapter per process, which is one app. An app booting
@@ -49,6 +53,11 @@ let active: InertiaRuntime | null = null
 
 export function setInertiaRuntime(runtime: InertiaRuntime | null): void {
   active = runtime
+}
+
+/** The active adapter's runtime, or null when no InertiaAdapter is mounted. */
+export function inertiaRuntime(): InertiaRuntime | null {
+  return active
 }
 
 function runtime(): InertiaRuntime {
@@ -184,10 +193,10 @@ export function inertia(
       // append to a Vary another layer set instead of replacing it.
       if (isInertiaRequest(ctx)) {
         ctx.setHeader('X-Inertia', 'true')
-        ctx.json(page)
+        ctx.json(page, options?.status ?? 200)
         return
       }
-      ctx.html(await runtime().renderHtml(page, ctx))
+      ctx.html(await runtime().renderHtml(page, ctx), options?.status ?? 200)
     },
   }
 }
@@ -268,4 +277,34 @@ export function location(url: string): Respondable {
       ctx.redirect(url)
     },
   }
+}
+
+/** A browser navigation or an Inertia visit — not an API or asset request. */
+export function isPageRequest(headers: Record<string, string | string[] | undefined>): boolean {
+  const accept = String(headers.accept ?? '')
+  return headers['x-inertia'] === 'true' || accept.includes('text/html')
+}
+
+const STATUS_TEXT: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Page Not Found',
+  405: 'Method Not Allowed',
+  419: 'Page Expired',
+  429: 'Too Many Requests',
+  500: 'Server Error',
+  503: 'Service Unavailable',
+}
+
+/**
+ * The configured error page as a response, with `{ status, message }` as its
+ * props. A 5xx message is replaced in production — an exception's text is
+ * for the log, not the visitor.
+ */
+export function errorPage(component: string, status: number, error?: unknown): Respondable {
+  const fallback = STATUS_TEXT[status] ?? (status >= 500 ? 'Server Error' : 'Error')
+  const raw = error instanceof Error && error.message ? error.message : fallback
+  const message = status >= 500 && process.env.NODE_ENV === 'production' ? fallback : raw
+  return inertia(component, { status, message }, { status })
 }

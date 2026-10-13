@@ -7,6 +7,8 @@ export {
   flash,
   buildPage,
   isInertiaRequest,
+  isPageRequest,
+  errorPage,
   type Page,
   type PageOptions,
 } from './inertia'

@@ -6,8 +6,15 @@
  *
  * @module @forinda/kickjs-inertia/errors
  */
-import { errorHandler, HttpException, Logger, type RuntimeResponse } from '@forinda/kickjs'
-import { ERRORS_KEY, previousUrl } from './inertia'
+import {
+  errorHandler,
+  HttpException,
+  Logger,
+  RequestContext,
+  RESPOND,
+  type RuntimeResponse,
+} from '@forinda/kickjs'
+import { ERRORS_KEY, errorPage, inertiaRuntime, isPageRequest, previousUrl } from './inertia'
 
 const log = Logger.for('Inertia')
 
@@ -35,18 +42,34 @@ function toErrors(details: unknown): Record<string, string> | null {
 }
 
 /**
- * Pass to `bootstrap({ onError: inertiaErrorHandler() })`. Needs the
- * `session()` middleware to carry the errors to the next request.
+ * Pass to `bootstrap({ onError: inertiaErrorHandler() })`.
+ *
+ * - A validation 422 on an Inertia visit goes back to the form with the
+ *   errors (needs the `session()` middleware to carry them).
+ * - Any other error on a page request renders the adapter's `errorPage`,
+ *   when one is configured.
+ * - Everything else — API calls, assets — goes to `fallback`.
  */
 export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): ErrorHandler {
   let warned = false
   return (err, req, res, next) => {
+    if (res.headersSent) return fallback(err, req, res, next)
+
     const errors = err instanceof HttpException && err.status === 422 ? toErrors(err.details) : null
-    if (!errors || req?.headers?.['x-inertia'] !== 'true' || res.headersSent) {
-      return fallback(err, req, res, next)
-    }
-    const session = req.session as SessionLike | undefined
-    if (!session) {
+    if (errors && req?.headers?.['x-inertia'] === 'true') {
+      const session = req.session as SessionLike | undefined
+      if (session) {
+        const bag = req.headers['x-inertia-error-bag'] as string | undefined
+        session.data[ERRORS_KEY] = bag ? { [bag]: errors } : errors
+        session
+          .save()
+          .then(() => {
+            res.status(303).setHeader('location', previousUrl(session, req.headers))
+            res.end()
+          })
+          .catch((saveErr) => fallback(saveErr, req, res, next))
+        return
+      }
       if (!warned) {
         log.warn(
           'Validation failed on an Inertia request, but there is no session() middleware to carry the errors — answering 422 instead.',
@@ -56,14 +79,16 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
       return fallback(err, req, res, next)
     }
 
-    const bag = req.headers['x-inertia-error-bag'] as string | undefined
-    session.data[ERRORS_KEY] = bag ? { [bag]: errors } : errors
-    session
-      .save()
-      .then(() => {
-        res.status(303).setHeader('location', previousUrl(session, req.headers))
-        res.end()
-      })
-      .catch((saveErr) => fallback(saveErr, req, res, next))
+    const component = inertiaRuntime()?.errorPage
+    if (component && req?.headers && isPageRequest(req.headers)) {
+      const status = err instanceof HttpException ? err.status : 500
+      if (status >= 500) log.error(err, 'Unhandled error on a page request')
+      const ctx = new RequestContext(req, res as never, next, res)
+      Promise.resolve(errorPage(component, status, err)[RESPOND](ctx)).catch((renderErr) =>
+        fallback(renderErr, req, res, next),
+      )
+      return
+    }
+    return fallback(err, req, res, next)
   }
 }

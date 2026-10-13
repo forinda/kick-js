@@ -29,6 +29,8 @@ export const app = await bootstrap({
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),
       ssr: { entry: 'src/client/ssr.tsx' },
+      // Unknown URLs and thrown errors render src/client/pages/Error.tsx.
+      errorPage: 'Error',
     }),
     // @kick:adapter
   ],

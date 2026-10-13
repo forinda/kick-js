@@ -12,6 +12,7 @@ import {
   Get,
   Post,
   Put,
+  HttpException,
   session,
   type RequestContext,
 } from '@forinda/kickjs'
@@ -62,7 +63,9 @@ function clientBuild(): string {
   return dir
 }
 
-async function makeApp(options: { version?: string | null; ssrBundle?: string } = {}) {
+async function makeApp(
+  options: { version?: string | null; ssrBundle?: string; errorPage?: string } = {},
+) {
   @Controller()
   class PagesController {
     @Get('/users')
@@ -93,6 +96,16 @@ async function makeApp(options: { version?: string | null; ssrBundle?: string } 
       ctx.redirect('/posts')
     }
 
+    @Get('/boom')
+    boom() {
+      throw new Error('database is down')
+    }
+
+    @Get('/secret')
+    secret() {
+      throw new HttpException(403, 'Members only')
+    }
+
     @Get('/away')
     away() {
       return location('https://example.com/out')
@@ -120,6 +133,7 @@ async function makeApp(options: { version?: string | null; ssrBundle?: string } 
         ...(options.version === null ? {} : { version: options.version ?? 'v1' }),
         share: () => ({ appName: 'Kick' }),
         head: '<link rel="icon" href="/favicon.svg" />',
+        errorPage: options.errorPage,
         ...(options.ssrBundle
           ? { ssr: { entry: 'src/client/ssr.tsx', bundle: options.ssrBundle } }
           : {}),
@@ -361,5 +375,60 @@ describe('InertiaAdapter', () => {
     const app = await makeApp()
     const res = await request(app.handle.bind(app)).get('/users').expect(200)
     expect(res.text).toContain('<link rel="icon" href="/favicon.svg" />')
+  })
+
+  describe('error pages', () => {
+    const html = { Accept: 'text/html' }
+    const pageOf = (text: string) =>
+      JSON.parse(/<script data-page="app" type="application\/json">(.*?)<\/script>/.exec(text)![1])
+
+    it('renders the error page for an unknown URL a browser asks for', async () => {
+      const app = await makeApp({ errorPage: 'Error' })
+      const res = await request(app.handle.bind(app)).get('/nowhere').set(html).expect(404)
+      const page = pageOf(res.text)
+      expect(page.component).toBe('Error')
+      expect(page.props).toMatchObject({ status: 404, message: 'Page Not Found', appName: 'Kick' })
+    })
+
+    it('answers an Inertia visit to an unknown URL with the error page as JSON', async () => {
+      const app = await makeApp({ errorPage: 'Error' })
+      const res = await request(app.handle.bind(app)).get('/nowhere').set(X).expect(404)
+      expect(res.headers['x-inertia']).toBe('true')
+      expect(res.body.component).toBe('Error')
+    })
+
+    it('leaves API calls and non-GET requests to the default 404', async () => {
+      const app = await makeApp({ errorPage: 'Error' })
+      const api = await request(app.handle.bind(app))
+        .get('/nowhere')
+        .set({ Accept: 'application/json' })
+        .expect(404)
+      expect(api.headers['content-type']).toMatch(/json/)
+      await request(app.handle.bind(app)).post('/nowhere').set(html).expect(404)
+    })
+
+    it('renders thrown errors with their status, and hides a 5xx message in production', async () => {
+      const app = await makeApp({ errorPage: 'Error' })
+      const forbidden = await request(app.handle.bind(app)).get('/secret').set(html).expect(403)
+      expect(pageOf(forbidden.text).props).toMatchObject({ status: 403, message: 'Members only' })
+
+      const dev = await request(app.handle.bind(app)).get('/boom').set(X).expect(500)
+      expect(dev.body.props).toMatchObject({ status: 500, message: 'database is down' })
+
+      const env = process.env.NODE_ENV
+      process.env.NODE_ENV = 'production'
+      try {
+        const prod = await request(app.handle.bind(app)).get('/boom').set(X).expect(500)
+        expect(prod.body.props).toMatchObject({ status: 500, message: 'Server Error' })
+      } finally {
+        process.env.NODE_ENV = env
+      }
+    })
+
+    it('keeps the default answers when no error page is configured', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).get('/nowhere').set(html).expect(404)
+      expect(res.headers['content-type']).toMatch(/json/)
+    })
   })
 })
