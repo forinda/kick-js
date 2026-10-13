@@ -64,6 +64,8 @@ export interface FeatureManifest {
   /** Install-script answers for packages this layer pulls in (see `approveInstallScripts`). */
   builds?: Record<string, boolean>
   integrations?: Integration[]
+  /** package.json scripts this layer adds or replaces. */
+  scripts?: Record<string, string>
 }
 
 export interface RenderedProject {
@@ -73,6 +75,8 @@ export interface RenderedProject {
   builds: Record<string, boolean>
   /** Every layer's integrations plus `extra`, in layer order — `kick add` wires these. */
   integrations: Integration[]
+  /** package.json scripts, later layers winning. */
+  scripts: Record<string, string>
 }
 
 /** The project path a template file lands at: `_dot_` segment prefixes become `.`. */
@@ -105,6 +109,7 @@ export function renderLayers(
   const devDependencies: string[] = []
   const builds: Record<string, boolean> = {}
   const integrations: Integration[] = []
+  const scripts: Record<string, string> = {}
 
   for (const layer of layers) {
     const dir = join(templatesDir, layer)
@@ -117,6 +122,7 @@ export function renderLayers(
       devDependencies.push(...(manifest.devDependencies ?? []))
       Object.assign(builds, manifest.builds)
       integrations.push(...(manifest.integrations ?? []))
+      Object.assign(scripts, manifest.scripts)
     }
 
     const root = join(dir, 'files')
@@ -149,6 +155,7 @@ export function renderLayers(
     devDependencies: [...new Set(devDependencies)],
     builds,
     integrations,
+    scripts,
   }
 }
 

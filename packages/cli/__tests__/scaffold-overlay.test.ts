@@ -267,6 +267,43 @@ describe('the shipped layers', () => {
     expect(builds).toEqual({ '@scarf/scarf': true, 'msgpackr-extract': false })
   })
 
+  it('render the inertia template as one app: pages, client, SSR and the build that makes them', () => {
+    const project = renderLayers(
+      scaffoldLayers({ template: 'inertia', runtime: 'express', schemaLib: 'zod', packages: [] }),
+    )
+    const entry = project.files.get('src/index.ts')!
+    // The Express body parser lands in the middleware list the template declares.
+    expect(entry).toMatch(
+      /middlewares: \[\n\s+requestId\(\),[\s\S]*express\.json\(\),[\s\S]*session\(/,
+    )
+    expect(entry).toContain(
+      "import { InertiaAdapter, inertiaErrorHandler } from '@forinda/kickjs-inertia'",
+    )
+    expect(entry).toContain('onError: inertiaErrorHandler()')
+
+    for (const path of [
+      'src/modules/pages/pages.controller.ts',
+      'src/client/main.tsx',
+      'src/client/ssr.tsx',
+      'vite.client.config.ts',
+    ]) {
+      expect(project.files.has(path), path).toBe(true)
+    }
+    expect(project.files.get('tsconfig.json')).toContain('"jsx": "react-jsx"')
+    expect(project.files.get('vite.config.ts')).toContain('react()')
+    expect(project.scripts.build).toContain('--ssr src/client/ssr.tsx')
+    expect(project.files.get('.env')).toContain('SESSION_SECRET={{sessionSecret}}')
+    expect(project.dependencies).toEqual(
+      expect.arrayContaining(['@forinda/kickjs-inertia', '@inertiajs/react', 'react-dom']),
+    )
+    for (const pkg of [...project.dependencies, ...project.devDependencies]) {
+      expect(
+        (SIBLING_PACKAGES as readonly string[]).includes(pkg) || pkg in THIRD_PARTY_PACKAGES,
+        pkg,
+      ).toBe(true)
+    }
+  })
+
   it('ship one env schema per schema library', () => {
     for (const lib of ['zod', 'valibot', 'yup'] as const) {
       const project = renderLayers([`schema-${lib}`])

@@ -1,0 +1,2 @@
+# Signs the session cookie — at least 32 random characters.
+SESSION_SECRET=

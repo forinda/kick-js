@@ -1,5 +1,6 @@
 import { join, dirname } from 'node:path'
 import { execSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
@@ -55,6 +56,7 @@ export const SIBLING_PACKAGES = [
   '@forinda/kickjs-devtools',
   '@forinda/kickjs-testing',
   '@forinda/kickjs-client',
+  '@forinda/kickjs-inertia',
 ] as const
 
 /**
@@ -79,6 +81,9 @@ export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: stri
   '@types/react': { fallback: '^19.0.0' },
   '@types/react-dom': { fallback: '^19.0.0' },
   '@vitejs/plugin-react': { fallback: '^5.0.0' },
+  // Inertia template — the client adapter and its protocol types.
+  '@inertiajs/react': { fallback: '^3.9.0', cap: '^3' },
+  '@inertiajs/core': { fallback: '^3.9.0', cap: '^3' },
   // Toolchain.
   '@types/node': { fallback: '^25.0.0' },
   '@types/supertest': { fallback: '^7.2.1' },
@@ -292,7 +297,7 @@ function tagExportsSubpath(name: string, tag: string, subpath: string): boolean 
   }
 }
 
-type ProjectTemplate = 'rest' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal' | 'inertia'
 type SchemaLib = 'zod' | 'valibot' | 'yup'
 
 interface InitProjectOptions {
@@ -471,7 +476,9 @@ export async function initProject(
     template,
     runtime,
     packageManager,
-    templateLabel: template === 'rest' ? 'REST API' : 'Minimal',
+    templateLabel: { rest: 'REST API', minimal: 'Minimal', inertia: 'Inertia (React)' }[template],
+    // A fresh secret per project, written to the gitignored .env.
+    sessionSecret: randomBytes(32).toString('hex'),
     packages: [...project.dependencies, ...project.devDependencies]
       .filter((pkg) => pkg.startsWith('@forinda/'))
       .map((pkg) => `- \`${pkg}\``)
@@ -558,6 +565,7 @@ export async function initProject(
   const genHint: Record<string, string> = {
     rest: 'kick g module user',
     minimal: '# add your routes to src/index.ts',
+    inertia: '# pages: src/modules/pages + src/client/pages',
   }
   log(`  ${genHint[template] ?? genHint.rest}`)
   log('  kick dev')
@@ -611,7 +619,7 @@ export function spaIntegration(clientDir: string): Integration {
  * names are left out (the caller warns about them).
  */
 export function scaffoldLayers(selection: {
-  template: 'rest' | 'minimal'
+  template: ProjectTemplate
   runtime: 'express' | 'fastify' | 'h3'
   schemaLib: SchemaLib
   packages: readonly string[]
