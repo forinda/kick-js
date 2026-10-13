@@ -111,7 +111,12 @@ export function compileWebRoute(
               fieldname: name,
               filename: value.name ?? '',
               mimetype: value.type || 'application/octet-stream',
-              buffer: new Uint8Array(await value.arrayBuffer()) as unknown as Buffer,
+              // A real Buffer where the runtime has one (Node, Bun, Deno), so
+              // `file.buffer.toString()` is the content as on every other
+              // engine — a bare Uint8Array stringifies as "80,78,71,…".
+              buffer: (typeof Buffer === 'function'
+                ? Buffer.from(await value.arrayBuffer())
+                : new Uint8Array(await value.arrayBuffer())) as unknown as Buffer,
             })
           }
         }

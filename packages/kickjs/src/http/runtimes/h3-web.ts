@@ -10,10 +10,10 @@
 // `@forinda/kickjs/web` edge entry uses, so node bootstrap and edge deploys
 // exercise identical request semantics.
 //
-// Known limitation vs the v1 runtime: no Vite dev-server fall-through —
-// unmatched requests are answered by the kick notFound handler (h3 v2 owns
-// the full request; there is no node `next()` bail-out mid-engine). Use the
-// v1 h3 runtime or Express for Vite-integrated dev setups.
+// Unmatched requests: behind a node host that passed `next` (`kick dev`'s
+// Vite server, `app.handle(req, res, next)`), they are handed back to it
+// like the v1 and Fastify runtimes do, unless `notFoundFallthrough: false`;
+// everywhere else kick's notFound handler answers them.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
@@ -37,6 +37,12 @@ const NOTFOUND_MW = Symbol('kickjs.h3web.notFoundMw')
 const ERROR_MW = Symbol('kickjs.h3web.errorMw')
 const ASSEMBLED = Symbol('kickjs.h3web.assembled')
 const NOOP_NEXT = (): void => {}
+/** The host's `next`, stashed on the node request by `nodeHandler`. */
+const NEXT = Symbol('kickjs.h3web.next')
+/** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
+const NO_FALLTHROUGH = Symbol('kickjs.h3web.noFallthrough')
+/** h3 v2's "the node response was handled elsewhere" return value. */
+const H3_HANDLED = Symbol.for('h3.handled')
 
 // Minimal structural surface of h3 v2 we depend on.
 interface H3AppLike {
@@ -100,15 +106,29 @@ async function runConnectTerminal(
   const req = new WebRequestShim(event.req, event.url)
   const driver = new WebResponseDriver(event.req.signal)
   if (mw) {
-    if (err !== undefined) {
-      ;(mw as (e: unknown, rq: unknown, rs: unknown, n: () => void) => void)(
-        err,
-        req,
-        driver,
-        NOOP_NEXT,
-      )
-    } else {
-      ;(mw as (rq: unknown, rs: unknown, n: () => void) => void)(req, driver, NOOP_NEXT)
+    const returned =
+      err !== undefined
+        ? (mw as (e: unknown, rq: unknown, rs: unknown, n: () => void) => unknown)(
+            err,
+            req,
+            driver,
+            NOOP_NEXT,
+          )
+        : (mw as (rq: unknown, rs: unknown, n: () => void) => unknown)(req, driver, NOOP_NEXT)
+    // An async handler answers after an await: wait for it before deciding
+    // nothing answered. One that rejects is an error in its own right.
+    if (typeof (returned as PromiseLike<void> | undefined)?.then === 'function') {
+      try {
+        await returned
+      } catch (handlerErr) {
+        if (!driver.settled) {
+          log.error(
+            handlerErr,
+            `h3-web: the ${err !== undefined ? 'error' : 'not-found'} handler failed`,
+          )
+          driver.status(500).json({ error: 'Internal Server Error' })
+        }
+      }
     }
   }
   if (!driver.settled) {
@@ -340,6 +360,18 @@ function assembleCatchAll(app: H3AppLike): void {
   if (state[ASSEMBLED]) return
   state[ASSEMBLED] = true
   app.all('/**', (event: H3EventLike) => {
+    const node = event.req.runtime?.node
+    const next = (node?.req as (IncomingMessage & { [NEXT]?: () => void }) | undefined)?.[NEXT]
+    if (node && next && !state[NO_FALLTHROUGH]) {
+      // Hand the request back to the host and tell h3 the node response is
+      // taken care of; srvx then leaves the already-written response alone.
+      return new Promise((resolve) => {
+        const done = () => resolve(H3_HANDLED)
+        node.res.once('finish', done)
+        node.res.once('close', done)
+        next()
+      })
+    }
     const mw = state[NOTFOUND_MW] as ConnectMiddleware | undefined
     return runConnectTerminal(mw, event)
   })
@@ -355,7 +387,7 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
   return {
     name: 'h3-web',
 
-    createApp(_options: RuntimeAppOptions = {}): H3AppLike {
+    createApp(options: RuntimeAppOptions = {}): H3AppLike {
       const holder: { app?: H3AppLike } = {}
       const app = new H3({
         // Engine-level errors (middleware throws outside the kick pipeline)
@@ -370,6 +402,8 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
         },
       })
       holder.app = app
+      ;(app as unknown as Record<symbol, unknown>)[NO_FALLTHROUGH] =
+        options.notFoundFallthrough === false
       return app
     },
 
@@ -377,6 +411,7 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
       assembleCatchAll(app)
       const listener = toNodeHandler(app)
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
+        if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
         try {
           const result = listener(req, res) as unknown
           if (result && typeof (result as Promise<unknown>).then === 'function') {
@@ -396,12 +431,21 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
             onError: async (err, req, driver) => {
               const mw = (app as unknown as Record<symbol, ConnectMiddleware | undefined>)[ERROR_MW]
               if (!mw) return
-              ;(mw as (e: unknown, rq: unknown, rs: unknown, n: () => void) => void)(
-                err,
-                req,
-                driver,
-                NOOP_NEXT,
-              )
+              // Awaited: an async handler answers after its await, and the
+              // pipeline falls back to its own answer once this returns.
+              try {
+                await (mw as (e: unknown, rq: unknown, rs: unknown, n: () => void) => unknown)(
+                  err,
+                  req,
+                  driver,
+                  NOOP_NEXT,
+                )
+              } catch (handlerErr) {
+                if (!driver.settled) {
+                  log.error(handlerErr, 'h3-web: the error handler failed')
+                  driver.status(500).json({ error: 'Internal Server Error' })
+                }
+              }
             },
           }
           const run = compileWebRoute(entry, hooks)
