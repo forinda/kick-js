@@ -88,6 +88,21 @@ function makeControllers() {
       }
     }
 
+    @Get('/xml')
+    xml(ctx: RequestContext) {
+      ctx.send('<urlset/>', { type: 'application/xml', status: 203 })
+    }
+
+    @Get('/text')
+    text(ctx: RequestContext) {
+      ctx.send('plain')
+    }
+
+    @Get('/bytes')
+    bytes(ctx: RequestContext) {
+      ctx.send(new Uint8Array([1, 2, 3]), { type: 'application/octet-stream' })
+    }
+
     @Get('/void')
     // Returns undefined AND writes via ctx — prior behavior untouched.
     voidStyle(ctx: RequestContext) {
@@ -178,6 +193,27 @@ for (const rt of RUNTIMES) {
       await request(app.handle.bind(app)).get('/api/v1/r/respondable-throws').expect(500)
     })
 
+    it('ctx.send() sends a body with its content type', async () => {
+      const app = await makeApp()
+      const http = request(app.handle.bind(app))
+      const xml = await http.get('/api/v1/r/xml').expect(203)
+      expect(xml.headers['content-type']).toMatch(/^application\/xml/)
+      expect(xml.text).toBe('<urlset/>')
+      const text = await request(app.handle.bind(app)).get('/api/v1/r/text').expect(200)
+      expect(text.headers['content-type']).toMatch(/^text\/plain/)
+      expect(text.text).toBe('plain')
+      const bytes = await request(app.handle.bind(app))
+        .get('/api/v1/r/bytes')
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = []
+          res.on('data', (c: Buffer) => chunks.push(c))
+          res.on('end', () => done(null, Buffer.concat(chunks)))
+        })
+        .expect(200)
+      expect([...(bytes.body as Buffer)]).toEqual([1, 2, 3])
+    })
+
     it('imperative style is untouched', async () => {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).get('/api/v1/r/void').expect(200)
@@ -211,6 +247,13 @@ describe('return-value handlers — web entry (fetch)', () => {
     const self = await app.fetch(new Request('http://x/api/v1/r/respondable'))
     expect(self.status).toBe(201)
     expect(await self.text()).toBe('<p>self</p>')
+
+    const xml = await app.fetch(new Request('http://x/api/v1/r/xml'))
+    expect(xml.status).toBe(203)
+    expect(xml.headers.get('content-type')).toMatch(/^application\/xml/)
+    expect(await xml.text()).toBe('<urlset/>')
+    const bytes = await app.fetch(new Request('http://x/api/v1/r/bytes'))
+    expect([...new Uint8Array(await bytes.arrayBuffer())]).toEqual([1, 2, 3])
 
     const big = await app.fetch(new Request('http://x/api/v1/r/bigint'))
     expect(big.status).toBe(200)

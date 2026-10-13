@@ -896,6 +896,24 @@ export class RequestContext<
   }
 
   /**
+   * Send a body with its content type — XML, plain text, CSV, an image.
+   * Runtime-neutral, like `json()` and `html()`. `type` defaults to
+   * `text/plain; charset=utf-8`.
+   *
+   * @example
+   * ```ts
+   * ctx.send(sitemapXml, { type: 'application/xml' })
+   * ctx.send(csv, { type: 'text/csv; charset=utf-8', status: 200 })
+   * ```
+   */
+  send(body: string | Uint8Array, options: { type?: string; status?: number } = {}) {
+    return this._response
+      .status(options.status ?? 200)
+      .type(options.type ?? 'text/plain; charset=utf-8')
+      .send(body)
+  }
+
+  /**
    * Send `buffer` as a file download named `filename`. The name is written
    * per RFC 6266 — an ASCII fallback plus `filename*` in UTF-8 — so a name
    * from an upload (quotes, line breaks, non-Latin text) can't break the header.
