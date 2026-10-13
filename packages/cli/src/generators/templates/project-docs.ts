@@ -112,12 +112,16 @@ This is a WORKSPACE root — the KickJS API lives in \`server/\`, the typed web
 app in \`web/\`. Run both with \`${pm === 'pnpm' ? 'pnpm dev' : `${pm} run dev:server + ${pm} run dev:web`}\`.
 
 The type loop (do not break it):
-1. \`server/\` handlers RETURN their payloads → \`kick typegen\` (auto under
-   \`kick dev\`) emits \`server/.kickjs/types/kick__routes.ts\` incl. the flat
-   \`KickRoutes.Api\` map with inferred response types.
-2. \`web/src/types/kick-routes.d.ts\` imports that file TYPE-ONLY.
-3. \`web/src/api.ts\` = \`createClient<KickApi>({ baseUrl: '/api/v1' })\`
-   — every call site is typed from the server's handlers.
+1. \`server/\` handlers RETURN their payloads → \`kick typegen\` emits
+   \`server/.kickjs/types/kick__client.d.ts\`: the ambient \`KickClientApi\`
+   namespace, every response resolved to a plain shape. \`kick dev\` writes it
+   at startup but NOT on save — run \`kick typegen\` in \`server/\` after changing a route or a
+   response (the root \`build\` script runs it too).
+2. \`web/tsconfig.json\` lists that file in \`compilerOptions.types\`.
+3. \`web/src/api.ts\` = \`createClient<KickClientApi.Api>({ baseUrl })\`
+   — every call site is typed from the server's handlers. \`baseUrl\` is the
+   relative \`/api/v1\` (Vite proxies it in dev) unless \`VITE_API_URL\` points at
+   an API on another origin.
 
 Rules: kick commands (\`kick g\`, \`kick typegen\`, \`kick dev\`) run in
 \`server/\`; never import server runtime code into \`web/\` (the d.ts bridge is

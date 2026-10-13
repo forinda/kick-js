@@ -3,10 +3,10 @@
 //   my-app/
 //     server/   KickJS API (the standard scaffold, minus its own git/install)
 //     web/      Vite + React frontend typed end-to-end via
-//               @forinda/kickjs-client + the server's generated KickRoutes.Api
+//               @forinda/kickjs-client + the server's generated KickClientApi.Api
 //
 // The type loop: server controllers use return-value handlers → `kick
-// typegen` (run here once, re-run by `kick dev`) emits
+// typegen` (run here once, then by the root `build` script and `kick dev` startup — not on save) emits
 // server/.kickjs/types/kick__client.d.ts → web tsconfig `types` (ambient)
 // side-effect-imports that file (type-only, erased at runtime) → the web
 // client calls `api.get('/hello')` with the handler's actual response type.
@@ -209,12 +209,12 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     }
   }
 
-  // ── typegen (server) so web's KickRoutes.Api resolves immediately ──
+  // ── typegen (server) so web's KickClientApi.Api resolves immediately ──
   try {
     const { runTypegen } = await import('../typegen')
     await runTypegen({ cwd: join(dir, 'server'), allowDuplicates: true, silent: true })
   } catch {
-    // Non-fatal — `kick dev` in server/ retries on boot.
+    // Non-fatal — `kick typegen` in server/ (or the root `build`) writes it later.
   }
 
   // ── git (root) ──────────────────────────────────────────────────────
@@ -252,7 +252,8 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     log(`  ${FRONTEND_WIRING_URL}`)
   } else {
     log('The web app calls the API through @forinda/kickjs-client —')
-    log("edit server/src/modules/hello and watch web/src/App.tsx's types follow.")
+    log('edit server/src/modules/hello, run `kick typegen` in server/, and')
+    log("web/src/App.tsx's types follow.")
   }
   log('')
 }
@@ -403,7 +404,7 @@ stops compiling. That's the point.
 \`server/.kickjs/types/kick__client.d.ts\` is generated, and \`web\` reads it as
 an ambient type package. Two things follow.
 
-**It is not refreshed by \`kick dev\`.** Resolving it builds a whole TypeScript
+**\`kick dev\` writes it at startup, not on save.** Resolving it builds a whole TypeScript
 program over the server, which is a build-step cost rather than a per-save one,
 so a renamed response field surfaces on the next \`kick typegen\` rather than on
 save. Everything else in \`.kickjs/types\` still updates on save. Add

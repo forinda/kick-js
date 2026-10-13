@@ -4,7 +4,7 @@
  * Everything about this file's shape is in service of one line in an adopter's
  * frontend:
  *
- *     import type { KickApi } from '../../../api/.kickjs/types/kick__client'
+ *     import type { Api } from '../../../api/.kickjs/types/kick__client'
  *
  * So: module-scoped (a dts bundler can follow module exports; it cannot follow
  * an ambient global — that is why #543's `rollup-plugin-dts` attempt emitted
@@ -22,14 +22,14 @@ const HEADER = `/* eslint-disable */
 // Self-contained: this file has no imports, so a frontend consumes it without
 // compiling the server, its decorators, or its path aliases.
 //
-//   // Ambient — add this file to the frontend's tsconfig "include", then:
+//   // Ambient — list this file in the frontend's tsconfig "types", then:
 //   export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
 //
 //   // Or import it explicitly, if you prefer no globals:
 //   import type { Api } from './path/to/kick__client'
 //
-// Not refreshed by \`kick dev\` — resolving these types builds a full
-// TypeScript program over the server. Re-run \`kick typegen\`.
+// Written when \`kick dev\` starts, not on save — resolving these types builds a
+// full TypeScript program over the server. Re-run \`kick typegen\`.
 `
 
 export function renderClient(map: ResolvedClientMap, keys: string[]): string {

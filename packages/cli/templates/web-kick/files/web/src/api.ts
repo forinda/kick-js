@@ -7,8 +7,11 @@ import { createClient } from '@forinda/kickjs-client'
 //
 // Keys are module-mount-relative paths; the bootstrap-level '/api/v1' prefix
 // lives here in baseUrl, and the Vite dev proxy forwards it to the KickJS
-// server.
+// server. VITE_API_URL stays unset unless the API is deployed on another
+// origin — see https://kickjs.app/guide/fullstack-frontend.html#deploying
 //
 // Prefer an explicit import? The same file exports the type:
 //   import type { Api } from '../../server/.kickjs/types/kick__client'
-export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
+export const api = createClient<KickClientApi.Api>({
+  baseUrl: `${(import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')}/api/v1`,
+})
