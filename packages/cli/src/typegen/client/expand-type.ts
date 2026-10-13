@@ -16,6 +16,13 @@
  *    becomes one `interface __T<n>` and is referenced by name.
  * 3. **Hoisting is also cycle termination.** `Student.school.students` is
  *    infinite to inline; a type already being expanded already has a name.
+ * 4. **Depth hoists rather than degrades.** Anonymous types (inferred rows,
+ *    zod output, object literals) render inline; once inline nesting reaches
+ *    `maxDepth`, the type at that point becomes its own declaration and the
+ *    nesting restarts. The emitted file stays shallow and the types stay
+ *    exact. Each hoist spends from a per-route budget that bounds the work: a
+ *    type family with no end always exhausts it, and a very large finite
+ *    response can too.
  *
  * @module @forinda/kickjs-cli/typegen/client/expand-type
  */
@@ -24,19 +31,24 @@ import type ts from '@typescript/typescript6'
 import type { TsApi } from './ts-compiler'
 
 export interface TypeExpanderOptions {
-  /** Depth beyond which a type degrades to `unknown`. Default 12. */
+  /** Inline nesting depth at which a type is hoisted to its own declaration. Default 12. */
   maxDepth?: number
-  /** Depth-guard hits tolerated per route before the expansion is abandoned. */
+  /**
+   * Depth hoists tolerated per route before the expansion is abandoned. Bounds
+   * the work: a type family with no end always reaches it, and a large enough
+   * finite response can too.
+   */
   truncationBudget?: number
   onWarn?: (msg: string) => void
 }
 
 /**
- * Depth-guard hits tolerated in one route before the expansion is abandoned.
+ * Depth hoists tolerated in one route before the expansion is abandoned.
  *
- * A genuinely deep response trips the guard a handful of times. Hundreds of
- * thousands means the type is recursive and the walk is exponential — that is
- * an OOM, not a slow render, so it has to stop rather than warn its way there.
+ * Each distinct type is hoisted at most once, so even a deep response needs a
+ * handful. A generic that yields a new instantiation at every level never
+ * repeats and would never end; this stops it. A finite response with more
+ * than this many distinct types nested beyond `maxDepth` stops here too.
  */
 const TRUNCATION_BUDGET = 1000
 const BUDGET_EXHAUSTED = Symbol('kick/client: expansion budget exhausted')
@@ -71,7 +83,7 @@ export class TypeExpander {
   private nextName = 0
   private readonly blocks: string[] = []
   private readonly maxDepth: number
-  /** Depth-guard hits for the route being expanded; reset per `expand()`. */
+  /** Depth hoists for the route being expanded; reset per `expand()`. */
   private truncations = 0
   private readonly budget: number
 
@@ -92,35 +104,46 @@ export class TypeExpander {
 
   expand(type: ts.Type): string {
     this.truncations = 0
+    // Rollback point: an abandoned route must not leave declarations behind —
+    // a name memoized here with its body never written would be referenced by
+    // later routes and fail to resolve.
+    const blocks = this.blocks.length
+    const names = this.nextName
+    const memo = new Set(this.hoistedByType.keys())
     try {
       return this.render(type, 0)
     } catch (err) {
       if (err !== BUDGET_EXHAUSTED) throw err
-      // One clear line beats a flood. A type that hits the depth guard this
-      // many times in a single route is pathological, not merely deep, and
-      // expanding the rest of it buys nothing: the output is already mostly
-      // `unknown`. Finding the last one of these meant counting 8.1 million
-      // warnings to notice a single route was responsible.
+      this.blocks.length = blocks
+      this.nextName = names
+      for (const key of this.hoistedByType.keys()) {
+        if (!memo.has(key)) this.hoistedByType.delete(key)
+      }
+      // One clear line beats a flood.
       this.opts.onWarn?.(
-        `expansion abandoned after ${this.budget} truncations — emitting 'unknown'. ` +
-          `This usually means a recursive type. Declare a response schema on the route ` +
+        `expansion abandoned after ${this.budget} depth hoists — emitting 'unknown'. ` +
+          `Either the response type never repeats (a generic that grows at every ` +
+          `level) or it nests more distinct types than the budget allows; raising ` +
+          `maxDepth hoists fewer of them. Declare a response schema on the route ` +
           `for an exact type.`,
       )
       return 'unknown'
     }
   }
 
-  private render(type: ts.Type, depth: number): string {
+  /**
+   * @param memo Look the type up among hoisted declarations first. False only
+   *   when rendering the body of the declaration that type is being hoisted to
+   *   — otherwise `type __T5 = __T5`.
+   */
+  private render(type: ts.Type, depth: number, memo = true): string {
     const F = this.ts.TypeFlags
 
-    if (depth > this.maxDepth) {
-      if (++this.truncations > this.budget) throw BUDGET_EXHAUSTED
-      this.opts.onWarn?.(
-        `type nesting exceeded ${this.maxDepth} levels — emitting 'unknown'. ` +
-          `Declare a response schema on the route for an exact type.`,
-      )
-      return 'unknown'
+    if (memo) {
+      const hoisted = this.hoistedByType.get(type)
+      if (hoisted) return hoisted
     }
+    if (depth > this.maxDepth && !this.isLeaf(type)) return this.hoistDeep(type)
 
     // Primitives and keywords — typeToString is exactly right for these and
     // carries no names from the program.
@@ -200,6 +223,58 @@ export class TypeExpander {
       `could not expand type '${this.checker.typeToString(type)}' — emitting 'unknown'`,
     )
     return 'unknown'
+  }
+
+  /** Renders without nesting anything — never worth a declaration of its own. */
+  private isLeaf(type: ts.Type): boolean {
+    const F = this.ts.TypeFlags
+    return (
+      (type.flags &
+        (F.String |
+          F.Number |
+          F.Boolean |
+          F.BigInt |
+          F.ESSymbol |
+          F.Any |
+          F.Unknown |
+          F.Never |
+          F.Void |
+          F.Undefined |
+          F.Null |
+          F.BooleanLiteral)) !==
+        0 || type.isLiteral()
+    )
+  }
+
+  /**
+   * Inline nesting reached `maxDepth`: give this type its own declaration and
+   * refer to it by name, so the nesting restarts at zero. A plain object
+   * becomes an `interface`; anything else (a union, an array, a lib generic)
+   * a `type` alias — which may be recursive, since the name is bound before
+   * the body renders.
+   */
+  private hoistDeep(type: ts.Type): string {
+    if (++this.truncations > this.budget) throw BUDGET_EXHAUSTED
+    const name = this.allocName()
+    this.hoistedByType.set(type, name)
+    const index = this.blocks.length
+    this.blocks.push('')
+    this.blocks[index] = this.isPlainObject(type)
+      ? `interface ${name} {\n${this.members(type, 0, '  ')}\n}`
+      : `type ${name} = ${this.render(type, 0, false)}`
+    return name
+  }
+
+  /** An object rendered member by member — not an array, tuple, lib type or `toJSON` carrier. */
+  private isPlainObject(type: ts.Type): boolean {
+    return (
+      (type.flags & this.ts.TypeFlags.Object) !== 0 &&
+      !type.isUnionOrIntersection() &&
+      !this.isTuple(type) &&
+      !this.arrayElement(type) &&
+      !this.toJsonType(type) &&
+      !this.isLibType(type)
+    )
   }
 
   private renderObject(type: ts.Type, depth: number): string {

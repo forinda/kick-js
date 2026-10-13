@@ -263,18 +263,15 @@ export interface TypegenConfig {
    * how a frontend ends up type-checking against routes the server no longer
    * serves.
    *
-   * Pass an object to tune the expansion. `{ maxDepth }` raises the limit on
-   * how deeply a response type is expanded inline before it is emitted as
-   * `unknown`:
+   * Pass an object to tune the expansion. `{ maxDepth }` sets how deeply a
+   * response type nests inline before the type at that point is hoisted to a
+   * declaration of its own. Hoists spend a per-route budget of 1,000; a route
+   * that exhausts it — an endlessly growing generic, or a very large response
+   * — is emitted as `unknown` with a warning:
    *
    * ```ts
    * typegen: { client: { maxDepth: 24 } }
    * ```
-   *
-   * The default of 12 truncates nothing on a 1,940-route app — recursion and
-   * named types both hoist, which costs one level rather than the whole
-   * budget, so only deep *anonymous* nesting spends it. Raise it if a route
-   * warns that it exceeded the limit; the warning names the route.
    */
   client?: boolean | ClientTypegenConfig
 }
@@ -284,11 +281,10 @@ export interface ClientTypegenConfig {
   /** On, unless explicitly false. Lets `{ maxDepth }` alone mean "on". */
   enabled?: boolean
   /**
-   * Levels of inline nesting expanded before a type is emitted as `unknown`.
-   *
-   * Truncation is loud and safe — it warns naming the route, and `unknown`
-   * cannot be mistaken for a wrong type — so this is a knob for fidelity, not
-   * correctness. Default 12.
+   * Levels of inline nesting before a type is hoisted to its own declaration
+   * (`interface __Tn` / `type __Tn`). Each hoist spends from a per-route budget
+   * of 1,000, so a higher value hoists fewer types and lets a larger response
+   * through. Default 12.
    */
   maxDepth?: number
 }

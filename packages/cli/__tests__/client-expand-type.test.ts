@@ -35,6 +35,7 @@ function expand(
   source: string,
   opts: {
     maxDepth?: number
+    truncationBudget?: number
     compilerOptions?: ts.CompilerOptions
     onWarn?: (msg: string) => void
   } = {},
@@ -60,6 +61,22 @@ function expand(
     text: expander.expand(checker.getTypeAtLocation(alias.type)),
     hoisted: expander.hoisted(),
   }
+}
+
+/**
+ * The emitted declarations and type, alone in a file with no imports, must
+ * compile — that is the contract the client map is read under.
+ */
+function compiles(out: { text: string; hoisted: string[] }): string[] {
+  const file = join(dir, `emitted-${Math.random().toString(36).slice(2)}.ts`)
+  writeFileSync(file, `${out.hoisted.join('\n')}\nexport type Out = ${out.text}\n`)
+  const program = ts.createProgram({
+    rootNames: [file],
+    options: { target: ts.ScriptTarget.ES2022, strict: true, noEmit: true },
+  })
+  return ts
+    .getPreEmitDiagnostics(program)
+    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
 }
 
 describe('TypeExpander', () => {
@@ -313,22 +330,41 @@ describe('TypeExpander', () => {
     expect(out.hoisted.join('\n')).not.toContain('unknown')
   })
 
-  it('still cuts off genuinely deep inline nesting', () => {
-    // The case the guard is actually for: anonymous levels really do nest in
-    // the emitted text, so something has to stop them.
+  it('hoists deep anonymous nesting instead of degrading it', () => {
+    // Inferred types (zod output, ORM rows, object literals) are anonymous,
+    // so they nest inline. Past maxDepth the type at that point becomes its
+    // own declaration and nesting restarts — every leaf keeps its real type.
     let t = '{ v: string }'
     for (let i = 0; i < 15; i++) t = `{ v: string; next: ${t} }`
 
     const warnings: string[] = []
     const out = expand(`type Target = ${t}`, { onWarn: (m) => warnings.push(m) })
 
-    expect(warnings.length).toBeGreaterThan(0)
-    expect(out.text).toContain('unknown')
+    expect(warnings).toEqual([])
+    const all = [out.text, ...out.hoisted].join('\n')
+    expect(all).not.toContain('unknown')
+    expect(all.match(/v: string/g)).toHaveLength(16)
+    expect(out.hoisted.length).toBeGreaterThan(0)
+    expect(compiles(out)).toEqual([])
   })
 
-  it('cuts off runaway depth rather than hanging', () => {
-    const out = expand('type Target = { a: { b: { c: string } } }', { maxDepth: 2 })
-    expect(out.text).toContain('unknown')
+  it('keeps every level exact at a tiny maxDepth', () => {
+    const out = expand('type Target = { a: { b: { c: { d: { e: string } } } } }', { maxDepth: 2 })
+    const all = [out.text, ...out.hoisted].join('\n')
+    expect(all).not.toContain('unknown')
+    expect(all).toContain('e: string')
+    expect(compiles(out)).toEqual([])
+  })
+
+  it('terminates on a recursive union, as a recursive alias', () => {
+    // No object in the cycle to hoist as an interface: `Json[]` leads straight
+    // back to `Json`. The alias is named before its body renders.
+    const out = expand(
+      'type Json = string | number | boolean | null | Json[] | { [key: string]: Json }\ntype Target = { data: Json }',
+      { maxDepth: 3 },
+    )
+    expect([out.text, ...out.hoisted].join('\n')).not.toContain('unknown')
+    expect(compiles(out)).toEqual([])
   })
 
   it('is the shape a frontend can actually compile — no names from the program', () => {
@@ -344,11 +380,23 @@ describe('TypeExpander', () => {
 })
 
 describe('TypeExpander — expansion budget', () => {
-  it('abandons an expansion that keeps hitting the depth guard', () => {
-    // Depth alone was never the danger — unbounded *work* was. The guard fired
-    // correctly every time on a recursive type and never bailed, so one route
-    // emitted 1.66M warnings and exhausted the heap. Past the budget the walk
-    // stops and says so once.
+  it('lets a large finite response exhaust the budget too', () => {
+    // The budget bounds hoists, not endless types: two hoists past a budget
+    // of one stop a perfectly finite type.
+    const warnings: string[] = []
+    const out = expand('type Target = { a: { b: { c: { d: string } } } }', {
+      maxDepth: 0,
+      truncationBudget: 1,
+      onWarn: (m) => warnings.push(m),
+    })
+    expect(out.text).toBe('unknown')
+    expect(out.hoisted).toEqual([])
+    expect(warnings[0]).toMatch(/nests more distinct types than the budget allows/)
+  })
+
+  it('expands a fan-out once per type, not once per path', () => {
+    // Three references to each next level was exponential when every path
+    // re-rendered inline; hoisting memoizes the type, so the work is linear.
     const deep = Array.from(
       { length: 6 },
       (_, i) => `type L${i} = { a: L${i + 1}; b: L${i + 1}; c: L${i + 1} }`,
@@ -359,8 +407,24 @@ describe('TypeExpander — expansion budget', () => {
       truncationBudget: 3,
       onWarn: (m) => warnings.push(m),
     })
+    expect(warnings).toEqual([])
+    expect([out.text, ...out.hoisted].join('\n')).toContain('end: string')
+    expect(compiles(out)).toEqual([])
+  })
+
+  it('abandons a type family with no end, and leaves no half-written declarations', () => {
+    // A generic that yields a new type at every level never repeats, so
+    // hoisting cannot close it. Past the budget the route says so once.
+    const warnings: string[] = []
+    const out = expand('type Deep<T> = { v: T; next: Deep<[T]> }\ntype Target = Deep<string>', {
+      maxDepth: 2,
+      truncationBudget: 5,
+      onWarn: (m) => warnings.push(m),
+    })
     expect(out.text).toBe('unknown')
-    expect(warnings.at(-1)).toMatch(/expansion abandoned after 3/)
+    expect(out.hoisted).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(/abandoned after 5 depth hoists/)
   })
 
   it('leaves an ordinary deep type alone', () => {
