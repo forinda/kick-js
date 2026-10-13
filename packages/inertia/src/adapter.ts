@@ -10,7 +10,7 @@
  * @module @forinda/kickjs-inertia/adapter
  */
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -122,6 +122,14 @@ function appendVary(res: ServerResponse, field: string): void {
   res.setHeader('Vary', [...list, field].join(', '))
 }
 
+function safeDecode(path: string): string {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
 type NodeMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
 export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
@@ -183,8 +191,27 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
             .slice(0, 12)
           version = () => hash
           // The whole build: hashed `assets/` plus what Vite copied from
-          // `public/` — favicon, robots.txt, a static sitemap. Dotfiles are not
-          // served, so `.vite/manifest.json` stays private.
+          // `public/` — favicon, robots.txt, a static sitemap.
+          if (existsSync(join(clientDir, 'package.json'))) {
+            throw new Error(
+              `InertiaAdapter: clientDir ${clientDir} looks like a project root — it must be the client build output (default dist/client), which is served as-is.`,
+            )
+          }
+          // Not every engine's static handler skips dotfiles, so the build's
+          // own (`.vite/manifest.json`) are refused here, before it runs.
+          const hidden = new Set(readdirSync(clientDir).filter((name) => name.startsWith('.')))
+          const hideBuildFiles: NodeMiddleware = (req, res, next) => {
+            const first = safeDecode((req.url ?? '/').split('?')[0]!)
+              .split('/')
+              .find(Boolean)
+            if (first && hidden.has(first)) {
+              res.statusCode = 404
+              res.end()
+              return
+            }
+            next()
+          }
+          http.use(hideBuildFiles as never)
           http.serveStatic('/', clientDir)
         }
         if (config.version !== undefined) {

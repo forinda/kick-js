@@ -347,6 +347,14 @@ describe('InertiaAdapter', () => {
     const robots = await request(app.handle.bind(app)).get('/robots.txt').expect(200)
     expect(robots.text).toBe('User-agent: *')
     await request(app.handle.bind(app)).get('/.vite/manifest.json').expect(404)
+    await request(app.handle.bind(app)).get('/%2evite/manifest.json').expect(404)
+  })
+
+  it('refuses a clientDir that is a project root', async () => {
+    const dir = clientBuild()
+    writeFileSync(join(dir, 'package.json'), '{}')
+    const app = new Application({ modules: [], adapters: [InertiaAdapter({ clientDir: dir })] })
+    await expect(app.setup()).rejects.toThrow(/looks like a project root/)
   })
 
   it('adds the head option to every page', async () => {
