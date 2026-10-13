@@ -170,8 +170,12 @@ export function rateLimit(options: RateLimitOptions = {}) {
 
     // Flag exemption: ask the table what flags the matched route WOULD carry.
     // A request matching no route matches no flags and stays limited.
+    // Routes are registered by their full path; mounted at a path, `req.url`
+    // is relative to the mount, so look the route up by `originalUrl`.
     if (exemptWhen !== undefined && policy) {
-      const flags = policy.lookup(String(req.method ?? 'GET'), pathname)
+      const { originalUrl } = req as ClientRequestLike
+      const routePath = originalUrl ? resolvePathname({ url: originalUrl }) : pathname
+      const flags = policy.lookup(String(req.method ?? 'GET'), routePath)
       if (matchesFlagTest(exemptWhen, flags)) {
         return next()
       }

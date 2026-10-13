@@ -8,6 +8,8 @@ import * as h3v2 from 'h3-v2'
 import { Application } from '../src/http/application'
 import { Container } from '../src/core/container'
 import { Controller, Get } from '../src/core/decorators'
+import { defineRouteFlag } from '../src/core/route-flag'
+import { rateLimit } from '../src/http/middleware/rate-limit'
 import { expressRuntime } from '../src/http/runtimes/express'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
@@ -92,6 +94,32 @@ for (const rt of RUNTIMES) {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).get('/files/nested/a.txt').expect(200)
       expect(res.text).toBe('deep file')
+    })
+
+    it('a mounted rateLimit finds the route by its full path for exemptWhen', async () => {
+      const Open = defineRouteFlag('test.open')
+      @Controller()
+      class HealthController {
+        @Open
+        @Get('/')
+        health() {
+          return { ok: true }
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/health', controller: HealthController }) } as never],
+        middlewares: [
+          { path: '/api', handler: rateLimit({ max: 1, exemptWhen: 'test.open' }) },
+        ] as never,
+      })
+      await app.setup()
+      const h = app.handle.bind(app)
+      const statuses = [
+        (await request(h).get('/api/v1/health')).status,
+        (await request(h).get('/api/v1/health')).status,
+      ]
+      expect(statuses).toEqual([200, 200])
     })
   })
 }
