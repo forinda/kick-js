@@ -46,7 +46,7 @@
     "vitest": "^5.0.3"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=9.2.0"
+    "@forinda/kickjs": ">=9.3.0"
   },
   "publishConfig": {
     "access": "public"

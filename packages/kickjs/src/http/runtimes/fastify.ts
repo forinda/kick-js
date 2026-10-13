@@ -108,6 +108,17 @@ const NEXT = Symbol('kickjs.fastify.next')
 // nodeHandler knows to register @fastify/multipart before ready().
 const NEEDS_MULTIPART = Symbol('kickjs.fastify.needsMultipart')
 const NOOP_NEXT = (): void => {}
+
+/**
+ * An async error / not-found handler that rejects never answers; answer 500
+ * so the request ends instead of hanging until the client gives up.
+ */
+function settleOrFail(reply: FastifyReplyLike, returned: unknown): void {
+  if (typeof (returned as PromiseLike<void> | undefined)?.then !== 'function') return
+  Promise.resolve(returned).then(undefined, () => {
+    if (!reply.sent && !reply.raw.headersSent) reply.code(500).send()
+  })
+}
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
 const NO_FALLTHROUGH = Symbol('kickjs.fastify.noFallthrough')
 
@@ -486,10 +497,13 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         }
         // Pass the reply DRIVER (not raw res) so the connect-style
         // notFoundHandler's `res.status().json()` lands on the Fastify reply.
-        ;(mw as (req: unknown, res: unknown, next: () => void) => void)(
-          request.raw,
-          replyDriver(reply),
-          NOOP_NEXT,
+        settleOrFail(
+          reply,
+          (mw as (req: unknown, res: unknown, next: () => void) => unknown)(
+            request.raw,
+            replyDriver(reply),
+            NOOP_NEXT,
+          ),
         )
       })
     },
@@ -498,11 +512,14 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       app.setErrorHandler((err, request, reply) => {
         // Reply driver (not raw res) so the connect-style errorHandler's
         // `res.status().json()` / `setHeader` land on the Fastify reply.
-        ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
-          err,
-          request.raw,
-          replyDriver(reply),
-          NOOP_NEXT,
+        settleOrFail(
+          reply,
+          (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
+            err,
+            request.raw,
+            replyDriver(reply),
+            NOOP_NEXT,
+          ),
         )
       })
     },

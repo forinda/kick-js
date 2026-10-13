@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineAdapter, Logger, type RequestContext } from '@forinda/kickjs'
-import { setInertiaRuntime, requestUrl, type Page } from './inertia'
+import { bindInertiaRuntime, requestUrl, type InertiaRuntime, type Page } from './inertia'
 import { defaultTemplate, devHead, manifestHead, pageBody, type HtmlTemplate } from './html'
 
 export interface InertiaAdapterOptions {
@@ -151,7 +151,11 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
     const template = config.template ?? defaultTemplate(config.title)
     let version: () => string | null = () => null
 
+    // Built in beforeMount, once the dev server / build is known.
+    let runtime: InertiaRuntime | null = null
+
     const protocol: NodeMiddleware = (req, res, next) => {
+      if (runtime) bindInertiaRuntime(req, runtime)
       // The same URL answers HTML or JSON depending on X-Inertia, so a shared
       // cache must key on it. Appended, not set: replacing a Vary another
       // layer added (Origin, Accept-Encoding) lets a cache serve one
@@ -252,7 +256,7 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
           }
         }
 
-        setInertiaRuntime({
+        runtime = {
           version: () => version(),
           share: config.share,
           errorPage: config.errorPage,
@@ -268,15 +272,11 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
             })
             return vite ? vite.transformIndexHtml(requestUrl(ctx.req), html) : html
           },
-        })
+        }
       },
 
       middleware() {
         return [{ handler: protocol as never, phase: 'afterGlobal' as const }]
-      },
-
-      shutdown() {
-        setInertiaRuntime(null)
       },
     }
   },

@@ -297,6 +297,10 @@ describe('the shipped layers', () => {
     expect(project.files.get('tsconfig.json')).toContain('"jsx": "react-jsx"')
     expect(project.files.get('vite.config.ts')).toContain('react()')
     expect(project.scripts.build).toContain('--ssr src/client/ssr.tsx')
+    // The platform builds need the client manifest the adapter reads at startup.
+    for (const script of ['build:netlify', 'build:vercel']) {
+      expect(project.scripts[script], script).toContain('--ssr src/client/ssr.tsx')
+    }
     expect(project.files.get('.env')).toContain('SESSION_SECRET={{sessionSecret}}')
     expect(project.dependencies).toEqual(
       expect.arrayContaining(['@forinda/kickjs-inertia', '@inertiajs/react', 'react-dom']),

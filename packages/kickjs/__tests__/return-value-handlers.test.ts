@@ -79,6 +79,24 @@ function makeControllers() {
       }
     }
 
+    @Get('/respondable-thenable')
+    // A thenable that is not this realm's Promise is still awaited.
+    respondableThenable(_ctx: RequestContext) {
+      return {
+        [RESPOND](ctx: RequestContext) {
+          return {
+            // oxlint-disable-next-line unicorn/no-thenable -- the point of the test: a thenable that is not a native Promise
+            then(resolve: () => void) {
+              setTimeout(() => {
+                ctx.html('<p>later</p>')
+                resolve()
+              }, 5)
+            },
+          }
+        },
+      }
+    }
+
     @Get('/respondable-throws')
     respondableThrows(_ctx: RequestContext) {
       return {
@@ -193,6 +211,14 @@ for (const rt of RUNTIMES) {
       expect(res.headers['x-self']).toBe('yes')
     })
 
+    it('a respondable returning a non-native thenable is awaited', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app))
+        .get('/api/v1/r/respondable-thenable')
+        .expect(200)
+      expect(res.text).toBe('<p>later</p>')
+    })
+
     it('a respondable that throws reaches the error handler', async () => {
       const app = await makeApp()
       await request(app.handle.bind(app)).get('/api/v1/r/respondable-throws').expect(500)
@@ -254,6 +280,9 @@ describe('return-value handlers — web entry (fetch)', () => {
 
     const ctxWins = await app.fetch(new Request('http://x/api/v1/r/ctx-wins'))
     expect(await ctxWins.json()).toEqual({ via: 'ctx' })
+
+    const later = await app.fetch(new Request('http://x/api/v1/r/respondable-thenable'))
+    expect(await later.text()).toBe('<p>later</p>')
 
     const self = await app.fetch(new Request('http://x/api/v1/r/respondable'))
     expect(self.status).toBe(201)

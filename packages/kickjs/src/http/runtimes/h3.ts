@@ -348,7 +348,7 @@ async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Bu
  * saving a session first) would lose that race. A handler that calls `next()`
  * instead of answering settles too, and h3's fallback answers.
  */
-function answered(res: ServerResponse, run: (done: () => void) => void): Promise<void> {
+function answered(res: ServerResponse, run: (done: () => void) => unknown): Promise<void> {
   return new Promise<void>((resolve) => {
     // h3 already holds a 'close' listener per connect middleware until the
     // response closes, so ours can cross Node's default of 10 and print a
@@ -365,8 +365,19 @@ function answered(res: ServerResponse, run: (done: () => void) => void): Promise
     }
     res.once('finish', done)
     res.once('close', done)
+    // A handler that rejects never answers: answer 500 so the request ends.
+    const failed = () => {
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.end()
+      }
+      done()
+    }
     try {
-      run(done)
+      const returned = run(done)
+      if (typeof (returned as PromiseLike<void> | undefined)?.then === 'function') {
+        Promise.resolve(returned).then(undefined, failed)
+      }
     } catch (err) {
       done()
       throw err
@@ -411,7 +422,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
             const nf = state[NOTFOUND_MW]
             if (nf) {
               return answered(res, (done) =>
-                (nf as (req: unknown, res: unknown, next: () => void) => void)(
+                (nf as (req: unknown, res: unknown, next: () => void) => unknown)(
                   event.node.req,
                   resDriver(res),
                   done,
@@ -422,7 +433,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           const mw = state[ERROR_MW]
           if (mw) {
             return answered(res, (done) =>
-              (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
+              (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
                 unwrapH3Error(error),
                 event.node.req,
                 resDriver(res),

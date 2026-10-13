@@ -105,7 +105,7 @@ export const RESPOND: unique symbol = Symbol.for('kickjs.respond') as never
 
 /** A handler return value that writes its own response. */
 export interface Respondable {
-  [RESPOND](ctx: RequestContext): void | Promise<void>
+  [RESPOND](ctx: RequestContext): void | PromiseLike<void>
 }
 
 export function isRespondable(value: unknown): value is Respondable {
@@ -135,8 +135,12 @@ export function applyHandlerResult(
 ): boolean | Promise<boolean> {
   if (result === undefined) return false
   if (isRespondable(result)) {
-    const sent = result[RESPOND](ctx)
-    return sent instanceof Promise ? sent.then(() => true) : true
+    const sent: unknown = result[RESPOND](ctx)
+    // Any thenable, not `instanceof Promise` — a promise from another realm
+    // (a VM context, an iframe-like runtime) fails that check.
+    return typeof (sent as PromiseLike<void> | undefined)?.then === 'function'
+      ? Promise.resolve(sent).then(() => true)
+      : true
   }
   if (isReply(result)) {
     // Only 204 maps to noContent — an undefined body must NOT coerce the

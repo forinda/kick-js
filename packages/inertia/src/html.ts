@@ -18,6 +18,9 @@ export interface HtmlParts {
 
 export type HtmlTemplate = (parts: HtmlParts) => string
 
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
 export const defaultTemplate =
   (title: string): HtmlTemplate =>
   ({ head, body }) =>
@@ -26,7 +29,7 @@ export const defaultTemplate =
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${title}</title>
+    <title>${escapeHtml(title)}</title>
     ${head}
   </head>
   <body>

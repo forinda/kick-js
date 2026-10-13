@@ -14,7 +14,7 @@ import {
   RESPOND,
   type RuntimeResponse,
 } from '@forinda/kickjs'
-import { ERRORS_KEY, errorPage, inertiaRuntime, isPageRequest, previousUrl } from './inertia'
+import { ERRORS_KEY, errorPage, inertiaRuntimeFor, isPageRequest, previousUrl } from './inertia'
 
 const log = Logger.for('Inertia')
 
@@ -79,7 +79,7 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
       return fallback(err, req, res, next)
     }
 
-    const component = inertiaRuntime()?.errorPage
+    const component = inertiaRuntimeFor(req)?.errorPage
     if (component && req?.headers && isPageRequest(req.headers)) {
       const status = err instanceof HttpException ? err.status : 500
       if (status >= 500) log.error(err, 'Unhandled error on a page request')
@@ -102,7 +102,7 @@ type NotFoundHandler = (req: any, res: RuntimeResponse, next: (err?: unknown) =>
  */
 export function inertiaNotFound(): NotFoundHandler {
   return (req, res, next) => {
-    const component = inertiaRuntime()?.errorPage
+    const component = inertiaRuntimeFor(req)?.errorPage
     const method = req?.method ?? 'GET'
     if (
       !component ||

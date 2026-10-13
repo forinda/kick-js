@@ -47,26 +47,30 @@ export interface InertiaRuntime {
   errorPage?: string
 }
 
-// ponytail: one active adapter per process, which is one app. An app booting
-// two Inertia apps in one process would need this keyed per Application.
-let active: InertiaRuntime | null = null
+/**
+ * Where the adapter's middleware leaves its runtime on each request, so every
+ * helper uses the adapter of the app that is handling that request — two apps
+ * in one process (tests, a reload that overlaps the old app) never share one.
+ */
+const RUNTIME_SLOT = Symbol.for('kickjs.inertia.runtime')
 
-export function setInertiaRuntime(runtime: InertiaRuntime | null): void {
-  active = runtime
+export function bindInertiaRuntime(req: object, runtime: InertiaRuntime): void {
+  ;(req as Record<symbol, unknown>)[RUNTIME_SLOT] = runtime
 }
 
-/** The active adapter's runtime, or null when no InertiaAdapter is mounted. */
-export function inertiaRuntime(): InertiaRuntime | null {
-  return active
+/** The runtime of the adapter that handled this request, or null without one. */
+export function inertiaRuntimeFor(req: unknown): InertiaRuntime | null {
+  return ((req as Record<symbol, unknown> | null)?.[RUNTIME_SLOT] as InertiaRuntime) ?? null
 }
 
-function runtime(): InertiaRuntime {
-  if (!active) {
+function runtime(ctx: RequestContext): InertiaRuntime {
+  const rt = inertiaRuntimeFor(ctx.req)
+  if (!rt) {
     throw new Error(
       'inertia() needs InertiaAdapter — add it to bootstrap({ adapters: [InertiaAdapter({ entry })] }).',
     )
   }
-  return active
+  return rt
 }
 
 function header(ctx: RequestContext, name: string): string | undefined {
@@ -114,7 +118,7 @@ export async function buildPage(
   props: Record<string, unknown>,
   options: PageOptions = {},
 ): Promise<Page> {
-  const rt = runtime()
+  const rt = runtime(ctx)
   const shared = (await rt.share?.(ctx)) ?? {}
   const all: Record<string, unknown> = { ...shared, ...props }
 
@@ -196,7 +200,7 @@ export function inertia(
         ctx.json(page, options?.status ?? 200)
         return
       }
-      ctx.html(await runtime().renderHtml(page, ctx), options?.status ?? 200)
+      ctx.html(await runtime(ctx).renderHtml(page, ctx), options?.status ?? 200)
     },
   }
 }
