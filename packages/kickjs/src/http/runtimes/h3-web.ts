@@ -25,7 +25,7 @@ import type {
   RuntimeAppOptions,
   UseConnectOptions,
 } from '../runtime'
-import { compileWebRoute, type WebRouteHooks } from '../web/handler'
+import { compileWebRoute, readThrough, type WebRouteHooks } from '../web/handler'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
 import { createLogger, describeError } from '../../core/logger'
 
@@ -103,7 +103,11 @@ async function runConnectTerminal(
   event: H3EventLike,
   err?: unknown,
 ): Promise<Response> {
-  const req = new WebRequestShim(event.req, event.url)
+  const shim = new WebRequestShim(event.req, event.url)
+  // What the app's connect middleware set (session, an adapter's slot) is
+  // visible to the error / not-found handler, as on the route itself.
+  const carry = event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req
+  const req = carry ? readThrough(shim, carry) : shim
   const driver = new WebResponseDriver(event.req.signal)
   if (mw) {
     const returned =
@@ -378,6 +382,43 @@ function assembleCatchAll(app: H3AppLike): void {
 }
 
 /**
+ * A middleware mounted at a path sees `req.url` relative to that path, as on
+ * Express and h3 v1 — `serve-static` mounted at `/files` must look up
+ * `/nested/a.txt`, not `/files/nested/a.txt`. h3 v2 leaves the URL whole, so
+ * strip the prefix for the call and restore it when the middleware passes on.
+ * `req.originalUrl` keeps the full URL, as Express sets it.
+ */
+function stripMountPrefix(path: string, mw: ConnectMiddleware): ConnectMiddleware {
+  const prefix = path.endsWith('/') ? path.slice(0, -1) : path
+  if (prefix === '') return mw
+  return ((
+    req: IncomingMessage & { originalUrl?: string },
+    res: unknown,
+    next: (err?: unknown) => void,
+  ) => {
+    const url = req.url ?? '/'
+    const rest = url.startsWith(prefix) ? url.slice(prefix.length) : null
+    if (rest === null || (rest !== '' && rest[0] !== '/' && rest[0] !== '?')) {
+      return (mw as (rq: unknown, rs: unknown, n: (err?: unknown) => void) => unknown)(
+        req,
+        res,
+        next,
+      )
+    }
+    req.originalUrl ??= url
+    req.url = rest.startsWith('/') ? rest : `/${rest}`
+    return (mw as (rq: unknown, rs: unknown, n: (err?: unknown) => void) => unknown)(
+      req,
+      res,
+      (err?: unknown) => {
+        req.url = url
+        next(err)
+      },
+    )
+  }) as unknown as ConnectMiddleware
+}
+
+/**
  * The h3 v2 HTTP runtime. Pass to `bootstrap({ runtime: h3WebRuntime() })`.
  * Requires the h3 v2 peer; fails fast with guidance when v1 is installed.
  */
@@ -412,6 +453,11 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
       const listener = toNodeHandler(app)
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
         if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
+        // h3 v2 adds 'close' / 'finish' listeners for every connect middleware
+        // and keeps them until the response ends, so an ordinary middleware
+        // stack crosses Node's default of 10 and warns about a leak on every
+        // request. They go away with the response; no limit is needed.
+        res.setMaxListeners(0)
         try {
           const result = listener(req, res) as unknown
           if (result && typeof (result as Promise<unknown>).then === 'function') {
@@ -454,13 +500,15 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
               request: event.req,
               url: event.url,
               params: event.context.params ?? {},
+              carry: event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req,
             }),
           )
         }
       }
     },
 
-    useConnect(app, mw: ConnectMiddleware, opts?: UseConnectOptions) {
+    useConnect(app, rawMw: ConnectMiddleware, opts?: UseConnectOptions) {
+      const mw = typeof opts?.path === 'string' ? stripMountPrefix(opts.path, rawMw) : rawMw
       // Behind a node server (toNodeHandler) the event carries node req/res and
       // h3's own bridge runs the middleware unchanged. Called through
       // `app.fetch(request)` there is none and fromNodeHandler would throw, so
@@ -498,6 +546,9 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
       uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
+      // srvx's node adapter writes HTTP/2 compat responses (it branches on
+      // httpVersion "2.0"), so the node path serves `server.http2` too.
+      http2: true,
     },
   }
 }

@@ -434,6 +434,9 @@ importers:
       h3:
         specifier: 1.15.11
         version: 1.15.11
+      h3-v2:
+        specifier: npm:h3@2.0.2
+        version: h3@2.0.2
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2

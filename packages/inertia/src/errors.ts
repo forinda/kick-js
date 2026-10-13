@@ -23,7 +23,7 @@ type ErrorHandler = (
   req: any,
   res: RuntimeResponse,
   next: (err?: unknown) => void,
-) => void
+) => unknown
 
 interface SessionLike {
   data: Record<string, unknown>
@@ -61,14 +61,14 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
       if (session) {
         const bag = req.headers['x-inertia-error-bag'] as string | undefined
         session.data[ERRORS_KEY] = bag ? { [bag]: errors } : errors
-        session
+        // Returned, so an engine that waits on async handlers waits on this.
+        return session
           .save()
           .then(() => {
             res.status(303).setHeader('location', previousUrl(session, req.headers))
             res.end()
           })
           .catch((saveErr) => fallback(saveErr, req, res, next))
-        return
       }
       if (!warned) {
         log.warn(
@@ -84,16 +84,19 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
       const status = err instanceof HttpException ? err.status : 500
       if (status >= 500) log.error(err, 'Unhandled error on a page request')
       const ctx = new RequestContext(req, res as never, next, res)
-      Promise.resolve(errorPage(component, status, err)[RESPOND](ctx)).catch((renderErr) =>
+      return Promise.resolve(errorPage(component, status, err)[RESPOND](ctx)).catch((renderErr) =>
         fallback(renderErr, req, res, next),
       )
-      return
     }
     return fallback(err, req, res, next)
   }
 }
 
-type NotFoundHandler = (req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
+type NotFoundHandler = (
+  req: any,
+  res: RuntimeResponse,
+  next: (err?: unknown) => void,
+) => void | Promise<void>
 
 /**
  * Pass to `bootstrap({ onNotFound: inertiaNotFound() })`. A browser or Inertia
@@ -112,6 +115,6 @@ export function inertiaNotFound(): NotFoundHandler {
       return next()
     }
     const ctx = new RequestContext(req, res as never, next, res)
-    Promise.resolve(errorPage(component, 404)[RESPOND](ctx)).catch(next)
+    return Promise.resolve(errorPage(component, 404)[RESPOND](ctx)).catch(next)
   }
 }
