@@ -284,7 +284,12 @@ class FetchConnectResponse extends WebResponseDriver {
     return this.removeListener(event, listener)
   }
 
-  /** The response exists (or the request failed): fire `finish` then `close`. */
+  /**
+   * The response exists (or the request failed): fire `finish` then `close`.
+   * Runs before `withConnectHeaders` merges this response's headers into the
+   * route's, so a `finish` listener can still set one — the cookie session
+   * store writes its cookie there.
+   */
   done(): void {
     for (const event of ['finish', 'close']) {
       for (const [e, listener] of this.listeners) if (e === event) listener()

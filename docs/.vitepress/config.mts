@@ -47,6 +47,7 @@ const guideSidebar = [
       { text: 'Middleware', link: '/guide/middleware' },
       { text: 'HTTP Runtimes (Express / Fastify / h3)', link: '/guide/http-runtimes' },
       { text: 'Edge Deployment (Workers / Bun / Deno)', link: '/guide/edge-deployment' },
+      { text: 'Deploying (Node / Docker)', link: '/guide/deployment' },
       { text: 'Serverless (Netlify / Vercel)', link: '/guide/serverless' },
       { text: 'Context Decorators', link: '/guide/context-decorators' },
       { text: 'Route Flags', link: '/guide/route-flags' },

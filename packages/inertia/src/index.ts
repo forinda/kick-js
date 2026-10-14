@@ -5,6 +5,7 @@ export {
   back,
   location,
   flash,
+  type RedirectOptions,
   buildPage,
   isInertiaRequest,
   isPageRequest,
@@ -12,6 +13,15 @@ export {
   type Page,
   type PageOptions,
 } from './inertia'
-export { optional, always, defer, merge, type InertiaProp } from './props'
-export { inertiaErrorHandler, inertiaNotFound } from './errors'
+export {
+  optional,
+  always,
+  defer,
+  merge,
+  once,
+  scroll,
+  type InertiaProp,
+  type ScrollMeta,
+} from './props'
+export { inertiaErrorHandler, inertiaNotFound, precognitive } from './errors'
 export { defaultTemplate, pageBody, type HtmlParts, type HtmlTemplate } from './html'

@@ -204,6 +204,7 @@ describe('the shipped layers', () => {
           template,
           runtime,
           packageManager: 'pnpm',
+          netlifyPublish: 'dist/public',
           templateLabel: 'Minimal',
           packages: '- `@forinda/kickjs`',
         })

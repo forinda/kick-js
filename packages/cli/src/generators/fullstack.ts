@@ -15,6 +15,8 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 import { writeFileSafe } from '../utils/fs'
+import { packageManagerSpec } from './templates/project-config'
+import { generateDockerfile, generateDockerignore } from './templates/docker'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
 import { approveInstallScripts } from '../commands/add'
@@ -184,6 +186,11 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     await writeFileSafe(join(dir, path), contents)
   }
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager, frontend))
+  await writeFileSafe(
+    join(dir, 'Dockerfile'),
+    generateDockerfile('fullstack', packageManager, name),
+  )
+  await writeFileSafe(join(dir, '.dockerignore'), generateDockerignore())
 
   // Workspace-root agent docs (CLAUDE.md + .agents/) flavored for the
   // fullstack layout — the server/ subdir keeps its own generated set.
@@ -296,7 +303,12 @@ function webPackageJson(name: string, versions: Record<string, string>): string 
 
 // ── root templates ────────────────────────────────────────────────────
 
-function rootPackageJson(name: string, pm: string, cliVersion: string): string {
+function rootPackageJson(
+  name: string,
+  pm: string,
+  cliVersion: string,
+  pmSpec = packageManagerSpec(pm),
+): string {
   const scripts: Record<string, string> =
     pm === 'pnpm'
       ? {
@@ -352,6 +364,7 @@ function rootPackageJson(name: string, pm: string, cliVersion: string): string {
       private: true,
       version: '0.0.0',
       type: 'module',
+      ...(pmSpec ? { packageManager: pmSpec } : {}),
       scripts,
       // The CLI is a ROOT dependency so the bare `kick` in the scripts above
       // resolves: package managers put `node_modules/.bin` on PATH for

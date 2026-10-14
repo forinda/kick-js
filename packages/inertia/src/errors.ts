@@ -12,6 +12,7 @@ import {
   Logger,
   RequestContext,
   RESPOND,
+  type MiddlewareHandler,
   type RuntimeResponse,
 } from '@forinda/kickjs'
 import { ERRORS_KEY, errorPage, inertiaRuntimeFor, isPageRequest, previousUrl } from './inertia'
@@ -41,9 +42,61 @@ function toErrors(details: unknown): Record<string, string> | null {
   return errors
 }
 
+function isPrecognitive(req: any): boolean {
+  return req?.headers?.precognition === 'true'
+}
+
+/**
+ * A Precognition answer: 204 when nothing the client asked about failed,
+ * else 422 with those fields' errors. `Precognition-Validate-Only` names the
+ * fields a form has touched, so errors on the rest are not shown yet.
+ */
+function precognitionResult(req: any, res: RuntimeResponse, errors: Record<string, string>) {
+  const only = String(req.headers['precognition-validate-only'] ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const shown = only.length
+    ? Object.fromEntries(
+        Object.entries(errors).filter(([field]) =>
+          only.some((o) => field === o || field.startsWith(`${o}.`)),
+        ),
+      )
+    : errors
+  res.setHeader('Precognition', 'true')
+  if (Object.keys(shown).length === 0) {
+    res.setHeader('Precognition-Success', 'true')
+    res.status(204).end()
+    return
+  }
+  res.status(422).json({ message: 'The given data was invalid.', errors: shown })
+}
+
+/**
+ * Live validation for Inertia's `useForm().validate()` — Laravel Precognition.
+ * Put it on a route that validates its body; a precognitive request runs the
+ * validation and stops before the handler:
+ *
+ * ```ts
+ * @Post('/users', { body: createUserSchema })
+ * @Middleware(precognitive)
+ * create(ctx: RequestContext) { ... }
+ * ```
+ *
+ * A failed check is answered by `inertiaErrorHandler()`.
+ */
+export const precognitive: MiddlewareHandler<RequestContext> = (ctx, next) => {
+  if (!isPrecognitive(ctx.req)) return next()
+  ctx.setHeader('Precognition', 'true')
+  ctx.setHeader('Precognition-Success', 'true')
+  ctx.noContent()
+}
+
 /**
  * Pass to `bootstrap({ onError: inertiaErrorHandler() })`.
  *
+ * - A validation 422 on a Precognition request is answered with the errors
+ *   of the fields it asked about (see `precognitive`).
  * - A validation 422 on an Inertia visit goes back to the form with the
  *   errors (needs the `session()` middleware to carry them).
  * - Any other error on a page request renders the adapter's `errorPage`,
@@ -56,6 +109,7 @@ export function inertiaErrorHandler(fallback: ErrorHandler = errorHandler()): Er
     if (res.headersSent) return fallback(err, req, res, next)
 
     const errors = err instanceof HttpException && err.status === 422 ? toErrors(err.details) : null
+    if (errors && isPrecognitive(req)) return precognitionResult(req, res, errors)
     if (errors && req?.headers?.['x-inertia'] === 'true') {
       const session = req.session as SessionLike | undefined
       if (session) {
