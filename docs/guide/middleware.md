@@ -217,6 +217,24 @@ bootstrap({
 
 Responses under 1 KB are left alone, and `Vary: Accept-Encoding` is set for caches. Server-sent events are never compressed: `ctx.sse()` sends `Cache-Control: no-transform`, so events reach the client as they are sent instead of waiting in a gzip buffer.
 
+### BREACH padding (opt-in)
+
+Compression can leak a secret: when a response holds both a secret (a token rendered into the page) and text an attacker controls (an echoed search term), how well the response compresses reveals whether the attacker's guess matches the secret — and TLS hides the bytes, not their count. This is the BREACH attack. Mitigate it by making every compressed response's size vary at random:
+
+```ts
+import compression from 'compression'
+import { breachPadding } from '@forinda/kickjs'
+
+bootstrap({
+  modules,
+  middlewares: [breachPadding(), compression() /* , … */], // breachPadding first
+})
+```
+
+Each gzip response gets 0–99 random bytes in its header's file-name field, which decompressors ignore — Django's "Heal The Breach" mitigation. `breachPadding({ maxBytes })` changes the range.
+
+The trade-off: the padding lives in the gzip header, which Brotli lacks, so `breachPadding()` removes `br` and `zstd` from the request's `Accept-Encoding` and browsers get gzip instead. Use it when your responses mix secrets with reflected input; most JSON APIs that keep tokens in cookies and headers don't need it.
+
 On Netlify, Vercel and Cloudflare the platform compresses responses at the edge — leave the middleware out of `src/serverless.ts` deployments and the web entry.
 
 ## Adapter Middleware Phases

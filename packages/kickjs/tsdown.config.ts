@@ -28,6 +28,7 @@ export default defineConfig({
     'http/runtimes/h3-web': 'src/http/runtimes/h3-web.ts',
     'http/middleware/helmet': 'src/http/middleware/helmet.ts',
     'http/middleware/allowed-hosts': 'src/http/middleware/allowed-hosts.ts',
+    'http/middleware/breach-padding': 'src/http/middleware/breach-padding.ts',
     'http/middleware/cors': 'src/http/middleware/cors.ts',
     'http/middleware/csrf': 'src/http/middleware/csrf.ts',
     'http/middleware/rate-limit': 'src/http/middleware/rate-limit.ts',
