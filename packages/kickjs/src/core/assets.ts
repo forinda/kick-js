@@ -26,6 +26,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import { createToken, type InjectionToken } from './token'
 import { groupAssetKeys } from './asset-keys'
+import { isProduction } from './is-production'
 
 export const ASSET_MANIFEST_VERSION = 1 as const
 
@@ -120,7 +121,7 @@ function loadManifest(): ResolvedManifest | null {
   // compared to the user-visible surprise of "I added a file but
   // assets.x.y() throws". Production keeps the cache because the built
   // manifest under `dist/.kickjs-assets.json` doesn't change at runtime.
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProduction()) {
     return discoverManifest()
   }
   if (manifestCache !== undefined) return manifestCache
@@ -148,7 +149,7 @@ function discoverManifest(): ResolvedManifest | null {
   // cache-skip in `loadManifest` exists to avoid. `synthesiseDevManifest`
   // returns null only when there's no `assetMap` config at all, in which
   // case we fall through to the built-manifest probes below.
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProduction()) {
     const fresh = synthesiseDevManifest(cwd, config)
     if (fresh) return fresh
   }
@@ -236,7 +237,7 @@ function synthesiseDevManifest(
       const abs = absByRel.get(rel)
       if (abs) entries[key] = abs
     }
-    if (collisionGroupsResolved > 0 && process.env.NODE_ENV !== 'production') {
+    if (collisionGroupsResolved > 0 && !isProduction()) {
       // Dev-only nudge — production runs read the build manifest where
       // the collision was already resolved at build time.
       console.log(

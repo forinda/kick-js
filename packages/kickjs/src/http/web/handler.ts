@@ -4,6 +4,7 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { HttpException } from '../../core/errors'
+import { isProduction } from '../../core/is-production'
 import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { publishMatchedRoute } from '../runtime'
@@ -76,14 +77,6 @@ function defaultErrorResponse(err: unknown, driver: WebResponseDriver): void {
   }
 
   driver.status(status).json({ error: (err as Error)?.message ?? 'Request failed' })
-}
-
-/**
- * Read per-call, not at module scope: the web entry is imported once and
- * reused across invocations, and edge runtimes may not expose `process`.
- */
-function isProduction(): boolean {
-  return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
 }
 
 function decodeParams(params: Record<string, string>): Record<string, string> {

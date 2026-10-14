@@ -12,6 +12,7 @@ import { createLogger } from '../../core/logger'
 import type { Request, Response, NextFunction } from 'express'
 
 import { registerDisposable } from '../../core/disposables'
+import { isProduction } from '../../core/is-production'
 
 /**
  * What a session holds. Augment it to type your keys — undeclared keys stay
@@ -198,7 +199,7 @@ export function session(options: SessionOptions) {
 
   const cookieDefaults = {
     httpOnly: cookieOpts.httpOnly ?? true,
-    secure: cookieOpts.secure ?? process.env.NODE_ENV === 'production',
+    secure: cookieOpts.secure ?? isProduction(),
     sameSite: cookieOpts.sameSite ?? ('lax' as const),
     path: cookieOpts.path ?? '/',
     ...(cookieOpts.domain ? { domain: cookieOpts.domain } : {}),
@@ -364,7 +365,7 @@ function cookieSession(options: SessionOptions) {
   const { seal, open } = sealer(secret, cookieName)
   const cookieDefaults = {
     httpOnly: cookieOpts.httpOnly ?? true,
-    secure: cookieOpts.secure ?? process.env.NODE_ENV === 'production',
+    secure: cookieOpts.secure ?? isProduction(),
     sameSite: cookieOpts.sameSite ?? ('lax' as const),
     path: cookieOpts.path ?? '/',
     ...(cookieOpts.domain ? { domain: cookieOpts.domain } : {}),
