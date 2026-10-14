@@ -861,6 +861,12 @@ const dbAdapter: AppAdapter = {
 }
 ```
 
+## Startup Timeline
+
+`app.getStartupTimeline()` returns where the last startup's time went: `{ totalMs, steps }`, with one step per phase (`middleware`, `modules`, `routes`, `error handlers`, `listen`, `ready`) and one per adapter hook (`'<Adapter>.beforeMount'`, `'.beforeStart'`, `'.afterStart'`). A hook's time is its own and is not counted in the phase around it. Each `setup()` (including an HMR rebuild) starts a new timeline.
+
+When startup takes longer than a second, the app logs its three slowest steps at `info`. DevTools serves the timeline at [`/_debug/startup`](../guide/devtools.md).
+
 ## Graceful Shutdown
 
 The `Application` tracks in-flight requests and provides a graceful shutdown sequence that drains active connections before tearing down adapters.

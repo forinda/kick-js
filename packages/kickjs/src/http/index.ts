@@ -5,6 +5,7 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
 } from './application'
+export type { StartupStep, StartupTimelineSnapshot } from './startup-timeline'
 
 // Bootstrap — zero-boilerplate entry point
 export { bootstrap } from './bootstrap'

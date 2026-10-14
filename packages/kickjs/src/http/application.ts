@@ -71,6 +71,7 @@ import {
   assertRouteUnique,
   buildRouteTable,
 } from './router-builder'
+import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import {
   HEALTH_PROBE,
   createHealthChecks,
@@ -89,6 +90,8 @@ import type {
 } from './runtime'
 import { requestStore } from './request-store'
 
+/** Startup slower than this logs its slowest steps. */
+const SLOW_STARTUP_MS = 1000
 const log = createLogger('Application')
 
 /**
@@ -674,6 +677,7 @@ export class Application {
   private readonly http2Sessions = new Set<http2.ServerHttp2Session>()
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
+  private timeline = new StartupTimeline()
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -901,19 +905,40 @@ export class Application {
     hook: ((ctx: AdapterContext) => void | Promise<void>) | undefined,
     ctx: AdapterContext,
     adapterName = 'adapter',
-    phase: 'setup' | 'afterStart' = 'setup',
+    hookName: 'beforeMount' | 'beforeStart' | 'afterStart',
   ): Promise<void> {
     if (!hook) return
     try {
-      await hook(ctx)
+      await this.timeline.time(`${adapterName}.${hookName}`, () => hook(ctx))
     } catch (err) {
-      if (phase === 'setup') throw err
+      // A failing setup hook fails boot; afterStart runs on a live server.
+      if (hookName !== 'afterStart') throw err
       log.error(err, `${adapterName} afterStart hook failed`)
     }
   }
 
+  /**
+   * Where the last startup's time went: each phase and each adapter hook, in
+   * order. Served by devtools at `/_debug/startup`.
+   */
+  getStartupTimeline(): StartupTimelineSnapshot {
+    return this.timeline.snapshot()
+  }
+
+  /** Log the slowest steps — only when startup was slow enough to ask why. */
+  private reportStartup(): void {
+    const { totalMs } = this.timeline.snapshot()
+    if (totalMs < SLOW_STARTUP_MS) return
+    const slowest = this.timeline
+      .slowest(3)
+      .map((step) => `${step.name} ${Math.round(step.ms)}ms`)
+      .join(', ')
+    log.info(`Startup took ${Math.round(totalMs)}ms — slowest: ${slowest}`)
+  }
+
   async setup(): Promise<void> {
     log.debug('Bootstrapping application...')
+    this.timeline = new StartupTimeline()
 
     // Reset module-contributor snapshot at the very top of each
     // setup pass — before anything that could throw — so a partial
@@ -948,7 +973,7 @@ export class Application {
 
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
-      await this.callHook(adapter.beforeMount?.bind(adapter), ctx, adapter.name)
+      await this.callHook(adapter.beforeMount?.bind(adapter), ctx, adapter.name, 'beforeMount')
     }
 
     // ── 1a. Cron trigger (serverless) ─────────────────────────────────
@@ -1041,6 +1066,7 @@ export class Application {
 
     // ── 5. Adapter middleware: afterGlobal ────────────────────────────
     this.mountMiddlewareList(adapterMw.afterGlobal)
+    this.timeline.mark('middleware')
 
     // ── 6. Module registration + DI bootstrap ────────────────────────
     // Module collection — the static `modules: [...]` array AND the
@@ -1096,6 +1122,8 @@ export class Application {
     if (!this.container.has(Logger)) {
       this.container.registerInstance(Logger, new Logger())
     }
+
+    this.timeline.mark('modules')
 
     // ── 7. Adapter middleware: beforeRoutes ───────────────────────────
     this.mountMiddlewareList(adapterMw.beforeRoutes)
@@ -1312,6 +1340,7 @@ export class Application {
 
     // ── 9. Adapter middleware: afterRoutes ────────────────────────────
     this.mountMiddlewareList(adapterMw.afterRoutes)
+    this.timeline.mark('routes')
 
     // ── 10. Adapter beforeStart hooks ────────────────────────────────
     // Runs BEFORE error handlers so adapters can still mount Express
@@ -1320,7 +1349,7 @@ export class Application {
     // catch-all that never calls next() — would pre-empt anything an
     // adapter adds afterwards and adapter-mounted endpoints would 404.
     for (const adapter of this.adapters) {
-      await this.callHook(adapter.beforeStart?.bind(adapter), ctx, adapter.name)
+      await this.callHook(adapter.beforeStart?.bind(adapter), ctx, adapter.name, 'beforeStart')
     }
 
     // ── 11. Error handlers ───────────────────────────────────────────
@@ -1350,6 +1379,7 @@ export class Application {
         : builtInNotFound,
     )
     this.runtime.setErrorHandler(this.app, observeErrors(this.options.onError ?? errorHandler()))
+    this.timeline.mark('error handlers')
   }
 
   /** Register modules and DI without starting the HTTP server (used by kick tinker) */
@@ -1383,6 +1413,8 @@ export class Application {
     for (const plugin of this.plugins) {
       await plugin.onReady?.(this.container)
     }
+    this.timeline.mark('ready')
+    this.reportStartup()
   }
 
   /**
@@ -1435,6 +1467,8 @@ export class Application {
       for (const plugin of this.plugins) {
         await plugin.onReady?.(this.container)
       }
+      this.timeline.mark('ready')
+      this.reportStartup()
 
       return
     }
@@ -1462,6 +1496,7 @@ export class Application {
         try {
           const scheme = serverOptions?.tls ? 'https' : 'http'
           const protocol = serverOptions?.http2 ? ' (HTTP/2)' : ''
+          this.timeline.mark('listen')
           log.info(`Server running on ${scheme}://localhost:${port}${protocol}`)
 
           for (const adapter of this.adapters) {
@@ -1478,6 +1513,8 @@ export class Application {
           for (const plugin of this.plugins) {
             await plugin.onReady?.(this.container)
           }
+          this.timeline.mark('ready')
+          this.reportStartup()
 
           resolve()
         } catch (err) {

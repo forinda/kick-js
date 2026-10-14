@@ -15,6 +15,7 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
 } from './http/application'
+export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
 export { waitUntil, settleBackgroundWork, type PlatformContext } from './http/background'
 export {
   reportError,

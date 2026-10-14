@@ -979,6 +979,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // and serves the deduped + validated list. The SPA fetches
         // this once at boot to render dynamic tabs after the four
         // built-ins.
+        // Startup timeline — each phase and adapter hook of the last boot.
+        router.get('/startup', (ctx: RequestContext) => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          const timeline = kickApp?.getStartupTimeline?.()
+          if (!timeline) {
+            ctx.json({ error: 'startup timeline unavailable' }, 503)
+            return
+          }
+          ctx.json(timeline)
+        })
+
         router.get('/tabs', (ctx: RequestContext) => {
           const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
           if (!kickApp) {

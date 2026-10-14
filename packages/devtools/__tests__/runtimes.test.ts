@@ -114,6 +114,10 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
 
     await http.get('/_debug/container').expect(200)
     await http.get('/_debug/graph').expect(200)
+
+    const startup = await http.get('/_debug/startup').expect(200)
+    expect(startup.body.totalMs).toEqual(expect.any(Number))
+    expect(startup.body.steps.map((s: { name: string }) => s.name)).toContain('routes')
   })
 
   it('locates a route handler in the project source', async () => {
