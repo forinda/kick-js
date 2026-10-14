@@ -213,7 +213,7 @@ export const QueueAdapter = defineAdapter({
 | `onPackage('name')`      | the app can import the package                               |
 | `allOf(a, b, …)`         | every condition is on; the first that isn't gives the reason |
 
-Any `() => boolean | string` works too — keep it synchronous and free of side effects. A condition that throws counts as off, with its error as the reason.
+Any `() => boolean | string` works too — keep it synchronous and free of side effects. A condition that throws counts as off; its error goes to the server log, not the report. Reasons never include an env variable's value, since the report is served by DevTools and the variable may hold a secret.
 
 An adapter left out runs no hooks, contributes no middleware, and is not in `app.getAdapters()`. One that `dependsOn` it is left out as well, rather than failing startup. `app.getConditionReport()` lists every adapter with a `when` and whether it is on — DevTools serves it at `/_debug/conditions`:
 

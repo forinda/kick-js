@@ -10,7 +10,9 @@ describe('condition helpers', () => {
     vi.stubEnv('KICK_COND_A', 'redis')
     expect(onEnv('KICK_COND_A')()).toBe(true)
     expect(onEnv('KICK_COND_A', 'redis')()).toBe(true)
-    expect(onEnv('KICK_COND_A', 'memory')()).toBe("KICK_COND_A is 'redis', not 'memory'")
+    // The reason never carries the variable's value — it may be a secret.
+    expect(onEnv('KICK_COND_A', 'memory')()).toBe("KICK_COND_A is not 'memory'")
+    expect(onEnv('KICK_COND_A', 'memory')()).not.toContain('redis')
     expect(onEnv('KICK_COND_MISSING')()).toBe('KICK_COND_MISSING is not set')
   })
 
@@ -51,7 +53,8 @@ describe('adapters with when', () => {
     expect(app.getConditionReport()).toEqual([
       { adapter: 'Cache', enabled: false, reason: 'KICK_COND_MISSING is not set' },
       { adapter: 'Sessions', enabled: false, reason: 'depends on Cache, which is off' },
-      { adapter: 'Broken', enabled: false, reason: 'its condition threw: bad check' },
+      // The error goes to the log, not the served report.
+      { adapter: 'Broken', enabled: false, reason: 'its condition threw (see the server log)' },
       { adapter: 'On', enabled: true },
     ])
   })

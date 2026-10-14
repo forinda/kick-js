@@ -32,9 +32,10 @@ export function onEnv(name: string, value?: string): AdapterCondition {
   return () => {
     const actual = process.env[name]
     if (value === undefined) return actual ? true : `${name} is not set`
-    return actual === value
-      ? true
-      : `${name} is ${actual === undefined ? 'not set' : `'${actual}'`}, not '${value}'`
+    if (actual === value) return true
+    // Never the value itself: reasons are logged and served by DevTools, and
+    // the variable may hold a secret. The expected value is the app's own.
+    return actual === undefined ? `${name} is not set` : `${name} is not '${value}'`
   }
 }
 
@@ -66,13 +67,21 @@ export function allOf(...conditions: AdapterCondition[]): AdapterCondition {
   }
 }
 
-/** `true`, or the reason it is off. A throwing condition is off, with its error. */
-export function evaluateCondition(condition: AdapterCondition): true | string {
+/**
+ * `true`, or the reason it is off. A throwing condition is off; its error goes
+ * to `onError` (the server log), not into the reason, which DevTools serves —
+ * error messages can carry connection strings.
+ */
+export function evaluateCondition(
+  condition: AdapterCondition,
+  onError?: (err: unknown) => void,
+): true | string {
   try {
     const result = condition()
     if (result === true) return true
     return typeof result === 'string' && result.length > 0 ? result : 'its condition returned false'
   } catch (err) {
-    return `its condition threw: ${err instanceof Error ? err.message : String(err)}`
+    onError?.(err)
+    return 'its condition threw (see the server log)'
   }
 }

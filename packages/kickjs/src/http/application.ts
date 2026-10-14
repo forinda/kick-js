@@ -793,7 +793,9 @@ export class Application {
     const off = new Map<string, string>()
     for (const adapter of adapters) {
       if (!adapter.when) continue
-      const result = evaluateCondition(adapter.when)
+      const result = evaluateCondition(adapter.when, (err) =>
+        log.warn(`Adapter ${adapter.name}: its \`when\` condition threw — ${String(err)}`),
+      )
       if (result !== true) off.set(adapter.name, result)
     }
     let changed = off.size > 0
