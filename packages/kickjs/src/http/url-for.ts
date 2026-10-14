@@ -6,6 +6,8 @@
  * @module @forinda/kickjs/http/url-for
  */
 
+import { createToken } from '../core/token'
+
 /**
  * Route names `kick typegen` knows: `'Controller.method'` → the route's
  * shape. Falls back to `string` before typegen has run.
@@ -28,13 +30,43 @@ export type UrlForArgs<N> =
 
 export type UrlQuery = Record<string, string | number | boolean | Array<string | number>>
 
+/** Builds route URLs by name — what `ROUTE_URLS` resolves to. */
+export interface UrlBuilder {
+  /**
+   * The URL of a route, by name — `'Controller.method'` — with its `:params`
+   * filled (encoded) and an optional query string.
+   */
+  urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string
+}
+
+/**
+ * The app's {@link UrlBuilder}, for code outside a request — a job, a mailer,
+ * a service building a link:
+ *
+ * ```ts
+ * @Service()
+ * class Mailer {
+ *   constructor(@Inject(ROUTE_URLS) private readonly urls: UrlBuilder) {}
+ *   resetLink(token: string) {
+ *     return `https://example.com${this.urls.urlFor('AuthController.reset', { token })}`
+ *   }
+ * }
+ * ```
+ */
+export const ROUTE_URLS = createToken<UrlBuilder>('kick/Http/routeUrls')
+
 /** One app's route name → full path pattern (`/api/v1/users/:id`). */
-export class RouteUrls {
+export class RouteUrls implements UrlBuilder {
   private readonly paths = new Map<string, string>()
 
   /** First registration wins — a controller mounted twice keeps its first path. */
   add(name: string, path: string): void {
     if (!this.paths.has(name)) this.paths.set(name, path)
+  }
+
+  urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string {
+    const [params, query] = args
+    return this.build(name, params as Record<string, unknown> | undefined, query)
   }
 
   build(name: string, params?: Record<string, unknown>, query?: UrlQuery): string {

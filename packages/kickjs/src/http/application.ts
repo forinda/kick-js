@@ -73,7 +73,7 @@ import {
   buildRouteTable,
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
-import { RouteUrls, type RouteName, type UrlForArgs } from './url-for'
+import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
@@ -1066,6 +1066,10 @@ export class Application {
   async setup(): Promise<void> {
     log.debug('Bootstrapping application...')
     this.timeline = new StartupTimeline()
+    // Bound before modules register, so their services can inject it; the
+    // routes fill it in as they mount.
+    this.routeUrls = new RouteUrls()
+    this.container.registerInstance(ROUTE_URLS, this.routeUrls)
 
     // Reset module-contributor snapshot at the very top of each
     // setup pass — before anything that could throw — so a partial
@@ -1312,7 +1316,6 @@ export class Application {
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
     this.mountedRoutes = mountedPaths
-    this.routeUrls = new RouteUrls()
 
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)

@@ -11,7 +11,14 @@ import {
   Post,
   expressRuntime,
   type RequestContext,
+  Inject,
+  ROUTE_URLS,
+  Service,
+  type UrlBuilder,
 } from '../src/index'
+import * as h3v2 from 'h3'
+import { createWebApp } from '../src/web'
+import { defineModule } from '../src/core/define-module'
 
 // What `kick typegen` writes for the controller below.
 declare global {
@@ -94,5 +101,41 @@ describe('urlFor errors and types', () => {
     // @ts-expect-error — not a route name
     void (() => app.urlFor('UrlUsersController.missing'))
     void (() => app.urlFor('UrlUsersController.create'))
+  })
+
+  it('is injectable as ROUTE_URLS, for code outside a request', async () => {
+    @Service()
+    class Mailer {
+      constructor(@Inject(ROUTE_URLS) private readonly urls: UrlBuilder) {}
+      link(id: string) {
+        return `https://example.com${this.urls.urlFor('UrlUsersController.show', { id })}`
+      }
+    }
+    const app = new Application({
+      modules: [{ routes: () => ({ path: '/users', controller: UrlUsersController }) } as never],
+    })
+    await app.setup()
+    expect(app.getContainer().resolve(Mailer).link('9')).toBe('https://example.com/api/v1/users/9')
+  })
+
+  it('works on the web entry too', async () => {
+    const app = createWebApp({
+      h3: h3v2,
+      modules: [
+        defineModule({
+          name: 'Users',
+          build: () => ({ routes: () => ({ path: '/users', controller: UrlUsersController }) }),
+        })(),
+      ],
+    })
+    const res = await app.fetch(
+      new Request('http://edge/api/v1/users', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      }),
+    )
+    expect(res.status).toBe(201)
+    expect(res.headers.get('location')).toBe('/api/v1/users/a%20b')
   })
 })

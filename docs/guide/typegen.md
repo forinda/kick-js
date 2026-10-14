@@ -17,8 +17,9 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
     kick__modules.d.ts          # ModuleToken string-literal union
     kick__plugins.d.ts          # KickJsPluginRegistry augmentation (narrows dependsOn)
     kick__routes.ts             # KickRoutes augmentation — typed Ctx<>, per-route
-                                #   response types, and the flat KickRoutes.Api map
-                                #   ('METHOD /mounted/path' keys) for the typed client
+                                #   response types, the flat KickRoutes.Api map
+                                #   ('METHOD /mounted/path' keys) for the typed client,
+                                #   and KickRoutes.Named ('Controller.method') for urlFor
     kick__env.ts                # KickEnv + NodeJS.ProcessEnv augmentation (when src/env.ts exists)
     kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
     kick__db.d.ts               # DB model types (when a DB adapter is configured)
@@ -35,13 +36,14 @@ sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` /
 `modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` / `kick__augmentations.d.ts` files
 automatically.)
 
-Five things become type-safe as a result:
+Six things become type-safe as a result:
 
 1. **`container.resolve('UserService')`** returns `UserService` instead of `any`.
 2. **`ctx.params`, `ctx.body`, `ctx.query`** are typed per route — including the inferred shape of any Zod schema you wired into the route decorator.
 3. **Response types** — inferred from each handler's return type ([return-value handlers](./controllers.md#return-value-handlers); `Reply<S, T>` unwraps; a declared `{ response: schema }` on the route wins). Emitted both per controller and as the flat `KickRoutes.Api` map that powers the [typed client](./typed-client.md).
 4. **`ctx.qs(config as const)`** narrows `parsed.filters[].field` and `parsed.sort[].field` to the literal whitelist you passed.
-5. **`@Value('DATABASE_URL')` and `process.env.DATABASE_URL`** are typed from your project's `src/env.ts` schema — autocomplete on keys, tsc errors on typos, and `Env<'PORT'>` looks up the inferred type.
+5. **`ctx.urlFor('UsersController.show', { id })`** — route names and their params, from `KickRoutes.Named`. See [Linking to routes](./controllers.md#linking-to-routes).
+6. **`@Value('DATABASE_URL')` and `process.env.DATABASE_URL`** are typed from your project's `src/env.ts` schema — autocomplete on keys, tsc errors on typos, and `Env<'PORT'>` looks up the inferred type.
 
 ## Quick start
 

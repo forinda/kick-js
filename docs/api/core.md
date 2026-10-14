@@ -861,6 +861,27 @@ const dbAdapter: AppAdapter = {
 }
 ```
 
+## Route URLs
+
+Build a route's URL from its name, `'<Controller>.<method>'`. All three take `(name, params?, query?)` and return the full path — API prefix and version included — with `:params` encoded and the query appended (arrays as repeated keys). An unknown name or a missing param throws; after `kick typegen`, both are compile errors.
+
+| Where                       | Use                                                         |
+| --------------------------- | ----------------------------------------------------------- |
+| In a handler                | `ctx.urlFor('UsersController.show', { id })`                |
+| In a service, job or mailer | `@Inject(ROUTE_URLS) urls: UrlBuilder` → `urls.urlFor(...)` |
+| With the app in hand        | `app.urlFor(...)` — `app` is what `bootstrap()` returns     |
+
+```typescript
+interface UrlBuilder {
+  urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string
+}
+
+const ROUTE_URLS: InjectionToken<UrlBuilder>
+type RouteName // the KickRoutes.Named keys after typegen; string before
+```
+
+Each app (and `createWebApp`) binds its own `ROUTE_URLS` before modules register, so services can inject it; it is filled as routes mount. A controller mounted under two paths keeps its first. See [Linking to routes](../guide/controllers.md#linking-to-routes).
+
 ## Startup Timeline
 
 `app.getStartupTimeline()` returns where the last startup's time went: `{ totalMs, steps }`, with one step per phase (`middleware`, `modules`, `routes`, `error handlers`, `listen`, `ready`) and one per adapter hook (`'<Adapter>.beforeMount'`, `'.beforeStart'`, `'.afterStart'`). A hook's time is its own and is not counted in the phase around it. Each `setup()` (including an HMR rebuild) starts a new timeline.
