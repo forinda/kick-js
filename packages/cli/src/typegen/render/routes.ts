@@ -187,6 +187,12 @@ export const kickRpc = {} as const
   const acceptedApi = new Set<string>()
   // 'Api' is reserved for the flat map below — a user controller class named
   // Api would declaration-merge its methods into the client map silently.
+  if (byController.has('Named')) {
+    opts.onWarn?.(
+      `controller class 'Named' collides with the reserved KickRoutes.Named route-name map — ` +
+        `its interface declaration-merges into it. Rename the controller.`,
+    )
+  }
   if (byController.has('Api')) {
     opts.onWarn?.(
       `controller class 'Api' collides with the reserved KickRoutes.Api client map — ` +
@@ -213,6 +219,17 @@ export const kickRpc = {} as const
   }
   const apiInterface = [`    interface Api {`, ...apiEntries, `    }`].join('\n')
   interfaces.push(apiInterface)
+
+  // Route names for `ctx.urlFor('Controller.method', params)` — the same
+  // routes as the Api map, keyed the way the runtime names them.
+  const namedEntries: string[] = []
+  for (const [controller, methods] of byController) {
+    for (const m of methods) {
+      if (!acceptedApi.has(`${controller}.${m.method}`)) continue
+      namedEntries.push(`      '${controller}.${m.method}': ${controller}['${m.method}']`)
+    }
+  }
+  interfaces.push([`    interface Named {`, ...namedEntries, `    }`].join('\n'))
 
   // Runtime RPC manifest (`kickRpc`) — controller.method → 'VERB /mounted/path'.
   // A VALUE export (this file is .ts, not .d.ts) consumed by

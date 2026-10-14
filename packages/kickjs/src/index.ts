@@ -25,6 +25,7 @@ export {
 } from './core/adapter-conditions'
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
 export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './http/conditional'
+export type { RouteName, UrlForArgs, UrlQuery } from './http/url-for'
 export {
   defineCheck,
   StartupCheckError,

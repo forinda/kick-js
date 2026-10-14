@@ -73,6 +73,7 @@ import {
   buildRouteTable,
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
+import { RouteUrls, type RouteName, type UrlForArgs } from './url-for'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
@@ -706,6 +707,7 @@ export class Application {
   private timeline = new StartupTimeline()
   private conditionReport: ConditionOutcome[] = []
   private mountedRoutes: MountedRoute[] = []
+  private routeUrls = new RouteUrls()
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -1026,6 +1028,20 @@ export class Application {
     return this.timeline.snapshot()
   }
 
+  /**
+   * The URL of a route, by name — `'Controller.method'` — with its `:params`
+   * filled (encoded) and an optional query string. For links built outside a
+   * request (emails, jobs); inside one, use `ctx.urlFor()`.
+   *
+   * ```ts
+   * app.urlFor('UsersController.show', { id: user.id }) // '/api/v1/users/42'
+   * ```
+   */
+  urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string {
+    const [params, query] = args
+    return this.routeUrls.build(name, params as Record<string, unknown> | undefined, query)
+  }
+
   /** Run the built-in and the app's startup checks against the assembled app. */
   private runChecks(): void {
     runStartupChecks(
@@ -1296,6 +1312,7 @@ export class Application {
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
     this.mountedRoutes = mountedPaths
+    this.routeUrls = new RouteUrls()
 
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
@@ -1367,6 +1384,7 @@ export class Application {
               const fullPath = joinPaths(mountPath, entry.path)
               assertRouteUnique(seenRoutes, entry.method, fullPath, owner)
               mountedPaths.push({ method: entry.method, path: fullPath })
+              this.routeUrls.add(owner, fullPath)
               this.routePolicy.add(entry.method, fullPath, entry.meta.flags)
             }
             // Each handler runs inside the `kickjs:handler` tracing channel (a
@@ -1387,6 +1405,7 @@ export class Application {
                 }),
                 meta: { ...entry.meta, pattern },
                 validationError: this.options.validationError,
+                urls: this.routeUrls,
               }
             })
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])

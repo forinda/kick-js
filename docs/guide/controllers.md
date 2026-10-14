@@ -299,6 +299,28 @@ SSE helpers:
 | `sse.onClose(fn)`             | Register disconnect callback |
 | `sse.close()`                 | End the stream               |
 
+## Linking to routes
+
+Build a route's URL from its name instead of writing the path where you link to it — a route that moves can't leave a `Location` header, a redirect or an email link behind:
+
+```ts
+@Post('/')
+async create(ctx: RequestContext) {
+  const user = await this.users.create(ctx.body)
+  ctx.setHeader('Location', ctx.urlFor('UsersController.show', { id: user.id }))
+  ctx.created(user)
+}
+```
+
+A route's name is `'<Controller>.<method>'`. `urlFor(name, params?, query?)` returns the full path — API prefix and version included — with `:params` filled in and encoded, plus an optional query string:
+
+```ts
+ctx.urlFor('UsersController.show', { id: '42' }) // '/api/v1/users/42'
+ctx.urlFor('UsersController.list', {}, { page: 2, tag: ['a', 'b'] }) // '/api/v1/users?page=2&tag=a&tag=b'
+```
+
+After `kick typegen`, names and params are typed: an unknown name or a missing param is a compile error (and, untyped, a thrown error). Outside a request — a job sending an email — use `app.urlFor(...)`, which takes the same arguments. Prefix your host for an absolute link; with [`allowedHosts`](./security-headers.md#allowed-hosts) set, `ctx.headers.host` is one you serve.
+
 ## Return-Value Handlers
 
 **The default way to write a handler.** Return the response payload and the

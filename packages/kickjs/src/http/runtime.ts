@@ -30,6 +30,7 @@ import type {
 import type { Constructor, FileUploadConfig, MiddlewareHandler, RouteDefinition } from '../core'
 import type { RequestContext } from './context'
 import type { ValidationErrorFactory } from './middleware/validate'
+import type { RouteUrls } from './url-for'
 
 /** HTTP verbs the router emits. Mirrors the decorator surface (@Get/@Post/...). */
 export type RouteMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -89,6 +90,8 @@ export interface RouteEntry {
   earlyContributorRunner?: CtxHandler | null
   /** The app's `validationError` — what this route's validation failure throws. */
   validationError?: ValidationErrorFactory
+  /** The app's route names → paths, for `ctx.urlFor()`. */
+  urls?: RouteUrls
   /** Terminal handler: resolves the controller per-request and invokes it. */
   handler: CtxHandler
   /** Introspection + runtime-materialized concerns (swagger/typegen read this). */
@@ -150,6 +153,7 @@ export function publishMatchedRoute(req: unknown, entry: RouteEntry): void {
       handlerName: entry.meta.handlerName,
       flags: entry.meta.flags ?? EMPTY_FLAGS,
       pattern: entry.meta.pattern ?? entry.path,
+      urls: entry.urls,
     })
     matchedRoutes.set(entry, route)
   }
@@ -174,6 +178,8 @@ export interface MatchedRoute {
   readonly handlerName?: string
   /** Enabled flags only — see {@link RouteMeta.flags}. */
   readonly flags: RouteFlags
+  /** @internal The app's route names, for `ctx.urlFor()`. */
+  readonly urls?: RouteUrls
 }
 
 /** A controller's routes grouped under the module mount prefix. */

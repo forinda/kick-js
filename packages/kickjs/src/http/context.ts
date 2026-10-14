@@ -1,4 +1,5 @@
 /// <reference types="multer" />
+import type { RouteName, UrlForArgs } from './url-for'
 import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
 import type { Request, NextFunction } from 'express'
 import { ROUTE_SLOT } from '../core/route-flag'
@@ -744,6 +745,27 @@ export class RequestContext<
 
   noContent() {
     return this._response.status(204).end()
+  }
+
+  /**
+   * The URL of a route, by name — `'Controller.method'` — with its `:params`
+   * filled (encoded) and an optional query string. Names and params are typed
+   * once `kick typegen` has run; an unknown name or a missing param throws.
+   *
+   * ```ts
+   * @Post('/')
+   * async create(ctx: RequestContext) {
+   *   const user = await this.users.create(ctx.body)
+   *   ctx.setHeader('Location', ctx.urlFor('UsersController.show', { id: user.id }))
+   *   ctx.created(user)
+   * }
+   * ```
+   */
+  urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string {
+    const urls = this.route?.urls
+    if (!urls) throw new Error('ctx.urlFor() is only available inside a matched route')
+    const [params, query] = args
+    return urls.build(name, params as Record<string, unknown> | undefined, query)
   }
 
   /**
