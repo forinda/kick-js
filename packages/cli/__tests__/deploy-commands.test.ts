@@ -4,15 +4,17 @@
  * with no `deploy` block. The platform output is exact: Netlify reads the
  * function's `config` without running the file, and Vercel routes by `src`.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { Command } from 'commander'
 import { describe, expect, it } from 'vitest'
 
 import { cronScheduleId as coreScheduleId } from '@forinda/kickjs'
 import {
   bareImportPackage,
+  registerDeployCommands,
   netlifyHiddenRules,
   missingPackage,
   cronScheduleId,
@@ -176,6 +178,32 @@ describe('Inertia apps', () => {
     const resolved = resolveDeploy({ include: ['data'] }, '/apps/site', tree(), inertia)
     expect(resolved.include).toEqual(['data'])
   })
+})
+
+describe('a runtime file the build has not made', () => {
+  it.each(['build:netlify', 'build:vercel'])(
+    'fails %s before writing anything',
+    async (command) => {
+      const root = mkdtempSync(join(tmpdir(), 'kick-deploy-include-'))
+      try {
+        writeFileSync(
+          join(root, 'package.json'),
+          JSON.stringify({ dependencies: { '@forinda/kickjs-inertia': '^0.2.0' } }),
+        )
+        const program = new Command().exitOverride()
+        registerDeployCommands(program, { projectRoot: root, log: () => {} } as never)
+        await expect(program.parseAsync(['node', 'kick', command])).rejects.toThrow(
+          /dist\/client\/\.vite\/manifest\.json, dist\/ssr not found/,
+        )
+        // No function left behind that points at files it doesn't have.
+        expect(existsSync(join(root, '.netlify'))).toBe(false)
+        expect(existsSync(join(root, '.vercel'))).toBe(false)
+        expect(existsSync(join(root, 'dist'))).toBe(false)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    },
+  )
 })
 
 describe('vercelFunctionSource', () => {

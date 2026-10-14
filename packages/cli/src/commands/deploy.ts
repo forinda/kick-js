@@ -468,6 +468,9 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
     .description('Bundle the serverless entry and write the Netlify function')
     .action(async () => {
       const options = deploy()
+      // Before anything is written, so a failed build leaves no function
+      // pointing at files it doesn't have.
+      requireIncluded(root, options.include)
       const server = await bundle(root, options, ctx.log)
       const siteRoot = resolve(root, options.siteRoot)
 
@@ -500,7 +503,6 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
           }),
         }),
       )
-      requireIncluded(root, options.include)
       ctx.log(`wrote ${relative(process.cwd(), resolve(functions, 'api.mjs'))}`)
 
       // Netlify publishes *something*; with no frontend that has to be an
@@ -548,6 +550,9 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
     .description('Bundle the serverless entry and write .vercel/output (Build Output API v3)')
     .action(async () => {
       const options = deploy()
+      // Before anything is written, so a failed build leaves no function
+      // pointing at files it doesn't have.
+      requireIncluded(root, options.include)
       const server = await bundle(root, options, ctx.log)
       const siteRoot = resolve(root, options.siteRoot)
       const staticDir = options.staticDir ? resolve(root, options.staticDir) : undefined
@@ -560,7 +565,6 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
       // Nothing outside the .func directory is visible at runtime.
       cpSync(server, resolve(fn, 'server.mjs'))
       writeFileSync(resolve(fn, 'index.mjs'), vercelFunctionSource())
-      requireIncluded(root, options.include)
       for (const path of options.include) {
         cpSync(resolve(root, path), resolve(fn, path), { recursive: true })
       }
