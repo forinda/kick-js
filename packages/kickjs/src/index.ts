@@ -15,6 +15,14 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
 } from './http/application'
+export type { FailureAdvice } from './core/failure-analysis'
+export {
+  allOf,
+  onEnv,
+  onPackage,
+  type AdapterCondition,
+  type ConditionOutcome,
+} from './core/adapter-conditions'
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
 export {
   defineCheck,
