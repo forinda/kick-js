@@ -765,7 +765,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     )
     .option('--name <name>', 'Project name (defaults to package.json name)')
     .option('--pm <pm>', 'Package manager (defaults to package.json packageManager)')
-    .option('--template <template>', 'Template: rest | minimal | fullstack')
+    .option('--template <template>', 'Template: rest | minimal | fullstack | inertia')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (opts: AgentDocsOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)

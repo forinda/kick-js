@@ -75,6 +75,7 @@ Create a new KickJS project:
 kick new my-app                          # Interactive prompts for everything
 kick new my-app --yes                    # Pick all defaults (rest + inmemory)
 kick new my-app --yes --template minimal # Minimal template, no prompts
+kick new my-app --template inertia       # Server-rendered React pages — see Inertia guide
 kick new .                               # Scaffold in current directory
 kick new my-app --pm pnpm                # Skip PM prompt only
 kick new my-app -t rest --pm pnpm --no-git --install  # Fully scriptable
@@ -111,7 +112,7 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 
 | Flag                             | Description                                                            | Default                                  |
 | -------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
-| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`                       | Prompted (or `minimal` with `--yes`)     |
+| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`, `inertia`            | Prompted (or `minimal` with `--yes`)     |
 | `--runtime <engine>`             | HTTP engine: `express`, `fastify`, `h3`                                | Prompted (or `express` with `--yes`)     |
 | `-s, --schema <lib>`             | Schema library: `zod`, `valibot`, `yup`                                | Prompted (or `zod` with `--yes`)         |
 | `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`) | Prompted (or `inmemory` with `--yes`)    |
@@ -684,7 +685,7 @@ Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from 
 | `--only <which>`        | `agents` \| `claude` \| `skills` \| `gemini` \| `copilot` \| `both` \| `all` | `all`                 |
 | `--name <name>`         | Project name override                                                        | from `package.json`   |
 | `--pm <pm>`             | Package manager override                                                     | from `package.json`   |
-| `--template <template>` | `rest` \| `minimal` \| `fullstack`                                           | from `kick.config.ts` |
+| `--template <template>` | `rest` \| `minimal` \| `fullstack` \| `inertia`                              | from `kick.config.ts` |
 | `-f, --force`           | Overwrite without prompting                                                  | `false`               |
 
 See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
