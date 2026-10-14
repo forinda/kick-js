@@ -104,6 +104,23 @@ await expect(service.create('taken@b.c')).rejects.toBeInstanceOf(UniqueViolation
 await expect(service.create('taken@b.c')).rejects.toMatchObject({ columns: ['email'] })
 ```
 
+## Counting queries
+
+A list endpoint that runs one query per row (an N+1) passes every test with three rows and falls over with three thousand. Pin the count instead:
+
+```ts
+import { expectQueries } from '@forinda/kickjs-db/testing'
+
+it('loads posts with their authors in two queries', async () => {
+  const posts = await expectQueries(db, 2, () => service.postsWithAuthors())
+  expect(posts).toHaveLength(3)
+})
+```
+
+On a mismatch the error lists every query that ran, numbered, so the extra one is easy to spot. `captureQueries(db, fn)` returns `{ result, queries }` when you want to assert on the SQL yourself.
+
+Both need a client with events on. `createTestDb` and `createPgTestDb` turn them on; for a client of your own, pass `createDbClient({ events: true })`. A client without events is refused rather than counted as zero.
+
 ## Related
 
 - [Testing](../testing) — `createTestApp`, modules, environment isolation

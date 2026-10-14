@@ -2,6 +2,8 @@
 // per test file, and a transaction per test that never commits.
 import { randomBytes } from 'node:crypto'
 import { createDbClient } from './client/create'
+import { EVENTS_ENABLED } from './client/events'
+import type { QueryEvent } from './client/types'
 import type { KickDbClient } from './client/types'
 import type { SchemaToTypes } from './client/schema-types'
 import { diff } from './diff/engine'
@@ -54,6 +56,8 @@ export async function createTestDb<S>(
     schema: opts.schema,
     dialect: sqliteDialect({ database }),
     casing: opts.casing,
+    // On, so captureQueries / expectQueries can count.
+    events: true,
   }) as never
 }
 
@@ -128,6 +132,7 @@ export async function createPgTestDb<S>(
     schema: opts.schema,
     dialect: pgDialect({ pool }),
     casing: opts.casing,
+    events: true,
   }) as never as KickDbClient<SchemaToTypes<S>>
   return {
     db,
@@ -170,5 +175,56 @@ export async function rolledBack<T>(
     .catch((err: unknown) => {
       if (err !== ROLLBACK) throw err
     })
+  return result
+}
+
+// oxlint-disable-next-line no-explicit-any -- any schema's client
+type Observable = Pick<KickDbClient<any>, 'on' | 'off'>
+
+/**
+ * Run `fn` and return the queries it sent, in order. The client must have
+ * events on — `createTestDb` / `createPgTestDb` clients do; your own needs
+ * `createDbClient({ events: true })`.
+ *
+ *   const { result, queries } = await captureQueries(db, () => repo.list())
+ */
+export async function captureQueries<T>(
+  db: Observable,
+  fn: () => Promise<T>,
+): Promise<{ result: T; queries: QueryEvent[] }> {
+  if ((db as unknown as Record<symbol, unknown>)[EVENTS_ENABLED] === false) {
+    throw new Error(
+      'captureQueries: this client was created without events, so no query is reported ' +
+        'and every count would be 0. Create it with `events: true`.',
+    )
+  }
+  const queries: QueryEvent[] = []
+  const listener = (event: QueryEvent) => void queries.push(event)
+  db.on('query', listener)
+  try {
+    return { result: await fn(), queries }
+  } finally {
+    db.off('query', listener)
+  }
+}
+
+/**
+ * Assert `fn` sends exactly `count` queries — a guard against N+1 queries
+ * that grows with the data. On a mismatch the error lists every query sent.
+ *
+ *   await expectQueries(db, 2, () => postsWithAuthors()) // 1 + 1, not 1 + N
+ */
+export async function expectQueries<T>(
+  db: Observable,
+  count: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const { result, queries } = await captureQueries(db, fn)
+  if (queries.length !== count) {
+    const list = queries.map((q, i) => `  ${i + 1}. ${q.sql}`).join('\n')
+    throw new Error(
+      `Expected ${count} quer${count === 1 ? 'y' : 'ies'}, ran ${queries.length}:\n${list || '  (none)'}`,
+    )
+  }
   return result
 }
