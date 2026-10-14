@@ -885,7 +885,7 @@ const ROUTE_URLS: InjectionToken<UrlBuilder>
 type RouteName // the KickRoutes.Named keys after typegen; string before
 ```
 
-Each app (and `createWebApp`) binds its own `ROUTE_URLS` before modules register, so services can inject it; it is filled as routes mount. A controller mounted under two paths keeps its first. See [Linking to routes](../guide/controllers.md#linking-to-routes).
+Each app (and `createWebApp`) binds `ROUTE_URLS` before modules register, so services can inject it; it is filled as routes mount. Like every DI binding it is one per process — with two apps in one process it is the one set up last — while `ctx.urlFor()` always uses the app serving the request. A controller mounted under two paths keeps its first. See [Linking to routes](../guide/controllers.md#linking-to-routes).
 
 ## Startup Timeline
 

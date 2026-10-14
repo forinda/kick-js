@@ -54,6 +54,9 @@ export interface UrlBuilder {
  * ```
  */
 export const ROUTE_URLS = createToken<UrlBuilder>('kick/Http/routeUrls')
+// One per process, like every DI binding: the container is process-wide, so
+// with two apps in one process this is the one set up last. `ctx.urlFor()`
+// always uses the app that is serving the request.
 
 /** One app's route name → full path pattern (`/api/v1/users/:id`). */
 export class RouteUrls implements UrlBuilder {

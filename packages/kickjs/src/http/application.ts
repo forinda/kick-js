@@ -1702,6 +1702,9 @@ export class Application {
     // the old app keeps running so the server stays responsive.
     const prevApp = this.app
     const prevContainer = this.container
+    // setup() replaces the URL registry; a failed rebuild keeps the old routes
+    // serving, so it must keep their names too.
+    const prevRouteUrls = this.routeUrls
     // Snapshot the outgoing app's disposables (session/rate-limit store
     // intervals) BEFORE setup() registers the incoming app's. On success the
     // stale set is disposed — without this, every HMR swap leaked one live
@@ -1721,6 +1724,7 @@ export class Application {
       for (const d of staleDisposables) registerDisposable(d)
       this.app = prevApp
       this.container = prevContainer
+      this.routeUrls = prevRouteUrls
       return
     }
 

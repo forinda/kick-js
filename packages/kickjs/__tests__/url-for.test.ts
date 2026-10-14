@@ -138,4 +138,23 @@ describe('urlFor errors and types', () => {
     expect(res.status).toBe(201)
     expect(res.headers.get('location')).toBe('/api/v1/users/a%20b')
   })
+
+  it('keeps the old route names when a rebuild fails', async () => {
+    const app = new Application({
+      modules: [{ routes: () => ({ path: '/users', controller: UrlUsersController }) } as never],
+      adapters: [
+        {
+          name: 'FailsOnRebuild',
+          beforeMount: () => {
+            if (rebuilding) throw new Error('broken edit')
+          },
+        },
+      ],
+    })
+    let rebuilding = false
+    await app.setup()
+    rebuilding = true
+    await app.rebuild()
+    expect(app.urlFor('UrlUsersController.show', { id: '1' })).toBe('/api/v1/users/1')
+  })
 })

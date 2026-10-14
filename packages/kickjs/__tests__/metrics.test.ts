@@ -32,6 +32,16 @@ describe('RequestHistogram', () => {
     expect(out).toContain(`${base}_count{method="GET",route="unmatched",status="404"} 1`)
   })
 
+  it('sorts and deduplicates buckets, and rejects invalid ones', () => {
+    const h = new RequestHistogram([1, 0.1, 1])
+    h.observe({ method: 'GET', route: '/x', status: 200, durationMs: 50 })
+    const bounds = [...h.render().matchAll(/le="([^"]+)"/g)].map((m) => m[1])
+    expect(bounds).toEqual(['0.1', '1', '+Inf'])
+    expect(() => new RequestHistogram([])).toThrow(/buckets/)
+    expect(() => new RequestHistogram([0.1, Number.NaN])).toThrow(/buckets/)
+    expect(() => new RequestHistogram([-1])).toThrow(/buckets/)
+  })
+
   it('escapes label values', () => {
     const h = new RequestHistogram([1])
     h.observe({ method: 'GET', route: 'a"b\\c\nd', status: 200, durationMs: 1 })

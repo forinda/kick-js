@@ -41,7 +41,19 @@ interface Series {
 export class RequestHistogram {
   private readonly series = new Map<string, Series>()
 
-  constructor(private readonly buckets: readonly number[] = DEFAULT_BUCKETS) {}
+  private readonly buckets: readonly number[]
+
+  /**
+   * Bounds in seconds — sorted and deduplicated here, since the exposition
+   * format needs them strictly increasing; anything not a finite positive
+   * number is rejected.
+   */
+  constructor(buckets: readonly number[] = DEFAULT_BUCKETS) {
+    if (buckets.length === 0 || buckets.some((b) => !Number.isFinite(b) || b <= 0)) {
+      throw new Error('metrics: buckets must be finite positive numbers (seconds)')
+    }
+    this.buckets = [...new Set(buckets)].toSorted((a, b) => a - b)
+  }
 
   observe(info: Pick<ResponseInfo, 'method' | 'route' | 'status' | 'durationMs'>): void {
     // The route pattern, never the raw path: `/users/42` and `/users/43` are
