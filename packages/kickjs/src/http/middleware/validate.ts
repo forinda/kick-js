@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express'
 // core/errors directly (not the barrel) — keeps the edge-safe web entry
 // graph free of the barrel's eager node:fs asset-manager import.
 import { HttpException, HttpStatus } from '../../core/errors'
-import { detectSchema, type SchemaIssue } from '@forinda/kickjs-schema'
+import { detectSchema, type KickSchema, type SchemaIssue } from '@forinda/kickjs-schema'
 
 export interface ValidationSchema {
   body?: any
@@ -56,29 +56,38 @@ function assignReqProperty(req: Request, key: 'query' | 'params', value: unknown
  * produce a uniform response envelope.
  */
 export function validate(schema: ValidationSchema) {
+  // Detected on the first request, not per request: detection walks every
+  // registered adapter and allocates a wrapper. Not at construction either —
+  // a custom adapter registered during boot must still be seen.
+  let wrapped: { body?: KickSchema; query?: KickSchema; params?: KickSchema } | undefined
+  const schemas = () =>
+    (wrapped ??= {
+      body: schema.body ? detectSchema(schema.body) : undefined,
+      query: schema.query ? detectSchema(schema.query) : undefined,
+      params: schema.params ? detectSchema(schema.params) : undefined,
+    })
+
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
-      if (schema.body) {
-        const wrapped = detectSchema(schema.body)
-        const result = wrapped.safeParse(req.body)
+      const { body, query, params } = schemas()
+      if (body) {
+        const result = body.safeParse(req.body)
         if (!result.success) {
           return next(toValidationException(result.issues, 'Validation failed', true))
         }
         req.body = result.data
       }
 
-      if (schema.query) {
-        const wrapped = detectSchema(schema.query)
-        const result = wrapped.safeParse(req.query)
+      if (query) {
+        const result = query.safeParse(req.query)
         if (!result.success) {
           return next(toValidationException(result.issues, 'Invalid query parameters', false))
         }
         assignReqProperty(req, 'query', result.data)
       }
 
-      if (schema.params) {
-        const wrapped = detectSchema(schema.params)
-        const result = wrapped.safeParse(req.params)
+      if (params) {
+        const result = params.safeParse(req.params)
         if (!result.success) {
           return next(toValidationException(result.issues, 'Invalid path parameters', false))
         }

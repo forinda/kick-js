@@ -606,6 +606,7 @@ export class Application {
   private readonly http2Sessions = new Set<http2.ServerHttp2Session>()
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
+  private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
    * Flags of every mounted route, for middleware that runs before routing and
@@ -741,7 +742,13 @@ export class Application {
   }
 
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
-    const handler = this.runtime.nodeHandler(this.app)
+    // Built once per engine app — the serverless and loopback paths call this
+    // per request, and h3 wraps the app in a fresh node listener on each call.
+    // Keyed on the app, so a rebuild (HMR) gets a handler for the new one.
+    if (this.handlerFor?.app !== this.app) {
+      this.handlerFor = { app: this.app, handler: this.runtime.nodeHandler(this.app) }
+    }
+    const handler = this.handlerFor.handler
     if (next) {
       handler(req, res, next)
     } else {

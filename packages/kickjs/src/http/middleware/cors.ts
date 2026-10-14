@@ -66,6 +66,12 @@ export function cors(options: CorsOptions = {}) {
     preflight = true,
   } = options
 
+  // Header values depend only on the options — joined once, not per request.
+  const exposeValue = exposedHeaders?.length ? exposedHeaders.join(', ') : undefined
+  const methodsValue = methods.join(', ')
+  const allowedValue = allowedHeaders?.join(', ')
+  const maxAgeValue = maxAge ? String(maxAge) : undefined
+
   return (req: Request, res: Response, next: NextFunction) => {
     const requestOrigin = req.headers.origin
 
@@ -84,23 +90,19 @@ export function cors(options: CorsOptions = {}) {
       res.setHeader('Access-Control-Allow-Credentials', 'true')
     }
 
-    if (exposedHeaders?.length) {
-      res.setHeader('Access-Control-Expose-Headers', exposedHeaders.join(', '))
-    }
+    if (exposeValue) res.setHeader('Access-Control-Expose-Headers', exposeValue)
 
     // Preflight handling
     if (preflight && req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
+      res.setHeader('Access-Control-Allow-Methods', methodsValue)
 
-      const reqHeaders = allowedHeaders ?? req.headers['access-control-request-headers']
+      const reqHeaders = allowedValue ?? req.headers['access-control-request-headers']
       if (reqHeaders) {
         const value = Array.isArray(reqHeaders) ? reqHeaders.join(', ') : reqHeaders
         res.setHeader('Access-Control-Allow-Headers', value)
       }
 
-      if (maxAge) {
-        res.setHeader('Access-Control-Max-Age', String(maxAge))
-      }
+      if (maxAgeValue) res.setHeader('Access-Control-Max-Age', maxAgeValue)
 
       res.statusCode = 204
       res.setHeader('Content-Length', '0')

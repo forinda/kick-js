@@ -110,9 +110,14 @@ async function runOne(
  * object, never `undefined`.
  */
 function resolveDeps(reg: ContributorRegistration, container: Container): Record<string, unknown> {
+  // The spec is fixed per registration; list its entries once, not per request.
+  let deps = depEntries.get(reg)
+  if (!deps) depEntries.set(reg, (deps = Object.entries(reg.deps)))
   const out: Record<string, unknown> = {}
-  for (const [key, token] of Object.entries(reg.deps)) {
+  for (const [key, token] of deps) {
     out[key] = container.resolve(token as never)
   }
   return out
 }
+
+const depEntries = new WeakMap<ContributorRegistration, Array<[string, unknown]>>()

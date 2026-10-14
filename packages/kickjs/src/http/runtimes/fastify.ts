@@ -450,9 +450,19 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         })()
       }
       const readyP = state[READY]
+      // Once ready, route synchronously — no promise hop per request.
+      let ready = false
+      readyP.then(
+        () => (ready = true),
+        () => {},
+      )
 
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
         if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
+        if (ready) {
+          app.routing(req, res)
+          return
+        }
         readyP
           .then(() => app.routing(req, res))
           .catch((err) => {

@@ -136,15 +136,24 @@ export interface RouteMeta {
  * one ctx would be invisible to the next and to the handler.
  */
 export function publishMatchedRoute(req: unknown, entry: RouteEntry): void {
-  ;(req as Record<symbol, MatchedRoute>)[ROUTE_SLOT] = {
-    method: entry.method,
-    path: entry.path,
-    controller: entry.meta.controller,
-    handlerName: entry.meta.handlerName,
-    flags: entry.meta.flags ?? EMPTY_FLAGS,
-    pattern: entry.meta.pattern ?? entry.path,
+  // One object per route, shared by its requests — every field comes from the
+  // entry, which is final once mounted. Frozen, since it is shared.
+  let route = matchedRoutes.get(entry)
+  if (!route) {
+    route = Object.freeze({
+      method: entry.method,
+      path: entry.path,
+      controller: entry.meta.controller,
+      handlerName: entry.meta.handlerName,
+      flags: entry.meta.flags ?? EMPTY_FLAGS,
+      pattern: entry.meta.pattern ?? entry.path,
+    })
+    matchedRoutes.set(entry, route)
   }
+  ;(req as Record<symbol, MatchedRoute>)[ROUTE_SLOT] = route
 }
+
+const matchedRoutes = new WeakMap<RouteEntry, MatchedRoute>()
 
 const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
 
