@@ -72,6 +72,9 @@ import {
   buildRouteTable,
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
+import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
+import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
+import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
 import {
   HEALTH_PROBE,
   createHealthChecks,
@@ -511,6 +514,28 @@ export interface ApplicationOptions {
   validationError?: ValidationErrorFactory
 
   /**
+   * Your own startup checks, run with the built-in ones once the app is
+   * assembled and before it serves a request. A check returning an `error`
+   * fails startup; a `warning` is logged.
+   *
+   * ```ts
+   * const needsDb = defineCheck({
+   *   name: 'database url',
+   *   deploy: true, // production only
+   *   run: () =>
+   *     process.env.DATABASE_URL?.includes('localhost')
+   *       ? { id: 'APP-W001', level: 'warning', message: 'DATABASE_URL points at localhost' }
+   *       : undefined,
+   * })
+   * bootstrap({ modules, checks: [needsDb] })
+   * ```
+   */
+  checks?: StartupCheck[]
+
+  /** Check IDs to skip, e.g. `['KICK-SEC-W002']` — a deliberate, reviewable exception. */
+  silenceChecks?: string[]
+
+  /**
    * Security defaults applied automatically unless opted out.
    *
    * When not specified, secure defaults are applied:
@@ -678,6 +703,8 @@ export class Application {
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
   private timeline = new StartupTimeline()
+  private conditionReport: ConditionOutcome[] = []
+  private mountedRoutes: MountedRoute[] = []
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -750,13 +777,59 @@ export class Application {
       }
       return adapter as AppAdapter & { name: string }
     })
-    this.adapters = mountSort(namedAdapters, 'adapter')
+    this.adapters = mountSort(this.applyConditions(namedAdapters), 'adapter')
     // Adapters and plugins with onError / onResponse observe every error and
     // response; the diagnostics_channel channels are fed from the same funnel.
     this.observers = setObservers([...this.adapters, ...this.plugins])
     installChannelPublisher()
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
+  }
+
+  /**
+   * Leave out adapters whose `when` says no — and, until nothing changes, any
+   * adapter that `dependsOn` one left out, which could not run without it.
+   */
+  private applyConditions<A extends AppAdapter & { name: string }>(adapters: A[]): A[] {
+    const off = new Map<string, string>()
+    for (const adapter of adapters) {
+      if (!adapter.when) continue
+      const result = evaluateCondition(adapter.when, (err) =>
+        log.warn(`Adapter ${adapter.name}: its \`when\` condition threw — ${String(err)}`),
+      )
+      if (result !== true) off.set(adapter.name, result)
+    }
+    let changed = off.size > 0
+    while (changed) {
+      changed = false
+      for (const adapter of adapters) {
+        if (off.has(adapter.name)) continue
+        const missing = adapter.dependsOn?.find((dep) => off.has(dep))
+        if (missing) {
+          off.set(adapter.name, `depends on ${missing}, which is off`)
+          changed = true
+        }
+      }
+    }
+    this.conditionReport = adapters
+      .filter((a) => a.when || off.has(a.name))
+      .map((a) =>
+        off.has(a.name)
+          ? { adapter: a.name, enabled: false, reason: off.get(a.name) }
+          : { adapter: a.name, enabled: true },
+      )
+    for (const outcome of this.conditionReport) {
+      if (!outcome.enabled) log.debug(`Adapter ${outcome.adapter} is off: ${outcome.reason}`)
+    }
+    return adapters.filter((a) => !off.has(a.name))
+  }
+
+  /**
+   * Adapters with a `when` condition, and whether each is on — with the reason
+   * when it is not. Served by DevTools at `/_debug/conditions`.
+   */
+  getConditionReport(): readonly ConditionOutcome[] {
+    return this.conditionReport
   }
 
   /** Whether the application is currently draining in-flight requests */
@@ -908,13 +981,32 @@ export class Application {
     hookName: 'beforeMount' | 'beforeStart' | 'afterStart',
   ): Promise<void> {
     if (!hook) return
+    const where = `${adapterName}.${hookName}`
     try {
-      await this.timeline.time(`${adapterName}.${hookName}`, () => hook(ctx))
+      await this.timeline.time(where, () => hook(ctx))
     } catch (err) {
+      this.adviseOnFailure(err, where, adapterName)
       // A failing setup hook fails boot; afterStart runs on a live server.
       if (hookName !== 'afterStart') throw err
       log.error(err, `${adapterName} afterStart hook failed`)
     }
+  }
+
+  /**
+   * Log advice for a hook failure: the failing adapter's own analysis first,
+   * then the framework's. The error itself is still thrown or logged by the
+   * caller — this only adds the explanation in front of it.
+   */
+  private adviseOnFailure(err: unknown, where: string, adapterName: string): void {
+    const adapter = this.adapters.find((a) => a.name === adapterName)
+    let advice: FailureAdvice | undefined
+    try {
+      advice = adapter?.analyzeFailure?.(err)
+    } catch (analyzerErr) {
+      log.debug(`${adapterName}.analyzeFailure threw: ${String(analyzerErr)}`)
+    }
+    advice ??= builtInAdvice(err, where)
+    if (advice) log.error(formatAdvice(advice))
   }
 
   /**
@@ -923,6 +1015,16 @@ export class Application {
    */
   getStartupTimeline(): StartupTimelineSnapshot {
     return this.timeline.snapshot()
+  }
+
+  /** Run the built-in and the app's startup checks against the assembled app. */
+  private runChecks(): void {
+    runStartupChecks(
+      [...builtInChecks, ...(this.options.checks ?? [])],
+      { options: this.options as unknown as Record<string, unknown>, routes: this.mountedRoutes },
+      this.options.silenceChecks,
+    )
+    this.timeline.mark('checks')
   }
 
   /** Log the slowest steps — only when startup was slow enough to ask why. */
@@ -1184,6 +1286,7 @@ export class Application {
     // is the only place that knows the FULL mounted path — prefix, version and
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
+    this.mountedRoutes = mountedPaths
 
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
@@ -1398,6 +1501,7 @@ export class Application {
   async startWithoutServer(): Promise<void> {
     this.handlerMode = true
     await this.setup()
+    this.runChecks()
 
     const needServer = this.adapters.filter((adapter) => adapter.afterStart)
     if (needServer.length > 0) {
@@ -1443,6 +1547,7 @@ export class Application {
     }
 
     await this.setup()
+    this.runChecks()
 
     if (g.__kickjs_httpServer) {
       // ── DEV MODE: Vite owns the http.Server ──────────────────────

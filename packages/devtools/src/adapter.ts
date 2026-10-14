@@ -979,6 +979,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // and serves the deduped + validated list. The SPA fetches
         // this once at boot to render dynamic tabs after the four
         // built-ins.
+        // Adapter conditions — which adapters a `when` turned off, and why.
+        router.get('/conditions', (ctx: RequestContext) => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          const report = kickApp?.getConditionReport?.()
+          if (!report) {
+            ctx.json({ error: 'condition report unavailable' }, 503)
+            return
+          }
+          ctx.json({ adapters: report })
+        })
+
         // Startup timeline — each phase and adapter hook of the last boot.
         router.get('/startup', (ctx: RequestContext) => {
           const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined

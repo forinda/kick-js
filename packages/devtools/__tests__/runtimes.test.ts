@@ -118,6 +118,9 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     const startup = await http.get('/_debug/startup').expect(200)
     expect(startup.body.totalMs).toEqual(expect.any(Number))
     expect(startup.body.steps.map((s: { name: string }) => s.name)).toContain('routes')
+
+    const conditions = await http.get('/_debug/conditions').expect(200)
+    expect(conditions.body).toEqual({ adapters: [] })
   })
 
   it('locates a route handler in the project source', async () => {
