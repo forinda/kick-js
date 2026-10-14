@@ -4,7 +4,14 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { HttpException } from '../../core/errors'
-import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
+import {
+  DEFAULT_BODY_LIMIT,
+  classifyMediaType,
+  parseByteSize,
+  parseForm,
+  readBodyText,
+  unsupportedMediaTypeError,
+} from '../body-policy'
 import { RequestContext } from '../context'
 import { publishMatchedRoute } from '../runtime'
 import { applyHandlerResult } from '../reply'
@@ -83,7 +90,9 @@ export function readThrough(shim: WebRequestShim, carry: object): WebRequestShim
 export function compileWebRoute(
   entry: RouteEntry,
   hooks?: WebRouteHooks,
+  options: { bodyLimit?: number } = {},
 ): (invocation: WebRouteInvocation) => Promise<Response> {
+  const bodyLimit = options.bodyLimit ?? parseByteSize(DEFAULT_BODY_LIMIT)
   const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
   const upload = entry.meta.upload && entry.meta.upload.mode !== 'none' ? entry.meta.upload : null
 
@@ -133,7 +142,13 @@ export function compileWebRoute(
       // Read once — a Request body is a stream and cannot be consumed twice.
       // A read that fails (client aborted mid-flight) is treated as an absent
       // body: there is nobody left to answer, and it is not a malformed one.
-      const raw = request.body === null ? '' : await request.text().catch(() => '')
+      // Past the limit is a 413, held like a parse failure below.
+      let raw = ''
+      try {
+        raw = await readBodyText(request, bodyLimit)
+      } catch (err) {
+        if (err instanceof HttpException) bodyError = err
+      }
 
       // An empty body is ABSENT, not unparseable — the same call the node h3
       // runtime makes on `content-length: 0`. Distinguishing the two is the
@@ -157,7 +172,7 @@ export function compileWebRoute(
             )
           }
         } else if (kind === 'urlencoded') {
-          req.body = Object.fromEntries(new URLSearchParams(raw))
+          req.body = parseForm(raw)
         } else {
           req.body = raw
         }

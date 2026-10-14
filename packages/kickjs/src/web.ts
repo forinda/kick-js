@@ -36,6 +36,7 @@ import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
+import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
 import { buildMountPath } from './core/path'
@@ -109,6 +110,11 @@ export interface CreateWebAppOptions {
    * ctx-style handlers are accepted (no connect/express middleware here).
    */
   middlewares?: MiddlewareHandler[]
+  /**
+   * Largest request body parsed, as bytes or `'1mb'`-style (default `'1mb'`)
+   * — parity with `bootstrap({ jsonLimit })`. A larger body answers 413.
+   */
+  jsonLimit?: string | number
 }
 
 export interface WebApp {
@@ -164,6 +170,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   const apiPrefix = options.apiPrefix ?? '/api'
   const defaultVersion = options.defaultVersion ?? 1
   const globalMiddleware = options.middlewares ?? []
+  const bodyLimit = parseByteSize(options.jsonLimit ?? DEFAULT_BODY_LIMIT)
 
   const globalSources: SourcedRegistration[] = (options.contributors ?? []).map(
     (registration): SourcedRegistration => ({
@@ -215,7 +222,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           if (globalMiddleware.length > 0) {
             entry.middlewares = [...globalMiddleware, ...entry.middlewares]
           }
-          const run = compileWebRoute(entry)
+          const run = compileWebRoute(entry, undefined, { bodyLimit })
           app.on(entry.method, url, (event: H3EventLike) =>
             run({
               request: event.req,

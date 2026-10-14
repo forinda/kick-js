@@ -18,7 +18,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
 import { HttpException } from '../../core/errors'
-import { unsupportedMediaTypeError } from '../body-policy'
+import { parseForm, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { publishMatchedRoute, stringifyJson } from '../runtime'
 import { applyHandlerResult } from '../reply'
@@ -50,6 +50,7 @@ interface FastifyReplyLike {
   code(statusCode: number): FastifyReplyLike
   send(payload?: unknown): FastifyReplyLike
   header(name: string, value: unknown): FastifyReplyLike
+  removeHeader(name: string): FastifyReplyLike
   type(contentType: string): FastifyReplyLike
   serializer(fn: (payload: unknown) => string): FastifyReplyLike
   getHeader(name: string): unknown
@@ -164,7 +165,14 @@ class FastifyReplyDriver implements RuntimeResponse {
     this.reply.type(contentType)
     return this
   }
+  getHeader(name: string): unknown {
+    return this.reply.getHeader(name)
+  }
   setHeader(name: string, value: unknown): this {
+    // Replace, as node's `res.setHeader` and the web driver do. Fastify's
+    // `header()` appends for `set-cookie`, so `setCookie()` — which passes the
+    // whole list each time — sent the first cookie twice.
+    this.reply.removeHeader(name)
     this.reply.header(name, value)
     return this
   }
@@ -357,6 +365,8 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         // `routerOptions` (Fastify 5+; top-level `ignoreTrailingSlash` is
         // deprecated, removed in Fastify 6).
         routerOptions: { ignoreTrailingSlash: true },
+        // `jsonLimit`, which Fastify otherwise ignores in favour of its own 1 MiB.
+        ...(options.bodyLimit !== undefined ? { bodyLimit: options.bodyLimit } : {}),
         // Express semantics for every form. Fastify takes a predicate as-is,
         // but reads a hop count as "trust nothing", where Express trusts that
         // many hops from the socket.
@@ -404,7 +414,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
           'application/x-www-form-urlencoded',
           { parseAs: 'string' },
           (_req: FastifyRequestLike, body: string | Buffer, done: FastifyParserDone) => {
-            done(null, Object.fromEntries(new URLSearchParams(body as string)))
+            done(null, parseForm(body as string))
           },
         )
         // `text/*` beyond Fastify's built-in `text/plain`. Raw string, never
