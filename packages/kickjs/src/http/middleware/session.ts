@@ -44,8 +44,20 @@ export interface Session {
 }
 
 export interface SessionOptions {
-  /** Secret used to sign the session cookie (required) */
-  secret: string
+  /**
+   * Secret that signs the session cookie — or, with `store: 'cookie'`,
+   * encrypts it (required).
+   *
+   * Pass a list to rotate without logging everyone out: the first secret signs
+   * new cookies, every secret is accepted, and a cookie made with an older one
+   * is re-issued with the first. Drop the old secret once sessions have moved
+   * over (after `maxAge`).
+   *
+   * ```ts
+   * session({ secret: [process.env.SESSION_SECRET!, process.env.SESSION_SECRET_OLD!] })
+   * ```
+   */
+  secret: string | string[]
   /** Cookie name (default: 'kick.sid') */
   cookieName?: string
   /** Session max age in milliseconds (default: 86400000 = 24h) */
@@ -134,29 +146,40 @@ class MemoryStore implements SessionStore {
 
 // ── Cookie Signing ────────────────────────────────────────────────────
 
+/** `secret` as a non-empty list, newest first. */
+function secretList(secret: string | string[]): string[] {
+  const list = Array.isArray(secret) ? secret : [secret]
+  if (list.length === 0 || list.some((s) => typeof s !== 'string' || s.length === 0)) {
+    throw new Error('session(): `secret` must be a non-empty string or list of strings')
+  }
+  return list
+}
+
 function sign(value: string, secret: string): string {
   const signature = createHmac('sha256', secret).update(value).digest('base64url')
   return `s:${value}.${signature}`
 }
 
-function unsign(signed: string, secret: string): string | false {
+/**
+ * The signed value, and whether it was signed with an older secret than the
+ * first (so the caller re-issues it); false when no secret verifies it.
+ */
+function unsign(signed: string, secrets: string[]): { value: string; stale: boolean } | false {
   if (!signed.startsWith('s:')) return false
   const raw = signed.slice(2)
   const dotIndex = raw.lastIndexOf('.')
   if (dotIndex === -1) return false
 
   const value = raw.slice(0, dotIndex)
-  const providedSig = raw.slice(dotIndex + 1)
-  const expectedSig = createHmac('sha256', secret).update(value).digest('base64url')
+  const provided = Buffer.from(raw.slice(dotIndex + 1))
 
-  const a = Buffer.from(providedSig)
-  const b = Buffer.from(expectedSig)
-
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return false
+  for (const [index, secret] of secrets.entries()) {
+    const expected = Buffer.from(createHmac('sha256', secret).update(value).digest('base64url'))
+    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+      return { value, stale: index > 0 }
+    }
   }
-
-  return value
+  return false
 }
 
 // ── Middleware Factory ────────────────────────────────────────────────
@@ -188,13 +211,14 @@ function unsign(signed: string, secret: string): string | false {
 export function session(options: SessionOptions) {
   if (options.store === 'cookie') return cookieSession(options)
   const {
-    secret,
     cookieName = 'kick.sid',
     maxAge = 86_400_000,
     rolling = false,
     saveUninitialized = true,
     cookie: cookieOpts = {},
   } = options
+  const secrets = secretList(options.secret)
+  const secret = secrets[0]
   const store = (options.store as SessionStore | undefined) ?? new MemoryStore()
 
   const cookieDefaults = {
@@ -216,11 +240,14 @@ export function session(options: SessionOptions) {
     let sid: string | false = false
     let sessionData: SessionData | null = null
     let isNew = false
+    let staleSignature = false
 
     // Attempt to recover existing session
     if (signedCookie) {
-      sid = unsign(signedCookie, secret)
-      if (sid) {
+      const unsigned = unsign(signedCookie, secrets)
+      if (unsigned) {
+        sid = unsigned.value
+        staleSignature = unsigned.stale
         sessionData = await store.get(sid)
       }
     }
@@ -289,8 +316,9 @@ export function session(options: SessionOptions) {
       }
     })
 
-    // Rolling: refresh cookie on every response
-    if (rolling && !isNew) {
+    // Rolling refreshes the cookie on every response; a cookie signed with an
+    // older secret is re-signed with the current one.
+    if (!isNew && (rolling || staleSignature)) {
       setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
     }
 
@@ -313,9 +341,15 @@ interface CookiePayload {
   e: number
 }
 
-/** AES-256-GCM, with the cookie name as associated data: `v1.<iv|tag|ciphertext>`. */
-function sealer(secret: string, cookieName: string) {
-  const key = Buffer.from(hkdfSync('sha256', secret, 'kick.session', 'cookie-store-v1', 32))
+/**
+ * AES-256-GCM, with the cookie name as associated data: `v1.<iv|tag|ciphertext>`.
+ * Seals with the first secret's key; opens with any of them.
+ */
+function sealer(secrets: string[], cookieName: string) {
+  const keys = secrets.map((secret) =>
+    Buffer.from(hkdfSync('sha256', secret, 'kick.session', 'cookie-store-v1', 32)),
+  )
+  const key = keys[0]
   const aad = Buffer.from(cookieName)
   return {
     seal(payload: CookiePayload): string {
@@ -324,23 +358,34 @@ function sealer(secret: string, cookieName: string) {
       const body = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()])
       return `v1.${Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64url')}`
     },
-    /** The payload, or null for anything forged, altered, expired or malformed. */
-    open(value: string): CookiePayload | null {
+    /**
+     * The payload and whether an older secret's key opened it, or null for
+     * anything forged, altered, expired or malformed.
+     */
+    open(value: string): { payload: CookiePayload; stale: boolean } | null {
       if (!value.startsWith('v1.')) return null
+      let raw: Buffer
       try {
-        const raw = Buffer.from(value.slice(3), 'base64url')
-        if (raw.length < 29) return null
-        const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12))
-          .setAAD(aad)
-          .setAuthTag(raw.subarray(12, 28))
-        const json = Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()])
-        const payload = JSON.parse(json.toString('utf8')) as CookiePayload
-        if (typeof payload?.i !== 'string' || typeof payload.e !== 'number') return null
-        if (!payload.d || typeof payload.d !== 'object') return null
-        return payload.e > Date.now() ? payload : null
+        raw = Buffer.from(value.slice(3), 'base64url')
       } catch {
         return null
       }
+      if (raw.length < 29) return null
+      for (const [index, k] of keys.entries()) {
+        try {
+          const decipher = createDecipheriv('aes-256-gcm', k, raw.subarray(0, 12))
+            .setAAD(aad)
+            .setAuthTag(raw.subarray(12, 28))
+          const json = Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()])
+          const payload = JSON.parse(json.toString('utf8')) as CookiePayload
+          if (typeof payload?.i !== 'string' || typeof payload.e !== 'number') return null
+          if (!payload.d || typeof payload.d !== 'object') return null
+          return payload.e > Date.now() ? { payload, stale: index > 0 } : null
+        } catch {
+          // Not this key (the auth tag fails) — try the next.
+        }
+      }
+      return null
     },
   }
 }
@@ -355,14 +400,13 @@ type HeaderWriter = (...args: unknown[]) => unknown
  */
 function cookieSession(options: SessionOptions) {
   const {
-    secret,
     cookieName = 'kick.sid',
     maxAge = 86_400_000,
     rolling = false,
     saveUninitialized = true,
     cookie: cookieOpts = {},
   } = options
-  const { seal, open } = sealer(secret, cookieName)
+  const { seal, open } = sealer(secretList(options.secret), cookieName)
   const cookieDefaults = {
     httpOnly: cookieOpts.httpOnly ?? true,
     secure: cookieOpts.secure ?? isProduction(),
@@ -378,13 +422,16 @@ function cookieSession(options: SessionOptions) {
       const header = req.headers.cookie
       cookies = header ? parseCookieHeader(header) : {}
     }
-    const existing = cookies[cookieName] ? open(cookies[cookieName]) : null
+    const opened = cookies[cookieName] ? open(cookies[cookieName]) : null
+    const existing = opened?.payload ?? null
     const isNew = !existing
 
     let id = existing?.i ?? randomUUID()
     let destroyed = false
     // What the browser already holds, to skip rewriting an unchanged cookie.
-    let written = existing ? JSON.stringify(existing.d) : undefined
+    // A cookie sealed with an older secret counts as nothing held, so it is
+    // rewritten with the current one.
+    let written = existing && !opened?.stale ? JSON.stringify(existing.d) : undefined
 
     const write = (force = false) => {
       if (res.headersSent) return

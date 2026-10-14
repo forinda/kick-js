@@ -64,13 +64,19 @@ import { ROUTE_SLOT } from '../core/route-flag'
 import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import type { ValidationErrorFactory } from './middleware/validate'
+import { allowedHosts, type AllowedHostsOptions } from './middleware/allowed-hosts'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
   _setExternalContributorSources,
   assertRouteUnique,
   buildRouteTable,
 } from './router-builder'
-import { HEALTH_PROBE, healthModule, type HealthModuleConfig } from './health-module'
+import {
+  HEALTH_PROBE,
+  createHealthChecks,
+  healthModule,
+  type HealthModuleConfig,
+} from './health-module'
 import { expressRuntime } from './runtimes/express'
 import { createLoopback, type Loopback } from './loopback'
 import type {
@@ -130,6 +136,17 @@ export interface ServerOptions {
   tls?: tls.SecureContextOptions & tls.TlsOptions
   /** Serve HTTP/2 with HTTP/1.1 fallback. Requires `tls` and an HTTP/2-capable runtime. */
   http2?: boolean
+  /**
+   * Milliseconds an idle keep-alive connection stays open. Default 65000.
+   * Keep it ABOVE your load balancer's idle timeout (AWS ALB: 60s): when the
+   * server closes a connection the balancer is about to reuse, that request
+   * fails with a 502. Node's own default is 5s.
+   */
+  keepAliveTimeout?: number
+  /** Milliseconds to receive the request headers. Default `keepAliveTimeout + 1000`. */
+  headersTimeout?: number
+  /** Milliseconds to receive the whole request. Default 300000; 0 disables. */
+  requestTimeout?: number
 }
 
 export interface ApplicationOptions {
@@ -373,6 +390,15 @@ export interface ApplicationOptions {
   shutdownTimeout?: number
 
   /**
+   * Milliseconds to keep serving after shutdown begins, with `/health/ready`
+   * already answering 503, before the server stops accepting connections.
+   * Load balancers and Kubernetes endpoints take a few seconds to notice an
+   * unready instance; closing at once refuses the requests still routed here.
+   * Default 0. Not counted against `shutdownTimeout`.
+   */
+  preStopDelay?: number
+
+  /**
    * Enable cluster mode for multi-core utilization.
    *
    * When enabled, the primary process forks worker processes that share the
@@ -501,6 +527,16 @@ export interface ApplicationOptions {
   security?: {
     /** Auto-inject helmet security headers. Default: true */
     helmet?: boolean
+    /**
+     * Answer only requests for these hosts — `allowedHosts()` mounted first.
+     * `'.example.com'` matches the domain and its subdomains. The health
+     * probes are exempt: orchestrators send them to the instance's IP.
+     *
+     * ```ts
+     * bootstrap({ security: { allowedHosts: ['example.com', '.example.com'] } })
+     * ```
+     */
+    allowedHosts?: string[] | AllowedHostsOptions
   }
 }
 
@@ -894,6 +930,22 @@ export class Application {
 
     const ctx = this.adapterCtx()
 
+    // ── 0. Host allow-list, before anything is mounted ─────────────────
+    // First, ahead of adapter beforeMount: routes an adapter registers there
+    // (docs UIs, devtools, the cron trigger) would otherwise answer on
+    // Express before the check runs.
+    const hostList = this.options.security?.allowedHosts
+    if (hostList) {
+      const hostOptions = Array.isArray(hostList) ? { hosts: hostList } : hostList
+      this.runtime.useConnect(
+        this.app,
+        allowedHosts({
+          ...hostOptions,
+          ignorePaths: [...(hostOptions.ignorePaths ?? []), '/health/live', '/health/ready'],
+        }),
+      )
+    }
+
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
       await this.callHook(adapter.beforeMount?.bind(adapter), ctx, adapter.name)
@@ -1020,15 +1072,11 @@ export class Application {
     if (this.options.health !== false) {
       this.container.registerInstance(HEALTH_PROBE, {
         isDraining: () => this._draining,
-        checks: async () => {
-          const withCheck = this.adapters.filter((a) => a.onHealthCheck)
-          const settled = await Promise.allSettled(withCheck.map((a) => a.onHealthCheck!()))
-          return settled.map((c, i) =>
-            c.status === 'fulfilled'
-              ? c.value
-              : { name: withCheck[i].name ?? 'unknown', status: 'down' as const },
-          )
-        },
+        checks: createHealthChecks(() => this.adapters, {
+          timeoutMs:
+            typeof this.options.health === 'object' ? this.options.health.checkTimeout : undefined,
+          onSlow: (name, ms) => log.warn(`Health check '${name}' took ${ms}ms`),
+        }),
       })
       moduleRegistry.mount(healthModule(this.options.health === true ? {} : this.options.health))
     }
@@ -1441,6 +1489,21 @@ export class Application {
 
   /** The production server for {@link ApplicationOptions.server}. */
   private createNodeServer(): KickServer {
+    const server = this.createBareServer()
+    const options = this.options.server ?? {}
+    const keepAlive = options.keepAliveTimeout ?? 65_000
+    // HTTP/2 sessions have their own lifetime; these apply to HTTP/1.1 servers.
+    if ('keepAliveTimeout' in server) {
+      server.keepAliveTimeout = keepAlive
+      // Must exceed keepAliveTimeout, or Node can drop a reused connection
+      // while its next request's headers are arriving.
+      server.headersTimeout = options.headersTimeout ?? keepAlive + 1000
+      server.requestTimeout = options.requestTimeout ?? 300_000
+    }
+    return server
+  }
+
+  private createBareServer(): KickServer {
     const handler = this.runtime.nodeHandler(this.app)
     const { tls, http2: useHttp2 } = this.options.server ?? {}
     if (useHttp2) {
@@ -1518,6 +1581,13 @@ export class Application {
     }
     this._shutdownInitiated = true
     this._draining = true
+
+    // Readiness already answers 503; keep serving while the balancers notice.
+    const preStopDelay = this.options.preStopDelay ?? 0
+    if (closeServer && preStopDelay > 0) {
+      log.debug(`Waiting ${preStopDelay}ms for load balancers to stop routing here...`)
+      await new Promise((resolve) => setTimeout(resolve, preStopDelay))
+    }
 
     log.debug('Shutting down — draining in-flight requests...')
 

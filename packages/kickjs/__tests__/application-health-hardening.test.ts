@@ -45,4 +45,48 @@ describe('hardened defaults + health endpoints (via the runtime)', () => {
     const res = await request(app.getExpressApp()).get('/health/ready').expect(503)
     expect(res.body.status).toBe('degraded')
   })
+
+  it('counts a check that does not answer in time as down, without hanging the probe', async () => {
+    const hung: AppAdapter = {
+      name: 'Hung',
+      onHealthCheck: () => new Promise(() => {}),
+    }
+    const throws: AppAdapter = {
+      name: 'Throws',
+      onHealthCheck: () => {
+        throw new Error('sync')
+      },
+    }
+    const app = new Application({
+      modules: [],
+      adapters: [hung, throws],
+      health: { checkTimeout: 50 },
+    })
+    await app.setup()
+
+    const started = Date.now()
+    const res = await request(app.getExpressApp()).get('/health/ready').expect(503)
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(res.body.checks).toEqual([
+      { name: 'Hung', status: 'down', reason: 'timeout' },
+      { name: 'Throws', status: 'down', reason: 'error' },
+    ])
+  })
+
+  it('shares one run between probes within a second', async () => {
+    let runs = 0
+    const counted: AppAdapter = {
+      name: 'Counted',
+      onHealthCheck: async () => {
+        runs++
+        return { name: 'Counted', status: 'up' }
+      },
+    }
+    const app = new Application({ modules: [], adapters: [counted] })
+    await app.setup()
+
+    await request(app.getExpressApp()).get('/health/ready').expect(200)
+    await request(app.getExpressApp()).get('/health/ready').expect(200)
+    expect(runs).toBe(1)
+  })
 })

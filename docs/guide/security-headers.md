@@ -128,3 +128,37 @@ cors({
 ```ts
 import { cors } from '@forinda/kickjs/middleware/cors'
 ```
+
+# Allowed Hosts
+
+`Host` is chosen by the client. Code that builds absolute URLs from it — password-reset and verification links, redirects, `Location` headers — hands an attacker a link to their own domain, and a shared cache can store a response built for the wrong host. Name the hosts your app serves, and every other request answers `400` problem details:
+
+```ts
+bootstrap({
+  modules,
+  security: { allowedHosts: ['example.com', '.example.com'] },
+})
+```
+
+| Pattern          | Matches                           |
+| ---------------- | --------------------------------- |
+| `'example.com'`  | exactly `example.com`             |
+| `'.example.com'` | `example.com` and every subdomain |
+| `'*'`            | anything — turns the check off    |
+
+Ports are ignored, and names compare case-insensitively.
+
+- **Health probes are exempt.** Kubernetes and most platforms probe the instance's IP, so `GET`/`HEAD` on `/health/live` and `/health/ready` answer whatever the host. The check runs before anything else is mounted, including routes adapters register.
+- **Behind a proxy that rewrites `Host`**, read the original from `X-Forwarded-Host` — only when your proxy sets it, since clients can send it too. Every value in the header must be allowed, since frameworks disagree about which one to read. Without this option the header is removed from the request, so nothing reads a host the check didn't see:
+
+  ```ts
+  security: { allowedHosts: { hosts: ['example.com'], trustForwardedHost: true } }
+  ```
+
+- **As middleware**, `allowedHosts()` takes the same options plus `ignorePaths` (exempt for `GET` and `HEAD` only), for apps that mount their own chain:
+
+  ```ts
+  import { allowedHosts } from '@forinda/kickjs'
+
+  bootstrap({ middlewares: [allowedHosts(['example.com']) /* , … */] })
+  ```

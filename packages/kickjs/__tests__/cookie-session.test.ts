@@ -99,6 +99,34 @@ for (const [name, runtime] of RUNTIMES)
       expect(cookieOf(me)).toBeUndefined()
     })
 
+    it('rotates the secret without dropping sessions', async () => {
+      const login = await (
+        await instance(runtime, { secret: 'old-secret-old-secret' })
+      )
+        .post('/login')
+        .expect(200)
+      const oldJar = cookieOf(login)!.split(';')[0]!
+
+      const rotated = { secret: ['new-secret-new-secret', 'old-secret-old-secret'] }
+      const me = await (
+        await instance(runtime, rotated)
+      )
+        .get('/me')
+        .set('Cookie', oldJar)
+        .expect(200)
+      expect(me.body.userId).toBe('u1')
+      // Re-sealed with the new secret, though nothing changed.
+      const newJar = cookieOf(me)!.split(';')[0]!
+      expect(newJar).not.toBe(oldJar)
+
+      // The new secret alone now reads it; the old cookie no longer works.
+      const onlyNew = { secret: 'new-secret-new-secret' }
+      const again = await (await instance(runtime, onlyNew)).get('/me').set('Cookie', newJar)
+      expect(again.body.userId).toBe('u1')
+      const stale = await (await instance(runtime, onlyNew)).get('/me').set('Cookie', oldJar)
+      expect(stale.body.userId).toBeNull()
+    })
+
     it('starts a fresh session for a cookie it did not write', async () => {
       const login = await (await instance(runtime)).post('/login').expect(200)
       const jar = cookieOf(login)!.split(';')[0]!

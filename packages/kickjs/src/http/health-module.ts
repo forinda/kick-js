@@ -36,6 +36,8 @@ import { reply } from './reply'
 export interface HealthCheckResult {
   name: string
   status: 'up' | 'down'
+  /** Why a check counts as down when it didn't answer for itself. */
+  reason?: 'timeout' | 'error'
 }
 
 /**
@@ -73,18 +75,89 @@ export interface HealthModuleConfig {
    * which silently stops matching if the probe paths ever move.
    */
   flags?: RouteFlagDeclarations
+  /**
+   * Milliseconds each `onHealthCheck()` gets before it counts as down
+   * (`reason: 'timeout'`). Default 2000. Keeps one hung dependency from
+   * hanging the probe itself, which the orchestrator would then time out.
+   */
+  checkTimeout?: number
+}
+
+/** A check slower than this share of its timeout is logged as slow. */
+const SLOW_SHARE = 0.5
+/** Probes from several kubelets or balancers within this window share one run. */
+const CACHE_MS = 1000
+
+/**
+ * The adapters' `onHealthCheck()`s, run with a timeout each, shared by calls
+ * within a second of one another, and logged when slow.
+ */
+export function createHealthChecks(
+  sources: () => ReadonlyArray<{ name?: string; onHealthCheck?: () => Promise<HealthCheckResult> }>,
+  options: { timeoutMs?: number; onSlow?: (name: string, ms: number) => void } = {},
+): () => Promise<HealthCheckResult[]> {
+  const timeoutMs = options.timeoutMs ?? 2000
+  let cached: { at: number; result: Promise<HealthCheckResult[]> } | undefined
+
+  const runOne = async (source: {
+    name?: string
+    onHealthCheck?: () => Promise<HealthCheckResult>
+  }): Promise<HealthCheckResult> => {
+    const name = source.name ?? 'unknown'
+    const started = Date.now()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<HealthCheckResult>((resolve) => {
+      // Referenced on purpose: an unref'd timer lets a process with nothing
+      // else pending exit before a hung check is reported. `finally` clears it.
+      timer = setTimeout(() => resolve({ name, status: 'down', reason: 'timeout' }), timeoutMs)
+    })
+    try {
+      return await Promise.race([
+        // Through a then(): a check that throws synchronously is down too.
+        Promise.resolve()
+          .then(() => source.onHealthCheck!())
+          .catch((): HealthCheckResult => ({
+            name,
+            status: 'down',
+            reason: 'error',
+          })),
+        timedOut,
+      ])
+    } finally {
+      clearTimeout(timer)
+      const ms = Date.now() - started
+      if (ms >= timeoutMs * SLOW_SHARE) options.onSlow?.(name, ms)
+    }
+  }
+
+  return () => {
+    const now = Date.now()
+    if (cached && now - cached.at < CACHE_MS) return cached.result
+    const result = Promise.all(
+      sources()
+        .filter((s) => s.onHealthCheck)
+        .map(runOne),
+    )
+    cached = { at: now, result }
+    return result
+  }
 }
 
 @Controller()
 export class HealthController {
   constructor(private readonly probe: HealthProbe) {}
 
-  /** Liveness: is the process up and not shutting down. */
+  /**
+   * Liveness: is the process up. Stays 200 while draining — an orchestrator
+   * restarts a container whose liveness fails, which would kill a graceful
+   * shutdown partway through. Readiness is what turns traffic away.
+   */
   @Get('/live')
   live() {
-    return this.probe.isDraining()
-      ? reply(503, { status: 'draining', uptime: process.uptime() })
-      : reply(200, { status: 'ok', uptime: process.uptime() })
+    return reply(200, {
+      status: this.probe.isDraining() ? 'draining' : 'ok',
+      uptime: process.uptime(),
+    })
   }
 
   /** Readiness: is every adapter's dependency answering. */
