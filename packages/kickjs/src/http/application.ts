@@ -1595,6 +1595,7 @@ export class Application {
         ...this.adapters.map((adapter) =>
           timeBoxed(`Adapter '${adapter.name}'`, () => adapter.shutdown?.()),
         ),
+        timeBoxed(`Runtime '${this.runtime.name}'`, () => this.runtime.close?.(this.app)),
       ])
 
       // A reload must leave the shared dev server listening. If a hook closed

@@ -4,7 +4,6 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { HttpException } from '../../core/errors'
-import { isProduction } from '../../core/is-production'
 import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { publishMatchedRoute } from '../runtime'
@@ -15,9 +14,8 @@ import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload-config'
 import type { RouteEntry, RuntimeResponse } from '../runtime'
 import { WebRequestShim, WebResponseDriver } from './driver'
-import { createLogger, describeError } from '../../core/logger'
+import { errorHandler, notFoundHandler } from '../middleware/error-handler'
 
-const log = createLogger('WebPipeline')
 const NOOP_NEXT = (): void => {}
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -45,39 +43,11 @@ export interface WebRouteHooks {
   onError?: (err: unknown, req: WebRequestShim, res: WebResponseDriver) => void | Promise<void>
 }
 
-/**
- * Fallback error shape when no engine error handler settles the response.
- *
- * This path used to be completely silent: a bare
- * `{ error: 'Internal Server Error' }` with no log line anywhere, so a
- * failure that reached here left no trace on either side. It is a
- * last-resort branch, which is exactly when diagnostics matter most.
- */
-function defaultErrorResponse(err: unknown, driver: WebResponseDriver): void {
-  const status =
-    typeof (err as { status?: number })?.status === 'number'
-      ? (err as { status: number }).status
-      : typeof (err as { statusCode?: number })?.statusCode === 'number'
-        ? (err as { statusCode: number }).statusCode
-        : 500
-
-  if (status >= 500) {
-    log.error(err, `Unhandled error in web pipeline — ${describeError(err)}`)
-    const stack = (err as Error)?.stack
-    driver.status(status).json({
-      error: 'Internal Server Error',
-      ...(isProduction()
-        ? {}
-        : {
-            message: describeError(err),
-            ...(typeof stack === 'string' ? { stack: stack.split('\n') } : {}),
-          }),
-    })
-    return
-  }
-
-  driver.status(status).json({ error: (err as Error)?.message ?? 'Request failed' })
-}
+// The same handlers Express and Fastify answer with, so an error or a request
+// nothing answered has one shape on every engine: RFC 9457 problem details,
+// the error's own headers, `requestId` on a 500.
+const builtInError = errorHandler()
+const builtInNotFound = notFoundHandler()
 
 function decodeParams(params: Record<string, string>): Record<string, string> {
   const decoded: Record<string, string> = {}
@@ -196,7 +166,7 @@ export function compileWebRoute(
 
     // Reuse the id `requestId()` middleware already gave the request, so the
     // response header, the route's ctx and observers agree on one id.
-    const store = createRequestStore(req.requestId ?? req.headers['x-request-id'])
+    const store = createRequestStore(req.requestId || req.headers['x-request-id'])
     req.requestId = store.requestId
 
     const driver = new WebResponseDriver(request.signal)
@@ -260,12 +230,12 @@ export function compileWebRoute(
       } catch (err) {
         if (!driver.settled) {
           if (hooks?.onError) await hooks.onError(err, req, driver)
-          if (!driver.settled) defaultErrorResponse(err, driver)
+          if (!driver.settled) await builtInError(err, req, driver, NOOP_NEXT)
         }
       }
       if (!driver.settled) {
-        // Pipeline finished without responding — canonical 404 shape.
-        driver.status(404).json({ error: 'Not Found' })
+        // Pipeline finished without responding — the catch-all's 404.
+        builtInNotFound(req, driver, NOOP_NEXT)
       }
       return await driver.ready
     } finally {

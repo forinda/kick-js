@@ -180,6 +180,31 @@ for (const rt of RUNTIMES) {
       await request(app.handle.bind(app)).get('/api/v1/nf/nope').expect(404)
     })
 
+    it('answers with an X-Request-Id, preferring an id already assigned', async () => {
+      @Controller()
+      class C {
+        @Get('/id')
+        id(ctx: RequestContext) {
+          ctx.json({ id: ctx.requestId })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/rid', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const fresh = await request(app.handle.bind(app)).get('/api/v1/rid/id').expect(200)
+      expect(fresh.headers['x-request-id']).toBe(fresh.body.id)
+
+      const sent = await request(app.handle.bind(app))
+        .get('/api/v1/rid/id')
+        .set('X-Request-Id', 'from-client')
+        .expect(200)
+      expect(sent.body.id).toBe('from-client')
+      expect(sent.headers['x-request-id']).toBe('from-client')
+    })
+
     it('percent-decodes route params', async () => {
       @Controller()
       class C {

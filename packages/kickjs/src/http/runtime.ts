@@ -347,6 +347,9 @@ export interface HttpRuntime<TApp = unknown> {
   /** Terminal error handler. */
   setErrorHandler(app: TApp, mw: ConnectMiddleware): void
 
+  /** Release the engine app on shutdown (Fastify runs its `onClose` hooks). */
+  close?(app: TApp): void | Promise<void>
+
   readonly capabilities: RuntimeCapabilities
 }
 

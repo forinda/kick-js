@@ -72,6 +72,7 @@ interface FastifyRequestLike {
 }
 type FastifyHandler = (request: FastifyRequestLike, reply: FastifyReplyLike) => void | Promise<void>
 interface FastifyAppLike {
+  close(): Promise<void>
   register(plugin: unknown, opts?: unknown): Promise<void> | FastifyAppLike
   use(path: unknown, mw?: unknown): unknown
   route(opts: { method: string; url: string; handler: FastifyHandler }): unknown
@@ -118,7 +119,10 @@ const NOOP_NEXT = (): void => {}
 function settleOrFail(reply: FastifyReplyLike, returned: unknown): void {
   if (typeof (returned as PromiseLike<void> | undefined)?.then !== 'function') return
   Promise.resolve(returned).then(undefined, () => {
-    if (!reply.sent && !reply.raw.headersSent) reply.code(500).send()
+    if (!reply.sent && !reply.raw.headersSent) {
+      // The 500 body every engine's built-in error handler starts from.
+      reply.code(500).send({ message: 'Internal Server Error' })
+    }
   })
 }
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
@@ -265,12 +269,15 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     }
 
     const headerId = raw.headers['x-request-id']
-    const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) || raw.requestId
+    // An id already assigned (requestId() middleware) wins over the header,
+    // as on Express and h3.
+    const requestId = raw.requestId || (Array.isArray(headerId) ? headerId[0] : headerId)
     const store = createRequestStore(requestId)
     // Propagate the resolved id back onto the raw request so anything reading
     // `req.requestId` inside the frame (e.g. request-logger) matches the store
     // and the X-Request-Id response header — parity with Express.
     raw.requestId = store.requestId
+    if (!reply.getHeader('x-request-id')) reply.header('x-request-id', store.requestId)
 
     // @PreDestroy teardown for REQUEST-scoped instances once the response
     // closes (finished or aborted) — parity with requestScopeMiddleware.
@@ -535,6 +542,11 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
           ),
         )
       })
+    },
+
+    close(app) {
+      // Runs the instance's onClose hooks (plugins registered on it).
+      return app.close()
     },
 
     capabilities: {

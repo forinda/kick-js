@@ -26,9 +26,11 @@ import type {
 } from '../runtime'
 import { compileWebRoute, readThrough, type WebRouteHooks } from '../web/handler'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
-import { createLogger, describeError } from '../../core/logger'
-import { isProduction } from '../../core/is-production'
+import { createLogger } from '../../core/logger'
+import { errorHandler, notFoundHandler } from '../middleware/error-handler'
 
+const builtInError = errorHandler()
+const builtInNotFound = notFoundHandler()
 const log = createLogger('H3Runtime')
 
 const peerRequire = createRequire(import.meta.url)
@@ -110,6 +112,8 @@ async function runConnectTerminal(
   const carry = event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req
   const req = carry ? readThrough(shim, carry) : shim
   const driver = new WebResponseDriver(event.req.signal)
+  // A failing handler is an error in its own right: answered as one below.
+  let failure = err
   if (mw) {
     const returned =
       err !== undefined
@@ -126,30 +130,17 @@ async function runConnectTerminal(
       try {
         await returned
       } catch (handlerErr) {
-        if (!driver.settled) {
-          log.error(
-            handlerErr,
-            `h3: the ${err !== undefined ? 'error' : 'not-found'} handler failed`,
-          )
-          driver.status(500).json({ error: 'Internal Server Error' })
-        }
+        log.error(handlerErr, `h3: the ${err !== undefined ? 'error' : 'not-found'} handler failed`)
+        failure ??= handlerErr
       }
     }
   }
   if (!driver.settled) {
-    if (err !== undefined) {
-      // The configured error handler ran but didn't settle the response
-      // (or there wasn't one). Emitting a bare 500 with no log entry
-      // makes this failure invisible on both sides — log it here, since
-      // by definition nothing downstream will.
-      log.error(err, `h3: error handler did not settle the response — ${describeError(err)}`)
-      driver.status(500).json({
-        error: 'Internal Server Error',
-        ...(isProduction() ? {} : { message: describeError(err) }),
-      })
-    } else {
-      driver.status(404).json({ error: 'Not Found' })
-    }
+    // The configured handler didn't answer (or there wasn't one): the
+    // built-in handlers answer, in the shape every other engine uses. The
+    // built-in error handler logs, so the failure still leaves a trace.
+    if (failure !== undefined) await builtInError(failure, req, driver, NOOP_NEXT)
+    else builtInNotFound(req, driver, NOOP_NEXT)
   }
   return driver.ready
 }
@@ -544,10 +535,8 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
                   NOOP_NEXT,
                 )
               } catch (handlerErr) {
-                if (!driver.settled) {
-                  log.error(handlerErr, 'h3: the error handler failed')
-                  driver.status(500).json({ error: 'Internal Server Error' })
-                }
+                log.error(handlerErr, 'h3: the error handler failed')
+                if (!driver.settled) await builtInError(err, req, driver, NOOP_NEXT)
               }
             },
           }
