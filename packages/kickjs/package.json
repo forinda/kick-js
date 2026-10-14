@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs",
   "version": "10.1.0",
-  "description": "Modern type-safe backend framework, powered by Vite. Built for developer experience, pluggable as you need \u2014 runs on Express, Fastify or h3.",
+  "description": "Modern type-safe backend framework, powered by Vite. Built for developer experience, pluggable as you need — runs on Express, Fastify or h3.",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -170,10 +170,12 @@
     "@fastify/middie": "^9.3.5",
     "@fastify/multipart": "^10.1.3",
     "@swc/core": "^1.16.13",
+    "@types/compression": "1.8.1",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
     "@types/node": "^26.6.5",
     "@types/serve-static": "^2.2.0",
+    "compression": "1.8.1",
     "croner": "^10.0.1",
     "fastify": "^5.12.5",
     "h3": "2.0.2",

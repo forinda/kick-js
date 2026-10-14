@@ -82,6 +82,9 @@ function toBytes(chunk: unknown): Uint8Array {
  * A class so the method table lives on a shared prototype (one allocation
  * per request — same rationale as the Fastify/h3 driver classes).
  */
+/** Edge-safe byte length — no `Buffer` on Workers. */
+const utf8 = new TextEncoder()
+
 export class WebResponseDriver implements RuntimeResponse {
   /** Resolves with the final (or streamed) Response. */
   readonly ready: Promise<Response>
@@ -200,6 +203,13 @@ export class WebResponseDriver implements RuntimeResponse {
     this._headersSent = true
     // 204/304 must not carry a body per the Response constructor contract.
     const bodyAllowed = this._status !== 204 && this._status !== 304
+    // A buffered body has a known length: say so, as the node runtimes do —
+    // no chunked encoding for a small reply, and middleware that decides by
+    // size (compression's threshold) can see it.
+    if (bodyAllowed && body != null && !this.headers.has('content-length')) {
+      const length = typeof body === 'string' ? utf8.encode(body).byteLength : body.byteLength
+      this.headers.set('content-length', String(length))
+    }
     this.resolveReady(
       new Response(bodyAllowed ? (body ?? null) : null, {
         status: this._status,

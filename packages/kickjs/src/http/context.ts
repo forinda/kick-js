@@ -1156,7 +1156,9 @@ export class RequestContext<
   sse<T = unknown>(): SseHandler<T> {
     this._response.writeHead(200, {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      // no-transform: compression middleware (and proxies) would otherwise
+      // buffer the stream in gzip, holding events back from the client.
+      'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     })
