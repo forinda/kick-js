@@ -22,6 +22,7 @@ import {
   createLogger,
   describeError,
 } from '../../core'
+import { isProduction as isProductionEnv } from '../../core/is-production'
 
 const log = createLogger('ErrorHandler')
 
@@ -114,7 +115,7 @@ export function notFoundHandler(routes: readonly MountedRoute[] = []) {
  * shape, so a client never has to branch on which one the app threw.
  */
 export function errorHandler() {
-  const isProduction = process.env.NODE_ENV === 'production'
+  const isProduction = isProductionEnv()
   return (err: any, req: ErrorRequest, res: RuntimeResponse, _next: () => void) => {
     // Don't write after headers are already sent
     if (res.headersSent) {

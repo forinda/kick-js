@@ -26,6 +26,7 @@ import {
   type PaginatedResponse,
   type TypedParsedQuery,
 } from './query'
+import { isProduction } from '../core/is-production'
 
 /**
  * Input shape for the typed problem-detail convenience methods on
@@ -196,7 +197,7 @@ function isPlainObjectOrArray(v: unknown): v is object {
  * visit. Primitives, `null`, and non-plain values pass through.
  */
 function makeReadOnlyProxy<T>(target: T, req: object, label: string): T {
-  if (process.env.NODE_ENV === 'production') return target
+  if (isProduction()) return target
   if (!isPlainObjectOrArray(target)) return target
 
   type Cache = WeakMap<object, unknown>
