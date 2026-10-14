@@ -84,17 +84,21 @@ describe.each(runtimes)('built-in health routes on $name', ({ make }) => {
     })
     const res = await agent.get('/health/ready')
     expect(res.status).toBe(503)
-    expect(res.body.checks).toEqual([{ name: 'flaky', status: 'down' }])
+    expect(res.body.checks).toEqual([{ name: 'flaky', status: 'down', reason: 'error' }])
   })
 
-  it.each(['/health/live', '/health/ready'])('%s reports draining, not 500', async (path) => {
+  it.each([
+    ['/health/live', 200],
+    ['/health/ready', 503],
+  ])('%s reports draining, not 500', async (path, status) => {
     // Both draining branches used the Express-only form. They fire during
     // shutdown, so a throw here is a 500 exactly when the orchestrator is
-    // deciding whether to keep routing traffic to this instance.
+    // deciding whether to keep routing traffic to this instance. Liveness
+    // stays 200 (a failing one restarts the container); readiness is 503.
     const { app, agent } = await boot()
     ;(app as unknown as { _draining: boolean })._draining = true
     const res = await agent.get(path)
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(status)
     expect(res.body.status).toBe('draining')
   })
 })
