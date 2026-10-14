@@ -71,7 +71,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Packages only — the docs site is not part of a scaffold.
       - run: pnpm turbo run build --filter='./packages/*'
-      - name: Scaffold, install, typecheck, build and boot
+      - name: Scaffold, install, typecheck, build, boot, deploy builds and Docker image
         env:
           SCENARIO: ${{ matrix.scenario }}
         run: node scripts/scaffold-matrix.mjs "$SCENARIO"

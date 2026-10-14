@@ -20,19 +20,19 @@ session middleware reuses it and will not re-parse.
 
 ## Options
 
-| Option              | Type           | Default              | Description                           |
-| ------------------- | -------------- | -------------------- | ------------------------------------- |
-| `secret`            | `string`       | **required**         | Secret for signing the session cookie |
-| `cookieName`        | `string`       | `'kick.sid'`         | Cookie name                           |
-| `maxAge`            | `number`       | `86400000` (24h)     | Session TTL in milliseconds           |
-| `rolling`           | `boolean`      | `false`              | Reset TTL on every request            |
-| `saveUninitialized` | `boolean`      | `true`               | Save empty sessions                   |
-| `cookie.httpOnly`   | `boolean`      | `true`               | HTTP-only cookie                      |
-| `cookie.secure`     | `boolean`      | `true` in production | Secure cookie                         |
-| `cookie.sameSite`   | `string`       | `'lax'`              | SameSite attribute                    |
-| `cookie.path`       | `string`       | `'/'`                | Cookie path                           |
-| `cookie.domain`     | `string`       | —                    | Cookie domain                         |
-| `store`             | `SessionStore` | In-memory            | Custom session store                  |
+| Option              | Type                       | Default              | Description                           |
+| ------------------- | -------------------------- | -------------------- | ------------------------------------- |
+| `secret`            | `string`                   | **required**         | Secret for signing the session cookie |
+| `cookieName`        | `string`                   | `'kick.sid'`         | Cookie name                           |
+| `maxAge`            | `number`                   | `86400000` (24h)     | Session TTL in milliseconds           |
+| `rolling`           | `boolean`                  | `false`              | Reset TTL on every request            |
+| `saveUninitialized` | `boolean`                  | `true`               | Save empty sessions                   |
+| `cookie.httpOnly`   | `boolean`                  | `true`               | HTTP-only cookie                      |
+| `cookie.secure`     | `boolean`                  | `true` in production | Secure cookie                         |
+| `cookie.sameSite`   | `string`                   | `'lax'`              | SameSite attribute                    |
+| `cookie.path`       | `string`                   | `'/'`                | Cookie path                           |
+| `cookie.domain`     | `string`                   | —                    | Cookie domain                         |
+| `store`             | `SessionStore \| 'cookie'` | In-memory            | Where the data lives — see below      |
 
 ## Using Sessions in Controllers
 
@@ -115,6 +115,21 @@ session({
 })
 ```
 
+## Cookie store
+
+The default store keeps sessions in the memory of one process. With more than one — several containers behind a load balancer, or Netlify and Vercel functions, where each request may land on a new instance — the next request can reach a process that has never seen the session.
+
+`store: 'cookie'` keeps the session data in the cookie itself, so every instance reads it, with nothing shared between them:
+
+```ts
+session({ secret: process.env.SESSION_SECRET!, store: 'cookie' })
+```
+
+- The data is **encrypted** (AES-256-GCM, under a key derived from `secret`), so the browser can neither read nor change it. A cookie that was altered, written with another secret, or past `maxAge` starts a fresh session.
+- It must fit in a cookie. Browsers drop one over about 4 KB, and a warning is logged when a session grows past that. Keep ids, flags and short messages in it; keep records in the database.
+- The cookie is rewritten only when the data changed, just before the response's headers are sent, so changes made anywhere in the request are included. `save()` writes it straight away.
+- `destroy()` clears the browser's cookie, but a copy taken before stays valid until it expires — the server keeps no list to revoke it from. Keep `maxAge` short where that matters, or use a shared store.
+
 ## Custom Store (Redis)
 
 Implement `SessionStore` for production deployments:
@@ -148,7 +163,7 @@ session({ secret: 'my-secret', store: new RedisSessionStore(redis) })
 
 ## Security Notes
 
-- Session cookies are signed with **HMAC-SHA256** using timing-safe comparison
+- Session cookies are signed with **HMAC-SHA256** using timing-safe comparison; with `store: 'cookie'` the whole value is encrypted and authenticated with AES-256-GCM
 - Always use a strong, random `secret` — at least 32 characters
 - Set `cookie.secure: true` in production (done automatically when `NODE_ENV === 'production'`)
 - Call `session.regenerate()` after login to prevent session fixation

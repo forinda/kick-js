@@ -117,6 +117,24 @@ export function setCookie(
   target.setHeader?.('Set-Cookie', all)
 }
 
+/**
+ * Set a cookie, replacing an earlier `Set-Cookie` for the same name on this
+ * response instead of adding a second one.
+ */
+export function replaceCookie(
+  res: unknown,
+  name: string,
+  value: string,
+  options: CookieOptions = {},
+): void {
+  const target = res as AnyResponse
+  const prior = target.getHeader?.('Set-Cookie')
+  const others = (prior === undefined ? [] : Array.isArray(prior) ? prior : [prior]).filter(
+    (cookie) => !String(cookie).startsWith(`${name}=`),
+  )
+  target.setHeader?.('Set-Cookie', [...others, serializeCookie(name, value, options)])
+}
+
 /** Send a JSON body with a status, without assuming Express. */
 export function sendJson(res: unknown, status: number, body: unknown): void {
   const target = res as AnyResponse

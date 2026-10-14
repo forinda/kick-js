@@ -16,13 +16,24 @@
  *
  * Per scenario: kick new → (kick add) → pnpm install → kick typegen →
  * tsc --noEmit → (web build) → kick build (or the app's build script) → kick start → HTTP checks.
+ * With `deploy`, also build:netlify / build:vercel and serve the Vercel
+ * function from a copy outside the project; with `docker`, build the
+ * scaffold's Dockerfile and request the same paths from the container.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'packages/cli/bin.js')
@@ -42,6 +53,12 @@ const SCENARIOS = {
     args: ['--template', 'rest', '--runtime', 'h3', '--packages', 'devtools'],
     get: ['/api/v1/hello'],
   },
+  'rest-deploy': {
+    args: ['--template', 'rest'],
+    get: ['/api/v1/hello'],
+    deploy: true,
+    docker: true,
+  },
   'kick-add-wiring': {
     args: ['--runtime', 'fastify'],
     add: ['swagger', 'ws', 'queue'],
@@ -51,11 +68,17 @@ const SCENARIOS = {
     args: ['--template', 'inertia'],
     buildScript: true,
     get: ['/api/v1/hello', '/', '/posts'],
+    // Rendered on the server, not the client-side fallback.
+    contains: { '/': 'data-server-rendered' },
+    deploy: true,
+    docker: true,
   },
   fullstack: {
     args: ['--template', 'fullstack', '--packages', 'swagger'],
     fullstack: true,
     get: ['/api/v1/hello', '/openapi.json'],
+    deploy: true,
+    docker: true,
   },
 }
 
@@ -164,6 +187,128 @@ async function boot(cwd, paths) {
   }
 }
 
+/** Where the tarballs go inside a project whose image is built. */
+const PACKS = '.kick-packs'
+
+/**
+ * GET each path on `base` until it answers 200 or the deadline passes; a path
+ * in `contains` must also include that text.
+ */
+async function expectOk(base, paths, logs, contains = {}) {
+  for (const path of paths) {
+    const deadline = Date.now() + 60_000
+    let status = 0
+    while (Date.now() < deadline) {
+      status = await fetch(`${base}${path}`, {
+        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      })
+        .then((res) => res.status)
+        .catch(() => 0)
+      if (status === 200) break
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    if (status !== 200) {
+      console.log(`FAILED — GET ${path} → ${status || 'no answer'}`)
+      if (logs) console.log(logs())
+      throw new Error(`GET ${path} failed`)
+    }
+    if (contains[path]) {
+      const body = await fetch(`${base}${path}`).then((res) => res.text())
+      if (!body.includes(contains[path])) {
+        console.log(`FAILED — GET ${path} has no "${contains[path]}"`)
+        if (logs) console.log(logs())
+        throw new Error(`GET ${path} content`)
+      }
+    }
+  }
+}
+
+/**
+ * `build:netlify` and `build:vercel`, then the Vercel function served from a
+ * copy outside the project — so it can only use what it was packaged with.
+ */
+async function deployBuilds(root, paths, contains) {
+  run('build:netlify', 'pnpm', ['run', 'build:netlify'], root)
+  run('build:vercel', 'pnpm', ['run', 'build:vercel'], root)
+  const fn = mkdtempSync(join(tmpdir(), 'kick-matrix-func-'))
+  cpSync(join(root, '.vercel/output/functions/api.func'), fn, { recursive: true })
+  const port = await freePort()
+  process.stdout.write(`  · Vercel function, outside the project + GET ${paths.join(', ')} … `)
+  const harness = `import http from 'node:http'
+const { default: handle } = await import(${JSON.stringify(pathToFileURL(join(fn, 'index.mjs')).href)})
+http.createServer((req, res) => handle(req, res)).listen(${port}, '127.0.0.1')`
+  const child = spawn('node', ['--input-type=module', '-e', harness], {
+    cwd: tmpdir(),
+    env: { ...process.env, NODE_ENV: 'production', SESSION_SECRET: 'matrix-secret-matrix-secret' },
+    detached: true,
+  })
+  let log = ''
+  child.stdout.on('data', (d) => (log += d))
+  child.stderr.on('data', (d) => (log += d))
+  try {
+    await expectOk(
+      `http://127.0.0.1:${port}`,
+      paths,
+      () => log.trim().split('\n').slice(-30).join('\n'),
+      contains,
+    )
+    console.log('ok')
+  } finally {
+    try {
+      process.kill(-child.pid, 'SIGTERM')
+    } catch {
+      /* already gone */
+    }
+    rmSync(fn, { recursive: true, force: true })
+  }
+}
+
+/** Build the scaffold's Dockerfile and request each path from the container. */
+async function dockerImage(name, root, paths, contains) {
+  // The image installs from the lockfile, which points at the tarballs in the
+  // context; nothing else in the Dockerfile changes.
+  const dockerfile = readFileSync(join(root, 'Dockerfile'), 'utf-8')
+  writeFileSync(
+    join(root, 'Dockerfile'),
+    dockerfile.replace(/^(FROM .* AS base\nWORKDIR \/app)$/m, `$1\nCOPY ${PACKS} ./${PACKS}`),
+  )
+  const tag = `kick-matrix-${name}:latest`
+  run('docker build', 'docker', ['build', '-q', '-t', tag, '.'], root)
+  const port = await freePort()
+  const id = run(
+    'docker run',
+    'docker',
+    [
+      'run',
+      '-d',
+      '--rm',
+      '-p',
+      `127.0.0.1:${port}:3000`,
+      '-e',
+      'SESSION_SECRET=matrix-secret-matrix-secret',
+      tag,
+    ],
+    root,
+  ).trim()
+  process.stdout.write(`  · GET ${paths.join(', ')} from the container … `)
+  try {
+    await expectOk(
+      `http://127.0.0.1:${port}`,
+      paths,
+      () =>
+        spawnSync('docker', ['logs', id], { encoding: 'utf-8' })
+          .stdout.split('\n')
+          .slice(-30)
+          .join('\n'),
+      contains,
+    )
+    console.log('ok')
+  } finally {
+    spawnSync('docker', ['rm', '-f', id])
+    spawnSync('docker', ['rmi', '-f', tag])
+  }
+}
+
 async function runScenario(name, scenario, tarballs) {
   console.log(`\n▶ ${name}`)
   const work = mkdtempSync(join(tmpdir(), `kick-matrix-${name}-`))
@@ -180,8 +325,16 @@ async function runScenario(name, scenario, tarballs) {
     // Every @forinda/* package, direct or transitive, is this checkout's.
     const yaml = join(root, 'pnpm-workspace.yaml')
     const current = existsSync(yaml) ? readFileSync(yaml, 'utf-8') : ''
+    // For an image build the tarballs travel in the build context, so the
+    // lockfile has to point at them by a path inside the project.
+    if (scenario.docker)
+      cpSync(dirname(Object.values(tarballs)[0]), join(root, PACKS), { recursive: true })
     const overrides = Object.entries(tarballs)
-      .map(([pkg, tarball]) => `  '${pkg}': 'file:${tarball}'`)
+      .map(([pkg, tarball]) =>
+        scenario.docker
+          ? `  '${pkg}': 'file:./${PACKS}/${basename(tarball)}'`
+          : `  '${pkg}': 'file:${tarball}'`,
+      )
       .join('\n')
     writeFileSync(yaml, `${current.trimEnd()}\n\noverrides:\n${overrides}\n`)
 
@@ -201,6 +354,8 @@ async function runScenario(name, scenario, tarballs) {
     if (scenario.buildScript) run('build', 'pnpm', ['run', 'build'], server)
     else run('kick build', 'pnpm', ['exec', 'kick', 'build'], server)
     await boot(server, scenario.get)
+    if (scenario.deploy) await deployBuilds(root, scenario.get, scenario.contains)
+    if (scenario.docker) await dockerImage(name, root, scenario.get, scenario.contains)
     return true
   } catch (err) {
     console.log(`✗ ${name}: ${err.message}`)

@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import express from 'express'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -72,7 +72,12 @@ function clientBuild(): string {
 }
 
 async function makeApp(
-  options: { version?: string | null; ssrBundle?: string; errorPage?: string } = {},
+  options: {
+    version?: string | null
+    ssrBundle?: string
+    errorPage?: string
+    clientDir?: string
+  } = {},
 ) {
   @Controller()
   class PagesController {
@@ -172,7 +177,7 @@ async function makeApp(
     ],
     adapters: [
       InertiaAdapter({
-        clientDir: clientBuild(),
+        clientDir: options.clientDir ?? clientBuild(),
         ...(options.version === null ? {} : { version: options.version ?? 'v1' }),
         share: () => ({ appName: 'Kick' }),
         head: '<link rel="icon" href="/favicon.svg" />',
@@ -226,6 +231,18 @@ for (const rt of RUNTIMES)
       expect(page.props.appName).toBe('Kick')
       expect(page.props.errors).toEqual({})
       expect(page.sharedProps).toEqual(['appName'])
+    })
+
+    it('finds a relative build under KICK_APP_ROOT, where a function packaged it', async () => {
+      const build = clientBuild()
+      process.env.KICK_APP_ROOT = dirname(build)
+      try {
+        const app = await makeApp({ clientDir: basename(build) })
+        const res = await request(app.handle.bind(app)).get('/users').expect(200)
+        expect(res.text).toContain('/assets/main-abc.js')
+      } finally {
+        delete process.env.KICK_APP_ROOT
+      }
     })
 
     it('answers an Inertia visit with the page as JSON', async () => {

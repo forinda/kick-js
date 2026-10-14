@@ -387,6 +387,12 @@ export interface DeployConfig {
   external?: string[]
   /** Vercel Node runtime. Default `nodejs22.x`. */
   vercelRuntime?: string
+  /**
+   * Files and directories the app reads at runtime, relative to the project —
+   * packaged with the function at the same paths. Detected for an Inertia
+   * app: the client build manifest and the SSR bundle.
+   */
+  include?: string[]
 }
 
 export interface KickConfig {

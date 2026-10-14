@@ -14,6 +14,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { dirname, relative, resolve, sep } from 'node:path'
@@ -37,6 +38,24 @@ export interface ResolvedDeploy {
   apiPath: string
   external: string[]
   vercelRuntime: string
+  /** Paths the function reads at runtime, relative to the project. */
+  include: string[]
+}
+
+/** The layout facts `detectLayout` finds. */
+type DetectedLayout = Pick<ResolvedDeploy, 'siteRoot' | 'apiPath'> & {
+  staticDir?: string
+  include?: string[]
+}
+
+/** The project's dependencies, or `{}` without a readable package.json. */
+function projectDeps(root: string): Record<string, string> {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'))
+    return { ...pkg.dependencies, ...pkg.devDependencies }
+  } catch {
+    return {}
+  }
 }
 
 /**
@@ -47,7 +66,18 @@ export interface ResolvedDeploy {
 export function detectLayout(
   root: string,
   exists: (path: string) => boolean = existsSync,
-): Pick<ResolvedDeploy, 'siteRoot' | 'apiPath'> & { staticDir?: string } {
+  deps: Record<string, string> = projectDeps(root),
+): DetectedLayout {
+  // Inertia: the function renders every page, the platform serves the built
+  // assets, and the function reads the asset manifest and SSR bundle.
+  if (deps['@forinda/kickjs-inertia']) {
+    return {
+      staticDir: 'dist/client',
+      siteRoot: '.',
+      apiPath: '',
+      include: ['dist/client/.vite/manifest.json', 'dist/ssr'],
+    }
+  }
   const parent = dirname(root)
   const isWorkspaceRoot =
     exists(resolve(parent, 'pnpm-workspace.yaml')) || exists(resolve(parent, 'package.json'))
@@ -64,8 +94,9 @@ export function resolveDeploy(
   config: DeployConfig | undefined,
   root: string,
   exists?: (path: string) => boolean,
+  deps?: Record<string, string>,
 ): ResolvedDeploy {
-  const detected = detectLayout(root, exists)
+  const detected = detectLayout(root, exists, deps)
   const staticDir =
     config?.staticDir === false ? undefined : (config?.staticDir ?? detected.staticDir)
   return {
@@ -77,22 +108,54 @@ export function resolveDeploy(
     apiPath: config?.apiPath ?? detected.apiPath,
     external: config?.external ?? ['valibot', 'yup'],
     vercelRuntime: config?.vercelRuntime ?? 'nodejs22.x',
+    include: config?.include ?? detected.include ?? [],
   }
+}
+
+/** What the generated Netlify function needs to know beyond the bundle. */
+export interface NetlifyFunctionOptions {
+  /** The project directory, relative to the function file. */
+  projectDir: string
+  /** Static files are served before the function (it owns every path). */
+  preferStatic?: boolean
+  /** Paths, relative to the function file, packaged with the function. */
+  includedFiles?: string[]
 }
 
 /**
  * The Netlify function. `config` has to be a literal — Netlify reads it
- * without running the file — and carries no `preferStatic`: with it, a SPA
- * rewrite counts as a static match and every API path returns `index.html`.
+ * without running the file. `preferStatic` is set only when the function owns
+ * every path and there is a static build (Inertia): beside a SPA, a rewrite
+ * counts as a static match and every API path would return `index.html`.
+ *
+ * The app reads its runtime files (`include`) relative to `KICK_APP_ROOT`,
+ * which the function sets to where they were packaged. Not `process.chdir()`:
+ * Netlify's local emulator runs functions in worker threads, which can't.
  */
-export function netlifyFunctionSource(bundleImport: string, apiPath: string): string {
-  return `import { handler } from '${bundleImport}'
+export function netlifyFunctionSource(
+  bundleImport: string,
+  apiPath: string,
+  options: NetlifyFunctionOptions = { projectDir: '.' },
+): string {
+  const config = [
+    `  path: '${apiPath}/*',`,
+    ...(options.preferStatic ? ['  preferStatic: true,'] : []),
+    ...(options.includedFiles?.length
+      ? [`  includedFiles: ${JSON.stringify(options.includedFiles)},`]
+      : []),
+  ]
+  return `import { fileURLToPath } from 'node:url'
+import { handler } from '${bundleImport}'
+
+// Where the app's build files were packaged; the platform starts this
+// function in another directory.
+process.env.KICK_APP_ROOT ??= fileURLToPath(new URL('${options.projectDir}/', import.meta.url))
 
 // Netlify's context carries waitUntil, so ctx.waitUntil() work finishes after the response.
 export default (request, context) => handler.fetch(request, context)
 
 export const config = {
-  path: '${apiPath}/*',
+${config.join('\n')}
 }
 `
 }
@@ -104,7 +167,12 @@ export const config = {
  * outside Vercel, so the handler just gets `undefined`.
  */
 export function vercelFunctionSource(): string {
-  return `import { handler } from './server.mjs'
+  return `import { fileURLToPath } from 'node:url'
+import { handler } from './server.mjs'
+
+// The app's build files are copied into this function at their project
+// paths; the platform starts it in another directory.
+process.env.KICK_APP_ROOT ??= fileURLToPath(new URL('./', import.meta.url))
 
 const requestContext = () => globalThis[Symbol.for('@vercel/request-context')]?.get?.()
 
@@ -133,7 +201,8 @@ export function vercelRoutes(
     { src: `^${apiPath}/(.*)$`, dest: '/api' },
   ]
   if (hasCrons && apiPath !== '') routes.push({ src: '^/_kick/(.*)$', dest: '/api' })
-  if (hasStatic) routes.push({ src: '^/(.*)$', dest: '/index.html' })
+  // A SPA shell for paths nothing else matched — unless the function took them all.
+  if (hasStatic && apiPath !== '') routes.push({ src: '^/(.*)$', dest: '/index.html' })
   return routes
 }
 
@@ -325,11 +394,13 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
       minify: false,
       rollupOptions: {
         input: entry,
-        // Inlined, a missing optional peer becomes a stub that throws on load;
-        // left external, an installed one is unreachable from the function.
-        external: deploy.external.filter(
-          (name) => !existsSync(resolve(root, 'node_modules', name)),
-        ),
+        // Inlined, a missing optional peer becomes a stub that throws on load —
+        // with no error code, so the package's own "is it just missing?" check
+        // can't tell. Left external, it fails the way an absent module does.
+        // An installed one is inlined: external, the function can't reach it.
+        external: (id: string, importer: string | undefined) =>
+          missingPackage(id, importer ? dirname(importer) : root) ||
+          (deploy.external.includes(id) && !existsSync(resolve(root, 'node_modules', id))),
         output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
       },
     },
@@ -337,6 +408,55 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
   const file = resolve(root, deploy.outDir, 'server.mjs')
   log(`bundled ${relative(process.cwd(), file)}`)
   return file
+}
+
+/** The package a bare import names (`@scope/pkg/sub` → `@scope/pkg`), else undefined. */
+export function bareImportPackage(id: string): string | undefined {
+  return /^((?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*)(?:\/|$)/i.exec(id)?.[1]
+}
+
+/** A bare import of a package no `node_modules` above `from` holds. */
+export function missingPackage(
+  id: string,
+  from: string,
+  exists: (path: string) => boolean = existsSync,
+): boolean {
+  const pkg = bareImportPackage(id)
+  if (!pkg) return false
+  for (let dir = from; ; dir = dirname(dir)) {
+    if (exists(resolve(dir, 'node_modules', pkg, 'package.json'))) return false
+    if (dirname(dir) === dir) return true
+  }
+}
+
+/** Whether `path` is inside a top-level dot entry of `dir` (`.vite/…`). */
+function isHiddenEntry(dir: string, path: string): boolean {
+  const first = relative(dir, path).split(sep)[0]
+  return first !== undefined && first.startsWith('.')
+}
+
+/** Netlify `_redirects` rules that answer 404 for these top-level names. */
+export function netlifyHiddenRules(names: string[]): string[] {
+  return names.flatMap((name) => [`/${name}  /404  404!`, `/${name}/*  /404  404!`])
+}
+
+function statSafe(path: string) {
+  try {
+    return statSync(path)
+  } catch {
+    return undefined
+  }
+}
+
+/** Every runtime file must exist — a missing one breaks the function only once deployed. */
+function requireIncluded(root: string, include: string[]): void {
+  const missing = include.filter((path) => !existsSync(resolve(root, path)))
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.join(', ')} not found — the function reads ${missing.length === 1 ? 'it' : 'them'} at runtime. ` +
+        'Run the full build first (`pnpm build`), or fix `deploy.include`.',
+    )
+  }
 }
 
 export function registerDeployCommands(program: Command, ctx: KickCliPluginContext): void {
@@ -363,7 +483,24 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
       mkdirSync(functions, { recursive: true })
       // The function imports the bundle; Netlify packages what it imports.
       const from = relative(functions, server).split(sep).join('/')
-      writeFileSync(resolve(functions, 'api.mjs'), netlifyFunctionSource(from, options.apiPath))
+      const posix = (path: string) => path.split(sep).join('/')
+      writeFileSync(
+        resolve(functions, 'api.mjs'),
+        netlifyFunctionSource(from, options.apiPath, {
+          projectDir: posix(relative(functions, root)),
+          preferStatic: options.apiPath === '' && Boolean(options.staticDir),
+          // Netlify resolves these against the function's own directory, and
+          // packages them at their paths under the site root.
+          includedFiles: options.include.flatMap((path) => {
+            const fromFunction = posix(relative(functions, resolve(root, path)))
+            // A directory is matched with a glob; Netlify matches files only.
+            return statSafe(resolve(root, path))?.isDirectory()
+              ? [`${fromFunction}/**`]
+              : [fromFunction]
+          }),
+        }),
+      )
+      requireIncluded(root, options.include)
       ctx.log(`wrote ${relative(process.cwd(), resolve(functions, 'api.mjs'))}`)
 
       // Netlify publishes *something*; with no frontend that has to be an
@@ -373,6 +510,21 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
       if (!options.staticDir) {
         mkdirSync(resolve(root, publish), { recursive: true })
         ctx.log(`publish directory ready at ${relative(process.cwd(), resolve(root, publish))}`)
+      } else if (existsSync(resolve(root, publish))) {
+        // Netlify publishes the whole directory, build bookkeeping included
+        // (Vite's .vite/manifest.json); answer those paths with 404 instead.
+        const hidden = readdirSync(resolve(root, publish)).filter((name) => name.startsWith('.'))
+        if (hidden.length > 0) {
+          const file = resolve(root, publish, '_redirects')
+          const current = existsSync(file) ? readFileSync(file, 'utf-8') : ''
+          const rules = netlifyHiddenRules(hidden).filter((rule) => !current.includes(rule))
+          if (rules.length > 0) {
+            writeFileSync(
+              file,
+              `${current}${current && !current.endsWith('\n') ? '\n' : ''}${rules.join('\n')}\n`,
+            )
+          }
+        }
       }
 
       // netlify.toml is written once by `kick new` and edited by hand after;
@@ -408,6 +560,10 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
       // Nothing outside the .func directory is visible at runtime.
       cpSync(server, resolve(fn, 'server.mjs'))
       writeFileSync(resolve(fn, 'index.mjs'), vercelFunctionSource())
+      requireIncluded(root, options.include)
+      for (const path of options.include) {
+        cpSync(resolve(root, path), resolve(fn, path), { recursive: true })
+      }
       writeFileSync(
         resolve(fn, '.vc-config.json'),
         `${JSON.stringify(
@@ -428,7 +584,11 @@ export function registerDeployCommands(program: Command, ctx: KickCliPluginConte
             `build:vercel: ${options.staticDir} does not exist — build the frontend first`,
           )
         }
-        cpSync(staticDir, resolve(output, 'static'), { recursive: true })
+        cpSync(staticDir, resolve(output, 'static'), {
+          recursive: true,
+          // Build bookkeeping (Vite's .vite/manifest.json) is not for the public.
+          filter: (path) => !isHiddenEntry(staticDir, path),
+        })
       }
       const { crons, warnings } = vercelCrons(scanCrons(root))
       for (const warning of warnings) ctx.log(`warning: ${warning}`)

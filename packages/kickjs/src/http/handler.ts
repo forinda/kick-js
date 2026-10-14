@@ -29,9 +29,64 @@ export interface KickHandler {
 }
 
 /**
+ * Set on `globalThis` while `createHandler(() => import('./index'))` loads the
+ * app's entry: `bootstrap()` hands its app here instead of starting it.
+ * @internal
+ */
+export const ENTRY_CAPTURE = Symbol.for('kickjs.handler.entryCapture')
+
+/** What `bootstrap()` hands to a loading handler. @internal */
+export type EntryCapture = (app: Application, options: ApplicationOptions) => void
+
+/**
+ * Load the app's own entry and keep the app its `bootstrap()` call builds.
+ * Retries after a failed setup reuse the captured options.
+ */
+function captureEntry(
+  load: () => Promise<unknown>,
+): () => Promise<{ first: Application; options: ApplicationOptions }> {
+  let pending: Promise<{ first: Application; options: ApplicationOptions }> | undefined
+  return () =>
+    (pending ??= (async () => {
+      let captured: { first: Application; options: ApplicationOptions } | undefined
+      const g = globalThis as Record<symbol, unknown>
+      const capture: EntryCapture = (first, options) => {
+        captured ??= { first, options }
+      }
+      g[ENTRY_CAPTURE] = capture
+      try {
+        await load()
+      } finally {
+        if (g[ENTRY_CAPTURE] === capture) delete g[ENTRY_CAPTURE]
+      }
+      if (!captured) {
+        throw new Error(
+          'createHandler(): the entry finished loading without calling bootstrap(). ' +
+            "Pass the module that calls it — createHandler(() => import('./index')) — or pass the options.",
+        )
+      }
+      return captured
+    })().catch((err) => {
+      pending = undefined
+      throw err
+    }))
+}
+
+/**
  * Build a KickJS app as request handlers instead of a listening server.
  *
- * Takes the same options as `bootstrap()`. The app is set up once per process
+ * Takes the same options as `bootstrap()`, or a function that imports the
+ * app's entry — the file that calls `bootstrap()`. With the entry, the app
+ * is built from that one `bootstrap({ ... })` call, so the server and the
+ * function never drift apart:
+ *
+ * ```ts
+ * // src/serverless.ts
+ * export const handler = createHandler(() => import('./index'))
+ * ```
+ *
+ * While the entry loads, its `bootstrap()` call builds the app without
+ * starting it — no port, no process signal handlers, no cluster. The app is set up once per process
  * (per function instance), lazily on the first request, and reused after that.
  * Nothing listens on a port, `afterStart` does not run, and no process signal
  * handlers are registered — the platform owns the process.
@@ -61,12 +116,27 @@ export interface KickHandler {
  * export const config = { path: '/api/*' }
  * ```
  */
-export function createHandler(options: ApplicationOptions): KickHandler {
+export function createHandler(options: ApplicationOptions | (() => Promise<unknown>)): KickHandler {
   let app: Promise<Application> | undefined
+  const entry =
+    typeof options === 'function'
+      ? captureEntry(options)
+      : async () => ({ first: undefined, options })
+  // The app the entry's bootstrap() built is used once; a retry builds anew.
+  let firstUsed = false
 
   const ready = (): Promise<Application> => {
     app ??= (async () => {
-      const instance = new Application(options)
+      let loaded: Awaited<ReturnType<typeof entry>>
+      try {
+        loaded = await entry()
+      } catch (err) {
+        // The entry failed to load: try again on the next request.
+        app = undefined
+        throw err
+      }
+      const instance = loaded.first && !firstUsed ? loaded.first : new Application(loaded.options)
+      firstUsed = true
       try {
         await instance.startWithoutServer()
       } catch (err) {

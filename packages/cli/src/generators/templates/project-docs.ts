@@ -1400,27 +1400,45 @@ options / subcommands / async work, \`generators\` (\`defineGenerator\`) for
       slug: 'deploy',
       frontmatterName: 'kickjs-deploy',
       description:
-        'Use when deploying this app — Netlify, Vercel or Cloudflare Workers — or when an API route returns the SPA shell, the platform build fails, or the function is missing from a deploy.',
-      body: `**Netlify and Vercel** run the app as a Node function; the CLI builds both:
+        'Use when deploying this app — a Node host or Docker, Netlify, Vercel or Cloudflare Workers — or when an API route returns the SPA shell, the platform build fails, or the function is missing from a deploy.',
+      body: `**A Node host or a container** runs the long-running server. The project
+ships a \`Dockerfile\`; without Docker:
+
+\`\`\`bash
+${pm} run build && NODE_ENV=production node dist/index.js
+\`\`\`
+
+Start it with \`node\`, not \`kick start\`: the CLI is a dev dependency, gone
+after a production install. The image installs from the lockfile, so commit it.
+
+**Netlify and Vercel** run the app as a Node function; the CLI builds both:
 
 \`\`\`bash
 ${pm} run build:netlify   # → .netlify/v1/functions/api.mjs
 ${pm} run build:vercel    # → .vercel/output (Build Output API v3)
 \`\`\`
 
-Both bundle \`src/serverless.ts\` (\`createHandler\`), which is a second entry
-beside \`src/index.ts\` — the long-running server. Keep the shared options in
-one module both import, so they cannot drift.
+Both bundle \`src/serverless.ts\`:
+\`createHandler(() => import('./index'))\` serves the app \`src/index.ts\`
+describes — its \`bootstrap()\` call builds the app without listening — so
+there is one set of options. Add middleware and adapters to \`src/index.ts\`
+as usual.
 
 Settings are detected from the layout: a workspace member beside a \`web\`
-package publishes \`web/dist\` and routes \`/api/*\`; a standalone API takes
-every path. Override in \`kick.config.ts\`:
+package publishes \`web/dist\` and routes \`/api/*\`; an Inertia app publishes
+\`dist/client\`, packages the asset manifest and SSR bundle with the function,
+and lets it take every other path; a standalone API takes every path.
+Override in \`kick.config.ts\`:
 
 \`\`\`ts
 export default defineConfig({
-  deploy: { apiPath: '/api', staticDir: '../web/dist' },
+  deploy: { apiPath: '/api', staticDir: '../web/dist', include: ['data/geo.json'] },
 })
 \`\`\`
+
+\`include\` lists files the app reads at runtime; they are packaged with the
+function. Memory does not survive between function instances: keep sessions in
+\`session({ store: 'cookie' })\` or a shared store, and data in a database.
 
 **Cloudflare Workers** is a different entry, not a third flag on this one.
 Workers have no \`node:http\`, so \`createHandler\` cannot run there; use the
@@ -1460,14 +1478,17 @@ plugins. Serve static files from Workers Assets or a separate deploy.
 **Red flags**:
 - An \`/api/*\` route returning \`index.html\` on Netlify — the function is not
   routed. Check the deploy summary says a function was deployed, keep
-  \`preferStatic\` out of its config, and leave Netlify's **Package directory**
-  unset so it reads the function at the repo root.
+  \`preferStatic\` out of a fullstack function's config, and leave Netlify's
+  **Package directory** unset so it reads the function at the repo root.
+- Validation errors or flash messages that vanish on Netlify / Vercel — the
+  session lives in one instance's memory. Use \`session({ store: 'cookie' })\`.
 - Committing \`.netlify/\` or \`.vercel/\` — both are build output.
 - A frontend that builds somewhere other than \`web/dist\` and only one of
   \`deploy.staticDir\`, \`SpaAdapter({ clientDir })\` and netlify.toml's
   \`publish\` updated. All three name that directory.
 - Pointing a platform at \`src/index.ts\` — it calls \`bootstrap()\`, which
-  listens on a port and registers signal handlers inside the function.
+  listens on a port and registers signal handlers inside the function. The
+  platform entry is \`src/serverless.ts\`.
 - Expecting \`kick build\` alone to produce a deployable function; it builds
   the server. Run the target command after it.`,
     },
