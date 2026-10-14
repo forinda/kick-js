@@ -48,16 +48,10 @@ export function defaultValidationError({ source, issues }: ValidationFailure): H
   return new HttpException(HttpStatus.UNPROCESSABLE_ENTITY, message, details)
 }
 
-// Process-wide, like the env resolver: set from `bootstrap({ validationError })`
-// / `createWebApp({ validationError })`, read by every engine's validation.
-let factory: ValidationErrorFactory | undefined
-
-/** @internal Installed by Application and createWebApp; `undefined` restores the default. */
-export function _setValidationErrorFactory(fn: ValidationErrorFactory | undefined): void {
-  factory = fn
-}
-
-function validationError(failure: ValidationFailure): unknown {
+function validationError(
+  factory: ValidationErrorFactory | undefined,
+  failure: ValidationFailure,
+): unknown {
   if (!factory) return defaultValidationError(failure)
   try {
     return factory(failure) ?? defaultValidationError(failure)
@@ -98,7 +92,14 @@ function assignReqProperty(req: Request, key: 'query' | 'params', value: unknown
  * they flow through the application's global error handler (`onError`) and
  * produce a uniform response envelope.
  */
-export function validate(schema: ValidationSchema) {
+export function validate(
+  schema: ValidationSchema,
+  options: {
+    /** What a failure throws — see `bootstrap({ validationError })`. Default: a 422. */
+    validationError?: ValidationErrorFactory
+  } = {},
+) {
+  const factory = options.validationError
   // Detected on the first request, not per request: detection walks every
   // registered adapter and allocates a wrapper. Not at construction either —
   // a custom adapter registered during boot must still be seen.
@@ -116,7 +117,7 @@ export function validate(schema: ValidationSchema) {
       if (body) {
         const result = body.safeParse(req.body)
         if (!result.success) {
-          return next(validationError({ source: 'body', issues: result.issues, req }))
+          return next(validationError(factory, { source: 'body', issues: result.issues, req }))
         }
         req.body = result.data
       }
@@ -124,7 +125,7 @@ export function validate(schema: ValidationSchema) {
       if (query) {
         const result = query.safeParse(req.query)
         if (!result.success) {
-          return next(validationError({ source: 'query', issues: result.issues, req }))
+          return next(validationError(factory, { source: 'query', issues: result.issues, req }))
         }
         assignReqProperty(req, 'query', result.data)
       }
@@ -132,7 +133,7 @@ export function validate(schema: ValidationSchema) {
       if (params) {
         const result = params.safeParse(req.params)
         if (!result.success) {
-          return next(validationError({ source: 'params', issues: result.issues, req }))
+          return next(validationError(factory, { source: 'params', issues: result.issues, req }))
         }
         assignReqProperty(req, 'params', result.data)
       }

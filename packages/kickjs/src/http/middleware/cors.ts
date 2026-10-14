@@ -54,6 +54,9 @@ function isOriginAllowed(requestOrigin: string, allowed: CorsOptions['origin']):
  *   ],
  * })
  * ```
+ *
+ * Options are read once, when the middleware is created: changing the options
+ * object afterwards does not change the headers. Create a new middleware instead.
  */
 export function cors(options: CorsOptions = {}) {
   const {

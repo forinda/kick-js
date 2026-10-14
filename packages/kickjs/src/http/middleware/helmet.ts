@@ -32,6 +32,9 @@ export interface HelmetOptions {
  *   middlewares: [helmet(), requestId(), express.json()],
  * })
  * ```
+ *
+ * Options are read once, when the middleware is created: changing the options
+ * object afterwards does not change the headers. Create a new middleware instead.
  */
 export function helmet(options: HelmetOptions = {}) {
   const {

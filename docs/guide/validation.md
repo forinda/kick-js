@@ -175,6 +175,7 @@ bootstrap({
 - Return `undefined` to use the default response for that failure — for example, to customise only body errors.
 - Returning or throwing a `ProblemException` or `HttpException` keeps the problem-details response. Anything else goes to your `onError` like any other error.
 - `defaultValidationError(failure)` builds the default, so a factory can start from it and adjust.
+- It applies to that app's routes. A standalone `validate()` takes the same function: `validate(schema, { validationError })`.
 - With [Inertia](inertia.md), keep the default shape for form routes: the page's `errors` are read from its `[{ field, message }]` details.
 
 ## Defining Reusable DTOs

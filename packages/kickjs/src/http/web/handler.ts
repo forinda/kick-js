@@ -93,7 +93,9 @@ export function compileWebRoute(
   options: { bodyLimit?: number } = {},
 ): (invocation: WebRouteInvocation) => Promise<Response> {
   const bodyLimit = options.bodyLimit ?? parseByteSize(DEFAULT_BODY_LIMIT)
-  const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
+  const validator = entry.meta.validation
+    ? validate(entry.meta.validation, { validationError: entry.validationError })
+    : undefined
   const upload = entry.meta.upload && entry.meta.upload.mode !== 'none' ? entry.meta.upload : null
 
   return async ({ request, url, params, carry }) => {

@@ -63,7 +63,7 @@ import {
 import { ROUTE_SLOT } from '../core/route-flag'
 import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
-import { _setValidationErrorFactory, type ValidationErrorFactory } from './middleware/validate'
+import type { ValidationErrorFactory } from './middleware/validate'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
   _setExternalContributorSources,
@@ -477,7 +477,7 @@ export interface ApplicationOptions {
    * })
    * ```
    *
-   * Process-wide: the last app constructed sets it.
+   * Applies to this app's routes only.
    */
   validationError?: ValidationErrorFactory
 
@@ -677,7 +677,6 @@ export class Application {
 
   constructor(private readonly options: ApplicationOptions) {
     this.runtime = options.runtime ?? expressRuntime()
-    _setValidationErrorFactory(options.validationError)
     // `this.app` is the engine-native app; typed Express here (the default) for
     // the legacy escape hatches. Under another runtime it holds that engine's
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
@@ -1199,6 +1198,7 @@ export class Application {
                   handler: entry.meta.handlerName,
                 }),
                 meta: { ...entry.meta, pattern },
+                validationError: this.options.validationError,
               }
             })
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])

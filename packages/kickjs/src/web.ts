@@ -39,7 +39,7 @@ import { compileWebRoute } from './http/web/handler'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
-import { _setValidationErrorFactory, type ValidationErrorFactory } from './http/middleware/validate'
+import type { ValidationErrorFactory } from './http/middleware/validate'
 import { buildMountPath } from './core/path'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
@@ -147,7 +147,6 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   }
 
   const container = Container.getInstance()
-  _setValidationErrorFactory(options.validationError)
 
   // Wire ConfigService/@Value env resolution when the platform has no
   // ambient process.env (Workers). Latest-wins like loadEnv().
@@ -226,6 +225,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           if (globalMiddleware.length > 0) {
             entry.middlewares = [...globalMiddleware, ...entry.middlewares]
           }
+          entry.validationError = options.validationError
           const run = compileWebRoute(entry, undefined, { bodyLimit })
           app.on(entry.method, url, (event: H3EventLike) =>
             run({
