@@ -24,6 +24,7 @@ export {
   type ConditionOutcome,
 } from './core/adapter-conditions'
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
+export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './http/conditional'
 export {
   defineCheck,
   StartupCheckError,

@@ -1,4 +1,5 @@
 /// <reference types="multer" />
+import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
 import type { Request, NextFunction } from 'express'
 import { ROUTE_SLOT } from '../core/route-flag'
 import {
@@ -743,6 +744,47 @@ export class RequestContext<
 
   noContent() {
     return this._response.status(204).end()
+  }
+
+  /**
+   * Answer a conditional request from the resource's validators, before doing
+   * the expensive part. Sets `ETag` / `Last-Modified`, then — per RFC 9110 —
+   * answers `304 Not Modified` when the client's copy is current, or `412`
+   * when an `If-Match` / `If-Unmodified-Since` write is based on a stale one.
+   * Returns `true` when it answered; respond as usual when it returns `false`.
+   *
+   * ```ts
+   * @Get('/:id')
+   * async show(ctx: RequestContext) {
+   *   const { version, updatedAt } = await posts.meta(ctx.params.id) // cheap
+   *   if (ctx.conditional({ etag: `v${version}`, lastModified: updatedAt })) return
+   *   ctx.json(await posts.full(ctx.params.id)) // only when it changed
+   * }
+   * ```
+   */
+  conditional(validators: Validators): boolean {
+    if (validators.etag !== undefined) this.setHeader('ETag', normalizeEtag(validators.etag))
+    if (validators.lastModified) {
+      this.setHeader('Last-Modified', validators.lastModified.toUTCString())
+    }
+    const method = String((this.req as { method?: string }).method ?? 'GET').toUpperCase()
+    const outcome = evaluatePreconditions(
+      method,
+      this.headers as Record<string, string | string[] | undefined>,
+      validators,
+    )
+    if (outcome === 304) {
+      this._response.status(304).end()
+      return true
+    }
+    if (outcome === 412) {
+      this.sendProblem({
+        status: 412,
+        detail: 'The resource changed since the version this request is based on.',
+      })
+      return true
+    }
+    return false
   }
 
   /**
