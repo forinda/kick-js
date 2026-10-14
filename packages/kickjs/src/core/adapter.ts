@@ -1,4 +1,5 @@
 import type { AdapterCondition } from './adapter-conditions'
+import type { FailureAdvice } from './failure-analysis'
 import type http from 'node:http'
 import type https from 'node:https'
 import type http2 from 'node:http2'
@@ -202,6 +203,21 @@ export interface AppAdapter {
    * ```
    */
   when?: AdapterCondition
+
+  /**
+   * Explain one of this adapter's startup failures. When a setup hook throws,
+   * the app asks the adapter first, then its own analyzers (connection
+   * refused, unknown host, bad credentials, …), and logs the advice before
+   * the error itself. Return `undefined` for errors you don't recognise.
+   *
+   * ```ts
+   * analyzeFailure: (err) =>
+   *   err instanceof MissingExtensionError
+   *     ? { summary: 'pgvector is not installed', fix: 'CREATE EXTENSION vector;' }
+   *     : undefined
+   * ```
+   */
+  analyzeFailure?(err: unknown): FailureAdvice | undefined
 
   /**
    * Return middleware entries to be inserted into the pipeline.

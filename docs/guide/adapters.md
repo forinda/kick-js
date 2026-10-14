@@ -230,6 +230,38 @@ An adapter left out runs no hooks, contributes no middleware, and is not in `app
 }
 ```
 
+## Explaining startup failures
+
+When an adapter's `beforeMount` or `beforeStart` throws, the app logs an explanation before the error itself, naming the hook that failed:
+
+```
+Db.beforeStart could not connect to 127.0.0.1:5432: connection refused
+
+  Cause: Nothing is listening at that address — the service is down, not started yet, or the URL points at the wrong host or port.
+
+  Fix:   Start the service, or check the connection URL in your env (localhost inside a container is the container itself).
+```
+
+The framework recognises refused connections, unknown hosts, timeouts and rejected credentials — through `cause` chains and `AggregateError`s too. An adapter that knows its own failure modes can explain them first with `analyzeFailure`:
+
+```ts
+const VectorAdapter: AppAdapter = {
+  name: 'VectorAdapter',
+  beforeStart: async () => {
+    /* … */
+  },
+  analyzeFailure: (err) =>
+    err instanceof Error && err.message.includes('extension "vector"')
+      ? {
+          summary: 'pgvector is not installed',
+          fix: 'Run CREATE EXTENSION vector; on the database',
+        }
+      : undefined, // not ours — fall back to the built-in advice
+}
+```
+
+The original error is still thrown unchanged, so code that checks its type or code keeps working.
+
 ## Middleware Phases
 
 The `middleware()` method returns entries that are inserted at a specific phase in the pipeline. Each entry has a `handler`, an optional `phase`, and an optional `path` for scoping:

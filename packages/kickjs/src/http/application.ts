@@ -73,6 +73,7 @@ import {
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
+import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
 import {
   HEALTH_PROBE,
@@ -980,13 +981,32 @@ export class Application {
     hookName: 'beforeMount' | 'beforeStart' | 'afterStart',
   ): Promise<void> {
     if (!hook) return
+    const where = `${adapterName}.${hookName}`
     try {
-      await this.timeline.time(`${adapterName}.${hookName}`, () => hook(ctx))
+      await this.timeline.time(where, () => hook(ctx))
     } catch (err) {
+      this.adviseOnFailure(err, where, adapterName)
       // A failing setup hook fails boot; afterStart runs on a live server.
       if (hookName !== 'afterStart') throw err
       log.error(err, `${adapterName} afterStart hook failed`)
     }
+  }
+
+  /**
+   * Log advice for a hook failure: the failing adapter's own analysis first,
+   * then the framework's. The error itself is still thrown or logged by the
+   * caller — this only adds the explanation in front of it.
+   */
+  private adviseOnFailure(err: unknown, where: string, adapterName: string): void {
+    const adapter = this.adapters.find((a) => a.name === adapterName)
+    let advice: FailureAdvice | undefined
+    try {
+      advice = adapter?.analyzeFailure?.(err)
+    } catch (analyzerErr) {
+      log.debug(`${adapterName}.analyzeFailure threw: ${String(analyzerErr)}`)
+    }
+    advice ??= builtInAdvice(err, where)
+    if (advice) log.error(formatAdvice(advice))
   }
 
   /**

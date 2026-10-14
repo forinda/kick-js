@@ -15,6 +15,7 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
 } from './http/application'
+export type { FailureAdvice } from './core/failure-analysis'
 export {
   allOf,
   onEnv,
