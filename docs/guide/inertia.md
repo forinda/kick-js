@@ -44,7 +44,7 @@ import { InertiaAdapter, inertiaErrorHandler, inertiaNotFound } from '@forinda/k
 export const app = await bootstrap({
   modules,
   // Carries validation errors and flash messages to the next page.
-  middlewares: [session({ secret: process.env.SESSION_SECRET! })],
+  middlewares: [session({ secret: process.env.SESSION_SECRET!, store: 'cookie' })],
   adapters: [
     InertiaAdapter({
       title: 'My App',
@@ -343,12 +343,18 @@ The pages need their own Vite config, separate from the server's:
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Production builds only — the server's .env sets NODE_ENV=development.
+process.env.NODE_ENV = 'production'
+
 export default defineConfig(({ isSsrBuild }) => ({
-  envDir: false, // the server's .env would make these development builds
+  envDir: false,
   plugins: [react()],
   resolve: { tsconfigPaths: true },
+  // The render bundle carries React: a serverless function has no node_modules.
+  ssr: { noExternal: true },
+  define: isSsrBuild ? { 'process.env.NODE_ENV': JSON.stringify('production') } : {},
   build: isSsrBuild
-    ? { outDir: 'dist/ssr' }
+    ? { outDir: 'dist/ssr', copyPublicDir: false }
     : { outDir: 'dist/client', manifest: true, rollupOptions: { input: 'src/client/main.tsx' } },
 }))
 ```
@@ -362,6 +368,21 @@ export default defineConfig(({ isSsrBuild }) => ({
 ```
 
 The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest.
+
+## Deploying
+
+An Inertia app deploys like any KickJS app — see [Deploying](./deployment.md):
+
+- **A Node host or Docker**: `pnpm build`, then `node dist/index.js`. The project's `Dockerfile` builds the server, the pages and the render bundle into one image.
+- **Netlify or Vercel**: `pnpm run build:netlify` / `pnpm run build:vercel`. The platform serves `dist/client` (the built pages' scripts, styles and `public/` files), the function renders every page, and the asset manifest and render bundle are packaged with it.
+
+Validation errors, flash messages and the "back" URL travel in the session. With more than one instance — several containers, or functions — use the cookie store, as the template does, so the request after a redirect finds them wherever it lands:
+
+```ts
+session({ secret: process.env.SESSION_SECRET!, store: 'cookie' })
+```
+
+Set `SESSION_SECRET` to a long random string on every target; the app refuses to start without it.
 
 ## What the adapter handles
 

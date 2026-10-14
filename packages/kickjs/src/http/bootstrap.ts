@@ -4,6 +4,7 @@ import { createLogger, Container } from '../core'
 import { reloadEnv } from '../config/env'
 import { Application, type ApplicationOptions } from './application'
 import { setupClusterPrimary, type ClusterOptions } from './cluster'
+import { ENTRY_CAPTURE, type EntryCapture } from './handler'
 
 /** Reload env from .env file (HMR rebuild) — config now lives in-tree. */
 function tryReloadEnv(): void {
@@ -37,6 +38,16 @@ const log = createLogger('Process')
  * ```
  */
 export async function bootstrap(options: ApplicationOptions): Promise<Application> {
+  // ── Loaded by createHandler(() => import('./index')) ────────────────
+  // The serverless entry reuses this call's options: build the app and hand
+  // it over without listening, forking or registering process hooks.
+  const capture = (globalThis as Record<symbol, unknown>)[ENTRY_CAPTURE]
+  if (typeof capture === 'function') {
+    const app = new Application(options)
+    ;(capture as EntryCapture)(app, options)
+    return app
+  }
+
   // ── Cluster mode ─────────────────────────────────────────────────────
   // In cluster mode the primary process forks workers and never runs the
   // Express application itself.  Only workers proceed past this block.

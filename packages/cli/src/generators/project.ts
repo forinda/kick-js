@@ -5,8 +5,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
 import { fillVars, renderLayers, TEMPLATES_DIR, type Integration } from '../scaffold/overlay'
+import { generateDockerfile, generateDockerignore } from './templates/docker'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
-import { generatePackageJson } from './templates/project-config'
+import { generatePackageJson, packageManagerSpec } from './templates/project-config'
 import {
   AVAILABLE_ADD_PACKAGES,
   TEMPLATE_BUILDS,
@@ -463,7 +464,16 @@ export async function initProject(
   )
 
   // ── package.json ─────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'package.json'), generatePackageJson(name, versions, project))
+  await writeFileSafe(
+    join(dir, 'package.json'),
+    generatePackageJson(
+      name,
+      versions,
+      project,
+      // A workspace member inherits the root's.
+      options.platformConfig !== false ? packageManagerSpec(packageManager) : undefined,
+    ),
+  )
 
   // tsconfig, vite/vitest/kick config, formatter/editor/git config, .env
   // files (`.env.test` is read INSTEAD of `.env` under a test run, so
@@ -475,6 +485,9 @@ export async function initProject(
     template,
     runtime,
     packageManager,
+    // Netlify serves this directory before the function: an Inertia app's
+    // built pages and assets, else an empty one so nothing shadows the API.
+    netlifyPublish: template === 'inertia' ? 'dist/client' : 'dist/public',
     templateLabel: { rest: 'REST API', minimal: 'Minimal', inertia: 'Inertia (React)' }[template],
     // A fresh secret per project, written to the gitignored .env.
     sessionSecret: randomBytes(32).toString('hex'),
@@ -485,6 +498,14 @@ export async function initProject(
   })
   for (const [path, contents] of files) {
     await writeFileSafe(join(dir, path), contents)
+  }
+
+  // A container image for the long-running server. A workspace member gets
+  // the workspace's own Dockerfile instead.
+  if (options.platformConfig !== false) {
+    const kind = template === 'inertia' ? 'inertia' : 'api'
+    await writeFileSafe(join(dir, 'Dockerfile'), generateDockerfile(kind, packageManager, name))
+    await writeFileSafe(join(dir, '.dockerignore'), generateDockerignore())
   }
 
   // ── Agent docs ──────────────────────────────────────────────────────

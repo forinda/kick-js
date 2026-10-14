@@ -4,7 +4,7 @@
  * with no `deploy` block. The platform output is exact: Netlify reads the
  * function's `config` without running the file, and Vercel routes by `src`.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -12,6 +12,9 @@ import { describe, expect, it } from 'vitest'
 
 import { cronScheduleId as coreScheduleId } from '@forinda/kickjs'
 import {
+  bareImportPackage,
+  netlifyHiddenRules,
+  missingPackage,
   cronScheduleId,
   detectLayout,
   findCronDecorators,
@@ -65,6 +68,7 @@ describe('resolveDeploy', () => {
       apiPath: '/api',
       external: ['valibot', 'yup'],
       vercelRuntime: 'nodejs22.x',
+      include: [],
     })
   })
 
@@ -86,8 +90,15 @@ describe('resolveDeploy', () => {
 
 describe('netlifyFunctionSource', () => {
   it('writes a literal config with no preferStatic', () => {
-    const source = netlifyFunctionSource('../../../server/dist/serverless/server.mjs', '/api')
-    expect(source).toBe(`import { handler } from '../../../server/dist/serverless/server.mjs'
+    const source = netlifyFunctionSource('../../../server/dist/serverless/server.mjs', '/api', {
+      projectDir: '../../../server',
+    })
+    expect(source).toBe(`import { fileURLToPath } from 'node:url'
+import { handler } from '../../../server/dist/serverless/server.mjs'
+
+// Where the app's build files were packaged; the platform starts this
+// function in another directory.
+process.env.KICK_APP_ROOT ??= fileURLToPath(new URL('../../../server/', import.meta.url))
 
 // Netlify's context carries waitUntil, so ctx.waitUntil() work finishes after the response.
 export default (request, context) => handler.fetch(request, context)
@@ -105,6 +116,68 @@ export const config = {
   })
 })
 
+describe('optional peers in the function bundle', () => {
+  it('reads the package a bare import names', () => {
+    expect(bareImportPackage('@valibot/to-json-schema')).toBe('@valibot/to-json-schema')
+    expect(bareImportPackage('react-dom/server')).toBe('react-dom')
+    expect(bareImportPackage('node:fs')).toBeUndefined()
+    expect(bareImportPackage('./local')).toBeUndefined()
+    expect(bareImportPackage('@/modules')).toBeUndefined()
+  })
+
+  it('leaves out a package no node_modules above the importer holds', () => {
+    // pnpm keeps a dependency next to its importer, not at the project root.
+    const exists = tree('/app/node_modules/.pnpm/schema/node_modules/zod/package.json')
+    const from = '/app/node_modules/.pnpm/schema/node_modules/schema/dist'
+    expect(missingPackage('zod', from, exists)).toBe(false)
+    expect(missingPackage('@valibot/to-json-schema', from, exists)).toBe(true)
+    expect(missingPackage('./sibling', from, exists)).toBe(false)
+  })
+})
+
+describe('Inertia apps', () => {
+  it('route every path to the function, with no SPA shell after it', () => {
+    expect(vercelRoutes('', true)).toEqual([
+      { handle: 'filesystem' },
+      { src: '^/(.*)$', dest: '/api' },
+    ])
+  })
+
+  it('answer 404 for build bookkeeping Netlify would publish', () => {
+    expect(netlifyHiddenRules(['.vite'])).toEqual(['/.vite  /404  404!', '/.vite/*  /404  404!'])
+  })
+
+  const inertia = { '@forinda/kickjs-inertia': '^0.2.0' }
+
+  it('publish the client build and package the manifest and SSR bundle', () => {
+    const resolved = resolveDeploy(undefined, '/apps/site', tree(), inertia)
+    expect(resolved).toMatchObject({
+      staticDir: 'dist/client',
+      siteRoot: '.',
+      apiPath: '',
+      include: ['dist/client/.vite/manifest.json', 'dist/ssr'],
+    })
+  })
+
+  it('serve static files before the function, which owns every path', () => {
+    const source = netlifyFunctionSource('../../../dist/serverless/server.mjs', '', {
+      projectDir: '../../..',
+      preferStatic: true,
+      includedFiles: ['../../../dist/client/.vite/manifest.json', '../../../dist/ssr/**'],
+    })
+    expect(source).toContain(`export const config = {
+  path: '/*',
+  preferStatic: true,
+  includedFiles: ["../../../dist/client/.vite/manifest.json","../../../dist/ssr/**"],
+}`)
+  })
+
+  it('keep a deploy.include override', () => {
+    const resolved = resolveDeploy({ include: ['data'] }, '/apps/site', tree(), inertia)
+    expect(resolved.include).toEqual(['data'])
+  })
+})
+
 describe('vercelFunctionSource', () => {
   it("passes Vercel's per-request context (waitUntil) to handler.node", async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kick-vercel-fn-'))
@@ -118,6 +191,8 @@ describe('vercelFunctionSource', () => {
     const g = globalThis as Record<symbol, unknown>
     try {
       const entry = await import(pathToFileURL(join(dir, 'index.mjs')).href)
+      // The app's build paths resolve against the function's own directory.
+      expect(realpathSync(process.env.KICK_APP_ROOT!)).toBe(realpathSync(dir))
       const server = await import(pathToFileURL(join(dir, 'server.mjs')).href)
 
       entry.default('req', 'res') // not on Vercel: no context
@@ -129,6 +204,7 @@ describe('vercelFunctionSource', () => {
         { req: 'req', res: 'res', platform: context },
       ])
     } finally {
+      delete process.env.KICK_APP_ROOT
       delete g[key]
       rmSync(dir, { recursive: true, force: true })
     }

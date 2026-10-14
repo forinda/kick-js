@@ -17,8 +17,10 @@ export const app = await bootstrap({
   middlewares: [
     requestId(),
     // @kick:middleware
-    // Carries validation errors and flash messages to the next page.
-    session({ secret: sessionSecret }),
+    // Carries validation errors and flash messages to the next page. Kept in
+    // an encrypted cookie, so it works on any number of instances — several
+    // containers, or Netlify / Vercel functions — with nothing shared.
+    session({ secret: sessionSecret, store: 'cookie' }),
   ],
   adapters: [
     InertiaAdapter({

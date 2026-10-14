@@ -119,6 +119,16 @@ function viteServer(): ViteDevServerLike | null {
   )
 }
 
+/**
+ * A build path, relative to the app: the working directory, or
+ * `KICK_APP_ROOT` when set — the Netlify and Vercel functions `kick build:*`
+ * writes set it to where they packaged the build, since the platform starts
+ * them elsewhere.
+ */
+function fromAppRoot(path: string): string {
+  return resolve(process.env.KICK_APP_ROOT ?? process.cwd(), path)
+}
+
 function appendVary(res: ServerResponse, field: string): void {
   const current = res.getHeader('Vary')
   const list = (Array.isArray(current) ? current.join(',') : String(current ?? ''))
@@ -147,7 +157,7 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
     title: 'KickJS',
   },
   build: (config) => {
-    const clientDir = resolve(config.clientDir)
+    const clientDir = fromAppRoot(config.clientDir)
     const template = config.template ?? defaultTemplate(config.title)
     let version: () => string | null = () => null
 
@@ -241,7 +251,7 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
             const mod = await vite.ssrLoadModule(`/${ssr!.entry.replace(/^\/+/, '')}`)
             return mod.default as SsrRender
           }
-          const url = pathToFileURL(resolve(ssr!.bundle ?? 'dist/ssr/ssr.js')).href
+          const url = pathToFileURL(fromAppRoot(ssr!.bundle ?? 'dist/ssr/ssr.js')).href
           // The app's own build output, chosen at runtime — nothing for Vite to analyze.
           prodRender ??= import(/* @vite-ignore */ url).then((mod) => mod.default as SsrRender)
           return prodRender

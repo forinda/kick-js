@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 // `SchemaLib` is defined next to `resolveSchemaLib` in ../../config, so the
 // scaffold that installs the library and the generators that import from it
 // read the same list. Re-exported here for existing importers.
@@ -32,6 +33,25 @@ function pinned(names: readonly string[], versions: SiblingVersions): Record<str
  * Generate package.json. Which packages it lists comes from the scaffold
  * layers (`templates/<layer>/feature.json`); the ranges come from `versions`.
  */
+/**
+ * `pnpm@11.24.0` for the package manager on this machine, for package.json's
+ * `packageManager`: corepack then installs that same version in CI and in
+ * the Docker image, so the lockfile is read by the tool that wrote it.
+ * Undefined when the version can't be read.
+ */
+export function packageManagerSpec(pm: string): string | undefined {
+  try {
+    const version = execFileSync(pm, ['--version'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10_000,
+    }).trim()
+    return /^\d+\.\d+\.\d+$/.test(version) ? `${pm}@${version}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function generatePackageJson(
   name: string,
   versions: SiblingVersions,
@@ -41,10 +61,12 @@ export function generatePackageJson(
     /** Scripts a scaffold layer adds or replaces. */
     scripts?: Record<string, string>
   },
+  packageManager?: string,
 ): string {
   return JSON.stringify(
     {
       name,
+      ...(packageManager ? { packageManager } : {}),
       // Project starts at 0.0.0 — adopters bump as they ship. Tying
       // the project version to the CLI version (the previous
       // behaviour) made every scaffolded app `5.4.0` on day one,

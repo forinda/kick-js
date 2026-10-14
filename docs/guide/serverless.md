@@ -4,15 +4,18 @@ Netlify Functions and Vercel Functions hand your code a request instead of a
 port. `createHandler()` builds the app for that: same modules, controllers,
 DI, contributors and adapters as `bootstrap()`, served as a handler.
 
-```ts
-// server/src/serverless.ts
-import 'reflect-metadata'
-import './config'
-import { createHandler } from '@forinda/kickjs'
-import { modules } from './modules'
+Every project `kick new` creates already has the entry:
 
-export const handler = createHandler({ modules })
+```ts
+// src/serverless.ts
+import { createHandler } from '@forinda/kickjs'
+
+export const handler = createHandler(() => import('./index'))
 ```
+
+Given the module that calls `bootstrap()`, the handler loads it and serves the app that `bootstrap({ ... })` call describes: while it loads, `bootstrap()` builds the app without listening on a port, forking or registering signal handlers. So the function and the long-running server share one set of options — middleware or an adapter added to `src/index.ts` is in both.
+
+`createHandler(options)` also takes the options directly, for an entry of its own — see [Keep both entries](#keep-both-entries-share-the-options).
 
 | Method                              | Signature                     | Use it for                                 |
 | ----------------------------------- | ----------------------------- | ------------------------------------------ |
@@ -25,25 +28,27 @@ export const handler = createHandler({ modules })
 
 `createHandler()` is the same in every KickJS app. The layout decides where the files go and whether the platform also serves a frontend.
 
-|                  | API only (`kick new --template rest` or `minimal`) | Fullstack (`kick new --template fullstack`) |
-| ---------------- | -------------------------------------------------- | ------------------------------------------- |
-| Serverless entry | `src/serverless.ts`                                | `server/src/serverless.ts`                  |
-| Bundle config    | `vite.serverless.config.ts`                        | `server/vite.serverless.config.ts`          |
-| Bundle output    | `dist/serverless/server.mjs`                       | `server/dist/serverless/server.mjs`         |
-| Static files     | None                                               | `web/dist`, served by the platform          |
-| `SpaAdapter`     | Not used                                           | Left out of the serverless entry (below)    |
+|                  | API only (`rest` or `minimal`) | Inertia (`--template inertia`)           | Fullstack (`--template fullstack`)  |
+| ---------------- | ------------------------------ | ---------------------------------------- | ----------------------------------- |
+| Serverless entry | `src/serverless.ts`            | `src/serverless.ts`                      | `server/src/serverless.ts`          |
+| Bundle output    | `dist/serverless/server.mjs`   | `dist/serverless/server.mjs`             | `server/dist/serverless/server.mjs` |
+| Static files     | None                           | `dist/client`, served by the platform    | `web/dist`, served by the platform  |
+| The function     | Every path                     | Every path the static files don't answer | `/api/*`                            |
+| Packaged with it | —                              | The asset manifest and the SSR bundle    | —                                   |
+
+`kick build:netlify` and `kick build:vercel` bundle the entry themselves — see [Build it with one command](#build-it-with-one-command).
 
 The examples on this page use the fullstack layout. Each platform section says what changes for an API-only project.
 
-### Fullstack: leave `SpaAdapter` out
+### Fullstack: the platform serves the web app
 
-The fullstack server's `src/index.ts` registers `SpaAdapter({ clientDir: '../web/dist' })`, so one process serves both the API and the built web app. On Netlify and Vercel the platform serves `web/dist` itself, so the serverless entry passes the modules and any other adapters, without `SpaAdapter`. Keep `src/index.ts` as it is for `kick dev` and `kick start`.
+The fullstack server's `src/index.ts` registers `SpaAdapter({ clientDir: '../web/dist' })`, so one process serves both the API and the built web app. On Netlify and Vercel the platform serves `web/dist` itself and routes only `/api/*` to the function. The function still loads `SpaAdapter`, finds no `web/dist` beside it and logs that it is not serving one — expected there.
 
 The web app's client calls `/api/v1` on its own origin (`baseUrl: '/api/v1'` in `web/src/api.ts`). That works unchanged when the API and web app deploy as one site, which is what the examples below do. For [two separate deploys](#two-deploys), proxy `/api/*` from the web site to the API site so the client URL still works.
 
 ### Keep both entries: share the options
 
-`src/index.ts` (`bootstrap()`, for `kick dev` / `kick start`) and `src/serverless.ts` (`createHandler()`) both take `ApplicationOptions`. To keep them from drifting apart, move the side-effect imports and the shared options into one file, and have each entry import it and add only what differs:
+To give the function options the server doesn't have — leave an adapter out, add `trustProxy` — pass `createHandler()` the options instead of the entry. `src/index.ts` (`bootstrap()`, for `kick dev` / `kick start`) and `src/serverless.ts` (`createHandler()`) then both take `ApplicationOptions`. To keep them from drifting apart, move the side-effect imports and the shared options into one file, and have each entry import it and add only what differs:
 
 ```ts
 // src/options/app-options.ts
@@ -160,7 +165,7 @@ export default defineConfig({
       // Optional peers you have NOT installed: inlined, a missing one becomes a
       // stub that throws on load. Remove any you install — left external, it
       // stays a bare import the Vercel function can't resolve.
-      external: ['valibot', 'yup'],
+      external: ['valibot', 'yup', '@valibot/to-json-schema'],
       output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
     },
   },
@@ -321,12 +326,15 @@ Run them **after** `kick build`, and for fullstack after the web build too — `
 
 With no configuration, the commands read the project's layout. A project whose parent directory is a workspace with a sibling `web` package is fullstack; anything else is API-only:
 
-|                            | Fullstack                               | API only                                                   |
-| -------------------------- | --------------------------------------- | ---------------------------------------------------------- |
-| Static files               | `../web/dist`, published beside the API | none                                                       |
-| `.netlify/` and `.vercel/` | the workspace root                      | the project itself                                         |
-| Function path              | `/api/*`                                | `/*` — every path, so unknown routes get the app's own 404 |
-| Netlify `publish`          | `web/dist`                              | `dist/public`, an empty directory the build creates        |
+|                            | Fullstack                               | Inertia (`@forinda/kickjs-inertia` installed) | API only                                                   |
+| -------------------------- | --------------------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| Static files               | `../web/dist`, published beside the API | `dist/client`, served before the function     | none                                                       |
+| `.netlify/` and `.vercel/` | the workspace root                      | the project itself                            | the project itself                                         |
+| Function path              | `/api/*`                                | `/*`, after the static files                  | `/*` — every path, so unknown routes get the app's own 404 |
+| Netlify `publish`          | `web/dist`                              | `dist/client`                                 | `dist/public`, an empty directory the build creates        |
+| Packaged with the function | —                                       | `dist/client/.vite/manifest.json`, `dist/ssr` | —                                                          |
+
+Files the app reads at runtime travel with the function at the paths they have in the project; the function sets `KICK_APP_ROOT` to where they landed, since the platform starts it in another directory. Build bookkeeping in the static directory (Vite's `.vite/`) is not published: it is left out on Vercel and answers 404 on Netlify.
 
 ### When you need something else
 
@@ -337,6 +345,8 @@ export default defineConfig({
   deploy: {
     // Keep an API-only project's routes under /api instead of taking every path.
     apiPath: '/api',
+    // Files the app reads at runtime, packaged with the function.
+    include: ['data/regions.json'],
     // entry, outDir, staticDir (false = API only), siteRoot, publishDir,
     // external, vercelRuntime — see the DeployConfig type.
   },
@@ -419,4 +429,4 @@ Without a proxy, set the client's `baseUrl` to the API's full URL and enable [`c
 | Response body | 6 MB buffered, 20 MB streamed | 4.5 MB                       |
 | WebSockets    | Not supported                 | Beta; closes at max duration |
 
-In-memory state does not survive between instances: use a hosted database instead of in-memory repositories, and a shared store (Redis, KV) for rate limiting and sessions. `@Cron` jobs run from Vercel crons and the Workers `scheduled()` handler, not on Netlify — see [Scheduled Tasks](./cron.md). Queue adapters need the platform's background functions.
+In-memory state does not survive between instances: use a hosted database instead of in-memory repositories, and a shared store (Redis, KV) for rate limiting. For sessions, `session({ secret, store: 'cookie' })` keeps the data in an encrypted cookie, so every instance reads it with nothing shared — see [Sessions](./sessions.md#cookie-store). `@Cron` jobs run from Vercel crons and the Workers `scheduled()` handler, not on Netlify — see [Scheduled Tasks](./cron.md). Queue adapters need the platform's background functions.
