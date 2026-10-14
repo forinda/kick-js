@@ -24,6 +24,7 @@ export {
   type ConditionOutcome,
 } from './core/adapter-conditions'
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
+export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './http/conditional'
 export {
   defineCheck,
   StartupCheckError,
@@ -149,6 +150,7 @@ export {
 } from './http/middleware/request-logger'
 export { helmet, type HelmetOptions } from './http/middleware/helmet'
 export { allowedHosts, type AllowedHostsOptions } from './http/middleware/allowed-hosts'
+export { breachPadding, type BreachPaddingOptions } from './http/middleware/breach-padding'
 export { cors, type CorsOptions } from './http/middleware/cors'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './http/middleware/rate-limit'
 export { rateLimitGuard, type RateLimitGuardOptions } from './http/middleware/rate-limit-guard'

@@ -149,6 +149,34 @@ async createUser(data: any) { ... }
 
 For this to work across methods, both decorators must use the same `key` prefix, and your `CacheProvider` must implement `delByPrefix`.
 
+## Conditional Requests (ETag / 304)
+
+`@Cacheable` saves your server the work; conditional requests save the transfer. When a client already holds the current version, answer `304 Not Modified` with no body — and skip loading the data at all:
+
+```ts
+@Get('/:id')
+async show(ctx: RequestContext) {
+  const { version, updatedAt } = await this.posts.meta(ctx.params.id) // cheap
+  if (ctx.conditional({ etag: `v${version}`, lastModified: updatedAt })) return
+  ctx.json(await this.posts.full(ctx.params.id)) // only when the client's copy is stale
+}
+```
+
+`ctx.conditional({ etag, lastModified })` sets `ETag` and `Last-Modified`, compares them with the request's `If-None-Match` / `If-Modified-Since`, and answers `304` when nothing changed. It returns `true` when it answered. A bare tag is quoted for you (`'v2'` → `"v2"`); prefix `W/` for a weak one.
+
+The same call protects writes from lost updates. A client that sends `If-Match: "v2"` with its `PUT` gets `412 Precondition Failed` if someone else changed the resource first:
+
+```ts
+@Put('/:id')
+async update(ctx: RequestContext) {
+  const { version } = await this.posts.meta(ctx.params.id)
+  if (ctx.conditional({ etag: `v${version}` })) return // 412 when stale
+  ctx.json(await this.posts.update(ctx.params.id, ctx.body))
+}
+```
+
+Preconditions are evaluated in RFC 9110 order (`If-Match`, `If-Unmodified-Since`, `If-None-Match`, `If-Modified-Since`) on every runtime. `evaluatePreconditions(method, headers, validators)` exposes the decision on its own.
+
 ## API Reference
 
 ### `@Cacheable(ttl?, options?)`

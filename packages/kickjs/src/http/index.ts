@@ -6,6 +6,7 @@ export {
   type ServerOptions,
 } from './application'
 export type { StartupStep, StartupTimelineSnapshot } from './startup-timeline'
+export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './conditional'
 export {
   defineCheck,
   StartupCheckError,
@@ -83,6 +84,7 @@ export {
 } from './middleware/request-logger'
 export { helmet, type HelmetOptions } from './middleware/helmet'
 export { allowedHosts, type AllowedHostsOptions } from './middleware/allowed-hosts'
+export { breachPadding, type BreachPaddingOptions } from './middleware/breach-padding'
 export { cors, type CorsOptions } from './middleware/cors'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './middleware/rate-limit'
 export { rateLimitGuard, type RateLimitGuardOptions } from './middleware/rate-limit-guard'
