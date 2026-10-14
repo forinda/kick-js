@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.0.2
+
+### Patch Changes
+
+- [#860](https://github.com/forinda/kick-js/pull/860) [`160f99b`](https://github.com/forinda/kick-js/commit/160f99b6f75d6ea827fbd1adeaed26abdbc8e804) Thanks [@forinda](https://github.com/forinda)! - Editing a page or component served by the `kick dev` server now hot-updates it in the browser. The plugin marked every changed source file as handled, which cancelled Vite's own browser update, so component edits only showed after a manual refresh.
+
 ## 8.0.1
 
 ### Patch Changes
