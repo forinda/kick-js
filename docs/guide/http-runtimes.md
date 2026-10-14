@@ -93,20 +93,17 @@ which is how the same app deploys to Cloudflare Workers, Bun, and Deno. Under
 `kick dev` and behind a host server it hands unmatched requests back unless
 `notFoundFallthrough: false`.
 
-`h3WebRuntime()` from `@forinda/kickjs/h3-web` is the same runtime, but
-requires h3 v2.
-
-### Still on h3 v1
-
-`h3Runtime()` runs on whichever h3 major is installed. On v1 it logs a one-time
-deprecation notice, and `kick doctor` warns: v1 support ends in the next major.
-Upgrading is `pnpm add h3@^2`, with no code change for apps that only use
-KickJS APIs. Code that reaches into the engine (`getRuntimeApp()`, `ctx.req` as
-an `H3Event`, h3 utilities called on it) follows
-[h3's migration guide](https://h3.dev/migration).
-
 If the app's `h3` is not the one KickJS resolves (a linked checkout, a
 bundler), pass it in: `h3Runtime({ h3: await import('h3') })`.
+
+### Upgrading from h3 v1
+
+The runtime needs h3 v2; on v1 it fails at boot with the upgrade command, and
+`kick doctor` flags it. Run `pnpm add h3@^2`. Apps that only use KickJS APIs
+need no code change. Code that reaches into the engine (`getRuntimeApp()`,
+`ctx.req` as an `H3Event`, h3 utilities called on it) follows
+[h3's migration guide](https://h3.dev/migration). `h3WebRuntime()` from
+`@forinda/kickjs/h3-web` is a deprecated alias of `h3Runtime()`.
 
 ### Calling the app through `fetch`
 

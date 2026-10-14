@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 
 import { Application, Container, KickError } from '../src/index'
 import { createWebApp } from '../src/web'

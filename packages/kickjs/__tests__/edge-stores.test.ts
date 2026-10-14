@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 
 import { createWebApp, KvRateLimitStore, KvSessionStore, rateLimitGuard } from '../src/web'
 import type { KvLike } from '../src/web'

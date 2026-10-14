@@ -64,7 +64,7 @@ describe('resolvePathname', () => {
 
 describe('web Request shapes', () => {
   // No runtime hands these helpers a raw `Request` today — `WebRequestShim`
-  // normalizes first on both web paths (web/handler.ts, runtimes/h3-web.ts).
+  // normalizes first on both web paths (web/handler.ts, runtimes/h3.ts).
   // These lock the defensive handling: `Headers` is not index-accessible and
   // `Request.url` is absolute, so BOTH would fail silently rather than throw.
   it('reads a Headers object, which has no index access', () => {

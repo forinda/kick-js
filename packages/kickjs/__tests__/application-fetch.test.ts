@@ -6,7 +6,6 @@
 import 'reflect-metadata'
 import http from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as h3v2 from 'h3-v2'
 import {
   Application,
   Container,
@@ -17,7 +16,7 @@ import {
   type ModuleRoutes,
   type RequestContext,
 } from '../src/index'
-import { h3WebRuntime } from '../src/http/runtimes/h3-web'
+import { h3Runtime } from '../src/http/runtimes/h3'
 
 @Controller()
 class EchoController {
@@ -43,7 +42,7 @@ afterEach(async () => {
 
 describe.each([
   ['express', undefined],
-  ['h3 v2', () => h3WebRuntime({ h3: h3v2 as never })],
+  ['h3', () => h3Runtime()],
 ] as const)('AdapterContext.fetch on %s', (_name, runtime) => {
   it('reaches routes from an adapter hook, before any server listens', async () => {
     let seen: unknown

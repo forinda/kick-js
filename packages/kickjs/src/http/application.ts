@@ -723,8 +723,8 @@ export class Application {
    * contributors, error handling — and return its `Response`, with no
    * listening server required.
    *
-   * Runtimes with a native fetch (the h3 v2 runtime) are called directly.
-   * Node-based runtimes (Express, Fastify, h3 v1) are served by forwarding to
+   * Runtimes with a native fetch (h3) are called directly.
+   * Node-based runtimes (Express, Fastify) are served by forwarding to
    * a server bound to `127.0.0.1` inside this process, started on first use
    * and closed by {@link shutdown}; request bodies are buffered on that path.
    *

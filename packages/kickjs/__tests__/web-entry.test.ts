@@ -2,7 +2,7 @@ import 'reflect-metadata'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { describe, it, expect, beforeEach } from 'vitest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 
 import { createWebApp, createFetchHandler } from '../src/web'
 import { Container } from '../src/core/container'

@@ -4,7 +4,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 
 ## Engine & package layout (read first — avoids the two most common mistakes)
 
-- **KickJS is engine-pluggable, not Express-only.** It runs on **Express (default), Fastify, or h3** behind one `HttpRuntime` seam (`bootstrap({ runtime })`). Controllers, modules, DI, and context decorators are engine-neutral — write to `ctx` (`ctx.json`/`ctx.body`/`ctx.params`/`ctx.sse`), not raw Express APIs. The runtimes (incl. the h3 v2 web-standard entries `./h3-web` and `./web` for edge/Bun/Deno) + cross-engine file uploads ship in the **stable** release.
+- **KickJS is engine-pluggable, not Express-only.** It runs on **Express (default), Fastify, or h3** behind one `HttpRuntime` seam (`bootstrap({ runtime })`). Controllers, modules, DI, and context decorators are engine-neutral — write to `ctx` (`ctx.json`/`ctx.body`/`ctx.params`/`ctx.sse`), not raw Express APIs. The runtimes (h3 is v2 only; the `./web` fetch entry targets edge/Bun/Deno) + cross-engine file uploads ship in the **stable** release.
 - **The framework lives in `packages/kickjs`** (`@forinda/kickjs`) — DI core under `src/core/`, HTTP layer under `src/http/`, runtimes under `src/http/runtimes/{express,fastify,h3}.ts`. There is no separate `packages/core`, `packages/http`, or `packages/config`.
 
 ## Before You Start

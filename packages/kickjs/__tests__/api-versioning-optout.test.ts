@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 
 import { Application, type BootstrapOptions } from '../src/http/application'
 import { Container } from '../src/core/container'

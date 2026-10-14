@@ -383,9 +383,9 @@ export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
   if (ctx.runtime === 'h3' && h3Major(ctx.cwd, deps.h3) === 1) {
     return {
       name,
-      status: 'warn',
+      status: 'fail',
       message: 'h3 v1',
-      fix: 'h3 v1 support is deprecated and ends in the next major of @forinda/kickjs. Upgrade: pnpm add h3@^2 — h3Runtime() picks it up with no code change.',
+      fix: 'This version of @forinda/kickjs runs on h3 v2 only. Upgrade: pnpm add h3@^2 — no code change for apps that only use KickJS APIs.',
     }
   }
   return { name, status: 'pass' }

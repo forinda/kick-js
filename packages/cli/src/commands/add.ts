@@ -241,8 +241,7 @@ export const ENGINE_PEERS: Record<'express' | 'fastify' | 'h3', readonly string[
   express: ['express'],
   // `serve-static` rather than express for static files — no express dependency.
   fastify: ['fastify', '@fastify/middie', 'serve-static'],
-  // Pinned so a later h3 v3 is not picked up unseen. h3Runtime() runs v1 too,
-  // so moving an existing ^1 app to ^2 keeps it working.
+  // Pinned so a later h3 v3 is not picked up unseen.
   h3: ['h3@^2', 'serve-static'],
 }
 

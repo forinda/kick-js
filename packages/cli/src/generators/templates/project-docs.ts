@@ -159,7 +159,7 @@ Rules that keep generated code correct on **every** engine:
   Don't assume \`ctx.req\` is an \`express.Request\` in portable code.
 - **Global middleware** in \`bootstrap({ middlewares })\` is connect-style
   \`(req, res, next)\` — it runs on all engines (Fastify via \`@fastify/middie\`,
-  h3 via \`fromNodeMiddleware\`). But on Fastify / h3 the engine parses the body
+  h3 via \`fromNodeHandler\`). But on Fastify / h3 the engine parses the body
   natively, so the default \`express.json()\` is **auto-skipped** (\`nativeBodyParsing\`).
   Don't add \`express.json()\` manually on those engines.
 - **File uploads** work on all three: \`@FileUpload({ mode, fieldName, ... })\` →
@@ -986,7 +986,7 @@ Same-key collisions WITHIN a precedence level throw \`DuplicateContributorError\
 **Critical rules — all stem from the same shared-via-ALS instance model**:
 - Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed bag.
 - **\`resolve\` and \`onError\` must RETURN the value** — the runner writes it via \`ctx.set(key, value)\`. Direct property assignment (\`ctx.tenant = …\`) sticks to one instance only and the handler instance never sees it.
-- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying node request is shared). Note it is a node \`IncomingMessage\` on Fastify and h3, not an \`express.Request\`.
+- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying node request is shared). Note it is a node \`IncomingMessage\` on Fastify and a web-backed request on h3, not an \`express.Request\`.
 - Services with no \`ctx\` reference: \`getRequestValue('tenant')\` returns \`MetaValue<'tenant'> | undefined\` (typed via the augmented \`ContextMeta\`). For \`requestId\` use \`getRequestStore()\`.
 - **No \`setRequestValue\` — writes flow through \`ctx.set\` or a contributor's return value.** Avoids "spooky action at a distance" where any service can pollute the per-request bag.
 
