@@ -80,8 +80,14 @@ for (const [name, runtime] of RUNTIMES)
       const cookie = cookieOf(login)!
       expect(cookie).toMatch(/^kick\.sid=v1\./)
       expect(cookie).toContain('HttpOnly')
-      // Encrypted: the value is not readable from the cookie.
-      expect(decodeURIComponent(cookie)).not.toContain('u1')
+      // Encrypted: the decoded bytes hold none of the session's plaintext.
+      // (Checked on the bytes: the base64 text of random ciphertext can
+      // contain any short string by chance.)
+      const sealed = Buffer.from(
+        decodeURIComponent(cookie.split(';')[0]!).slice('kick.sid=v1.'.length),
+        'base64url',
+      )
+      expect(sealed.toString('latin1')).not.toContain('userId')
 
       const jar = cookie.split(';')[0]!
       const added = await (await instance(runtime)).post('/add').set('Cookie', jar).expect(200)
