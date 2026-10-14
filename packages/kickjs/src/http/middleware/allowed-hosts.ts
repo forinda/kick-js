@@ -13,9 +13,13 @@ export interface AllowedHostsOptions {
   hosts: string[]
   /**
    * Read the host from `X-Forwarded-Host` instead of `Host`. Only behind a
-   * proxy that sets it — a client can send the header too. The LAST value is
-   * used: a proxy that appends leaves the client's own value first. Default
-   * `false`.
+   * proxy that sets it — a client can send the header too. Every value in it
+   * must be allowed: a proxy that appends leaves the client's own value first,
+   * and that first value is what Express's `req.hostname` reads.
+   *
+   * Without this option the header is removed from the request, so nothing
+   * downstream (Express under `trust proxy`, your own code) reads a host this
+   * check never saw. Default `false`.
    */
   trustForwardedHost?: boolean
   /**
@@ -89,15 +93,23 @@ export function allowedHosts(options: string[] | AllowedHostsOptions) {
 
   return (req: Request, res: Response, next: NextFunction) => {
     const headers = req.headers as HeaderBag
-    // Several X-Forwarded-Host headers arrive comma-joined; the nearest proxy's
-    // value is the last one.
-    const forwarded = trustForwardedHost
-      ? headerOf(headers, 'x-forwarded-host')?.split(',').at(-1)?.trim()
-      : undefined
-    const hostname = hostnameOf(
-      forwarded ?? headerOf(headers, 'host') ?? headerOf(headers, ':authority'),
-    )
-    if (hostname !== undefined && allowed(hostname)) return next()
+    // Check every host a consumer could read, not one chosen by a rule that a
+    // consumer may not share — which value of a list wins differs between
+    // proxies and frameworks.
+    const forwardedHeader = headerOf(headers, 'x-forwarded-host')
+    let candidates: Array<string | undefined>
+    if (trustForwardedHost && forwardedHeader !== undefined) {
+      candidates = forwardedHeader.split(',').map((h) => h.trim())
+    } else {
+      // Not trusted: drop it, so it can't be read past this point.
+      if (forwardedHeader !== undefined) delete headers['x-forwarded-host']
+      candidates = [headerOf(headers, 'host') ?? headerOf(headers, ':authority')]
+    }
+    const passes = candidates.every((host) => {
+      const hostname = hostnameOf(host)
+      return hostname !== undefined && allowed(hostname)
+    })
+    if (passes) return next()
     // Probes read; nothing that changes state is exempt.
     const method = req.method?.toUpperCase()
     if (

@@ -149,7 +149,7 @@ bootstrap({
 Ports are ignored, and names compare case-insensitively.
 
 - **Health probes are exempt.** Kubernetes and most platforms probe the instance's IP, so `GET`/`HEAD` on `/health/live` and `/health/ready` answer whatever the host. The check runs before anything else is mounted, including routes adapters register.
-- **Behind a proxy that rewrites `Host`**, read the original from `X-Forwarded-Host` — only when your proxy sets it, since clients can send it too. The last value is used, which is the one your nearest proxy added:
+- **Behind a proxy that rewrites `Host`**, read the original from `X-Forwarded-Host` — only when your proxy sets it, since clients can send it too. Every value in the header must be allowed, since frameworks disagree about which one to read. Without this option the header is removed from the request, so nothing reads a host the check didn't see:
 
   ```ts
   security: { allowedHosts: { hosts: ['example.com'], trustForwardedHost: true } }

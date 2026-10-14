@@ -49,15 +49,29 @@ describe('allowedHosts()', () => {
     }
   })
 
-  it("reads X-Forwarded-Host only when told to, taking the nearest proxy's value", () => {
-    // The client sent `evil.test`; the proxy appended the host it served.
-    const appended = { 'x-forwarded-host': 'evil.test, example.com' }
-    expect(run('10.0.0.5:3000', ['example.com'], appended)).toBe(400)
+  it('reads X-Forwarded-Host only when told to, and then every value must be allowed', () => {
     const trusted = { hosts: ['example.com'], trustForwardedHost: true }
-    expect(run('10.0.0.5:3000', trusted, appended)).toBe('next')
+    expect(run('10.0.0.5:3000', trusted, { 'x-forwarded-host': 'example.com' })).toBe('next')
+    // Express's req.hostname reads the FIRST value, which the client chose.
+    expect(run('10.0.0.5:3000', trusted, { 'x-forwarded-host': 'evil.test, example.com' })).toBe(
+      400,
+    )
     expect(run('10.0.0.5:3000', trusted, { 'x-forwarded-host': 'example.com, evil.test' })).toBe(
       400,
     )
+    expect(run('10.0.0.5:3000', ['example.com'], { 'x-forwarded-host': 'example.com' })).toBe(400)
+  })
+
+  it('removes an untrusted X-Forwarded-Host so nothing downstream reads it', () => {
+    const headers: Record<string, string> = { host: 'example.com', 'x-forwarded-host': 'evil.test' }
+    let nexted = false
+    allowedHosts(['example.com'])(
+      { method: 'GET', url: '/', headers } as never,
+      { setHeader: () => {} } as never,
+      (() => (nexted = true)) as never,
+    )
+    expect(nexted).toBe(true)
+    expect(headers['x-forwarded-host']).toBeUndefined()
   })
 
   it('exempts ignorePaths for GET and HEAD only', () => {
