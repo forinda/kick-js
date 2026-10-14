@@ -2,7 +2,7 @@ import { readCookies, sendJson, setCookie } from './respond'
 import type { Request, Response, NextFunction } from 'express'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
-import { randomHex } from '../../core/web-crypto'
+import { randomHex, safeEqual } from '../../core/web-crypto'
 import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
@@ -107,7 +107,7 @@ export function csrf(options: CsrfOptions = {}) {
     // Validate: header token must match cookie token
     const headerToken = req.headers[headerName] as string | undefined
 
-    if (!headerToken || headerToken !== token) {
+    if (typeof headerToken !== 'string' || !safeEqual(headerToken, token)) {
       return sendJson(res, 403, {
         message: 'CSRF token mismatch',
       })
@@ -201,7 +201,7 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
     if (ignorePaths.has(resolvePathname(ctx.req as unknown as ClientRequestLike))) return next()
 
     const headerToken = ctx.headers[headerName] as string | undefined
-    if (!headerToken || headerToken !== token) {
+    if (typeof headerToken !== 'string' || !safeEqual(headerToken, token)) {
       ctx.json({ message: 'CSRF token mismatch' }, 403)
       return
     }

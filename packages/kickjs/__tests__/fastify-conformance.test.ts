@@ -180,6 +180,66 @@ for (const rt of RUNTIMES) {
       await request(app.handle.bind(app)).get('/api/v1/nf/nope').expect(404)
     })
 
+    it('percent-decodes route params', async () => {
+      @Controller()
+      class C {
+        @Get('/u/:name')
+        get(ctx: RequestContext) {
+          ctx.json({ name: ctx.params.name })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/dec', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app)).get('/api/v1/dec/u/a%20b%C3%A9').expect(200)
+      expect(res.body).toEqual({ name: 'a bé' })
+      await request(app.handle.bind(app)).get('/api/v1/dec/u/%E0%A4%A').expect(400)
+    })
+
+    it('trusts a hop count of proxies the way Express does', async () => {
+      @Controller()
+      class C {
+        @Get('/ip')
+        ip(ctx: RequestContext) {
+          ctx.json({ ip: ctx.ip })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        trustProxy: 1,
+        modules: [{ routes: () => ({ path: '/tp', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app))
+        .get('/api/v1/tp/ip')
+        .set('X-Forwarded-For', '203.0.113.7')
+        .expect(200)
+      expect(res.body.ip).toBe('203.0.113.7')
+    })
+
+    if (rt.name !== 'express') {
+      // Express leaves the request to the handler: `ctx.render()` writes from
+      // a callback after the handler returns, so it cannot fall through.
+      it('answers 404 when a handler neither writes nor returns', async () => {
+        @Controller()
+        class C {
+          @Get('/silent')
+          silent() {}
+        }
+        const app = new Application({
+          runtime: rt.make(),
+          modules: [{ routes: () => ({ path: '/s', controller: C }) } as never],
+        })
+        await app.setup()
+
+        await request(app.handle.bind(app)).get('/api/v1/s/silent').expect(404)
+      })
+    }
+
     it('streams Server-Sent Events through the response driver', async () => {
       @Controller()
       class C {

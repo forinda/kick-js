@@ -86,6 +86,15 @@ function isProduction(): boolean {
   return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
 }
 
+function decodeParams(params: Record<string, string>): Record<string, string> {
+  const decoded: Record<string, string> = {}
+  for (const key in params) {
+    const value = params[key]
+    decoded[key] = value.includes('%') ? decodeURIComponent(value) : value
+  }
+  return decoded
+}
+
 /**
  * Compile a RouteEntry into a `(invocation) => Promise<Response>` function.
  * Everything derivable at route-build time (validator, upload config) is
@@ -118,8 +127,15 @@ export function compileWebRoute(
   return async ({ request, url, params, carry }) => {
     const shim = new WebRequestShim(request, url)
     const req = carry ? readThrough(shim, carry) : shim
-    req.params = params
     let bodyError: unknown
+    // h3 hands params over still percent-encoded; Express and Fastify decode
+    // them, so `/users/a%20b` must reach the handler as `'a b'` here too.
+    try {
+      req.params = decodeParams(params)
+    } catch {
+      req.params = params
+      bodyError = HttpException.badRequest('Malformed URL parameter')
+    }
 
     // Body: uploads consume the stream as FormData; everything else parses
     // by content-type.

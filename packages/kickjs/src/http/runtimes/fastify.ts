@@ -54,6 +54,8 @@ interface FastifyReplyLike {
   serializer(fn: (payload: unknown) => string): FastifyReplyLike
   getHeader(name: string): unknown
   hijack(): void
+  /** Hand the request to the not-found handler (Fastify 5). */
+  callNotFound(): void
   readonly sent: boolean
   readonly raw: ServerResponse
 }
@@ -316,9 +318,16 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
       if (reply.sent) return
       const result = await entry.handler(ctx)
       // Return-value handlers (reply.ts): auto-send when nothing was written.
-      if (!reply.sent) await applyHandlerResult(ctx, result)
+      // Nothing written and nothing returned falls through to the 404 handler,
+      // as on Express and h3 — not Fastify's own empty 200.
+      if (!reply.sent && !(await applyHandlerResult(ctx, result))) reply.callNotFound()
     })
   }
+}
+
+/** Express's `trust proxy` number: trust the first `hops` addresses from the socket. */
+function hopTrust(hops: number): (ip: string, hopIndex: number) => boolean {
+  return (_ip, hopIndex) => hopIndex < hops
 }
 
 /**
@@ -341,9 +350,13 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         // `routerOptions` (Fastify 5+; top-level `ignoreTrailingSlash` is
         // deprecated, removed in Fastify 6).
         routerOptions: { ignoreTrailingSlash: true },
-        // trustProxy passed through for now; core X-Forwarded-For
-        // normalization (spec §10 Q1) is a follow-up.
-        trustProxy: typeof options.trustProxy === 'function' ? false : options.trustProxy,
+        // Express semantics for every form. Fastify takes a predicate as-is,
+        // but reads a hop count as "trust nothing", where Express trusts that
+        // many hops from the socket.
+        trustProxy:
+          typeof options.trustProxy === 'number'
+            ? hopTrust(options.trustProxy)
+            : options.trustProxy,
       }) as FastifyAppLike & {
         [QUEUE]?: Array<{ mw: ConnectMiddleware; opts?: UseConnectOptions }>
       }
