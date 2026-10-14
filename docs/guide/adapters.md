@@ -188,6 +188,48 @@ Two are worth calling out because nothing else surfaces them:
   memory. It may be async so a snapshot can be assembled, not so it can do
   work.
 
+## Turning an adapter on or off
+
+`when` decides once, at startup, whether an adapter runs at all. Return `true` to keep it, or `false` / a reason to leave it out:
+
+```ts
+import { allOf, onEnv, onPackage } from '@forinda/kickjs'
+
+export const QueueAdapter = defineAdapter({
+  name: 'QueueAdapter',
+  build: () => ({
+    when: allOf(onEnv('REDIS_URL'), onPackage('bullmq')),
+    beforeStart: ({ container }) => {
+      /* … */
+    },
+  }),
+})
+```
+
+| Helper                   | On when                                                      |
+| ------------------------ | ------------------------------------------------------------ |
+| `onEnv('NAME')`          | the variable is set and not empty                            |
+| `onEnv('NAME', 'value')` | the variable equals `value`                                  |
+| `onPackage('name')`      | the app can import the package                               |
+| `allOf(a, b, …)`         | every condition is on; the first that isn't gives the reason |
+
+Any `() => boolean | string` works too — keep it synchronous and free of side effects. A condition that throws counts as off, with its error as the reason.
+
+An adapter left out runs no hooks, contributes no middleware, and is not in `app.getAdapters()`. One that `dependsOn` it is left out as well, rather than failing startup. `app.getConditionReport()` lists every adapter with a `when` and whether it is on — DevTools serves it at `/_debug/conditions`:
+
+```json
+{
+  "adapters": [
+    { "adapter": "QueueAdapter", "enabled": false, "reason": "REDIS_URL is not set" },
+    {
+      "adapter": "JobsAdapter",
+      "enabled": false,
+      "reason": "depends on QueueAdapter, which is off"
+    }
+  ]
+}
+```
+
 ## Middleware Phases
 
 The `middleware()` method returns entries that are inserted at a specific phase in the pipeline. Each entry has a `handler`, an optional `phase`, and an optional `path` for scoping:

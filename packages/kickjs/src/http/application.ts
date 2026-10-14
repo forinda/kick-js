@@ -72,6 +72,7 @@ import {
   buildRouteTable,
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
+import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
 import {
   HEALTH_PROBE,
@@ -701,6 +702,7 @@ export class Application {
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
   private timeline = new StartupTimeline()
+  private conditionReport: ConditionOutcome[] = []
   private mountedRoutes: MountedRoute[] = []
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
@@ -774,13 +776,57 @@ export class Application {
       }
       return adapter as AppAdapter & { name: string }
     })
-    this.adapters = mountSort(namedAdapters, 'adapter')
+    this.adapters = mountSort(this.applyConditions(namedAdapters), 'adapter')
     // Adapters and plugins with onError / onResponse observe every error and
     // response; the diagnostics_channel channels are fed from the same funnel.
     this.observers = setObservers([...this.adapters, ...this.plugins])
     installChannelPublisher()
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
+  }
+
+  /**
+   * Leave out adapters whose `when` says no — and, until nothing changes, any
+   * adapter that `dependsOn` one left out, which could not run without it.
+   */
+  private applyConditions<A extends AppAdapter & { name: string }>(adapters: A[]): A[] {
+    const off = new Map<string, string>()
+    for (const adapter of adapters) {
+      if (!adapter.when) continue
+      const result = evaluateCondition(adapter.when)
+      if (result !== true) off.set(adapter.name, result)
+    }
+    let changed = off.size > 0
+    while (changed) {
+      changed = false
+      for (const adapter of adapters) {
+        if (off.has(adapter.name)) continue
+        const missing = adapter.dependsOn?.find((dep) => off.has(dep))
+        if (missing) {
+          off.set(adapter.name, `depends on ${missing}, which is off`)
+          changed = true
+        }
+      }
+    }
+    this.conditionReport = adapters
+      .filter((a) => a.when || off.has(a.name))
+      .map((a) =>
+        off.has(a.name)
+          ? { adapter: a.name, enabled: false, reason: off.get(a.name) }
+          : { adapter: a.name, enabled: true },
+      )
+    for (const outcome of this.conditionReport) {
+      if (!outcome.enabled) log.debug(`Adapter ${outcome.adapter} is off: ${outcome.reason}`)
+    }
+    return adapters.filter((a) => !off.has(a.name))
+  }
+
+  /**
+   * Adapters with a `when` condition, and whether each is on — with the reason
+   * when it is not. Served by DevTools at `/_debug/conditions`.
+   */
+  getConditionReport(): readonly ConditionOutcome[] {
+    return this.conditionReport
   }
 
   /** Whether the application is currently draining in-flight requests */

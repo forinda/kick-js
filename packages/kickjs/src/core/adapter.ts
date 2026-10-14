@@ -1,3 +1,4 @@
+import type { AdapterCondition } from './adapter-conditions'
 import type http from 'node:http'
 import type https from 'node:https'
 import type http2 from 'node:http2'
@@ -188,6 +189,19 @@ export interface AppAdapter {
    * ```
    */
   dependsOn?: readonly KickJsPluginName[]
+
+  /**
+   * Whether this adapter runs at all, decided once at startup. Return `true`
+   * to keep it, or `false` / a reason to leave it out — the outcome is in
+   * `app.getConditionReport()` and DevTools' `/_debug/conditions`. An adapter
+   * that `dependsOn` one left out is left out too.
+   *
+   * ```ts
+   * const cache: AppAdapter = { name: 'Cache', when: onEnv('REDIS_URL'), … }
+   * defineAdapter({ name: 'Queue', build: () => ({ when: allOf(onEnv('QUEUE'), onPackage('bullmq')), … }) })
+   * ```
+   */
+  when?: AdapterCondition
 
   /**
    * Return middleware entries to be inserted into the pipeline.
