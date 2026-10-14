@@ -47,12 +47,21 @@ export function onEnv(name: string, value?: string): AdapterCondition {
  */
 export function onPackage(name: string): AdapterCondition {
   return () => {
-    try {
-      createRequire(join(process.cwd(), 'package.json')).resolve(name)
-      return true
-    } catch {
-      return `package '${name}' is not installed`
+    // From the app's entry file first — the working directory can sit outside
+    // the app's package tree (a process manager, a monorepo root) — then from
+    // the working directory.
+    const bases = [process.argv[1], join(process.cwd(), 'package.json')].filter(
+      (base): base is string => typeof base === 'string' && base.length > 0,
+    )
+    for (const base of bases) {
+      try {
+        createRequire(base).resolve(name)
+        return true
+      } catch {
+        // Try the next base.
+      }
     }
+    return `package '${name}' is not installed`
   }
 }
 

@@ -27,6 +27,7 @@ import {
   type RouteDefinition,
   type SourcedRegistration,
   mountSort,
+  DuplicateMountNameError,
   MutableModuleRegistry,
 } from '../core'
 import {
@@ -791,6 +792,14 @@ export class Application {
    * adapter that `dependsOn` one left out, which could not run without it.
    */
   private applyConditions<A extends AppAdapter & { name: string }>(adapters: A[]): A[] {
+    // Names identify adapters below, and dependsOn refers to them by name. Two
+    // with one name would both be dropped when one is off, hiding the
+    // duplicate from mountSort — so reject it first, as mountSort would.
+    const seen = new Set<string>()
+    for (const adapter of adapters) {
+      if (seen.has(adapter.name)) throw new DuplicateMountNameError('adapter', adapter.name)
+      seen.add(adapter.name)
+    }
     const off = new Map<string, string>()
     for (const adapter of adapters) {
       if (!adapter.when) continue
@@ -1518,6 +1527,7 @@ export class Application {
       await plugin.onReady?.(this.container)
     }
     this.timeline.mark('ready')
+    this.timeline.complete()
     this.reportStartup()
   }
 
@@ -1573,6 +1583,7 @@ export class Application {
         await plugin.onReady?.(this.container)
       }
       this.timeline.mark('ready')
+      this.timeline.complete()
       this.reportStartup()
 
       return
@@ -1619,6 +1630,7 @@ export class Application {
             await plugin.onReady?.(this.container)
           }
           this.timeline.mark('ready')
+          this.timeline.complete()
           this.reportStartup()
 
           resolve()

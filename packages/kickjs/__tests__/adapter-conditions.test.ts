@@ -1,4 +1,7 @@
 import 'reflect-metadata'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application, Container, allOf, onEnv, onPackage, type AppAdapter } from '../src/index'
 
@@ -57,5 +60,32 @@ describe('adapters with when', () => {
       { adapter: 'Broken', enabled: false, reason: 'its condition threw (see the server log)' },
       { adapter: 'On', enabled: true },
     ])
+  })
+
+  it('rejects duplicate adapter names before a condition can hide one', () => {
+    expect(
+      () =>
+        new Application({
+          modules: [],
+          adapters: [
+            { name: 'Cache', when: () => false },
+            { name: 'Cache', when: () => true },
+          ],
+        }),
+    ).toThrow(/Cache/)
+  })
+
+  it('onPackage resolves from the app entry when the working directory is elsewhere', () => {
+    const cwd = process.cwd()
+    const entry = process.argv[1]
+    // An app whose entry is in this package, started from an unrelated directory.
+    process.argv[1] = join(cwd, 'src/index.ts')
+    process.chdir(mkdtempSync(join(tmpdir(), 'kick-cwd-')))
+    try {
+      expect(onPackage('supertest')()).toBe(true)
+    } finally {
+      process.chdir(cwd)
+      process.argv[1] = entry
+    }
   })
 })

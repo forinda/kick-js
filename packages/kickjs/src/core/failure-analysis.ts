@@ -32,6 +32,19 @@ function findCode(err: unknown, codes: readonly string[], depth = 0): ErrnoLike 
   return undefined
 }
 
+/** Whether the error, or one in its `cause` chain / AggregateError, has a matching message. */
+function findMessage(err: unknown, pattern: RegExp, depth = 0): boolean {
+  if (!err || typeof err !== 'object' || depth > 5) return false
+  const e = err as { message?: unknown; cause?: unknown; errors?: unknown[] }
+  if (typeof e.message === 'string' && pattern.test(e.message)) return true
+  return [e.cause, ...(Array.isArray(e.errors) ? e.errors : [])].some((inner) =>
+    findMessage(inner, pattern, depth + 1),
+  )
+}
+
+const CREDENTIALS_REJECTED =
+  /password authentication failed|access denied for user|authentication failed|NOAUTH|WRONGPASS/i
+
 const target = (e: ErrnoLike) =>
   typeof e.address === 'string'
     ? `${e.address}${typeof e.port === 'number' ? `:${e.port}` : ''}`
@@ -67,15 +80,12 @@ export function builtInAdvice(err: unknown, where: string): FailureAdvice | unde
       fix: 'Check that this machine is allowed to reach the service, and that TLS and port settings match it.',
     }
   }
-  const message = err instanceof Error ? err.message : ''
-  if (
-    /password authentication failed|access denied for user|authentication failed|NOAUTH|WRONGPASS/i.test(
-      message,
-    )
-  ) {
+  if (findMessage(err, CREDENTIALS_REJECTED)) {
     return {
       summary: `${where} was refused: the credentials were not accepted`,
-      cause: message,
+      // A fixed explanation, not the driver's message: those can carry the
+      // connection URL, and this text goes to the log.
+      cause: 'The server rejected the user name or password.',
       fix: 'Check the user and password in your connection URL or env, and that the user exists on this server.',
     }
   }

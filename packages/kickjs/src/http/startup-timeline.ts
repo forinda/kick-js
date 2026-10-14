@@ -23,6 +23,8 @@ export class StartupTimeline {
   private readonly began = performance.now()
   private last = this.began
   private readonly steps: StartupStep[] = []
+  /** Set by complete(): later snapshots stop counting idle runtime. */
+  private completedAt: number | undefined
 
   /** Close a phase: the time since the previous step ended. */
   mark(name: string): void {
@@ -47,8 +49,14 @@ export class StartupTimeline {
     }
   }
 
+  /** Startup is over: freeze the total. */
+  complete(): void {
+    this.completedAt ??= performance.now()
+  }
+
   snapshot(): StartupTimelineSnapshot {
-    return { totalMs: round(performance.now() - this.began), steps: [...this.steps] }
+    const end = this.completedAt ?? performance.now()
+    return { totalMs: round(end - this.began), steps: [...this.steps] }
   }
 
   /** The `count` slowest steps, slowest first. */

@@ -93,4 +93,25 @@ describe('startup checks', () => {
     expect(output).toContain('KICK-SEC-W001')
     expect(output).toContain('KICK-SEC-W002')
   })
+
+  it("still warns about allowed hosts when the list is '*'", async () => {
+    process.env.NODE_ENV = 'production'
+    const lines: string[] = []
+    const warn = vi.spyOn(console, 'warn').mockImplementation((...args) => {
+      lines.push(args.join(' '))
+    })
+    try {
+      for (const allowedHosts of [['*'], { hosts: ['example.com', '*'] }, ['example.com']]) {
+        Container.reset()
+        lines.length = 0
+        const a = new Application({ modules: [], port: 0, security: { allowedHosts } })
+        await a.start()
+        await a.shutdown()
+        const warned = lines.some((l) => l.includes('KICK-SEC-W001'))
+        expect(warned).toBe(JSON.stringify(allowedHosts) !== '["example.com"]')
+      }
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })

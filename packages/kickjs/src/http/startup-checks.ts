@@ -58,14 +58,18 @@ export const builtInChecks: StartupCheck[] = [
     name: 'allowed hosts',
     deploy: true,
     run: ({ options }) => {
-      const security = options.security as { allowedHosts?: unknown } | undefined
-      if (security?.allowedHosts) return
+      const configured = (options.security as { allowedHosts?: unknown } | undefined)?.allowedHosts
+      const hosts = Array.isArray(configured)
+        ? configured
+        : (configured as { hosts?: unknown } | undefined)?.hosts
+      // `'*'` matches every host: configured, but no restriction.
+      if (Array.isArray(hosts) && hosts.length > 0 && !hosts.includes('*')) return
       return {
         id: 'KICK-SEC-W001',
         level: 'warning',
         message:
-          'No allowed hosts in production: any Host header is accepted, and absolute URLs built ' +
-          'from it (reset links, redirects) can point anywhere.',
+          'No allowed hosts in production (or `*`): any Host header is accepted, and absolute ' +
+          'URLs built from it (reset links, redirects) can point anywhere.',
         fix: "bootstrap({ security: { allowedHosts: ['example.com'] } })",
       }
     },

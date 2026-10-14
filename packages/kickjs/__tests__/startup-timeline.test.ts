@@ -57,6 +57,14 @@ describe('Application startup timeline', () => {
     expect(totalMs).toBeGreaterThanOrEqual(steps.reduce((sum, s) => sum + s.ms, 0) - 1)
   })
 
+  it('stops counting once startup is complete', async () => {
+    app = new Application({ modules: [], port: 0 })
+    await app.start()
+    const first = app.getStartupTimeline().totalMs
+    await sleep(40)
+    expect(app.getStartupTimeline().totalMs).toBe(first)
+  })
+
   it('starts over on each setup', async () => {
     app = new Application({ modules: [] })
     await app.setup()

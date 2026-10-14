@@ -88,6 +88,13 @@ describe('builtInAdvice', () => {
     )
   })
 
+  it('finds rejected credentials through a cause chain, without copying the message', () => {
+    const driver = new Error('password authentication failed for postgres://app:hunter2@db/app')
+    const advice = builtInAdvice(new Error('pool failed', { cause: driver }), 'Db.beforeStart')
+    expect(advice?.summary).toContain('credentials were not accepted')
+    expect(JSON.stringify(advice)).not.toContain('hunter2')
+  })
+
   it('recognises rejected credentials and ignores everything else', () => {
     expect(
       builtInAdvice(new Error('password authentication failed for user "app"'), 'Db.beforeStart')
