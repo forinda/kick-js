@@ -6,18 +6,17 @@
 // wrapped in a RuntimeResponse so `ctx.json` / `ctx.html` / `ctx.sse` work
 // unchanged.
 //
-// Targets h3 **v1** (stable, node-based: `createApp` / `createRouter` /
-// `toNodeListener`, with `event.node.req` / `event.node.res`). `h3` is an
-// optional peer pinned to `^1`.
-//
-// h3 v2 (https://h3.dev/migration) moves to a web-standard `Request`/`Response`
-// core. Adopting it is the spec's §8 "web-standard driver" — `RuntimeResponse`
-// was shaped so a future `webRuntime()` can implement it over WHATWG streams,
-// at which point h3 v2 (and edge/Bun/Deno) become a driver swap rather than a
-// rewrite. Until that lands, this binding uses the node-compatible v1 surface.
+// `h3Runtime()` runs whichever h3 major is installed. h3 v2 (web-standard
+// `Request` / `Response`) goes to the h3-web runtime; h3 v1 (node-based:
+// `createApp` / `createRouter` / `toNodeListener`, with `event.node.req` /
+// `event.node.res`) runs on the implementation below, which is deprecated and
+// goes in the next major.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
+
+import { createLogger } from '../../core/logger'
+import { h3WebRuntime, unwrapH3Module, type H3WebRuntimeTypes } from './h3-web'
 
 import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
@@ -40,7 +39,9 @@ import type {
 
 const peerRequire = createRequire(import.meta.url)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const h3 = (): any => peerRequire('h3')
+type H3v1Module = any
+const log = createLogger('H3Runtime')
+let warnedV1 = false
 
 interface H3EventLike {
   node: { req: IncomingMessage; res: ServerResponse }
@@ -135,10 +136,11 @@ const TRUST_PROXY = Symbol('kickjs.h3.trustProxy')
 
 /** Build the h3 event handler that runs the kickjs pipeline for one route. */
 function makeEventHandler(
+  h3: H3v1Module,
   entry: RouteEntry,
   trustProxy: boolean,
 ): (event: H3EventLike) => Promise<void> {
-  const { getRouterParams, getQuery, readRawBody, readMultipartFormData } = h3()
+  const { getRouterParams, getQuery, readRawBody, readMultipartFormData } = h3
   const upload = entry.meta.upload
   // Validation middleware built ONCE per route (parity with Express) — calling
   // validate() per request re-allocated the closure every time.
@@ -329,11 +331,6 @@ function unwrapH3Error(error: unknown): unknown {
   return cause instanceof Error ? cause : error
 }
 
-/**
- * The h3 HTTP runtime. Pass to `bootstrap({ runtime: h3Runtime() })`.
- * h3 parses bodies itself (`readBody`), so the Application skips its default
- * `express.json()` (see `nativeBodyParsing`).
- */
 /** Collect a request stream as bytes — never decoded, so file parts stay intact. */
 async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Buffer> {
   const chunks: Buffer[] = []
@@ -386,12 +383,42 @@ function answered(res: ServerResponse, run: (done: () => void) => unknown): Prom
   })
 }
 
-export function h3Runtime(): HttpRuntime<H3AppLike> {
+export interface H3RuntimeOptions {
+  /**
+   * Pre-imported h3 module, for when the app's `h3` is not the one this
+   * package resolves (a linked checkout, a bundler): `h3Runtime({ h3: await import('h3') })`.
+   * Omitted → the installed `h3` peer.
+   */
+  h3?: unknown
+}
+
+/**
+ * The h3 HTTP runtime. Pass to `bootstrap({ runtime: h3Runtime() })`. Runs on
+ * the installed h3: v2 through the web-standard runtime (same as
+ * `h3WebRuntime()`), v1 through the deprecated node-based one, with a one-time
+ * warning. Either way h3 parses bodies itself, so the Application skips its
+ * default `express.json()` (see `nativeBodyParsing`).
+ */
+export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike> {
+  const h3 = unwrapH3Module(options.h3 ?? peerRequire('h3'))
+  if (typeof h3.H3 === 'function') {
+    return h3WebRuntime({ h3 }) as unknown as HttpRuntime<H3AppLike>
+  }
+  if (!warnedV1) {
+    warnedV1 = true
+    log.warn(
+      'h3 v1 is installed. Support for it is deprecated and ends in the next major of @forinda/kickjs — `pnpm add h3@^2`; nothing else changes for apps that only use KickJS APIs.',
+    )
+  }
+  return h3v1Runtime(h3)
+}
+
+function h3v1Runtime(h3: H3v1Module): HttpRuntime<H3AppLike> {
   return {
     name: 'h3',
 
     createApp(options: RuntimeAppOptions = {}): H3AppLike {
-      const { createApp } = h3()
+      const { createApp } = h3
       const app = createApp({
         onError: (error: unknown, event: H3EventLike): Promise<void> | void => {
           const res = event.node.res
@@ -452,7 +479,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
     },
 
     nodeHandler(app) {
-      const { toNodeListener } = h3()
+      const { toNodeListener } = h3
       // Register the shared router exactly once, AFTER all connect middleware
       // (serveStatic / useConnect) the setup phase added via `app.use` — the
       // router is terminal, so anything that must run for non-route paths has to
@@ -472,7 +499,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
     },
 
     mountRoutes(app, table: RouteTable) {
-      const { createRouter, eventHandler } = h3()
+      const { createRouter, eventHandler } = h3
       const trustProxy = Boolean((app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY])
       // One shared router per app — every mountRoutes call (controllers, health,
       // devtools, ad-hoc adapter routes) adds to it. `app.use(router)` is
@@ -484,13 +511,13 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
         for (const entry of routes) {
           const url = joinPath(mountPath, entry.path)
           const method = entry.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
-          router[method](url, eventHandler(makeEventHandler(entry, trustProxy)))
+          router[method](url, eventHandler(makeEventHandler(h3, entry, trustProxy)))
         }
       }
     },
 
     useConnect(app, mw: ConnectMiddleware, opts?: UseConnectOptions) {
-      const { fromNodeMiddleware } = h3()
+      const { fromNodeMiddleware } = h3
       const handler = fromNodeMiddleware(mw)
       if (opts?.path !== undefined) app.use(opts.path, handler)
       else app.use(handler)
@@ -529,23 +556,19 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
 /**
  * The h3 runtime's engine-native types — what the runtime-typed escape hatches
  * resolve to once the `kick/runtime` typegen emits a `KickRuntimeRegister`
- * augmentation pointing here (spec §4.3b). `AdapterContext.app` / `getRuntimeApp()`
- * become the h3 `App`; `ctx.req` / `ctx.res` the per-request `H3Event` (h3 v1
- * routes everything through the event). Mirrors `ExpressRuntimeTypes`.
+ * augmentation pointing here (spec §4.3b). They follow the installed h3, as
+ * the runtime does: on v2 the same as {@link H3WebRuntimeTypes}; on v1
+ * `getRuntimeApp()` is the h3 `App` and `ctx.req` / `ctx.res` the per-request
+ * `H3Event`. Mirrors `ExpressRuntimeTypes`.
  */
-// Resolved conditionally so this file typechecks against EITHER installed h3
-// major: v1 exports `App`; v2 (used by the sibling h3-web runtime) does not.
-// Runtime behavior is untouched — this block is type-only.
-type H3AppType = typeof import('h3') extends { App: infer A } ? A : unknown
-type H3EventType = typeof import('h3') extends { H3Event: new (...args: never[]) => infer E }
-  ? E
-  : unknown
+// Type-only; resolved conditionally so this file typechecks against either major.
+type H3Module = typeof import('h3')
+type H3AppType = H3Module extends { App: infer A } ? A : unknown
+type H3EventType = H3Module extends { H3Event: new (...args: never[]) => infer E } ? E : unknown
 
-export interface H3RuntimeTypes {
-  request: H3EventType
-  response: H3EventType
-  app: H3AppType
-}
+export type H3RuntimeTypes = H3Module extends { H3: new (...args: never[]) => unknown }
+  ? H3WebRuntimeTypes
+  : { request: H3EventType; response: H3EventType; app: H3AppType }
 
 /** Join a mount prefix and a route path; a root path maps to the prefix itself. */
 function joinPath(mountPath: string, path: string): string {

@@ -74,7 +74,7 @@ Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs
 [h3](https://h3.dev) is the HTTP layer behind Nitro / Nuxt. It ships as a
 subpath too:
 
-<PmCommand add="h3@^1" />
+<PmCommand add="h3@^2" />
 
 ```ts
 import { h3Runtime } from '@forinda/kickjs/h3'
@@ -82,34 +82,31 @@ import { h3Runtime } from '@forinda/kickjs/h3'
 export const app = await bootstrap({ modules, runtime: h3Runtime() })
 ```
 
-The binding targets **h3 v1** (the node-based surface, maintained on h3's `1x`
-line). Pin it: h3 v2 is now `latest`, so a bare `h3` installs v2, which this
-runtime does not run on — for v2, use the web-standards runtime below.
+Same surface as Fastify: routing, JSON / HTML, connect middleware, context
+decorators, errors / 404, SSE, body validation, native body parsing, and file
+uploads (`@FileUpload` → `ctx.file` / `ctx.files`, from the request's
+`FormData` — no driver to install).
 
-Same surface as Fastify: routing, JSON / HTML, connect middleware (via h3's
-`fromNodeMiddleware`), context decorators, errors / 404, SSE, body validation,
-native body parsing, and file uploads (`@FileUpload` → `ctx.file` / `ctx.files`,
-via h3's built-in `readMultipartFormData` — no driver to install).
+h3 v2 is built on WHATWG `Request` / `Response`, and the runtime shares its
+request pipeline with the [`@forinda/kickjs/web` fetch entry](./edge-deployment.md),
+which is how the same app deploys to Cloudflare Workers, Bun, and Deno. Under
+`kick dev` and behind a host server it hands unmatched requests back unless
+`notFoundFallthrough: false`.
 
-## h3 v2 (web standards)
+`h3WebRuntime()` from `@forinda/kickjs/h3-web` is the same runtime, but
+requires h3 v2.
 
-h3 v2 rebased on WHATWG `Request` / `Response` — KickJS supports it through a
-**separate, additive runtime**, so v1 adopters are untouched:
+### Still on h3 v1
 
-<PmCommand add="h3@latest   # the v2 line" />
+`h3Runtime()` runs on whichever h3 major is installed. On v1 it logs a one-time
+deprecation notice, and `kick doctor` warns: v1 support ends in the next major.
+Upgrading is `pnpm add h3@^2`, with no code change for apps that only use
+KickJS APIs. Code that reaches into the engine (`getRuntimeApp()`, `ctx.req` as
+an `H3Event`, h3 utilities called on it) follows
+[h3's migration guide](https://h3.dev/migration).
 
-```ts
-import { h3WebRuntime } from '@forinda/kickjs/h3-web'
-
-export const app = await bootstrap({ modules, runtime: h3WebRuntime() })
-```
-
-Each runtime fail-fasts with guidance when the wrong h3 major is installed.
-The v2 runtime shares its request pipeline with the
-[`@forinda/kickjs/web` fetch entry](./edge-deployment.md), which is how the
-same app deploys to Cloudflare Workers, Bun, and Deno. Under `kick dev` and
-behind a host server it behaves like the v1 runtime, including handing
-unmatched requests back unless `notFoundFallthrough: false`.
+If the app's `h3` is not the one KickJS resolves (a linked checkout, a
+bundler), pass it in: `h3Runtime({ h3: await import('h3') })`.
 
 ### Calling the app through `fetch`
 
@@ -137,19 +134,19 @@ Connect-style `(req, res, next)` middleware runs on both paths:
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                     | Express      | Fastify                 | h3 (v1)                 | h3 v2 (`h3-web`)                                    |
-| ------------------------------ | ------------ | ----------------------- | ----------------------- | --------------------------------------------------- |
-| Routing + `ctx.json`           | ✅           | ✅                      | ✅                      | ✅                                                  |
-| Connect middleware             | ✅           | ✅ (via middie)         | ✅ (fromNodeMiddleware) | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
-| Context decorators             | ✅           | ✅                      | ✅                      | ✅                                                  |
-| Errors / 404                   | ✅           | ✅                      | ✅                      | ✅                                                  |
-| Server-Sent Events             | ✅           | ✅                      | ✅                      | ✅ (web streams)                                    |
-| Validation                     | ✅           | ✅                      | ✅                      | ✅                                                  |
-| `ctx.render` (views)           | ✅           | ❌ (no view engine)     | ❌ (no view engine)     | ❌ (no view engine)                                 |
-| File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart) | ✅ (native multipart)   | ✅ (web `FormData`)                                 |
-| File download (`ctx.download`) | ✅           | ✅                      | ✅                      | ✅                                                  |
-| Edge / Bun / Deno deploy       | ❌           | ❌                      | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
-| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅                      | ✅ (node); the platform's server on edge            |
+| Capability                     | Express      | Fastify                 | h3                                                  |
+| ------------------------------ | ------------ | ----------------------- | --------------------------------------------------- |
+| Routing + `ctx.json`           | ✅           | ✅                      | ✅                                                  |
+| Connect middleware             | ✅           | ✅ (via middie)         | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
+| Context decorators             | ✅           | ✅                      | ✅                                                  |
+| Errors / 404                   | ✅           | ✅                      | ✅                                                  |
+| Server-Sent Events             | ✅           | ✅                      | ✅                                                  |
+| Validation                     | ✅           | ✅                      | ✅                                                  |
+| `ctx.render` (views)           | ✅           | ❌ (no view engine)     | ❌ (no view engine)                                 |
+| File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart) | ✅ (web `FormData`)                                 |
+| File download (`ctx.download`) | ✅           | ✅                      | ✅                                                  |
+| Edge / Bun / Deno deploy       | ❌           | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
+| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅ (node); the platform's server on edge            |
 
 ## HTTPS and HTTP/2
 
@@ -212,7 +209,7 @@ Under the default Express runtime these are typed as Express's `Application`,
 `ActiveRuntime` registry: set `runtime: 'fastify'` (or `'h3'`) in `kick.config.ts`
 and the `kick/runtime` typegen emits a `KickRuntimeRegister` augmentation that
 retypes them to that engine — Fastify's `FastifyInstance` / `FastifyRequest` /
-`FastifyReply`, or h3's `App` / `H3Event`.
+`FastifyReply`, or for h3 the types of the installed major.
 
 ## Writing a custom runtime
 

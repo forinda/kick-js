@@ -126,7 +126,7 @@ describe('planAddPackages', () => {
     expect(fastify).not.toContain('express')
 
     const h3 = planAddPackages(['kickjs'], false, 'h3').prodDeps
-    expect(h3).toContain('h3@^1')
+    expect(h3).toContain('h3@^2')
     expect(h3).not.toContain('express')
   })
 
@@ -135,7 +135,7 @@ describe('planAddPackages', () => {
     // needs — the failure mode is a missing peer at boot.
     expect([...ENGINE_PEERS.express]).toEqual(['express'])
     expect([...ENGINE_PEERS.fastify]).toEqual(['fastify', '@fastify/middie', 'serve-static'])
-    expect([...ENGINE_PEERS.h3]).toEqual(['h3@^1', 'serve-static'])
+    expect([...ENGINE_PEERS.h3]).toEqual(['h3@^2', 'serve-static'])
   })
 
   it('--runtime overrides everything, including an ambiguous package.json', () => {

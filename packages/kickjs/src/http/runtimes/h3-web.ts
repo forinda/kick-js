@@ -74,21 +74,23 @@ export interface H3WebRuntimeOptions {
   h3?: unknown
 }
 
-/** Resolve h3 (injected or peer-required) and fail fast unless it is v2. */
-function loadH3v2(injected?: unknown): H3v2Module {
-  const mod = injected ?? peerRequire('h3')
+/** An h3 module as `import()` or `require()` hands it over, ESM interop unwrapped. */
+export function unwrapH3Module(mod: unknown): Record<string, unknown> {
   const m = mod as { __esModule?: boolean; default?: Record<string, unknown> } & Record<
     string,
     unknown
   >
-  const resolved = (m && m.__esModule && m.default
-    ? { ...m.default, ...m }
-    : m) as unknown as H3v2Module
+  return m && m.__esModule && m.default ? { ...m.default, ...m } : m
+}
+
+/** Resolve h3 (injected or peer-required) and fail fast unless it is v2. */
+function loadH3v2(injected?: unknown): H3v2Module {
+  const resolved = unwrapH3Module(injected ?? peerRequire('h3')) as unknown as H3v2Module
   if (typeof resolved.H3 !== 'function') {
     throw new Error(
       "@forinda/kickjs: h3WebRuntime() requires h3 v2 (the web-standards line, npm dist-tag 'latest'), " +
         'but the installed h3 has no H3 class — that is the v1 line. ' +
-        "Either `pnpm add h3@latest` for this runtime, or keep h3 v1 and use h3Runtime() from '@forinda/kickjs/h3'.",
+        "Either `pnpm add h3@^2`, or use h3Runtime() from '@forinda/kickjs/h3', which runs either major.",
     )
   }
   return resolved
@@ -554,13 +556,13 @@ export function h3WebRuntime(options: H3WebRuntimeOptions = {}): HttpRuntime<H3A
 }
 
 /**
- * h3-web runtime engine types for the `kick/runtime` typegen augmentation —
- * mirrors {@link import('./h3').H3RuntimeTypes} for the v1 runtime.
+ * h3 v2 runtime engine types for the `kick/runtime` typegen augmentation —
+ * what {@link import('./h3').H3RuntimeTypes} resolves to when h3 v2 is installed.
  */
 export interface H3WebRuntimeTypes {
   request: Request
   response: Response
-  app: unknown
+  app: typeof import('h3') extends { H3: new (...args: never[]) => infer A } ? A : unknown
 }
 
 /** Join a mount prefix and a route path into one URL, collapsing slashes. */

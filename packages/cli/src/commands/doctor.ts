@@ -380,7 +380,37 @@ export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
       fix: `Resolved runtime '${ctx.runtime}' is missing engine peer(s): ${missing.join(', ')}.\nInstall: pnpm add ${missing.join(' ')}`,
     }
   }
+  if (ctx.runtime === 'h3' && h3Major(ctx.cwd, deps.h3) === 1) {
+    return {
+      name,
+      status: 'warn',
+      message: 'h3 v1',
+      fix: 'h3 v1 support is deprecated and ends in the next major of @forinda/kickjs. Upgrade: pnpm add h3@^2 — h3Runtime() picks it up with no code change.',
+    }
+  }
   return { name, status: 'pass' }
+}
+
+/**
+ * The installed h3's major, else the one its declared range starts at. Looks
+ * up through ancestor `node_modules` as Node does, so an h3 hoisted to a
+ * workspace root counts.
+ */
+function h3Major(cwd: string, range: string): number | undefined {
+  let version = range
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    try {
+      version = JSON.parse(
+        readFileSync(join(dir, 'node_modules', 'h3', 'package.json'), 'utf8'),
+      ).version
+      break
+    } catch {
+      // not here — try the parent
+    }
+    if (dirname(dir) === dir) break
+  }
+  const major = /(\d+)/.exec(version)?.[1]
+  return major === undefined ? undefined : Number(major)
 }
 
 /**

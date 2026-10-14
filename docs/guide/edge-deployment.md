@@ -8,12 +8,11 @@ Two pieces make this work:
 
 - **`@forinda/kickjs/web`** — `createWebApp()` builds your app as a pure fetch
   handler for edge runtimes (Cloudflare Workers), Bun, and Deno.
-- **`@forinda/kickjs/h3-web`** — the same web-standard engine (h3 v2) behind
-  the classic `bootstrap()` for node servers, so local dev and edge share one
-  request pipeline.
+- **[`h3Runtime()`](./http-runtimes.md#h3)** on h3 v2 — the same web-standard
+  engine behind the classic `bootstrap()` for node servers, so local dev and
+  edge share one request pipeline.
 
-Both need **h3 v2** (the web-standards line — `npm i h3@latest`). The
-[v1 h3 runtime](./http-runtimes.md#h3) is unaffected and keeps working.
+Both need **h3 v2** (`npm i h3@^2`).
 
 Deploying to **Netlify or Vercel Functions** (Node, not edge)? Use
 [`createHandler()`](./serverless.md) — it keeps adapters and works with the
@@ -80,12 +79,12 @@ Bun.serve({ port: 3000, fetch: (req) => app.fetch(req) })
 ```ts
 // Or classic bootstrap on the h3 v2 engine
 import { bootstrap } from '@forinda/kickjs'
-import { h3WebRuntime } from '@forinda/kickjs/h3-web'
+import { h3Runtime } from '@forinda/kickjs/h3'
 
-await bootstrap({ modules, runtime: h3WebRuntime() })
+await bootstrap({ modules, runtime: h3Runtime() })
 ```
 
-A full `Application` on `h3WebRuntime()` can also be driven through `fetch`
+A full `Application` on `h3Runtime()` with h3 v2 can also be driven through `fetch`
 with no node server — `await app.setup()`, then
 `app.getRuntimeApp().fetch(request)`. Global connect middleware runs there
 against a web-backed `req` / `res`; see
@@ -175,7 +174,7 @@ middleware itself is not wired on the web entry yet.
 
 ## One pipeline, two entries
 
-`createWebApp` and `h3WebRuntime()` share the same request pipeline (the web
+`createWebApp` and `h3Runtime()` on h3 v2 share the same request pipeline (the web
 driver pair), so behavior is identical between `bootstrap()` on your dev
 machine and the deployed fetch handler. The package also enforces a **bundle
 purity contract** in CI: the built `@forinda/kickjs/web` graph contains no
