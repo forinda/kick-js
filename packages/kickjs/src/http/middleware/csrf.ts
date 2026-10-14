@@ -6,6 +6,7 @@ import { randomHex } from '../../core/web-crypto'
 import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
+import { isProduction } from '../../core/is-production'
 
 export interface CsrfOptions {
   /** Cookie name for the CSRF token (default: '_csrf') */
@@ -75,7 +76,7 @@ export function csrf(options: CsrfOptions = {}) {
     // reaches the client some other way (server-rendered, or your own endpoint).
     httpOnly: false,
     sameSite: 'strict' as const,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction(),
     path: '/',
     ...options.cookieOptions,
   }
@@ -175,7 +176,7 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
     // Same default as `csrf()` above, and for the same reason.
     httpOnly: false,
     sameSite: 'strict' as const,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction(),
     path: '/',
     ...options.cookieOptions,
   }

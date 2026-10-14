@@ -27,6 +27,7 @@ import type {
 import { compileWebRoute, readThrough, type WebRouteHooks } from '../web/handler'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
 import { createLogger, describeError } from '../../core/logger'
+import { isProduction } from '../../core/is-production'
 
 const log = createLogger('H3Runtime')
 
@@ -144,9 +145,7 @@ async function runConnectTerminal(
       log.error(err, `h3: error handler did not settle the response — ${describeError(err)}`)
       driver.status(500).json({
         error: 'Internal Server Error',
-        ...(typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
-          ? {}
-          : { message: describeError(err) }),
+        ...(isProduction() ? {} : { message: describeError(err) }),
       })
     } else {
       driver.status(404).json({ error: 'Not Found' })
