@@ -6,12 +6,14 @@
  * @module @forinda/kickjs-inertia/inertia
  */
 import { RESPOND, type RequestContext, type Respondable } from '@forinda/kickjs'
-import { isInertiaProp, propKind, resolveProp } from './props'
+import { isInertiaProp, propKind, resolveProp, type ScrollMeta } from './props'
 
 export const ERRORS_KEY = '__inertia_errors'
 export const FLASH_KEY = '__inertia_flash'
 /** URL of the last page rendered — where a failed submit goes back to. */
 export const PREVIOUS_KEY = '__inertia_previous'
+/** Set by `redirect(url, { preserveFragment: true })` for the next page. */
+export const FRAGMENT_KEY = '__inertia_fragment'
 
 /** The page object the Inertia client renders — see the protocol docs. */
 export interface Page {
@@ -25,8 +27,12 @@ export interface Page {
   mergeProps?: string[]
   prependProps?: string[]
   deepMergeProps?: string[]
+  matchPropsOn?: string[]
+  scrollProps?: Record<string, ScrollMeta & { pageName: string; reset: boolean }>
+  onceProps?: Record<string, { prop: string; expiresAt?: number }>
   encryptHistory?: boolean
   clearHistory?: boolean
+  preserveFragment?: boolean
 }
 
 export interface PageOptions {
@@ -126,6 +132,10 @@ export async function buildPage(
   const only = partial ? list(header(ctx, 'x-inertia-partial-data')) : []
   const except = partial ? list(header(ctx, 'x-inertia-partial-except')) : []
   const reset = list(header(ctx, 'x-inertia-reset'))
+  // Once props the client already holds; it fills them in from its cache.
+  const cachedOnce = list(header(ctx, 'x-inertia-except-once-props'))
+  const scrollIntent =
+    header(ctx, 'x-inertia-infinite-scroll-merge-intent') === 'prepend' ? 'prepend' : 'append'
 
   // A dot path in `only` ('users.data') still selects its top-level prop.
   const named = (key: string) => only.some((o) => o === key || o.startsWith(`${key}.`))
@@ -133,6 +143,9 @@ export async function buildPage(
   const resolved: Record<string, unknown> = {}
   const deferredProps: Record<string, string[]> = {}
   const merges = { append: [] as string[], prepend: [] as string[], deep: [] as string[] }
+  const matchPropsOn: string[] = []
+  const scrollProps: NonNullable<Page['scrollProps']> = {}
+  const onceProps: NonNullable<Page['onceProps']> = {}
 
   for (const [key, value] of Object.entries(all)) {
     const kind = isInertiaProp(value) ? propKind(value) : undefined
@@ -140,6 +153,16 @@ export async function buildPage(
     if (kind === 'always') send = true
     else if (partial) send = (only.length === 0 || named(key)) && !except.includes(key)
     else send = kind !== 'optional' && kind !== 'defer'
+
+    if (kind === 'once' && isInertiaProp(value)) {
+      const onceKey = value.key ?? key
+      onceProps[onceKey] = {
+        prop: key,
+        ...(value.ttl === undefined ? {} : { expiresAt: Date.now() + value.ttl }),
+      }
+      // Asked for by name, it is sent even when cached.
+      if (cachedOnce.includes(onceKey) && !(partial && named(key))) send = false
+    }
 
     if (!send) {
       if (!partial && kind === 'defer' && isInertiaProp(value)) {
@@ -151,6 +174,18 @@ export async function buildPage(
     resolved[key] = await resolveProp(value)
     if (kind === 'merge' && isInertiaProp(value) && !reset.includes(key)) {
       merges[value.mode ?? 'append'].push(key)
+      for (const field of value.matchOn ?? []) matchPropsOn.push(`${key}.${field}`)
+    }
+    if (kind === 'scroll' && isInertiaProp(value)) {
+      const path = `${key}.${value.wrapper}`
+      const isReset = reset.includes(key)
+      scrollProps[key] = {
+        pageName: value.pageName!,
+        ...value.meta!(resolved[key]),
+        reset: isReset,
+      }
+      if (!isReset) merges[scrollIntent].push(path)
+      for (const field of value.matchOn ?? []) matchPropsOn.push(`${path}.${field}`)
     }
   }
 
@@ -167,6 +202,13 @@ export async function buildPage(
   if (merges.append.length) page.mergeProps = merges.append
   if (merges.prepend.length) page.prependProps = merges.prepend
   if (merges.deep.length) page.deepMergeProps = merges.deep
+  if (matchPropsOn.length) page.matchPropsOn = matchPropsOn
+  if (Object.keys(scrollProps).length) page.scrollProps = scrollProps
+  if (Object.keys(onceProps).length) page.onceProps = onceProps
+  if (ctx.session?.data[FRAGMENT_KEY]) {
+    delete ctx.session.data[FRAGMENT_KEY]
+    page.preserveFragment = true
+  }
   if (options.encryptHistory) page.encryptHistory = true
   if (options.clearHistory) page.clearHistory = true
   return page
@@ -205,15 +247,33 @@ export function inertia(
   }
 }
 
+export interface RedirectOptions {
+  /**
+   * Keep the `#fragment` of the page the request came from — a form posted
+   * from `/posts/1#comments` lands back on `#comments`. Needs `session()`.
+   */
+  preserveFragment?: boolean
+}
+
 /**
  * Redirect after a form submit. Uses 303 for anything but GET, so the browser
  * follows with a GET, and saves the session first so flashed errors and
  * messages are there when that GET arrives.
+ *
+ * A URL with a `#fragment` is sent to an Inertia visit as 409 +
+ * `X-Inertia-Redirect`: a redirect followed inside a fetch drops the
+ * fragment, so the client makes the visit itself.
  */
-export function redirect(url: string): Respondable {
+export function redirect(url: string, options: RedirectOptions = {}): Respondable {
   return {
     async [RESPOND](ctx: RequestContext) {
+      if (options.preserveFragment && ctx.session) ctx.session.data[FRAGMENT_KEY] = true
       await ctx.session?.save()
+      if (url.includes('#') && isInertiaRequest(ctx)) {
+        ctx.setHeader('X-Inertia-Redirect', url)
+        ctx.html('', 409)
+        return
+      }
       const method = (ctx.req as { method?: string }).method ?? 'GET'
       ctx.redirect(url, method === 'GET' ? 302 : 303)
     },
@@ -255,13 +315,14 @@ export function previousUrl(
 }
 
 /** Redirect back to the page the request came from. */
-export function back(ctx: RequestContext, fallback = '/'): Respondable {
+export function back(ctx: RequestContext, fallback = '/', options?: RedirectOptions): Respondable {
   return redirect(
     previousUrl(
       ctx.session,
       { referer: header(ctx, 'referer'), host: header(ctx, 'host') },
       fallback,
     ),
+    options,
   )
 }
 

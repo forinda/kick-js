@@ -4,13 +4,17 @@ import swc from 'unplugin-swc'
 import react from '@vitejs/plugin-react'
 import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
 
-// Dev server for the API and the pages. swc compiles both sides —
-// decorators on the server, JSX (tsconfig "jsx": "react-jsx") in
-// src/client — and react() adds Fast Refresh.
+// Dev server for the API and the pages. swc compiles the server, which
+// needs decorator metadata; Vite's oxc compiles the pages, which lets
+// react() hot-swap components on save (Fast Refresh) without a reload.
+const client = /src\/client\/.+\.[jt]sx?$/
+
 export default defineConfig({
-  oxc: false,
+  oxc: { include: client },
   plugins: [
-    swc.vite(),
+    // swc's own config hook switches oxc off for every file; drop it so
+    // the pages keep oxc.
+    { ...swc.vite({ exclude: [/node_modules/, client] }), config: undefined },
     react(),
     kickjsVitePlugin({ entry: 'src/index.ts' }),
     // Watches .env files and triggers a full reload on change so the

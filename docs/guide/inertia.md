@@ -25,7 +25,7 @@ vite.config.ts          # kick dev: the API and the pages on one server
 vite.client.config.ts   # production builds of the pages
 ```
 
-`kick dev` serves both through one Vite server. `pnpm build` builds the server, the browser bundle (`dist/client`) and the SSR bundle (`dist/ssr/ssr.js`).
+`kick dev` serves both through one Vite server. Saving a page or a stylesheet updates the open browser tab in place — React Fast Refresh keeps component state and form input — and saving server code reloads the app. `pnpm build` builds the server, the browser bundle (`dist/client`) and the SSR bundle (`dist/ssr/ssr.js`).
 
 ## Add it to an existing app
 
@@ -105,14 +105,35 @@ createInertiaApp({
 })
 ```
 
-Add `react()` from `@vitejs/plugin-react` to `vite.config.ts`. The server renders the HTML, so Vite has no `index.html` to scan; name the entry for dependency optimization:
+### The dev server
+
+`kick dev` compiles the server with swc, which emits the decorator metadata KickJS needs. The pages are better compiled by Vite's own oxc, because that is where `@vitejs/plugin-react` adds Fast Refresh — swc's plugin switches oxc off for every file, so give each its half:
 
 ```ts
-optimizeDeps: {
-  entries: ['src/client/main.tsx'],
-  include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
-},
+// vite.config.ts
+import swc from 'unplugin-swc'
+import react from '@vitejs/plugin-react'
+import { kickjsVitePlugin } from '@forinda/kickjs-vite'
+
+const client = /src\/client\/.+\.[jt]sx?$/
+
+export default defineConfig({
+  oxc: { include: client },
+  plugins: [
+    // Drop swc's config hook, which would turn oxc off for the pages too.
+    { ...swc.vite({ exclude: [/node_modules/, client] }), config: undefined },
+    react(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+  ],
+  // The server renders the HTML, so Vite has no index.html to scan.
+  optimizeDeps: {
+    entries: ['src/client/main.tsx'],
+    include: ['react', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+  },
+})
 ```
+
+Without the split, page edits still show up, but as a full page reload that loses component state.
 
 ## Pages
 
@@ -148,20 +169,22 @@ The first visit gets HTML; every later visit from Inertia gets the same page as 
 | Helper                                                                | What it does                                                   |
 | --------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `inertia(component, props, { status, encryptHistory, clearHistory })` | Render a page                                                  |
-| `redirect(url)`                                                       | 303 after a submit                                             |
-| `back(ctx, fallback?)`                                                | Redirect to the previous page on this site                     |
+| `redirect(url, { preserveFragment })`                                 | 303 after a submit                                             |
+| `back(ctx, fallback?, { preserveFragment })`                          | Redirect to the previous page on this site                     |
 | `location(url)`                                                       | A full browser visit — another site, or a page outside Inertia |
 | `flash(ctx, data)`                                                    | Data for the next page's `flash` prop; needs `session()`       |
 
 ### When a prop is sent
 
-| Prop                  | Sent                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| a value or function   | On full visits and on partial reloads that name it; a function is only called when sent                                   |
-| `optional(fn)`        | Only when a partial reload names it (`router.reload({ only: [...] })`)                                                    |
-| `always(value)`       | Every response, including partial reloads that name other props                                                           |
-| `defer(fn, group?)`   | Right after the page renders, one extra request per `group`                                                               |
-| `merge(value, mode?)` | Merged into the client's copy on a partial reload — `'append'`, `'prepend'`, `'deep'`; for pagination and infinite scroll |
+| Prop                               | Sent                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| a value or function                | On full visits and on partial reloads that name it; a function is only called when sent |
+| `optional(fn)`                     | Only when a partial reload names it (`router.reload({ only: [...] })`)                  |
+| `always(value)`                    | Every response, including partial reloads that name other props                         |
+| `defer(fn, group?)`                | Right after the page renders, one extra request per `group`                             |
+| `merge(value, mode?, { matchOn })` | Merged into the client's copy on a partial reload — `'append'`, `'prepend'`, `'deep'`   |
+| `once(fn, { key?, ttl? })`         | Once; the client keeps it and later visits skip it (below)                              |
+| `scroll(fn, options?)`             | One page of an infinite list (below)                                                    |
 
 On the page, wrap a deferred prop in Inertia's `<Deferred>`:
 
@@ -170,6 +193,55 @@ On the page, wrap a deferred prop in Inertia's `<Deferred>`:
   <p>Total: {stats?.total}</p>
 </Deferred>
 ```
+
+### Data the client keeps
+
+`once()` sends a prop on the first visit only. The client caches it and tells the server which props it holds, so later visits — to this page or any page using the same `key` — skip resolving it:
+
+```ts
+return inertia('Billing', {
+  plans: once(() => this.plans.list(), { ttl: 60 * 60_000 }), // refetched after an hour
+})
+```
+
+A partial reload that names the prop (`router.reload({ only: ['plans'] })`) always gets a fresh value.
+
+### Merging by id
+
+By default merged rows are appended. `matchOn` names a field that identifies a row, so a row the client already has is replaced in place instead of added again:
+
+```ts
+users: merge(() => this.users.page(n), 'append', { matchOn: 'id' })
+```
+
+### Infinite scroll
+
+`scroll()` serves Inertia's `<InfiniteScroll>`. Return one page as `{ data, meta: { page, hasNext, hasPrev } }` — the `PaginatedResponse` shape — and the client asks for the next or previous page with `?page=N` as the user scrolls:
+
+```ts
+@Get('/posts')
+index(ctx: RequestContext) {
+  const page = Number(ctx.query.page ?? 1)
+  return inertia('Posts/Index', {
+    posts: scroll(() => this.posts.page(page), { matchOn: 'id' }),
+  })
+}
+```
+
+```tsx
+<InfiniteScroll data="posts">
+  {posts.data.map((post) => (
+    <PostRow key={post.id} post={post} />
+  ))}
+</InfiniteScroll>
+```
+
+| Option     | Default  | What it does                                                             |
+| ---------- | -------- | ------------------------------------------------------------------------ |
+| `pageName` | `'page'` | The query parameter the client sends                                     |
+| `wrapper`  | `'data'` | The key holding the rows                                                 |
+| `matchOn`  | —        | A row field that identifies it, as with `merge`                          |
+| `meta`     | —        | `(value) => ({ currentPage, nextPage, previousPage })` for another shape |
 
 ## Forms and validation
 
@@ -185,6 +257,41 @@ const form = useForm({ title: '' })
 ```
 
 API requests to the same routes still get the usual 422 JSON.
+
+### Live validation
+
+Inertia's `useForm` can check fields as the user fills them in, before the form is submitted, using the Precognition protocol. Put `precognitive` on the route; the route's schema runs, and the handler doesn't:
+
+```ts
+import { precognitive } from '@forinda/kickjs-inertia'
+
+@Post('/users', { body: createUserSchema })
+@Middleware(precognitive)
+create(ctx: RequestContext) {
+  // runs only for the real submit
+}
+```
+
+```tsx
+const form = useForm('post', '/users', { name: '', email: '' })
+
+<input
+  value={form.data.email}
+  onChange={(e) => form.setData('email', e.target.value)}
+  onBlur={() => form.validate('email')}
+/>
+{form.errors.email && <p>{form.errors.email}</p>}
+```
+
+Each check reports only the fields the form has validated so far, so the user isn't shown errors for fields they haven't reached. `inertiaErrorHandler()` must be the app's `onError`.
+
+### Keeping the `#fragment`
+
+A redirect to a URL with a fragment (`redirect('/posts/1#comments')`) keeps it. To return to the fragment the form was posted from — the user submits a comment at `/posts/1#comments` and lands back there — pass `preserveFragment`:
+
+```ts
+return back(ctx, '/', { preserveFragment: true })
+```
 
 ## Errors and unknown URLs
 
@@ -245,7 +352,7 @@ The adapter reads `dist/client/.vite/manifest.json` for the script and style tag
 
 ## What the adapter handles
 
-- The protocol: `X-Inertia` JSON responses, `Vary`, partial reloads, the asset version check (409), and 302 → 303 after PUT, PATCH and DELETE.
+- The protocol: `X-Inertia` JSON responses, `Vary`, partial reloads, once props, infinite scroll, the asset version check (409), redirects that keep a `#fragment`, Precognition, and 302 → 303 after PUT, PATCH and DELETE.
 - Assets: Vite's dev server under `kick dev`; the build manifest, `assets/` and `public/` in production.
 - Server-side rendering, with a fallback to client rendering.
 - Validation errors and flash data through the session.

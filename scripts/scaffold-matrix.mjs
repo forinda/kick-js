@@ -15,7 +15,7 @@
  * Third-party packages come from the registry.
  *
  * Per scenario: kick new → (kick add) → pnpm install → kick typegen →
- * tsc --noEmit → (web build) → kick build → kick start → HTTP checks.
+ * tsc --noEmit → (web build) → kick build (or the app's build script) → kick start → HTTP checks.
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -46,6 +46,11 @@ const SCENARIOS = {
     args: ['--runtime', 'fastify'],
     add: ['swagger', 'ws', 'queue'],
     get: ['/api/v1/hello', '/openapi.json'],
+  },
+  inertia: {
+    args: ['--template', 'inertia'],
+    buildScript: true,
+    get: ['/api/v1/hello', '/', '/posts'],
   },
   fullstack: {
     args: ['--template', 'fullstack', '--packages', 'swagger'],
@@ -192,7 +197,9 @@ async function runScenario(name, scenario, tarballs) {
     run('kick typegen', 'pnpm', ['exec', 'kick', 'typegen'], server)
     run('tsc --noEmit', 'pnpm', ['exec', 'tsc', '--noEmit'], server)
     if (scenario.fullstack) run('web build', 'pnpm', ['run', 'build'], join(root, 'web'))
-    run('kick build', 'pnpm', ['exec', 'kick', 'build'], server)
+    // The inertia template's build script also builds the pages and the SSR bundle.
+    if (scenario.buildScript) run('build', 'pnpm', ['run', 'build'], server)
+    else run('kick build', 'pnpm', ['exec', 'kick', 'build'], server)
     await boot(server, scenario.get)
     return true
   } catch (err) {

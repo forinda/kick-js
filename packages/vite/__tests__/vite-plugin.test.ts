@@ -326,7 +326,7 @@ export class UserService {
     // The transform() hook builds the fileTokenMap; handleHotUpdate reads it.
     // If handleHotUpdate returns [] (handled), the file had tokens detected.
 
-    function simulateTransformAndHmr(code: string, filePath: string) {
+    function simulateTransformAndHmr(code: string, filePath: string, clientFiles: string[] = []) {
       // Transform to register tokens
       callTransform(hmrPlugin, code, filePath)
 
@@ -339,6 +339,14 @@ export class UserService {
         moduleGraph: {
           getModuleById: () => null,
           invalidateModule: () => {},
+        },
+        environments: {
+          client: {
+            moduleGraph: {
+              getModulesByFile: (file: string) =>
+                clientFiles.includes(file) ? new Set([{}]) : undefined,
+            },
+          },
         },
         hot: {
           send: (data: any) => {
@@ -443,6 +451,15 @@ export class PlainHelper {
 `
       const result = simulateTransformAndHmr(code, '/src/helper.ts')
       expect(result).toEqual([])
+    })
+
+    it('leaves modules the browser imports to Vite, so Fast Refresh still runs', () => {
+      // An Inertia page served by the same dev server: answering [] here
+      // swallowed React Fast Refresh, so edits needed a manual reload.
+      const page = '/project/src/client/pages/Home.tsx'
+      expect(simulateTransformAndHmr('export default () => null', page, [page])).toBeUndefined()
+      // The same file seen only by the server is still handled here.
+      expect(simulateTransformAndHmr('export default () => null', page)).toEqual([])
     })
 
     it('ignores non-source files (typegen .d.ts output, dist artefacts)', () => {

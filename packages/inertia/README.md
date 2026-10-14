@@ -75,14 +75,18 @@ export class PagesController {
 | --------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `inertia(component, props, { status, encryptHistory, clearHistory })` | Render a page — HTML on a first visit, JSON on an Inertia visit |
 | `optional(fn)` / `always(v)` / `defer(fn, group)` / `merge(v, mode)`  | When a prop is sent                                             |
+| `once(fn, { key, ttl })`                                              | Sent once; the client keeps it                                  |
+| `scroll(fn, { pageName, matchOn })`                                   | One page of an `<InfiniteScroll>` list                          |
 | `redirect(url)` / `back(ctx)`                                         | 303 after a submit; `back` stays on this site                   |
 | `location(url)`                                                       | A full browser visit (another site)                             |
 | `flash(ctx, data)`                                                    | Data for the next page's `flash`                                |
+| `@Middleware(precognitive)`                                           | Live validation for `useForm().validate()`                      |
 
 ## What the adapter handles
 
-- The protocol: `X-Inertia` JSON responses, `Vary`, partial reloads, the asset
-  version check (409), 302 → 303 after PUT / PATCH / DELETE.
+- The protocol: `X-Inertia` JSON responses, `Vary`, partial reloads, once
+  props, infinite scroll, the asset version check (409), redirects that keep a
+  `#fragment`, Precognition, 302 → 303 after PUT / PATCH / DELETE.
 - Assets: Vite's dev server under `kick dev`; the build manifest, `assets/` and
   `public/` files in production.
 - Server-side rendering through Vite in dev and a built bundle in production,

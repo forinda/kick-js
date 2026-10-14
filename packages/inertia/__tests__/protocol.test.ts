@@ -15,6 +15,7 @@ import {
   Get,
   Post,
   Put,
+  Middleware,
   HttpException,
   session,
   type RequestContext,
@@ -29,8 +30,11 @@ import {
   inertiaNotFound,
   location,
   merge,
+  once,
   optional,
+  precognitive,
   redirect,
+  scroll,
 } from '@forinda/kickjs-inertia'
 import { previousUrl } from '../src/inertia'
 
@@ -113,6 +117,39 @@ async function makeApp(
     @Get('/away')
     away() {
       return location('https://example.com/out')
+    }
+
+    @Get('/feed')
+    feed(ctx: RequestContext) {
+      const page = Number(ctx.query.page ?? 1)
+      return inertia('Feed', {
+        plans: once(() => ['free', 'pro'], { ttl: 60_000 }),
+        countries: once(() => ['KE'], { key: 'geo' }),
+        posts: scroll(
+          () => ({
+            data: [{ id: page }],
+            meta: { page, hasNext: page < 3, hasPrev: page > 1 },
+          }),
+          { matchOn: 'id' },
+        ),
+        tags: merge(() => [{ slug: 'a' }], 'append', { matchOn: 'slug' }),
+      })
+    }
+
+    @Post('/comments')
+    comment() {
+      return redirect('/posts/1#comments')
+    }
+
+    @Post('/keep')
+    keep() {
+      return redirect('/posts', { preserveFragment: true })
+    }
+
+    @Post('/users', { body: titleSchema })
+    @Middleware(precognitive)
+    createUser() {
+      return redirect('/users')
     }
   }
 
@@ -455,6 +492,135 @@ for (const rt of RUNTIMES)
         const app = await makeApp()
         const res = await request(app.handle.bind(app)).get('/nowhere').set(html).expect(404)
         expect(res.headers['content-type']).toMatch(/json/)
+      })
+    })
+
+    describe('once props', () => {
+      it('lists them, and skips the ones the client already holds', async () => {
+        const app = await makeApp()
+        const first = await request(app.handle.bind(app)).get('/feed').set(X).expect(200)
+        expect(first.body.props.plans).toEqual(['free', 'pro'])
+        expect(first.body.onceProps.geo).toEqual({ prop: 'countries' })
+        expect(first.body.onceProps.plans.prop).toBe('plans')
+        expect(first.body.onceProps.plans.expiresAt).toBeGreaterThan(Date.now())
+
+        const cached = await request(app.handle.bind(app))
+          .get('/feed')
+          .set({ ...X, 'X-Inertia-Except-Once-Props': 'plans,geo' })
+          .expect(200)
+        expect(cached.body.props).not.toHaveProperty('plans')
+        expect(cached.body.props).not.toHaveProperty('countries')
+        // Still listed, so the client fills them in from its cache.
+        expect(Object.keys(cached.body.onceProps)).toEqual(['plans', 'geo'])
+      })
+
+      it('sends a cached once prop a partial reload names', async () => {
+        const app = await makeApp()
+        const res = await request(app.handle.bind(app))
+          .get('/feed')
+          .set({
+            ...X,
+            'X-Inertia-Partial-Component': 'Feed',
+            'X-Inertia-Partial-Data': 'plans',
+            'X-Inertia-Except-Once-Props': 'plans',
+          })
+          .expect(200)
+        expect(res.body.props.plans).toEqual(['free', 'pro'])
+      })
+    })
+
+    describe('infinite scroll', () => {
+      it('describes the page and merges the rows under data', async () => {
+        const app = await makeApp()
+        const res = await request(app.handle.bind(app)).get('/feed?page=2').set(X).expect(200)
+        expect(res.body.scrollProps.posts).toEqual({
+          pageName: 'page',
+          currentPage: 2,
+          nextPage: 3,
+          previousPage: 1,
+          reset: false,
+        })
+        expect(res.body.mergeProps).toEqual(['posts.data', 'tags'])
+        expect(res.body.matchPropsOn).toEqual(['posts.data.id', 'tags.slug'])
+      })
+
+      it('prepends when the client loads the previous page, and stops merging on reset', async () => {
+        const app = await makeApp()
+        const prev = await request(app.handle.bind(app))
+          .get('/feed?page=1')
+          .set({ ...X, 'X-Inertia-Infinite-Scroll-Merge-Intent': 'prepend' })
+          .expect(200)
+        expect(prev.body.prependProps).toEqual(['posts.data'])
+        expect(prev.body.scrollProps.posts.previousPage).toBeNull()
+
+        const reset = await request(app.handle.bind(app))
+          .get('/feed')
+          .set({ ...X, 'X-Inertia-Reset': 'posts' })
+          .expect(200)
+        expect(reset.body.scrollProps.posts.reset).toBe(true)
+        expect(reset.body.mergeProps).toEqual(['tags'])
+      })
+    })
+
+    describe('fragments', () => {
+      it('sends an Inertia visit to a URL with a fragment as 409 + X-Inertia-Redirect', async () => {
+        const app = await makeApp()
+        const res = await request(app.handle.bind(app)).post('/comments').set(X).expect(409)
+        expect(res.headers['x-inertia-redirect']).toBe('/posts/1#comments')
+
+        const plain = await request(app.handle.bind(app)).post('/comments').expect(303)
+        expect(plain.headers.location).toBe('/posts/1#comments')
+      })
+
+      it('tells the next page to keep the fragment', async () => {
+        const app = await makeApp()
+        const agent = request.agent(app.handle.bind(app))
+        await agent.post('/keep').set(X).expect(303)
+        const next = await agent.get('/posts').set(X).expect(200)
+        expect(next.body.preserveFragment).toBe(true)
+        const again = await agent.get('/posts').set(X).expect(200)
+        expect(again.body).not.toHaveProperty('preserveFragment')
+      })
+    })
+
+    describe('precognition', () => {
+      const P = { Precognition: 'true', Accept: 'application/json' }
+
+      it('validates without running the handler', async () => {
+        const app = await makeApp()
+        const res = await request(app.handle.bind(app))
+          .post('/users')
+          .set(P)
+          .send({ title: 'Ada' })
+          .expect(204)
+        expect(res.headers.precognition).toBe('true')
+        expect(res.headers['precognition-success']).toBe('true')
+      })
+
+      it('answers 422 with the errors of the fields it asked about', async () => {
+        const app = await makeApp()
+        const res = await request(app.handle.bind(app))
+          .post('/users')
+          .set({ ...P, 'Precognition-Validate-Only': 'title' })
+          .send({ title: '' })
+          .expect(422)
+        expect(res.headers.precognition).toBe('true')
+        expect(res.body.errors).toEqual({ title: 'Title is required' })
+      })
+
+      it('succeeds when only fields it did not ask about fail', async () => {
+        const app = await makeApp()
+        const res = await request(app.handle.bind(app))
+          .post('/users')
+          .set({ ...P, 'Precognition-Validate-Only': 'email' })
+          .send({ title: '' })
+          .expect(204)
+        expect(res.headers['precognition-success']).toBe('true')
+      })
+
+      it('runs the handler for an ordinary submit', async () => {
+        const app = await makeApp()
+        await request(app.handle.bind(app)).post('/users').set(X).send({ title: 'Ada' }).expect(303)
       })
     })
   })

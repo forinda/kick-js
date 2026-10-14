@@ -61,6 +61,12 @@ import { rewarmApp } from './warm'
  * lives under `src/` causes a cheap virtual-app invalidation, no worse
  * than `kick dev`'s typegen sweep already does on the same event.
  */
+/** Whether the browser has loaded `file` through this dev server. */
+function isClientModule(server: ViteDevServer, file: string): boolean {
+  const graph = server.environments?.client?.moduleGraph
+  return (graph?.getModulesByFile(file)?.size ?? 0) > 0
+}
+
 function isProjectSource(file: string): boolean {
   if (!/\.(?:ts|tsx|js|jsx|mts|cts|mjs|cjs)$/.test(file)) return false
   if (file.endsWith('.d.ts') || file.endsWith('.d.mts') || file.endsWith('.d.cts')) return false
@@ -240,7 +246,13 @@ export function kickjsHmrPlugin(ctx: PluginContext, hmrOptions: HmrOptions = {})
         pendingTokens = new Set()
       }, DEBOUNCE_MS)
 
-      // Tell Vite we handled it — don't do default full-page reload.
+      // A module the browser imports (Inertia pages, a frontend served by
+      // this dev server) keeps Vite's own HMR — React Fast Refresh, Vue and
+      // Svelte hot updates. Answering `[]` for those swallowed the update,
+      // so component edits only showed after a manual refresh.
+      if (isClientModule(server, file)) return
+
+      // Server-only: tell Vite we handled it — no full-page reload.
       // `flushInvalidation` always invalidates the virtual app module,
       // so the next ssrLoadModule re-imports the changed file via the
       // dev-server's middleware shim.
