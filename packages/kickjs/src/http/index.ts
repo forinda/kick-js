@@ -74,6 +74,7 @@ export {
   type LoggedResponse,
 } from './middleware/request-logger'
 export { helmet, type HelmetOptions } from './middleware/helmet'
+export { allowedHosts, type AllowedHostsOptions } from './middleware/allowed-hosts'
 export { cors, type CorsOptions } from './middleware/cors'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './middleware/rate-limit'
 export { rateLimitGuard, type RateLimitGuardOptions } from './middleware/rate-limit-guard'
