@@ -188,6 +188,14 @@ describe('checkRuntimeEngine', () => {
       'node_modules/h3/package.json': JSON.stringify({ version: '1.15.11' }),
     })
     expect(checkRuntimeEngine(ctx(installed, { runtime: 'h3' }))?.status).toBe('warn')
+
+    const hoisted = tempProject({
+      'node_modules/h3/package.json': JSON.stringify({ version: '1.15.11' }),
+      'apps/api/package.json': JSON.stringify({ dependencies: { h3: 'latest' } }),
+    })
+    expect(checkRuntimeEngine(ctx(join(hoisted, 'apps/api'), { runtime: 'h3' }))?.status).toBe(
+      'warn',
+    )
   })
 })
 

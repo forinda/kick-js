@@ -391,15 +391,23 @@ export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
   return { name, status: 'pass' }
 }
 
-/** The installed h3's major, else the one its declared range starts at. */
+/**
+ * The installed h3's major, else the one its declared range starts at. Looks
+ * up through ancestor `node_modules` as Node does, so an h3 hoisted to a
+ * workspace root counts.
+ */
 function h3Major(cwd: string, range: string): number | undefined {
   let version = range
-  try {
-    version = JSON.parse(
-      readFileSync(join(cwd, 'node_modules', 'h3', 'package.json'), 'utf8'),
-    ).version
-  } catch {
-    // not installed — read the declared range
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    try {
+      version = JSON.parse(
+        readFileSync(join(dir, 'node_modules', 'h3', 'package.json'), 'utf8'),
+      ).version
+      break
+    } catch {
+      // not here — try the parent
+    }
+    if (dirname(dir) === dir) break
   }
   const major = /(\d+)/.exec(version)?.[1]
   return major === undefined ? undefined : Number(major)
