@@ -10,17 +10,60 @@ export interface ValidationSchema {
   params?: any
 }
 
-function toValidationException(
-  issues: SchemaIssue[],
-  message: string,
-  useFirstIssueMessage: boolean,
-): HttpException {
+/** A request that failed route validation — what a `validationError` hook receives. */
+export interface ValidationFailure {
+  /** The part of the request that failed. */
+  source: 'body' | 'query' | 'params'
+  /** Every issue the schema reported, adapter-neutral (Zod, Valibot, Yup, …). */
+  issues: SchemaIssue[]
+  /** The request, as the runtime hands it to middleware. */
+  req: unknown
+}
+
+/**
+ * Turns a validation failure into the error the request fails with. Return
+ * (or throw) any error — an `HttpException` or `ProblemException` keeps the
+ * error handler's problem-details response — or return `undefined` to use
+ * {@link defaultValidationError} for this one.
+ */
+export type ValidationErrorFactory = (failure: ValidationFailure) => unknown
+
+/**
+ * The built-in failure: 422 with `details` as `[{ field, message }]`. A body
+ * failure leads with its first issue's message. `@forinda/kickjs-inertia`
+ * reads these `details` for the page's `errors`, so a custom factory serving
+ * Inertia pages should keep the shape — or call this and adjust the result.
+ */
+export function defaultValidationError({ source, issues }: ValidationFailure): HttpException {
   const details = issues.map((i) => ({
     field: i.path.join('.') || '',
     message: i.message,
   }))
-  const finalMessage = useFirstIssueMessage ? (issues[0]?.message ?? message) : message
-  return new HttpException(HttpStatus.UNPROCESSABLE_ENTITY, finalMessage, details)
+  const message =
+    source === 'body'
+      ? (issues[0]?.message ?? 'Validation failed')
+      : source === 'query'
+        ? 'Invalid query parameters'
+        : 'Invalid path parameters'
+  return new HttpException(HttpStatus.UNPROCESSABLE_ENTITY, message, details)
+}
+
+// Process-wide, like the env resolver: set from `bootstrap({ validationError })`
+// / `createWebApp({ validationError })`, read by every engine's validation.
+let factory: ValidationErrorFactory | undefined
+
+/** @internal Installed by Application and createWebApp; `undefined` restores the default. */
+export function _setValidationErrorFactory(fn: ValidationErrorFactory | undefined): void {
+  factory = fn
+}
+
+function validationError(failure: ValidationFailure): unknown {
+  if (!factory) return defaultValidationError(failure)
+  try {
+    return factory(failure) ?? defaultValidationError(failure)
+  } catch (thrown) {
+    return thrown
+  }
 }
 
 /**
@@ -73,7 +116,7 @@ export function validate(schema: ValidationSchema) {
       if (body) {
         const result = body.safeParse(req.body)
         if (!result.success) {
-          return next(toValidationException(result.issues, 'Validation failed', true))
+          return next(validationError({ source: 'body', issues: result.issues, req }))
         }
         req.body = result.data
       }
@@ -81,7 +124,7 @@ export function validate(schema: ValidationSchema) {
       if (query) {
         const result = query.safeParse(req.query)
         if (!result.success) {
-          return next(toValidationException(result.issues, 'Invalid query parameters', false))
+          return next(validationError({ source: 'query', issues: result.issues, req }))
         }
         assignReqProperty(req, 'query', result.data)
       }
@@ -89,7 +132,7 @@ export function validate(schema: ValidationSchema) {
       if (params) {
         const result = params.safeParse(req.params)
         if (!result.success) {
-          return next(toValidationException(result.issues, 'Invalid path parameters', false))
+          return next(validationError({ source: 'params', issues: result.issues, req }))
         }
         assignReqProperty(req, 'params', result.data)
       }

@@ -58,6 +58,7 @@ import {
 import { ROUTE_SLOT } from '../core/route-flag'
 import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
+import { _setValidationErrorFactory, type ValidationErrorFactory } from './middleware/validate'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
   _setExternalContributorSources,
@@ -450,6 +451,27 @@ export interface ApplicationOptions {
   onError?: (err: any, req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
 
   /**
+   * Decide what a failed route validation (`@Validate` / `validate()`) throws.
+   * Receives `{ source, issues, req }` and returns the error — by default a 422
+   * `HttpException` with `[{ field, message }]` details. Return `undefined` to
+   * fall back to the default for that failure.
+   *
+   * ```ts
+   * bootstrap({
+   *   validationError: ({ source, issues }) =>
+   *     new ProblemException({
+   *       status: 400,
+   *       title: `Invalid ${source}`,
+   *       errors: issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+   *     }),
+   * })
+   * ```
+   *
+   * Process-wide: the last app constructed sets it.
+   */
+  validationError?: ValidationErrorFactory
+
+  /**
    * Security defaults applied automatically unless opted out.
    *
    * When not specified, secure defaults are applied:
@@ -645,6 +667,7 @@ export class Application {
 
   constructor(private readonly options: ApplicationOptions) {
     this.runtime = options.runtime ?? expressRuntime()
+    _setValidationErrorFactory(options.validationError)
     // `this.app` is the engine-native app; typed Express here (the default) for
     // the legacy escape hatches. Under another runtime it holds that engine's
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.

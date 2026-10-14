@@ -20,6 +20,7 @@ import {
   FileUpload,
   Get,
   Post,
+  ProblemException,
   RequestContext,
   defineContextDecorator,
   expressRuntime,
@@ -226,6 +227,44 @@ for (const rt of RUNTIMES) {
       // Invalid body → rejected by validation (not 2xx).
       const bad = await request(handler).post('/api/v1/v').send({ title: '' })
       expect(bad.status).toBeGreaterThanOrEqual(400)
+    })
+
+    it('lets bootstrap({ validationError }) decide what a failed validation throws', async () => {
+      const schema = z.object({ title: z.string().min(1) })
+
+      @Controller()
+      class C {
+        @Post('/', { body: schema })
+        create(ctx: RequestContext) {
+          ctx.created({ title: (ctx.body as { title: string }).title })
+        }
+
+        @Get('/q', { query: z.object({ page: z.coerce.number() }) })
+        list(ctx: RequestContext) {
+          ctx.json({ ok: true })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        // Custom for the body; `undefined` falls back to the default 422.
+        validationError: ({ source, issues }) =>
+          source === 'body'
+            ? new ProblemException({
+                status: 400,
+                title: 'Invalid body',
+                fields: issues.map((i) => i.path.join('.')),
+              })
+            : undefined,
+        modules: [{ routes: () => ({ path: '/vh', controller: C }) } as never],
+      })
+      await app.setup()
+      const handler = app.handle.bind(app)
+
+      const bad = await request(handler).post('/api/v1/vh').send({ title: '' }).expect(400)
+      expect(bad.body).toMatchObject({ title: 'Invalid body', fields: ['title'] })
+
+      const query = await request(handler).get('/api/v1/vh/q?page=x').expect(422)
+      expect(query.body).toMatchObject({ status: 422, detail: 'Invalid query parameters' })
     })
 
     it('accepts a single file upload and exposes it on ctx.file', async () => {
