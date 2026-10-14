@@ -71,8 +71,13 @@ describe('the built-in health module', () => {
 
   it('reports draining through the same contract', async () => {
     const controller = new HealthController({ isDraining: () => true, checks: async () => [] })
+    // Liveness stays 200 while draining — a failing liveness probe gets the
+    // container restarted mid-shutdown; readiness turns traffic away.
     const live = controller.live() as { status: number; body: { status: string } }
-    expect(live.status).toBe(503)
+    expect(live.status).toBe(200)
     expect(live.body.status).toBe('draining')
+    const ready = (await controller.ready()) as { status: number; body: { status: string } }
+    expect(ready.status).toBe(503)
+    expect(ready.body.status).toBe('draining')
   })
 })
