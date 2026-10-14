@@ -4,11 +4,12 @@ KickJS includes a double-submit cookie CSRF middleware that protects state-chang
 
 ## How It Works
 
-The `csrf()` middleware uses the **double-submit cookie** pattern:
+The `csrf()` middleware checks two things on state-changing methods (POST, PUT, PATCH, DELETE):
 
-1. On every request, a random token is set as a cookie (if not already present).
-2. For state-changing methods (POST, PUT, PATCH, DELETE), the middleware checks that the value in the `x-csrf-token` request header matches the cookie value.
-3. If the tokens do not match or the header is missing, the request is rejected with a **403** response.
+1. **Where the request came from.** Browsers say so themselves. `Sec-Fetch-Site: same-origin` passes. Otherwise the `Origin` header (or the `Referer`'s origin) must match the request's `Host`, or one of `trustedOrigins`. A browser request that says it is cross-site without an origin is refused. Requests with none of these headers (servers, curl) go on to the token check.
+2. **The token (double-submit cookie).** On every request a random token is set as a cookie if not already present, and the `x-csrf-token` header must match it.
+
+Either check failing answers **403**. The origin check is what the token alone can't do: a sibling subdomain that can set cookies on your parent domain can plant a token, but it can't make the browser send your origin.
 
 ## Setup
 
@@ -35,6 +36,8 @@ csrf({
   methods: ['POST', 'PUT', 'PATCH', 'DELETE'], // methods that require validation
   ignorePaths: ['/webhooks/stripe', '/webhooks/github'],
   tokenLength: 32, // bytes before hex encoding (default: 32 = 64 hex chars)
+  trustedOrigins: ['https://app.example.com'], // other origins allowed to send requests
+  checkOrigin: true, // default: true
   cookieOptions: {
     httpOnly: false, // default: false — the page must be able to read the token
     sameSite: 'strict', // default: 'strict'
@@ -56,16 +59,28 @@ Set `httpOnly: true` only when the client receives the token another way — ren
 by the server, or fetched from an endpoint of your own.
 :::
 
-| Option          | Type       | Default                              |
-| --------------- | ---------- | ------------------------------------ |
-| `cookie`        | `string`   | `'_csrf'`                            |
-| `header`        | `string`   | `'x-csrf-token'`                     |
-| `methods`       | `string[]` | `['POST', 'PUT', 'PATCH', 'DELETE']` |
-| `ignorePaths`   | `string[]` | `[]`                                 |
-| `tokenLength`   | `number`   | `32`                                 |
-| `cookieOptions` | object     | See above                            |
+| Option           | Type       | Default                              |
+| ---------------- | ---------- | ------------------------------------ |
+| `cookie`         | `string`   | `'_csrf'`                            |
+| `header`         | `string`   | `'x-csrf-token'`                     |
+| `methods`        | `string[]` | `['POST', 'PUT', 'PATCH', 'DELETE']` |
+| `ignorePaths`    | `string[]` | `[]`                                 |
+| `tokenLength`    | `number`   | `32`                                 |
+| `trustedOrigins` | `string[]` | `[]`                                 |
+| `checkOrigin`    | `boolean`  | `true`                               |
+| `cookieOptions`  | object     | See above                            |
 
 The `secure` cookie flag defaults to `true` when `NODE_ENV` is `'production'` and `false` otherwise.
+
+### Frontend on another origin
+
+When the page and the API are on different hosts — `app.example.com` calling `api.example.com` — list the page's origin, scheme included:
+
+```ts
+csrf({ trustedOrigins: ['https://app.example.com'] })
+```
+
+Behind a proxy that rewrites the `Host` header, list your public origin the same way. Turn the check off with `checkOrigin: false` only when you can't list the origins.
 
 ## Client-Side Usage
 
@@ -122,7 +137,7 @@ When validation fails, the middleware returns:
 { "message": "CSRF token mismatch" }
 ```
 
-with HTTP status **403**.
+or, when the origin check fails, `{ "message": "CSRF origin not allowed" }` — both with HTTP status **403**.
 
 ## Exempting routes by flag
 

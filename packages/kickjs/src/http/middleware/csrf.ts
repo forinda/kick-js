@@ -19,6 +19,22 @@ export interface CsrfOptions {
   ignorePaths?: string[]
   /** Token byte length before hex encoding (default: 32 = 64 hex chars) */
   tokenLength?: number
+  /**
+   * Origins, besides the request's own host, allowed to send state-changing
+   * requests — e.g. `['https://app.example.com']` when the frontend lives on
+   * another subdomain. Compared against the `Origin` (or `Referer`) header.
+   */
+  trustedOrigins?: string[]
+  /**
+   * Check where an unsafe request came from before the token (default `true`).
+   * `Sec-Fetch-Site: same-origin` passes; otherwise the `Origin` (or `Referer`)
+   * must match the request's `Host` or a {@link trustedOrigins} entry, and a
+   * browser request that says it is cross-site with neither is refused. A
+   * request with no such headers at all (a server, curl) goes on to the token
+   * check. Turn off only behind a proxy that rewrites `Host` and when you
+   * cannot list the origins.
+   */
+  checkOrigin?: boolean
   /** Cookie options */
   cookieOptions?: {
     /**
@@ -32,6 +48,68 @@ export interface CsrfOptions {
     path?: string
   }
 }
+
+type HeaderBag = Record<string, string | string[] | undefined>
+
+function headerOf(headers: HeaderBag, name: string): string | undefined {
+  const value = headers[name]
+  return Array.isArray(value) ? value[0] : value
+}
+
+function hostOfUrl(url: string): string | undefined {
+  try {
+    return new URL(url).host
+  } catch {
+    return undefined
+  }
+}
+
+/** `scheme://host[:port]` of a URL, or undefined when it doesn't parse. */
+function originOfUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  try {
+    return new URL(url).origin
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Whether an unsafe request came from somewhere allowed to send it — the
+ * origin half of CSRF protection, ahead of the token. The token alone (double
+ * submit) can be planted by a sibling subdomain that sets cookies on the
+ * parent domain; the browser's own origin headers cannot.
+ */
+export function isAllowedOrigin(headers: HeaderBag, trusted: ReadonlySet<string>): boolean {
+  const site = headerOf(headers, 'sec-fetch-site')
+  if (site === 'same-origin') return true
+
+  const origin = headerOf(headers, 'origin') ?? originOfUrl(headerOf(headers, 'referer'))
+  if (origin === undefined) {
+    // No browser origin headers: not a browser cross-site request (or a very
+    // old browser). Left to the token. A browser that says cross-site or
+    // same-site but sends no origin is refused.
+    return site === undefined || site === 'none'
+  }
+  if (trusted.has(origin)) return true
+  // The scheme is not compared: behind a TLS-terminating proxy the app cannot
+  // know it reliably. The host (with port) is what an attacker cannot match.
+  // `Origin: null` (sandboxed frames, some redirects) does not parse: refused.
+  const host = headerOf(headers, 'host')
+  return host !== undefined && hostOfUrl(origin) === host.toLowerCase()
+}
+
+function trustedSet(origins: string[] | undefined): Set<string> {
+  return new Set(
+    (origins ?? []).map((o) => {
+      const origin = originOfUrl(o)
+      if (!origin) throw new Error(`csrf: trustedOrigins entry '${o}' is not a URL origin`)
+      return origin
+    }),
+  )
+}
+
+const ORIGIN_REJECTED = { message: 'CSRF origin not allowed' }
 
 /**
  * Double-submit cookie CSRF protection middleware.
@@ -66,6 +144,8 @@ export function csrf(options: CsrfOptions = {}) {
   )
   const ignorePaths = new Set(options.ignorePaths ?? [])
   const tokenLength = options.tokenLength ?? 32
+  const checkOrigin = options.checkOrigin ?? true
+  const trusted = trustedSet(options.trustedOrigins)
   const cookieOpts = {
     // `false`, not `true`: double-submit CSRF requires the PAGE to read this
     // cookie and echo it in a header. Under `httpOnly: true` `document.cookie`
@@ -103,6 +183,10 @@ export function csrf(options: CsrfOptions = {}) {
     // configured exemptions were silently ignored on Fastify / h3.
     if (ignorePaths.has(resolvePathname(req as ClientRequestLike))) {
       return next()
+    }
+
+    if (checkOrigin && !isAllowedOrigin(req.headers as HeaderBag, trusted)) {
+      return sendJson(res, 403, ORIGIN_REJECTED)
     }
 
     // Validate: header token must match cookie token
@@ -172,6 +256,8 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
   const tokenLength = options.tokenLength ?? 32
   const exemptWhen = options.exemptWhen
   if (exemptWhen !== undefined) assertFlagTest(exemptWhen, 'csrfGuard({ exemptWhen })')
+  const checkOrigin = options.checkOrigin ?? true
+  const trusted = trustedSet(options.trustedOrigins)
   const cookieOpts = {
     // Same default as `csrf()` above, and for the same reason.
     httpOnly: false,
@@ -200,6 +286,11 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
     }
 
     if (ignorePaths.has(resolvePathname(ctx.req as unknown as ClientRequestLike))) return next()
+
+    if (checkOrigin && !isAllowedOrigin(ctx.headers as HeaderBag, trusted)) {
+      ctx.json(ORIGIN_REJECTED, 403)
+      return
+    }
 
     const headerToken = ctx.headers[headerName] as string | undefined
     if (typeof headerToken !== 'string' || !safeEqual(headerToken, token)) {
