@@ -173,3 +173,69 @@ export function rejectUnsupportedBody() {
     req.on?.('end', onEnd)
   }
 }
+
+/** Default body size limit — Express's `express.json()` default. */
+export const DEFAULT_BODY_LIMIT = '1mb'
+
+const BYTE_UNITS: Record<string, number> = { b: 1, kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3 }
+
+/**
+ * `'1mb'` / `'512kb'` / `1048576` → bytes, the forms `express.json({ limit })`
+ * accepts (1024-based, like the `bytes` package Express uses), so one
+ * `jsonLimit` means the same size on every engine.
+ */
+export function parseByteSize(value: string | number): number {
+  if (typeof value === 'number') return value
+  const match = /^\s*(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?\s*$/i.exec(value)
+  if (!match) throw new Error(`Invalid body size limit: '${value}'`)
+  return Math.floor(Number(match[1]) * BYTE_UNITS[(match[2] ?? 'b').toLowerCase()])
+}
+
+function tooLarge(limit: number): HttpException {
+  return new HttpException(413, `Request body is larger than the ${limit}-byte limit`)
+}
+
+/**
+ * Read a web `Request` body as text, refusing more than `limit` bytes with a
+ * 413 — from `Content-Length` before reading, and while streaming for a body
+ * that doesn't declare one (or declares less than it sends).
+ */
+export async function readBodyText(request: Request, limit: number): Promise<string> {
+  const declared = Number(request.headers.get('content-length'))
+  if (declared > limit) throw tooLarge(limit)
+  if (!request.body) return ''
+
+  const reader = request.body.getReader()
+  const decoder = new TextDecoder()
+  let size = 0
+  let text = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > limit) {
+      await reader.cancel().catch(() => {})
+      throw tooLarge(limit)
+    }
+    text += decoder.decode(value, { stream: true })
+  }
+  return text + decoder.decode()
+}
+
+/**
+ * `application/x-www-form-urlencoded` → object, with a repeated key becoming
+ * an array — the same rule the query string follows on every engine, and
+ * what Express's form parser does.
+ */
+export function parseForm(raw: string): Record<string, string | string[]> {
+  // A Map, then fromEntries: assigning keys onto a plain object would let a
+  // `__proto__` field set the result's prototype.
+  const fields = new Map<string, string | string[]>()
+  for (const [key, value] of new URLSearchParams(raw)) {
+    const prev = fields.get(key)
+    if (prev === undefined) fields.set(key, value)
+    else if (Array.isArray(prev)) prev.push(value)
+    else fields.set(key, [prev, value])
+  }
+  return Object.fromEntries(fields)
+}

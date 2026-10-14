@@ -9,6 +9,7 @@ import { Container } from '../src/core/container'
 import { Controller, Get, Post, Service, Value } from '../src/core/decorators'
 import { defineModule } from '../src/core/define-module'
 import type { RequestContext } from '../src/http/context'
+import { HttpException } from '../src/core/errors'
 
 /**
  * `@forinda/kickjs/web` — the edge/Bun/Deno fetch entry. Round-trips real
@@ -115,6 +116,47 @@ describe('createWebApp — fetch entry', () => {
 })
 
 describe('web entry — bundle purity (design §3.4)', () => {
+  it('answers errors and unmatched requests with the same problem details as bootstrap', async () => {
+    @Controller()
+    class C {
+      @Get('/teapot')
+      teapot() {
+        throw new HttpException(418, 'short and stout')
+      }
+
+      @Get('/boom')
+      boom() {
+        throw new Error('kaboom')
+      }
+    }
+    const mod = defineModule({
+      name: 'Errors',
+      build: () => ({ routes: () => ({ path: '/e', controller: C }) }),
+    })()
+    const app = createWebApp({ h3: h3v2, modules: [mod] })
+
+    const teapot = await app.fetch(new Request('http://edge/api/v1/e/teapot'))
+    expect(teapot.status).toBe(418)
+    expect(teapot.headers.get('content-type')).toContain('application/problem+json')
+    expect(await teapot.json()).toMatchObject({ status: 418, detail: 'short and stout' })
+
+    const boom = await app.fetch(new Request('http://edge/api/v1/e/boom'))
+    expect(boom.status).toBe(500)
+    const body = await boom.json()
+    expect(body).toMatchObject({ message: 'Internal Server Error' })
+    expect(body.requestId).toBe(boom.headers.get('x-request-id'))
+
+    const missing = await app.fetch(new Request('http://edge/api/v1/e/nope'))
+    expect(missing.status).toBe(404)
+    expect(missing.headers.get('content-type')).toContain('application/problem+json')
+
+    const wrongVerb = await app.fetch(
+      new Request('http://edge/api/v1/e/teapot', { method: 'DELETE' }),
+    )
+    expect(wrongVerb.status).toBe(405)
+    expect(wrongVerb.headers.get('allow')).toBe('GET')
+  })
+
   it('the built dist/web graph contains no node-only or express imports', () => {
     const distDir = resolve(__dirname, '../dist')
     const entry = join(distDir, 'web.mjs')

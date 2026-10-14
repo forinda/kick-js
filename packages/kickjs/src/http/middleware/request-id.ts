@@ -17,7 +17,8 @@ export function requestId() {
     const existing = (req as Request & { requestId?: string }).requestId
     // globalThis.crypto (Web Crypto) — portable across node/bun/deno/workers,
     // unlike node:crypto. Node ≥ 19 exposes it globally; engines pin ≥ 20.
-    const id = existing || (req.headers[REQUEST_ID_HEADER] as string) || crypto.randomUUID()
+    const header = req.headers[REQUEST_ID_HEADER]
+    const id = existing || (Array.isArray(header) ? header[0] : header) || crypto.randomUUID()
     ;(req as any).requestId = id
     res.setHeader(REQUEST_ID_HEADER, id)
     next()

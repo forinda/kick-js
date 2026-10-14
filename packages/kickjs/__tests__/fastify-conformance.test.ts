@@ -27,6 +27,7 @@ import {
 } from '../src/index'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
+import { setCookie } from '../src/http/middleware/respond'
 
 // One fixture app, run under both runtimes — the conformance harness. Proves the
 // HttpRuntime contract holds for Fastify: native routing, the RuntimeResponse
@@ -179,6 +180,166 @@ for (const rt of RUNTIMES) {
 
       await request(app.handle.bind(app)).get('/api/v1/nf/nope').expect(404)
     })
+
+    it('answers with an X-Request-Id, preferring an id already assigned', async () => {
+      @Controller()
+      class C {
+        @Get('/id')
+        id(ctx: RequestContext) {
+          ctx.json({ id: ctx.requestId })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/rid', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const fresh = await request(app.handle.bind(app)).get('/api/v1/rid/id').expect(200)
+      expect(fresh.headers['x-request-id']).toBe(fresh.body.id)
+
+      const sent = await request(app.handle.bind(app))
+        .get('/api/v1/rid/id')
+        .set('X-Request-Id', 'from-client')
+        .expect(200)
+      expect(sent.body.id).toBe('from-client')
+      expect(sent.headers['x-request-id']).toBe('from-client')
+    })
+
+    it('applies jsonLimit, answering 413 past it', async () => {
+      @Controller()
+      class C {
+        @Post('/in')
+        take(ctx: RequestContext) {
+          ctx.json({ size: JSON.stringify(ctx.body).length })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        jsonLimit: '1kb',
+        modules: [{ routes: () => ({ path: '/lim', controller: C }) } as never],
+      })
+      await app.setup()
+
+      await request(app.handle.bind(app))
+        .post('/api/v1/lim/in')
+        .send({ text: 'x'.repeat(100) })
+        .expect(200)
+      await request(app.handle.bind(app))
+        .post('/api/v1/lim/in')
+        .send({ text: 'x'.repeat(2000) })
+        .expect(413)
+
+      // An HMR rebuild keeps the limit.
+      await app.rebuild()
+      await request(app.handle.bind(app))
+        .post('/api/v1/lim/in')
+        .send({ text: 'x'.repeat(2000) })
+        .expect(413)
+    })
+
+    it('parses a repeated form field into an array', async () => {
+      @Controller()
+      class C {
+        @Post('/form')
+        form(ctx: RequestContext) {
+          ctx.json(ctx.body)
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/f', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app))
+        .post('/api/v1/f/form')
+        .type('form')
+        .send('tag=a&tag=b&name=n')
+        .expect(200)
+      expect(res.body).toEqual({ tag: ['a', 'b'], name: 'n' })
+    })
+
+    it('sends each cookie once', async () => {
+      @Controller()
+      class C {
+        @Get('/two')
+        two(ctx: RequestContext) {
+          setCookie(ctx.res, 'a', '1')
+          setCookie(ctx.res, 'b', '2')
+          ctx.json({ ok: true })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/ck', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app)).get('/api/v1/ck/two').expect(200)
+      const cookies = (res.headers['set-cookie'] as unknown as string[]).map((c) => c.split(';')[0])
+      expect(cookies).toEqual(['a=1', 'b=2'])
+    })
+
+    it('percent-decodes route params', async () => {
+      @Controller()
+      class C {
+        @Get('/u/:name')
+        get(ctx: RequestContext) {
+          ctx.json({ name: ctx.params.name })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/dec', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app)).get('/api/v1/dec/u/a%20b%C3%A9').expect(200)
+      expect(res.body).toEqual({ name: 'a bé' })
+      await request(app.handle.bind(app)).get('/api/v1/dec/u/%E0%A4%A').expect(400)
+    })
+
+    it('trusts a hop count of proxies the way Express does', async () => {
+      @Controller()
+      class C {
+        @Get('/ip')
+        ip(ctx: RequestContext) {
+          ctx.json({ ip: ctx.ip })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        trustProxy: 1,
+        modules: [{ routes: () => ({ path: '/tp', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app))
+        .get('/api/v1/tp/ip')
+        .set('X-Forwarded-For', '203.0.113.7')
+        .expect(200)
+      expect(res.body.ip).toBe('203.0.113.7')
+    })
+
+    if (rt.name !== 'express') {
+      // Express leaves the request to the handler: `ctx.render()` writes from
+      // a callback after the handler returns, so it cannot fall through.
+      it('answers 404 when a handler neither writes nor returns', async () => {
+        @Controller()
+        class C {
+          @Get('/silent')
+          silent() {}
+        }
+        const app = new Application({
+          runtime: rt.make(),
+          modules: [{ routes: () => ({ path: '/s', controller: C }) } as never],
+        })
+        await app.setup()
+
+        await request(app.handle.bind(app)).get('/api/v1/s/silent').expect(404)
+      })
+    }
 
     it('streams Server-Sent Events through the response driver', async () => {
       @Controller()

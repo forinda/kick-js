@@ -43,7 +43,12 @@ import {
   runDisposables,
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
-import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from './body-policy'
+import {
+  DEFAULT_BODY_LIMIT,
+  EXPRESS_JSON_TYPES,
+  parseByteSize,
+  rejectUnsupportedBody,
+} from './body-policy'
 import { requestId } from './middleware/request-id'
 import { pendingBackgroundWork, settleBackgroundWork } from './background'
 import { installChannelPublisher, traceHandler } from './tracing'
@@ -340,7 +345,12 @@ export interface ApplicationOptions {
 
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
-  /** Maximum JSON body size (only used when middleware is not provided) */
+  /**
+   * Largest request body parsed, as bytes or `'1mb'`-style (default `'1mb'`).
+   * Express applies it to its default parsers, so only when `middlewares` is
+   * not provided; Fastify, h3 and the web entry parse bodies themselves and
+   * always apply it. A larger body answers 413.
+   */
   jsonLimit?: string | number
   /**
    * Print the route table on startup. Default: `false`. Set to `true`
@@ -647,10 +657,7 @@ export class Application {
     // `this.app` is the engine-native app; typed Express here (the default) for
     // the legacy escape hatches. Under another runtime it holds that engine's
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
-    this.app = this.runtime.createApp({
-      trustProxy: options.trustProxy,
-      notFoundFallthrough: options.notFoundFallthrough,
-    }) as Express
+    this.app = this.createEngineApp()
     this.container = Container.getInstance()
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
@@ -738,6 +745,15 @@ export class Application {
     }
     this.loopback ??= createLoopback((req, res) => this.handle(req, res))
     return this.loopback.fetch(request)
+  }
+
+  /** The engine app, from the options — one place, so a rebuild (HMR) keeps them all. */
+  private createEngineApp(): Express {
+    return this.runtime.createApp({
+      trustProxy: this.options.trustProxy,
+      notFoundFallthrough: this.options.notFoundFallthrough,
+      bodyLimit: parseByteSize(this.options.jsonLimit ?? DEFAULT_BODY_LIMIT),
+    }) as Express
   }
 
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
@@ -925,7 +941,7 @@ export class Application {
       // Skip express.json on engines that parse bodies natively (Fastify, h3) —
       // otherwise the body stream is read twice and the engine's parser hangs.
       if (!this.runtime.capabilities.nativeBodyParsing) {
-        const limit = this.options.jsonLimit ?? '1mb'
+        const limit = this.options.jsonLimit ?? DEFAULT_BODY_LIMIT
         // EXPRESS_JSON_TYPES, not the default: `express.json()` matches the
         // exact string `application/json`, so `application/merge-patch+json`
         // arrived unparsed while Fastify answered 415 and h3 parsed it (#590).
@@ -1427,10 +1443,7 @@ export class Application {
     try {
       Container.reset()
       this.container = Container.getInstance()
-      this.app = this.runtime.createApp({
-        trustProxy: this.options.trustProxy,
-        notFoundFallthrough: this.options.notFoundFallthrough,
-      }) as Express
+      this.app = this.createEngineApp()
       await this.setup()
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
@@ -1595,6 +1608,7 @@ export class Application {
         ...this.adapters.map((adapter) =>
           timeBoxed(`Adapter '${adapter.name}'`, () => adapter.shutdown?.()),
         ),
+        timeBoxed(`Runtime '${this.runtime.name}'`, () => this.runtime.close?.(this.app)),
       ])
 
       // A reload must leave the shared dev server listening. If a hook closed
