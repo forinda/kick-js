@@ -52,6 +52,10 @@
       "import": "./dist/core/reactivity.mjs",
       "types": "./dist/core/reactivity.d.mts"
     },
+    "./middleware/allowed-hosts": {
+      "import": "./dist/http/middleware/allowed-hosts.mjs",
+      "types": "./dist/http/middleware/allowed-hosts.d.mts"
+    },
     "./middleware/helmet": {
       "import": "./dist/http/middleware/helmet.mjs",
       "types": "./dist/http/middleware/helmet.d.mts"

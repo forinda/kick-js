@@ -64,6 +64,7 @@ import { ROUTE_SLOT } from '../core/route-flag'
 import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import type { ValidationErrorFactory } from './middleware/validate'
+import { allowedHosts, type AllowedHostsOptions } from './middleware/allowed-hosts'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
   _setExternalContributorSources,
@@ -526,6 +527,16 @@ export interface ApplicationOptions {
   security?: {
     /** Auto-inject helmet security headers. Default: true */
     helmet?: boolean
+    /**
+     * Answer only requests for these hosts — `allowedHosts()` mounted first.
+     * `'.example.com'` matches the domain and its subdomains. The health
+     * probes are exempt: orchestrators send them to the instance's IP.
+     *
+     * ```ts
+     * bootstrap({ security: { allowedHosts: ['example.com', '.example.com'] } })
+     * ```
+     */
+    allowedHosts?: string[] | AllowedHostsOptions
   }
 }
 
@@ -918,6 +929,22 @@ export class Application {
     ;(this.app as any).__kickApp = this
 
     const ctx = this.adapterCtx()
+
+    // ── 0. Host allow-list, before anything is mounted ─────────────────
+    // First, ahead of adapter beforeMount: routes an adapter registers there
+    // (docs UIs, devtools, the cron trigger) would otherwise answer on
+    // Express before the check runs.
+    const hostList = this.options.security?.allowedHosts
+    if (hostList) {
+      const hostOptions = Array.isArray(hostList) ? { hosts: hostList } : hostList
+      this.runtime.useConnect(
+        this.app,
+        allowedHosts({
+          ...hostOptions,
+          ignorePaths: [...(hostOptions.ignorePaths ?? []), '/health/live', '/health/ready'],
+        }),
+      )
+    }
 
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
