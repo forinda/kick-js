@@ -1,5 +1,11 @@
 # @forinda/kickjs-ai
 
+## 8.3.1
+
+### Patch Changes
+
+- [#858](https://github.com/forinda/kick-js/pull/858) [`348eb16`](https://github.com/forinda/kick-js/commit/348eb162f589f9e64c4bc9a05daf37ad87023fa9) Thanks [@forinda](https://github.com/forinda)! - Accept `@forinda/kickjs` 10 as a peer (`>=8.5.0 <11.0.0`). Neither package uses the APIs kickjs 10 removes.
+
 ## 8.3.0
 
 ### Minor Changes
