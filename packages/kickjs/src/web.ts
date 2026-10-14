@@ -36,6 +36,7 @@ import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
+import { _setValidationErrorFactory, type ValidationErrorFactory } from './http/middleware/validate'
 import { buildMountPath } from './core/path'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
@@ -107,6 +108,8 @@ export interface CreateWebAppOptions {
    * ctx-style handlers are accepted (no connect/express middleware here).
    */
   middlewares?: MiddlewareHandler[]
+  /** What a failed route validation throws — parity with `bootstrap({ validationError })`. */
+  validationError?: ValidationErrorFactory
 }
 
 export interface WebApp {
@@ -136,6 +139,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   }
 
   const container = Container.getInstance()
+  _setValidationErrorFactory(options.validationError)
 
   // Wire ConfigService/@Value env resolution when the platform has no
   // ambient process.env (Workers). Latest-wins like loadEnv().

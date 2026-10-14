@@ -117,7 +117,12 @@ export { requestScopeMiddleware } from './http/middleware/request-scope'
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './http/middleware/request-id'
-export { validate } from './http/middleware/validate'
+export {
+  validate,
+  defaultValidationError,
+  type ValidationFailure,
+  type ValidationErrorFactory,
+} from './http/middleware/validate'
 export { notFoundHandler, errorHandler } from './http/middleware/error-handler'
 export { csrf, csrfGuard, type CsrfOptions, type CsrfGuardOptions } from './http/middleware/csrf'
 export {

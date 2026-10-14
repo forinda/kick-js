@@ -59,7 +59,12 @@ export type {
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './middleware/request-id'
-export { validate } from './middleware/validate'
+export {
+  validate,
+  defaultValidationError,
+  type ValidationFailure,
+  type ValidationErrorFactory,
+} from './middleware/validate'
 export { notFoundHandler, errorHandler } from './middleware/error-handler'
 export { csrf, csrfGuard, type CsrfOptions, type CsrfGuardOptions } from './middleware/csrf'
 export {
