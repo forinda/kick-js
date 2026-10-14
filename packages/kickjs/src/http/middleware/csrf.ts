@@ -7,6 +7,7 @@ import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
 import { isProduction } from '../../core/is-production'
+import { canonicalHost, parseHttpUrl } from '../host'
 
 export interface CsrfOptions {
   /** Cookie name for the CSRF token (default: '_csrf') */
@@ -54,33 +55,6 @@ type HeaderBag = Record<string, string | string[] | undefined>
 function headerOf(headers: HeaderBag, name: string): string | undefined {
   const value = headers[name]
   return Array.isArray(value) ? value[0] : value
-}
-
-/** An http(s) URL, or undefined for anything else (`null`, `file:`, garbage). */
-function parseHttpUrl(value: string): URL | undefined {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * RFC 9110 `Host`: a hostname or bracketed IPv6 literal, optional port. Checked
- * before parsing, so the URL parser never sees userinfo, a path or whitespace —
- * `x@a.test` would otherwise parse to the host `a.test`.
- */
-const HOST_GRAMMAR = /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/
-
-/**
- * The request's host, canonicalized the way `URL` canonicalizes the origin it
- * is compared with (case, IDN, default port for that scheme) — comparing two
- * strings parsed by different rules is how checks like this get bypassed.
- */
-function canonicalHost(host: string | undefined, protocol: string): string | undefined {
-  if (!host || !HOST_GRAMMAR.test(host)) return undefined
-  return parseHttpUrl(`${protocol}//${host}`)?.host
 }
 
 /** `scheme://host[:port]` of a URL, or undefined when it doesn't parse. */
