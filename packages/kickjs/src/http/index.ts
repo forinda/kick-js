@@ -6,6 +6,13 @@ export {
   type ServerOptions,
 } from './application'
 export type { StartupStep, StartupTimelineSnapshot } from './startup-timeline'
+export {
+  defineCheck,
+  StartupCheckError,
+  type CheckContext,
+  type CheckMessage,
+  type StartupCheck,
+} from './startup-checks'
 
 // Bootstrap — zero-boilerplate entry point
 export { bootstrap } from './bootstrap'

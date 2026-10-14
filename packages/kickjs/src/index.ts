@@ -16,6 +16,13 @@ export {
   type ServerOptions,
 } from './http/application'
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
+export {
+  defineCheck,
+  StartupCheckError,
+  type CheckContext,
+  type CheckMessage,
+  type StartupCheck,
+} from './http/startup-checks'
 export { waitUntil, settleBackgroundWork, type PlatformContext } from './http/background'
 export {
   reportError,

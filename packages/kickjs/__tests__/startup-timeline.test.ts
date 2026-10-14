@@ -48,6 +48,7 @@ describe('Application startup timeline', () => {
       'routes',
       'Slow.beforeStart',
       'error handlers',
+      'checks',
       'listen',
       'Slow.afterStart',
       'ready',

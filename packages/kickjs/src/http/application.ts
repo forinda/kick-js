@@ -72,6 +72,7 @@ import {
   buildRouteTable,
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
+import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
 import {
   HEALTH_PROBE,
   createHealthChecks,
@@ -511,6 +512,28 @@ export interface ApplicationOptions {
   validationError?: ValidationErrorFactory
 
   /**
+   * Your own startup checks, run with the built-in ones once the app is
+   * assembled and before it serves a request. A check returning an `error`
+   * fails startup; a `warning` is logged.
+   *
+   * ```ts
+   * const needsDb = defineCheck({
+   *   name: 'database url',
+   *   deploy: true, // production only
+   *   run: () =>
+   *     process.env.DATABASE_URL?.includes('localhost')
+   *       ? { id: 'APP-W001', level: 'warning', message: 'DATABASE_URL points at localhost' }
+   *       : undefined,
+   * })
+   * bootstrap({ modules, checks: [needsDb] })
+   * ```
+   */
+  checks?: StartupCheck[]
+
+  /** Check IDs to skip, e.g. `['KICK-SEC-W002']` — a deliberate, reviewable exception. */
+  silenceChecks?: string[]
+
+  /**
    * Security defaults applied automatically unless opted out.
    *
    * When not specified, secure defaults are applied:
@@ -678,6 +701,7 @@ export class Application {
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
   private timeline = new StartupTimeline()
+  private mountedRoutes: MountedRoute[] = []
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -923,6 +947,16 @@ export class Application {
    */
   getStartupTimeline(): StartupTimelineSnapshot {
     return this.timeline.snapshot()
+  }
+
+  /** Run the built-in and the app's startup checks against the assembled app. */
+  private runChecks(): void {
+    runStartupChecks(
+      [...builtInChecks, ...(this.options.checks ?? [])],
+      { options: this.options as unknown as Record<string, unknown>, routes: this.mountedRoutes },
+      this.options.silenceChecks,
+    )
+    this.timeline.mark('checks')
   }
 
   /** Log the slowest steps — only when startup was slow enough to ask why. */
@@ -1184,6 +1218,7 @@ export class Application {
     // is the only place that knows the FULL mounted path — prefix, version and
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
+    this.mountedRoutes = mountedPaths
 
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
@@ -1398,6 +1433,7 @@ export class Application {
   async startWithoutServer(): Promise<void> {
     this.handlerMode = true
     await this.setup()
+    this.runChecks()
 
     const needServer = this.adapters.filter((adapter) => adapter.afterStart)
     if (needServer.length > 0) {
@@ -1443,6 +1479,7 @@ export class Application {
     }
 
     await this.setup()
+    this.runChecks()
 
     if (g.__kickjs_httpServer) {
       // ── DEV MODE: Vite owns the http.Server ──────────────────────
