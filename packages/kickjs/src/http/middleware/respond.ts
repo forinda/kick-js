@@ -78,7 +78,21 @@ interface AnyResponse {
   statusCode?: number
   getHeader?: (name: string) => unknown
   setHeader?: (name: string, value: unknown) => unknown
+  /** Fastify's `Reply` (what `ctx.res` is on Fastify) has these instead of `setHeader`. */
+  header?: (name: string, value: unknown) => unknown
+  removeHeader?: (name: string) => unknown
   end?: (chunk?: unknown) => unknown
+}
+
+/** Replace the response's `Set-Cookie` list, on a node response or a Fastify reply. */
+function writeSetCookie(target: AnyResponse, cookies: unknown[]): void {
+  if (typeof target.setHeader === 'function') {
+    target.setHeader('Set-Cookie', cookies)
+    return
+  }
+  // Fastify's header() appends for set-cookie, so clear the list first.
+  target.removeHeader?.('Set-Cookie')
+  target.header?.('Set-Cookie', cookies)
 }
 
 /** `Set-Cookie` value for one cookie, per RFC 6265 §4.1. */
@@ -114,7 +128,7 @@ export function setCookie(
   const cookie = serializeCookie(name, value, options)
   const prior = target.getHeader?.('Set-Cookie')
   const all = prior === undefined ? [cookie] : [...(Array.isArray(prior) ? prior : [prior]), cookie]
-  target.setHeader?.('Set-Cookie', all)
+  writeSetCookie(target, all)
 }
 
 /**
@@ -132,7 +146,7 @@ export function replaceCookie(
   const others = (prior === undefined ? [] : Array.isArray(prior) ? prior : [prior]).filter(
     (cookie) => !String(cookie).startsWith(`${name}=`),
   )
-  target.setHeader?.('Set-Cookie', [...others, serializeCookie(name, value, options)])
+  writeSetCookie(target, [...others, serializeCookie(name, value, options)])
 }
 
 /** Send a JSON body with a status, without assuming Express. */

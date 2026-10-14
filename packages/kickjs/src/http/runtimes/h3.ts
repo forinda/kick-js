@@ -44,6 +44,7 @@ const NEXT = Symbol('kickjs.h3web.next')
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
 const NO_FALLTHROUGH = Symbol('kickjs.h3web.noFallthrough')
 const TRUST_PROXY = Symbol('kickjs.h3.trustProxy')
+const BODY_LIMIT = Symbol('kickjs.h3.bodyLimit')
 /** h3 v2's "the node response was handled elsewhere" return value. */
 const H3_HANDLED = Symbol.for('h3.handled')
 
@@ -482,6 +483,7 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
       ;(app as unknown as Record<symbol, unknown>)[NO_FALLTHROUGH] =
         options.notFoundFallthrough === false
       ;(app as unknown as Record<symbol, unknown>)[TRUST_PROXY] = proxyTrust(options.trustProxy)
+      ;(app as unknown as Record<symbol, unknown>)[BODY_LIMIT] = options.bodyLimit
       return app
     },
 
@@ -540,7 +542,9 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
               }
             },
           }
-          const run = compileWebRoute(entry, hooks)
+          const run = compileWebRoute(entry, hooks, {
+            bodyLimit: (app as unknown as Record<symbol, number | undefined>)[BODY_LIMIT],
+          })
           app.on(entry.method, url, (event: H3EventLike) =>
             run({
               request: event.req,

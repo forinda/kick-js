@@ -274,6 +274,8 @@ export interface RuntimeAppOptions {
    * app's not-found handling — `false`. Express always answers.
    */
   notFoundFallthrough?: boolean
+  /** Largest request body the engine parses, in bytes — `jsonLimit`, resolved. */
+  bodyLimit?: number
 }
 
 /** Where a connect middleware sits and what it scopes to. */
