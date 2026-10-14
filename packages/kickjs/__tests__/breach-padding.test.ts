@@ -16,6 +16,60 @@ import {
   type RequestContext,
 } from '../src/index'
 
+/** A fake response recording what reaches the wire. */
+function recorder(encoding: string) {
+  const out: Buffer[] = []
+  const res = {
+    getHeader: () => encoding,
+    write: (chunk: unknown) => (out.push(Buffer.from(chunk as Uint8Array | string)), true),
+    end: (chunk?: unknown) => {
+      if (chunk !== undefined && typeof chunk !== 'function') {
+        out.push(Buffer.from(chunk as Uint8Array | string))
+      }
+      return res
+    },
+  }
+  return { res, bytes: () => Buffer.concat(out) }
+}
+
+describe('breachPadding() with short writes', () => {
+  const run = (encoding: string, steps: (res: { write: Function; end: Function }) => void) => {
+    const { res, bytes } = recorder(encoding)
+    breachPadding()({ headers: {} } as never, res as never, () => {})
+    steps(res as never)
+    return bytes()
+  }
+
+  it('never drops bytes held for an incomplete header', () => {
+    // A short binary write, then a string: padding is abandoned, both go out.
+    expect(
+      run('gzip', (res) => {
+        res.write(Buffer.from([1, 2, 3]))
+        res.write('rest')
+        res.end()
+      }).equals(Buffer.concat([Buffer.from([1, 2, 3]), Buffer.from('rest')])),
+    ).toBe(true)
+    // A short write, then end(callback).
+    expect(
+      run('gzip', (res) => {
+        res.write(Buffer.from([1, 2, 3]))
+        res.end(() => {})
+      }).equals(Buffer.from([1, 2, 3])),
+    ).toBe(true)
+  })
+
+  it('pads a gzip header split across writes', () => {
+    const gz = gzipSync(Buffer.from('hello '.repeat(100)))
+    const sent = run('gzip', (res) => {
+      res.write(gz.subarray(0, 4))
+      res.write(gz.subarray(4))
+      res.end()
+    })
+    expect(sent[3]).toBe(0x08)
+    expect(gunzipSync(sent).toString()).toBe('hello '.repeat(100))
+  })
+})
+
 describe('padGzipHeader', () => {
   it('adds a random-length name that decompressors ignore', () => {
     const gz = gzipSync(Buffer.from('secret=abc '.repeat(200)))

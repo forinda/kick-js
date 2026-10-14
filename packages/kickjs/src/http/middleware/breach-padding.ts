@@ -102,17 +102,34 @@ export function breachPadding(options: BreachPaddingOptions = {}) {
       return padGzipHeader(joined, maxBytes)
     }
 
+    // Bytes held back while waiting for a full header. Whenever padding is
+    // abandoned — the next chunk is a string, the encoding changed, the
+    // response ends early — they go out first, so nothing is lost.
+    const held = () => (pending && pending.length > 0 ? pending : null)
+
     ;(res as unknown as { write: Writer }).write = (chunk, ...rest) => {
+      const before = held()
       const out = take(chunk)
-      if (out === null) return write(chunk, ...rest)
+      if (out === null) {
+        if (before) write(Buffer.from(before))
+        return write(chunk, ...rest)
+      }
       return out.length > 0 ? write(Buffer.from(out), ...rest) : true
     }
     ;(res as unknown as { end: Writer }).end = (chunk, ...rest) => {
-      if (typeof chunk === 'function') return end(chunk, ...rest)
-      const flushed = pending && pending.length > 0 && chunk === undefined ? pending : null
-      const out = chunk === undefined ? flushed : take(chunk)
+      const before = held()
+      // end() / end(callback): no more data — send what was held, unpadded.
+      if (chunk === undefined || typeof chunk === 'function') {
+        pending = null
+        if (before) write(Buffer.from(before))
+        return end(chunk, ...rest)
+      }
+      const out = take(chunk)
       pending = null
-      if (out === null) return end(chunk, ...rest)
+      if (out === null) {
+        if (before) write(Buffer.from(before))
+        return end(chunk, ...rest)
+      }
       return end(Buffer.from(out), ...rest)
     }
     next()

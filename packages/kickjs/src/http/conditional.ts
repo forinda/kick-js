@@ -28,9 +28,14 @@ function header(headers: Headers, name: string): string | undefined {
   return Array.isArray(value) ? value.join(', ') : value
 }
 
-/** `"v1"` stays, `W/"v1"` stays, bare `v1` becomes `"v1"`. */
+/** `"v1"` and `W/"v1"` stay; bare `v1` becomes `"v1"`, bare `W/v1` becomes `W/"v1"`. */
 export function normalizeEtag(etag: string): string {
-  return /^(W\/)?".*"$/.test(etag) ? etag : `"${etag.replaceAll('"', '')}"`
+  if (/^(W\/)?".*"$/.test(etag)) return etag
+  // Keep a weak prefix weak: quoting `W/v1` whole would make `"W/v1"`, a
+  // strong tag, and change how If-Match compares it.
+  const weak = etag.startsWith('W/')
+  const bare = (weak ? etag.slice(2) : etag).replaceAll('"', '')
+  return `${weak ? 'W/' : ''}"${bare}"`
 }
 
 const opaque = (tag: string) => tag.replace(/^W\//, '')

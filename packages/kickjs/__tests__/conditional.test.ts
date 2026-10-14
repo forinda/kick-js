@@ -2,6 +2,7 @@ import 'reflect-metadata'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
+import { normalizeEtag } from '../src/http/conditional'
 import { h3Runtime } from '../src/http/runtimes/h3'
 import {
   Application,
@@ -20,6 +21,15 @@ describe('evaluatePreconditions', () => {
   const v = { etag: 'v2', lastModified: UPDATED }
   const get = (headers: Record<string, string>) => evaluatePreconditions('GET', headers, v)
   const put = (headers: Record<string, string>) => evaluatePreconditions('PUT', headers, v)
+
+  it('normalizes bare tags, keeping a W/ prefix weak', () => {
+    expect(normalizeEtag('v1')).toBe('"v1"')
+    expect(normalizeEtag('"v1"')).toBe('"v1"')
+    expect(normalizeEtag('W/v1')).toBe('W/"v1"')
+    expect(normalizeEtag('W/"v1"')).toBe('W/"v1"')
+    // A weak validator never satisfies If-Match (strong comparison).
+    expect(evaluatePreconditions('PUT', { 'if-match': '"v1"' }, { etag: 'W/v1' })).toBe(412)
+  })
 
   it('If-None-Match: weak comparison, lists and *', () => {
     expect(get({ 'if-none-match': '"v2"' })).toBe(304)
