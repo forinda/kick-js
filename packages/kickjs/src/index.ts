@@ -26,6 +26,7 @@ export {
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
 export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './http/conditional'
 export type { RouteName, UrlForArgs, UrlQuery } from './http/url-for'
+export { metricsAdapter, RequestHistogram, type MetricsOptions } from './http/metrics'
 export {
   defineCheck,
   StartupCheckError,

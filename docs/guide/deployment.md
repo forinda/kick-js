@@ -79,6 +79,35 @@ Behind a proxy or load balancer, set `bootstrap({ trustProxy })` so `ctx.ip` and
 - **Shutdown:** set `preStopDelay` to a few seconds (for example `5_000`). The app keeps serving while balancers and Kubernetes endpoints notice it is unready, then stops accepting connections and drains. Draining and the adapters' shutdown hooks each get up to `shutdownTimeout`, so keep the platform's grace period (`terminationGracePeriodSeconds`) above `preStopDelay` plus twice `shutdownTimeout`, with a few seconds to spare — with the defaults and `preStopDelay: 5_000`, at least 70 seconds.
 - **Keep-alive:** the server keeps idle connections for 65 seconds, above AWS ALB's 60-second idle timeout. If your balancer's idle timeout is longer, raise `server: { keepAliveTimeout }` above it — otherwise requests on reused connections fail with 502.
 
+## Metrics
+
+`metricsAdapter()` serves Prometheus metrics at `/metrics`:
+
+```ts
+import { metricsAdapter } from '@forinda/kickjs'
+
+bootstrap({
+  modules,
+  adapters: [metricsAdapter({ token: process.env.METRICS_TOKEN })],
+})
+```
+
+| Metric                                              | Type      |                                      |
+| --------------------------------------------------- | --------- | ------------------------------------ |
+| `http_request_duration_seconds`                     | histogram | by `method`, `route` and `status`    |
+| `process_resident_memory_bytes`                     | gauge     |                                      |
+| `nodejs_heap_used_bytes`, `nodejs_heap_total_bytes` | gauge     |                                      |
+| `nodejs_eventloop_lag_seconds`                      | gauge     | mean delay since the previous scrape |
+| `process_uptime_seconds`                            | gauge     |                                      |
+
+`route` is the route pattern (`/api/v1/users/:id`), never the raw URL, so one route is one series; requests no route matched share `route="unmatched"`. The scrape itself is not counted.
+
+- **Protect it.** The endpoint is mounted before your middleware — a scraper doesn't need your auth, and your auth doesn't cover it. Pass `token` and configure the scraper with `authorization: { credentials: … }`, or keep the port reachable only from Prometheus.
+- **With `allowedHosts`**, Prometheus scrapes by pod IP: add the path to the allow-list's exemptions — `security: { allowedHosts: { hosts: [...], ignorePaths: ['/metrics'] } }`.
+- `metricsAdapter({ path, buckets })` changes the path and the histogram buckets (seconds).
+
+Metrics are per process: run Prometheus against each instance (the usual Kubernetes pod discovery does this).
+
 ## Netlify and Vercel
 
 ```bash
