@@ -43,7 +43,12 @@ import {
   runDisposables,
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
-import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from './body-policy'
+import {
+  DEFAULT_BODY_LIMIT,
+  EXPRESS_JSON_TYPES,
+  parseByteSize,
+  rejectUnsupportedBody,
+} from './body-policy'
 import { requestId } from './middleware/request-id'
 import { pendingBackgroundWork, settleBackgroundWork } from './background'
 import { installChannelPublisher, traceHandler } from './tracing'
@@ -340,7 +345,12 @@ export interface ApplicationOptions {
 
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
-  /** Maximum JSON body size (only used when middleware is not provided) */
+  /**
+   * Largest request body parsed, as bytes or `'1mb'`-style (default `'1mb'`).
+   * Express applies it to its default parsers, so only when `middlewares` is
+   * not provided; Fastify, h3 and the web entry parse bodies themselves and
+   * always apply it. A larger body answers 413.
+   */
   jsonLimit?: string | number
   /**
    * Print the route table on startup. Default: `false`. Set to `true`
@@ -650,6 +660,7 @@ export class Application {
     this.app = this.runtime.createApp({
       trustProxy: options.trustProxy,
       notFoundFallthrough: options.notFoundFallthrough,
+      bodyLimit: parseByteSize(options.jsonLimit ?? DEFAULT_BODY_LIMIT),
     }) as Express
     this.container = Container.getInstance()
 
@@ -925,7 +936,7 @@ export class Application {
       // Skip express.json on engines that parse bodies natively (Fastify, h3) —
       // otherwise the body stream is read twice and the engine's parser hangs.
       if (!this.runtime.capabilities.nativeBodyParsing) {
-        const limit = this.options.jsonLimit ?? '1mb'
+        const limit = this.options.jsonLimit ?? DEFAULT_BODY_LIMIT
         // EXPRESS_JSON_TYPES, not the default: `express.json()` matches the
         // exact string `application/json`, so `application/merge-patch+json`
         // arrived unparsed while Fastify answered 415 and h3 parsed it (#590).
@@ -1595,6 +1606,7 @@ export class Application {
         ...this.adapters.map((adapter) =>
           timeBoxed(`Adapter '${adapter.name}'`, () => adapter.shutdown?.()),
         ),
+        timeBoxed(`Runtime '${this.runtime.name}'`, () => this.runtime.close?.(this.app)),
       ])
 
       // A reload must leave the shared dev server listening. If a hook closed

@@ -97,8 +97,12 @@ export function createRequestStore(requestId?: string): RequestStore {
 export function requestScopeMiddleware() {
   const mw = (req: Request, res: Response, next: NextFunction) => {
     const requestIdHeader = req.headers['x-request-id']
+    // An id already assigned (requestId() middleware ran first) wins, so the
+    // response header and the logs agree.
     const requestId =
-      (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) || crypto.randomUUID()
+      (req as Request & { requestId?: string }).requestId ||
+      (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) ||
+      crypto.randomUUID()
     const store = createRequestStore(requestId)
     // Surface the requestId on req so the standalone requestId() middleware
     // (when also mounted) reuses this value instead of generating a divergent
@@ -106,6 +110,9 @@ export function requestScopeMiddleware() {
     // disagree with the X-Request-Id response header for any request that
     // didn't carry an inbound x-request-id header.
     ;(req as Request & { requestId?: string }).requestId = requestId
+    // Every engine answers with the id, as h3 does, whether or not the app
+    // mounted requestId() as well.
+    if (!res.headersSent && !res.getHeader('x-request-id')) res.setHeader('x-request-id', requestId)
     // 'close' fires once the response finished OR the client aborted — run
     // @PreDestroy teardown for the request's scoped instances either way.
     res.once('close', () => disposeRequestStore(store))

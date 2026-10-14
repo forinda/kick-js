@@ -4,7 +4,14 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { HttpException } from '../../core/errors'
-import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
+import {
+  DEFAULT_BODY_LIMIT,
+  classifyMediaType,
+  parseByteSize,
+  parseForm,
+  readBodyText,
+  unsupportedMediaTypeError,
+} from '../body-policy'
 import { RequestContext } from '../context'
 import { publishMatchedRoute } from '../runtime'
 import { applyHandlerResult } from '../reply'
@@ -14,9 +21,8 @@ import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload-config'
 import type { RouteEntry, RuntimeResponse } from '../runtime'
 import { WebRequestShim, WebResponseDriver } from './driver'
-import { createLogger, describeError } from '../../core/logger'
+import { errorHandler, notFoundHandler } from '../middleware/error-handler'
 
-const log = createLogger('WebPipeline')
 const NOOP_NEXT = (): void => {}
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -44,47 +50,11 @@ export interface WebRouteHooks {
   onError?: (err: unknown, req: WebRequestShim, res: WebResponseDriver) => void | Promise<void>
 }
 
-/**
- * Fallback error shape when no engine error handler settles the response.
- *
- * This path used to be completely silent: a bare
- * `{ error: 'Internal Server Error' }` with no log line anywhere, so a
- * failure that reached here left no trace on either side. It is a
- * last-resort branch, which is exactly when diagnostics matter most.
- */
-function defaultErrorResponse(err: unknown, driver: WebResponseDriver): void {
-  const status =
-    typeof (err as { status?: number })?.status === 'number'
-      ? (err as { status: number }).status
-      : typeof (err as { statusCode?: number })?.statusCode === 'number'
-        ? (err as { statusCode: number }).statusCode
-        : 500
-
-  if (status >= 500) {
-    log.error(err, `Unhandled error in web pipeline — ${describeError(err)}`)
-    const stack = (err as Error)?.stack
-    driver.status(status).json({
-      error: 'Internal Server Error',
-      ...(isProduction()
-        ? {}
-        : {
-            message: describeError(err),
-            ...(typeof stack === 'string' ? { stack: stack.split('\n') } : {}),
-          }),
-    })
-    return
-  }
-
-  driver.status(status).json({ error: (err as Error)?.message ?? 'Request failed' })
-}
-
-/**
- * Read per-call, not at module scope: the web entry is imported once and
- * reused across invocations, and edge runtimes may not expose `process`.
- */
-function isProduction(): boolean {
-  return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
-}
+// The same handlers Express and Fastify answer with, so an error or a request
+// nothing answered has one shape on every engine: RFC 9457 problem details,
+// the error's own headers, `requestId` on a 500.
+const builtInError = errorHandler()
+const builtInNotFound = notFoundHandler()
 
 function decodeParams(params: Record<string, string>): Record<string, string> {
   const decoded: Record<string, string> = {}
@@ -120,7 +90,9 @@ export function readThrough(shim: WebRequestShim, carry: object): WebRequestShim
 export function compileWebRoute(
   entry: RouteEntry,
   hooks?: WebRouteHooks,
+  options: { bodyLimit?: number } = {},
 ): (invocation: WebRouteInvocation) => Promise<Response> {
+  const bodyLimit = options.bodyLimit ?? parseByteSize(DEFAULT_BODY_LIMIT)
   const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
   const upload = entry.meta.upload && entry.meta.upload.mode !== 'none' ? entry.meta.upload : null
 
@@ -170,7 +142,13 @@ export function compileWebRoute(
       // Read once — a Request body is a stream and cannot be consumed twice.
       // A read that fails (client aborted mid-flight) is treated as an absent
       // body: there is nobody left to answer, and it is not a malformed one.
-      const raw = request.body === null ? '' : await request.text().catch(() => '')
+      // Past the limit is a 413, held like a parse failure below.
+      let raw = ''
+      try {
+        raw = await readBodyText(request, bodyLimit)
+      } catch (err) {
+        if (err instanceof HttpException) bodyError = err
+      }
 
       // An empty body is ABSENT, not unparseable — the same call the node h3
       // runtime makes on `content-length: 0`. Distinguishing the two is the
@@ -194,7 +172,7 @@ export function compileWebRoute(
             )
           }
         } else if (kind === 'urlencoded') {
-          req.body = Object.fromEntries(new URLSearchParams(raw))
+          req.body = parseForm(raw)
         } else {
           req.body = raw
         }
@@ -203,7 +181,7 @@ export function compileWebRoute(
 
     // Reuse the id `requestId()` middleware already gave the request, so the
     // response header, the route's ctx and observers agree on one id.
-    const store = createRequestStore(req.requestId ?? req.headers['x-request-id'])
+    const store = createRequestStore(req.requestId || req.headers['x-request-id'])
     req.requestId = store.requestId
 
     const driver = new WebResponseDriver(request.signal)
@@ -267,12 +245,12 @@ export function compileWebRoute(
       } catch (err) {
         if (!driver.settled) {
           if (hooks?.onError) await hooks.onError(err, req, driver)
-          if (!driver.settled) defaultErrorResponse(err, driver)
+          if (!driver.settled) await builtInError(err, req, driver, NOOP_NEXT)
         }
       }
       if (!driver.settled) {
-        // Pipeline finished without responding — canonical 404 shape.
-        driver.status(404).json({ error: 'Not Found' })
+        // Pipeline finished without responding — the catch-all's 404.
+        builtInNotFound(req, driver, NOOP_NEXT)
       }
       return await driver.ready
     } finally {

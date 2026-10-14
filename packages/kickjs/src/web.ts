@@ -36,6 +36,9 @@ import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
+import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
+import { WebRequestShim, WebResponseDriver } from './http/web/driver'
+import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
 import { buildMountPath } from './core/path'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
@@ -107,6 +110,11 @@ export interface CreateWebAppOptions {
    * ctx-style handlers are accepted (no connect/express middleware here).
    */
   middlewares?: MiddlewareHandler[]
+  /**
+   * Largest request body parsed, as bytes or `'1mb'`-style (default `'1mb'`)
+   * — parity with `bootstrap({ jsonLimit })`. A larger body answers 413.
+   */
+  jsonLimit?: string | number
 }
 
 export interface WebApp {
@@ -162,6 +170,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   const apiPrefix = options.apiPrefix ?? '/api'
   const defaultVersion = options.defaultVersion ?? 1
   const globalMiddleware = options.middlewares ?? []
+  const bodyLimit = parseByteSize(options.jsonLimit ?? DEFAULT_BODY_LIMIT)
 
   const globalSources: SourcedRegistration[] = (options.contributors ?? []).map(
     (registration): SourcedRegistration => ({
@@ -173,6 +182,8 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
 
   // Duplicate-route guard (KICK006) — same boot-time check as the node path.
   const seenRoutes = new Map<string, string>()
+  // For the catch-all: a known path with the wrong verb is a 405, not a 404.
+  const mounted: MountedRoute[] = []
 
   for (const mod of modules) {
     const declaredName = (mod as { name?: unknown }).name
@@ -207,10 +218,11 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           // Per-handler owner so intra-controller duplicates name both methods.
           const owner = `${route.controller.name ?? 'controller'}.${String(entry.meta.handlerName ?? '?')}`
           assertRouteUnique(seenRoutes, entry.method, url, owner)
+          mounted.push({ method: entry.method, path: url })
           if (globalMiddleware.length > 0) {
             entry.middlewares = [...globalMiddleware, ...entry.middlewares]
           }
-          const run = compileWebRoute(entry)
+          const run = compileWebRoute(entry, undefined, { bodyLimit })
           app.on(entry.method, url, (event: H3EventLike) =>
             run({
               request: event.req,
@@ -224,6 +236,15 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
       _setExternalContributorSources([])
     }
   }
+
+  // Anything no route answered: the same 404 / 405 problem details as the
+  // node engines, instead of h3's own 404 body.
+  const notFound = notFoundHandler(mounted)
+  app.all('/**', (event: H3EventLike) => {
+    const driver = new WebResponseDriver(event.req.signal)
+    notFound(new WebRequestShim(event.req, event.url), driver, () => {})
+    return driver.ready
+  })
 
   return {
     fetch: async (request: Request, platform?: PlatformContext) => {

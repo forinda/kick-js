@@ -128,6 +128,15 @@ export class WebResponseDriver implements RuntimeResponse {
     return this
   }
 
+  /** What `setHeader` recorded — `Set-Cookie` as its list, like node's `res.getHeader`. */
+  getHeader(name: string): string | string[] | undefined {
+    if (name.toLowerCase() === 'set-cookie') {
+      const cookies = this.headers.getSetCookie()
+      return cookies.length > 0 ? cookies : undefined
+    }
+    return this.headers.get(name) ?? undefined
+  }
+
   setHeader(name: string, value: unknown): this {
     if (Array.isArray(value)) {
       this.headers.delete(name)

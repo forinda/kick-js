@@ -15,13 +15,11 @@ interface ErrorRequest {
   originalUrl?: string
   headers: Record<string, string | string[] | undefined>
 }
-import {
-  HttpException,
-  ProblemException,
-  normalizeProblem,
-  createLogger,
-  describeError,
-} from '../../core'
+// Module paths, not the core barrel: the web entry (edge runtimes) uses these
+// handlers too, and the barrel reaches node-only modules.
+import { HttpException, ProblemException, normalizeProblem } from '../../core/errors'
+import { createLogger, describeError } from '../../core/logger'
+import { isProduction as isProductionEnv } from '../../core/is-production'
 
 const log = createLogger('ErrorHandler')
 
@@ -114,8 +112,8 @@ export function notFoundHandler(routes: readonly MountedRoute[] = []) {
  * shape, so a client never has to branch on which one the app threw.
  */
 export function errorHandler() {
-  const isProduction = process.env.NODE_ENV === 'production'
   return (err: any, req: ErrorRequest, res: RuntimeResponse, _next: () => void) => {
+    const isProduction = isProductionEnv()
     // Don't write after headers are already sent
     if (res.headersSent) {
       log.warn(`Error after headers sent: ${err?.message || 'Unknown'}`)
