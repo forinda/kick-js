@@ -381,6 +381,47 @@ function assembleCatchAll(app: H3AppLike): void {
   })
 }
 
+type ProxyTrust = (address: string, hop: number) => boolean
+
+/**
+ * The `trustProxy` forms h3 can honour without an address-matching library:
+ * `true` (every hop), a hop count, or a predicate — Express's semantics for
+ * each. Address and subnet lists are not supported here; they are refused
+ * with a warning and the socket address is kept, so a misread rule never
+ * trusts a header it should not.
+ */
+function proxyTrust(option: RuntimeAppOptions['trustProxy']): ProxyTrust | undefined {
+  if (option === undefined || option === false) return undefined
+  if (option === true) return () => true
+  if (typeof option === 'number') return (_address, hop) => hop < option
+  if (typeof option === 'function') return option
+  log.warn(
+    'h3: trustProxy as an address or subnet list is not supported; client IPs ' +
+      'use the socket address. Use a hop count or a function instead.',
+  )
+  return undefined
+}
+
+/**
+ * Express's `proxy-addr` walk: from the socket outward through
+ * `x-forwarded-for`, stop at the first address the rule does not trust.
+ */
+function forwardedClientIp(req: IncomingMessage, trust: ProxyTrust): string | undefined {
+  const socket = req.socket?.remoteAddress
+  if (!socket) return undefined
+  const header = req.headers['x-forwarded-for']
+  const forwarded = (Array.isArray(header) ? header.join(',') : (header ?? ''))
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .toReversed()
+  const chain = [socket, ...forwarded]
+  for (let hop = 0; hop < chain.length - 1; hop++) {
+    if (!trust(chain[hop]!, hop)) return chain[hop]
+  }
+  return chain[chain.length - 1]
+}
+
 /**
  * A middleware mounted at a path sees `req.url` relative to that path, as on
  * Express — `serve-static` mounted at `/files` must look up
@@ -445,24 +486,25 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
       holder.app = app
       ;(app as unknown as Record<symbol, unknown>)[NO_FALLTHROUGH] =
         options.notFoundFallthrough === false
-      ;(app as unknown as Record<symbol, unknown>)[TRUST_PROXY] = Boolean(options.trustProxy)
+      ;(app as unknown as Record<symbol, unknown>)[TRUST_PROXY] = proxyTrust(options.trustProxy)
       return app
     },
 
     nodeHandler(app) {
       assembleCatchAll(app)
       const listener = toNodeHandler(app)
-      const trustProxy = (app as unknown as Record<symbol, unknown>)[TRUST_PROXY] === true
+      const trust = (app as unknown as Record<symbol, unknown>)[TRUST_PROXY] as
+        | ProxyTrust
+        | undefined
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
         if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
         // Express and Fastify derive `req.ip` from their trust-proxy settings;
         // this is h3's equivalent, off unless the app opts in, because an
         // unverified `x-forwarded-for` is client-controllable. Without it every
         // caller behind a proxy shares the proxy's address (one rate-limit bucket).
-        if (trustProxy && !(req as { ip?: string }).ip) {
-          const forwarded = req.headers['x-forwarded-for']
-          const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim()
-          if (first) (req as { ip?: string }).ip = first
+        if (trust && !(req as { ip?: string }).ip) {
+          const ip = forwardedClientIp(req, trust)
+          if (ip) (req as { ip?: string }).ip = ip
         }
         // h3 v2 adds 'close' / 'finish' listeners for every connect middleware
         // and keeps them until the response ends, so an ordinary middleware
@@ -519,7 +561,13 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
     },
 
     useConnect(app, rawMw: ConnectMiddleware, opts?: UseConnectOptions) {
-      const mw = typeof opts?.path === 'string' ? stripMountPrefix(opts.path, rawMw) : rawMw
+      const path = opts?.path
+      // A list mounts each member, as Express does.
+      if (Array.isArray(path)) {
+        for (const member of path) this.useConnect!(app, rawMw, { path: member })
+        return
+      }
+      const mw = typeof path === 'string' ? stripMountPrefix(path, rawMw) : rawMw
       // Behind a node server (toNodeHandler) the event carries node req/res and
       // h3's own bridge runs the middleware unchanged. Called through
       // `app.fetch(request)` there is none and fromNodeHandler would throw, so
@@ -527,9 +575,15 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
       const viaNode = fromNodeHandler(mw) as (event: H3EventLike) => unknown
       const handler = (event: H3EventLike, next: () => unknown) =>
         event.req.runtime?.node?.res ? viaNode(event) : runConnectOnFetch(mw, event, next)
-      if (opts?.path !== undefined) {
+      if (path instanceof RegExp) {
+        // h3 routes by string pattern only; test the pathname per request.
+        // Like Express, a pattern mount leaves `req.url` whole.
+        app.use((event: H3EventLike, next: () => unknown) =>
+          path.test(event.url.pathname) ? handler(event, next) : next(),
+        )
+      } else if (typeof path === 'string') {
         // h3 `use` is exact-match; `/**` covers the subtree.
-        app.use(joinPath(String(opts.path), '/**'), handler)
+        app.use(joinPath(path, '/**'), handler)
       } else {
         app.use(handler)
       }

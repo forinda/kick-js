@@ -13,4 +13,5 @@ Also fixed on the h3 runtime and the `@forinda/kickjs/web` entry:
 
 - Observers and the request logger see the matched route (`onResponse` `route`).
 - A route uses the request id that `requestId()` middleware assigned, so the `X-Request-Id` header, `ctx.requestId` and `onError` / `onResponse` agree.
-- With `trustProxy`, `req.ip` comes from `X-Forwarded-For`, so rate limits bucket per client behind a proxy.
+- `trustProxy` now sets `req.ip` from `X-Forwarded-For`, so rate limits bucket per client behind a proxy. `true`, a hop count and a function follow Express's rules. An address or subnet list is not supported on h3: it logs a warning and keeps the socket address.
+- A connect middleware mounted at a list of paths or a regular expression now matches them. Before, the path was turned into a string and never matched.
