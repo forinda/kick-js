@@ -135,11 +135,14 @@ async list(ctx: RequestContext) {
 
 ## Error Response Format
 
-When validation fails, the response is a `422 Unprocessable Entity` with this structure:
+When validation fails, the response is a `422` in [RFC 9457 problem details](error-handling.md) (`application/problem+json`):
 
 ```json
 {
-  "message": "Title is required",
+  "type": "about:blank",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "Title is required",
   "errors": [
     { "field": "title", "message": "Title is required" },
     { "field": "priority", "message": "Invalid enum value" }
@@ -147,12 +150,33 @@ When validation fails, the response is a `422 Unprocessable Entity` with this st
 }
 ```
 
-The top-level `message` is taken from the first validation issue. Each entry in `errors` includes:
+- **detail** — the first issue's message for a body. For query errors it reads `"Invalid query parameters"`, and for path parameters `"Invalid path parameters"`.
+- **errors** — one entry per issue: `field` is the dotted path (`"address.zip"` for nested objects), `message` the schema's message. Left out in production, like every error's details, unless your [`onError`](error-handling.md) exposes them.
 
-- **field** -- the dotted path to the invalid field (e.g. `"address.zip"` for nested objects)
-- **message** -- the Zod error message for that field
+## Custom Validation Errors
 
-For query parameter errors, the message reads `"Invalid query parameters"`. For path parameter errors, it reads `"Invalid path parameters"`. For body errors, the first issue message is used.
+To control what a failed validation throws — a different status, your own message format, extra fields — pass `validationError` to `bootstrap()` (or `createWebApp()`). It receives the failure and returns the error:
+
+```ts
+import { bootstrap, ProblemException } from '@forinda/kickjs'
+
+bootstrap({
+  modules,
+  validationError: ({ source, issues }) =>
+    new ProblemException({
+      status: 400,
+      title: `Invalid ${source}`,
+      fields: Object.fromEntries(issues.map((i) => [i.path.join('.'), i.message])),
+    }),
+})
+```
+
+- `source` is `'body'`, `'query'` or `'params'`; `issues` is the schema's list (`{ path, message, code }`) whatever library produced it; `req` is the request.
+- Return `undefined` to use the default response for that failure — for example, to customise only body errors.
+- Returning or throwing a `ProblemException` or `HttpException` keeps the problem-details response. Anything else goes to your `onError` like any other error.
+- `defaultValidationError(failure)` builds the default, so a factory can start from it and adjust.
+- It applies to that app's routes. A standalone `validate()` takes the same function: `validate(schema, { validationError })`.
+- With [Inertia](inertia.md), keep the default shape for form routes: the page's `errors` are read from its `[{ field, message }]` details.
 
 ## Defining Reusable DTOs
 

@@ -29,6 +29,7 @@ import type {
 
 import type { Constructor, FileUploadConfig, MiddlewareHandler, RouteDefinition } from '../core'
 import type { RequestContext } from './context'
+import type { ValidationErrorFactory } from './middleware/validate'
 
 /** HTTP verbs the router emits. Mirrors the decorator surface (@Get/@Post/...). */
 export type RouteMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -86,6 +87,8 @@ export interface RouteEntry {
    * Absent or `null` when no contributor asks for it.
    */
   earlyContributorRunner?: CtxHandler | null
+  /** The app's `validationError` — what this route's validation failure throws. */
+  validationError?: ValidationErrorFactory
   /** Terminal handler: resolves the controller per-request and invokes it. */
   handler: CtxHandler
   /** Introspection + runtime-materialized concerns (swagger/typegen read this). */
@@ -136,32 +139,41 @@ export interface RouteMeta {
  * one ctx would be invisible to the next and to the handler.
  */
 export function publishMatchedRoute(req: unknown, entry: RouteEntry): void {
-  ;(req as Record<symbol, MatchedRoute>)[ROUTE_SLOT] = {
-    method: entry.method,
-    path: entry.path,
-    controller: entry.meta.controller,
-    handlerName: entry.meta.handlerName,
-    flags: entry.meta.flags ?? EMPTY_FLAGS,
-    pattern: entry.meta.pattern ?? entry.path,
+  // One object per route, shared by its requests — every field comes from the
+  // entry, which is final once mounted. Frozen, since it is shared.
+  let route = matchedRoutes.get(entry)
+  if (!route) {
+    route = Object.freeze({
+      method: entry.method,
+      path: entry.path,
+      controller: entry.meta.controller,
+      handlerName: entry.meta.handlerName,
+      flags: entry.meta.flags ?? EMPTY_FLAGS,
+      pattern: entry.meta.pattern ?? entry.path,
+    })
+    matchedRoutes.set(entry, route)
   }
+  ;(req as Record<symbol, MatchedRoute>)[ROUTE_SLOT] = route
 }
+
+const matchedRoutes = new WeakMap<RouteEntry, MatchedRoute>()
 
 const EMPTY_FLAGS: RouteFlags = new Map() as RouteFlags
 
 export interface MatchedRoute {
-  method: RouteMethod
+  readonly method: RouteMethod
   /** Path as declared on the handler, e.g. `/:id`. */
-  path: string
+  readonly path: string
   /**
    * The full route pattern including the mount prefix and version, e.g.
    * `/api/v1/users/:id` — what metrics and spans should be keyed by. Falls
    * back to `path` for routes registered without a mount.
    */
-  pattern: string
-  controller?: Constructor
-  handlerName?: string
+  readonly pattern: string
+  readonly controller?: Constructor
+  readonly handlerName?: string
   /** Enabled flags only — see {@link RouteMeta.flags}. */
-  flags: RouteFlags
+  readonly flags: RouteFlags
 }
 
 /** A controller's routes grouped under the module mount prefix. */

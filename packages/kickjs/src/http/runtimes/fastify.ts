@@ -220,7 +220,9 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
   // Validation middleware is built ONCE per route (parity with the Express
   // materializer) — `validate()` constructs a fresh closure, so calling it
   // per request was pure allocation waste.
-  const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
+  const validator = entry.meta.validation
+    ? validate(entry.meta.validation, { validationError: entry.validationError })
+    : undefined
   return async (request, reply) => {
     // Fastify runs the route handler OUTSIDE the connect-middleware chain, so
     // (unlike Express) the requestScopeMiddleware ALS frame isn't active here.
@@ -480,9 +482,19 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         })()
       }
       const readyP = state[READY]
+      // Once ready, route synchronously — no promise hop per request.
+      let ready = false
+      readyP.then(
+        () => (ready = true),
+        () => {},
+      )
 
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
         if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
+        if (ready) {
+          app.routing(req, res)
+          return
+        }
         readyP
           .then(() => app.routing(req, res))
           .catch((err) => {

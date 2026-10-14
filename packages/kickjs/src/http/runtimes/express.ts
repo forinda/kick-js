@@ -75,7 +75,7 @@ export function materializeRouter(entries: RouteEntry[]): Router {
 
     // Validation middleware (shared with the standalone validate() export).
     if (entry.meta.validation) {
-      handlers.push(validate(entry.meta.validation))
+      handlers.push(validate(entry.meta.validation, { validationError: entry.validationError }))
     }
 
     // @FileUpload — auto-attach upload middleware from metadata.

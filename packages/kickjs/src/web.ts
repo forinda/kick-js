@@ -39,6 +39,7 @@ import { compileWebRoute } from './http/web/handler'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
+import type { ValidationErrorFactory } from './http/middleware/validate'
 import { buildMountPath } from './core/path'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
@@ -115,6 +116,8 @@ export interface CreateWebAppOptions {
    * — parity with `bootstrap({ jsonLimit })`. A larger body answers 413.
    */
   jsonLimit?: string | number
+  /** What a failed route validation throws — parity with `bootstrap({ validationError })`. */
+  validationError?: ValidationErrorFactory
 }
 
 export interface WebApp {
@@ -222,6 +225,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           if (globalMiddleware.length > 0) {
             entry.middlewares = [...globalMiddleware, ...entry.middlewares]
           }
+          entry.validationError = options.validationError
           const run = compileWebRoute(entry, undefined, { bodyLimit })
           app.on(entry.method, url, (event: H3EventLike) =>
             run({

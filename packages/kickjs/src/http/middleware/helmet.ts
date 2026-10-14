@@ -32,6 +32,9 @@ export interface HelmetOptions {
  *   middlewares: [helmet(), requestId(), express.json()],
  * })
  * ```
+ *
+ * Options are read once, when the middleware is created: changing the options
+ * object afterwards does not change the headers. Create a new middleware instead.
  */
 export function helmet(options: HelmetOptions = {}) {
   const {
@@ -45,6 +48,20 @@ export function helmet(options: HelmetOptions = {}) {
     contentSecurityPolicy = false,
   } = options
 
+  // Header values depend only on the options — built once, not per request.
+  const hstsValue = hsts
+    ? `max-age=${hsts.maxAge ?? 31536000}${hsts.includeSubDomains ? '; includeSubDomains' : ''}${
+        hsts.preload ? '; preload' : ''
+      }`
+    : undefined
+  const cspValue = !contentSecurityPolicy
+    ? undefined
+    : typeof contentSecurityPolicy === 'object'
+      ? Object.entries(contentSecurityPolicy)
+          .map(([key, values]) => `${key} ${values.join(' ')}`)
+          .join('; ')
+      : "default-src 'self'"
+
   const handler = (req: Request, res: Response, next: NextFunction) => {
     if (hidePoweredBy) res.removeHeader('X-Powered-By')
     if (noSniff) res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -53,23 +70,8 @@ export function helmet(options: HelmetOptions = {}) {
     if (referrerPolicy) res.setHeader('Referrer-Policy', referrerPolicy)
     if (!dnsPrefetch) res.setHeader('X-DNS-Prefetch-Control', 'off')
 
-    if (hsts) {
-      const maxAge = hsts.maxAge ?? 31536000
-      let value = `max-age=${maxAge}`
-      if (hsts.includeSubDomains) value += '; includeSubDomains'
-      if (hsts.preload) value += '; preload'
-      res.setHeader('Strict-Transport-Security', value)
-    }
-
-    if (contentSecurityPolicy) {
-      const policy =
-        typeof contentSecurityPolicy === 'object'
-          ? Object.entries(contentSecurityPolicy)
-              .map(([key, values]) => `${key} ${values.join(' ')}`)
-              .join('; ')
-          : "default-src 'self'"
-      res.setHeader('Content-Security-Policy', policy)
-    }
+    if (hstsValue) res.setHeader('Strict-Transport-Security', hstsValue)
+    if (cspValue) res.setHeader('Content-Security-Policy', cspValue)
 
     next()
   }

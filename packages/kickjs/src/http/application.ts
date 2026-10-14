@@ -63,6 +63,7 @@ import {
 import { ROUTE_SLOT } from '../core/route-flag'
 import type { MatchedRoute } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
+import type { ValidationErrorFactory } from './middleware/validate'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
   _setExternalContributorSources,
@@ -460,6 +461,27 @@ export interface ApplicationOptions {
   onError?: (err: any, req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
 
   /**
+   * Decide what a failed route validation (`@Validate` / `validate()`) throws.
+   * Receives `{ source, issues, req }` and returns the error — by default a 422
+   * `HttpException` with `[{ field, message }]` details. Return `undefined` to
+   * fall back to the default for that failure.
+   *
+   * ```ts
+   * bootstrap({
+   *   validationError: ({ source, issues }) =>
+   *     new ProblemException({
+   *       status: 400,
+   *       title: `Invalid ${source}`,
+   *       errors: issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+   *     }),
+   * })
+   * ```
+   *
+   * Applies to this app's routes only.
+   */
+  validationError?: ValidationErrorFactory
+
+  /**
    * Security defaults applied automatically unless opted out.
    *
    * When not specified, secure defaults are applied:
@@ -616,6 +638,7 @@ export class Application {
   private readonly http2Sessions = new Set<http2.ServerHttp2Session>()
   /** Forwarding server behind {@link fetch} on Node-based runtimes. */
   private loopback?: Loopback
+  private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
    * Flags of every mounted route, for middleware that runs before routing and
@@ -757,7 +780,13 @@ export class Application {
   }
 
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
-    const handler = this.runtime.nodeHandler(this.app)
+    // Built once per engine app — the serverless and loopback paths call this
+    // per request, and h3 wraps the app in a fresh node listener on each call.
+    // Keyed on the app, so a rebuild (HMR) gets a handler for the new one.
+    if (this.handlerFor?.app !== this.app) {
+      this.handlerFor = { app: this.app, handler: this.runtime.nodeHandler(this.app) }
+    }
+    const handler = this.handlerFor.handler
     if (next) {
       handler(req, res, next)
     } else {
@@ -1169,6 +1198,7 @@ export class Application {
                   handler: entry.meta.handlerName,
                 }),
                 meta: { ...entry.meta, pattern },
+                validationError: this.options.validationError,
               }
             })
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])
