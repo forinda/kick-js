@@ -20,19 +20,19 @@ session middleware reuses it and will not re-parse.
 
 ## Options
 
-| Option              | Type                       | Default              | Description                           |
-| ------------------- | -------------------------- | -------------------- | ------------------------------------- |
-| `secret`            | `string`                   | **required**         | Secret for signing the session cookie |
-| `cookieName`        | `string`                   | `'kick.sid'`         | Cookie name                           |
-| `maxAge`            | `number`                   | `86400000` (24h)     | Session TTL in milliseconds           |
-| `rolling`           | `boolean`                  | `false`              | Reset TTL on every request            |
-| `saveUninitialized` | `boolean`                  | `true`               | Save empty sessions                   |
-| `cookie.httpOnly`   | `boolean`                  | `true`               | HTTP-only cookie                      |
-| `cookie.secure`     | `boolean`                  | `true` in production | Secure cookie                         |
-| `cookie.sameSite`   | `string`                   | `'lax'`              | SameSite attribute                    |
-| `cookie.path`       | `string`                   | `'/'`                | Cookie path                           |
-| `cookie.domain`     | `string`                   | —                    | Cookie domain                         |
-| `store`             | `SessionStore \| 'cookie'` | In-memory            | Where the data lives — see below      |
+| Option              | Type                       | Default              | Description                                                                        |
+| ------------------- | -------------------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| `secret`            | `string \| string[]`       | **required**         | Secret for signing the session cookie; a list to [rotate it](#rotating-the-secret) |
+| `cookieName`        | `string`                   | `'kick.sid'`         | Cookie name                                                                        |
+| `maxAge`            | `number`                   | `86400000` (24h)     | Session TTL in milliseconds                                                        |
+| `rolling`           | `boolean`                  | `false`              | Reset TTL on every request                                                         |
+| `saveUninitialized` | `boolean`                  | `true`               | Save empty sessions                                                                |
+| `cookie.httpOnly`   | `boolean`                  | `true`               | HTTP-only cookie                                                                   |
+| `cookie.secure`     | `boolean`                  | `true` in production | Secure cookie                                                                      |
+| `cookie.sameSite`   | `string`                   | `'lax'`              | SameSite attribute                                                                 |
+| `cookie.path`       | `string`                   | `'/'`                | Cookie path                                                                        |
+| `cookie.domain`     | `string`                   | —                    | Cookie domain                                                                      |
+| `store`             | `SessionStore \| 'cookie'` | In-memory            | Where the data lives — see below                                                   |
 
 ## Using Sessions in Controllers
 
@@ -160,6 +160,16 @@ class RedisSessionStore implements SessionStore {
 
 session({ secret: 'my-secret', store: new RedisSessionStore(redis) })
 ```
+
+## Rotating the secret
+
+Pass a list to change the secret without logging everyone out. The first secret signs (or, with `store: 'cookie'`, encrypts) new cookies, and every secret in the list is accepted:
+
+```ts
+session({ secret: [process.env.SESSION_SECRET!, process.env.SESSION_SECRET_OLD!] })
+```
+
+A cookie made with an older secret is re-issued with the first one on the next response. Once `maxAge` has passed since the change, every active session has moved over and the old secret can be removed. Rotate when a secret may have leaked, or on a schedule.
 
 ## Security Notes
 
