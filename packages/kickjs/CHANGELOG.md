@@ -1,5 +1,46 @@
 # @forinda/kickjs
 
+## 10.0.0
+
+### Major Changes
+
+- [#858](https://github.com/forinda/kick-js/pull/858) [`8e9cf3b`](https://github.com/forinda/kick-js/commit/8e9cf3bb8d98c457fdb36ae5c6b1d01ae6c70b77) Thanks [@forinda](https://github.com/forinda)! - **Breaking:** the h3 runtime runs on h3 v2 only. h3 v1 support is removed.
+  
+  - `h3Runtime()` from `@forinda/kickjs/h3` needs h3 v2, and fails at boot with the upgrade command when v1 is installed. Upgrade with `pnpm add h3@^2`; apps that only use KickJS APIs need no code change. Code that reaches into the engine (`getRuntimeApp()`, `ctx.req` as an `H3Event`) follows h3's migration guide.
+  - `h3Runtime({ h3 })` takes a pre-imported h3 module, for linked checkouts and bundlers.
+  - `H3RuntimeTypes` describes the h3 v2 runtime: `getRuntimeApp()` is the `H3` app.
+  - `h3WebRuntime()` (`@forinda/kickjs/h3-web`) is now a deprecated alias of `h3Runtime()`.
+  
+  Also fixed on the h3 runtime and the `@forinda/kickjs/web` entry:
+  
+  - Observers and the request logger see the matched route (`onResponse` `route`).
+  - A route uses the request id that `requestId()` middleware assigned, so the `X-Request-Id` header, `ctx.requestId` and `onError` / `onResponse` agree.
+  - `trustProxy` now sets `req.ip` from `X-Forwarded-For`, so rate limits bucket per client behind a proxy. `true`, a hop count and a function follow Express's rules. An address or subnet list is not supported on h3: it logs a warning and keeps the socket address.
+  - A connect middleware mounted at a list of paths or a regular expression now matches them. Before, the path was turned into a string and never matched.
+
+### Minor Changes
+
+- [#852](https://github.com/forinda/kick-js/pull/852) [`e977e0a`](https://github.com/forinda/kick-js/commit/e977e0ad98215348831a14d4a22624372529e5b0) Thanks [@forinda](https://github.com/forinda)! - - A handler may return a value carrying `[RESPOND](ctx)` (exported `RESPOND`, `isRespondable`, `Respondable`); it writes its own response, and an async one is awaited so its errors reach the error handler.
+  - `ctx.send(body, { type, status })` sends a string or bytes with its content type on every engine — XML, CSV, plain text.
+  - `notFoundFallthrough: false` makes Fastify and h3 answer requests no route matched (`onNotFound`, or the built-in 404 / 405) when the app runs inside another handler, such as `kick dev`, instead of handing them back. The default keeps the hand-back.
+  - A custom `onNotFound` that calls `next()` now reaches the built-in 404 / 405 handler.
+
+### Patch Changes
+
+- [#856](https://github.com/forinda/kick-js/pull/856) [`c2a7187`](https://github.com/forinda/kick-js/commit/c2a718701096ed98dfec06a9510cc42cea2e40fa) Thanks [@forinda](https://github.com/forinda)! - h3 v2 runtime (`h3WebRuntime`, `@forinda/kickjs/web`) catches up with the other engines:
+  
+  - Uploaded files are `Buffer`s on Node, Bun and Deno, so `ctx.file.buffer.toString()` is the content.
+  - An async `onError` / `onNotFound` is awaited; one that rejects answers 500.
+  - What connect middleware sets on the request (`session`, `user`, an adapter's data) reaches route handlers and the error / not-found handlers, on the node and fetch paths.
+  - A middleware or static directory mounted at a path sees `req.url` relative to it, as on Express — static files under a prefix (`/assets/...`) are found.
+  - Behind a node host (`kick dev`, `app.handle(req, res, next)`) unmatched requests are handed back unless `notFoundFallthrough: false`, like the v1 and Fastify runtimes.
+  - `server: { tls, http2: true }` works.
+  - No more `MaxListenersExceededWarning` from h3's per-middleware listeners.
+
+- [#856](https://github.com/forinda/kick-js/pull/856) [`cecce5a`](https://github.com/forinda/kick-js/commit/cecce5a9e47c0348aa02940e2dbf93d2079b75eb) Thanks [@forinda](https://github.com/forinda)! - `rateLimit({ exemptWhen })` mounted at a path (`{ path: '/api', handler: rateLimit(...) }`) now finds the route by its full URL, so flagged routes under the mount are exempt on every engine. Before, it looked the route up by the mount-relative path, matched nothing, and limited them.
+
+- [#852](https://github.com/forinda/kick-js/pull/852) [`e977e0a`](https://github.com/forinda/kick-js/commit/e977e0ad98215348831a14d4a22624372529e5b0) Thanks [@forinda](https://github.com/forinda)! - Fastify: `ctx.redirect()` sends its `Location` header. h3: an `onError` or `onNotFound` that answers asynchronously is waited for, instead of h3 sending its own error response first. Fastify and h3: an async `onError` / `onNotFound` that rejects answers 500 instead of leaving the request open. A returned value's `[RESPOND]` result is awaited when it is any thenable, not only this realm's `Promise`.
+
 ## 9.2.0
 
 ### Minor Changes

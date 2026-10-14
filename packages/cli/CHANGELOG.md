@@ -1,5 +1,24 @@
 # @forinda/kickjs-cli
 
+## 8.8.0
+
+### Minor Changes
+
+- [#857](https://github.com/forinda/kick-js/pull/857) [`3e28ff4`](https://github.com/forinda/kick-js/commit/3e28ff4ae640168e293fdaa14cba2c60c1c9fb42) Thanks [@forinda](https://github.com/forinda)! - `kick new --runtime h3` and `kick add` install h3 v2 (`h3@^2`). `kick doctor` fails when an h3 app is on h3 v1, with the upgrade command.
+
+- [#852](https://github.com/forinda/kick-js/pull/852) [`e977e0a`](https://github.com/forinda/kick-js/commit/e977e0ad98215348831a14d4a22624372529e5b0) Thanks [@forinda](https://github.com/forinda)! - `kick new --template inertia`: an app whose pages are React components rendered through `@forinda/kickjs-inertia`, with server-side rendering, an error page, Tailwind-ready styles and aliases from `tsconfig.json` `paths`, alongside the usual `/api/v1` modules, on any runtime. Scaffold layers can now add package.json scripts through `feature.json`.
+
+### Patch Changes
+
+- [#859](https://github.com/forinda/kick-js/pull/859) [`cd81e3d`](https://github.com/forinda/kick-js/commit/cd81e3da1e2153accf55f0489138eb6f9db933e4) Thanks [@forinda](https://github.com/forinda)! - `kick g agents --help` lists `inertia` among the `--template` values.
+
+- [#851](https://github.com/forinda/kick-js/pull/851) [`d71ddd1`](https://github.com/forinda/kick-js/commit/d71ddd15fb74efc7d2996d4c3b1685e33f63a1c7) Thanks [@forinda](https://github.com/forinda)! - Fullstack scaffold: `web/src/api.ts` reads an optional `VITE_API_URL` in front of `/api/v1`, so the web app can be built against an API on another origin; it stays unset for the default single-origin setup. `web/tsconfig.json` adds `vite/client` to `types` for `import.meta.env`. The generated agent docs describe the current type loop — the ambient `KickClientApi` map from `kick__client.d.ts`, refreshed by `kick typegen` (`kick dev` writes it at startup, not on save) — and the next-steps message says to run `kick typegen` after changing a response.
+
+- [#855](https://github.com/forinda/kick-js/pull/855) [`e8e0454`](https://github.com/forinda/kick-js/commit/e8e04549ee1d865ed01361f4e8932d1da20ae1a8) Thanks [@forinda](https://github.com/forinda)! - The client route map no longer cuts deeply nested response types off at `maxDepth`. Past that many levels of inline nesting, the type at that point is hoisted to a declaration of its own and referenced by name, so the types stay exact and the emitted file stays shallow; recursive unions (`type Json = … | Json[]`) become recursive aliases. Hoists spend a per-route budget of 1,000: a route that exhausts it — a generic that yields a new type at every level, or a response nesting more distinct types than that — is still emitted as `unknown` with a warning, and no longer leaves half-written declarations behind.
+- Updated dependencies [[`8e9cf3b`](https://github.com/forinda/kick-js/commit/8e9cf3bb8d98c457fdb36ae5c6b1d01ae6c70b77), [`c2a7187`](https://github.com/forinda/kick-js/commit/c2a718701096ed98dfec06a9510cc42cea2e40fa), [`cecce5a`](https://github.com/forinda/kick-js/commit/cecce5a9e47c0348aa02940e2dbf93d2079b75eb), [`e977e0a`](https://github.com/forinda/kick-js/commit/e977e0ad98215348831a14d4a22624372529e5b0), [`e977e0a`](https://github.com/forinda/kick-js/commit/e977e0ad98215348831a14d4a22624372529e5b0)]:
+  - @forinda/kickjs@10.0.0
+  - @forinda/kickjs-db@8.6.0
+
 ## 8.7.9
 
 ### Patch Changes
