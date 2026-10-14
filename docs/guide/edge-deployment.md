@@ -31,8 +31,16 @@ export const app = createWebApp({ h3, modules })
 
 `createWebApp` accepts the same module shapes as `bootstrap({ modules })`, plus
 `apiPrefix` (default `/api`), `defaultVersion` (default `1`),
-`contributors` (global context contributors), and `env` (see
+`contributors` (global context contributors), `middlewares` (global
+`(ctx, next)` middleware), `jsonLimit` (largest body, default `'1mb'`; larger
+answers 413), `validationError` (as in
+[`bootstrap`](./validation.md#custom-validation-errors)), and `env` (see
 [Environment](#environment-config)).
+
+Errors and unmatched requests answer exactly as under `bootstrap()`: RFC 9457
+problem details, a `404` for an unknown path, and a `405` with `Allow` for a
+known path with the wrong method. `ctx.urlFor()` and the `ROUTE_URLS` token
+work here too.
 
 The h3 module is **passed in by you** rather than imported internally — edge
 bundlers have no `createRequire`, and this keeps the peer optional for everyone
