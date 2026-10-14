@@ -202,6 +202,23 @@ Global middleware entries can be path-scoped:
 middlewares: [express.json(), { path: '/api/v1/webhooks', handler: express.raw({ type: '*/*' }) }]
 ```
 
+## Compression
+
+Compress responses with the standard [`compression`](https://www.npmjs.com/package/compression) middleware. It works the same on Express, Fastify and h3:
+
+```ts
+import compression from 'compression'
+
+bootstrap({
+  modules,
+  middlewares: [compression() /* … your other middleware */],
+})
+```
+
+Responses under 1 KB are left alone, and `Vary: Accept-Encoding` is set for caches. Server-sent events are never compressed: `ctx.sse()` sends `Cache-Control: no-transform`, so events reach the client as they are sent instead of waiting in a gzip buffer.
+
+On Netlify, Vercel and Cloudflare the platform compresses responses at the edge — leave the middleware out of `src/serverless.ts` deployments and the web entry.
+
 ## Adapter Middleware Phases
 
 Adapters (database, rate limiting, CORS, Swagger, etc.) can inject middleware at four phases in the pipeline by returning a `middleware()` array from `defineAdapter()`'s `build`:
