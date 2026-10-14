@@ -840,11 +840,15 @@ The flags land on the mount, not on `HealthController` — the class is the fram
 
 ### GET /health/live
 
-Liveness probe. Returns `200` with `{ status: 'ok', uptime }` when the server is running. Returns `503` with `{ status: 'draining', uptime }` when the application is shutting down.
+Liveness probe. Returns `200` with `{ status: 'ok', uptime }` while the process runs, and `200` with `{ status: 'draining', uptime }` during shutdown. It never fails while draining: an orchestrator restarts a container whose liveness probe fails, which would cut the graceful shutdown short. Readiness is what turns traffic away.
 
 ### GET /health/ready
 
 Readiness probe. Runs `onHealthCheck()` on every adapter that implements it and aggregates the results. Returns `200` with `{ status: 'ready', checks }` when all adapters report healthy. Returns `503` with `{ status: 'degraded', checks }` when any adapter is down. Returns `503` with `{ status: 'draining', checks: [] }` during shutdown.
+
+- Each check gets `health.checkTimeout` milliseconds (default `2000`). One that doesn't answer in time counts as `{ status: 'down', reason: 'timeout' }`, and one that throws as `reason: 'error'`, so a hung dependency can't hang the probe.
+- Probes within one second share a single run, so several probes arriving together don't each hit the database.
+- A check that takes more than half its timeout is logged as slow.
 
 ```typescript
 // Example adapter with health check
@@ -874,10 +878,11 @@ class Application {
 
 ### Shutdown sequence
 
-1. **Stop accepting connections** -- `server.close()` prevents new TCP connections.
-2. **Drain in-flight requests** -- Waits for all active requests to complete their response (tracked via `finish`/`close` events).
-3. **Run adapter and plugin shutdowns** -- Calls `shutdown()` on all registered adapters and plugins concurrently via `Promise.allSettled`.
-4. **Force exit on timeout** -- If requests do not drain within `shutdownTimeout` (default 30 seconds), the shutdown proceeds anyway. Set to `0` to disable the forced timeout.
+1. **Wait for the load balancers** -- with `preStopDelay` set, the server keeps serving for that many milliseconds while `/health/ready` already answers `503`, so balancers stop routing here before connections are refused. Default `0`; not counted against `shutdownTimeout`.
+2. **Stop accepting connections** -- `server.close()` prevents new TCP connections.
+3. **Drain in-flight requests** -- Waits for all active requests to complete their response (tracked via `finish`/`close` events).
+4. **Run adapter and plugin shutdowns** -- Calls `shutdown()` on all registered adapters and plugins concurrently via `Promise.allSettled`.
+5. **Force exit on timeout** -- If requests do not drain within `shutdownTimeout` (default 30 seconds), the shutdown proceeds anyway. Set to `0` to disable the forced timeout.
 
 Safe to call multiple times -- subsequent calls are no-ops.
 
@@ -887,13 +892,26 @@ import { bootstrap } from '@forinda/kickjs'
 const app = await bootstrap({
   modules,
   shutdownTimeout: 15_000, // 15 seconds (default: 30_000)
+  preStopDelay: 5_000, // keep serving 5s after readiness flips (default: 0)
 })
 
 // Trigger shutdown on SIGTERM (already wired by bootstrap, shown for clarity)
 process.on('SIGTERM', () => app.shutdown())
 ```
 
-During draining, the `/health/live` and `/health/ready` endpoints return `503` so load balancers can stop routing traffic to the instance.
+During draining, `/health/ready` returns `503` so load balancers stop routing traffic to the instance; `/health/live` keeps returning `200`.
+
+### Server timeouts
+
+`bootstrap({ server })` sets the production server's connection timeouts:
+
+| Option             | Default                   |                                                                                                                                                                                                                                   |
+| ------------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keepAliveTimeout` | `65000`                   | How long an idle keep-alive connection stays open. Keep it above your load balancer's idle timeout (AWS ALB: 60s), or the balancer reuses connections the server is closing and requests fail with 502. Node's own default is 5s. |
+| `headersTimeout`   | `keepAliveTimeout + 1000` | How long receiving the request headers may take.                                                                                                                                                                                  |
+| `requestTimeout`   | `300000`                  | How long receiving the whole request may take; `0` disables it.                                                                                                                                                                   |
+
+They apply to HTTP/1.1 servers (plain and TLS); in dev, Vite owns the server.
 
 ## HttpException
 

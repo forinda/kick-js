@@ -230,7 +230,7 @@ describe('Graceful shutdown with request draining', () => {
     expect(app.isDraining).toBe(true)
   })
 
-  it('health endpoints return 503 when draining', async () => {
+  it('readiness answers 503 while draining; liveness stays 200', async () => {
     Container.reset()
     const { expressApp, app } = await createTestApp({ modules: [] })
 
@@ -246,9 +246,10 @@ describe('Graceful shutdown with request draining', () => {
     // Trigger shutdown (without a server, it just sets draining state)
     await app.shutdown()
 
-    // Health endpoints should now return 503
+    // Liveness stays up — failing it would get the container restarted
+    // mid-drain — and says it is draining; readiness turns traffic away.
     const drainingLive = await request(expressApp).get('/health/live')
-    expect(drainingLive.status).toBe(503)
+    expect(drainingLive.status).toBe(200)
     expect(drainingLive.body.status).toBe('draining')
 
     const drainingReady = await request(expressApp).get('/health/ready')
