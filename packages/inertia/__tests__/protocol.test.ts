@@ -595,6 +595,8 @@ for (const rt of RUNTIMES)
           .expect(204)
         expect(res.headers.precognition).toBe('true')
         expect(res.headers['precognition-success']).toBe('true')
+        // Added to the Vary other layers set, not in place of it.
+        expect(res.headers.vary).toBe('Origin, X-Inertia, Precognition')
       })
 
       it('answers 422 with the errors of the fields it asked about', async () => {
@@ -606,6 +608,7 @@ for (const rt of RUNTIMES)
           .expect(422)
         expect(res.headers.precognition).toBe('true')
         expect(res.body.errors).toEqual({ title: 'Title is required' })
+        expect(res.headers.vary).toBe('Origin, X-Inertia, Precognition')
       })
 
       it('succeeds when only fields it did not ask about fail', async () => {

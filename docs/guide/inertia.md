@@ -111,6 +111,7 @@ createInertiaApp({
 
 ```ts
 // vite.config.ts
+import { defineConfig } from 'vite'
 import swc from 'unplugin-swc'
 import react from '@vitejs/plugin-react'
 import { kickjsVitePlugin } from '@forinda/kickjs-vite'
@@ -287,11 +288,23 @@ Each check reports only the fields the form has validated so far, so the user is
 
 ### Keeping the `#fragment`
 
-A redirect to a URL with a fragment (`redirect('/posts/1#comments')`) keeps it. To return to the fragment the form was posted from — the user submits a comment at `/posts/1#comments` and lands back there — pass `preserveFragment`:
+A redirect to a URL with a fragment (`redirect('/posts/1#comments')`) keeps it.
+
+`preserveFragment` keeps the fragment of the URL the form was **submitted to**, so the redirect can stay generic. Put the fragment in the submit URL — the browser leaves it out of the request, and the Inertia client puts it back on the page it lands on:
+
+```tsx
+form.post('/posts/1/comments#comments')
+```
 
 ```ts
-return back(ctx, '/', { preserveFragment: true })
+@Post('/posts/:id/comments')
+comment(ctx: RequestContext) {
+  // …save the comment
+  return back(ctx, '/', { preserveFragment: true }) // lands on /posts/1#comments
+}
 ```
+
+The fragment of the page the form sits on is not used; a form on `/posts/1#comments` that posts to `/posts/1/comments` lands on `/posts/1`.
 
 ## Errors and unknown URLs
 

@@ -249,8 +249,9 @@ export function inertia(
 
 export interface RedirectOptions {
   /**
-   * Keep the `#fragment` of the page the request came from — a form posted
-   * from `/posts/1#comments` lands back on `#comments`. Needs `session()`.
+   * Keep the `#fragment` of the URL the request was sent to — a form that
+   * posts to `/posts/1/comments#comments` lands on `#comments` of the page
+   * this redirects to. Needs `session()`.
    */
   preserveFragment?: boolean
 }

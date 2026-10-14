@@ -161,6 +161,9 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
       // layer added (Origin, Accept-Encoding) lets a cache serve one
       // client's variant to another.
       appendVary(res, 'X-Inertia')
+      // A Precognition request gets a validation answer instead of the
+      // route's response.
+      if (req.headers.precognition === 'true') appendVary(res, 'Precognition')
       if (req.headers['x-inertia'] !== 'true') return next()
 
       const current = version()

@@ -64,7 +64,6 @@ function precognitionResult(req: any, res: RuntimeResponse, errors: Record<strin
       )
     : errors
   res.setHeader('Precognition', 'true')
-  res.setHeader('Vary', 'Precognition')
   if (Object.keys(shown).length === 0) {
     res.setHeader('Precognition-Success', 'true')
     res.status(204).end()
@@ -90,7 +89,6 @@ export const precognitive: MiddlewareHandler<RequestContext> = (ctx, next) => {
   if (!isPrecognitive(ctx.req)) return next()
   ctx.setHeader('Precognition', 'true')
   ctx.setHeader('Precognition-Success', 'true')
-  ctx.setHeader('Vary', 'Precognition')
   ctx.noContent()
 }
 
