@@ -107,8 +107,9 @@ export function createHealthChecks(
     const started = Date.now()
     let timer: ReturnType<typeof setTimeout> | undefined
     const timedOut = new Promise<HealthCheckResult>((resolve) => {
+      // Referenced on purpose: an unref'd timer lets a process with nothing
+      // else pending exit before a hung check is reported. `finally` clears it.
       timer = setTimeout(() => resolve({ name, status: 'down', reason: 'timeout' }), timeoutMs)
-      timer.unref?.()
     })
     try {
       return await Promise.race([

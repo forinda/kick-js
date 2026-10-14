@@ -76,7 +76,7 @@ Behind a proxy or load balancer, set `bootstrap({ trustProxy })` so `ctx.ip` and
 ## Behind a load balancer or on Kubernetes
 
 - **Probes:** point the liveness probe at `/health/live` and the readiness probe at `/health/ready`. During shutdown readiness answers `503` and liveness stays `200`, so the instance leaves rotation without being restarted. Readiness runs every adapter's `onHealthCheck()` with a 2-second timeout each (`health: { checkTimeout }`).
-- **Shutdown:** set `preStopDelay` to a few seconds (for example `5_000`). The app keeps serving while balancers and Kubernetes endpoints notice it is unready, then stops accepting connections and drains. Keep the platform's grace period (`terminationGracePeriodSeconds`) above `preStopDelay` plus `shutdownTimeout`.
+- **Shutdown:** set `preStopDelay` to a few seconds (for example `5_000`). The app keeps serving while balancers and Kubernetes endpoints notice it is unready, then stops accepting connections and drains. Draining and the adapters' shutdown hooks each get up to `shutdownTimeout`, so keep the platform's grace period (`terminationGracePeriodSeconds`) above `preStopDelay` plus twice `shutdownTimeout`, with a few seconds to spare — with the defaults and `preStopDelay: 5_000`, at least 70 seconds.
 - **Keep-alive:** the server keeps idle connections for 65 seconds, above AWS ALB's 60-second idle timeout. If your balancer's idle timeout is longer, raise `server: { keepAliveTimeout }` above it — otherwise requests on reused connections fail with 502.
 
 ## Netlify and Vercel

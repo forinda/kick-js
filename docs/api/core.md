@@ -881,7 +881,7 @@ class Application {
 1. **Wait for the load balancers** -- with `preStopDelay` set, the server keeps serving for that many milliseconds while `/health/ready` already answers `503`, so balancers stop routing here before connections are refused. Default `0`; not counted against `shutdownTimeout`.
 2. **Stop accepting connections** -- `server.close()` prevents new TCP connections.
 3. **Drain in-flight requests** -- Waits for all active requests to complete their response (tracked via `finish`/`close` events).
-4. **Run adapter and plugin shutdowns** -- Calls `shutdown()` on all registered adapters and plugins concurrently via `Promise.allSettled`.
+4. **Run adapter and plugin shutdowns** -- Calls `shutdown()` on all registered adapters and plugins concurrently via `Promise.allSettled`, each given up to `shutdownTimeout` of its own. A full shutdown can therefore take `preStopDelay` plus twice `shutdownTimeout`; keep your platform's grace period above that.
 5. **Force exit on timeout** -- If requests do not drain within `shutdownTimeout` (default 30 seconds), the shutdown proceeds anyway. Set to `0` to disable the forced timeout.
 
 Safe to call multiple times -- subsequent calls are no-ops.
