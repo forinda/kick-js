@@ -49,12 +49,33 @@ describe('allowedHosts()', () => {
     }
   })
 
-  it('reads X-Forwarded-Host only when told to', () => {
-    const fwd = { 'x-forwarded-host': 'example.com, proxy.internal' }
-    expect(run('10.0.0.5:3000', ['example.com'], fwd)).toBe(400)
-    expect(run('10.0.0.5:3000', { hosts: ['example.com'], trustForwardedHost: true }, fwd)).toBe(
-      'next',
+  it("reads X-Forwarded-Host only when told to, taking the nearest proxy's value", () => {
+    // The client sent `evil.test`; the proxy appended the host it served.
+    const appended = { 'x-forwarded-host': 'evil.test, example.com' }
+    expect(run('10.0.0.5:3000', ['example.com'], appended)).toBe(400)
+    const trusted = { hosts: ['example.com'], trustForwardedHost: true }
+    expect(run('10.0.0.5:3000', trusted, appended)).toBe('next')
+    expect(run('10.0.0.5:3000', trusted, { 'x-forwarded-host': 'example.com, evil.test' })).toBe(
+      400,
     )
+  })
+
+  it('exempts ignorePaths for GET and HEAD only', () => {
+    const options = { hosts: ['example.com'], ignorePaths: ['/x'] }
+    expect(run('10.0.0.5', options)).toBe('next')
+    let status = 0
+    const res = {
+      status: (code: number) => ((status = code), res),
+      json: () => {},
+      setHeader: () => {},
+      getHeader: () => undefined,
+    }
+    allowedHosts(options)(
+      { method: 'POST', url: '/x', headers: { host: '10.0.0.5' } } as never,
+      res as never,
+      (() => {}) as never,
+    )
+    expect(status).toBe(400)
   })
 
   it('validates its list when created', () => {
@@ -97,5 +118,25 @@ for (const [name, runtime] of RUNTIMES)
       // Kubernetes probes the pod IP.
       await http.get('/health/live').set('Host', '10.0.0.5:3000').expect(200)
       await http.get('/health/ready').set('Host', '10.0.0.5:3000').expect(200)
+    })
+
+    it('also covers routes adapters register before the middleware chain', async () => {
+      const app = new Application({
+        runtime: runtime(),
+        security: { allowedHosts: ['example.com'] },
+        modules: [],
+        adapters: [
+          {
+            name: 'Docs',
+            beforeMount({ http }) {
+              http.route('GET', '/docs', (ctx) => ctx.json({ docs: true }))
+            },
+          },
+        ],
+      })
+      await app.setup()
+      const http = request(app.handle.bind(app))
+      await http.get('/docs').set('Host', 'example.com').expect(200)
+      await http.get('/docs').set('Host', 'evil.test').expect(400)
     })
   })

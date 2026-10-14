@@ -930,6 +930,22 @@ export class Application {
 
     const ctx = this.adapterCtx()
 
+    // ── 0. Host allow-list, before anything is mounted ─────────────────
+    // First, ahead of adapter beforeMount: routes an adapter registers there
+    // (docs UIs, devtools, the cron trigger) would otherwise answer on
+    // Express before the check runs.
+    const hostList = this.options.security?.allowedHosts
+    if (hostList) {
+      const hostOptions = Array.isArray(hostList) ? { hosts: hostList } : hostList
+      this.runtime.useConnect(
+        this.app,
+        allowedHosts({
+          ...hostOptions,
+          ignorePaths: [...(hostOptions.ignorePaths ?? []), '/health/live', '/health/ready'],
+        }),
+      )
+    }
+
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
       await this.callHook(adapter.beforeMount?.bind(adapter), ctx, adapter.name)
@@ -943,19 +959,6 @@ export class Application {
 
     // ── 2a. In-flight request tracking ──────────────────────────────
     this.runtime.useConnect(this.app, this.requestTrackingMiddleware())
-
-    // ── 2b. Host allow-list, ahead of anything that reads the host ─────
-    const hostList = this.options.security?.allowedHosts
-    if (hostList) {
-      const hostOptions = Array.isArray(hostList) ? { hosts: hostList } : hostList
-      this.runtime.useConnect(
-        this.app,
-        allowedHosts({
-          ...hostOptions,
-          ignorePaths: [...(hostOptions.ignorePaths ?? []), '/health/live', '/health/ready'],
-        }),
-      )
-    }
 
     // ── 2c. Request scope (AsyncLocalStorage) ────────────────────────
     // Auto-mounted unless the user opted out (`contextStore: 'manual'`)

@@ -13,13 +13,16 @@ export interface AllowedHostsOptions {
   hosts: string[]
   /**
    * Read the host from `X-Forwarded-Host` instead of `Host`. Only behind a
-   * proxy that sets it — a client can send the header too. Default `false`.
+   * proxy that sets it — a client can send the header too. The LAST value is
+   * used: a proxy that appends leaves the client's own value first. Default
+   * `false`.
    */
   trustForwardedHost?: boolean
   /**
-   * Exact paths answered whatever the host — e.g. probes that a platform
-   * sends to the instance's IP. `bootstrap({ security: { allowedHosts } })`
-   * adds `/health/live` and `/health/ready`.
+   * Exact paths answered whatever the host, for `GET` and `HEAD` only — e.g.
+   * probes that a platform sends to the instance's IP.
+   * `bootstrap({ security: { allowedHosts } })` adds `/health/live` and
+   * `/health/ready`.
    */
   ignorePaths?: string[]
 }
@@ -86,14 +89,24 @@ export function allowedHosts(options: string[] | AllowedHostsOptions) {
 
   return (req: Request, res: Response, next: NextFunction) => {
     const headers = req.headers as HeaderBag
+    // Several X-Forwarded-Host headers arrive comma-joined; the nearest proxy's
+    // value is the last one.
     const forwarded = trustForwardedHost
-      ? headerOf(headers, 'x-forwarded-host')?.split(',')[0]?.trim()
+      ? headerOf(headers, 'x-forwarded-host')?.split(',').at(-1)?.trim()
       : undefined
     const hostname = hostnameOf(
       forwarded ?? headerOf(headers, 'host') ?? headerOf(headers, ':authority'),
     )
     if (hostname !== undefined && allowed(hostname)) return next()
-    if (ignored.size > 0 && ignored.has(resolvePathname(req as ClientRequestLike))) return next()
+    // Probes read; nothing that changes state is exempt.
+    const method = req.method?.toUpperCase()
+    if (
+      ignored.size > 0 &&
+      (method === 'GET' || method === 'HEAD') &&
+      ignored.has(resolvePathname(req as ClientRequestLike))
+    ) {
+      return next()
+    }
 
     res.setHeader('content-type', 'application/problem+json')
     sendJson(res, 400, REJECTED)

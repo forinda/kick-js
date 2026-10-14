@@ -148,14 +148,14 @@ bootstrap({
 
 Ports are ignored, and names compare case-insensitively.
 
-- **Health probes are exempt.** Kubernetes and most platforms probe the instance's IP, so `/health/live` and `/health/ready` answer whatever the host.
-- **Behind a proxy that rewrites `Host`**, read the original from `X-Forwarded-Host` — only when your proxy sets it, since clients can send it too:
+- **Health probes are exempt.** Kubernetes and most platforms probe the instance's IP, so `GET`/`HEAD` on `/health/live` and `/health/ready` answer whatever the host. The check runs before anything else is mounted, including routes adapters register.
+- **Behind a proxy that rewrites `Host`**, read the original from `X-Forwarded-Host` — only when your proxy sets it, since clients can send it too. The last value is used, which is the one your nearest proxy added:
 
   ```ts
   security: { allowedHosts: { hosts: ['example.com'], trustForwardedHost: true } }
   ```
 
-- **As middleware**, `allowedHosts()` takes the same options plus `ignorePaths`, for apps that mount their own chain:
+- **As middleware**, `allowedHosts()` takes the same options plus `ignorePaths` (exempt for `GET` and `HEAD` only), for apps that mount their own chain:
 
   ```ts
   import { allowedHosts } from '@forinda/kickjs'
