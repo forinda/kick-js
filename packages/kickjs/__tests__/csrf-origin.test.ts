@@ -22,6 +22,31 @@ describe('isAllowedOrigin', () => {
     expect(isAllowedOrigin({ origin: 'null', host: 'a.test' }, none)).toBe(false)
   })
 
+  it('compares Host and Origin after the same canonicalization', () => {
+    // Default port, case: the same host however it is spelled.
+    expect(isAllowedOrigin({ origin: 'https://a.test', host: 'A.TEST:443' }, none)).toBe(true)
+    expect(isAllowedOrigin({ origin: 'http://a.test', host: 'a.test:80' }, none)).toBe(true)
+    // A non-default port is part of the origin.
+    expect(isAllowedOrigin({ origin: 'https://a.test', host: 'a.test:8443' }, none)).toBe(false)
+    // HTTP/2 carries the host as :authority.
+    expect(isAllowedOrigin({ origin: 'https://a.test', ':authority': 'a.test' }, none)).toBe(true)
+  })
+
+  it('never lets a malformed Host parse into a matching one', () => {
+    for (const host of [
+      'x@a.test',
+      'a.test/',
+      'a.test?',
+      'a.test#',
+      'a .test',
+      'evil.test\\@a.test',
+    ]) {
+      expect(isAllowedOrigin({ origin: 'https://a.test', host }, none)).toBe(false)
+    }
+    // Only http(s) origins count.
+    expect(isAllowedOrigin({ origin: 'file://a.test', host: 'a.test' }, none)).toBe(false)
+  })
+
   it('accepts listed trusted origins', () => {
     const trusted = new Set(['https://app.a.test'])
     expect(isAllowedOrigin({ origin: 'https://app.a.test', host: 'api.a.test' }, trusted)).toBe(
@@ -82,6 +107,7 @@ describe('csrf() origin check', () => {
   })
 
   it('rejects a trustedOrigins entry that is not an origin', () => {
-    expect(() => csrf({ trustedOrigins: ['app.a.test'] })).toThrow(/not a URL origin/)
+    expect(() => csrf({ trustedOrigins: ['https://a.test/path'] })).toThrow(/origin/)
+    expect(() => csrf({ trustedOrigins: ['app.a.test'] })).toThrow(/not an http\(s\) origin/)
   })
 })

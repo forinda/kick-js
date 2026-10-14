@@ -56,12 +56,31 @@ function headerOf(headers: HeaderBag, name: string): string | undefined {
   return Array.isArray(value) ? value[0] : value
 }
 
-function hostOfUrl(url: string): string | undefined {
+/** An http(s) URL, or undefined for anything else (`null`, `file:`, garbage). */
+function parseHttpUrl(value: string): URL | undefined {
   try {
-    return new URL(url).host
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : undefined
   } catch {
     return undefined
   }
+}
+
+/**
+ * RFC 9110 `Host`: a hostname or bracketed IPv6 literal, optional port. Checked
+ * before parsing, so the URL parser never sees userinfo, a path or whitespace —
+ * `x@a.test` would otherwise parse to the host `a.test`.
+ */
+const HOST_GRAMMAR = /^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/
+
+/**
+ * The request's host, canonicalized the way `URL` canonicalizes the origin it
+ * is compared with (case, IDN, default port for that scheme) — comparing two
+ * strings parsed by different rules is how checks like this get bypassed.
+ */
+function canonicalHost(host: string | undefined, protocol: string): string | undefined {
+  if (!host || !HOST_GRAMMAR.test(host)) return undefined
+  return parseHttpUrl(`${protocol}//${host}`)?.host
 }
 
 /** `scheme://host[:port]` of a URL, or undefined when it doesn't parse. */
@@ -84,27 +103,38 @@ export function isAllowedOrigin(headers: HeaderBag, trusted: ReadonlySet<string>
   const site = headerOf(headers, 'sec-fetch-site')
   if (site === 'same-origin') return true
 
-  const origin = headerOf(headers, 'origin') ?? originOfUrl(headerOf(headers, 'referer'))
-  if (origin === undefined) {
+  const declared = headerOf(headers, 'origin') ?? originOfUrl(headerOf(headers, 'referer'))
+  if (declared === undefined) {
     // No browser origin headers: not a browser cross-site request (or a very
     // old browser). Left to the token. A browser that says cross-site or
     // same-site but sends no origin is refused.
     return site === undefined || site === 'none'
   }
-  if (trusted.has(origin)) return true
+  // `Origin: null` (sandboxed frames, some redirects) and non-http schemes
+  // don't parse: refused.
+  const origin = parseHttpUrl(declared)
+  if (!origin) return false
+  if (trusted.has(origin.origin)) return true
   // The scheme is not compared: behind a TLS-terminating proxy the app cannot
   // know it reliably. The host (with port) is what an attacker cannot match.
-  // `Origin: null` (sandboxed frames, some redirects) does not parse: refused.
-  const host = headerOf(headers, 'host')
-  return host !== undefined && hostOfUrl(origin) === host.toLowerCase()
+  // HTTP/2 carries it as `:authority`.
+  const host = canonicalHost(
+    headerOf(headers, 'host') ?? headerOf(headers, ':authority'),
+    origin.protocol,
+  )
+  return host !== undefined && host === origin.host
 }
 
 function trustedSet(origins: string[] | undefined): Set<string> {
   return new Set(
     (origins ?? []).map((o) => {
-      const origin = originOfUrl(o)
-      if (!origin) throw new Error(`csrf: trustedOrigins entry '${o}' is not a URL origin`)
-      return origin
+      const url = parseHttpUrl(o)
+      // An origin is scheme + host + port: a path, query or credentials here
+      // means the entry was meant as something else.
+      if (!url || url.pathname !== '/' || url.search || url.hash || url.username || url.password) {
+        throw new Error(`csrf: trustedOrigins entry '${o}' is not an http(s) origin`)
+      }
+      return url.origin
     }),
   )
 }
