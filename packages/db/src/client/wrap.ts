@@ -29,7 +29,7 @@ import * as kick from '@forinda/kickjs'
 import type { KickDbClient, TransactionOptions } from './types'
 import { applyExtensions } from '../extend/apply'
 import { findOrCreate, upsert, type FindOrCreateOptions, type UpsertOptions } from './upsert'
-import type { KickDbEventEmitter } from './events'
+import { EVENTS_ENABLED, type KickDbEventEmitter } from './events'
 import type { CompileFn } from '../query/builder'
 import { buildQueryNamespace } from '../query/builder'
 import { KickDbError } from '../errors'
@@ -400,6 +400,9 @@ export function wrap<DB>(
     },
   }
   shapes.set(client, { qb, root, plugins, readPrimary })
+  // Lets test helpers that count queries refuse a client whose `on()` is a
+  // no-op, instead of counting zero and passing.
+  Object.defineProperty(client, EVENTS_ENABLED, { value: ctx.events != null })
   return client
 }
 

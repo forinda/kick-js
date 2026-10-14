@@ -31,3 +31,6 @@ export class KickDbEventEmitter {
     this.emitter.emit(event, payload)
   }
 }
+
+/** Set on every client: whether `on()` listeners can fire (`events: true` or implied). */
+export const EVENTS_ENABLED = Symbol.for('kick.db.eventsEnabled')

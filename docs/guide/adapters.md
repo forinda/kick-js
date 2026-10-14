@@ -188,6 +188,80 @@ Two are worth calling out because nothing else surfaces them:
   memory. It may be async so a snapshot can be assembled, not so it can do
   work.
 
+## Turning an adapter on or off
+
+`when` decides once, at startup, whether an adapter runs at all. Return `true` to keep it, or `false` / a reason to leave it out:
+
+```ts
+import { allOf, onEnv, onPackage } from '@forinda/kickjs'
+
+export const QueueAdapter = defineAdapter({
+  name: 'QueueAdapter',
+  build: () => ({
+    when: allOf(onEnv('REDIS_URL'), onPackage('bullmq')),
+    beforeStart: ({ container }) => {
+      /* … */
+    },
+  }),
+})
+```
+
+| Helper                   | On when                                                      |
+| ------------------------ | ------------------------------------------------------------ |
+| `onEnv('NAME')`          | the variable is set and not empty                            |
+| `onEnv('NAME', 'value')` | the variable equals `value`                                  |
+| `onPackage('name')`      | the app can import the package                               |
+| `allOf(a, b, …)`         | every condition is on; the first that isn't gives the reason |
+
+Any `() => boolean | string` works too — keep it synchronous and free of side effects. A condition that throws counts as off; its error goes to the server log, not the report. Reasons never include an env variable's value, since the report is served by DevTools and the variable may hold a secret.
+
+An adapter left out runs no hooks, contributes no middleware, and is not in `app.getAdapters()`. One that `dependsOn` it is left out as well, rather than failing startup. `app.getConditionReport()` lists every adapter with a `when` and whether it is on — DevTools serves it at `/_debug/conditions`:
+
+```json
+{
+  "adapters": [
+    { "adapter": "QueueAdapter", "enabled": false, "reason": "REDIS_URL is not set" },
+    {
+      "adapter": "JobsAdapter",
+      "enabled": false,
+      "reason": "depends on QueueAdapter, which is off"
+    }
+  ]
+}
+```
+
+## Explaining startup failures
+
+When an adapter's `beforeMount` or `beforeStart` throws, the app logs an explanation before the error itself, naming the hook that failed:
+
+```
+Db.beforeStart could not connect to 127.0.0.1:5432: connection refused
+
+  Cause: Nothing is listening at that address — the service is down, not started yet, or the URL points at the wrong host or port.
+
+  Fix:   Start the service, or check the connection URL in your env (localhost inside a container is the container itself).
+```
+
+The framework recognises refused connections, unknown hosts, timeouts and rejected credentials — through `cause` chains and `AggregateError`s too. An adapter that knows its own failure modes can explain them first with `analyzeFailure`:
+
+```ts
+const VectorAdapter: AppAdapter = {
+  name: 'VectorAdapter',
+  beforeStart: async () => {
+    /* … */
+  },
+  analyzeFailure: (err) =>
+    err instanceof Error && err.message.includes('extension "vector"')
+      ? {
+          summary: 'pgvector is not installed',
+          fix: 'Run CREATE EXTENSION vector; on the database',
+        }
+      : undefined, // not ours — fall back to the built-in advice
+}
+```
+
+The original error is still thrown unchanged, so code that checks its type or code keeps working.
+
 ## Middleware Phases
 
 The `middleware()` method returns entries that are inserted at a specific phase in the pipeline. Each entry has a `handler`, an optional `phase`, and an optional `path` for scoping:

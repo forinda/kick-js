@@ -182,6 +182,27 @@ Deep health check with computed status derived from reactive error rate.
 
 Returns `200` when healthy, `503` when degraded (error rate exceeds threshold).
 
+### `GET /_debug/startup`
+
+Where the last startup's time went: each phase and each adapter hook, in the order they ran. Adapter hooks are named `<Adapter>.<hook>`.
+
+```json
+{
+  "totalMs": 412.6,
+  "steps": [
+    { "name": "PrismaAdapter.beforeMount", "ms": 287.1 },
+    { "name": "middleware", "ms": 4.2 },
+    { "name": "modules", "ms": 61.9 },
+    { "name": "routes", "ms": 12.4 },
+    { "name": "error handlers", "ms": 0.3 },
+    { "name": "listen", "ms": 1.8 },
+    { "name": "ready", "ms": 0.4 }
+  ]
+}
+```
+
+The same data is available in code as `app.getStartupTimeline()`. When startup takes longer than a second, the app logs its three slowest steps.
+
 ### `GET /_debug/ws`
 
 WebSocket stats when `WsAdapter` is active. Shows namespaces, connections, message counts, and rooms.

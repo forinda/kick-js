@@ -26,6 +26,10 @@ import {
 export interface TopologyApplicationLike {
   getAdapters(): AppAdapter[]
   getPlugins(): readonly KickPlugin[]
+  /** Adapters with a `when` condition and whether each is on — absent on older Applications. */
+  getConditionReport?(): ReadonlyArray<{ adapter: string; enabled: boolean; reason?: string }>
+  /** Where the last startup's time went — absent on older Applications. */
+  getStartupTimeline?(): { totalMs: number; steps: ReadonlyArray<{ name: string; ms: number }> }
   /**
    * Optional in older Application implementations — when present, returns
    * the union of contributors across adapters/plugins/global with proper

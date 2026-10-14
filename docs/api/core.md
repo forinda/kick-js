@@ -861,6 +861,51 @@ const dbAdapter: AppAdapter = {
 }
 ```
 
+## Startup Timeline
+
+`app.getStartupTimeline()` returns where the last startup's time went: `{ totalMs, steps }`, with one step per phase (`middleware`, `modules`, `routes`, `error handlers`, `listen`, `ready`) and one per adapter hook (`'<Adapter>.beforeMount'`, `'.beforeStart'`, `'.afterStart'`). A hook's time is its own and is not counted in the phase around it. Each `setup()` (including an HMR rebuild) starts a new timeline.
+
+When startup takes longer than a second, the app logs its three slowest steps at `info`. DevTools serves the timeline at [`/_debug/startup`](../guide/devtools.md).
+
+## Startup Checks
+
+Once the app is assembled and before it serves a request, `start()` runs a set of checks against it: the framework's and your own. A check reports messages with a stable ID. A `warning` is logged; an `error` fails startup, listing every error and its fix. A check that throws is logged and skipped.
+
+Built-in checks run in production only (`deploy: true`):
+
+| ID              | When                                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `KICK-SEC-W001` | No `security.allowedHosts` — any `Host` is accepted. See [Allowed Hosts](../guide/security-headers.md#allowed-hosts).         |
+| `KICK-SEC-W002` | `trustProxy: true` — every `X-Forwarded-For` hop is trusted, so a direct client can choose its IP. Trust a hop count instead. |
+
+Add your own with `defineCheck`, and skip any ID you have decided to accept with `silenceChecks`:
+
+```ts
+import { bootstrap, defineCheck } from '@forinda/kickjs'
+
+const noLocalDb = defineCheck({
+  name: 'database url',
+  deploy: true, // production only
+  run: () =>
+    process.env.DATABASE_URL?.includes('localhost')
+      ? {
+          id: 'APP-E001',
+          level: 'error',
+          message: 'DATABASE_URL points at localhost',
+          fix: 'Set DATABASE_URL to the production database',
+        }
+      : undefined,
+})
+
+bootstrap({
+  modules,
+  checks: [noLocalDb],
+  silenceChecks: ['KICK-SEC-W002'], // behind a proxy that strips X-Forwarded-For
+})
+```
+
+A check's `run(ctx)` receives `{ options, routes, production }` — the app's options, every mounted route as `{ method, path }`, and whether `NODE_ENV` is `production` — and returns a message, a list, or nothing. Checks run in `start()` and in serverless handlers, not in `createTestApp()`.
+
 ## Graceful Shutdown
 
 The `Application` tracks in-flight requests and provides a graceful shutdown sequence that drains active connections before tearing down adapters.
