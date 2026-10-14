@@ -229,6 +229,13 @@ for (const rt of RUNTIMES) {
         .post('/api/v1/lim/in')
         .send({ text: 'x'.repeat(2000) })
         .expect(413)
+
+      // An HMR rebuild keeps the limit.
+      await app.rebuild()
+      await request(app.handle.bind(app))
+        .post('/api/v1/lim/in')
+        .send({ text: 'x'.repeat(2000) })
+        .expect(413)
     })
 
     it('parses a repeated form field into an array', async () => {

@@ -12,12 +12,14 @@ export function randomHex(bytes: number): string {
 
 /**
  * Constant-time string comparison for secrets and tokens — the portable
- * counterpart of `timingSafeEqual`. A length mismatch returns early; the
- * length of a token is not the secret.
+ * counterpart of `timingSafeEqual`. Walks the longer input and folds the
+ * length difference in, so neither the contents nor the length of the
+ * expected value shows in the timing.
  */
 export function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  const length = Math.max(a.length, b.length)
+  let diff = a.length ^ b.length
+  // Past the end, charCodeAt is NaN, which `^` treats as 0.
+  for (let i = 0; i < length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return diff === 0
 }

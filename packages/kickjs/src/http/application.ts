@@ -657,11 +657,7 @@ export class Application {
     // `this.app` is the engine-native app; typed Express here (the default) for
     // the legacy escape hatches. Under another runtime it holds that engine's
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
-    this.app = this.runtime.createApp({
-      trustProxy: options.trustProxy,
-      notFoundFallthrough: options.notFoundFallthrough,
-      bodyLimit: parseByteSize(options.jsonLimit ?? DEFAULT_BODY_LIMIT),
-    }) as Express
+    this.app = this.createEngineApp()
     this.container = Container.getInstance()
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
@@ -749,6 +745,15 @@ export class Application {
     }
     this.loopback ??= createLoopback((req, res) => this.handle(req, res))
     return this.loopback.fetch(request)
+  }
+
+  /** The engine app, from the options — one place, so a rebuild (HMR) keeps them all. */
+  private createEngineApp(): Express {
+    return this.runtime.createApp({
+      trustProxy: this.options.trustProxy,
+      notFoundFallthrough: this.options.notFoundFallthrough,
+      bodyLimit: parseByteSize(this.options.jsonLimit ?? DEFAULT_BODY_LIMIT),
+    }) as Express
   }
 
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
@@ -1438,10 +1443,7 @@ export class Application {
     try {
       Container.reset()
       this.container = Container.getInstance()
-      this.app = this.runtime.createApp({
-        trustProxy: this.options.trustProxy,
-        notFoundFallthrough: this.options.notFoundFallthrough,
-      }) as Express
+      this.app = this.createEngineApp()
       await this.setup()
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
