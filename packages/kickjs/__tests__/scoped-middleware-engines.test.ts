@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
-import * as h3v2 from 'h3-v2'
 import { Application } from '../src/http/application'
 import { Container } from '../src/core/container'
 import { Controller, Get } from '../src/core/decorators'
@@ -13,7 +12,6 @@ import { rateLimit } from '../src/http/middleware/rate-limit'
 import { expressRuntime } from '../src/http/runtimes/express'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
-import { h3WebRuntime } from '../src/http/runtimes/h3-web'
 import type { HttpRuntime } from '../src/http/runtime'
 import type { AppAdapter } from '../src/core'
 
@@ -25,8 +23,6 @@ const RUNTIMES: Array<{ name: string; make: () => HttpRuntime }> = [
   { name: 'express', make: () => expressRuntime() },
   { name: 'fastify', make: () => fastifyRuntime() },
   { name: 'h3', make: () => h3Runtime() },
-  // h3 v2, through the npm alias — the installed `h3` peer is v1.
-  { name: 'h3-web', make: () => h3WebRuntime({ h3: h3v2 }) },
 ]
 
 beforeEach(() => Container.reset())

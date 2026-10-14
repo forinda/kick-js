@@ -1,25 +1,15 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
-// npm alias — the repo devDeps carry h3 v1 (for the v1 runtime's conformance
-// suite) AND v2 side by side; this runtime targets v2, injected explicitly.
-import * as h3v2 from 'h3-v2'
 
-import {
-  h3WebRuntime as h3WebRuntimeBase,
-  type H3WebRuntimeOptions,
-} from '../src/http/runtimes/h3-web'
-
-const h3WebRuntime = (options: H3WebRuntimeOptions = {}) =>
-  h3WebRuntimeBase({ h3: h3v2, ...options })
+import { h3Runtime } from '../src/http/runtimes/h3'
 import { Container } from '../src/core/container'
 import { requestStore, type RequestStore } from '../src/http/request-store'
 import type { RouteEntry, RouteTable, ConnectMiddleware } from '../src/http/runtime'
 import type { RequestContext } from '../src/http/context'
 
 /**
- * Fetch-level tests for the h3 v2 (web-standards) runtime — the additive
- * sibling of the untouched v1 runtime. Exercises the shared web driver pair
- * end-to-end through real h3 v2 `app.fetch(new Request(...))`, no server.
+ * Fetch-level tests for the h3 runtime. Exercises the shared web driver pair
+ * end-to-end through real h3 `app.fetch(new Request(...))`, no server.
  */
 
 function entry(
@@ -33,7 +23,7 @@ function mount(routes: RouteEntry[], mountPath = '/api'): ReturnType<typeof buil
 }
 
 function buildApp(table: RouteTable) {
-  const runtime = h3WebRuntime()
+  const runtime = h3Runtime()
   const app = runtime.createApp()
   runtime.mountRoutes(app, table)
   // nodeHandler assembles the terminal catch-all (kick notFound bridge).
@@ -46,7 +36,7 @@ beforeEach(() => {
   Container._requestStoreProvider = () => requestStore.getStore() ?? null
 })
 
-describe('h3WebRuntime — fetch round-trips', () => {
+describe('h3Runtime — fetch round-trips', () => {
   it('routes GET and returns ctx.json payloads', async () => {
     const { app } = mount([
       entry({
@@ -175,7 +165,7 @@ describe('h3WebRuntime — fetch round-trips', () => {
     const notFound: ConnectMiddleware = (_req: any, res: any) => {
       res.status(404).json({ error: 'custom-not-found' })
     }
-    const runtime = h3WebRuntime()
+    const runtime = h3Runtime()
     const app = runtime.createApp()
     runtime.mountRoutes(app, [{ mountPath: '/api', routes: [] }])
     runtime.setNotFound(app, notFound)
@@ -189,7 +179,7 @@ describe('h3WebRuntime — fetch round-trips', () => {
     const errorMw: ConnectMiddleware = ((err: any, _req: any, res: any, _next: any) => {
       res.status(err.status ?? 500).json({ error: err.message })
     }) as unknown as ConnectMiddleware
-    const runtime = h3WebRuntime()
+    const runtime = h3Runtime()
     const app = runtime.createApp()
     runtime.mountRoutes(app, [
       {

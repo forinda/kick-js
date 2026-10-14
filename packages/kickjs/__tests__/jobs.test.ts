@@ -6,7 +6,7 @@
  */
 import 'reflect-metadata'
 import { beforeEach, describe, expect, it } from 'vitest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 import {
   Container,
   Job,

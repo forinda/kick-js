@@ -2,7 +2,7 @@
 
 [Inertia.js](https://inertiajs.com/) v3 adapter for [KickJS](https://kickjs.app/) —
 server-driven pages rendered by React, Vue or Svelte, with server-side
-rendering, on Express, Fastify or h3.
+rendering, on Express, Fastify or h3 (v2).
 
 ```bash
 pnpm add @forinda/kickjs-inertia @inertiajs/react react react-dom
@@ -89,7 +89,7 @@ export class PagesController {
   falling back to client rendering if a render fails.
 - Validation errors and flash data through the session.
 
-Requires `@forinda/kickjs` 9.3 or later.
+Requires `@forinda/kickjs` 10 or later.
 
 ## License
 

@@ -1,8 +1,8 @@
 /**
  * Serve web `Request`s through a Node request handler by forwarding them to a
  * server bound to `127.0.0.1` inside the same process. Used by
- * `Application.fetch()` for runtimes without a native fetch (Express, Fastify,
- * h3 v1): their handlers need real Node request/response objects, and Express
+ * `Application.fetch()` for runtimes without a native fetch (Express and
+ * Fastify): their handlers need real Node request/response objects, and Express
  * swaps the `res` prototype, which makes a direct Request→`res` bridge
  * unreliable.
  *

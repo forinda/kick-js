@@ -31,8 +31,6 @@ import {
 import { Application } from '../src/http/application'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
-import { h3WebRuntime } from '../src/http/runtimes/h3-web'
-import * as h3v2 from 'h3-v2'
 
 const hasOpenssl = (() => {
   try {
@@ -171,8 +169,6 @@ const ALL = [
   ['express', undefined],
   ['fastify', fastifyRuntime],
   ['h3', h3Runtime],
-  // h3 v2, through the npm alias — the installed `h3` peer is v1.
-  ['h3-web', () => h3WebRuntime({ h3: h3v2 })],
 ] as const
 
 describe.skipIf(!hasOpenssl)('server: { tls }', () => {

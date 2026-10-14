@@ -20,13 +20,8 @@ export default defineConfig({
         replacement: path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/fastify.ts'),
       },
       {
-        find: /^@forinda\/kickjs\/h3-web$/,
-        replacement: path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/h3-web.ts'),
-      },
-      // h3 v2, installed for the kickjs runtime tests.
-      {
-        find: /^h3-v2$/,
-        replacement: path.resolve(import.meta.dirname, '../kickjs/node_modules/h3-v2'),
+        find: /^@forinda\/kickjs\/h3$/,
+        replacement: path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/h3.ts'),
       },
       {
         find: /^@forinda\/kickjs$/,

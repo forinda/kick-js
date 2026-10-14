@@ -175,26 +175,26 @@ describe('checkRuntimeEngine', () => {
     expect(checkRuntimeEngine(ctx(dir, { runtime: 'h3' }))?.status).toBe('pass')
   })
 
-  it('warns that h3 v1 is deprecated, reading the installed version first', () => {
+  it('fails on h3 v1, reading the installed version first', () => {
     const declared = tempProject({
       'package.json': JSON.stringify({ dependencies: { h3: '^1.0.0' } }),
     })
     const r = checkRuntimeEngine(ctx(declared, { runtime: 'h3' }))
-    expect(r?.status).toBe('warn')
+    expect(r?.status).toBe('fail')
     expect(r?.fix).toContain('h3@^2')
 
     const installed = tempProject({
       'package.json': JSON.stringify({ dependencies: { h3: 'latest' } }),
       'node_modules/h3/package.json': JSON.stringify({ version: '1.15.11' }),
     })
-    expect(checkRuntimeEngine(ctx(installed, { runtime: 'h3' }))?.status).toBe('warn')
+    expect(checkRuntimeEngine(ctx(installed, { runtime: 'h3' }))?.status).toBe('fail')
 
     const hoisted = tempProject({
       'node_modules/h3/package.json': JSON.stringify({ version: '1.15.11' }),
       'apps/api/package.json': JSON.stringify({ dependencies: { h3: 'latest' } }),
     })
     expect(checkRuntimeEngine(ctx(join(hoisted, 'apps/api'), { runtime: 'h3' }))?.status).toBe(
-      'warn',
+      'fail',
     )
   })
 })

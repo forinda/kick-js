@@ -14,9 +14,8 @@ import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
-import * as h3v2 from 'h3-v2'
 import { Application, Container, Controller, Get, Post, type RequestContext } from '../src/index'
-import { h3WebRuntime } from '../src/http/runtimes/h3-web'
+import { h3Runtime } from '../src/http/runtimes/h3'
 
 const body = z.object({ name: z.string() })
 
@@ -48,7 +47,7 @@ type ConnectMw = (req: any, res: any, next: (err?: unknown) => void) => void
 
 async function buildApp(middlewares?: ConnectMw[]) {
   const app = new Application({
-    runtime: h3WebRuntime({ h3: h3v2 }),
+    runtime: h3Runtime(),
     modules: [{ routes: () => ({ path: '/items', controller: ItemsController }) } as any],
     ...(middlewares ? { middlewares } : {}),
   })
@@ -68,7 +67,7 @@ afterEach(() => {
   for (const s of servers.splice(0)) s.close()
 })
 
-describe('h3-web Application invoked through fetch', () => {
+describe('h3 Application invoked through fetch', () => {
   it('serves a controller route with the default middleware applied', async () => {
     const { fetch } = await buildApp()
     const res = await fetch('/api/v1/items')
@@ -169,7 +168,7 @@ describe('h3-web Application invoked through fetch', () => {
   })
 })
 
-describe('h3-web Application invoked through node (unchanged)', () => {
+describe('h3 Application invoked through node (unchanged)', () => {
   it('serves routes, defaults and user connect middleware over a real http server', async () => {
     const { app } = await buildApp([
       (_req, res, next) => {

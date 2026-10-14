@@ -1,546 +1,609 @@
 // The h3 runtime — `@forinda/kickjs/h3`.
 //
-// h3 (unjs) is the HTTP layer behind Nitro / Nuxt. This binds it to the same
-// HttpRuntime contract as Express and Fastify: routes become native h3 router
-// routes, and the node `ServerResponse` (h3 exposes it as `event.node.res`) is
-// wrapped in a RuntimeResponse so `ctx.json` / `ctx.html` / `ctx.sse` work
-// unchanged.
+// Targets h3 v2: the web-standard line where `event.req` is a WHATWG Request,
+// handlers return values/Responses, and `app.fetch(request)` is the universal
+// entry. h3 v1 is not supported; loading it fails fast with upgrade guidance.
 //
-// `h3Runtime()` runs whichever h3 major is installed. h3 v2 (web-standard
-// `Request` / `Response`) goes to the h3-web runtime; h3 v1 (node-based:
-// `createApp` / `createRouter` / `toNodeListener`, with `event.node.req` /
-// `event.node.res`) runs on the implementation below, which is deprecated and
-// goes in the next major.
+// The request pipeline runs through the shared web driver pair
+// (`../web/driver`, `../web/handler`) — the same code path the
+// `@forinda/kickjs/web` edge entry uses, so node bootstrap and edge deploys
+// exercise identical request semantics.
+//
+// Unmatched requests: behind a node host that passed `next` (`kick dev`'s
+// Vite server, `app.handle(req, res, next)`), they are handed back to it
+// like the Fastify runtime does, unless `notFoundFallthrough: false`;
+// everywhere else kick's notFound handler answers them.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
-import { createLogger } from '../../core/logger'
-import { h3WebRuntime, unwrapH3Module, type H3WebRuntimeTypes } from './h3-web'
-
-import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
-import { RequestContext } from '../context'
-import { publishMatchedRoute, stringifyJson } from '../runtime'
-import { applyHandlerResult } from '../reply'
-import { requestStore } from '../request-store'
-import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
-import { validate } from '../middleware/validate'
-import { HttpException } from '../../core/errors'
-import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
   ConnectMiddleware,
   HttpRuntime,
-  RouteEntry,
   RouteTable,
   RuntimeAppOptions,
-  RuntimeResponse,
   UseConnectOptions,
 } from '../runtime'
+import { compileWebRoute, readThrough, type WebRouteHooks } from '../web/handler'
+import { WebRequestShim, WebResponseDriver } from '../web/driver'
+import { createLogger, describeError } from '../../core/logger'
+
+const log = createLogger('H3Runtime')
 
 const peerRequire = createRequire(import.meta.url)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type H3v1Module = any
-const log = createLogger('H3Runtime')
-let warnedV1 = false
 
-interface H3EventLike {
-  node: { req: IncomingMessage; res: ServerResponse }
-}
-interface H3AppLike {
-  use(arg1: unknown, arg2?: unknown): unknown
-  handler: unknown
-}
-
-const NEXT = Symbol('kickjs.h3.next')
-const ERROR_MW = Symbol('kickjs.h3.errorMw')
-// h3's `createRouter` is terminal — on no match it THROWS a 404, it does not
-// fall through to the next `app.use` layer like an Express Router. So every
-// route source (controllers, /health, devtools /_debug, ad-hoc adapter routes)
-// must live on ONE shared router, registered AFTER all connect middleware.
-const ROUTER = Symbol('kickjs.h3.router')
-const NOTFOUND_MW = Symbol('kickjs.h3.notFoundMw')
-const ASSEMBLED = Symbol('kickjs.h3.assembled')
+const NOTFOUND_MW = Symbol('kickjs.h3web.notFoundMw')
+const ERROR_MW = Symbol('kickjs.h3web.errorMw')
+const ASSEMBLED = Symbol('kickjs.h3web.assembled')
 const NOOP_NEXT = (): void => {}
+/** The host's `next`, stashed on the node request by `nodeHandler`. */
+const NEXT = Symbol('kickjs.h3web.next')
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
-const NO_FALLTHROUGH = Symbol('kickjs.h3.noFallthrough')
-const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-
-/**
- * Wrap a node ServerResponse (from `event.node.res`) as a RuntimeResponse.
- * A class so the ~12 driver methods live on a shared prototype — the previous
- * object-literal version re-allocated every method closure on each request.
- */
-class NodeResDriver implements RuntimeResponse {
-  constructor(private readonly res: ServerResponse) {}
-  status(code: number): this {
-    this.res.statusCode = code
-    return this
-  }
-  json(data: unknown): this {
-    // Do not clobber a content-type the caller already chose. This used to set
-    // `application/json` unconditionally, so every `application/problem+json`
-    // response — RFC 9457 problem details, which the error handler sets the
-    // header for before serialising — went out as plain JSON on this runtime
-    // alone. Express and Fastify both leave an existing value alone.
-    if (!this.res.headersSent && !this.res.getHeader('content-type')) {
-      this.res.setHeader('content-type', 'application/json; charset=utf-8')
-    }
-    this.res.end(stringifyJson(data))
-    return this
-  }
-  send(data: unknown): this {
-    this.res.end(data as never)
-    return this
-  }
-  type(contentType: string): this {
-    this.res.setHeader('content-type', contentType)
-    return this
-  }
-  setHeader(name: string, value: unknown): this {
-    this.res.setHeader(name, value as never)
-    return this
-  }
-  render(): never {
-    throw new Error('ctx.render() is not supported on the h3 runtime (no view engine).')
-  }
-  writeHead(statusCode: number, headers?: Record<string, string | number | string[]>): this {
-    this.res.writeHead(statusCode, headers)
-    return this
-  }
-  flushHeaders(): this {
-    this.res.flushHeaders()
-    return this
-  }
-  write(chunk: unknown): boolean {
-    return this.res.write(chunk as never)
-  }
-  end(data?: unknown): this {
-    this.res.end(data as never)
-    return this
-  }
-  once(event: string, listener: (...args: unknown[]) => void): this {
-    this.res.once(event, listener)
-    return this
-  }
-  get headersSent(): boolean {
-    return this.res.headersSent
-  }
-}
-
-function resDriver(res: ServerResponse): RuntimeResponse {
-  return new NodeResDriver(res) as unknown as RuntimeResponse
-}
-
-/** Carries `trustProxy` from createApp() to the per-route handlers. */
+const NO_FALLTHROUGH = Symbol('kickjs.h3web.noFallthrough')
 const TRUST_PROXY = Symbol('kickjs.h3.trustProxy')
+/** h3 v2's "the node response was handled elsewhere" return value. */
+const H3_HANDLED = Symbol.for('h3.handled')
 
-/** Build the h3 event handler that runs the kickjs pipeline for one route. */
-function makeEventHandler(
-  h3: H3v1Module,
-  entry: RouteEntry,
-  trustProxy: boolean,
-): (event: H3EventLike) => Promise<void> {
-  const { getRouterParams, getQuery, readRawBody, readMultipartFormData } = h3
-  const upload = entry.meta.upload
-  // Validation middleware built ONCE per route (parity with Express) — calling
-  // validate() per request re-allocated the closure every time.
-  const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
-  return async (event: H3EventLike) => {
-    const req = event.node.req as IncomingMessage & {
-      requestId?: string
-      body?: unknown
-      params?: unknown
-      query?: unknown
-      file?: unknown
-      files?: unknown
-    }
-    const res = event.node.res
-
-    // h3 computes no client address of its own, so `resolveClientIp` fell
-    // straight through to the socket — which behind a proxy is the proxy, and
-    // put every caller in one rate-limit bucket with no way to configure out
-    // of it (#614). Express and Fastify derive `req.ip` from their own
-    // trust-proxy settings; this is h3's equivalent, and like theirs it is
-    // OFF unless the app opts in, because an unverified `x-forwarded-for` is
-    // client-controllable.
-    if (trustProxy && !(req as { ip?: string }).ip) {
-      const forwarded = req.headers['x-forwarded-for']
-      const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim()
-      if (first) (req as { ip?: string }).ip = first
-    }
-
-    // Populate the express-shaped request fields h3 keeps elsewhere.
-    req.params = getRouterParams(event) ?? {}
-    req.query = getQuery(event) ?? {}
-
-    // HTTP/2 frames a body in DATA frames: no `transfer-encoding`, and
-    // `content-length` is optional. h3's `readRawBody` — behind both the
-    // JSON/text path and `readMultipartFormData` — returns `undefined` when
-    // neither header is present, dropping the body. Read it once as bytes and
-    // hand it over on `req.rawBody`, which `readRawBody` checks first.
-    if (
-      req.httpVersionMajor === 2 &&
-      req.headers['content-length'] === undefined &&
-      BODY_METHODS.has(req.method ?? 'GET')
-    ) {
-      ;(req as { rawBody?: Buffer }).rawBody = await readStreamBuffer(req)
-    }
-    if (upload && upload.mode !== 'none') {
-      // @FileUpload: read the multipart body once (readBody would consume the
-      // same stream, so the two are mutually exclusive). File parts → the
-      // multer-shaped ctx.file/ctx.files; non-file fields → req.body.
-      const form = (await readMultipartFormData(event).catch(() => undefined)) as
-        | Array<{ name?: string; filename?: string; type?: string; data: Buffer }>
-        | undefined
-      const rawParts: RawUploadPart[] = []
-      const fields: Record<string, unknown> = {}
-      for (const part of form ?? []) {
-        if (part.filename) {
-          rawParts.push({
-            fieldname: part.name ?? '',
-            filename: part.filename,
-            mimetype: part.type ?? 'application/octet-stream',
-            buffer: part.data,
-          })
-        } else if (part.name) {
-          fields[part.name] = part.data.toString('utf-8')
-        }
-      }
-      const { file, files } = applyUploadConfig(rawParts, upload)
-      req.file = file
-      req.files = files
-      req.body = fields
-    } else if (BODY_METHODS.has(req.method ?? 'GET')) {
-      // Swallow ONLY the absent-body case. `.catch(() => undefined)` also
-      // swallowed a malformed one, so h3 answered 200 with the handler running
-      // on `undefined` where Express and Fastify both answer 400 — a client
-      // sending broken JSON got a success response, and the handler executed
-      // against data that was never valid.
-      // HTTP/2 frames the body in DATA frames: no `transfer-encoding`, and
-      // `content-length` is optional, so there a body may be present with
-      // neither header — only an explicit `content-length: 0` rules it out.
-      const { 'content-length': length, 'transfer-encoding': encoding } = req.headers
-      const sentBody =
-        encoding !== undefined ||
-        (length !== undefined && length !== '0') ||
-        (req.httpVersionMajor === 2 && length !== '0')
-      if (sentBody) {
-        // Read raw and apply the shared policy rather than calling `readBody`,
-        // whose own content-type dispatch is the source of the divergence:
-        // it matches `application/json` with `===` (so `; charset=utf-8` misses)
-        // and routes everything unrecognised through `destr`, which returns the
-        // RAW STRING for malformed input instead of throwing (#590).
-        const kind = classifyMediaType(req.headers['content-type'])
-        if (kind !== 'multipart') {
-          const raw = await readRawBody(event, 'utf8')
-          // Reject only once the body is known to be non-empty. `sentBody` is
-          // true for an empty CHUNKED post — `transfer-encoding` is present
-          // with no payload — and rejecting on that alone would 415 a request
-          // that sent nothing, contradicting the rule the other runtimes apply.
-          if (raw) {
-            if (kind === 'unsupported') {
-              // A body was sent in a format the framework does not parse. Say
-              // so rather than handing the handler `undefined` and letting it
-              // fail somewhere less obvious.
-              throw unsupportedMediaTypeError(req.headers['content-type'])
-            }
-            if (kind === 'json') {
-              try {
-                req.body = JSON.parse(raw)
-              } catch (err) {
-                throw HttpException.badRequest(
-                  err instanceof Error ? err.message : 'Request body could not be parsed',
-                )
-              }
-            } else if (kind === 'urlencoded') {
-              req.body = Object.fromEntries(new URLSearchParams(raw))
-            } else {
-              req.body = raw
-            }
-          }
-        }
-      }
-    }
-
-    const headerId = req.headers['x-request-id']
-    const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) || req.requestId
-    const store = createRequestStore(requestId)
-    req.requestId = store.requestId
-
-    // @PreDestroy teardown for REQUEST-scoped instances once the response
-    // closes (finished or aborted) — parity with requestScopeMiddleware.
-    res.once('close', () => disposeRequestStore(store))
-
-    await requestStore.run(store, async () => {
-      publishMatchedRoute(req, entry)
-      const ctx = new RequestContext(req as never, res as never, NOOP_NEXT, resDriver(res))
-
-      // `beforeValidation` contributors (#677) — ahead of validation and middleware.
-      if (entry.earlyContributorRunner) {
-        await entry.earlyContributorRunner(ctx)
-        if (res.writableEnded) return
-      }
-
-      if (validator) {
-        await new Promise<void>((resolve, reject) => {
-          validator(req as never, undefined as never, (err?: unknown) =>
-            err ? reject(err) : resolve(),
-          )
-        })
-      }
-
-      for (const mw of entry.middlewares) {
-        let advanced = false
-        await new Promise<void>((resolve, reject) => {
-          const next = (err?: unknown): void => {
-            advanced = true
-            if (err) reject(err)
-            else resolve()
-          }
-          Promise.resolve(mw(ctx, next)).catch(reject)
-        })
-        if (!advanced || res.writableEnded) return
-      }
-
-      if (entry.contributorRunner) await entry.contributorRunner(ctx)
-      if (res.writableEnded) return
-      const result = await entry.handler(ctx)
-      // Return-value handlers (reply.ts): auto-send when nothing was written.
-      if (!res.writableEnded && !res.headersSent) await applyHandlerResult(ctx, result)
-    })
-  }
+// Minimal structural surface of h3 v2 we depend on.
+interface H3AppLike {
+  on(method: string, path: string, handler: (event: H3EventLike) => unknown): unknown
+  all(path: string, handler: (event: H3EventLike) => unknown): unknown
+  use(...args: unknown[]): unknown
+  fetch(request: Request): Promise<Response>
+}
+interface H3EventLike {
+  req: Request & { runtime?: { node?: { req: IncomingMessage; res: ServerResponse } } }
+  url: URL
+  context: { params?: Record<string, string> }
 }
 
-/**
- * The original error h3 wrapped.
- *
- * h3 routes every thrown value through `createError()`, which returns its own
- * error with the original on `cause`. Handing that wrapper to the shared error
- * middleware means it sees something Express and Fastify never give it, and the
- * responses diverge: `instanceof HttpException` fails, so a thrown
- * `HttpException(418)` falls through to the generic branch and picks up a
- * `requestId` the other two omit, and `describeError` walks the cause chain to
- * report `kaboom ← caused by kaboom`.
- *
- * Only an `Error` cause is unwrapped. h3's own 404 carries no cause, so the
- * not-found path above is unaffected.
- */
-function unwrapH3Error(error: unknown): unknown {
-  if (!(error instanceof Error)) return error
-  const { cause } = error as { cause?: unknown }
-  return cause instanceof Error ? cause : error
-}
-
-/** Collect a request stream as bytes — never decoded, so file parts stay intact. */
-async function readStreamBuffer(req: AsyncIterable<Buffer | string>): Promise<Buffer> {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
-  return Buffer.concat(chunks)
-}
-
-/**
- * Run an error / not-found handler and settle once it has answered. h3 awaits
- * its `onError` hook and then sends its own error response unless the reply
- * is finished, so a handler that answers asynchronously (rendering a page,
- * saving a session first) would lose that race. A handler that calls `next()`
- * instead of answering settles too, and h3's fallback answers.
- */
-function answered(res: ServerResponse, run: (done: () => void) => unknown): Promise<void> {
-  return new Promise<void>((resolve) => {
-    // h3 already holds a 'close' listener per connect middleware until the
-    // response closes, so ours can cross Node's default of 10 and print a
-    // leak warning. Ours are removed in `done`; budget for exactly them.
-    res.setMaxListeners(res.getMaxListeners() + 1)
-    let settled = false
-    const done = () => {
-      if (settled) return
-      settled = true
-      res.removeListener('finish', done)
-      res.removeListener('close', done)
-      res.setMaxListeners(Math.max(0, res.getMaxListeners() - 1))
-      resolve()
-    }
-    res.once('finish', done)
-    res.once('close', done)
-    // A handler that rejects never answers: answer 500 so the request ends.
-    const failed = () => {
-      if (!res.headersSent) {
-        res.statusCode = 500
-        res.end()
-      }
-      done()
-    }
-    try {
-      const returned = run(done)
-      if (typeof (returned as PromiseLike<void> | undefined)?.then === 'function') {
-        Promise.resolve(returned).then(undefined, failed)
-      }
-    } catch (err) {
-      done()
-      throw err
-    }
-    if (res.writableEnded) done()
-  })
+interface H3v2Module {
+  H3: new (config?: unknown) => H3AppLike
+  toNodeHandler: (app: H3AppLike) => (req: IncomingMessage, res: ServerResponse) => void
+  fromNodeHandler: (mw: unknown) => unknown
 }
 
 export interface H3RuntimeOptions {
   /**
    * Pre-imported h3 module, for when the app's `h3` is not the one this
-   * package resolves (a linked checkout, a bundler): `h3Runtime({ h3: await import('h3') })`.
+   * package resolves (a linked checkout, a bundler):
+   * `h3Runtime({ h3: await import('h3') })`.
    * Omitted → the installed `h3` peer.
    */
   h3?: unknown
 }
 
-/**
- * The h3 HTTP runtime. Pass to `bootstrap({ runtime: h3Runtime() })`. Runs on
- * the installed h3: v2 through the web-standard runtime (same as
- * `h3WebRuntime()`), v1 through the deprecated node-based one, with a one-time
- * warning. Either way h3 parses bodies itself, so the Application skips its
- * default `express.json()` (see `nativeBodyParsing`).
- */
-export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike> {
-  const h3 = unwrapH3Module(options.h3 ?? peerRequire('h3'))
-  if (typeof h3.H3 === 'function') {
-    return h3WebRuntime({ h3 }) as unknown as HttpRuntime<H3AppLike>
-  }
-  if (!warnedV1) {
-    warnedV1 = true
-    log.warn(
-      'h3 v1 is installed. Support for it is deprecated and ends in the next major of @forinda/kickjs — `pnpm add h3@^2`; nothing else changes for apps that only use KickJS APIs.',
-    )
-  }
-  return h3v1Runtime(h3)
+/** An h3 module as `import()` or `require()` hands it over, ESM interop unwrapped. */
+function unwrapH3Module(mod: unknown): Record<string, unknown> {
+  const m = mod as { __esModule?: boolean; default?: Record<string, unknown> } & Record<
+    string,
+    unknown
+  >
+  return m && m.__esModule && m.default ? { ...m.default, ...m } : m
 }
 
-function h3v1Runtime(h3: H3v1Module): HttpRuntime<H3AppLike> {
+/** Resolve h3 (injected or peer-required) and fail fast unless it is v2. */
+function loadH3v2(injected?: unknown): H3v2Module {
+  const resolved = unwrapH3Module(injected ?? peerRequire('h3')) as unknown as H3v2Module
+  if (typeof resolved.H3 !== 'function') {
+    throw new Error(
+      '@forinda/kickjs: h3Runtime() requires h3 v2, but the installed h3 has no H3 class — that is the v1 line, ' +
+        'which this version of KickJS no longer supports. Upgrade: `pnpm add h3@^2`.',
+    )
+  }
+  return resolved
+}
+
+/**
+ * Bridge a connect-style terminal middleware (kick's notFound / error
+ * handlers) onto the web driver pair, returning the produced Response.
+ */
+async function runConnectTerminal(
+  mw: ConnectMiddleware | undefined,
+  event: H3EventLike,
+  err?: unknown,
+): Promise<Response> {
+  const shim = new WebRequestShim(event.req, event.url)
+  // What the app's connect middleware set (session, an adapter's slot) is
+  // visible to the error / not-found handler, as on the route itself.
+  const carry = event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req
+  const req = carry ? readThrough(shim, carry) : shim
+  const driver = new WebResponseDriver(event.req.signal)
+  if (mw) {
+    const returned =
+      err !== undefined
+        ? (mw as (e: unknown, rq: unknown, rs: unknown, n: () => void) => unknown)(
+            err,
+            req,
+            driver,
+            NOOP_NEXT,
+          )
+        : (mw as (rq: unknown, rs: unknown, n: () => void) => unknown)(req, driver, NOOP_NEXT)
+    // An async handler answers after an await: wait for it before deciding
+    // nothing answered. One that rejects is an error in its own right.
+    if (typeof (returned as PromiseLike<void> | undefined)?.then === 'function') {
+      try {
+        await returned
+      } catch (handlerErr) {
+        if (!driver.settled) {
+          log.error(
+            handlerErr,
+            `h3: the ${err !== undefined ? 'error' : 'not-found'} handler failed`,
+          )
+          driver.status(500).json({ error: 'Internal Server Error' })
+        }
+      }
+    }
+  }
+  if (!driver.settled) {
+    if (err !== undefined) {
+      // The configured error handler ran but didn't settle the response
+      // (or there wasn't one). Emitting a bare 500 with no log entry
+      // makes this failure invisible on both sides — log it here, since
+      // by definition nothing downstream will.
+      log.error(err, `h3: error handler did not settle the response — ${describeError(err)}`)
+      driver.status(500).json({
+        error: 'Internal Server Error',
+        ...(typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
+          ? {}
+          : { message: describeError(err) }),
+      })
+    } else {
+      driver.status(404).json({ error: 'Not Found' })
+    }
+  }
+  return driver.ready
+}
+
+// ── Connect middleware on the fetch path ─────────────────────────────────
+//
+// `app.fetch(request)` (edge, Bun, Deno, a serverless function) carries no
+// node req/res, and h3's `fromNodeHandler` throws without one. Connect
+// middleware there runs against the web driver pair instead: one request shim
+// per event (so `req.requestId` set by one middleware is seen by the next) and
+// one header bag per event that is merged into whatever Response comes back.
+// The merge is ours rather than h3's `event.res.headers` because h3 skips
+// prepared headers on non-2xx responses, and a 404/422/500 must still carry
+// helmet's headers and the request id, exactly as on node.
+
+interface FetchConnectState {
+  req: WebRequestShim
+  headers: Headers
+}
+
+const FETCH_CONNECT = new WeakMap<object, FetchConnectState>()
+
+function fetchConnectState(event: H3EventLike): FetchConnectState {
+  let state = FETCH_CONNECT.get(event)
+  if (!state) {
+    state = { req: new WebRequestShim(event.req, event.url), headers: new Headers() }
+    FETCH_CONNECT.set(event, state)
+  }
+  return state
+}
+
+/**
+ * Add the headers connect middleware set to `response`. The response's own
+ * headers win — a later `setHeader` overrides an earlier one on node too.
+ * Consumed once, so every middleware layer can call it on the way out.
+ */
+function withConnectHeaders(event: H3EventLike, response: Response): Response {
+  const state = FETCH_CONNECT.get(event)
+  if (!state) return response
+  const missing = [...state.headers].filter(
+    ([name]) => name === 'set-cookie' || !response.headers.has(name),
+  )
+  state.headers = new Headers()
+  if (missing.length === 0) return response
+  try {
+    for (const [name, value] of missing) response.headers.append(name, value)
+    return response
+  } catch {
+    // Immutable headers (a Response from fetch) — rebuild around the body.
+    const headers = new Headers(response.headers)
+    for (const [name, value] of missing) headers.append(name, value)
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
+}
+
+/**
+ * The node `res` surface connect middleware uses, over the web driver:
+ * headers go to the per-event bag, `statusCode`, and `finish`/`close`
+ * emitted once the response exists.
+ */
+class FetchConnectResponse extends WebResponseDriver {
+  private code = 200
+  private listeners: Array<[string, (...args: unknown[]) => void]> = []
+
+  constructor(
+    private readonly prepared: Headers,
+    signal: AbortSignal,
+  ) {
+    super(signal)
+  }
+
+  get statusCode(): number {
+    return this.code
+  }
+
+  set statusCode(code: number) {
+    this.status(code)
+  }
+
+  override status(code: number): this {
+    this.code = code
+    return super.status(code)
+  }
+
+  override writeHead(code: number, headers?: Record<string, string | number | string[]>): this {
+    this.code = code
+    return super.writeHead(code, headers)
+  }
+
+  override setHeader(name: string, value: unknown): this {
+    if (Array.isArray(value)) {
+      this.prepared.delete(name)
+      for (const v of value) this.prepared.append(name, String(v))
+    } else {
+      this.prepared.set(name, String(value))
+    }
+    return this
+  }
+
+  getHeader(name: string): string | undefined {
+    return this.prepared.get(name) ?? undefined
+  }
+
+  hasHeader(name: string): boolean {
+    return this.prepared.has(name)
+  }
+
+  removeHeader(name: string): void {
+    this.prepared.delete(name)
+  }
+
+  override once(event: string, listener: (...args: unknown[]) => void): this {
+    this.listeners.push([event, listener])
+    return this
+  }
+
+  on(event: string, listener: (...args: unknown[]) => void): this {
+    return this.once(event, listener)
+  }
+
+  removeListener(event: string, listener: (...args: unknown[]) => void): this {
+    this.listeners = this.listeners.filter(([e, l]) => e !== event || l !== listener)
+    return this
+  }
+
+  off(event: string, listener: (...args: unknown[]) => void): this {
+    return this.removeListener(event, listener)
+  }
+
+  /** The response exists (or the request failed): fire `finish` then `close`. */
+  done(): void {
+    for (const event of ['finish', 'close']) {
+      for (const [e, listener] of this.listeners) if (e === event) listener()
+      this.listeners = this.listeners.filter(([e]) => e !== event)
+    }
+  }
+}
+
+function runConnectOnFetch(
+  mw: ConnectMiddleware,
+  event: H3EventLike,
+  next: () => unknown,
+): Promise<unknown> {
+  const state = fetchConnectState(event)
+  const res = new FetchConnectResponse(state.headers, event.req.signal)
+
+  return new Promise((resolve, reject) => {
+    const respond = (response: Response): void => {
+      res.done()
+      resolve(withConnectHeaders(event, response))
+    }
+    const fail = (err: unknown): void => {
+      res.done()
+      reject(err)
+    }
+
+    // The middleware answered itself (`res.end`, `res.json`, `writeHead`).
+    void res.ready.then(respond)
+
+    const connectNext = (err?: unknown): void => {
+      if (err) return fail(err)
+      if (res.settled) return
+      // The route builds its request store from the inbound header; hand it the
+      // id requestScope/requestId settled on so body, logs and header agree.
+      const id = state.req.requestId
+      if (id && event.req.headers.get('x-request-id') !== id) {
+        try {
+          event.req.headers.set('x-request-id', id)
+        } catch {
+          // Immutable request headers on some runtimes — the route mints its own id.
+        }
+      }
+      let downstream: unknown
+      try {
+        // Synchronous, so downstream work starts inside any AsyncLocalStorage
+        // scope this middleware opened (requestScopeMiddleware).
+        downstream = next()
+      } catch (e) {
+        return fail(e)
+      }
+      Promise.resolve(downstream).then((value) => {
+        if (value instanceof Response) return respond(value)
+        res.done()
+        resolve(value)
+      }, fail)
+    }
+
+    try {
+      ;(mw as (rq: unknown, rs: unknown, n: (err?: unknown) => void) => void)(
+        state.req,
+        res,
+        connectNext,
+      )
+    } catch (err) {
+      fail(err)
+    }
+  })
+}
+
+/**
+ * Terminal catch-all AFTER all mounted routes: kick's own notFound handler
+ * answers unmatched paths (h3 v2's default 404 never fires). rou3 ranks `/**`
+ * below every concrete route, so registration time does not matter.
+ */
+function assembleCatchAll(app: H3AppLike): void {
+  const state = app as unknown as Record<symbol, unknown>
+  if (state[ASSEMBLED]) return
+  state[ASSEMBLED] = true
+  app.all('/**', (event: H3EventLike) => {
+    const node = event.req.runtime?.node
+    const next = (node?.req as (IncomingMessage & { [NEXT]?: () => void }) | undefined)?.[NEXT]
+    if (node && next && !state[NO_FALLTHROUGH]) {
+      // Hand the request back to the host and tell h3 the node response is
+      // taken care of; srvx then leaves the already-written response alone.
+      return new Promise((resolve) => {
+        const done = () => resolve(H3_HANDLED)
+        node.res.once('finish', done)
+        node.res.once('close', done)
+        next()
+      })
+    }
+    const mw = state[NOTFOUND_MW] as ConnectMiddleware | undefined
+    return runConnectTerminal(mw, event)
+  })
+}
+
+type ProxyTrust = (address: string, hop: number) => boolean
+
+/**
+ * The `trustProxy` forms h3 can honour without an address-matching library:
+ * `true` (every hop), a hop count, or a predicate — Express's semantics for
+ * each. Address and subnet lists are not supported here; they are refused
+ * with a warning and the socket address is kept, so a misread rule never
+ * trusts a header it should not.
+ */
+function proxyTrust(option: RuntimeAppOptions['trustProxy']): ProxyTrust | undefined {
+  if (option === undefined || option === false) return undefined
+  if (option === true) return () => true
+  if (typeof option === 'number') return (_address, hop) => hop < option
+  if (typeof option === 'function') return option
+  log.warn(
+    'h3: trustProxy as an address or subnet list is not supported; client IPs ' +
+      'use the socket address. Use a hop count or a function instead.',
+  )
+  return undefined
+}
+
+/**
+ * Express's `proxy-addr` walk: from the socket outward through
+ * `x-forwarded-for`, stop at the first address the rule does not trust.
+ */
+function forwardedClientIp(req: IncomingMessage, trust: ProxyTrust): string | undefined {
+  const socket = req.socket?.remoteAddress
+  if (!socket) return undefined
+  const header = req.headers['x-forwarded-for']
+  const forwarded = (Array.isArray(header) ? header.join(',') : (header ?? ''))
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .toReversed()
+  const chain = [socket, ...forwarded]
+  for (let hop = 0; hop < chain.length - 1; hop++) {
+    if (!trust(chain[hop]!, hop)) return chain[hop]
+  }
+  return chain[chain.length - 1]
+}
+
+/**
+ * A middleware mounted at a path sees `req.url` relative to that path, as on
+ * Express — `serve-static` mounted at `/files` must look up
+ * `/nested/a.txt`, not `/files/nested/a.txt`. h3 v2 leaves the URL whole, so
+ * strip the prefix for the call and restore it when the middleware passes on.
+ * `req.originalUrl` keeps the full URL, as Express sets it.
+ */
+function stripMountPrefix(path: string, mw: ConnectMiddleware): ConnectMiddleware {
+  const prefix = path.endsWith('/') ? path.slice(0, -1) : path
+  if (prefix === '') return mw
+  return ((
+    req: IncomingMessage & { originalUrl?: string },
+    res: unknown,
+    next: (err?: unknown) => void,
+  ) => {
+    const url = req.url ?? '/'
+    const rest = url.startsWith(prefix) ? url.slice(prefix.length) : null
+    if (rest === null || (rest !== '' && rest[0] !== '/' && rest[0] !== '?')) {
+      return (mw as (rq: unknown, rs: unknown, n: (err?: unknown) => void) => unknown)(
+        req,
+        res,
+        next,
+      )
+    }
+    req.originalUrl ??= url
+    req.url = rest.startsWith('/') ? rest : `/${rest}`
+    return (mw as (rq: unknown, rs: unknown, n: (err?: unknown) => void) => unknown)(
+      req,
+      res,
+      (err?: unknown) => {
+        req.url = url
+        next(err)
+      },
+    )
+  }) as unknown as ConnectMiddleware
+}
+
+/**
+ * The h3 HTTP runtime. Pass to `bootstrap({ runtime: h3Runtime() })`.
+ * Requires the h3 v2 peer; fails fast with guidance when v1 is installed.
+ */
+export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike> {
+  const { H3, toNodeHandler, fromNodeHandler } = loadH3v2(options.h3)
+
   return {
     name: 'h3',
 
     createApp(options: RuntimeAppOptions = {}): H3AppLike {
-      const { createApp } = h3
-      const app = createApp({
-        onError: (error: unknown, event: H3EventLike): Promise<void> | void => {
-          const res = event.node.res
-          if (res.writableEnded) return
-          const state = app as {
-            [ERROR_MW]?: ConnectMiddleware
-            [NOTFOUND_MW]?: ConnectMiddleware
-          }
-          // The shared router throws a 404 on no match (it's terminal). Treat
-          // that as "not found", not a server error: hand back to the outer
-          // chain (Vite dev fall-through) when present, else run the framework's
-          // notFound handler so it returns a proper 404 — only genuine handler
-          // errors reach the error middleware (and the ErrorHandler log).
-          //
-          // Only the ROUTER's no-match counts: h3 builds it from a plain object,
-          // so its `cause` is not an Error. A handler that throws
-          // `HttpException(404, '…')` arrives wrapped with the exception as
-          // `cause` — that is a handler error and belongs to the error
-          // middleware, which keeps its detail (and reports it to observers).
-          const status = (error as { statusCode?: number } | undefined)?.statusCode
-          const thrownByHandler = (error as { cause?: unknown } | undefined)?.cause instanceof Error
-          if (status === 404 && !thrownByHandler) {
-            const next = (event.node.req as IncomingMessage & { [NEXT]?: () => void })[NEXT]
-            if (next && !(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH]) {
-              next()
-              return
-            }
-            const nf = state[NOTFOUND_MW]
-            if (nf) {
-              return answered(res, (done) =>
-                (nf as (req: unknown, res: unknown, next: () => void) => unknown)(
-                  event.node.req,
-                  resDriver(res),
-                  done,
-                ),
-              )
-            }
-          }
-          const mw = state[ERROR_MW]
-          if (mw) {
-            return answered(res, (done) =>
-              (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
-                unwrapH3Error(error),
-                event.node.req,
-                resDriver(res),
-                done,
-              ),
-            )
-          }
+      const holder: { app?: H3AppLike } = {}
+      const app = new H3({
+        // Engine-level errors (middleware throws outside the kick pipeline)
+        // dispatch to the kick error handler once setErrorHandler stashes it.
+        onError: (error: unknown, event: H3EventLike) => {
+          const mw = (holder.app as unknown as Record<symbol, ConnectMiddleware | undefined>)?.[
+            ERROR_MW
+          ]
+          return runConnectTerminal(mw, event, error).then((response) =>
+            withConnectHeaders(event, response),
+          )
         },
       })
-      // Stash the setting for mountRoutes — h3 has no app-level config object
-      // of its own to hang it on.
-      ;(app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY] = options.trustProxy
-      ;(app as { [NO_FALLTHROUGH]?: boolean })[NO_FALLTHROUGH] =
+      holder.app = app
+      ;(app as unknown as Record<symbol, unknown>)[NO_FALLTHROUGH] =
         options.notFoundFallthrough === false
-      return app as H3AppLike
+      ;(app as unknown as Record<symbol, unknown>)[TRUST_PROXY] = proxyTrust(options.trustProxy)
+      return app
     },
 
     nodeHandler(app) {
-      const { toNodeListener } = h3
-      // Register the shared router exactly once, AFTER all connect middleware
-      // (serveStatic / useConnect) the setup phase added via `app.use` — the
-      // router is terminal, so anything that must run for non-route paths has to
-      // sit before it in the stack.
-      const state = app as { [ROUTER]?: unknown; [ASSEMBLED]?: boolean }
-      if (!state[ASSEMBLED]) {
-        state[ASSEMBLED] = true
-        if (state[ROUTER]) app.use(state[ROUTER])
-      }
-      const listener = toNodeListener(app)
+      assembleCatchAll(app)
+      const listener = toNodeHandler(app)
+      const trust = (app as unknown as Record<symbol, unknown>)[TRUST_PROXY] as
+        | ProxyTrust
+        | undefined
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
         if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
-        Promise.resolve(listener(req, res)).catch((err) => {
-          if (next) next(err)
-        })
-      }
-    },
-
-    mountRoutes(app, table: RouteTable) {
-      const { createRouter, eventHandler } = h3
-      const trustProxy = Boolean((app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY])
-      // One shared router per app — every mountRoutes call (controllers, health,
-      // devtools, ad-hoc adapter routes) adds to it. `app.use(router)` is
-      // deferred to nodeHandler so the router lands after connect middleware.
-      const state = app as { [ROUTER]?: ReturnType<typeof createRouter> }
-      if (!state[ROUTER]) state[ROUTER] = createRouter()
-      const router = state[ROUTER]
-      for (const { mountPath, routes } of table) {
-        for (const entry of routes) {
-          const url = joinPath(mountPath, entry.path)
-          const method = entry.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
-          router[method](url, eventHandler(makeEventHandler(h3, entry, trustProxy)))
+        // Express and Fastify derive `req.ip` from their trust-proxy settings;
+        // this is h3's equivalent, off unless the app opts in, because an
+        // unverified `x-forwarded-for` is client-controllable. Without it every
+        // caller behind a proxy shares the proxy's address (one rate-limit bucket).
+        if (trust && !(req as { ip?: string }).ip) {
+          const ip = forwardedClientIp(req, trust)
+          if (ip) (req as { ip?: string }).ip = ip
+        }
+        // h3 v2 adds 'close' / 'finish' listeners for every connect middleware
+        // and keeps them until the response ends, so an ordinary middleware
+        // stack crosses Node's default of 10 and warns about a leak on every
+        // request. They go away with the response; no limit is needed.
+        res.setMaxListeners(0)
+        try {
+          const result = listener(req, res) as unknown
+          if (result && typeof (result as Promise<unknown>).then === 'function') {
+            void (result as Promise<unknown>).catch((err) => next?.(err))
+          }
+        } catch (err) {
+          next?.(err)
         }
       }
     },
 
-    useConnect(app, mw: ConnectMiddleware, opts?: UseConnectOptions) {
-      const { fromNodeMiddleware } = h3
-      const handler = fromNodeMiddleware(mw)
-      if (opts?.path !== undefined) app.use(opts.path, handler)
-      else app.use(handler)
+    mountRoutes(app, table: RouteTable) {
+      for (const { mountPath, routes } of table) {
+        for (const entry of routes) {
+          const url = joinPath(mountPath, entry.path)
+          const hooks: WebRouteHooks = {
+            onError: async (err, req, driver) => {
+              const mw = (app as unknown as Record<symbol, ConnectMiddleware | undefined>)[ERROR_MW]
+              if (!mw) return
+              // Awaited: an async handler answers after its await, and the
+              // pipeline falls back to its own answer once this returns.
+              try {
+                await (mw as (e: unknown, rq: unknown, rs: unknown, n: () => void) => unknown)(
+                  err,
+                  req,
+                  driver,
+                  NOOP_NEXT,
+                )
+              } catch (handlerErr) {
+                if (!driver.settled) {
+                  log.error(handlerErr, 'h3: the error handler failed')
+                  driver.status(500).json({ error: 'Internal Server Error' })
+                }
+              }
+            },
+          }
+          const run = compileWebRoute(entry, hooks)
+          app.on(entry.method, url, (event: H3EventLike) =>
+            run({
+              request: event.req,
+              url: event.url,
+              params: event.context.params ?? {},
+              carry: event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req,
+            }),
+          )
+        }
+      }
+    },
+
+    useConnect(app, rawMw: ConnectMiddleware, opts?: UseConnectOptions) {
+      const path = opts?.path
+      // A list mounts each member, as Express does.
+      if (Array.isArray(path)) {
+        for (const member of path) this.useConnect!(app, rawMw, { path: member })
+        return
+      }
+      const mw = typeof path === 'string' ? stripMountPrefix(path, rawMw) : rawMw
+      // Behind a node server (toNodeHandler) the event carries node req/res and
+      // h3's own bridge runs the middleware unchanged. Called through
+      // `app.fetch(request)` there is none and fromNodeHandler would throw, so
+      // the middleware runs against the web driver pair instead.
+      const viaNode = fromNodeHandler(mw) as (event: H3EventLike) => unknown
+      const handler = (event: H3EventLike, next: () => unknown) =>
+        event.req.runtime?.node?.res ? viaNode(event) : runConnectOnFetch(mw, event, next)
+      if (path instanceof RegExp) {
+        // h3 routes by string pattern only; test the pathname per request.
+        // Like Express, a pattern mount leaves `req.url` whole.
+        app.use((event: H3EventLike, next: () => unknown) =>
+          path.test(event.url.pathname) ? handler(event, next) : next(),
+        )
+      } else if (typeof path === 'string') {
+        // h3 `use` is exact-match; `/**` covers the subtree.
+        app.use(joinPath(path, '/**'), handler)
+      } else {
+        app.use(handler)
+      }
     },
 
     serveStatic(app, prefix, dir) {
-      // `serve-static` (the standalone connect middleware behind express.static)
-      // so the h3 runtime carries no `express` dependency — bridged via
-      // fromNodeMiddleware like any other connect middleware.
+      // serve-static bridged like any other connect middleware (node only).
       const serveStatic = peerRequire('serve-static')
       this.useConnect(app, serveStatic(dir) as ConnectMiddleware, { path: prefix })
     },
 
     setNotFound(app, mw: ConnectMiddleware) {
-      // Stash it — the shared router throws a 404 on no match, which `onError`
-      // (createApp) dispatches to this handler (or to the Vite fall-through when
-      // a `next` is present). A post-router `app.use` could never run, since the
-      // terminal router throws before the stack advances.
-      ;(app as { [NOTFOUND_MW]?: ConnectMiddleware })[NOTFOUND_MW] = mw
+      ;(app as unknown as Record<symbol, ConnectMiddleware>)[NOTFOUND_MW] = mw
+      // Here as well as in nodeHandler: an app only ever called through
+      // `app.fetch` never reaches nodeHandler, and would answer h3's own 404.
+      assembleCatchAll(app)
     },
 
     setErrorHandler(app, mw: ConnectMiddleware) {
-      ;(app as { [ERROR_MW]?: ConnectMiddleware })[ERROR_MW] = mw
+      ;(app as unknown as Record<symbol, ConnectMiddleware>)[ERROR_MW] = mw
     },
 
     capabilities: {
@@ -548,32 +611,34 @@ function h3v1Runtime(h3: H3v1Module): HttpRuntime<H3AppLike> {
       uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
+      // srvx's node adapter writes HTTP/2 compat responses (it branches on
+      // httpVersion "2.0"), so the node path serves `server.http2` too.
       http2: true,
     },
   }
 }
 
 /**
- * The h3 runtime's engine-native types — what the runtime-typed escape hatches
- * resolve to once the `kick/runtime` typegen emits a `KickRuntimeRegister`
- * augmentation pointing here (spec §4.3b). They follow the installed h3, as
- * the runtime does: on v2 the same as {@link H3WebRuntimeTypes}; on v1
- * `getRuntimeApp()` is the h3 `App` and `ctx.req` / `ctx.res` the per-request
- * `H3Event`. Mirrors `ExpressRuntimeTypes`.
+ * The h3 runtime's engine-native types, for the `kick/runtime` typegen
+ * augmentation. Mirrors `ExpressRuntimeTypes`.
  */
-// Type-only; resolved conditionally so this file typechecks against either major.
-type H3Module = typeof import('h3')
-type H3AppType = H3Module extends { App: infer A } ? A : unknown
-type H3EventType = H3Module extends { H3Event: new (...args: never[]) => infer E } ? E : unknown
+export interface H3RuntimeTypes {
+  request: Request
+  response: Response
+  app: typeof import('h3') extends { H3: new (...args: never[]) => infer A } ? A : unknown
+}
 
-export type H3RuntimeTypes = H3Module extends { H3: new (...args: never[]) => unknown }
-  ? H3WebRuntimeTypes
-  : { request: H3EventType; response: H3EventType; app: H3AppType }
-
-/** Join a mount prefix and a route path; a root path maps to the prefix itself. */
+/** Join a mount prefix and a route path into one URL, collapsing slashes. */
 function joinPath(mountPath: string, path: string): string {
   const a = mountPath.endsWith('/') ? mountPath.slice(0, -1) : mountPath
   if (path === '/' || path === '') return a === '' ? '/' : a
   const b = path.startsWith('/') ? path : `/${path}`
   return `${a}${b}`
 }
+
+/** @deprecated Use {@link h3Runtime} — the same runtime. Removed in the next major. */
+export const h3WebRuntime = h3Runtime
+/** @deprecated Use {@link H3RuntimeOptions}. */
+export type H3WebRuntimeOptions = H3RuntimeOptions
+/** @deprecated Use {@link H3RuntimeTypes}. */
+export type H3WebRuntimeTypes = H3RuntimeTypes

@@ -13,7 +13,6 @@ import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { z } from 'zod'
-import * as h3v2 from 'h3-v2'
 import {
   Application,
   Container,
@@ -28,7 +27,6 @@ import {
 } from '../src/index'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
-import { h3WebRuntime } from '../src/http/runtimes/h3-web'
 import { requestStore } from '../src/http/request-store'
 import { buildPipeline, splitBeforeValidation } from '../src/core/contributor-pipeline'
 import type { RouteEntry } from '../src/http/runtime'
@@ -143,7 +141,7 @@ describe.each(runtimes)('beforeValidation contributors on %s', (_, runtime) => {
   })
 })
 
-describe('beforeValidation contributors on the web entry (h3-web)', () => {
+describe('beforeValidation contributors on the h3 fetch path', () => {
   function app(early: boolean) {
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
     const entry: RouteEntry = {
@@ -159,7 +157,7 @@ describe('beforeValidation contributors on the web entry (h3-web)', () => {
       handler: async (ctx: RequestContext) => ctx.json({ ok: true }),
       meta: { validation: { body } },
     }
-    const runtime = h3WebRuntime({ h3: h3v2 })
+    const runtime = h3Runtime()
     const instance = runtime.createApp()
     runtime.mountRoutes(instance, [{ mountPath: '/api', routes: [entry] }])
     runtime.nodeHandler(instance)

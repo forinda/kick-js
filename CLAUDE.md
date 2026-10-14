@@ -10,7 +10,7 @@
 
 KickJS is a decorator-driven Node.js framework for TypeScript. The HTTP engine is pluggable — it runs on **Express (default), Fastify, or h3**, selected via `bootstrap({ runtime })`; controllers/modules/DI/context decorators are engine-neutral. Monorepo managed with pnpm workspaces and Turbo.
 
-> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). Fastify/h3 runtimes, the h3 v2 web-standard entries (`./h3-web`, `./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
+> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). Fastify/h3 runtimes (h3 v2 only), the web fetch entry (`./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
 
 **18 workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, kick/db. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); there is no in-repo `examples/`.
 
@@ -33,7 +33,7 @@ pnpm scaffold:matrix    # kick new → install → typecheck → build → boot,
 ```
 packages/               # Workspace packages (@forinda/kickjs* on npm unless private)
   kickjs/               # THE framework — DI core, decorators, http layer,
-                        #   RequestContext, runtimes (express/fastify/h3/h3-web),
+                        #   RequestContext, runtimes (express/fastify/h3 — h3 v2),
                         #   web fetch entry (src/web.ts → @forinda/kickjs/web)
   cli/                  # kick new (rest|minimal|fullstack), generators, typegen,
                         #   kick add / doctor / agents

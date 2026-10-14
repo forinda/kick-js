@@ -64,7 +64,7 @@ export {
 export { rateLimitGuard, type RateLimitGuardOptions } from './http/middleware/rate-limit-guard'
 
 // Minimal structural surface of h3 v2 used here (kept local so this entry
-// never imports the node-coupled h3-web runtime module).
+// never imports the node-coupled h3 runtime module).
 interface H3AppLike {
   on(method: string, path: string, handler: (event: H3EventLike) => unknown): unknown
   all(path: string, handler: (event: H3EventLike) => unknown): unknown

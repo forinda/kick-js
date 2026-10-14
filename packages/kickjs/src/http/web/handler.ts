@@ -185,13 +185,18 @@ export function compileWebRoute(
       }
     }
 
-    const store = createRequestStore(req.headers['x-request-id'])
+    // Reuse the id `requestId()` middleware already gave the request, so the
+    // response header, the route's ctx and observers agree on one id.
+    const store = createRequestStore(req.requestId ?? req.headers['x-request-id'])
     req.requestId = store.requestId
 
     const driver = new WebResponseDriver(request.signal)
     driver.setHeader('x-request-id', store.requestId)
 
     publishMatchedRoute(req, entry)
+    // Middleware that reports after the response (observers, request logger)
+    // reads the route off the request it was handed — the carried one.
+    if (carry) publishMatchedRoute(carry, entry)
 
     const pipeline = requestStore.run(store, async () => {
       if (bodyError) throw bodyError

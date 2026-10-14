@@ -7,8 +7,6 @@ import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fastifyRuntime } from '@forinda/kickjs/fastify'
 import { h3Runtime } from '@forinda/kickjs/h3'
-import { h3WebRuntime } from '@forinda/kickjs/h3-web'
-import * as h3v2 from 'h3-v2'
 import {
   Application,
   Container,
@@ -160,8 +158,6 @@ const RUNTIMES = [
   { name: 'express', make: () => expressRuntime() },
   { name: 'fastify', make: () => fastifyRuntime() },
   { name: 'h3', make: () => h3Runtime() },
-  // h3 v2, through the npm alias — the installed `h3` peer is v1.
-  { name: 'h3-web', make: () => h3WebRuntime({ h3: h3v2 }) },
 ] as const
 let current: (typeof RUNTIMES)[number] = RUNTIMES[0]
 

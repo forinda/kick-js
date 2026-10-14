@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, expectTypeOf, beforeEach } from 'vitest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 
 import { createWebApp } from '@forinda/kickjs/web'
 import { Container } from '@forinda/kickjs/container'

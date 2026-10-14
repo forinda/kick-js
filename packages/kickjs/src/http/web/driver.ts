@@ -2,7 +2,7 @@
 // primitives (WHATWG Request/Response) and the KickJS RequestContext surface.
 //
 // Deliberately imports NOTHING from node: this module is the edge-safe core
-// shared by the h3 v2 runtime (`runtimes/h3-web.ts`, node bootstrap) and the
+// shared by the h3 v2 runtime (`runtimes/h3.ts`, node bootstrap) and the
 // `@forinda/kickjs/web` fetch entry (edge/Bun/Deno).
 
 import { stringifyJson, type RuntimeResponse } from '../runtime'

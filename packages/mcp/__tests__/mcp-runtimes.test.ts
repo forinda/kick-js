@@ -18,8 +18,7 @@ import {
   type RequestContext,
 } from '@forinda/kickjs'
 import { fastifyRuntime } from '@forinda/kickjs/fastify'
-import { h3WebRuntime } from '@forinda/kickjs/h3-web'
-import * as h3v2 from 'h3-v2'
+import { h3Runtime } from '@forinda/kickjs/h3'
 import { McpAdapter, McpTool } from '@forinda/kickjs-mcp'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 
@@ -71,7 +70,7 @@ async function callRename(port: number) {
 const runtimes = [
   ['express', undefined],
   ['fastify', () => fastifyRuntime()],
-  ['h3 v2 (h3-web)', () => h3WebRuntime({ h3: h3v2 as never })],
+  ['h3', () => h3Runtime()],
 ] as const
 
 describe('McpAdapter — runtimes', () => {

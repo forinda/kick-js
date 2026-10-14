@@ -8,7 +8,7 @@ import 'reflect-metadata'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as h3v2 from 'h3-v2'
+import * as h3v2 from 'h3'
 import {
   Container,
   Controller,

@@ -5,7 +5,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import * as h3v2 from 'h3-v2'
 import {
   Application,
   Container,
@@ -17,7 +16,6 @@ import {
 } from '../src/index'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
-import { h3WebRuntime } from '../src/http/runtimes/h3-web'
 
 @Controller()
 class WebResponseController {
@@ -53,7 +51,6 @@ const runtimes = [
   ['express', undefined],
   ['fastify', () => fastifyRuntime()],
   ['h3', () => h3Runtime()],
-  ['h3 v2', () => h3WebRuntime({ h3: h3v2 as never })],
 ] as const
 
 describe.each(runtimes)('ctx.sendResponse on %s', (_name, runtime) => {
