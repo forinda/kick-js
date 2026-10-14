@@ -52,6 +52,10 @@
       "import": "./dist/core/reactivity.mjs",
       "types": "./dist/core/reactivity.d.mts"
     },
+    "./middleware/breach-padding": {
+      "import": "./dist/http/middleware/breach-padding.mjs",
+      "types": "./dist/http/middleware/breach-padding.d.mts"
+    },
     "./middleware/allowed-hosts": {
       "import": "./dist/http/middleware/allowed-hosts.mjs",
       "types": "./dist/http/middleware/allowed-hosts.d.mts"
