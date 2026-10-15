@@ -24,3 +24,5 @@ container.resolve(Greeter).hi('Ada') // 'Hello, Ada'
 ```
 
 It uses legacy decorators: set `experimentalDecorators` and `emitDecoratorMetadata` in `tsconfig.json`.
+
+Full reference: [kickjs.app/api/di](https://kickjs.app/api/di).

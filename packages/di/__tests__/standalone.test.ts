@@ -6,6 +6,7 @@ import { Container } from '../src/container'
 import { Inject, Service, Value } from '../src/decorators'
 import { createToken } from '../src/token'
 import { DiError } from '../src/errors'
+import { Scope } from '../src/interfaces'
 
 it('throws a DiError with a stable code when nothing provides the token', () => {
   const err = (() => {
@@ -43,3 +44,41 @@ it('runs the README example', () => {
   container.registerInstance(GREETING, 'Hello')
   expect(container.resolve(Greeter).hi('Ada')).toBe('Hello, Ada')
 })
+
+it('runs the request-scope example from the docs', async () => {
+  const { AsyncLocalStorage } = await import('node:async_hooks')
+  type Store = { instances: Map<unknown, unknown>; values: Map<unknown, unknown> }
+  const scope = new AsyncLocalStorage<Store>()
+  const previous = Container._requestStoreProvider
+  Container._requestStoreProvider = () => scope.getStore() ?? null
+  try {
+    @Service({ scope: Scope.REQUEST })
+    class JobContext {}
+    const container = Container.create()
+    const runJob = <T>(work: () => T) =>
+      scope.run({ instances: new Map(), values: new Map() }, work)
+
+    const [a, b] = runJob(() => [container.resolve(JobContext), container.resolve(JobContext)])
+    const c = runJob(() => container.resolve(JobContext))
+    expect(a).toBe(b)
+    expect(c).not.toBe(a)
+    expect(() => container.resolve(JobContext)).toThrow(
+      expect.objectContaining({ code: 'KICK003' }),
+    )
+  } finally {
+    Container._requestStoreProvider = previous
+  }
+})
+
+it('types resolve() from an augmented KickJsRegistry', () => {
+  const container = Container.create()
+  container.registerInstance('Answer', 42)
+  const answer: number = container.resolve('Answer')
+  expect(answer).toBe(42)
+})
+
+declare module '../src/container' {
+  interface KickJsRegistry {
+    Answer: number
+  }
+}
