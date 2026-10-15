@@ -133,6 +133,10 @@ A key is a `/`-separated path, like `avatars/42.png`. Every driver refuses a key
 
 Build keys from ids you control, such as `avatars/${user.id}.png` or a `randomUUID()`, not from the uploaded file's name. Two users uploading `photo.jpg` would otherwise overwrite each other.
 
+## Where disk files go
+
+A relative `root` resolves from `process.cwd()` when `diskStorage()` is called. That is the same base KickJS uses for `.env` files, assets and the SPA adapter, so `./uploads` sits next to them in the project root. Start the app from that directory: `kick dev` and `kick start` do, and in production set the working directory (Docker `WORKDIR`, systemd `WorkingDirectory`, pm2 `cwd`). To put files elsewhere, pass an absolute path, such as `/var/lib/myapp/uploads` on a mounted volume.
+
 ## URLs
 
 - **Buckets:** `url(key, { expiresIn })` returns a presigned GET URL that works for `expiresIn` seconds. The default is 3600 and the maximum is 604800 (7 days), which is S3's limit. The bucket can stay private.

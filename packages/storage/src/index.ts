@@ -169,7 +169,11 @@ export function memoryStorage(options: MemoryStorageOptions = {}): Storage {
 }
 
 export interface DiskStorageOptions {
-  /** The directory files live under; created on first write. */
+  /**
+   * The directory files live under; created on first write. A relative path
+   * resolves from `process.cwd()` when the storage is created, the same base
+   * as env files and assets.
+   */
   root: string
   /** Where the app serves `root` from, e.g. `/uploads` or a CDN origin, for {@link Storage.url}. */
   baseUrl?: string
