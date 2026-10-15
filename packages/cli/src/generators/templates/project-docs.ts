@@ -1,5 +1,13 @@
 import { execBin, runScript, type PackageManager } from '../../config'
 import type { ModuleStyle } from './types'
+
+/** How to start the dev server: a non-pnpm fullstack root has `dev:server` and `dev:web`, no `dev`. */
+function devCommand(pm: string, template: ProjectTemplate): string {
+  const p = pm as PackageManager
+  return template === 'fullstack' && p !== 'pnpm'
+    ? `${runScript(p, 'dev:server')} + ${runScript(p, 'dev:web')}`
+    : runScript(p, 'dev')
+}
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
 /**
@@ -12,7 +20,7 @@ type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
  * CLAUDE.md now redirects there + adds Claude-specific affordances
  * only.
  */
-export function generateClaude(name: string, _template: ProjectTemplate, pm: string): string {
+export function generateClaude(name: string, template: ProjectTemplate, pm: string): string {
   return `# CLAUDE.md — ${name}
 
 **Read \`./.agents/AGENTS.md\` first.** It is the canonical, multi-agent
@@ -62,7 +70,7 @@ prose.
 
 \`\`\`bash
 ${pm} install
-${runScript(pm as PackageManager, 'dev')}     # Dev server with HMR + typegen
+${devCommand(pm, template)}     # Dev server with HMR + typegen
 ${runScript(pm as PackageManager, 'build')} && ${runScript(pm as PackageManager, 'start')}  # Production
 ${runScript(pm as PackageManager, 'test')}    # Vitest
 ${execBin(pm as PackageManager, 'kick')} typecheck   # tsc/tsgo, whichever the project has
@@ -106,7 +114,7 @@ add tool-specific affordances on top.
 ## Before You Start
 
 1. Run \`${pm} install\` to install dependencies
-2. Run \`${runScript(pm as PackageManager, 'dev')}\` to verify the app starts
+2. Run \`${devCommand(pm, template)}\` to verify the app starts
 
 \`kick\` is this project's dev dependency, not a global command: every \`kick …\`
 below runs as \`${execBin(pm as PackageManager, 'kick')} …\` in a shell.${
@@ -835,7 +843,7 @@ async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
       description:
         "Use when ConfigService.get('SOME_KEY') returns undefined or @Value silently falls back to process.env.",
       body: `**Fastest path**: \`kick explain "ConfigService.get('MY_KEY') returned undefined"\` —
-pipe a failing run straight in if you prefer (\`${runScript(pm as PackageManager, 'test')} 2>&1 | kick explain\`). It
+pipe a failing run straight in if you prefer (\`${runScript(pm as PackageManager, 'test')} 2>&1 | ${execBin(pm as PackageManager, 'kick')} explain\`). It
 distinguishes the entry-file cause from the test-file one, which is the step most
 people lose time on. The manual checks below are the same reasoning.
 
@@ -1533,7 +1541,7 @@ fine and fails at runtime.
 **Local, and usually faster**
 
 - \`kick explain "<error message>"\` — matches known failures and gives the fix.
-  Pipe a failing run in: \`${runScript(pm as PackageManager, 'test')} 2>&1 | kick explain\`.
+  Pipe a failing run in: \`${runScript(pm as PackageManager, 'test')} 2>&1 | ${execBin(pm as PackageManager, 'kick')} explain\`.
 - \`kick doctor\` — checks this project's wiring.
 - \`kick inspect\` — the live route / adapter table.
 - \`.kickjs/types/\` — generated types are ground truth for what exists.

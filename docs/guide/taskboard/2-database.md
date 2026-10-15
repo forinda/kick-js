@@ -40,7 +40,7 @@ export default defineConfig({
 })
 ```
 
-`schemaPath` is where `kick db generate` reads your tables. `adapter` is the connection `kick db migrate` uses: the app's own, from `src/db/client.ts` below. It's imported inside the function, so only `kick db` commands open the database. `kick dev` and the rest load this config without touching it, and the database is opened in one place.
+`schemaPath` is where `kick db generate` reads your tables. `adapter` is the connection `kick db migrate` uses: the app's own, from `src/db/client.ts` below. The import is inside the function, so the client loads only when a `kick db` command calls `adapter`. Other `kick` commands read this config without loading it. The app imports the same file when it starts, so the database is opened in one file, with one handle shared by the app's queries and its migrations.
 
 One file opens the database. It builds the typed client the app queries through, and the migration adapter both the app and `kick db` run migrations with. It imports the schema you write next:
 

@@ -132,6 +132,12 @@ describe('Yarn 2+ and older Bun', () => {
     )
   })
 
+  it('installs everything on Yarn 2 and 3, which lack `workspaces focus` by default', () => {
+    const file = generateDockerfile('api', 'yarn', 'app', 'yarn@3.8.7')
+    expect(file).toContain('yarn install --immutable')
+    expect(file).not.toContain('workspaces focus')
+  })
+
   it("copies the lockfile the project's Bun writes", () => {
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.1.38')).toContain('COPY bun.lockb ./')
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.2.5')).toContain('COPY bun.lock ./')

@@ -94,7 +94,11 @@ export function generateDockerfile(
   const [major = 0, minor = 0] = specVersion(spec) ?? []
   const p =
     pm === 'yarn' && major >= 2
-      ? YARN_BERRY
+      ? major >= 4
+        ? YARN_BERRY
+        : // `workspaces focus` needs the workspace-tools plugin, built in from
+          // Yarn 4 only: install everything rather than fail the image.
+          { ...YARN_BERRY, installProd: YARN_BERRY.install }
       : pm === 'bun' && spec && (major < 1 || (major === 1 && minor < 2))
         ? { ...PM.bun, lockfile: 'bun.lockb' }
         : PM[pm]
