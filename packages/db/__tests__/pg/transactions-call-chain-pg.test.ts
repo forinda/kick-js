@@ -67,6 +67,19 @@ describe('call-chain transactions (postgres)', () => {
     expect(await notes()).toEqual(['audit'])
   })
 
+  it("durable with nested: 'separate' runs inside another transaction and commits on its own", async () => {
+    await expect(
+      db.transaction(async () => {
+        await db.insertInto('log').values({ id: 1, note: 'outer' }).execute()
+        await db.transaction({ durable: true, nested: 'separate' }, async () => {
+          await db.insertInto('log').values({ id: 2, note: 'payment' }).execute()
+        })
+        throw new Error('outer fails')
+      }),
+    ).rejects.toThrow('outer fails')
+    expect(await notes()).toEqual(['payment'])
+  })
+
   it('concurrent call chains each get their own transaction', async () => {
     let release!: () => void
     const both = new Promise<void>((r) => (release = r))

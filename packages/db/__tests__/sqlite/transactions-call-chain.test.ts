@@ -228,3 +228,41 @@ describe('work that outlives its transaction', () => {
     expect(await emails()).toEqual([])
   })
 })
+
+describe('transaction({ durable: true })', () => {
+  it('commits as the outermost transaction', async () => {
+    await db.transaction({ durable: true }, async () => {
+      await repo.add('paid@x.io')
+    })
+    expect(await emails()).toEqual(['paid@x.io'])
+  })
+
+  it('refuses to run inside an open transaction, where it would not commit on its own', async () => {
+    const recordPayment = () =>
+      db.transaction({ durable: true }, async () => {
+        await repo.add('paid@x.io')
+      })
+    await expect(
+      db.transaction(async () => {
+        await repo.add('order@x.io')
+        await recordPayment()
+      }),
+    ).rejects.toThrow('durable: true')
+    // Nothing committed: the outer transaction rolled back on the error.
+    expect(await emails()).toEqual([])
+    // A transaction client is inside one too.
+    await expect(
+      db.transaction((tx) => tx.transaction({ durable: true }, async () => {})),
+    ).rejects.toThrow('durable: true')
+  })
+
+  it('may open savepoints and nested transactions of its own', async () => {
+    await db.transaction({ durable: true }, async () => {
+      await repo.add('a@x.io')
+      await db.transaction({ nested: 'savepoint' }, async () => {
+        await repo.add('b@x.io')
+      })
+    })
+    expect(await emails()).toEqual(['a@x.io', 'b@x.io'])
+  })
+})

@@ -75,6 +75,8 @@ export interface InternalContext {
   /** Read replicas, used in turn for reads outside a transaction. Empty without any. */
   replicas: Kysely<any>[]
   nextReplica: number
+  /** `createDbClient({ route })`: picks where each read outside a transaction goes. */
+  route?: import('./types').ReadRouter
   /** The transaction open on the current call chain, if any. */
   transactions: AsyncLocalStorage<TxFrame>
   /**
@@ -144,13 +146,26 @@ export function wrap<DB>(
    * Where this client's reads go: a replica, in turn, for a root client
    * outside a transaction; otherwise wherever its writes go.
    */
-  const reader = (): Kysely<DB> => {
+  const reader = (table?: string): Kysely<DB> => {
     if (!root || readPrimary || ctx.replicas.length === 0 || ctx.transactions.getStore()) {
       return active()
     }
-    const replica = ctx.replicas[ctx.nextReplica++ % ctx.replicas.length]!
+    const choice = ctx.route?.({ table, replicas: ctx.replicas.length })
+    if (choice === 'primary') return active()
+    if (
+      choice !== undefined &&
+      !(Number.isInteger(choice) && choice >= 0 && choice < ctx.replicas.length)
+    ) {
+      throw new Error(
+        `kickjs-db: route() returned ${String(choice)}; expected 'primary', a replica index (0–${ctx.replicas.length - 1}) or undefined`,
+      )
+    }
+    const replica = ctx.replicas[choice ?? ctx.nextReplica++ % ctx.replicas.length]!
     return withPlugins<DB>(replica, plugins)
   }
+  /** `'users'` from `selectFrom('users as u')`; undefined for anything else. */
+  const tableOf = (from: unknown): string | undefined =>
+    typeof from === 'string' ? from.split(/\s+as\s+/i)[0]!.trim() : undefined
   /** The open transaction on this call chain, ignoring one that has finished. */
   const openFrame = (): TxFrame | undefined => {
     const frame = ctx.transactions.getStore()
@@ -266,6 +281,21 @@ export function wrap<DB>(
           ctx.query.compile,
         )
       }
+      // With a router, each table's queries ask it where to go.
+      if (ctx.route && root && !readPrimary && ctx.replicas.length > 0) {
+        return new Proxy({} as KickDbClient<DB>['query'], {
+          get: (_target, table) => {
+            if (typeof table !== 'string') return undefined
+            const ns = buildQueryNamespace<DB>(
+              reader(table),
+              ctx.query.relations,
+              ctx.query.tables,
+              ctx.query.compile,
+            )
+            return (ns as Record<string, unknown>)[table]
+          },
+        })
+      }
       const read = reader()
       return read === qb
         ? ownQuery
@@ -280,7 +310,7 @@ export function wrap<DB>(
     },
 
     selectFrom: ((...args: unknown[]) =>
-      (reader().selectFrom as (...a: unknown[]) => unknown)(
+      (reader(tableOf(args[0])).selectFrom as (...a: unknown[]) => unknown)(
         ...args,
       )) as KickDbClient<DB>['selectFrom'],
     // A CTE may write (`with x as (delete … returning …)`), so it starts on the primary.
@@ -321,6 +351,15 @@ export function wrap<DB>(
       const fn = (typeof a === 'function' ? a : b) as (tx: KickDbClient<DB>) => Promise<unknown>
       const frame = currentFrame()
       const nested = opts.nested ?? 'reuse'
+      // Joined or behind a savepoint, it would only commit when the caller's
+      // transaction does — not what `durable` promises.
+      if (opts.durable && frame && nested !== 'separate') {
+        return Promise.reject(
+          new Error(
+            "kickjs-db: transaction({ durable: true }) inside an open transaction wouldn't commit on its own — call it outside one, or use nested: 'separate'",
+          ),
+        )
+      }
       if (opts.readOnly && ctx.dialect === 'sqlite') {
         return Promise.reject(
           new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly'),

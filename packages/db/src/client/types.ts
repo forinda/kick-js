@@ -58,6 +58,15 @@ export interface TransactionOptions extends TransactionEvent {
    */
   nested?: 'reuse' | 'savepoint' | 'separate'
   /**
+   * Must be the outermost transaction, so that when the callback returns its
+   * work is committed — not just folded into a caller's transaction that may
+   * still roll back. Throws if a transaction is already open on this call
+   * chain (unless `nested: 'separate'`, which commits on its own). For work
+   * that has to be on disk before anything else happens: a payment recorded
+   * before the confirmation email goes out.
+   */
+  durable?: boolean
+  /**
    * Start the transaction read-only (Postgres, MySQL): a write inside it fails.
    * For reports that must see one consistent view and must not change it.
    * SQLite has no read-only transactions, so it's refused there.
@@ -96,6 +105,16 @@ export interface SlowQueryEvent extends QueryEvent {
   /** The configured threshold the query exceeded. */
   thresholdMs: number
 }
+
+/** A read about to run, for {@link CreateDbClientOptions.route}. */
+export interface ReadRoute {
+  /** The table it reads — `undefined` for a join list, a subquery, raw SQL. */
+  table: string | undefined
+  /** How many replicas there are: valid indexes are `0` to `replicas - 1`. */
+  replicas: number
+}
+
+export type ReadRouter = (read: ReadRoute) => 'primary' | number | undefined
 
 export interface KickDbClientEvents {
   beforeQuery: BeforeQueryEvent
@@ -313,6 +332,17 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * own writes through `db.primary`.
    */
   replica?: KyselyDialect | readonly KyselyDialect[]
+  /**
+   * Where each read outside a transaction goes, when there are replicas:
+   * return `'primary'`, a replica's index, or `undefined` for the default
+   * (replicas in turn). Called per read with the table it reads (`undefined`
+   * for a query not on one table). For read-your-writes after a request
+   * wrote, tables that replicate late, a replica in the caller's region, or
+   * skipping one that lags:
+   *
+   *   route: ({ table }) => (wroteThisRequest() || table === 'balances' ? 'primary' : undefined)
+   */
+  route?: ReadRouter
   /**
    * Enable lifecycle event emission for `query` / `queryError` /
    * `slowQuery` / `transactionStart` / `transactionCommit` /
