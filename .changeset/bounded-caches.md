@@ -17,7 +17,7 @@ Bound long-lived state that client input could grow without limit:
   - Computed-field (`$extends({ result })`) bookkeeping no longer keeps an entry for every failed query.
   - The `'schema'` tenancy strategy no longer caches a plugin per schema name.
   - `maxOpenTenants` defaults to 100 instead of unlimited.
-- **kickjs-ws:** `join()` is ignored for a socket that already closed (with ws and Socket.IO), and a socket can be in at most 1,000 rooms.
-- **kickjs-mcp:** a session's idle timer starts as soon as it exists, so a session whose first response fails still expires. Initializations in progress count toward `maxSessions`.
+- **kickjs-ws:** `join()` is ignored for a socket that already closed (with ws and Socket.IO), and a socket can be in at most 1,000 rooms, on both. Socket.IO's own id room doesn't count.
+- **kickjs-mcp:** each initialization holds one slot toward `maxSessions` (while in progress, then as the session) and the session counts as busy until its first response is sent, so the idle timer can't close it mid-response. The timer starts once that response is sent or fails, so a failed one no longer holds its slot forever.
 - **kickjs-devtools:** route latency keys use `OTHER` for unknown methods.
-- **kickjs-ai:** `AnthropicProvider` remembers at most 100 warned-about model names.
+- **kickjs-ai:** `AnthropicProvider` remembers at most 100 warned-about model names, then prints one overflow notice and stays quiet.

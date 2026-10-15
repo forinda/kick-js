@@ -408,3 +408,20 @@ describe('AnthropicProvider.embed()', () => {
     await expect(provider.embed('x')).rejects.toThrow(/does not provide an embeddings API/)
   })
 })
+
+describe('AnthropicProvider warnings', () => {
+  it('remembers 100 keys, then prints one overflow notice and stays quiet', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const provider = new AnthropicProvider({ apiKey: 'k' }) as unknown as {
+        warnOnce(key: string, text: string): void
+      }
+      for (let i = 0; i < 150; i++) provider.warnOnce(`sampling:model-${i}`, `warn ${i}`)
+      for (let i = 0; i < 150; i++) provider.warnOnce(`sampling:model-${i}`, `warn ${i}`)
+      expect(warn).toHaveBeenCalledTimes(101)
+      expect(warn.mock.calls.at(-1)![0]).toContain('suppressed')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})

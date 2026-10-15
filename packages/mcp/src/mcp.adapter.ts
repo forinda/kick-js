@@ -1436,15 +1436,19 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             await sendJsonRpcError(ctx, 503, 'Too many MCP sessions; try again later')
             return
           }
+          // One slot, held as `initializing` until the SDK registers the
+          // session, then as the session itself — never both.
           initializing++
+          let registered = false
           const server = buildMcpServer()
           const sessionTransport = new WebStandardStreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (id) => {
-              sessions.set(id, { server, transport: sessionTransport, active: 0 })
-              // Armed now, not after the response: if sending it fails (the
-              // client went away), the session still expires.
-              armIdleTimer(id)
+              registered = true
+              initializing--
+              // Active until this request's response is sent: the idle timer
+              // mustn't close it mid-response to a slow client.
+              sessions.set(id, { server, transport: sessionTransport, active: 1 })
             },
           })
           // Set before connect(): the SDK wraps an existing onclose, but a
@@ -1462,9 +1466,16 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
               await sessionTransport.handleRequest(webRequest, { parsedBody, authInfo }),
             )
           } finally {
-            initializing--
+            if (!registered) initializing--
+            // Response sent, or failed (the client went away): either way the
+            // session is idle now, so its timer starts.
+            const id = sessionTransport.sessionId
+            const session = id ? sessions.get(id) : undefined
+            if (session) {
+              session.active--
+              armIdleTimer(id!)
+            }
           }
-          if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
           if (!ctx.res.headersSent) {

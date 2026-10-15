@@ -30,6 +30,7 @@ import {
   type WsUserBroadcaster,
 } from './interfaces'
 import { parseCookies } from './ws-context'
+import { MAX_ROOMS_PER_SOCKET } from './room-manager'
 
 const log = createLogger('SocketIoAdapter')
 
@@ -113,6 +114,13 @@ export class SocketIoContext {
     // Socket.IO removes a socket from its rooms once, on disconnect; a join
     // after that (a handler that awaited) would stay for good.
     if (!this.socket.connected) return
+    // Same cap as RoomManager. Socket.IO puts every socket in a room named
+    // after its own id, which doesn't count.
+    if (!this.socket.rooms.has(room) && this.socket.rooms.size - 1 >= MAX_ROOMS_PER_SOCKET) {
+      throw new Error(
+        `Socket ${this.socket.id} is already in ${MAX_ROOMS_PER_SOCKET} rooms; leave one before joining '${room}'`,
+      )
+    }
     return this.socket.join(room)
   }
 
