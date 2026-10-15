@@ -129,10 +129,12 @@ export function describeSchemaVars(schema: unknown): ConfigVar[] {
   const shape = detectSchema(schema).toJsonSchema() as JsonShape
   const required = new Set(shape.required ?? [])
   // The keys of an env schema are the variable names themselves.
-  return Object.entries(shape.properties ?? {}).map(([key, child]) => ({
-    ...toConfigVar(leavesOf(child, '', [key], required.has(key))[0]),
-    name: key,
-  }))
+  return Object.entries(shape.properties ?? {}).map(([key, child]) => {
+    // A fresh object from toConfigVar — safe to set the name on directly.
+    const described = toConfigVar(leavesOf(child, '', [key], required.has(key))[0])
+    described.name = key
+    return described
+  })
 }
 
 /** Values validated at startup (or on first `get()`), by prefix. */
