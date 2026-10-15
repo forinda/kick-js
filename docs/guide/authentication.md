@@ -96,3 +96,4 @@ Follow the [recipe](byo-recipes.md#auth) for the complete, copy-paste-ready eigh
 - [BYO Auth recipe](./byo-recipes.md#auth) — the full walkthrough: strategies, the contributor, the adapter
 - [Context Decorators](./context-decorators.md) — the primitive the recipe is built on
 - [Authorization](./authorization.md) — role checks and policies on top of the user this page loads
+- [Passwords and Signed Tokens](./passwords-and-tokens.md) — `hashPassword` / `verifyPassword` for logins, `createSigner` for reset and confirmation links
