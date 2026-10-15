@@ -83,7 +83,7 @@ function leavesOf(shape: JsonShape, prefix: string, path: string[] = []): Leaf[]
 }
 
 /** Values validated at startup (or on first `get()`), by prefix. */
-const cached = new Map<string, unknown>()
+const cached = new WeakMap<Settings<unknown>, unknown>()
 
 /**
  * Define a typed configuration section read from env variables with a prefix.
@@ -130,6 +130,19 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
     )
   }
   const leaves = leavesOf(shape, prefix)
+  // `fooBar` and `foo_bar` would both read `DB_FOO_BAR` — one variable for two
+  // settings that could never differ. Refuse it here, naming both paths.
+  const seenEnv = new Map<string, string>()
+  for (const leaf of leaves) {
+    const path = leaf.path.join('.')
+    const other = seenEnv.get(leaf.env)
+    if (other !== undefined) {
+      throw new Error(
+        `defineSettings('${prefix}'): '${other}' and '${path}' both read ${leaf.env} — rename one`,
+      )
+    }
+    seenEnv.set(leaf.env, path)
+  }
   const envNames = leaves.map((leaf) => leaf.env)
   const byPath = new Map(leaves.map((leaf) => [leaf.path.join('.'), leaf.env]))
 
@@ -175,8 +188,10 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
       // test may have replaced. Before the app binds it, the validated env.
       const container = Container.getInstance()
       if (container.has(settings)) return container.resolve(settings) as T
-      if (!cached.has(prefix)) cached.set(prefix, load())
-      return cached.get(prefix) as T
+      // Keyed by the section, not its prefix: two sections sharing a prefix
+      // each parse their own schema.
+      if (!cached.has(settings)) cached.set(settings, load())
+      return cached.get(settings) as T
     },
     scoped: (name: string): Settings<T> => {
       const scopePrefix = `${name}_${prefix}`
@@ -200,13 +215,19 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
 export function loadSettings(
   sections: Iterable<Settings<unknown>>,
   env: NodeJS.ProcessEnv = process.env,
+  /**
+   * Prefixes already taken, across calls — an app binds in two phases (app
+   * sections, then modules') and a clash between them must still be refused.
+   */
+  byPrefix: Map<string, Settings<unknown>> = new Map(),
 ): Map<Settings<unknown>, unknown> {
   const values = new Map<Settings<unknown>, unknown>()
-  const byPrefix = new Map<string, Settings<unknown>>()
   const failures: string[] = []
   for (const section of sections) {
     if (values.has(section)) continue
     const other = byPrefix.get(section.prefix)
+    // Already bound in an earlier phase: same section, nothing to do.
+    if (other === section) continue
     if (other && other !== section) {
       failures.push(`Two different settings sections use the prefix '${section.prefix}'.`)
       continue
@@ -216,7 +237,7 @@ export function loadSettings(
       const value = section.load(env)
       values.set(section, value)
       // `get()` returns what the app started with.
-      cached.set(section.prefix, value)
+      cached.set(section, value)
     } catch (err) {
       failures.push((err as Error).message)
     }

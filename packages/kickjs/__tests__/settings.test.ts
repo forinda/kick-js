@@ -273,3 +273,33 @@ describe('scoped sections', () => {
     expect(app.getContainer().resolve(Analytics).url).toBe('postgres://analytics/app')
   })
 })
+
+describe('review fixes', () => {
+  it('refuses two keys that would read the same variable', () => {
+    expect(() =>
+      defineSettings('KT_CLASH', z.object({ fooBar: z.string(), foo_bar: z.string() })),
+    ).toThrow(/'fooBar' and 'foo_bar' both read KT_CLASH_FOO_BAR/)
+  })
+
+  it('caches get() per section, not per prefix', () => {
+    const A = defineSettings('KT_SAME', z.object({ a: z.string().default('a') }))
+    const B = defineSettings('KT_SAME', z.object({ b: z.string().default('b') }))
+    expect(A.get()).toEqual({ a: 'a' })
+    expect(B.get()).toEqual({ b: 'b' })
+  })
+
+  it('refuses a prefix clash between app and module sections', async () => {
+    const AppSide = defineSettings('KT_DUP', z.object({ x: z.string().default('1') }))
+    const ModuleSide = defineSettings('KT_DUP', z.object({ y: z.string().default('2') }))
+    const mod = { settings: () => [ModuleSide], routes: () => null }
+    await expect(
+      new Application({ modules: [mod as never], settings: [AppSide] }).setup(),
+    ).rejects.toThrow(/Two different settings sections use the prefix 'KT_DUP'/)
+    // The same section declared in both phases is fine.
+    Container.reset()
+    const shared = { settings: () => [AppSide], routes: () => null }
+    await expect(
+      new Application({ modules: [shared as never], settings: [AppSide] }).setup(),
+    ).resolves.toBeUndefined()
+  })
+})

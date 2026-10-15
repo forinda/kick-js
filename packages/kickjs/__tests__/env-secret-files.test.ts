@@ -59,6 +59,13 @@ describe('<KEY>_FILE secrets', () => {
     expect(() => loadEnv(z.object({ KICK_T_STRIPE_KEY: z.string().startsWith('sk_') }))).toThrow()
   })
 
+  it('treats an empty variable as unset, as the official Postgres image does', () => {
+    // An empty `DB_PASSWORD=` (a placeholder in a shared .env) is not a second
+    // value: the file supplies it. Postgres' entrypoint (file_env) behaves the same.
+    const path = secret('empty_case', 'from-file')
+    expect(withSecretFiles({ KT_X: '', KT_X_FILE: path }, ['KT_X']).KT_X).toBe('from-file')
+  })
+
   it('leaves undeclared *_FILE variables alone', () => {
     const env = { LOG_FILE: '/var/log/app.log' }
     expect(withSecretFiles(env, ['PORT'])).toBe(env)

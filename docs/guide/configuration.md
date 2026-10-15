@@ -264,7 +264,7 @@ const env = loadEnv(envSchema) // re-parsed with new PORT against fresh schema
 
 For the normal "edit `.env`, want the new value" flow, do nothing — `envWatchPlugin()` calls `reloadEnv()` for you and `ConfigService.get()` immediately returns the new value.
 
-## Secrets from files (`<KEY>_FILE`)
+## Secrets from files (`<KEY>_FILE`) {#secrets-from-files}
 
 Docker secrets, Kubernetes secret volumes and most secret managers mount secrets as files rather than environment variables. For any key your env schema declares, set `<KEY>_FILE` to the file's path and the value is read from it:
 
@@ -357,7 +357,7 @@ Each key path becomes one env variable under the prefix, in `UPPER_SNAKE_CASE`:
 | `replicas` | `DB_REPLICAS` — a list, comma-separated: `r1.db,r2.db` |
 | `ssl`      | `DB_SSL`                                               |
 
-`DbSettings.envNames` lists them, and [`<NAME>_FILE` secrets](#secrets-from-files-key-file) work for every one (`DB_URL_FILE=/run/secrets/db_url`).
+`DbSettings.envNames` lists them, and [`<NAME>_FILE` secrets](#secrets-from-files) work for every one (`DB_URL_FILE=/run/secrets/db_url`).
 
 ### Where sections live
 

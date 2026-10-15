@@ -719,6 +719,8 @@ export class Application {
   private conditionReport: ConditionOutcome[] = []
   private mountedRoutes: MountedRoute[] = []
   private routeUrls = new RouteUrls()
+  /** Settings prefixes bound in this setup, across its two binding phases. */
+  private settingsPrefixes = new Map<string, Settings<unknown>>()
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -1055,7 +1057,7 @@ export class Application {
 
   /** Validate settings sections and bind each under its token. */
   private bindSettings(sections: readonly Settings<unknown>[]): void {
-    for (const [section, value] of loadSettings(sections)) {
+    for (const [section, value] of loadSettings(sections, process.env, this.settingsPrefixes)) {
       this.container.registerInstance(section, value)
     }
   }
@@ -1088,6 +1090,7 @@ export class Application {
     // routes fill it in as they mount.
     this.routeUrls = new RouteUrls()
     this.container.registerInstance(ROUTE_URLS, this.routeUrls)
+    this.settingsPrefixes = new Map()
     // Settings sections declared by bootstrap, plugins and enabled adapters:
     // validated now — a bad value fails startup with the full list — and bound
     // before any hook runs. Modules' sections are bound before they register.
