@@ -6,48 +6,75 @@ import { describe, expect, it, vi } from 'vitest'
 import { RequestHistogram } from '../src/index'
 import { MemoryStore as RateLimitMemoryStore } from '../src/http/middleware/rate-limit'
 import { LazyMemoryStore } from '../src/http/middleware/rate-limit-guard'
+import { BoundedCounters } from '../src/http/middleware/bounded-counters'
 import { MemoryStore as SessionMemoryStore } from '../src/http/middleware/session'
 
 const sizeOf = (store: object, field: string) =>
   (store as Record<string, Map<unknown, unknown>>)[field].size
 
-describe.each([
-  ['rateLimit() memory store', () => new RateLimitMemoryStore(60_000), 'hits'],
-  ['rateLimitGuard() memory store', () => new LazyMemoryStore(60_000), 'hits'],
-] as const)('%s', (_name, make, field) => {
-  it('caps live keys at 100k, refusing new keys rather than dropping a live counter', async () => {
-    const store = make()
-    await store.increment('victim')
-    await store.increment('victim')
-    for (let i = 0; i < 99_999; i++) await store.increment(`flood-${i}`)
-    expect(sizeOf(store, field)).toBe(100_000)
-    // Full: a new key is over any limit, and the victim's count survives.
-    expect((await store.increment('newcomer')).totalHits).toBe(Number.POSITIVE_INFINITY)
-    expect((await store.increment('victim')).totalHits).toBe(3)
-    expect(sizeOf(store, field)).toBe(100_000)
-    ;(store as { dispose?: () => void }).dispose?.()
+describe('BoundedCounters (the in-memory rate-limit stores)', () => {
+  it('recycles one-hit keys, so a flood of made-up keys never resets a real counter', () => {
+    const counters = new BoundedCounters(60_000, 5)
+    for (let i = 0; i < 3; i++) counters.increment('victim')
+    for (let i = 0; i < 50; i++) expect(counters.increment(`flood-${i}`).totalHits).toBe(1)
+    expect(counters.size).toBe(5)
+    expect(counters.increment('victim').totalHits).toBe(4)
   })
 
-  it('takes new keys again once windows end', async () => {
+  it('refuses a new key only once every counter has two hits or more', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
-      const store = make()
-      for (let i = 0; i < 100_000; i++) await store.increment(`flood-${i}`)
-      expect((await store.increment('newcomer')).totalHits).toBe(Number.POSITIVE_INFINITY)
-      vi.setSystemTime(Date.now() + 61_000) // past the 60s window
-      expect((await store.increment('newcomer')).totalHits).toBe(1)
-      ;(store as { dispose?: () => void }).dispose?.()
+      const counters = new BoundedCounters(60_000, 3)
+      for (const key of ['a', 'b', 'c']) {
+        counters.increment(key)
+        counters.increment(key)
+      }
+      expect(counters.increment('newcomer').totalHits).toBe(Number.POSITIVE_INFINITY)
+      expect(counters.increment('a').totalHits).toBe(3)
+      vi.setSystemTime(Date.now() + 61_000) // the windows end
+      expect(counters.increment('newcomer').totalHits).toBe(1)
+      expect(counters.size).toBe(1)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('drops expired windows from the front without scanning live ones', async () => {
-    const store = new (make().constructor as new (windowMs: number) => typeof store)(1)
-    for (let i = 0; i < 1000; i++) await store.increment(`old-${i}`)
-    await new Promise((done) => setTimeout(done, 5))
-    await store.increment('new')
-    expect(sizeOf(store, field)).toBe(1)
+  it('a counter brought back to one hit becomes evictable again', () => {
+    const counters = new BoundedCounters(60_000, 2)
+    counters.increment('a')
+    counters.increment('a')
+    counters.increment('b')
+    counters.increment('b')
+    counters.decrement('a') // a skipped request (skipSuccessfulRequests) gave one back
+    expect(counters.increment('c').totalHits).toBe(1) // took a's place
+    expect(counters.increment('b').totalHits).toBe(3)
+    expect(counters.increment('a').totalHits).toBe(1) // a started over
+  })
+
+  it('drops expired windows from the front without touching live ones', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const counters = new BoundedCounters(1000)
+      for (let i = 0; i < 1000; i++) counters.increment(`old-${i}`)
+      vi.setSystemTime(Date.now() + 1001)
+      counters.increment('new')
+      expect(counters.size).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['rateLimit()', () => new RateLimitMemoryStore(60_000)],
+    ['rateLimitGuard()', () => new LazyMemoryStore(60_000)],
+  ] as const)('%s store counts through it', async (_name, make) => {
+    const store = make()
+    expect((await store.increment('k')).totalHits).toBe(1)
+    expect((await store.increment('k')).totalHits).toBe(2)
+    await store.decrement('k')
+    expect((await store.increment('k')).totalHits).toBe(2)
+    await store.reset('k')
+    expect((await store.increment('k')).totalHits).toBe(1)
     ;(store as { dispose?: () => void }).dispose?.()
   })
 })
@@ -55,10 +82,10 @@ describe.each([
 describe('session memory store', () => {
   it('evicts empty sessions first, so a cookieless flood keeps logins', async () => {
     const store = new SessionMemoryStore()
-    await store.set('logged-in', { userId: 1 }, 60_000)
+    await store.set('logged-in', { userId: 'u1' }, 60_000)
     for (let i = 0; i < 20_000; i++) await store.set(`visitor-${i}`, {}, 60_000)
     expect(sizeOf(store, 'sessions')).toBe(10_000)
-    expect(await store.get('logged-in')).toEqual({ userId: 1 })
+    expect(await store.get('logged-in')).toEqual({ userId: 'u1' })
     expect(await store.get('visitor-0')).toBeNull()
     expect(await store.get('visitor-19999')).toEqual({})
     store.dispose()

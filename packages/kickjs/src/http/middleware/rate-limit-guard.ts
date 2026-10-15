@@ -7,6 +7,7 @@ import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
 import type { RateLimitStore } from './rate-limit'
+import { BoundedCounters } from './bounded-counters'
 
 export interface RateLimitGuardOptions {
   /** Maximum number of requests per window (default: 100). */
@@ -68,54 +69,29 @@ export interface RateLimitGuardOptions {
   exemptWhen?: RouteFlagTest
 }
 
-// ponytail: fixed cap; a store shared between instances has its own limits.
-const MAX_KEYS = 100_000
-
 /**
- * Timer-free in-memory store. Kept in window order (a refreshed key moves to
- * the back), so expired entries are always at the front: each insert drops
- * them from there and stops at the first live one — no full scan. Keys come
- * from clients (on an edge host, the first `x-forwarded-for` hop), so the map
- * holds at most {@link MAX_KEYS}: past that, new keys are refused until a
- * window ends. Live counters are never dropped — that would let a flood of
- * keys reset someone else's count.
+ * Timer-free in-memory store: expired windows are swept on insert, from the
+ * front. Bounded: see {@link BoundedCounters}.
+ *
+ * @internal Exported for tests.
  */
-/** @internal Exported for tests. */
 export class LazyMemoryStore implements RateLimitStore {
-  private readonly hits = new Map<string, { hits: number; reset: number }>()
+  private readonly counters: BoundedCounters
 
-  constructor(private readonly windowMs: number) {}
+  constructor(windowMs: number) {
+    this.counters = new BoundedCounters(windowMs)
+  }
 
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
-    const now = Date.now()
-    const entry = this.hits.get(key)
-    if (entry && entry.reset > now) {
-      entry.hits++
-      return { totalHits: entry.hits, resetTime: new Date(entry.reset) }
-    }
-    this.hits.delete(key)
-    for (const [k, e] of this.hits) {
-      if (e.reset > now) break
-      this.hits.delete(k)
-    }
-    // Still full: refuse the new key (over any limit until the oldest window
-    // ends) rather than drop a live counter someone could then reset.
-    if (this.hits.size >= MAX_KEYS) {
-      const oldest = this.hits.values().next().value!
-      return { totalHits: Number.POSITIVE_INFINITY, resetTime: new Date(oldest.reset) }
-    }
-    const fresh = { hits: 1, reset: now + this.windowMs }
-    this.hits.set(key, fresh)
-    return { totalHits: 1, resetTime: new Date(fresh.reset) }
+    return this.counters.increment(key)
   }
 
   async decrement(key: string): Promise<void> {
-    const entry = this.hits.get(key)
-    if (entry && entry.hits > 0) entry.hits--
+    this.counters.decrement(key)
   }
 
   async reset(key: string): Promise<void> {
-    this.hits.delete(key)
+    this.counters.reset(key)
   }
 }
 

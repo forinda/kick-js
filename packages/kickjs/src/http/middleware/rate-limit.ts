@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { registerDisposable } from '../../core/disposables'
+import { BoundedCounters } from './bounded-counters'
 
 export interface RateLimitStore {
   increment(key: string): Promise<{ totalHits: number; resetTime: Date }>
@@ -52,21 +53,14 @@ export interface RateLimitOptions {
   exemptWhen?: RouteFlagTest
 }
 
-// ponytail: fixed cap; a store shared between instances (Redis) has its own limits.
-const MAX_KEYS = 100_000
-
-interface MemoryStoreEntry {
-  totalHits: number
-  resetTime: Date
-}
-
-/** @internal Exported for tests. */
+/** @internal Exported for tests. Bounded: see {@link BoundedCounters}. */
 export class MemoryStore implements RateLimitStore {
-  private hits = new Map<string, MemoryStoreEntry>()
+  private readonly counters: BoundedCounters
   private cleanupTimer: ReturnType<typeof setInterval>
 
-  constructor(private windowMs: number) {
-    this.cleanupTimer = setInterval(() => this.cleanup(), windowMs)
+  constructor(windowMs: number) {
+    this.counters = new BoundedCounters(windowMs)
+    this.cleanupTimer = setInterval(() => this.counters.sweep(), windowMs)
     // Allow the process to exit without waiting for the timer
     if (this.cleanupTimer.unref) {
       this.cleanupTimer.unref()
@@ -80,63 +74,19 @@ export class MemoryStore implements RateLimitStore {
   /** Clear the cleanup interval and drop all hit counters. */
   dispose(): void {
     clearInterval(this.cleanupTimer)
-    this.hits.clear()
+    this.counters.clear()
   }
 
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
-    const now = Date.now()
-    const entry = this.hits.get(key)
-
-    if (entry && entry.resetTime.getTime() > now) {
-      entry.totalHits++
-      return { totalHits: entry.totalHits, resetTime: entry.resetTime }
-    }
-
-    // Deleted first so the map stays in window order: the oldest window, the
-    // first to expire, is always at the front.
-    this.hits.delete(key)
-    const full = this.full(now)
-    if (full) return full
-    const resetTime = new Date(now + this.windowMs)
-    this.hits.set(key, { totalHits: 1, resetTime })
-    return { totalHits: 1, resetTime }
-  }
-
-  /**
-   * Keys come from clients (an IP, a header behind a proxy, a username from a
-   * custom key), so the map is capped. Expired windows are dropped from the
-   * front. When it's still full, a new key is refused — counted as over any
-   * limit until the oldest window ends — rather than dropping a live counter,
-   * which would let someone reset another client's count by flooding keys.
-   */
-  private full(now: number): { totalHits: number; resetTime: Date } | undefined {
-    for (const [key, entry] of this.hits) {
-      if (entry.resetTime.getTime() > now) break
-      this.hits.delete(key)
-    }
-    if (this.hits.size < MAX_KEYS) return undefined
-    const oldest = this.hits.values().next().value!
-    return { totalHits: Number.POSITIVE_INFINITY, resetTime: oldest.resetTime }
+    return this.counters.increment(key)
   }
 
   async decrement(key: string): Promise<void> {
-    const entry = this.hits.get(key)
-    if (entry && entry.totalHits > 0) {
-      entry.totalHits--
-    }
+    this.counters.decrement(key)
   }
 
   async reset(key: string): Promise<void> {
-    this.hits.delete(key)
-  }
-
-  private cleanup(): void {
-    const now = Date.now()
-    for (const [key, entry] of this.hits) {
-      if (entry.resetTime.getTime() <= now) {
-        this.hits.delete(key)
-      }
-    }
+    this.counters.reset(key)
   }
 }
 
