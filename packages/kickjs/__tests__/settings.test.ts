@@ -12,6 +12,8 @@ import {
   Container,
   Inject,
   Service,
+  createToken,
+  defineAdapter,
   defineSettings,
   type SettingsOf,
 } from '../src/index'
@@ -157,5 +159,50 @@ describe('settings in the app', () => {
       },
     })
     expect(Container.getInstance().resolve(DbSettings).url).toBe('postgres://edge/app')
+  })
+})
+
+describe('settings from adapters and modules', () => {
+  beforeEach(() => vi.stubEnv('KT_DB_URL', 'postgres://env/app'))
+
+  it('configures an adapter through .async({ inject })', async () => {
+    let seen: unknown
+    const DbAdapter = defineAdapter<{ url: string }>({
+      name: 'DbAdapter',
+      build: (config) => ({ beforeStart: () => void (seen = config.url) }),
+    })
+    const app = new Application({
+      modules: [],
+      adapters: [
+        DbAdapter.async({
+          inject: [DbSettings],
+          useFactory: (db: SettingsOf<typeof DbSettings>) => ({ url: db.url }),
+        }),
+      ],
+    })
+    await app.setup()
+    expect(seen).toBe('postgres://env/app')
+  })
+
+  it('a module can bind a value under its own token, or replace the section — get() follows', async () => {
+    const DB_URL = createToken<string>('test/dbUrl')
+    const app = new Application({
+      modules: [
+        {
+          register(container: Container) {
+            container.registerFactory(DB_URL, () => container.resolve(DbSettings).url)
+            container.registerInstance(DbSettings, {
+              ...DbSettings.load(),
+              url: 'postgres://module/app',
+            })
+          },
+          routes: () => null,
+        } as never,
+      ],
+    })
+    await app.setup()
+    expect(app.getContainer().resolve(DB_URL)).toBe('postgres://module/app')
+    // Outside DI, get() sees the same replacement injected code does.
+    expect(DbSettings.get().url).toBe('postgres://module/app')
   })
 })

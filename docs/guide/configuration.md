@@ -400,7 +400,47 @@ export class Database {
 const { url, pool } = DbSettings.get()
 ```
 
-`get()` returns the value the app validated when it started, so it's cheap and always matches what injected code sees. Called before the app starts (a CLI script, a seed file), the first call loads and validates it. `DbSettings.load(env?)` parses afresh — from `process.env`, or an env object you pass — when you need the current values instead.
+`get()` returns what injected code sees — the value validated at startup, or a replacement bound in the container (below) — so it's cheap and never disagrees with DI. Called before the app starts (a CLI script, a seed file), the first call loads and validates it. `DbSettings.load(env?)` parses afresh — from `process.env`, or an env object you pass — when you need the current values instead.
+
+### From an adapter or a module
+
+A section is an ordinary DI token, bound before modules register, so the usual patterns work.
+
+**Configure an adapter from it** — `defineAdapter`'s `.async()` injects tokens into its config factory:
+
+```ts
+bootstrap({
+  modules,
+  adapters: [
+    DatabaseAdapter.async({
+      inject: [DbSettings],
+      useFactory: (db: SettingsOf<typeof DbSettings>) => ({ url: db.url, poolSize: db.pool.max }),
+    }),
+  ],
+})
+```
+
+**Bind a value under a module's own token** — when a library expects `DB_URL`, not your section:
+
+```ts
+export const DbModule = defineModule({
+  name: 'DbModule',
+  build: () => ({
+    register(container) {
+      container.registerFactory(DB_URL, () => container.resolve(DbSettings).url)
+    },
+    routes: () => null,
+  }),
+})
+```
+
+**Replace the section** — in a module, or in a test — by binding the token again. Injected code and `DbSettings.get()` both see the replacement:
+
+```ts
+container.registerInstance(DbSettings, { ...DbSettings.load(), url: 'postgres://localhost/test' })
+```
+
+The container is one per process, so there's no per-module copy: whatever binds last is what every module sees.
 
 ### Validated at startup
 

@@ -9,6 +9,7 @@
  */
 import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
 import { INJECTION_TOKEN, type InjectionToken } from '../core/token'
+import { Container } from '../core/container'
 
 /**
  * Reads `<NAME>_FILE` secrets. Registered by `./env` (Node only) when it
@@ -156,13 +157,17 @@ export function defineSettings<S>(prefix: string, schema: S): Settings<InferSche
     throw new Error(`Settings '${prefix}' are invalid:\n${problems.join('\n')}`)
   }
 
-  const settings = Object.freeze({
+  const settings: Settings<T> = Object.freeze({
     [INJECTION_TOKEN]: true as const,
     name: `Settings(${prefix})`,
     prefix,
     envNames,
     load,
     get: (): T => {
+      // What injected code sees: the container's binding, which a module or a
+      // test may have replaced. Before the app binds it, the validated env.
+      const container = Container.getInstance()
+      if (container.has(settings)) return container.resolve(settings) as T
       if (!cached.has(prefix)) cached.set(prefix, load())
       return cached.get(prefix) as T
     },
