@@ -12,21 +12,22 @@ Optional peers: `@anthropic-ai/sdk` for `AnthropicProvider`, `pg` for `PgVectorS
 
 ### Adapter and tokens
 
-| Export             | Description                                                                |
-| ------------------ | -------------------------------------------------------------------------- |
-| `AiAdapter`        | Adapter factory: registers the provider, discovers tools, runs agent loops |
-| `AI_ADAPTER`       | DI token for the adapter instance (`AiAdapterInstance`)                    |
-| `AI_PROVIDER`      | DI token for the configured `AiProvider`                                   |
-| `VECTOR_STORE`     | DI token for a `VectorStore` you register                                  |
-| `AI_TOOL_METADATA` | Metadata key `@AiTool` writes                                              |
+| Export                                             | Description                                                                                                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AiAdapter`                                        | Adapter factory: registers the provider, discovers tools, runs agent loops                                                                                                |
+| `AI_ADAPTER`                                       | DI token for the adapter instance (`AiAdapterInstance`)                                                                                                                   |
+| `AI_PROVIDER`                                      | DI token for the configured `AiProvider`                                                                                                                                  |
+| `VECTOR_STORE`                                     | DI token for a `VectorStore` you register                                                                                                                                 |
+| `AI_TOOL_METADATA`                                 | Metadata key `@AiTool` writes                                                                                                                                             |
+| `aiAdapterToken(scope)` / `aiProviderToken(scope)` | DI tokens for a scoped adapter — `AiAdapter.scoped('support', { … })` registers under these instead of `AI_ADAPTER` / `AI_PROVIDER`, so several adapters run side by side |
 
 ### Tools
 
-| Export          | Description                                                                 |
-| --------------- | --------------------------------------------------------------------------- |
-| `@AiTool(opts)` | Expose a controller method as a tool (`description`, `name`, `inputSchema`) |
-| `getAiToolMeta` | Read `@AiTool` options for a method                                         |
-| `isAiTool`      | Whether a method carries `@AiTool`                                          |
+| Export          | Description                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `@AiTool(opts)` | Expose a controller method as a tool (`description`, `name`, `inputSchema`). Name defaults to `<Controller>_<method>` |
+| `getAiToolMeta` | Read `@AiTool` options for a method                                                                                   |
+| `isAiTool`      | Whether a method carries `@AiTool`                                                                                    |
 
 ### Providers
 
@@ -36,6 +37,26 @@ Optional peers: `@anthropic-ai/sdk` for `AnthropicProvider`, `pg` for `PgVectorS
 | `AnthropicProvider` | Claude through `@anthropic-ai/sdk`; no embeddings                          |
 | `ProviderError`     | Error with the HTTP `status` and response `body` of a failed provider call |
 | `ScriptedProvider`  | Test provider that answers with scripted turns and records each input      |
+
+`OpenAIProviderOptions`: `apiKey`, `baseURL`, `defaultChatModel`, `defaultEmbedModel`, `organization`, `name`, `retry`, `fetch`. `AnthropicProviderOptions`: `apiKey`, `baseURL`, `client`, `defaultChatModel`, `defaultMaxTokens`, `effort`, `thinkingDisplay`. `RetryOptions`: `maxRetries` (default 3, `0` disables), `baseDelayMs` (default 1000, doubles each attempt), `maxDelayMs`.
+
+### Structured output and attachments
+
+| Export                                  | Description                                                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `chatObject(provider, input, options?)` | `chat()` with a `schema`, returning only the validated answer, typed from the schema                                                      |
+| `StructuredOutputError`                 | Thrown when the answer doesn't match the schema after retries (or the model refused); carries `issues` and `raw`                          |
+| `attachmentFromFile(file, options?)`    | A `ContentPart` from an upload (`ctx.file`). Images, PDFs and text go as-is; other formats throw unless `options.normalize` converts them |
+
+```ts
+const Advice = z.object({ summary: z.string(), steps: z.array(z.string()) })
+const advice = await chatObject(ai.getProvider(), {
+  messages: [{ role: 'user', content: 'How do I rotate my API keys?' }],
+  schema: Advice,
+})
+```
+
+`chat()` itself accepts `schema`, `schemaName` and `schemaRetries` on `ChatInput` and returns the parsed answer as `ChatResponse.object`; `stream()` does not take a schema.
 
 ### Settings (`@forinda/kickjs-ai/settings`)
 
@@ -100,14 +121,15 @@ Inject with `@Inject(AI_ADAPTER)`.
 
 ## Chat types
 
-| Type           | Key fields                                                                                                                         |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `ChatMessage`  | `role`, `content`, `toolCalls`, `toolCallId`, `isError`, `providerContent`                                                         |
-| `ChatOptions`  | `temperature`, `topP`, `maxTokens`, `stopSequences`, `effort`, `signal`                                                            |
-| `ChatResponse` | `content`, `toolCalls`, `usage`, `finishReason` (`stop` / `length` / `tool_call` / `content_filter`), `refusal`, `providerContent` |
-| `ChatChunk`    | `content`, `toolCallDelta` (`id`, `index`, `name`, `argumentsDelta`), `done`; final chunk `finishReason`, `usage`                  |
-| `ChatUsage`    | `promptTokens`, `completionTokens`, `totalTokens`, `cacheReadTokens`, `cacheWriteTokens`                                           |
-| `AiProvider`   | `name`, `chat`, `stream`, `embed` — implement it for a custom provider                                                             |
+| Type           | Key fields                                                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ChatMessage`  | `role`, `content`, `attachments`, `toolCalls`, `toolCallId`, `isError`, `providerContent`                                                    |
+| `ChatOptions`  | `temperature`, `topP`, `maxTokens`, `stopSequences`, `effort`, `signal`                                                                      |
+| `ChatResponse` | `content`, `object`, `toolCalls`, `usage`, `finishReason` (`stop` / `length` / `tool_call` / `content_filter`), `refusal`, `providerContent` |
+| `ChatChunk`    | `content`, `toolCallDelta` (`id`, `index`, `name`, `argumentsDelta`), `done`; final chunk `finishReason`, `usage`                            |
+| `ChatUsage`    | `promptTokens`, `completionTokens`, `totalTokens`, `cacheReadTokens`, `cacheWriteTokens`                                                     |
+| `ContentPart`  | `{ type: 'text', text }`, `{ type: 'image', data, mimeType }` or `{ type: 'file', data, mimeType, filename? }`                               |
+| `AiProvider`   | `name`, `chat`, `stream`, `embed`, optional `tool` — implement it for a custom provider                                                      |
 
 ## Related
 

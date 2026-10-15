@@ -9,9 +9,9 @@
 //
 // `@forinda/kickjs-devtools` registers an instance under this token in
 // its adapter's `beforeMount` so anything resolved during plugin boot
-// can grab it. Plugins that resolve before devtools boots get
-// `undefined`; making the dep optional via `@Optional()` is the
-// idiomatic guard.
+// can grab it. Before that, nothing is registered under the token, and
+// resolving it throws: check `container.has(DEVTOOLS_BUS)` first, or use
+// `getActiveDevtoolsBus()`.
 
 import { createToken, type InjectionToken } from '@forinda/kickjs'
 

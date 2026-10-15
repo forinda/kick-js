@@ -155,7 +155,8 @@ Column refs carry their column's value type (`TypedColumnRef<T>`), which is what
 `pgEnum(name, ...values)` declares an enum once and references it from columns:
 
 ```ts
-import { pgEnum, table, uuid } from '@forinda/kickjs-db'
+import { table, uuid } from '@forinda/kickjs-db'
+import { pgEnum } from '@forinda/kickjs-db/pg'
 
 export const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
 

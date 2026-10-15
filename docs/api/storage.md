@@ -6,28 +6,38 @@ One `Storage` interface over memory, local disk, and S3-compatible buckets, with
 
 <PmCommand add="@forinda/kickjs-storage" />
 
+`@forinda/kickjs` (10.1+) is an optional peer — needed only for the `settings`, `adapter` and `tus` entries.
+
+```ts
+import { s3Storage } from '@forinda/kickjs-storage'
+
+const files = s3Storage({ bucket: 'avatars', region: 'eu-west-1', accessKeyId, secretAccessKey })
+await files.put(`avatars/${user.id}.png`, ctx.file!.buffer, { contentType: 'image/png' })
+const link = await files.url(`avatars/${user.id}.png`, { expiresIn: 600 })
+```
+
 ## Exports
 
-| Export                             | Description                                                                                                                                                                  |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Storage`                          | `put`, `putIfAbsent`, `get`, `getStream`, `stat`, `exists`, `delete`, `list`, `url`                                                                                          |
-| `memoryStorage(options?)`          | Files in a `Map`, for tests. `baseUrl` for `url()`                                                                                                                           |
-| `diskStorage(options)`             | From `@forinda/kickjs-storage/disk` (Node only). Files under `root`, written atomically. `baseUrl` for `url()`                                                               |
-| `s3Storage(options)`               | S3, R2, MinIO over `fetch` with SigV4. `url()` presigns a GET                                                                                                                |
-| `checkKey(key)`                    | Throws for an empty key, a leading `/`, empty / `.` / `..` segments, `\` or NUL                                                                                              |
-| `S3Storage`                        | `Storage` plus `uploadUrl(key, { size, contentType, expiresIn })`, `uploadForm(key, { maxSize, minSize, contentType })`, `multipart`, `compose(key, sources)` and `location` |
-| `Multipart`                        | `create`, `partUrl`, `listParts`, `complete`, `abort`                                                                                                                        |
-| `UploadFormOptions` / `UploadForm` | `maxSize`, `minSize`, `contentType` (one exact type), `expiresIn` / `{ url, fields }`                                                                                        |
-| `UploadUrlOptions`                 | `expiresIn`, `size` (signed, exact), `contentType` (signed)                                                                                                                  |
-| `UploadedPart` / `CompletedPart`   | `{ partNumber, etag, size }` / `{ partNumber, etag }`                                                                                                                        |
-| `Body`                             | `Uint8Array \| string \| AsyncIterable<Uint8Array>` (web or Node streams)                                                                                                    |
-| `FileInfo`                         | `key`, `size`, `lastModified`, `contentType?`                                                                                                                                |
-| `ListOptions` / `ListPage`         | `prefix`, `delimiter`, `cursor`, `limit` (1 to 1000) / `files`, `prefixes?`, `cursor?`                                                                                       |
-| `PutOptions`                       | `contentType`                                                                                                                                                                |
-| `UrlOptions`                       | `expiresIn` in seconds, default 3600, at most 604800                                                                                                                         |
-| `S3StorageOptions`                 | `bucket`, `region`, `endpoint`, `accessKeyId`, `secretAccessKey`, `sessionToken`, `forcePathStyle`, `fetch`, `partSize`, `partConcurrency`                                   |
-| `DiskStorageOptions`               | `root`, `baseUrl`                                                                                                                                                            |
-| `MemoryStorageOptions`             | `baseUrl`                                                                                                                                                                    |
+| Export                             | Description                                                                                                                                                                            |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Storage`                          | `put`, `putIfAbsent`, `get`, `getStream`, `stat`, `exists`, `delete`, `list`, `url`                                                                                                    |
+| `memoryStorage(options?)`          | Files in a `Map`, for tests. `baseUrl` for `url()`                                                                                                                                     |
+| `diskStorage(options)`             | From `@forinda/kickjs-storage/disk` (Node only). Files under `root`, written atomically. `baseUrl` for `url()`                                                                         |
+| `s3Storage(options)`               | S3, R2, MinIO over `fetch` with SigV4. `url()` presigns a GET                                                                                                                          |
+| `checkKey(key)`                    | Throws for an empty key, a leading `/`, empty / `.` / `..` segments, `\` or NUL                                                                                                        |
+| `S3Storage`                        | `Storage` plus `uploadUrl(key, { size, contentType, expiresIn })`, `uploadForm(key, { maxSize, minSize, contentType })`, `multipart`, `compose(key, sources, options?)` and `location` |
+| `Multipart`                        | `create`, `partUrl`, `listParts`, `complete`, `abort`                                                                                                                                  |
+| `UploadFormOptions` / `UploadForm` | `maxSize`, `minSize`, `contentType` (one exact type), `expiresIn` / `{ url, fields }`                                                                                                  |
+| `UploadUrlOptions`                 | `expiresIn`, `size` (signed, exact), `contentType` (signed)                                                                                                                            |
+| `UploadedPart` / `CompletedPart`   | `{ partNumber, etag, size }` / `{ partNumber, etag }`                                                                                                                                  |
+| `Body`                             | `Uint8Array \| string \| AsyncIterable<Uint8Array>` (web or Node streams)                                                                                                              |
+| `FileInfo`                         | `key`, `size`, `lastModified`, `contentType?`                                                                                                                                          |
+| `ListOptions` / `ListPage`         | `prefix`, `delimiter`, `cursor`, `limit` (1 to 1000, default 1000) / `files`, `prefixes?`, `cursor?`                                                                                   |
+| `PutOptions`                       | `contentType`                                                                                                                                                                          |
+| `UrlOptions`                       | `expiresIn` in seconds, default 3600, at most 604800                                                                                                                                   |
+| `S3StorageOptions`                 | `bucket`, `region`, `endpoint`, `accessKeyId`, `secretAccessKey`, `sessionToken`, `forcePathStyle`, `fetch`, `partSize`, `partConcurrency`                                             |
+| `DiskStorageOptions`               | `root`, `baseUrl`                                                                                                                                                                      |
+| `MemoryStorageOptions`             | `baseUrl`                                                                                                                                                                              |
 
 ### Settings (`@forinda/kickjs-storage/settings`)
 
@@ -60,3 +70,8 @@ Needs `@forinda/kickjs` 10.1 or later.
 | `TusUpload`                 | `id`, `key`, `size`, `offset`, `metadata`, `data`, `expiresAt`, `concat?`                                                          |
 | `TusTarget`                 | What `onCreate` returns: `key`, `data`, `contentType` (one exact type; default `application/octet-stream`)                         |
 | `TusCreateRequest`          | `headers`, `size`, `metadata`, `concat?`                                                                                           |
+
+## Related
+
+- [File Storage guide](../guide/file-storage.md) — setup, direct-to-bucket uploads, multipart, tus, R2 / MinIO
+- [File uploads](../guide/file-uploads.md) — `ctx.file` / `ctx.files`

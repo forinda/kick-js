@@ -284,7 +284,7 @@ export interface ApplicationOptions {
    * ```
    *
    * If omitted, a sensible default is applied:
-   *   requestId(), express.json({ limit: '100kb' })
+   *   requestId(), and a JSON body parser limited to `jsonLimit` (default '1mb')
    */
   middlewares?: MiddlewareEntry[]
 

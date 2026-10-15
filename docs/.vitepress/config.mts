@@ -253,24 +253,45 @@ const guideSidebar = [
 
 const apiSidebar = [
   {
-    text: 'Packages',
+    text: '@forinda/kickjs',
     items: [
-      { text: '@forinda/kickjs', link: '/api/kickjs' },
+      { text: 'Overview', link: '/api/kickjs' },
+      { text: 'Core', link: '/api/core' },
+      { text: 'HTTP', link: '/api/http' },
+    ],
+  },
+  {
+    text: 'Core packages',
+    items: [
       { text: '@forinda/kickjs-di', link: '/api/di' },
-      { text: '@forinda/kickjs-core', link: '/api/core' },
-      { text: '@forinda/kickjs-http', link: '/api/http' },
-      { text: '@forinda/kickjs-swagger', link: '/api/swagger' },
-      { text: '@forinda/kickjs-db', link: '/api/db' },
-      { text: '@forinda/kickjs-ws', link: '/api/ws' },
-      { text: '@forinda/kickjs-grpc', link: '/api/grpc' },
-      { text: '@forinda/kickjs-queue', link: '/api/queue' },
-      { text: '@forinda/kickjs-devtools', link: '/api/devtools' },
-      { text: '@forinda/kickjs-ai', link: '/api/ai' },
-      { text: '@forinda/kickjs-storage', link: '/api/storage' },
-      { text: '@forinda/kickjs-mcp', link: '/api/mcp' },
-      { text: '@forinda/kickjs-vite', link: '/api/vite' },
       { text: '@forinda/kickjs-cli', link: '/api/cli' },
+      { text: '@forinda/kickjs-vite', link: '/api/vite' },
+      { text: '@forinda/kickjs-schema', link: '/api/schema' },
+      { text: '@forinda/kickjs-client', link: '/api/client' },
       { text: '@forinda/kickjs-testing', link: '/api/testing' },
+    ],
+  },
+  {
+    text: 'Optional packages',
+    items: [
+      { text: '@forinda/kickjs-db', link: '/api/db' },
+      { text: '@forinda/kickjs-swagger', link: '/api/swagger' },
+      { text: '@forinda/kickjs-devtools', link: '/api/devtools' },
+      { text: '@forinda/kickjs-ws', link: '/api/ws' },
+      { text: '@forinda/kickjs-queue', link: '/api/queue' },
+      { text: '@forinda/kickjs-storage', link: '/api/storage' },
+      { text: '@forinda/kickjs-inertia', link: '/api/inertia' },
+      { text: '@forinda/kickjs-grpc', link: '/api/grpc' },
+      { text: '@forinda/kickjs-ai', link: '/api/ai' },
+      { text: '@forinda/kickjs-mcp', link: '/api/mcp' },
+    ],
+  },
+  {
+    text: 'Tooling',
+    items: [
+      { text: '@forinda/kickjs-devtools-kit', link: '/api/devtools-kit' },
+      { text: '@forinda/kickjs-cli-kit', link: '/api/cli-kit' },
+      { text: '@forinda/kickjs-lint', link: '/api/lint' },
     ],
   },
 ]
@@ -484,7 +505,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Database', link: '/guide/database/' },
-      { text: 'API', link: '/api/core' },
+      { text: 'API', link: '/api/kickjs' },
       { text: 'Schemas', link: '/schemas/' },
     ],
 

@@ -1,5 +1,5 @@
 /**
- * Dev server plugin for KickJS — mounts the Express application on Vite's
+ * Dev server plugin for KickJS — mounts the application on Vite's
  * HTTP server using the `configureServer` hook.
  *
  * ## Architecture
@@ -33,12 +33,10 @@
  * HTTP Request → Vite static middleware (HMR, assets)
  *   → If Vite handles it → done
  *   → If not → KickJS post-middleware
- *     → ssrLoadModule('virtual:kickjs/app') → fresh Express app
- *     → Express handles request (routes, middleware, controllers)
+ *     → ssrLoadModule('virtual:kickjs/app') → fresh app
+ *     → the app handles the request on its runtime (Express, Fastify or h3)
  * ```
  *
- * @see v3/architecture.md Section 2.6 for the httpServer piping design
- * @see bench-mark/react-router-analysis.md for the pattern origin
  *
  * @module @forinda/kickjs-vite/dev-server
  */
@@ -54,7 +52,7 @@ import { VIRTUAL_APP } from './virtual-modules'
  * `__kickjs_httpServer` uses the same `HttpServer` type that Vite uses
  * internally (union of http.Server | https.Server | Http2SecureServer).
  * KickJS adapters receive it as `http.Server` via AdapterContext — the
- * cast is safe because Express only works with HTTP/1.1 servers.
+ * cast is safe because the dev server is HTTP/1.1.
  */
 declare global {
   // eslint-disable-next-line no-var
@@ -68,7 +66,7 @@ declare global {
  *
  * This is the critical integration point between Vite and KickJS:
  * - Pipes `viteServer.httpServer` to adapters via `globalThis`
- * - Loads fresh Express app on every request via `ssrLoadModule()`
+ * - Loads a fresh app on every request via `ssrLoadModule()`
  * - Fixes stack traces for SSR errors with `ssrFixStacktrace()`
  *
  * @param ctx - Shared plugin context (entry file, root directory)
@@ -89,7 +87,7 @@ export function kickjsDevServerPlugin(_ctx: PluginContext): Plugin {
      *
      * Returning a function from `configureServer` registers it as a
      * **post-middleware** — it runs AFTER Vite's own middleware (static
-     * files, HMR client, etc.), so Vite-handled requests never hit Express.
+     * files, HMR client, etc.), so Vite-handled requests never reach the app.
      */
     configureServer(viteServer: ViteDevServer) {
       // ━━━ Store the REAL http.Server on globalThis ━━━
@@ -142,16 +140,16 @@ export function kickjsDevServerPlugin(_ctx: PluginContext): Plugin {
             const mod = await viteServer.ssrLoadModule(VIRTUAL_APP)
 
             // The entry file exports: export const app = bootstrap({ modules })
-            // `app` is the configured Express instance (not yet listening).
+            // `app` is the configured Application (not yet listening).
             const expressApp = mod.app
 
             if (!expressApp?.handle) {
-              // Entry file doesn't export an Express app — fall through to Vite's 404
+              // Entry file doesn't export an app — fall through to Vite's 404
               return next()
             }
 
-            // Let Express handle the request.
-            // If Express doesn't match any route, it calls next() and
+            // Let the app handle the request.
+            // If no route matches, it calls next() and
             // Vite's default 404 handler takes over.
             expressApp.handle(req, res, (err?: any) => {
               if (err) {
