@@ -1,0 +1,59 @@
+{
+  "name": "@forinda/kickjs-di",
+  "version": "0.0.0",
+  "description": "The dependency injection container behind KickJS: typed tokens, decorators, REQUEST scope, HMR-safe registrations",
+  "keywords": [
+    "kickjs",
+    "dependency-injection",
+    "di",
+    "ioc",
+    "decorators",
+    "typescript"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.16.13",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://kickjs.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/di"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

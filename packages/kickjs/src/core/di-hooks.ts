@@ -1,11 +1,10 @@
 /**
- * Connects the DI core (`./di`, which imports nothing else from kickjs) to
+ * Connects the DI core (`@forinda/kickjs-di`) to
  * the framework: catalogued errors, the logger, and `@Asset` injection.
  * Imported by `./container` and `./decorators`, so every kickjs entry that
  * reaches the container installs them.
  */
-import { Container } from './di/container'
-import type { DiErrorCode } from './di/errors'
+import { Container, type DiErrorCode } from '@forinda/kickjs-di'
 // Slot indirection, NOT `./assets` — that module's eager node:fs import
 // would poison the edge-safe web entry graph (see asset-resolver-slot.ts).
 import { resolveAssetViaSlot } from './asset-resolver-slot'
