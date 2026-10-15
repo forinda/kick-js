@@ -102,7 +102,7 @@ for await (const ev of events) {
 
 ## KickClientError
 
-Thrown for non-2xx responses (and by `stream` when the connection fails).
+Thrown for non-2xx responses (and by `stream` on a non-2xx response or a missing body). A rejected `fetch` (network failure, abort) propagates its original error.
 
 ```typescript
 class KickClientError extends Error {

@@ -16,6 +16,7 @@ See the [gRPC guide](../guide/grpc.md) for the full walkthrough.
 import { bootstrap, Autowired } from '@forinda/kickjs'
 import { GrpcAdapter, GrpcService, GrpcMethod, type GrpcContext } from '@forinda/kickjs-grpc'
 import { UserService, type GetUserRequest } from './gen/user_pb'
+import { UserModule, UserRepository } from './modules/users' // your app's module + repository
 
 @GrpcService(UserService)
 export class UserRpc {

@@ -209,9 +209,10 @@ Notes per library:
 - **Yup** — JSON Schema is built from the schema's `describe()` output.
 
 ```ts
+import { z } from 'zod'
 import { fromZod } from '@forinda/kickjs-schema/zod'
 
-const schema = fromZod(z.object({ email: z.email() })) // KickSchema<{ email: string }>
+const schema = fromZod(z.object({ email: z.string().email() })) // KickSchema<{ email: string }>
 schema.toJsonSchema({ io: 'input', target: 'openapi-3.0' })
 ```
 

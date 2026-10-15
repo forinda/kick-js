@@ -110,6 +110,8 @@ interface TabRuntimeConfig {
 ```
 
 ```ts
+import { defineDevtoolsRenderTab } from '@forinda/kickjs-devtools-kit'
+
 export default defineDevtoolsRenderTab({
   id: 'slow-queries',
   name: 'Slow queries',

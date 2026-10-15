@@ -88,11 +88,11 @@ Not registered by class — inject it with `@Inject(QUEUE_MANAGER)`, or prefer t
 | `add`           | `add(queue: string, jobName: string, data: any, opts?: JobsOptions)` | Add one job. Throws when the queue isn't registered (BullMQ)    |
 | `addBulk`       | `addBulk(queue: string, jobs: BulkJobEntry[])`                       | Add several jobs (`{ name, data, opts? }`)                      |
 | `dispatch`      | `dispatch(queue, name, data, options?): Promise<unknown>`            | `JobDispatcher`: `add` with the caller's job context stamped on |
-| `getQueue`      | `getQueue(name: string): Queue \| undefined`                         | Raw BullMQ `Queue`                                              |
+| `getQueue`      | `getQueue(name: string): Queue \| undefined`                         | Raw BullMQ `Queue` (provider mode: see below)                   |
 | `getQueueNames` | `getQueueNames(): string[]`                                          | Registered queue names                                          |
 | `closeAll`      | `closeAll(): Promise<void>`                                          | Close every queue                                               |
 
-With a `provider`, `add` / `addBulk` go through it (`addBulk` falls back to one `addJob` per entry).
+With a `provider`, `add` / `addBulk` go through it (`addBulk` falls back to one `addJob` per entry). `getQueue` then returns whatever `provider.getQueue(name)` gives (or a bare `{ name }`), typed as `Queue` but not a BullMQ instance unless the provider is — don't call BullMQ methods on it.
 
 ```ts
 import { Inject, JOB_DISPATCHER, Service, type JobDispatcher } from '@forinda/kickjs'

@@ -188,7 +188,10 @@ class RequestContext<TBody = any, TParams = any, TQuery = any, TKeys = ContextMe
   get file(): Express.Multer.File | undefined
   get files(): Express.Multer.File[] | undefined
 
-  qs(fieldConfig?: QueryFieldConfig, options?: ParseQueryOptions): TypedParsedQuery
+  qs<TConfig extends QueryFieldConfig | undefined = undefined>(
+    fieldConfig?: TConfig,
+    options?: ParseQueryOptions,
+  ): TypedParsedQuery<TConfig>
   get<K extends ContextMetaKey>(key: K): MetaValue<K> | undefined
   require<K extends TKeys>(key: K): Exclude<MetaValue<K>, undefined> // throws MissingContextValueError
   set<K extends ContextMetaKey>(key: K, value: MetaValue<K>): void
@@ -212,9 +215,9 @@ class RequestContext<TBody = any, TParams = any, TQuery = any, TKeys = ContextMe
   /** @deprecated Prefer ctx.problem.badRequest() */
   badRequest(message: string)
 
-  paginate<T>(
-    fetcher: (parsed: TypedParsedQuery) => Promise<{ data: T[]; total: number }>,
-    fieldConfig?: QueryFieldConfig,
+  paginate<T, TConfig extends QueryFieldConfig | undefined = undefined>(
+    fetcher: (parsed: TypedParsedQuery<TConfig>) => Promise<{ data: T[]; total: number }>,
+    fieldConfig?: TConfig,
   ): Promise<PaginatedResponse<T>>
 
   waitUntil(promise: Promise<unknown>): void // keep work running after the response
@@ -605,11 +608,11 @@ Serves a Prometheus request-duration histogram (`RequestHistogram`). The endpoin
 ORM-agnostic query string parsing for filters, sorting, pagination, and search. Also available as the `@forinda/kickjs/query` subpath.
 
 ```typescript
-function parseQuery(
+function parseQuery<TConfig extends QueryFieldConfig | undefined = undefined>(
   query: Record<string, any>,
-  fieldConfig?: QueryFieldConfig,
+  fieldConfig?: TConfig,
   options?: ParseQueryOptions,
-): TypedParsedQuery
+): TypedParsedQuery<TConfig>
 function parseFilters(
   filter: string | string[] | undefined,
   allowedFields?: string[],
@@ -683,8 +686,11 @@ interface ParsedQuery {
   pagination: PaginationParams
   search: string
 }
-/** filters[].field / sort[].field narrowed to an `as const` whitelist. */
-interface TypedParsedQuery<TConfig> extends ParsedQuery {}
+/** filters[].field / sort[].field narrowed to an `as const` whitelist (`FieldsOf` falls back to `string`). */
+interface TypedParsedQuery<TConfig extends QueryFieldConfig | undefined> extends ParsedQuery {
+  filters: Array<FilterItem & { field: FieldsOf<TConfig, 'filterable'> }>
+  sort: Array<SortItem & { field: FieldsOf<TConfig, 'sortable'> }>
+}
 
 type QueryFieldConfig =
   | { filterable?: string[]; sortable?: string[]; searchable?: string[] }

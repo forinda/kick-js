@@ -62,11 +62,11 @@ interface WsAdapterOptions {
 
 ### auth (`WsAuthConfig`)
 
-| Field              | Type                                                                                   | Default   | Notes                                                                       |
-| ------------------ | -------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------- |
-| `resolveUser`      | `(request: IncomingMessage, handshakeAuth?) => WsAuthenticatedUser \| null \| Promise` | required  | Runs once per socket before `@OnConnect`. `null` / throw closes with `4401` |
-| `autoJoinUserRoom` | `boolean`                                                                              | `true`    | Join `user:<id>` once resolved                                              |
-| `userRoomPrefix`   | `string`                                                                               | `'user:'` |                                                                             |
+| Field              | Type                                                                                                                | Default   | Notes                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------- |
+| `resolveUser`      | `(request: IncomingMessage, handshakeAuth?) => WsAuthenticatedUser \| null \| Promise<WsAuthenticatedUser \| null>` | required  | Runs once per socket before `@OnConnect`. `null` / throw closes with `4401` |
+| `autoJoinUserRoom` | `boolean`                                                                                                           | `true`    | Join `user:<id>` once resolved                                              |
+| `userRoomPrefix`   | `string`                                                                                                            | `'user:'` |                                                                             |
 
 The resolved user is stored on the context: `ctx.get('user')`, `ctx.get('userId')`. `handshakeAuth` is passed by `SocketIoAdapter` only.
 

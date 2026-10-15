@@ -167,8 +167,9 @@ interface KickCliPlugin {
 interface KickCliPluginContext {
   cwd: string
   projectRoot: string
-  config: KickConfig
+  config: KickConfig | null
   log: (msg: string) => void
+  generators?: DiscoveredGenerator[] // plugin-shipped generators merged by the host
 }
 ```
 

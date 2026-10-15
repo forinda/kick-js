@@ -55,7 +55,7 @@ import * as schema from './schema'
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
 
 export const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
-export const migrationAdapter = pgAdapter({ pool })
+export const migrationAdapter = pgAdapter({ pool, endPoolOnClose: true }) // shutdown ends the shared pool
 export const APP_DB = createToken<typeof db>('app/Db')
 ```
 
@@ -324,6 +324,7 @@ See [DB Extensions](../guide/db-extensions.md) for the full mapper signature.
 Declare a PostgreSQL named schema and hang tables off it (`@forinda/kickjs-db/pg`).
 
 ```ts
+import { serial } from '@forinda/kickjs-db'
 import { pgSchema } from '@forinda/kickjs-db/pg'
 
 const billing = pgSchema('billing')
