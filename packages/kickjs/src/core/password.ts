@@ -82,6 +82,33 @@ export interface PasswordCheck {
   needsRehash: boolean
 }
 
+/**
+ * A hash format from before scrypt — bcrypt or argon2 rows imported from
+ * another system. It still verifies; on success `needsRehash` is true, so the
+ * account moves to scrypt at its next login.
+ *
+ * ```ts
+ * import bcrypt from 'bcrypt'
+ * const bcryptHashes: LegacyHasher = {
+ *   matches: (stored) => /^\$2[aby]\$/.test(stored),
+ *   verify: (password, stored) => bcrypt.compare(password, stored),
+ * }
+ * await verifyPassword(input, user?.passwordHash, { legacy: [bcryptHashes] })
+ * ```
+ */
+export interface LegacyHasher {
+  /** Whether `stored` is in this format — by prefix (`$2b$` for bcrypt, `$argon2id$`). */
+  matches(stored: string): boolean
+  /** Whether `password` matches `stored`: the library's own check. */
+  verify(password: string, stored: string): boolean | Promise<boolean>
+}
+
+/** {@link verifyPassword}'s options: the scrypt cost, and older formats that still verify. */
+export interface VerifyPasswordOptions extends PasswordHashOptions {
+  /** Formats besides scrypt, tried in order on a hash scrypt can't read. */
+  legacy?: readonly LegacyHasher[]
+}
+
 // What a missing user is checked against: the same work as a real check.
 const DUMMY_SALT = randomBytes(SALT_BYTES)
 
@@ -90,25 +117,36 @@ const DUMMY_SALT = randomBytes(SALT_BYTES)
  * `undefined` for a user that doesn't exist: the password is still hashed,
  * so a missing account takes as long to reject as a wrong password and the
  * timing doesn't reveal which accounts exist. A hash not in this format
- * (another algorithm, or corrupt) fails rather than throws.
+ * (another algorithm, or corrupt) fails rather than throws, unless one of
+ * `options.legacy` reads it.
  */
 export async function verifyPassword(
   password: string,
   stored: string | null | undefined,
-  options: PasswordHashOptions = {},
+  options: VerifyPasswordOptions = {},
 ): Promise<PasswordCheck> {
+  const { legacy, ...scryptCost } = options
   const parsed = stored ? parse(stored) : undefined
+  const older = !parsed && stored ? legacy?.find((hasher) => hasher.matches(stored)) : undefined
+  if (older) {
+    // The library's own check; a throw (a malformed row) is a failed match.
+    const ok =
+      (await Promise.resolve()
+        .then(() => older.verify(password, stored!))
+        .catch(() => false)) === true
+    return { ok, needsRehash: ok }
+  }
   if (!parsed) {
     // At the cost real hashes are checked at (`options`, not the defaults),
     // and one derivation, so "no such user" takes as long as "wrong password".
-    await derive(password, DUMMY_SALT, costOf(options))
+    await derive(password, DUMMY_SALT, costOf(scryptCost))
     return { ok: false, needsRehash: false }
   }
   // Costs OpenSSL still refuses (N >= 2^(16r) with a small r) fail, not throw.
   const key = await derive(password, parsed.salt, parsed.cost).catch(() => undefined)
   if (!key) return { ok: false, needsRehash: false }
   const ok = key.length === parsed.key.length && timingSafeEqual(key, parsed.key)
-  const wanted = costOf(options)
+  const wanted = costOf(scryptCost)
   const needsRehash =
     ok && (parsed.cost.N !== wanted.N || parsed.cost.r !== wanted.r || parsed.cost.p !== wanted.p)
   return { ok, needsRehash }

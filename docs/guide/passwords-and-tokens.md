@@ -29,7 +29,7 @@ if (needsRehash) {
 
 **Pass `undefined` for a missing user.** `verifyPassword(password, user?.passwordHash)` still runs the hash when there's no user, at the cost you pass, so "no such account" takes as long as "wrong password" and response times don't reveal which emails are registered. Return the same message for both.
 
-**Never throws on bad input.** A hash in another format (bcrypt from a previous system, a corrupt column) returns `{ ok: false }`. So does a hash whose cost would need more than 256 MiB, so a tampered row can't exhaust memory.
+**Never throws on bad input.** A hash in another format (bcrypt from a previous system, a corrupt column) returns `{ ok: false }`, unless you pass a hasher for that format, as described in [Hashes from another system](#hashes-from-another-system). So does a hash whose cost would need more than 256 MiB, so a tampered row can't exhaust memory.
 
 **Normalised.** Passwords are NFKC-normalised before hashing (NIST 800-63B's advice), so `café` typed with a composed or a decomposed accent is the same password.
 
@@ -44,6 +44,26 @@ await verifyPassword(password, stored, cost) // needsRehash: true for hashes mad
 ```
 
 While accounts are moving to a new cost, those still on the old one verify at the old speed. That's a timing difference, but it reveals an account's age, not whether it exists. Memory is `128 * N * r` bytes per concurrent hash. Mind it on small containers, and in tests pass a low cost (`{ N: 2 ** 10, r: 8, p: 1 }`) to keep them fast.
+
+### Hashes from another system
+
+Users imported with bcrypt or argon2 hashes can keep their passwords. Pass a `LegacyHasher` for the format: `matches` recognises its hashes, and `verify` is that library's own check. A match returns `needsRehash: true`, so the rehash step above moves the account to scrypt at its next login:
+
+```ts
+import bcrypt from 'bcrypt'
+import { type LegacyHasher, verifyPassword } from '@forinda/kickjs'
+
+const bcryptHashes: LegacyHasher = {
+  matches: (stored) => /^\$2[aby]\$/.test(stored),
+  verify: (password, stored) => bcrypt.compare(password, stored),
+}
+
+const { ok, needsRehash } = await verifyPassword(password, user?.passwordHash, {
+  legacy: [bcryptHashes],
+})
+```
+
+Scrypt hashes are never handed to a legacy hasher. A `verify` that throws (a malformed row) counts as a failed match. An old-format check takes that library's time, not scrypt's, so until those rows are gone a login's timing can tell an imported account from a missing one, the same trade-off as changing the cost. Once no rows in the old format remain, drop the hasher and its dependency.
 
 ## Signed tokens: `createSigner`
 

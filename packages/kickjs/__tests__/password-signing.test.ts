@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createSigner, hashPassword, verifyPassword } from '../src/index'
+import { createHash } from 'node:crypto'
+import { createSigner, hashPassword, verifyPassword, type LegacyHasher } from '../src/index'
 
 // Cheap cost for tests; the defaults are exercised once below.
 const fast = { N: 2 ** 10, r: 8, p: 1 }
@@ -67,6 +68,49 @@ describe('hashPassword / verifyPassword', () => {
 
   it('rejects a cost that is not a power of two', async () => {
     await expect(hashPassword('pw', { N: 1000 })).rejects.toThrow(/power of two/)
+  })
+})
+
+describe('verifyPassword with legacy formats', () => {
+  // A stand-in for bcrypt: `sha256$<hex>`.
+  const sha: LegacyHasher = {
+    matches: (stored) => stored.startsWith('sha256$'),
+    verify: (password, stored) =>
+      stored === `sha256$${createHash('sha256').update(password).digest('hex')}`,
+  }
+  const old = `sha256$${createHash('sha256').update('hunter2').digest('hex')}`
+
+  it('verifies an imported hash and asks for a rehash, so the account moves to scrypt', async () => {
+    expect(await verifyPassword('hunter2', old, { ...fast, legacy: [sha] })).toEqual({
+      ok: true,
+      needsRehash: true,
+    })
+    expect(await verifyPassword('wrong', old, { ...fast, legacy: [sha] })).toEqual({
+      ok: false,
+      needsRehash: false,
+    })
+  })
+
+  it('fails without the hasher, and when it throws or returns something other than true', async () => {
+    expect((await verifyPassword('hunter2', old, fast)).ok).toBe(false)
+    const throws: LegacyHasher = {
+      matches: () => true,
+      verify: () => {
+        throw new Error('malformed hash')
+      },
+    }
+    expect((await verifyPassword('hunter2', old, { ...fast, legacy: [throws] })).ok).toBe(false)
+    const truthy: LegacyHasher = { matches: () => true, verify: () => 1 as unknown as boolean }
+    expect((await verifyPassword('hunter2', old, { ...fast, legacy: [truthy] })).ok).toBe(false)
+  })
+
+  it('leaves scrypt hashes to scrypt', async () => {
+    const stored = await hashPassword('hunter2', fast)
+    const never: LegacyHasher = { matches: () => true, verify: () => true }
+    expect(await verifyPassword('wrong', stored, { ...fast, legacy: [never] })).toEqual({
+      ok: false,
+      needsRehash: false,
+    })
   })
 })
 
