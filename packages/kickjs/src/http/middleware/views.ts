@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { Logger, defineAdapter } from '../../core'
 
 const log = Logger.for('ViewEngine')
@@ -23,7 +23,12 @@ export interface ViewAdapterOptions {
   /** File extension for templates (e.g., 'ejs', 'pug', 'hbs') */
   ext: string
 
-  /** Directory containing template files (default: 'src/views') */
+  /**
+   * Directory containing template files (default: 'src/views'), relative to
+   * the project. Also looked up beside the running entry file, where
+   * `copyDirs: ['src/views']` puts it in a build (`dist/src/views`), so a
+   * deployment holding only `dist/` still finds it.
+   */
   viewsDir?: string
 
   /** Default layout template (optional — depends on engine) */
@@ -87,9 +92,22 @@ export const ViewAdapter = defineAdapter<ViewAdapterOptions>({
       }
 
       app.set('view engine', ext)
-      app.set('views', resolve(viewsDir))
+      app.set('views', viewDirs(viewsDir))
 
-      log.debug(`View engine: ${ext} (${resolve(viewsDir)})`)
+      log.debug(`View engine: ${ext} (${viewDirs(viewsDir).join(', ')})`)
     },
   }),
 })
+
+/**
+ * Where to look for `viewsDir`: the project — `KICK_APP_ROOT` when set (the
+ * Netlify and Vercel functions `kick build:*` writes set it to where
+ * `deploy.include` files land), else the working directory — then beside the
+ * running entry file (`node dist/index.js` → `dist/<viewsDir>`, where
+ * `copyDirs` copies it). Express tries them in order.
+ */
+export function viewDirs(viewsDir: string): string[] {
+  const root = resolve(process.env.KICK_APP_ROOT ?? process.cwd(), viewsDir)
+  const entry = process.argv[1] ? resolve(dirname(resolve(process.argv[1])), viewsDir) : root
+  return [...new Set([root, entry])]
+}
