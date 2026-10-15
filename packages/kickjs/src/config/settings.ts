@@ -313,6 +313,8 @@ export function loadSettings(
    * sections, then modules') and a clash between them must still be refused.
    */
   byPrefix: Map<string, Settings<unknown>> = new Map(),
+  /** Values passed to `provide()`, across calls — same reason as `byPrefix`. */
+  providedBefore: Map<Settings<unknown>, unknown> = new Map(),
 ): Map<Settings<unknown>, unknown> {
   const values = new Map<Settings<unknown>, unknown>()
   const failures: string[] = []
@@ -322,6 +324,12 @@ export function loadSettings(
   const sections: Settings<unknown>[] = []
   for (const decl of declarations) {
     if (isProvided(decl)) {
+      // Two provides of one section would silently keep whichever came last.
+      const earlier = provided.has(decl.section) ? provided : providedBefore
+      if (earlier.has(decl.section) && earlier.get(decl.section) !== decl.value) {
+        failures.push(`Settings '${decl.section.prefix}' are provided twice with different values.`)
+        continue
+      }
       provided.set(decl.section, decl.value)
       sections.push(decl.section)
     } else {
@@ -331,8 +339,9 @@ export function loadSettings(
   for (const section of sections) {
     if (values.has(section)) continue
     const other = byPrefix.get(section.prefix)
-    // Already bound in an earlier phase: same section, nothing to do.
-    if (other === section) continue
+    // Already bound in an earlier phase: nothing to do — unless that read env
+    // and this phase provides a value, which wins.
+    if (other === section && !(provided.has(section) && !providedBefore.has(section))) continue
     if (other && other !== section) {
       failures.push(`Two different settings sections use the prefix '${section.prefix}'.`)
       continue
@@ -341,6 +350,7 @@ export function loadSettings(
     try {
       const value = provided.has(section) ? section.parse(provided.get(section)) : section.load(env)
       values.set(section, value)
+      if (provided.has(section)) providedBefore.set(section, provided.get(section))
       // `get()` returns what the app started with.
       cached.set(section, value)
     } catch (err) {

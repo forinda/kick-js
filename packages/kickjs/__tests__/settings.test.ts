@@ -333,4 +333,28 @@ describe('provided settings', () => {
       new Application({ modules: [], settings: [DbSettings.provide({ url: 'nope' })] }).setup(),
     ).rejects.toThrow(/KT_DB_URL/)
   })
+
+  it('a module-provided value wins over the app reading the same section from env', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://from-env/app')
+    const TestModule = {
+      settings: () => [DbSettings.provide({ url: 'postgres://module/app' })],
+      routes: () => null,
+    }
+    const app = new Application({ modules: [TestModule as never], settings: [DbSettings] })
+    await app.setup()
+    expect(app.getContainer().resolve(DbSettings).url).toBe('postgres://module/app')
+  })
+
+  it('fails startup when one section is provided twice with different values', async () => {
+    const TestModule = {
+      settings: () => [DbSettings.provide({ url: 'postgres://module/app' })],
+      routes: () => null,
+    }
+    await expect(
+      new Application({
+        modules: [TestModule as never],
+        settings: [DbSettings.provide({ url: 'postgres://app/app' })],
+      }).setup(),
+    ).rejects.toThrow(/provided twice/)
+  })
 })

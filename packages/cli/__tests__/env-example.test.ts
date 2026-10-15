@@ -29,6 +29,22 @@ describe('renderEnvExample', () => {
     expect(text).not.toMatch(/\n\n\n/)
   })
 
+  it('keeps multi-line descriptions and defaults inside comments', () => {
+    const text = renderEnvExample({
+      env: [
+        {
+          name: 'GREETING',
+          required: false,
+          default: 'hi\nthere',
+          description: 'Shown on\nthe home page',
+          list: false,
+        },
+      ],
+      sections: [],
+    })
+    expect(text).toContain('# Shown on\n# the home page\n# GREETING="hi\\nthere"\n')
+  })
+
   it('omits the env block when there is no schema', () => {
     expect(renderEnvExample({ env: [], sections: [] })).not.toContain('App env schema')
   })
