@@ -127,7 +127,8 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     expect((await patch(6, 'world')).headers['upload-offset']).toBe('11')
 
     expect(new TextDecoder().decode((await files.get(completed[0]))!)).toBe('hello world')
-    expect((await files.stat(completed[0]))!.contentType).toBe('text/plain')
+    // The client's filetype is not trusted as the served type.
+    expect((await files.stat(completed[0]))!.contentType).toBe('application/octet-stream')
     expect(completed).toEqual([`uploads/${location.split('/').pop()}`])
     // Only the finished record is left, until it expires.
     const id = location.split('/').pop()
@@ -369,6 +370,36 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     }
   })
 
+  it('serves an upload as the type onCreate chose, never as the client declared it', async () => {
+    const TYPES = ['image/png', 'text/plain']
+    const { agent, files, completed } = await boot(runtime, {
+      onCreate: ({ metadata }) =>
+        TYPES.includes(metadata.filetype) ? { contentType: metadata.filetype } : {},
+    })
+    const upload = async (filetype: string) => {
+      const { headers } = await agent
+        .post('/uploads')
+        .set(TUS)
+        .set('Upload-Length', '1')
+        .set('Upload-Metadata', `filetype ${b64(filetype)}`)
+        .set('Content-Type', 'application/offset+octet-stream')
+        .send(Buffer.from('x'))
+        .expect(201)
+      return headers.location as string
+    }
+    await upload('image/png')
+    await upload('text/html')
+    expect((await files.stat(completed[0]))!.contentType).toBe('image/png')
+    expect((await files.stat(completed[1]))!.contentType).toBe('application/octet-stream')
+  })
+
+  it('refuses a contentType from onCreate that is not one exact type', async () => {
+    const { agent } = await boot(runtime, {
+      onCreate: () => ({ contentType: 'text/html; charset=utf-8' }),
+    })
+    expect((await agent.post('/uploads').set(TUS).set('Upload-Length', '1')).status).toBe(500)
+  })
+
   it('honours X-HTTP-Method-Override on POST only', async () => {
     const { agent } = await boot(runtime)
     const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)
@@ -572,7 +603,11 @@ describe('across instances, sharing partials', () => {
   })
 
   it('uploads in parallel with tus-js-client (parallelUploads)', async () => {
-    const { urls, files, completed } = await instances(2)
+    const { urls, files, completed } = await instances(2, {
+      // The final upload's type, checked against an allowlist.
+      onCreate: ({ metadata }) =>
+        metadata.filetype === 'text/plain' ? { contentType: 'text/plain' } : {},
+    })
     const data = Buffer.from(
       Array.from({ length: 3000 }, (_, i) => String.fromCharCode(97 + (i % 26))).join(''),
     )

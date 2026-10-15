@@ -59,6 +59,14 @@ export interface TusUpload {
   concat?: 'partial' | 'final'
 }
 
+/** Where `onCreate` puts an upload, and what it keeps with it. */
+export interface TusTarget {
+  key?: string
+  data?: unknown
+  /** One exact type, e.g. `'image/png'`, after checking the client's `metadata.filetype`. */
+  contentType?: string
+}
+
 /** What the client asked to create. */
 export interface TusCreateRequest {
   headers: IncomingHttpHeaders
@@ -92,11 +100,14 @@ export interface TusOptions {
    * `size`). Throw an `HttpException` to refuse with its status. `data` is
    * kept with the upload and handed to `authorize`. Default key: `uploads/<id>`.
    * Keys under `tus/` are refused: that prefix holds the unfinished uploads.
+   *
+   * `contentType` is what the stored file is served as. Default
+   * `application/octet-stream`: the client's `metadata.filetype` is never
+   * used as-is — `text/html` or `image/svg+xml` from a client would make the
+   * file a page that runs script. Check it against your own list and return
+   * it here.
    */
-  onCreate?(
-    request: TusCreateRequest,
-    id: string,
-  ): { key?: string; data?: unknown } | void | Promise<{ key?: string; data?: unknown } | void>
+  onCreate?(request: TusCreateRequest, id: string): TusTarget | void | Promise<TusTarget | void>
   /**
    * Check every later request (HEAD, PATCH, DELETE) to an upload, and each
    * part a final upload joins — e.g. that the caller is the user who created
@@ -125,6 +136,8 @@ interface Info {
   concat?: 'partial' | 'final'
   /** For a final upload: the ids of its parts, in order. */
   parts?: string[]
+  /** From `onCreate`, never from the client. */
+  contentType?: string
 }
 
 /** Where a range of the upload is: the chunk object, and its size. */
@@ -186,6 +199,16 @@ function checksumOf(req: IncomingMessage): { hash: Hash; expected: string } | un
     )
   }
   return { hash: createHash(algorithm), expected }
+}
+
+/** `onCreate`'s `contentType`, if it is one exact type (no parameters, no header injection). */
+function exactType(contentType: string): string {
+  if (!/^[\w.+-]+\/[\w.+-]+$/.test(contentType)) {
+    throw new Error(
+      `tus: onCreate contentType must be one exact type like 'image/png', not '${contentType}'`,
+    )
+  }
+  return contentType
 }
 
 const isStorage = (value: unknown): value is Storage =>
@@ -419,7 +442,7 @@ export function createTusHandler(
     if (info.concat !== 'partial') {
       const chunks = await chunksOf(info)
       const putOptions = {
-        contentType: info.metadata.filetype || info.metadata.contentType || undefined,
+        contentType: info.contentType ?? 'application/octet-stream',
       }
       if (sameBucket) await (options.storage as Composer).compose(info.key, chunks, putOptions)
       else await options.storage.put(info.key, contents(chunks), putOptions)
@@ -506,6 +529,7 @@ export function createTusHandler(
       metadata,
       rawMetadata,
       data: chosen.data,
+      ...(chosen.contentType ? { contentType: exactType(chosen.contentType) } : {}),
       expiresAt: '',
       ...(concat ? { concat } : {}),
       ...(parts ? { parts } : {}),

@@ -58,4 +58,5 @@ Needs `@forinda/kickjs` 10.1 or later.
 | `createTusHandler(options)` | The same endpoint as a Node `(req, res, next)` handler                                                                             |
 | `TusOptions`                | `path`, `storage`, `partials`, `dir`, `maxSize`, `expiresIn`, `onCreate`, `authorize`, `onComplete`                                |
 | `TusUpload`                 | `id`, `key`, `size`, `offset`, `metadata`, `data`, `expiresAt`, `concat?`                                                          |
+| `TusTarget`                 | What `onCreate` returns: `key`, `data`, `contentType` (one exact type; default `application/octet-stream`)                         |
 | `TusCreateRequest`          | `headers`, `size`, `metadata`, `concat?`                                                                                           |
