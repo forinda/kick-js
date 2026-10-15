@@ -33,7 +33,12 @@ const SALT_BYTES = 16
 const KEY_BYTES = 64
 
 function derive(password: string, salt: Buffer, cost: Required<PasswordHashOptions>) {
-  const options: ScryptOptions = { ...cost, maxmem: 256 * cost.N * cost.r }
+  // What OpenSSL allocates (128 * r * (N + p + 2)), plus slack; `256 * N * r`
+  // alone is too little when p is large next to N.
+  const options: ScryptOptions = {
+    ...cost,
+    maxmem: 128 * cost.r * (cost.N + cost.p + 2) + 1024 * 1024,
+  }
   return new Promise<Buffer>((resolve, reject) =>
     // NFKC, as NIST 800-63B suggests: the same password typed on another
     // keyboard or OS (composed vs decomposed accents) still matches.
@@ -99,7 +104,9 @@ export async function verifyPassword(
     await derive(password, DUMMY_SALT, costOf(options))
     return { ok: false, needsRehash: false }
   }
-  const key = await derive(password, parsed.salt, parsed.cost)
+  // Costs OpenSSL still refuses (N >= 2^(16r) with a small r) fail, not throw.
+  const key = await derive(password, parsed.salt, parsed.cost).catch(() => undefined)
+  if (!key) return { ok: false, needsRehash: false }
   const ok = key.length === parsed.key.length && timingSafeEqual(key, parsed.key)
   const wanted = costOf(options)
   const needsRehash =

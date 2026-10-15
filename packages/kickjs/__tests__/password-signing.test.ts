@@ -53,6 +53,13 @@ describe('hashPassword / verifyPassword', () => {
     }
   })
 
+  it('handles a large p next to a small N, and fails on a cost OpenSSL refuses', async () => {
+    const stored = await hashPassword('pw', { N: 2, r: 1, p: 16 })
+    expect((await verifyPassword('pw', stored, { N: 2, r: 1, p: 16 })).ok).toBe(true)
+    const refused = `scrypt$${2 ** 21}$1$1$c2FsdA==$a2V5`
+    expect(await verifyPassword('pw', refused)).toEqual({ ok: false, needsRehash: false })
+  })
+
   it('checks a missing user at the configured cost, not the default', async () => {
     // The dummy check reads `options`: an invalid cost surfaces from it too.
     await expect(verifyPassword('pw', undefined, { N: 1000 })).rejects.toThrow(/power of two/)

@@ -55,14 +55,17 @@ import { HttpException, createSigner, getEnv } from '@forinda/kickjs'
 const resets = createSigner({ secret: getEnv('SIGNING_SECRET'), salt: 'password-reset' })
 
 // Issue
-const token = resets.sign({ userId: user.id, stamp: user.passwordChangedAt })
+const token = resets.sign({ userId: user.id, stamp: user.passwordChangedAt.toISOString() })
 await mailer.send(user.email, `https://app.example.com/reset?token=${token}`)
 
 // Redeem
 const check = resets.verify<{ userId: string; stamp: string }>(token, { maxAge: 60 * 60_000 })
 if (!check.ok) throw HttpException.badRequest(check.reason) // 'invalid' | 'expired'
 const user = await users.find(check.value.userId)
-if (user.passwordChangedAt !== check.value.stamp) throw HttpException.badRequest('used')
+// A Date from the database never equals the string in the token: compare strings.
+if (user?.passwordChangedAt.toISOString() !== check.value.stamp) {
+  throw HttpException.badRequest('used')
+}
 ```
 
 - **Signed, not encrypted.** The token is `payload.timestamp.signature`, URL-safe, and anyone holding it can decode the payload. Put ids in it, not secrets.
