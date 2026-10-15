@@ -264,15 +264,16 @@ function describePipeline(
   ]
   return runOrder.map((registration) => {
     const winner = bySource.get(registration)
-    return {
+    const described: RouteContributor = {
       key: registration.key,
       source: winner?.source ?? 'global',
-      ...(winner?.label ? { label: winner.label } : {}),
       dependsOn: registration.dependsOn,
       beforeValidation: registration.beforeValidation === true,
       overrides: sources
         .filter((s) => s.registration !== registration && s.registration.key === registration.key)
         .map((s) => (s.label ? { source: s.source, label: s.label } : { source: s.source })),
     }
+    if (winner?.label) described.label = winner.label
+    return described
   })
 }
