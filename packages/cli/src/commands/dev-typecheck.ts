@@ -14,7 +14,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 
 export interface TypecheckBin {
   cmd: string
@@ -64,18 +64,58 @@ export function localBinDirs(projectDir: string): string[] {
   return (root ? [project, root] : [project]).map((dir) => join(dir, 'node_modules', '.bin'))
 }
 
-/** The nearest folder above `dir` that declares a workspace holding it, if any. */
+/**
+ * The workspace root `dir` belongs to: the first folder above it with a
+ * `package.json` or `pnpm-workspace.yaml`, and only when that file lists `dir`
+ * as a member. Anything else above — a stray `package.json` in `/tmp` — is not
+ * this project's, and nothing further up is searched.
+ */
 function workspaceRoot(dir: string): string | undefined {
   for (let up = dirname(dir); up !== dirname(up); up = dirname(up)) {
-    if (existsSync(join(up, 'pnpm-workspace.yaml'))) return up
-    try {
-      const pkg = JSON.parse(readFileSync(join(up, 'package.json'), 'utf-8'))
-      if (pkg.workspaces) return up
-    } catch {
-      // no package.json here — keep looking
-    }
+    const pnpmFile = join(up, 'pnpm-workspace.yaml')
+    const pkgFile = join(up, 'package.json')
+    if (!existsSync(pnpmFile) && !existsSync(pkgFile)) continue
+    return workspaceMembers(pnpmFile, pkgFile).some((glob) => globMatch(glob, relative(up, dir)))
+      ? up
+      : undefined
   }
   return undefined
+}
+
+/** Member globs from `pnpm-workspace.yaml`'s `packages:` or package.json's `workspaces`. */
+function workspaceMembers(pnpmFile: string, pkgFile: string): string[] {
+  try {
+    if (existsSync(pnpmFile)) {
+      // The list right under `packages:`, up to the next key.
+      const after = readFileSync(pnpmFile, 'utf-8').split(/^packages:\s*$/m)[1] ?? ''
+      const globs: string[] = []
+      for (const line of after.split('\n')) {
+        if (!line.trim() || line.trim().startsWith('#')) continue
+        const item = /^\s+-\s*['"]?([^'"#]+?)['"]?\s*$/.exec(line)
+        if (!item) break
+        globs.push(item[1]!)
+      }
+      return globs
+    }
+    const { workspaces } = JSON.parse(readFileSync(pkgFile, 'utf-8'))
+    const globs = Array.isArray(workspaces) ? workspaces : workspaces?.packages
+    return Array.isArray(globs) ? globs.filter((g): g is string => typeof g === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Workspace globs: `*` is one path segment, `**` any depth. No negation. */
+function globMatch(glob: string, path: string): boolean {
+  const pattern = glob
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .map((part) =>
+      part === '**' ? '.*' : part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'),
+    )
+    .join('/')
+  return new RegExp(`^${pattern}$`).test(path.split(sep).join('/'))
 }
 
 export interface TypecheckResult {

@@ -70,6 +70,40 @@ describe('resolveTypecheckBin', () => {
     expect(resolveTypecheckBin(server)?.cmd).toBe(join(root, 'node_modules', '.bin', tsc))
   })
 
+  it('finds it at a pnpm workspace root listing the project by glob', () => {
+    const root = tmp()
+    writeFileSync(
+      join(root, 'pnpm-workspace.yaml'),
+      "packages:\n  - 'apps/*'\n\nonlyBuiltDependencies:\n  - esbuild\n",
+    )
+    withTsc(root)
+    const app = join(root, 'apps', 'api')
+    mkdirSync(app, { recursive: true })
+    expect(resolveTypecheckBin(app)?.cmd).toBe(join(root, 'node_modules', '.bin', tsc))
+    // A list under another key names no members.
+    mkdirSync(join(root, 'esbuild'))
+    expect(resolveTypecheckBin(join(root, 'esbuild'))).toBeNull()
+  })
+
+  it('ignores a parent that declares a workspace the project is not a member of', () => {
+    const parent = tmp() // e.g. a planted /tmp/package.json
+    writeFileSync(join(parent, 'package.json'), JSON.stringify({ workspaces: ['other'] }))
+    withTsc(parent)
+    const project = join(parent, 'app')
+    mkdirSync(project)
+    expect(resolveTypecheckBin(project)).toBeNull()
+  })
+
+  it('stops at the first package.json above, even if a workspace lists the project further up', () => {
+    const outer = tmp()
+    writeFileSync(join(outer, 'package.json'), JSON.stringify({ workspaces: ['**'] }))
+    withTsc(outer)
+    const middle = join(outer, 'middle')
+    mkdirSync(join(middle, 'app'), { recursive: true })
+    writeFileSync(join(middle, 'package.json'), '{}')
+    expect(resolveTypecheckBin(join(middle, 'app'))).toBeNull()
+  })
+
   it("never runs one from a parent folder that isn't the project's workspace", () => {
     const parent = tmp()
     withTsc(parent) // e.g. a node_modules/.bin someone left in /tmp
