@@ -29,25 +29,48 @@ export interface InsertManyOptions {
   atomic?: boolean
 }
 
+/** A statement, before it runs. */
+interface Compilable {
+  compile(): { parameters: readonly unknown[] }
+}
+
 /**
- * `rows` in groups that each fit in one statement: `maxParams` divided by the
- * columns any row has (a row missing a column still takes its slot).
+ * `rows` in groups whose statement — what `build` makes of them — binds at
+ * most `maxParams` parameters. Counted on the compiled SQL, so expression
+ * values and an upsert's update set count too. The first guess is one
+ * parameter per column any row has; a group over the limit shrinks in
+ * proportion and is built again.
  */
-export function chunksFor(rows: readonly Row[], maxParams: number, extraPerRow = 0): Row[][] {
+export function chunksFor(
+  rows: readonly Row[],
+  maxParams: number,
+  build: (rows: Row[]) => Compilable,
+): Row[][] {
   if (!Number.isInteger(maxParams) || maxParams < 1) {
     throw new Error('kickjs-db: maxParams must be a whole number, at least 1')
   }
   const columns = new Set<string>()
   for (const row of rows) for (const key of Object.keys(row)) columns.add(key)
-  const perRow = Math.max(1, columns.size + extraPerRow)
-  const size = Math.floor(maxParams / perRow)
-  if (size < 1) {
-    throw new Error(
-      `kickjs-db: one row needs ${perRow} parameters, more than maxParams (${maxParams})`,
-    )
-  }
+  let size = Math.max(1, Math.floor(maxParams / Math.max(1, columns.size)))
   const chunks: Row[][] = []
-  for (let i = 0; i < rows.length; i += size) chunks.push(rows.slice(i, i + size) as Row[])
+  for (let i = 0; i < rows.length;) {
+    const chunk = rows.slice(i, i + size) as Row[]
+    const params = build(chunk).compile().parameters.length
+    if (params > maxParams) {
+      if (chunk.length === 1) {
+        throw new Error(
+          `kickjs-db: one row needs ${params} parameters, more than maxParams (${maxParams})`,
+        )
+      }
+      size = Math.max(
+        1,
+        Math.min(chunk.length - 1, Math.floor((chunk.length * maxParams) / params)),
+      )
+      continue
+    }
+    chunks.push(chunk)
+    i += chunk.length
+  }
   return chunks
 }
 
@@ -78,8 +101,8 @@ export async function insertMany<DB, T extends keyof DB & string>(
       'kickjs-db: insertMany({ returning }) needs RETURNING, which MySQL has no syntax for',
     )
   }
-  const chunks = chunksFor(rows as Row[], options.maxParams ?? MAX_PARAMS[db.dialect])
   const insert = (chunk: Row[]) => (db.insertInto as (t: string) => any)(table).values(chunk)
+  const chunks = chunksFor(rows as Row[], options.maxParams ?? MAX_PARAMS[db.dialect], insert)
   if (options.returning) {
     return inChunks(db, chunks, options.atomic ?? true, (chunk) =>
       insert(chunk).returningAll().execute(),

@@ -10,6 +10,7 @@ import {
   emitSqlite,
   extractSnapshot,
   integer,
+  sql,
   serial,
   table,
   text,
@@ -103,5 +104,23 @@ describe('insertMany on SQLite', () => {
     expect(updated).toHaveLength(40_000)
     const kinds = await db.selectFrom('events').select('kind').distinct().execute()
     expect(kinds).toEqual([{ kind: 'view' }])
+  })
+  it('counts the parameters the whole statement binds — an update set, expression values', async () => {
+    const db = make()
+    const sent: number[] = []
+    db.on('query', (e) => void (/^insert/i.test(e.sql) && sent.push(e.parameters.length)))
+    // 3 per row plus the update's 1: two rows would bind 7, so one per statement.
+    await db.upsert('events', {
+      values: rows(4),
+      target: ['code'],
+      update: { weight: 1 },
+      maxParams: 6,
+    })
+    expect(sent).toEqual([4, 4, 4, 4])
+    sent.length = 0
+    // An expression binding two: 4 per row, so one row per statement.
+    const joined = rows(3, 10).map((r) => ({ ...r, kind: sql<string>`${'cl'} || ${'ick'}` }))
+    expect(await db.insertMany('events', joined, { maxParams: 6 })).toBe(3)
+    expect(sent).toEqual([4, 4, 4])
   })
 })

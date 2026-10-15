@@ -128,7 +128,7 @@ export const db = createDbClient({
 })
 ```
 
-`table` is the table a `selectFrom` or `db.query.<table>` reads (without its alias), and `undefined` for a list of tables or a subquery. `route` isn't asked inside a transaction or through `db.primary`, which always use the primary. Keep it fast and free of I/O, because it runs before every read. To skip a replica that is lagging, check its lag elsewhere on a timer and read the result here.
+`table` is the table a `selectFrom` or `db.query.<table>` reads (without its alias), and `undefined` for a list of tables or a subquery. `route` isn't asked inside a transaction or through `db.primary`, which always use the primary. It runs when the read is built — at `db.selectFrom(…)` or `db.query.<table>` — so a query built before a write keeps the connection it was given: for read-your-writes, build the read after the write. Keep it fast and free of I/O, because it runs before every read. To skip a replica that is lagging, check its lag elsewhere on a timer and read the result here.
 
 ## Transactions hold a connection
 
