@@ -75,6 +75,13 @@ describe.each([
     )
     expect(results.filter(Boolean)).toHaveLength(1)
     expect(text(await files.get('m/race'))).toBe(`caller ${results.indexOf(true)}`)
+    expect(
+      await files.putIfAbsent('m/stream', Readable.from([new TextEncoder().encode('s1')])),
+    ).toBe(true)
+    expect(
+      await files.putIfAbsent('m/stream', Readable.from([new TextEncoder().encode('s2')])),
+    ).toBe(false)
+    expect(text(await files.get('m/stream'))).toBe('s1')
   })
 
   it('lists in the same order as plain string sorting, across folders', async () => {

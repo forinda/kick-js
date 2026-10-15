@@ -15,7 +15,7 @@ One `Storage` interface over memory, local disk, and S3-compatible buckets, with
 | `diskStorage(options)`           | From `@forinda/kickjs-storage/disk` (Node only). Files under `root`, written atomically. `baseUrl` for `url()`                             |
 | `s3Storage(options)`             | S3, R2, MinIO over `fetch` with SigV4. `url()` presigns a GET                                                                              |
 | `checkKey(key)`                  | Throws for an empty key, a leading `/`, empty / `.` / `..` segments, `\` or NUL                                                            |
-| `S3Storage`                      | `Storage` plus `uploadUrl(key, { size, contentType, expiresIn })` and `multipart`                                                          |
+| `S3Storage`                      | `Storage` plus `uploadUrl(key, { size, contentType, expiresIn })`, `multipart`, `compose(key, sources)` and `location`                     |
 | `Multipart`                      | `create`, `partUrl`, `listParts`, `complete`, `abort`                                                                                      |
 | `UploadUrlOptions`               | `expiresIn`, `size` (signed, exact), `contentType` (signed)                                                                                |
 | `UploadedPart` / `CompletedPart` | `{ partNumber, etag, size }` / `{ partNumber, etag }`                                                                                      |

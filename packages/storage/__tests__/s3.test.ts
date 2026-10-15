@@ -267,6 +267,88 @@ describe('s3Storage', () => {
       expect(calls[0].headers.get('if-none-match')).toBe('*')
     })
 
+    it('putIfAbsent streams a large body in parts, conditional on completing', async () => {
+      const big = () => Readable.from([new Uint8Array(5 * 1024 * 1024), new Uint8Array(10)])
+      const won = scripted(
+        [404, ''], // HEAD: not there yet
+        [200, '<R><UploadId>u1</UploadId></R>'],
+        [200, '', { etag: '"p1"' }],
+        [200, '', { etag: '"p2"' }],
+        [200, '<CompleteMultipartUploadResult/>'],
+      )
+      expect(await won.files.putIfAbsent('k', big())).toBe(true)
+      expect(won.calls.at(-1)!.headers.get('if-none-match')).toBe('*')
+
+      const lost = scripted(
+        [404, ''],
+        [200, '<R><UploadId>u2</UploadId></R>'],
+        [200, '', { etag: '"p1"' }],
+        [200, '', { etag: '"p2"' }],
+        [412, '<Error><Code>PreconditionFailed</Code></Error>'],
+        [204, ''],
+      )
+      expect(await lost.files.putIfAbsent('k', big())).toBe(false)
+      expect(lost.calls.at(-1)!.method).toBe('DELETE') // the upload is aborted
+
+      // Already there: found before uploading anything.
+      const there = scripted([200, ''])
+      expect(await there.files.putIfAbsent('k', big())).toBe(false)
+      expect(there.calls.map((c) => c.method)).toEqual(['HEAD'])
+    })
+
+    it('compose copies one source with CopyObject, signing the copy headers', async () => {
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': '10' }],
+        [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+      )
+      await files.compose('dest', ['tus/a b'], { contentType: 'text/plain' })
+      const copy = calls[1]
+      expect(copy.method).toBe('PUT')
+      expect(copy.headers.get('x-amz-copy-source')).toBe('/files/tus/a%20b')
+      expect(copy.headers.get('content-type')).toBe('text/plain')
+      expect(copy.headers.get('authorization')).toContain('x-amz-copy-source')
+    })
+
+    it('compose copies big sources in even ranges of at most 5 GiB', async () => {
+      const GiB = 1024 ** 3
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': String(6 * GiB) }],
+        [200, '', { 'content-length': '7' }],
+        [200, '<R><UploadId>u</UploadId></R>'],
+        [200, '<CopyPartResult><ETag>"1"</ETag></CopyPartResult>'],
+        [200, '<CopyPartResult><ETag>"2"</ETag></CopyPartResult>'],
+        [200, '<CopyPartResult><ETag>"3"</ETag></CopyPartResult>'],
+        [200, '<CompleteMultipartUploadResult/>'],
+      )
+      await files.compose('dest', ['big', 'tail'])
+      const ranges = calls
+        .filter((c) => c.headers.get('x-amz-copy-source-range'))
+        .map(
+          (c) =>
+            `${c.headers.get('x-amz-copy-source')} ${c.headers.get('x-amz-copy-source-range')}`,
+        )
+        .toSorted()
+      expect(ranges).toEqual([
+        `/files/big bytes=0-${3 * GiB - 1}`,
+        `/files/big bytes=${3 * GiB}-${6 * GiB - 1}`,
+        '/files/tail bytes=0-6',
+      ])
+      expect(await calls.at(-1)!.text()).toContain('<PartNumber>3</PartNumber>')
+    })
+
+    it('compose streams through when a source before the last is under 5 MiB', async () => {
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': '3' }],
+        [200, '', { 'content-length': '3' }],
+        [200, 'abc'],
+        [200, 'def'],
+        [200, ''],
+      )
+      await files.compose('dest', ['a', 'b'])
+      expect(calls.map((c) => c.method)).toEqual(['HEAD', 'HEAD', 'GET', 'GET', 'PUT'])
+      expect(await calls[4].text()).toBe('abcdef')
+    })
+
     it('sends a small stream as one PUT', async () => {
       const { files, calls } = scripted([200, ''])
       await files.put('k', Readable.from([new Uint8Array([1, 2])]))

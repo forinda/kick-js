@@ -124,6 +124,44 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     expect(new TextDecoder().decode((await files.get(key))!)).toBe(`w${results.indexOf(true)}`)
   })
 
+  it('putIfAbsent with large streams: one of two racing writers wins', async () => {
+    const key = `${run}claim-big`
+    // Both pass the early check; completing with If-None-Match decides.
+    const stream = (fill: number) =>
+      Readable.from([new Uint8Array(5 * MiB).fill(fill), new Uint8Array(MiB).fill(fill)])
+    const results = await Promise.all([
+      files.putIfAbsent(key, stream(1)),
+      files.putIfAbsent(key, stream(2)),
+    ])
+    expect(results.filter(Boolean)).toHaveLength(1)
+    const bytes = (await files.get(key))!
+    expect(bytes.length).toBe(6 * MiB)
+    expect(bytes[0]).toBe(results[0] ? 1 : 2)
+  })
+
+  it('compose joins objects inside the bucket', async () => {
+    await files.put(`${run}c/1`, new Uint8Array(5 * MiB).fill(1))
+    await files.put(`${run}c/2`, new Uint8Array(5 * MiB).fill(2))
+    await files.put(`${run}c/3`, 'tail')
+    await files.compose(`${run}c/joined`, [`${run}c/1`, `${run}c/2`, `${run}c/3`], {
+      contentType: 'application/pdf',
+    })
+    const joined = (await files.get(`${run}c/joined`))!
+    expect(joined.length).toBe(10 * MiB + 4)
+    expect([joined[0], joined[5 * MiB], new TextDecoder().decode(joined.slice(-4))]).toEqual([
+      1,
+      2,
+      'tail',
+    ])
+    expect((await files.stat(`${run}c/joined`))!.contentType).toBe('application/pdf')
+
+    await files.compose(`${run}c/one`, [`${run}c/3`])
+    expect(new TextDecoder().decode((await files.get(`${run}c/one`))!)).toBe('tail')
+    // A small source first: streamed through instead.
+    await files.compose(`${run}c/small-first`, [`${run}c/3`, `${run}c/1`])
+    expect((await files.stat(`${run}c/small-first`))!.size).toBe(4 + 5 * MiB)
+  })
+
   it('streams parts in parallel', async () => {
     const parallel = s3Storage({
       bucket: 'test',
@@ -137,6 +175,63 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     const bytes = (await files.get(`${run}parallel.bin`))!
     expect(bytes.length).toBe(20 * MiB)
     expect([0, 5, 10, 15].map((at) => bytes[at * MiB])).toEqual([0, 1, 2, 3])
+  })
+
+  it('tus with partials in the same bucket joins the chunks there, not through the server', async () => {
+    const methods: string[] = []
+    const counting = s3Storage({
+      bucket: 'test',
+      endpoint: endpoint ?? minio!.url,
+      accessKeyId: 'minioadmin',
+      secretAccessKey: 'minioadmin',
+      fetch: (input, init) => {
+        const req = new Request(input, init)
+        methods.push(
+          `${req.method} ${new URL(req.url).search ? 'q' : ''}${req.headers.get('x-amz-copy-source') ? 'copy' : ''}`,
+        )
+        return fetch(req)
+      },
+    })
+    const handler = createTusHandler({
+      path: '/uploads',
+      storage: counting,
+      partials: files, // another instance, same bucket
+      onCreate: (_request, id) => ({ key: `${run}tus-joined/${id}` }),
+    })
+    const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+    await new Promise<void>((done) => server.listen(0, done))
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/uploads`
+    try {
+      const tus = { 'Tus-Resumable': '1.0.0' }
+      const created = await fetch(url, {
+        method: 'POST',
+        headers: { ...tus, 'Upload-Length': String(6 * MiB) },
+      })
+      const path = new URL(created.headers.get('location')!, url).toString()
+      for (const [offset, body] of [
+        [0, new Uint8Array(5 * MiB).fill(7)],
+        [5 * MiB, new Uint8Array(MiB).fill(8)],
+      ] as const) {
+        const res = await fetch(path, {
+          method: 'PATCH',
+          headers: {
+            ...tus,
+            'Upload-Offset': String(offset),
+            'Content-Type': 'application/offset+octet-stream',
+          },
+          body,
+        })
+        expect(res.status).toBe(204)
+      }
+      const key = `${run}tus-joined/${path.split('/').pop()}`
+      const bytes = (await files.get(key))!
+      expect([bytes.length, bytes[0], bytes[6 * MiB - 1]]).toEqual([6 * MiB, 7, 8])
+      // The final storage only copied: no GET of a chunk went through it.
+      expect(methods.filter((m) => m.startsWith('GET'))).toEqual([])
+      expect(methods.some((m) => m.includes('copy'))).toBe(true)
+    } finally {
+      server.close()
+    }
   })
 
   it('runs tus with unfinished uploads in the bucket, across two instances', async () => {

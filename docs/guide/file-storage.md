@@ -136,7 +136,7 @@ do {
 } while (cursor)
 ```
 
-Listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. A folder with a very large number of files is still read whole each time a page passes through it.
+Listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. Each folder's sorted listing is kept until the folder changes (a file added or removed), so paging through a folder of a million files reads it once.
 
 ## Create-only writes: `putIfAbsent`
 
@@ -148,7 +148,17 @@ if (!(await files.putIfAbsent(`webhooks/${event.id}`, JSON.stringify(event)))) r
 await handle(event)
 ```
 
-Buckets use S3 conditional writes (`If-None-Match: *`), which AWS S3, Cloudflare R2 and MinIO support. Disk uses an atomic hard link. The body is read into memory first, so this is for small objects.
+Buckets use S3 conditional writes (`If-None-Match: *`), which AWS S3, Cloudflare R2 and MinIO support. Disk uses an atomic hard link. A stream is written as it arrives: on a bucket, a body larger than one part goes up in parts, and completing the upload is the conditional step, so two large writers racing for one key still leave exactly one.
+
+## Joining objects in the bucket: `compose`
+
+`s3Storage` has `compose(key, sources)`, which joins objects already in the bucket into `key`, in order. The bucket does the copying (CopyObject, or UploadPartCopy in ranges of up to 5 GiB), so the bytes never pass through your server:
+
+```ts
+await files.compose('reports/2026.csv', ['reports/q1.csv', 'reports/q2.csv', 'reports/q3.csv'])
+```
+
+S3 requires every part except the last to be at least 5 MiB. If an earlier source is smaller, `compose` streams the sources through instead, so it always works and copies inside the bucket whenever it can. `files.location` is the bucket's address: two storages with the same `location` are the same bucket.
 
 ## Keys
 
@@ -334,6 +344,7 @@ How it works:
 - **Checks.** `onCreate` sees every new upload's headers, size and metadata before anything is written. `authorize` sees every later request to that upload. Without `authorize`, anyone holding an upload's URL, which contains an unguessable id, can continue or cancel it. Throw an `HttpException` from either hook to refuse with its status.
 - **Limits.** `maxSize` (default 1 GiB) is checked against the declared length, and the body can never run past it. Unfinished uploads expire `expiresIn` seconds (default one day) after their last write and are swept hourly.
 - **Middleware.** The adapter runs after the global middleware, so `cors()`, rate limits and `csrf()` apply. Pass the CSRF header through tus-js-client's `headers`. For a browser on another origin, `cors()` must expose the tus headers: `exposedHeaders: ['Location', 'Upload-Offset', 'Upload-Length', 'Upload-Expires', 'Tus-Resumable']`.
+- **Finishing in the bucket.** When `storage` and `partials` are the same bucket (same `location`), the finished file is joined from its chunks with `compose`, inside the bucket. Chunks of at least 5 MiB are copied, so set tus-js-client's `chunkSize` to 5 MiB or more for large files. Smaller ones stream through.
 - **Several instances.** Pass a `partials` that every instance shares, such as a bucket (`partials: s3Storage({...})`, or a DI token), and any instance can take any request of any upload. No sticky sessions or locks are needed: a chunk counts once its commit marker is written with `putIfAbsent`, so of two requests racing to write the same offset, one wins and the other gets 409 and asks `HEAD` again. With the default local `partials`, have the load balancer send an upload's requests to one instance. Unfinished uploads live under `tus/` in `partials`, so final keys under `tus/` are refused: with one bucket for both, such a key could overwrite another upload's records.
 
 The protocol is tus 1.0.0 with the creation, creation-with-upload, termination, expiration, checksum and concatenation extensions:
@@ -438,7 +449,6 @@ await createTestApp({
 ## Limits
 
 - **Direct and multipart uploads are bucket only.** `uploadUrl()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
-- **tus finishing passes the bytes through the server.** When the last chunk arrives, the chunks are streamed from `partials` into `storage`. With both in the same bucket, that is a download and an upload the bucket could have done itself.
 - **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
 - **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, is refused, so a link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.
