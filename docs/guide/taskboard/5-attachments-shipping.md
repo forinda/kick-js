@@ -460,14 +460,14 @@ describe('task attachments', () => {
 
 Production reads its settings from the environment. Everything the app needs:
 
-| Variable          | Read by                                 | Notes                                                              |
-| ----------------- | --------------------------------------- | ------------------------------------------------------------------ |
-| `NODE_ENV`        | `src/index.ts`, the migration runner    | `production`; `kick start` sets it for you                         |
-| `PORT`            | the env schema                          | defaults to `3000`                                                 |
-| `SESSION_SECRET`  | the env schema → `session()`            | required, 32+ characters: `openssl rand -hex 32`                   |
-| `UPLOAD_DIR`      | the env schema → `diskStorage()`        | defaults to `uploads`; put it on a persistent volume               |
-| `AUTH_RATE_LIMIT` | the env schema → the auth controller    | defaults to `10` attempts per IP per 15 minutes                    |
-| `DB_FILE`         | `src/db/client.ts` and `kick.config.ts` | defaults to `taskboard.db`; the app and `kick db` must agree on it |
+| Variable          | Read by                              | Notes                                                                |
+| ----------------- | ------------------------------------ | -------------------------------------------------------------------- |
+| `NODE_ENV`        | `src/index.ts`, the migration runner | `production`; `kick start` sets it for you                           |
+| `PORT`            | the env schema                       | defaults to `3000`                                                   |
+| `SESSION_SECRET`  | the env schema → `session()`         | required, 32+ characters: `openssl rand -hex 32`                     |
+| `UPLOAD_DIR`      | the env schema → `diskStorage()`     | defaults to `uploads`; put it on a persistent volume                 |
+| `AUTH_RATE_LIMIT` | the env schema → the auth controller | defaults to `10` attempts per IP per 15 minutes                      |
+| `DB_FILE`         | `src/db/client.ts`                   | defaults to `taskboard.db`; `kick db` opens it through the same file |
 
 The env schema validates at boot, so a missing or short `SESSION_SECRET` stops the app before it serves anything. Keep `.env.example` listing every key with placeholder values. See [Configuration](../configuration.md).
 

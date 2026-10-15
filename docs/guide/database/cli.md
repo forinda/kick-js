@@ -53,6 +53,8 @@ export default defineConfig({
 })
 ```
 
+If your app already opens the database in a file that exports a migration adapter, return that one instead and keep a single connection: `adapter: async () => (await import('./src/db/client')).migrationAdapter` ([Getting started](./index.md#_4-create-the-client)).
+
 The plugin is opt-in: without it `kick db` is an unknown command. It also adds the schema types to `kick typegen` (see [`kick typegen`](#kick-typegen)). `kick` loads `.env` before running a command, so `NODE_ENV=development` there lets unreviewed migrations apply locally.
 
 ### Standalone `kickjs-db`
