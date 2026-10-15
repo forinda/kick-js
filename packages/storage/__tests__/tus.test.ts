@@ -594,6 +594,39 @@ describe('across instances, sharing partials', () => {
 describe('sweep', () => {
   afterEach(() => vi.useRealTimers())
 
+  it("keeps an index entry when the upload's record can't be read, to try again", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-15T10:30:00Z'))
+    const partials = memoryStorage()
+    const handler = createTusHandler({
+      path: '/uploads',
+      storage: memoryStorage(),
+      partials,
+      expiresIn: 60,
+    })
+    const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+    await new Promise<void>((done) => server.listen(0, done))
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/uploads`
+    try {
+      const id = (
+        await fetch(url, { method: 'POST', headers: { ...TUS, 'Upload-Length': '5' } })
+      ).headers
+        .get('location')!
+        .split('/')
+        .pop()!
+      vi.setSystemTime(new Date('2026-10-15T12:00:00Z'))
+      const get = vi.spyOn(partials, 'get').mockRejectedValueOnce(new Error('storage hiccup'))
+      await handler.sweep()
+      const keys = async () => (await partials.list()).files.map((f) => f.key)
+      expect(await keys()).toContain(`tus/_expiry/2026-10-15T10/${id}`)
+      get.mockRestore()
+      await handler.sweep()
+      expect((await keys()).some((k) => k.includes(id))).toBe(false)
+    } finally {
+      server.close()
+    }
+  })
+
   it('drops expired uploads through the expiry index, and reads nothing newer', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-15T10:30:00Z'))
@@ -638,7 +671,10 @@ describe('sweep', () => {
 
 describe('limits', () => {
   async function serve(handler: ReturnType<typeof createTusHandler>) {
-    const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+    // As an app does: an error passed to next() is a 500, nothing matched a 404.
+    const server = createServer((req, res) =>
+      handler(req, res, (err) => res.writeHead(err ? 500 : 404).end()),
+    )
     await new Promise<void>((done) => server.listen(0, done))
     return { server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/uploads` }
   }
@@ -676,6 +712,36 @@ describe('limits', () => {
       })
       expect(res.status).toBe(400)
       expect(await res.text()).toContain('at most 10000')
+    } finally {
+      server.close()
+    }
+  })
+
+  it("fails rather than store a file whose chunks don't add up", async () => {
+    const partials = memoryStorage()
+    const files = memoryStorage()
+    const handler = createTusHandler({ path: '/uploads', storage: files, partials })
+    const { server, url } = await serve(handler)
+    try {
+      const part = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...TUS,
+          'Upload-Concat': 'partial',
+          'Upload-Length': '3',
+          'Content-Type': 'application/offset+octet-stream',
+        },
+        body: 'abc',
+      })
+      const partPath = part.headers.get('location')!
+      // The part's commit marker goes missing.
+      await partials.delete(`tus/${partPath.split('/').pop()}/at/0`)
+      const final = await fetch(url, {
+        method: 'POST',
+        headers: { ...TUS, 'Upload-Concat': `final;${partPath}` },
+      })
+      expect(final.status).toBe(500)
+      expect((await files.list()).files).toEqual([])
     } finally {
       server.close()
     }

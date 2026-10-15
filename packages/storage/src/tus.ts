@@ -373,8 +373,17 @@ export function createTusHandler(
   /** The chunk keys that make up the file, in order — of this upload, or of each part of a final one. */
   async function chunksOf(info: Info): Promise<string[]> {
     const keys: string[] = []
+    let size = 0
     for (const id of info.parts ?? [info.id]) {
-      keys.push(...(await committed(id)).chunks.map((c) => c.chunk))
+      for (const { chunk, size: bytes } of (await committed(id)).chunks) {
+        keys.push(chunk)
+        size += bytes
+      }
+    }
+    // Never store a file short or long: if the chunks don't add up to the
+    // declared size (a part's markers went missing, say), fail instead.
+    if (size !== info.size) {
+      throw new Error(`tus: upload ${info.id} has ${size} of ${info.size} bytes in its chunks`)
     }
     return keys
   }
@@ -686,7 +695,16 @@ export function createTusHandler(
         // The hour's last expiry has passed only once the hour is over.
         if (new Date(`${hour}:00:00Z`).getTime() + 3_600_000 > now.getTime()) return
         if (locked.has(id)) continue
-        const info = UPLOAD_ID.test(id) ? await loadInfo(id).catch(() => null) : null
+        let info: Info | null = null
+        if (UPLOAD_ID.test(id)) {
+          try {
+            info = await loadInfo(id)
+          } catch {
+            // Couldn't read it (storage hiccup, corrupt record): keep the
+            // index entry, so the next sweep tries again.
+            continue
+          }
+        }
         if (info && new Date(info.expiresAt) < now) await drop(id)
         // Expired and dropped, already gone, or touched since (indexed again later).
         await partials.delete(key)
