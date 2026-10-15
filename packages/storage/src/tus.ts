@@ -181,7 +181,8 @@ export function createTusHandler(options: Omit<TusOptions, 'storage'> & { storag
       return null
     }
     if (new Date(info.expiresAt) < new Date()) {
-      await drop(id)
+      // Not while a request holds it; that request just answers 404.
+      if (!locked.has(id)) await drop(id)
       return null
     }
     const offset = info.done
@@ -228,7 +229,11 @@ export function createTusHandler(options: Omit<TusOptions, 'storage'> & { storag
       })
       res.end(body)
     }
-    const method = (header(req, 'x-http-method-override') ?? req.method ?? 'GET').toUpperCase()
+    // The override is for clients that can only send POST. Honouring it on GET
+    // would let a request csrf() lets through (a safe method) act as a PATCH or DELETE.
+    const actual = (req.method ?? 'GET').toUpperCase()
+    const method =
+      actual === 'POST' ? (header(req, 'x-http-method-override') ?? actual).toUpperCase() : actual
 
     if (method === 'OPTIONS') {
       return send(204, {
@@ -283,39 +288,45 @@ export function createTusHandler(options: Omit<TusOptions, 'storage'> & { storag
       return send(201, headers)
     }
 
-    const found = await load(id)
-    if (!found) return send(404, {}, 'Upload not found')
-    const { info, upload } = found
-    await options.authorize?.(req.headers, upload)
-    const expires = { 'Upload-Expires': upload.expiresAt.toUTCString() }
-
     if (method === 'HEAD') {
+      const found = await load(id)
+      if (!found) return send(404, {}, 'Upload not found')
+      const { info, upload } = found
+      await options.authorize?.(req.headers, upload)
       return send(200, {
         'Upload-Offset': String(upload.offset),
         'Upload-Length': String(upload.size),
         ...(info.rawMetadata ? { 'Upload-Metadata': info.rawMetadata } : {}),
         'Cache-Control': 'no-store',
-        ...(info.done ? {} : expires),
+        ...(info.done ? {} : { 'Upload-Expires': upload.expiresAt.toUTCString() }),
       })
     }
-    if (method === 'DELETE') {
-      if (locked.has(id)) throw new TusError(423, 'Upload is being written')
-      await drop(id)
-      return send(204)
+    if (method !== 'PATCH' && method !== 'DELETE') {
+      return send(405, { Allow: 'OPTIONS, HEAD, PATCH, DELETE' })
     }
-    if (method !== 'PATCH') return send(405, { Allow: 'OPTIONS, HEAD, PATCH, DELETE' })
 
-    if (header(req, 'content-type') !== 'application/offset+octet-stream') {
-      throw new TusError(415, 'Content-Type must be application/offset+octet-stream')
-    }
-    const offset = intHeader(req, 'upload-offset')
-    if (offset !== upload.offset) {
-      throw new TusError(409, `Upload-Offset must be ${upload.offset}`)
-    }
-    if (info.done) return send(204, { 'Upload-Offset': String(upload.size) })
+    // Locked before anything is read, so the offset checked below is still the
+    // offset when the body is appended — two PATCHes can't both pass the check.
     if (locked.has(id)) throw new TusError(423, 'Upload is being written')
     locked.add(id)
     try {
+      const found = await load(id)
+      if (!found) return send(404, {}, 'Upload not found')
+      const { info, upload } = found
+      await options.authorize?.(req.headers, upload)
+
+      if (method === 'DELETE') {
+        await drop(id)
+        return send(204)
+      }
+      if (header(req, 'content-type') !== 'application/offset+octet-stream') {
+        throw new TusError(415, 'Content-Type must be application/offset+octet-stream')
+      }
+      const offset = intHeader(req, 'upload-offset')
+      if (offset !== upload.offset) {
+        throw new TusError(409, `Upload-Offset must be ${upload.offset}`)
+      }
+      if (info.done) return send(204, { 'Upload-Offset': String(upload.size) })
       const next = touch(info)
       await save(next)
       const received = await append(req, id, upload.size - upload.offset)

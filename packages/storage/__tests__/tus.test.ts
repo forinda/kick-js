@@ -228,6 +228,44 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     expect(completed[0]).toMatch(/^avatars\/u1\/[0-9a-f-]{36}\.png$/)
   })
 
+  it('honours X-HTTP-Method-Override on POST only', async () => {
+    const { agent } = await boot(runtime)
+    const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)
+    // A GET passes csrf() as a safe method; it must not act as a DELETE.
+    await agent.get(headers.location).set(TUS).set('X-HTTP-Method-Override', 'DELETE').expect(405)
+    expect((await agent.head(headers.location).set(TUS)).status).toBe(200)
+    await agent.post(headers.location).set(TUS).set('X-HTTP-Method-Override', 'DELETE').expect(204)
+    expect((await agent.head(headers.location).set(TUS)).status).toBe(404)
+  })
+
+  it('lets one PATCH write at a time, checking the offset under the lock', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((done) => (release = done))
+    let calls = 0
+    const { agent, files, completed } = await boot(runtime, {
+      // Hold the first PATCH inside authorize, after it has read offset 0.
+      authorize: async () => {
+        if (++calls === 1) await gate
+      },
+    })
+    const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '4').expect(201)
+    const patch = (body: string) =>
+      agent
+        .patch(headers.location)
+        .set(TUS)
+        .set('Upload-Offset', '0')
+        .set('Content-Type', 'application/offset+octet-stream')
+        .send(Buffer.from(body))
+    const first = patch('ab').then((r) => r)
+    await new Promise((done) => setTimeout(done, 20))
+    const second = await patch('cd')
+    expect(second.status).toBe(423)
+    release()
+    expect((await first).headers['upload-offset']).toBe('2')
+    expect(completed).toEqual([])
+    expect(await files.list()).toEqual({ files: [] })
+  })
+
   it('terminates an upload, and leaves other routes alone', async () => {
     const { agent, dir } = await boot(runtime)
     const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)
