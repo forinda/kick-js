@@ -130,6 +130,7 @@
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
+    "@forinda/kickjs-di": "workspace:*",
     "@forinda/kickjs-schema": "workspace:^",
     "reflect-metadata": "^0.2.2"
   },

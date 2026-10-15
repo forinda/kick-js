@@ -48,6 +48,7 @@ export default defineConfig({
   minify: { compress: true, mangle: false },
   dts: true,
   external: [
+    '@forinda/kickjs-di',
     '@forinda/kickjs-schema',
     'express',
     'reflect-metadata',

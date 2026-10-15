@@ -5,7 +5,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 ## Engine & package layout (read first — avoids the two most common mistakes)
 
 - **KickJS is engine-pluggable, not Express-only.** It runs on **Express (default), Fastify, or h3** behind one `HttpRuntime` seam (`bootstrap({ runtime })`). Controllers, modules, DI, and context decorators are engine-neutral — write to `ctx` (`ctx.json`/`ctx.body`/`ctx.params`/`ctx.sse`), not raw Express APIs. The runtimes (h3 is v2 only; the `./web` fetch entry targets edge/Bun/Deno) + cross-engine file uploads ship in the **stable** release.
-- **The framework lives in `packages/kickjs`** (`@forinda/kickjs`) — DI core under `src/core/`, HTTP layer under `src/http/`, runtimes under `src/http/runtimes/{express,fastify,h3}.ts`. There is no separate `packages/core`, `packages/http`, or `packages/config`.
+- **The framework lives in `packages/kickjs`** (`@forinda/kickjs`) — DI wiring under `src/core/` (the container itself is `packages/di`, `@forinda/kickjs-di`, which kickjs depends on and re-exports), HTTP layer under `src/http/`, runtimes under `src/http/runtimes/{express,fastify,h3}.ts`. There is no separate `packages/core`, `packages/http`, or `packages/config`.
 
 ## Before You Start
 
@@ -17,38 +17,38 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 
 ### Source Code
 
-| What                 | Where                                                                      |
-| -------------------- | -------------------------------------------------------------------------- |
-| DI container         | `packages/kickjs/src/core/container.ts`                                    |
-| All decorators       | `packages/kickjs/src/core/decorators.ts`                                   |
-| Module system        | `packages/kickjs/src/core/app-module.ts`                                   |
-| Adapter interface    | `packages/kickjs/src/core/adapter.ts`                                      |
-| Error classes        | `packages/kickjs/src/core/errors.ts`                                       |
-| Logger               | `packages/kickjs/src/core/logger.ts`                                       |
-| Application wrapper  | `packages/kickjs/src/http/application.ts`                                  |
-| Bootstrap function   | `packages/kickjs/src/http/bootstrap.ts`                                    |
-| RequestContext       | `packages/kickjs/src/http/context.ts`                                      |
-| HTTP runtime seam    | `packages/kickjs/src/http/runtime.ts` + `runtimes/{express,fastify,h3}.ts` |
-| Router builder       | `packages/kickjs/src/http/router-builder.ts`                               |
-| Middleware           | `packages/kickjs/src/http/middleware/*.ts`                                 |
-| Query parsing        | `packages/kickjs/src/http/query/`                                          |
-| Config/env           | `packages/kickjs/src/config/`                                              |
-| CLI commands         | `packages/cli/src/commands/`                                               |
-| Code generators      | `packages/cli/src/generators/`                                             |
-| Generator patterns   | `packages/cli/src/generators/patterns/{rest,minimal}.ts`                   |
-| Template functions   | `packages/cli/src/generators/templates/`                                   |
-| TemplateContext type | `packages/cli/src/generators/templates/types.ts`                           |
-| Scaffold layers      | `packages/cli/templates/<layer>/files/` + `src/scaffold/overlay.ts`        |
-| ModuleConfig type    | `packages/cli/src/config.ts`                                               |
-| Swagger decorators   | `packages/swagger/src/decorators.ts`                                       |
-| OpenAPI builder      | `packages/swagger/src/openapi-builder.ts`                                  |
-| WebSocket adapter    | `packages/ws/src/ws-adapter.ts`                                            |
-| WebSocket decorators | `packages/ws/src/decorators.ts`                                            |
-| WebSocket context    | `packages/ws/src/ws-context.ts`                                            |
-| Room manager         | `packages/ws/src/room-manager.ts`                                          |
-| gRPC/Connect adapter | `packages/grpc/src/grpc-adapter.ts`                                        |
-| gRPC route builder   | `packages/grpc/src/router.ts`                                              |
-| gRPC context         | `packages/grpc/src/grpc-context.ts`                                        |
+| What                 | Where                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| DI container         | `packages/di/src/container.ts` (kickjs hooks: `packages/kickjs/src/core/di-hooks.ts`) |
+| Decorators           | DI: `packages/di/src/decorators.ts`; HTTP: `packages/kickjs/src/core/decorators.ts`   |
+| Module system        | `packages/kickjs/src/core/app-module.ts`                                              |
+| Adapter interface    | `packages/kickjs/src/core/adapter.ts`                                                 |
+| Error classes        | `packages/kickjs/src/core/errors.ts`                                                  |
+| Logger               | `packages/kickjs/src/core/logger.ts`                                                  |
+| Application wrapper  | `packages/kickjs/src/http/application.ts`                                             |
+| Bootstrap function   | `packages/kickjs/src/http/bootstrap.ts`                                               |
+| RequestContext       | `packages/kickjs/src/http/context.ts`                                                 |
+| HTTP runtime seam    | `packages/kickjs/src/http/runtime.ts` + `runtimes/{express,fastify,h3}.ts`            |
+| Router builder       | `packages/kickjs/src/http/router-builder.ts`                                          |
+| Middleware           | `packages/kickjs/src/http/middleware/*.ts`                                            |
+| Query parsing        | `packages/kickjs/src/http/query/`                                                     |
+| Config/env           | `packages/kickjs/src/config/`                                                         |
+| CLI commands         | `packages/cli/src/commands/`                                                          |
+| Code generators      | `packages/cli/src/generators/`                                                        |
+| Generator patterns   | `packages/cli/src/generators/patterns/{rest,minimal}.ts`                              |
+| Template functions   | `packages/cli/src/generators/templates/`                                              |
+| TemplateContext type | `packages/cli/src/generators/templates/types.ts`                                      |
+| Scaffold layers      | `packages/cli/templates/<layer>/files/` + `src/scaffold/overlay.ts`                   |
+| ModuleConfig type    | `packages/cli/src/config.ts`                                                          |
+| Swagger decorators   | `packages/swagger/src/decorators.ts`                                                  |
+| OpenAPI builder      | `packages/swagger/src/openapi-builder.ts`                                             |
+| WebSocket adapter    | `packages/ws/src/ws-adapter.ts`                                                       |
+| WebSocket decorators | `packages/ws/src/decorators.ts`                                                       |
+| WebSocket context    | `packages/ws/src/ws-context.ts`                                                       |
+| Room manager         | `packages/ws/src/room-manager.ts`                                                     |
+| gRPC/Connect adapter | `packages/grpc/src/grpc-adapter.ts`                                                   |
+| gRPC route builder   | `packages/grpc/src/router.ts`                                                         |
+| gRPC context         | `packages/grpc/src/grpc-context.ts`                                                   |
 
 ### Configuration
 

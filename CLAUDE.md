@@ -10,9 +10,9 @@
 
 KickJS is a decorator-driven Node.js framework for TypeScript. The HTTP engine is pluggable — it runs on **Express (default), Fastify, or h3**, selected via `bootstrap({ runtime })`; controllers/modules/DI/context decorators are engine-neutral. Monorepo managed with pnpm workspaces and Turbo.
 
-> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). Fastify/h3 runtimes (h3 v2 only), the web fetch entry (`./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
+> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI wiring (the container itself is `packages/di`), HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). Fastify/h3 runtimes (h3 v2 only), the web fetch entry (`./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
 
-**18 workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, kick/db. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); there is no in-repo `examples/`.
+**19 workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, kick/db. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); there is no in-repo `examples/`.
 
 ## Quick Commands
 
@@ -39,6 +39,8 @@ packages/               # Workspace packages (@forinda/kickjs* on npm unless pri
                         #   kick add / doctor / agents
   client/               # @forinda/kickjs-client — typed fetch client (frontend)
   vite/                 # Vite HMR plugin + typegen watcher
+  di/                   # @forinda/kickjs-di — the DI container + DI decorators;
+                        #   kickjs depends on the exact version and re-exports it
   schema/               # Schema-agnostic validation (Zod/Valibot/Yup/StdSchema)
   swagger/              # OpenAPI from decorators + declared response schemas
   db/                   # kick/db code-first database family — dialects ship as

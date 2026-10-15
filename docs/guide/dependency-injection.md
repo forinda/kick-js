@@ -471,3 +471,7 @@ beforeEach(() => {
   Container.reset()
 })
 ```
+
+## Without the framework
+
+The container is its own package, `@forinda/kickjs-di`. `@forinda/kickjs` depends on it and re-exports it, so in an app you keep importing from `@forinda/kickjs`. Don't install both. To use the container somewhere without HTTP, such as a CLI, a worker or another server, see [`@forinda/kickjs-di`](../api/di.md). That page covers its errors, its hooks, and how to open a request scope yourself.
