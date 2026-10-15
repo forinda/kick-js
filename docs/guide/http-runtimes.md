@@ -126,6 +126,24 @@ Connect-style `(req, res, next)` middleware runs on both paths:
   Express-only additions (`req.cookies`, `req.path`, `res.cookie`). Middleware
   that needs those should read `req.headers` or move to a context decorator.
 
+## Same behaviour on every engine
+
+Swapping the engine must not change what clients see. These hold on Express, Fastify, h3 and the [web entry](./edge-deployment.md) alike, and a conformance suite runs them against each:
+
+|                    | Behaviour                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| Errors             | RFC 9457 problem details from one handler; a 500 carries `requestId`.                       |
+| Unmatched requests | `404` problem details; a known path with the wrong method is `405` with `Allow`.            |
+| Route params       | Percent-decoded (`/users/a%20b` → `'a b'`); a malformed escape is `400`.                    |
+| Body size          | `jsonLimit` (default `'1mb'`) applies; a larger body is `413`.                              |
+| Form bodies        | A repeated field becomes an array (`tag=a&tag=b` → `['a', 'b']`).                           |
+| Request id         | Every response carries `X-Request-Id`; an id already assigned wins over the inbound header. |
+| `trustProxy`       | Express semantics: `true`, a hop count, an address list, or a `(ip, hop)` predicate.        |
+| Cookies            | Setting several cookies keeps them all.                                                     |
+| Shutdown           | The engine is closed too — Fastify's `onClose` hooks run.                                   |
+
+One difference remains: a handler that neither writes a response nor returns a value answers `404` on Fastify and h3, but on Express the request stays open — `ctx.render()` and raw `res` writes finish after the handler returns there, so Express cannot tell "done" from "still writing". Return a value or call a `ctx` response method.
+
 ## Capability matrix
 
 Some `ctx` features depend on the engine. Calling an unsupported one raises a

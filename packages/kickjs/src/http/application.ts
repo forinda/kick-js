@@ -73,6 +73,7 @@ import {
   buildRouteTable,
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
+import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
@@ -706,6 +707,7 @@ export class Application {
   private timeline = new StartupTimeline()
   private conditionReport: ConditionOutcome[] = []
   private mountedRoutes: MountedRoute[] = []
+  private routeUrls = new RouteUrls()
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -1026,6 +1028,20 @@ export class Application {
     return this.timeline.snapshot()
   }
 
+  /**
+   * The URL of a route, by name — `'Controller.method'` — with its `:params`
+   * filled (encoded) and an optional query string. For links built outside a
+   * request (emails, jobs); inside one, use `ctx.urlFor()`.
+   *
+   * ```ts
+   * app.urlFor('UsersController.show', { id: user.id }) // '/api/v1/users/42'
+   * ```
+   */
+  urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string {
+    const [params, query] = args
+    return this.routeUrls.build(name, params as Record<string, unknown> | undefined, query)
+  }
+
   /** Run the built-in and the app's startup checks against the assembled app. */
   private runChecks(): void {
     runStartupChecks(
@@ -1050,6 +1066,10 @@ export class Application {
   async setup(): Promise<void> {
     log.debug('Bootstrapping application...')
     this.timeline = new StartupTimeline()
+    // Bound before modules register, so their services can inject it; the
+    // routes fill it in as they mount.
+    this.routeUrls = new RouteUrls()
+    this.container.registerInstance(ROUTE_URLS, this.routeUrls)
 
     // Reset module-contributor snapshot at the very top of each
     // setup pass — before anything that could throw — so a partial
@@ -1367,6 +1387,7 @@ export class Application {
               const fullPath = joinPaths(mountPath, entry.path)
               assertRouteUnique(seenRoutes, entry.method, fullPath, owner)
               mountedPaths.push({ method: entry.method, path: fullPath })
+              this.routeUrls.add(owner, fullPath)
               this.routePolicy.add(entry.method, fullPath, entry.meta.flags)
             }
             // Each handler runs inside the `kickjs:handler` tracing channel (a
@@ -1387,6 +1408,7 @@ export class Application {
                 }),
                 meta: { ...entry.meta, pattern },
                 validationError: this.options.validationError,
+                urls: this.routeUrls,
               }
             })
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])
@@ -1680,6 +1702,9 @@ export class Application {
     // the old app keeps running so the server stays responsive.
     const prevApp = this.app
     const prevContainer = this.container
+    // setup() replaces the URL registry; a failed rebuild keeps the old routes
+    // serving, so it must keep their names too.
+    const prevRouteUrls = this.routeUrls
     // Snapshot the outgoing app's disposables (session/rate-limit store
     // intervals) BEFORE setup() registers the incoming app's. On success the
     // stale set is disposed — without this, every HMR swap leaked one live
@@ -1699,6 +1724,7 @@ export class Application {
       for (const d of staleDisposables) registerDisposable(d)
       this.app = prevApp
       this.container = prevContainer
+      this.routeUrls = prevRouteUrls
       return
     }
 

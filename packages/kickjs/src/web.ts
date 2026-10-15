@@ -36,6 +36,7 @@ import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
+import { ROUTE_URLS, RouteUrls } from './http/url-for'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
@@ -147,6 +148,10 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   }
 
   const container = Container.getInstance()
+  // Route names for ctx.urlFor() / the ROUTE_URLS token — bound before modules
+  // register so their services can inject it.
+  const routeUrls = new RouteUrls()
+  container.registerInstance(ROUTE_URLS, routeUrls)
 
   // Wire ConfigService/@Value env resolution when the platform has no
   // ambient process.env (Workers). Latest-wins like loadEnv().
@@ -226,6 +231,8 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
             entry.middlewares = [...globalMiddleware, ...entry.middlewares]
           }
           entry.validationError = options.validationError
+          entry.urls = routeUrls
+          routeUrls.add(owner, url)
           const run = compileWebRoute(entry, undefined, { bodyLimit })
           app.on(entry.method, url, (event: H3EventLike) =>
             run({

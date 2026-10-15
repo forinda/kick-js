@@ -299,6 +299,45 @@ SSE helpers:
 | `sse.onClose(fn)`             | Register disconnect callback |
 | `sse.close()`                 | End the stream               |
 
+## Linking to routes
+
+Build a route's URL from its name instead of writing the path where you link to it — a route that moves can't leave a `Location` header, a redirect or an email link behind:
+
+```ts
+@Post('/')
+async create(ctx: RequestContext) {
+  const user = await this.users.create(ctx.body)
+  ctx.setHeader('Location', ctx.urlFor('UsersController.show', { id: user.id }))
+  ctx.created(user)
+}
+```
+
+A route's name is `'<Controller>.<method>'`. `urlFor(name, params?, query?)` returns the full path — API prefix and version included — with `:params` filled in and encoded, plus an optional query string:
+
+```ts
+ctx.urlFor('UsersController.show', { id: '42' }) // '/api/v1/users/42'
+ctx.urlFor('UsersController.list', {}, { page: 2, tag: ['a', 'b'] }) // '/api/v1/users?page=2&tag=a&tag=b'
+```
+
+After `kick typegen`, names and params are typed: an unknown name or a missing param is a compile error (and, untyped, a thrown error).
+
+Outside a request — a mailer, a job, a service building a link — inject the app's URL builder with the `ROUTE_URLS` token. It takes the same arguments:
+
+```ts
+import { Inject, ROUTE_URLS, Service, type UrlBuilder } from '@forinda/kickjs'
+
+@Service()
+export class Mailer {
+  constructor(@Inject(ROUTE_URLS) private readonly urls: UrlBuilder) {}
+
+  verifyLink(token: string) {
+    return `${process.env.APP_URL}${this.urls.urlFor('AuthController.verify', { token })}`
+  }
+}
+```
+
+Holding the `Application` itself — the value `bootstrap()` returns — `app.urlFor(...)` works too. `urlFor` returns a path; prefix your public origin for an absolute link (from config, or `ctx.headers.host` when [`allowedHosts`](./security-headers.md#allowed-hosts) guarantees it is one you serve).
+
 ## Return-Value Handlers
 
 **The default way to write a handler.** Return the response payload and the

@@ -43,12 +43,14 @@ describe('production server', () => {
   })
 
   it('keeps serving through preStopDelay, with readiness already 503', async () => {
-    app = new Application({ modules: [], port: 0, preStopDelay: 300, shutdownTimeout: 0 })
+    // A wide window: under a loaded CI machine the probes below must still land
+    // inside it. The test only waits as long as the delay actually takes.
+    app = new Application({ modules: [], port: 0, preStopDelay: 1500, shutdownTimeout: 0 })
     await app.start()
     const base = urlOf(app)
 
     const shutdown = app.shutdown()
-    await new Promise((r) => setTimeout(r, 50))
+    await new Promise((r) => setTimeout(r, 20))
 
     const ready = await fetch(`${base}/health/ready`)
     expect(ready.status).toBe(503)

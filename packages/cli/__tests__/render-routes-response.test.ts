@@ -99,6 +99,26 @@ describe('renderRoutes — KickRoutes.Api flat map', () => {
     expect(src).toContain('interface Api {')
   })
 
+  it('emits KickRoutes.Named, keyed Controller.method, for ctx.urlFor', () => {
+    const src = renderRoutes(
+      [
+        route({}),
+        route({
+          method: 'create',
+          httpMethod: 'POST',
+          path: '/',
+          pathParams: [],
+          mountedPath: '/users',
+        }),
+      ],
+      OUT,
+      'zod',
+    )
+    expect(src).toContain('interface Named {')
+    expect(src).toContain("'UsersController.get': UsersController['get']")
+    expect(src).toContain("'UsersController.create': UsersController['create']")
+  })
+
   it('falls back to the bare path when mountedPath is absent (old fixtures)', () => {
     const src = renderRoutes([route({ mountedPath: undefined })], OUT, 'zod')
     expect(src).toContain("'GET /:id': UsersController['get']")
