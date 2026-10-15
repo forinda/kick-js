@@ -327,4 +327,24 @@ describe('/_debug/config', () => {
     expect(JSON.stringify(res.body.origins)).not.toContain('smtp.secret.local')
     vi.unstubAllEnvs()
   })
+
+  it('serves the origins (names only) at /config/origins without exposeConfig', async () => {
+    vi.stubEnv('DT_MAIL_HOST', 'smtp.secret.local')
+    const Mail = defineSettings('DT_MAIL', z.object({ host: z.string() }))
+    const app = new Application({
+      modules: [],
+      settings: [Mail],
+      adapters: [DevToolsAdapter({ enabled: true, secret: false, runtime: { enabled: false } })],
+    })
+    await app.setup()
+    const handle = request(app.handle.bind(app))
+    await handle.get('/_debug/config').expect(404)
+    const res = await handle.get('/_debug/config/origins').expect(200)
+    expect(res.body.sections).toContainEqual({
+      prefix: 'DT_MAIL',
+      vars: [{ name: 'DT_MAIL_HOST', origin: 'env' }],
+    })
+    expect(JSON.stringify(res.body)).not.toContain('smtp.secret.local')
+    vi.unstubAllEnvs()
+  })
 })

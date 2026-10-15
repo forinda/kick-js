@@ -1206,6 +1206,14 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
+        // Where each declared variable's value comes from: env, a `_FILE`, the
+        // schema default, `provide()`, or unset. Names only, never values, so
+        // it is served without `exposeConfig`.
+        router.get('/config/origins', (ctx: RequestContext) => {
+          const app = appRef?.__kickApp as { configOrigins?: () => unknown } | undefined
+          ctx.json(app?.configOrigins?.() ?? { env: [], sections: [] })
+        })
+
         if (exposeConfig) {
           router.get('/config', (ctx: RequestContext) => {
             const config: Record<string, string> = {}
