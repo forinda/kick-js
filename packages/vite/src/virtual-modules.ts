@@ -7,9 +7,6 @@
  * `ssrLoadModule('virtual:kickjs/app')`, this plugin generates the code
  * that imports and re-exports the user's application entry.
  *
- * In the future, this will also support auto-discovery of `@Module` classes
- * (Step 4 in v3/plan.md) and container manifest generation.
- *
  * @see https://vite.dev/guide/api-plugin.html#virtual-modules-convention
  *
  * @module @forinda/kickjs-vite/virtual-modules

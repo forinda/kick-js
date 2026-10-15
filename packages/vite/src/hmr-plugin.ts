@@ -31,9 +31,6 @@
  * - No Babel/SWC parsing needed
  * - False positives are harmless (extra invalidation is safe)
  *
- * @see bench-mark/tanstack-router-analysis.md — Detection pattern origin
- * @see v3/plan.md Step 5 — Design rationale
- *
  * @module @forinda/kickjs-vite/hmr-plugin
  */
 
