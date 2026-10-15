@@ -6,7 +6,7 @@ import {
   type ClassKind,
   type PostConstructStatus,
 } from './interfaces'
-import { diError, silentLogger, type DiErrorCode, type DiLogger } from './errors'
+import { diError, defaultLogger, type DiErrorCode, type DiLogger } from './errors'
 import {
   getClassMeta,
   getClassMetaOrUndefined,
@@ -181,8 +181,8 @@ export class Container {
    * returns its catalogued `KickError`.
    */
   static _error: (code: DiErrorCode, subject: string) => Error = diError
-  /** Where non-fatal problems go (an async `@PostConstruct`, one that threw). Silent by default. */
-  static _logger: DiLogger = silentLogger
+  /** Where non-fatal problems go (an async `@PostConstruct`, one that threw). Errors reach `console.error` by default. */
+  static _logger: DiLogger = defaultLogger
   /**
    * Extra lazy property injections, keyed by metadata key. For each property
    * a class stores under that key (a `Map` on the prototype, as `@Value`
@@ -604,11 +604,14 @@ export class Container {
    * Called by the Vite HMR plugin when a module file changes.
    * Skips persistent registrations (DB connections, etc.).
    */
-  invalidate(token: any): void {
+  invalidate(token: any, visited = new Set<Registration>()): void {
     const name = tokenName(token)
     // Try both the token itself and the HMR fallback name
     const reg = this.registrations.get(token) ?? this.registrations.get(`__hmr__${name}`)
-    if (!reg) return
+    // `visited`: two classes that @Autowired each other depend on each other,
+    // and the walk below went round that cycle until the stack overflowed.
+    if (!reg || visited.has(reg)) return
+    visited.add(reg)
 
     // Don't invalidate persistent registrations (DB, Redis, etc.)
     const store = getPersistentStore()
@@ -623,7 +626,7 @@ export class Container {
     // Walk dependency graph — invalidate anything that injected this token
     for (const [depToken, depReg] of this.registrations) {
       if (depReg.dependencies.includes(name)) {
-        this.invalidate(depToken)
+        this.invalidate(depToken, visited)
       }
     }
   }

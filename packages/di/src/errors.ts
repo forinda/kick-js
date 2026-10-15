@@ -36,10 +36,16 @@ export function diError(code: DiErrorCode, subject: string): Error {
   return new DiError(code, subject, `${code}: ${MESSAGES[code](subject)}`)
 }
 
-/** Where the container reports non-fatal problems. Silent unless a host installs one. */
+/** Where the container reports non-fatal problems. A host can install its own. */
 export interface DiLogger {
   warn(message: string): void
   error(err: unknown, message: string): void
 }
 
-export const silentLogger: DiLogger = { warn() {}, error() {} }
+/** Drops warnings; errors (a `@PostConstruct` that threw) go to `console.error`. */
+export const defaultLogger: DiLogger = {
+  warn() {},
+  error(err, message) {
+    console.error(message, err)
+  },
+}

@@ -1,9 +1,9 @@
 // The DI core without kickjs: no hooks installed, so the container's own
 // errors and its silent logger. (Importing anything from kickjs installs them.)
 import 'reflect-metadata'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { Container } from '../src/container'
-import { Inject, Service, Value } from '../src/decorators'
+import { Autowired, Inject, PostConstruct, Service, Value } from '../src/decorators'
 import { createToken } from '../src/token'
 import { DiError } from '../src/errors'
 import { Scope } from '../src/interfaces'
@@ -82,3 +82,33 @@ declare module '../src/container' {
     Answer: number
   }
 }
+
+it('invalidates two classes that @Autowired each other without looping', () => {
+  @Service()
+  class Ping {
+    @Autowired() pong!: unknown
+  }
+  @Service()
+  class Pong {
+    @Autowired() ping!: Ping
+  }
+  Reflect.defineMetadata('design:type', Pong, Ping.prototype, 'pong')
+  const container = Container.create()
+  const ping = container.resolve(Ping)
+  container.resolve(Pong)
+  expect(() => container.invalidate(Ping)).not.toThrow()
+  expect(container.resolve(Ping)).not.toBe(ping)
+})
+
+it('reports a @PostConstruct that threw on console.error by default', () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  @Service()
+  class Broken {
+    @PostConstruct() init() {
+      throw new Error('boom')
+    }
+  }
+  Container.create().resolve(Broken)
+  expect(error).toHaveBeenCalledWith(expect.stringContaining('Broken.init()'), expect.any(Error))
+  error.mockRestore()
+})

@@ -31,7 +31,7 @@ export {
   disposeAll,
   type Disposable,
 } from './disposables'
-export { DiError, diError, silentLogger, type DiErrorCode, type DiLogger } from './errors'
+export { DiError, diError, defaultLogger, type DiErrorCode, type DiLogger } from './errors'
 export {
   Scope,
   DI_METADATA,

@@ -57,7 +57,7 @@ A class constructor parameter is injected by its type; a token or an interface n
 | Member decorators | `Inject`, `Autowired`, `Value`, `PostConstruct`, `PreDestroy`                                                           |
 | Tokens            | `createToken`, `isInjectionToken`, `INJECTION_TOKEN`, `InjectionToken`                                                  |
 | Types             | `Scope`, `Constructor`, `ServiceOptions`, `BuilderOf`, `Buildable`, `ClassKind`, `PostConstructStatus`, `EnvKey`, `Env` |
-| Errors            | `DiError`, `diError`, `DiErrorCode`, `DiLogger`, `silentLogger`                                                         |
+| Errors            | `DiError`, `diError`, `DiErrorCode`, `DiLogger`, `defaultLogger`                                                        |
 | Metadata helpers  | `DI_METADATA`, `setClassMeta`, `getClassMeta`, `setInMetaMap`, `getMetaMap`, …                                          |
 | Disposables       | `registerDisposable`, `drainDisposables`, `runDisposables`, `disposeAll`                                                |
 
@@ -100,13 +100,13 @@ Inside KickJS the same codes become the catalogued `KickError`s, with the cause 
 
 The framework plugs into the container through static hooks. Standalone, set the ones you need once at startup.
 
-| Hook                              | Default   | What it does                                                                                                              |
-| --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `Container._envResolver`          | `null`    | `(key) => value` for `@Value`. Without one, `@Value` reads `process.env`, then the default.                               |
-| `Container._requestStoreProvider` | `null`    | Returns the current request's store for `Scope.REQUEST`. See below.                                                       |
-| `Container._error`                | `diError` | `(code, subject) => Error` — build your own errors from the codes.                                                        |
-| `Container._logger`               | silent    | `{ warn, error }` — told when an async `@PostConstruct` isn't awaited, or one throws.                                     |
-| `Container._propertyInjectors`    | empty     | A `Map` from metadata key to `(config, prop) => getter`: your own lazy property decorators, the way KickJS adds `@Asset`. |
+| Hook                              | Default                                     | What it does                                                                                                              |
+| --------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Container._envResolver`          | `null`                                      | `(key) => value` for `@Value`. Without one, `@Value` reads `process.env`, then the default.                               |
+| `Container._requestStoreProvider` | `null`                                      | Returns the current request's store for `Scope.REQUEST`. See below.                                                       |
+| `Container._error`                | `diError`                                   | `(code, subject) => Error` — build your own errors from the codes.                                                        |
+| `Container._logger`               | errors to `console.error`, warnings dropped | `{ warn, error }` — told when an async `@PostConstruct` isn't awaited, or one throws.                                     |
+| `Container._propertyInjectors`    | empty                                       | A `Map` from metadata key to `(config, prop) => getter`: your own lazy property decorators, the way KickJS adds `@Asset`. |
 
 ```ts
 Container._logger = {
