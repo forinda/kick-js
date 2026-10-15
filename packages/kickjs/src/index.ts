@@ -56,6 +56,7 @@ export {
   type StartupCheck,
 } from './http/startup-checks'
 export { waitUntil, settleBackgroundWork, type PlatformContext } from './http/background'
+export { RAW_BODY } from './http/body-policy'
 export {
   reportError,
   reportResponse,

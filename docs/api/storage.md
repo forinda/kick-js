@@ -36,3 +36,15 @@ Needs `@forinda/kickjs` 10.1 or later.
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `S3Settings`                         | Section `S3`: `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_SESSION_TOKEN`, `S3_FORCE_PATH_STYLE` |
 | `s3FromSettings(section?, options?)` | An `S3Storage` read from the section on first use; set variables win over `options`                                                          |
+
+### tus (`@forinda/kickjs-storage/tus`)
+
+Needs `@forinda/kickjs` 10.1 or later.
+
+| Export                      | Description                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `TusAdapter(options)`       | A tus 1.0.0 endpoint at `path` (creation, creation-with-upload, termination, expiration) on every runtime |
+| `createTusHandler(options)` | The same endpoint as a Node `(req, res, next)` handler                                                    |
+| `TusOptions`                | `path`, `storage`, `dir`, `maxSize`, `expiresIn`, `onCreate`, `authorize`, `onComplete`                   |
+| `TusUpload`                 | `id`, `key`, `size`, `offset`, `metadata`, `data`, `expiresAt`                                            |
+| `TusCreateRequest`          | `headers`, `size`, `metadata`                                                                             |
