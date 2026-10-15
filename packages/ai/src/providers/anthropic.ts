@@ -133,6 +133,7 @@ export class AnthropicProvider implements AiProvider {
   private readonly defaultMaxTokens: number
   private clientPromise?: Promise<Anthropic>
   private readonly warned = new Set<string>()
+  private warnedFull = false
 
   constructor(private readonly options: AnthropicProviderOptions = {}) {
     this.defaultChatModel = options.defaultChatModel ?? 'claude-opus-5-5'
@@ -398,7 +399,16 @@ export class AnthropicProvider implements AiProvider {
   }
 
   private warnOnce(key: string, text: string): void {
+    // Keys carry the model name, which an app may take from a request, so at
+    // most 100 are remembered. Past that, one last notice, then quiet: warning
+    // on every call would let clients flood the log instead.
     if (this.warned.has(key)) return
+    if (this.warned.size >= 100) {
+      if (!this.warnedFull)
+        console.warn('AnthropicProvider: further warnings of this kind are suppressed')
+      this.warnedFull = true
+      return
+    }
     this.warned.add(key)
     console.warn(text)
   }

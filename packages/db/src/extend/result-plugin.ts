@@ -46,11 +46,12 @@ type TableExtensionBag = Record<string, ResultExtension<UnknownRow>>
 export class ResultExtensionPlugin implements KyselyPlugin {
   private byTable: Map<string, TableExtensionBag>
   /**
-   * Map of queryId → table name the query targets. Populated in
-   * transformQuery, consumed in transformResult, deleted after use so
-   * it doesn't leak across long-lived clients.
+   * queryId → table name the query targets. Populated in transformQuery,
+   * consumed in transformResult. Weak: Kysely skips transformResult when the
+   * query fails (bad input, a timeout, an abort), and a strong map kept one
+   * entry for every such query a client could cause.
    */
-  private pending = new Map<QueryId, string>()
+  private pending = new WeakMap<QueryId, string>()
 
   /**
    * @param relations the client's relation graph. `db.query` returns related

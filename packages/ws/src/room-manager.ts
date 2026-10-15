@@ -14,6 +14,9 @@ import type { WebSocket } from 'ws'
  * describe this instance. `broadcast` reaches other instances when the adapter
  * has a broker.
  */
+// ponytail: fixed cap; raise it if an app really keeps a socket in more rooms.
+export const MAX_ROOMS_PER_SOCKET = 1000
+
 export class RoomManager {
   /**
    * @param onSend Called with the number of frames each broadcast wrote.
@@ -34,11 +37,25 @@ export class RoomManager {
   /** room name → set of { socketId, socket } */
   private roomSockets = new Map<string, Map<string, WebSocket>>()
 
+  /**
+   * Add a socket to a room. Skipped for a socket that is no longer open: a
+   * handler that awaits and then joins after the client hung up would
+   * otherwise leave an entry `leaveAll` (run once, on close) never removes.
+   * At most {@link MAX_ROOMS_PER_SOCKET} rooms per socket — room names often
+   * come from what the client sends.
+   */
   join(socketId: string, socket: WebSocket, room: string): void {
+    if (socket.readyState !== socket.OPEN) return
     if (!this.socketRooms.has(socketId)) {
       this.socketRooms.set(socketId, new Set())
     }
-    this.socketRooms.get(socketId)!.add(room)
+    const rooms = this.socketRooms.get(socketId)!
+    if (!rooms.has(room) && rooms.size >= MAX_ROOMS_PER_SOCKET) {
+      throw new Error(
+        `WebSocket ${socketId} is already in ${MAX_ROOMS_PER_SOCKET} rooms; leave one before joining '${room}'`,
+      )
+    }
+    rooms.add(room)
 
     if (!this.roomSockets.has(room)) {
       this.roomSockets.set(room, new Map())

@@ -8,12 +8,13 @@ import 'reflect-metadata'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { MAX_ROOMS_PER_SOCKET } from '../src/room-manager'
 import { io as connectClient, type Socket as ClientSocket } from 'socket.io-client'
 import Redis from 'ioredis'
 import { createAdapter } from '@socket.io/redis-adapter'
 import { Container } from '@forinda/kickjs'
 import { WsController, OnConnect, OnMessage, WS_USER_BROADCASTER } from '@forinda/kickjs-ws'
-import { SocketIoAdapter, SOCKET_IO, type SocketIoContext } from '../src/socket-io'
+import { SocketIoAdapter, SOCKET_IO, SocketIoContext } from '../src/socket-io'
 
 const seen: string[] = []
 
@@ -400,5 +401,31 @@ describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
     await adapter.shutdown()
     expect(server.listeners('upgrade')).toContain(laterUpgrade)
     expect(server.listeners('request')).toContain(laterRequest)
+  })
+})
+
+describe('SocketIoContext.join limits', () => {
+  const fakeSocket = (connected = true) => {
+    const rooms = new Set<string>(['own-id'])
+    return {
+      id: 'own-id',
+      connected,
+      rooms,
+      join: (room: string) => void rooms.add(room),
+    }
+  }
+
+  it('ignores a join after the socket disconnected', () => {
+    const socket = fakeSocket(false)
+    new SocketIoContext(socket as never, {} as never, '/').join('lobby')
+    expect([...socket.rooms]).toEqual(['own-id'])
+  })
+
+  it('caps rooms per socket, not counting its own id room', () => {
+    const socket = fakeSocket()
+    const ctx = new SocketIoContext(socket as never, {} as never, '/')
+    for (let i = 0; i < MAX_ROOMS_PER_SOCKET; i++) ctx.join(`room-${i}`)
+    expect(() => ctx.join('one-more')).toThrow(`already in ${MAX_ROOMS_PER_SOCKET} rooms`)
+    ctx.join('room-0') // already in it: fine
   })
 })

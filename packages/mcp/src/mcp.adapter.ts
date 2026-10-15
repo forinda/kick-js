@@ -417,6 +417,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
     >()
     const maxSessions = options.maxSessions ?? 1000
+    /** `initialize` requests between the cap check and becoming a session. */
+    let initializing = 0
     const sessionIdleTimeoutMs = options.sessionIdleTimeoutMs ?? 30 * 60_000
 
     /** The MCP endpoint's path. */
@@ -1428,15 +1430,25 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           // Each session holds an MCP server and transport, and initialize needs
           // no session — cap them so clients (authenticated or not) can't
           // exhaust memory, and close abandoned ones after an idle timeout.
-          if (sessions.size >= maxSessions) {
+          // Initializations still in progress count too: they become sessions
+          // only once the SDK reports them, after the awaits below.
+          if (sessions.size + initializing >= maxSessions) {
             await sendJsonRpcError(ctx, 503, 'Too many MCP sessions; try again later')
             return
           }
+          // One slot, held as `initializing` until the SDK registers the
+          // session, then as the session itself — never both.
+          initializing++
+          let registered = false
           const server = buildMcpServer()
           const sessionTransport = new WebStandardStreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (id) => {
-              sessions.set(id, { server, transport: sessionTransport, active: 0 })
+              registered = true
+              initializing--
+              // Active until this request's response is sent: the idle timer
+              // mustn't close it mid-response to a slow client.
+              sessions.set(id, { server, transport: sessionTransport, active: 1 })
             },
           })
           // Set before connect(): the SDK wraps an existing onclose, but a
@@ -1448,11 +1460,22 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             clearTimeout(sessions.get(id)?.idleTimer)
             sessions.delete(id)
           }
-          await server.connect(sessionTransport)
-          await ctx.sendResponse(
-            await sessionTransport.handleRequest(webRequest, { parsedBody, authInfo }),
-          )
-          if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
+          try {
+            await server.connect(sessionTransport)
+            await ctx.sendResponse(
+              await sessionTransport.handleRequest(webRequest, { parsedBody, authInfo }),
+            )
+          } finally {
+            if (!registered) initializing--
+            // Response sent, or failed (the client went away): either way the
+            // session is idle now, so its timer starts.
+            const id = sessionTransport.sessionId
+            const session = id ? sessions.get(id) : undefined
+            if (session) {
+              session.active--
+              armIdleTimer(id!)
+            }
+          }
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
           if (!ctx.res.headersSent) {

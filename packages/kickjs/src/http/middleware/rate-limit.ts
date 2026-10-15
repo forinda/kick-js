@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express'
 import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { registerDisposable } from '../../core/disposables'
+import { BoundedCounters } from './bounded-counters'
 
 export interface RateLimitStore {
   increment(key: string): Promise<{ totalHits: number; resetTime: Date }>
@@ -52,17 +53,15 @@ export interface RateLimitOptions {
   exemptWhen?: RouteFlagTest
 }
 
-interface MemoryStoreEntry {
-  totalHits: number
-  resetTime: Date
-}
-
-class MemoryStore implements RateLimitStore {
-  private hits = new Map<string, MemoryStoreEntry>()
+/** @internal Exported for tests. Bounded: see {@link BoundedCounters}. */
+export class MemoryStore implements RateLimitStore {
+  private readonly counters: BoundedCounters
   private cleanupTimer: ReturnType<typeof setInterval>
 
-  constructor(private windowMs: number) {
-    this.cleanupTimer = setInterval(() => this.cleanup(), windowMs)
+  /** @param limit The `max` it enforces, so it never evicts a counter at the limit. */
+  constructor(windowMs: number, limit?: number) {
+    this.counters = new BoundedCounters(windowMs, limit)
+    this.cleanupTimer = setInterval(() => this.counters.sweep(), windowMs)
     // Allow the process to exit without waiting for the timer
     if (this.cleanupTimer.unref) {
       this.cleanupTimer.unref()
@@ -76,42 +75,19 @@ class MemoryStore implements RateLimitStore {
   /** Clear the cleanup interval and drop all hit counters. */
   dispose(): void {
     clearInterval(this.cleanupTimer)
-    this.hits.clear()
+    this.counters.clear()
   }
 
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
-    const now = Date.now()
-    const entry = this.hits.get(key)
-
-    if (entry && entry.resetTime.getTime() > now) {
-      entry.totalHits++
-      return { totalHits: entry.totalHits, resetTime: entry.resetTime }
-    }
-
-    const resetTime = new Date(now + this.windowMs)
-    const newEntry: MemoryStoreEntry = { totalHits: 1, resetTime }
-    this.hits.set(key, newEntry)
-    return { totalHits: 1, resetTime }
+    return this.counters.increment(key)
   }
 
   async decrement(key: string): Promise<void> {
-    const entry = this.hits.get(key)
-    if (entry && entry.totalHits > 0) {
-      entry.totalHits--
-    }
+    this.counters.decrement(key)
   }
 
   async reset(key: string): Promise<void> {
-    this.hits.delete(key)
-  }
-
-  private cleanup(): void {
-    const now = Date.now()
-    for (const [key, entry] of this.hits) {
-      if (entry.resetTime.getTime() <= now) {
-        this.hits.delete(key)
-      }
-    }
+    this.counters.reset(key)
   }
 }
 
@@ -147,7 +123,7 @@ export function rateLimit(options: RateLimitOptions = {}) {
     options.keyGenerator ??
     ((req: Request) => resolveClientIp(req as ClientRequestLike) ?? 'global')
   const sendHeaders = options.headers ?? true
-  const store = options.store ?? new MemoryStore(windowMs)
+  const store = options.store ?? new MemoryStore(windowMs, max)
   const skip = options.skip
   const skipPaths = new Set(options.skipPaths ?? [])
   const exemptWhen = options.exemptWhen

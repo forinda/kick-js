@@ -7,6 +7,7 @@ import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
 import type { RateLimitStore } from './rate-limit'
+import { BoundedCounters } from './bounded-counters'
 
 export interface RateLimitGuardOptions {
   /** Maximum number of requests per window (default: 100). */
@@ -68,36 +69,30 @@ export interface RateLimitGuardOptions {
   exemptWhen?: RouteFlagTest
 }
 
-/** Timer-free in-memory store: sweeps expired entries when the map grows. */
-class LazyMemoryStore implements RateLimitStore {
-  private readonly hits = new Map<string, { hits: number; reset: number }>()
+/**
+ * Timer-free in-memory store: expired windows are swept on insert, from the
+ * front. Bounded: see {@link BoundedCounters}.
+ *
+ * @internal Exported for tests.
+ */
+export class LazyMemoryStore implements RateLimitStore {
+  private readonly counters: BoundedCounters
 
-  constructor(private readonly windowMs: number) {}
+  /** @param limit The `max` it enforces, so it never evicts a counter at the limit. */
+  constructor(windowMs: number, limit?: number) {
+    this.counters = new BoundedCounters(windowMs, limit)
+  }
 
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
-    const now = Date.now()
-    const entry = this.hits.get(key)
-    if (entry && entry.reset > now) {
-      entry.hits++
-      return { totalHits: entry.hits, resetTime: new Date(entry.reset) }
-    }
-    // ponytail: sweep-on-growth instead of a cleanup interval — no timer to
-    // dispose, edge-safe. Bound is 10k live keys before a full sweep.
-    if (this.hits.size > 10_000) {
-      for (const [k, e] of this.hits) if (e.reset <= now) this.hits.delete(k)
-    }
-    const fresh = { hits: 1, reset: now + this.windowMs }
-    this.hits.set(key, fresh)
-    return { totalHits: 1, resetTime: new Date(fresh.reset) }
+    return this.counters.increment(key)
   }
 
   async decrement(key: string): Promise<void> {
-    const entry = this.hits.get(key)
-    if (entry && entry.hits > 0) entry.hits--
+    this.counters.decrement(key)
   }
 
   async reset(key: string): Promise<void> {
-    this.hits.delete(key)
+    this.counters.reset(key)
   }
 }
 
@@ -130,7 +125,7 @@ export function rateLimitGuard(options: RateLimitGuardOptions = {}): MiddlewareH
   const statusCode = options.statusCode ?? 429
   const keyGenerator = options.keyGenerator ?? defaultKey
   const sendHeaders = options.headers ?? true
-  const store = options.store ?? new LazyMemoryStore(windowMs)
+  const store = options.store ?? new LazyMemoryStore(windowMs, max)
 
   const exemptWhen = options.exemptWhen
   if (exemptWhen !== undefined) assertFlagTest(exemptWhen, 'rateLimitGuard({ exemptWhen })')

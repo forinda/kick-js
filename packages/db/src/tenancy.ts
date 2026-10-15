@@ -46,7 +46,10 @@ export interface TenancyOptions {
   /**
    * `'database'`: at most this many tenants' connections open at once — the
    * least recently used idle one is closed to make room. A soft cap: tenants
-   * with a query in flight are never closed. Default unlimited.
+   * with a query in flight are never closed. Default 100: a pool each is
+   * already more connections than most databases allow, and the tenant id
+   * often comes from a request — unbounded, a client sending made-up ids
+   * would open a pool per id.
    */
   maxOpenTenants?: number
   /**
@@ -163,7 +166,7 @@ export function defineTenancy(options: TenancyOptions): Tenancy {
     bypassDialect: options.bypassDialect,
     dialectFor: options.dialectFor,
     tenantIdleMs: options.tenantIdleMs ?? 600_000,
-    maxOpenTenants: options.maxOpenTenants ?? Number.POSITIVE_INFINITY,
+    maxOpenTenants: options.maxOpenTenants ?? 100,
     run: (tenantId, fn) => scope.run({ id: tenantId }, fn),
     bypass: (fn, bypassOptions) => {
       if (!bypassOptions?.reason) {

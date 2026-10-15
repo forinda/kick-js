@@ -89,8 +89,15 @@ export interface SessionOptions {
 
 // ── In-Memory Store ───────────────────────────────────────────────────
 
-class MemoryStore implements SessionStore {
+// ponytail: fixed cap for the single-instance default; a shared store
+// (KvSessionStore, Redis) is the answer for more.
+const MAX_SESSIONS = 10_000
+
+/** @internal Exported for tests. */
+export class MemoryStore implements SessionStore {
   private readonly sessions = new Map<string, { data: SessionData; expires: number }>()
+  /** Sessions with no data, oldest first: evicted before any that hold some. */
+  private readonly empty = new Set<string>()
   private readonly cleanupInterval: ReturnType<typeof setInterval>
 
   constructor() {
@@ -107,6 +114,7 @@ class MemoryStore implements SessionStore {
   dispose(): void {
     clearInterval(this.cleanupInterval)
     this.sessions.clear()
+    this.empty.clear()
   }
 
   async get(sid: string): Promise<SessionData | null> {
@@ -114,23 +122,41 @@ class MemoryStore implements SessionStore {
     if (!entry) return null
     if (Date.now() > entry.expires) {
       this.sessions.delete(sid)
+      this.empty.delete(sid)
       return null
     }
     return entry.data
   }
 
   async set(sid: string, data: SessionData, maxAge: number): Promise<void> {
+    // Deleted first so the map stays in last-written order, oldest at the front.
+    this.sessions.delete(sid)
     this.sessions.set(sid, { data, expires: Date.now() + maxAge })
+    this.empty.delete(sid)
+    if (Object.keys(data).length === 0) this.empty.add(sid)
+    // A session is created for every visitor without a cookie, so a client
+    // can make as many as it sends requests. Past the cap, an empty session
+    // goes first — a flood of cookieless requests makes only empty ones, so
+    // it can't push out sessions that hold a login; only when none is empty
+    // does the least recently written go.
+    while (this.sessions.size > MAX_SESSIONS) {
+      const victim = this.empty.values().next().value ?? this.sessions.keys().next().value!
+      this.sessions.delete(victim)
+      this.empty.delete(victim)
+    }
   }
 
   async destroy(sid: string): Promise<void> {
     this.sessions.delete(sid)
+    this.empty.delete(sid)
   }
 
   async touch(sid: string, maxAge: number): Promise<void> {
     const entry = this.sessions.get(sid)
     if (entry) {
       entry.expires = Date.now() + maxAge
+      this.sessions.delete(sid)
+      this.sessions.set(sid, entry)
     }
   }
 
@@ -139,6 +165,7 @@ class MemoryStore implements SessionStore {
     for (const [sid, entry] of this.sessions) {
       if (now > entry.expires) {
         this.sessions.delete(sid)
+        this.empty.delete(sid)
       }
     }
   }

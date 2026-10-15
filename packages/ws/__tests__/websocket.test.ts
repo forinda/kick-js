@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { RoomManager } from '@forinda/kickjs-ws'
+import { MAX_ROOMS_PER_SOCKET } from '../src/room-manager'
 
 // Adapter-level tests against a real server live in adapter.integration.test.ts.
 
@@ -15,6 +16,31 @@ describe('RoomManager', () => {
 
     rm.leave('s1', 'room-a')
     expect(rm.getRooms('s1')).toEqual(['room-b'])
+  })
+
+  it('ignores a join from a socket that already closed', () => {
+    const rm = new RoomManager()
+    const open = { readyState: 1, OPEN: 1, send: () => {} } as any
+    rm.join('s1', open, 'lobby')
+    rm.leaveAll('s1') // the close handler ran
+    // A handler that awaited, then joined after the client hung up:
+    const closed = { readyState: 3, OPEN: 1, send: () => {} } as any
+    rm.join('s1', closed, 'lobby')
+    expect(rm.getRooms('s1')).toEqual([])
+    expect(rm.getAllRooms()).toEqual({})
+  })
+
+  it('caps the rooms one socket can be in', () => {
+    const rm = new RoomManager()
+    const socket = { readyState: 1, OPEN: 1, send: () => {} } as any
+    for (let i = 0; i < MAX_ROOMS_PER_SOCKET; i++) rm.join('s1', socket, `room-${i}`)
+    expect(() => rm.join('s1', socket, 'one-more')).toThrow(
+      `already in ${MAX_ROOMS_PER_SOCKET} rooms`,
+    )
+    rm.join('s1', socket, 'room-0') // a room it is already in is fine
+    rm.leave('s1', 'room-1')
+    rm.join('s1', socket, 'one-more')
+    expect(rm.getRooms('s1')).toContain('one-more')
   })
 
   it('should leaveAll on disconnect', () => {

@@ -167,4 +167,4 @@ A lone query under `'transaction'` binding is three round trips (`BEGIN` with th
 
 ## Many databases: closing idle ones
 
-With `'database'`, each tenant's connections stay open while it's busy, and close after `tenantIdleMs` without use (default 10 minutes). `maxOpenTenants` caps how many tenants keep connections at once: when a new tenant arrives, the least recently used idle one is closed. Tenants with a query in flight are never closed, so it's a soft cap. A closed tenant reopens on its next query.
+With `'database'`, each tenant's connections stay open while it's busy, and close after `tenantIdleMs` without use (default 10 minutes). `maxOpenTenants` (default 100) caps how many tenants keep connections at once: when a new tenant arrives, the least recently used idle one is closed. Tenants with a query in flight are never closed, so it's a soft cap. A closed tenant reopens on its next query. Check that a tenant id from a request names a real tenant before you set it: each id opens its own pool, so made-up ids from a client would each cost connections until they're closed.

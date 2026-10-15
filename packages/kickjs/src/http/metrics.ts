@@ -60,7 +60,7 @@ export class RequestHistogram {
     // one series, and a scan of random URLs adds one series (`unmatched`),
     // not one per URL.
     const labels =
-      `method="${label(info.method)}",route="${label(info.route ?? 'unmatched')}",` +
+      `method="${label(knownMethod(info.method))}",route="${label(info.route ?? 'unmatched')}",` +
       `status="${info.status}"`
     let series = this.series.get(labels)
     if (!series) {
@@ -89,6 +89,18 @@ export class RequestHistogram {
     }
     return lines.join('\n')
   }
+}
+
+const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'QUERY'])
+
+/**
+ * The method as a label, or `OTHER`. Node only parses known methods, but a
+ * fetch-based host (Bun, Deno) passes any token through, and each one would
+ * start a series.
+ */
+function knownMethod(method: string): string {
+  const upper = method.toUpperCase()
+  return METHODS.has(upper) ? upper : 'OTHER'
 }
 
 function gauge(name: string, help: string, value: number): string {
