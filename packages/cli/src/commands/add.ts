@@ -718,7 +718,7 @@ export function registerAddCommand(program: Command): void {
       const { unknown, warnings, notices } = plan
       let { prodDeps, devDeps } = plan
 
-      // Packages with a scaffold layer (swagger, devtools, ws, queue) are also
+      // Packages with a scaffold layer (swagger, devtools, ws, queue, storage) are also
       // wired: their adapter goes into the entry file and their .env lines in.
       // The entry file imports them, so they install as regular dependencies
       // (devtools is otherwise a dev dependency), with the peers the layer uses.

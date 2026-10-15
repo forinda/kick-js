@@ -1,0 +1,6 @@
+# File storage: set S3_BUCKET to use a bucket instead of the uploads/ folder
+# S3_BUCKET=
+# S3_REGION=
+# S3_ACCESS_KEY_ID=
+# S3_SECRET_ACCESS_KEY=
+# S3_ENDPOINT=

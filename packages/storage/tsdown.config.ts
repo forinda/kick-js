@@ -9,6 +9,7 @@ export default defineConfig({
     disk: 'src/disk.ts',
     settings: 'src/settings.ts',
     tus: 'src/tus.ts',
+    adapter: 'src/adapter.ts',
   },
   format: ['esm'],
   platform: 'node',

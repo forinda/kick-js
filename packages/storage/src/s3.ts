@@ -1,7 +1,8 @@
-import type { FileInfo, Storage } from './types'
+import type { FileInfo, PutOptions, Storage } from './types'
 import {
+  checkDelimiter,
+  checkKey,
   checkLimit,
-  collect,
   concatBytes,
   encodeKey,
   encodeSegment,
@@ -144,6 +145,27 @@ export interface UploadUrlOptions {
   contentType?: string
 }
 
+export interface UploadFormOptions {
+  /** Seconds the form stays valid. Default 3600, at most 604800 (7 days). */
+  expiresIn?: number
+  /** Largest file accepted, in bytes. The bucket refuses anything bigger. */
+  maxSize: number
+  /** Smallest file accepted, in bytes. Default 0. */
+  minSize?: number
+  /**
+   * The `Content-Type` the file must be sent with: exact (`'application/pdf'`),
+   * or a family ending in `/` (`'image/'`), in which case the form sets
+   * `Content-Type` itself, to the file's type.
+   */
+  contentType?: string
+}
+
+/** What a browser form POSTs to: the URL, and fields to send before the file. */
+export interface UploadForm {
+  url: string
+  fields: Record<string, string>
+}
+
 /** A part already in a multipart upload. */
 export interface UploadedPart {
   partNumber: number
@@ -185,12 +207,29 @@ export interface Multipart {
 export interface S3Storage extends Storage {
   /** A signed URL the browser can `PUT` one file to, up to 5 GiB. */
   uploadUrl(key: string, options?: UploadUrlOptions): Promise<string>
+  /**
+   * A signed form (POST policy) the browser uploads one file through, with a
+   * size range the bucket enforces — for when the size isn't known up front.
+   * AWS S3 and MinIO support it; Cloudflare R2 doesn't (use `uploadUrl`).
+   */
+  uploadForm(key: string, options: UploadFormOptions): Promise<UploadForm>
   multipart: Multipart
+  /**
+   * Join objects already in this bucket, in order, into `key` — copied by
+   * the bucket itself (CopyObject, UploadPartCopy), not through this server.
+   * S3 needs every part but the last to be at least 5 MiB; sources under
+   * that (other than the last) are streamed through instead.
+   */
+  compose(key: string, sources: readonly string[], options?: PutOptions): Promise<void>
+  /** The bucket's address, e.g. `https://avatars.s3.eu-west-1.amazonaws.com`: equal for two storages on one bucket. */
+  readonly location: string
 }
 
 // S3's minimum part size; `put()` streams in parts of this size.
 const PART_SIZE = 5 * 1024 * 1024
 const MAX_PARTS = 10_000
+// S3's largest single copy (CopyObject) and part copy.
+const MAX_COPY = 5 * 1024 ** 3
 const BUCKET = Symbol('bucket')
 
 const xmlEscape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -258,6 +297,8 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
 
   interface Request {
     query?: Record<string, string>
+    /** `x-amz-*` headers to send, signed. */
+    amz?: Record<string, string>
     /** Sent unsigned, besides the signed ones. */
     headers?: Record<string, string>
     body?: Uint8Array
@@ -272,6 +313,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate(now.date),
       ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
+      ...request.amz,
     }
     const { signature, credential, signedHeaders } = await signV4(
       method,
@@ -325,6 +367,63 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       headers,
     )
 
+  /**
+   * Join an upload's parts. With `createOnly`, only if nothing is at `key`
+   * yet (`If-None-Match: *`): `false` when something is.
+   */
+  async function completeUpload(
+    key: string,
+    uploadId: string,
+    parts: CompletedPart[],
+    createOnly = false,
+  ): Promise<boolean> {
+    const body =
+      '<CompleteMultipartUpload>' +
+      parts
+        .toSorted((a, b) => a.partNumber - b.partNumber)
+        .map(
+          (part) =>
+            `<Part><PartNumber>${checkPartNumber(part.partNumber)}</PartNumber><ETag>${xmlEscape(part.etag)}</ETag></Part>`,
+        )
+        .join('') +
+      '</CompleteMultipartUpload>'
+    const res = await send('POST', key, {
+      query: { uploadId },
+      body: toBytes(body),
+      ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
+    })
+    if (createOnly && (res.status === 412 || res.status === 409)) {
+      await res.body?.cancel()
+      return false
+    }
+    if (!res.ok) await fail(res, 'POST', key)
+    // S3 can answer 200 and put the failure in the body.
+    const xml = await res.text()
+    if (xml.includes('<Error>')) {
+      if (createOnly && tag(xml, 'Code') === 'PreconditionFailed') return false
+      throw new Error(
+        `s3Storage: completing '${key}' failed: ${tag(xml, 'Code')} ${tag(xml, 'Message') ?? ''}`,
+      )
+    }
+    return true
+  }
+
+  /** One PUT; with `createOnly`, `false` when the key exists (412) or is being created (409). */
+  async function putOnce(key: string, bytes: Uint8Array, contentType?: string, createOnly = false) {
+    const res = await send('PUT', key, {
+      body: bytes,
+      contentType,
+      ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
+    })
+    if (createOnly && (res.status === 412 || res.status === 409)) {
+      await res.body?.cancel()
+      return false
+    }
+    if (!res.ok) await fail(res, 'PUT', key)
+    await res.body?.cancel()
+    return true
+  }
+
   const multipart: Multipart = {
     async create(key, createOptions = {}) {
       const res = await call('POST', key, {
@@ -362,24 +461,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       return parts
     },
     async complete(key, uploadId, parts) {
-      const body =
-        '<CompleteMultipartUpload>' +
-        parts
-          .toSorted((a, b) => a.partNumber - b.partNumber)
-          .map(
-            (part) =>
-              `<Part><PartNumber>${checkPartNumber(part.partNumber)}</PartNumber><ETag>${xmlEscape(part.etag)}</ETag></Part>`,
-          )
-          .join('') +
-        '</CompleteMultipartUpload>'
-      const res = await call('POST', key, { query: { uploadId }, body: toBytes(body) })
-      // S3 can answer 200 and put the failure in the body.
-      const xml = await res.text()
-      if (xml.includes('<Error>')) {
-        throw new Error(
-          `s3Storage: completing '${key}' failed: ${tag(xml, 'Code')} ${tag(xml, 'Message') ?? ''}`,
-        )
-      }
+      await completeUpload(key, uploadId, parts)
     },
     async abort(key, uploadId) {
       await call('DELETE', key, { query: { uploadId } }, true)
@@ -390,7 +472,12 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
    * A stream in parts of `partSize`, `partConcurrency` at a time: one PUT if
    * it fits in one part, a multipart upload if not, aborted on any failure.
    */
-  async function putStream(key: string, body: AsyncIterable<Uint8Array>, contentType?: string) {
+  async function putStream(
+    key: string,
+    body: AsyncIterable<Uint8Array>,
+    contentType?: string,
+    createOnly = false,
+  ): Promise<boolean> {
     let buffered: Uint8Array[] = []
     let size = 0
     let uploadId: Promise<string> | undefined
@@ -398,7 +485,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     let failed: { error: unknown } | undefined
     const parts: CompletedPart[] = []
     const inFlight = new Set<Promise<void>>()
-    const send = () => {
+    const sendPart = () => {
       const bytes = concatBytes(buffered)
       const partNumber = checkPartNumber(nextPart++)
       buffered = []
@@ -424,23 +511,152 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         buffered.push(bytes)
         size += bytes.length
         if (size >= partSize) {
-          send()
+          // Not the atomic check (completing is), but it saves uploading a
+          // big body only to find the key taken.
+          if (createOnly && !uploadId && (await statOf(key))) return false
+          sendPart()
           while (inFlight.size >= partConcurrency) await Promise.race(inFlight)
         }
         if (failed) throw failed.error
       }
-      if (!uploadId) {
-        await call('PUT', key, { body: concatBytes(buffered), contentType })
-        return
-      }
-      if (size > 0) send()
+      if (!uploadId) return await putOnce(key, concatBytes(buffered), contentType, createOnly)
+      if (size > 0) sendPart()
       await Promise.all(inFlight)
       if (failed) throw failed.error
-      await multipart.complete(key, await uploadId, parts)
+      const id = await uploadId
+      if (await completeUpload(key, id, parts, createOnly)) return true
+      await multipart.abort(key, id)
+      return false
     } catch (err) {
       await Promise.all(inFlight)
       if (uploadId) await uploadId.then((id) => multipart.abort(key, id)).catch(() => {})
       throw err
+    }
+  }
+
+  /** `x-amz-copy-source` for an object in this bucket. */
+  const copySource = (source: string) => `/${encodeSegment(options.bucket)}/${encodeKey(source)}`
+
+  async function compose(key: string, sources: readonly string[], putOptions: PutOptions = {}) {
+    if (sources.length === 0) throw new Error('s3Storage: compose() needs at least one source')
+    const sizes = await Promise.all(
+      sources.map(async (source) => {
+        const info = await statOf(source)
+        if (!info) throw new Error(`s3Storage: compose() source '${source}' does not exist`)
+        return info.size
+      }),
+    )
+    const streamed = async () => {
+      async function* joined() {
+        for (const source of sources) {
+          const stream = await storage.getStream(source)
+          if (!stream) throw new Error(`s3Storage: compose() source '${source}' disappeared`)
+          yield* stream as unknown as AsyncIterable<Uint8Array>
+        }
+      }
+      await storage.put(key, joined(), putOptions)
+    }
+    // A part under 5 MiB is only allowed last: such sources can't be copied as parts.
+    if (sizes.slice(0, -1).some((size) => size < PART_SIZE)) return streamed()
+
+    if (sources.length === 1 && sizes[0] <= MAX_COPY) {
+      const res = await call('PUT', key, {
+        amz: { 'x-amz-copy-source': copySource(sources[0]), 'x-amz-metadata-directive': 'REPLACE' },
+        contentType: putOptions.contentType ?? 'application/octet-stream',
+      })
+      const xml = await res.text()
+      if (xml.includes('<Error>'))
+        throw new Error(`s3Storage: copying into '${key}' failed: ${tag(xml, 'Code')}`)
+      return
+    }
+
+    // Each source in ranges of at most 5 GiB, split evenly so no range is small.
+    const ranges = sources.flatMap((source, i) => {
+      const pieces = Math.max(1, Math.ceil(sizes[i] / MAX_COPY))
+      const each = Math.ceil(sizes[i] / pieces)
+      return Array.from({ length: pieces }, (_, p) => ({
+        source,
+        from: p * each,
+        to: Math.min(sizes[i], (p + 1) * each) - 1,
+      })).filter((range) => range.to >= range.from)
+    })
+    if (ranges.length > MAX_PARTS) return streamed()
+    const uploadId = await multipart.create(key, { contentType: putOptions.contentType })
+    try {
+      const parts: CompletedPart[] = []
+      // ponytail: partConcurrency copies at a time, like put()'s parts.
+      for (let i = 0; i < ranges.length; i += partConcurrency) {
+        const batch = ranges.slice(i, i + partConcurrency)
+        await Promise.all(
+          batch.map(async ({ source, from, to }, j) => {
+            const partNumber = i + j + 1
+            const res = await call('PUT', key, {
+              query: { partNumber: String(partNumber), uploadId },
+              amz: {
+                'x-amz-copy-source': copySource(source),
+                'x-amz-copy-source-range': `bytes=${from}-${to}`,
+              },
+            })
+            const xml = await res.text()
+            const etag = tag(xml, 'ETag')
+            if (!etag)
+              throw new Error(
+                `s3Storage: copying part ${partNumber} into '${key}' failed: ${xml.slice(0, 200)}`,
+              )
+            parts.push({ partNumber, etag })
+          }),
+        )
+      }
+      await completeUpload(key, uploadId, parts)
+    } catch (err) {
+      await multipart.abort(key, uploadId).catch(() => {})
+      throw err
+    }
+  }
+
+  async function uploadForm(key: string, formOptions: UploadFormOptions): Promise<UploadForm> {
+    checkKey(key)
+    const { maxSize, minSize = 0, contentType } = formOptions
+    if (
+      !Number.isInteger(maxSize) ||
+      !Number.isInteger(minSize) ||
+      minSize < 0 ||
+      maxSize < minSize
+    ) {
+      throw new Error('s3Storage: uploadForm needs whole-number sizes, 0 <= minSize <= maxSize')
+    }
+    const expiresIn = checkExpires(formOptions.expiresIn ?? 3600)
+    const date = new Date()
+    const stamp = amzDate(date)
+    const credential = `${options.accessKeyId}/${stamp.slice(0, 8)}/${region}/s3/aws4_request`
+    const fields: Record<string, string> = {
+      key,
+      'x-amz-algorithm': 'AWS4-HMAC-SHA256',
+      'x-amz-credential': credential,
+      'x-amz-date': stamp,
+      ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
+    }
+    const family = contentType?.endsWith('/')
+    if (contentType && !family) fields['Content-Type'] = contentType
+    const policy = {
+      expiration: new Date(date.getTime() + expiresIn * 1000).toISOString(),
+      conditions: [
+        { bucket: options.bucket },
+        ...Object.entries(fields).map(([name, value]) => ({ [name]: value })),
+        ['content-length-range', minSize, maxSize],
+        ...(family ? [['starts-with', '$Content-Type', contentType]] : []),
+      ],
+    }
+    // Base64 without Buffer, for edge runtimes.
+    const encoded = btoa(String.fromCharCode(...utf8(JSON.stringify(policy))))
+    const signingKey = await keyFor(options.secretAccessKey, stamp.slice(0, 8), region)
+    return {
+      url: `${base}/`,
+      fields: {
+        ...fields,
+        policy: encoded,
+        'x-amz-signature': hex(await hmac(signingKey, encoded)),
+      },
     }
   }
 
@@ -455,26 +671,23 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
   }
 
-  return {
+  const storage: S3Storage = {
+    location: base,
+    compose,
+    uploadForm,
     async put(key, body, putOptions = {}) {
-      if (isStream(body)) return putStream(key, body, putOptions.contentType)
+      if (isStream(body)) {
+        await putStream(key, body, putOptions.contentType)
+        return
+      }
       await call('PUT', key, { body: toBytes(body), contentType: putOptions.contentType })
     },
     async putIfAbsent(key, body, putOptions = {}) {
       // S3 conditional writes: 412 when the key exists, 409 when another
       // conditional write to it is in progress — both mean someone else has it.
-      const res = await send('PUT', key, {
-        body: await collect(body),
-        contentType: putOptions.contentType,
-        headers: { 'if-none-match': '*' },
-      })
-      if (res.status === 412 || res.status === 409) {
-        await res.body?.cancel()
-        return false
-      }
-      if (!res.ok) await fail(res, 'PUT', key)
-      await res.body?.cancel()
-      return true
+      // A stream larger than a part goes up in parts, conditional on completing.
+      if (isStream(body)) return putStream(key, body, putOptions.contentType, true)
+      return putOnce(key, toBytes(body), putOptions.contentType, true)
     },
     async get(key) {
       const res = await call('GET', key, {}, true)
@@ -496,11 +709,13 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       await call('DELETE', key, {}, true)
     },
     async list(listOptions = {}) {
+      const delimiter = checkDelimiter(listOptions.delimiter)
       const query: Record<string, string> = {
         'list-type': '2',
         'max-keys': String(checkLimit(listOptions.limit)),
         ...(listOptions.prefix ? { prefix: listOptions.prefix } : {}),
         ...(listOptions.cursor ? { 'continuation-token': listOptions.cursor } : {}),
+        ...(delimiter ? { delimiter } : {}),
       }
       const xml = await (await call('GET', BUCKET, { query })).text()
       const files = tags(xml, 'Contents').map((entry) => ({
@@ -508,9 +723,15 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         size: Number(tag(entry, 'Size')),
         lastModified: new Date(tag(entry, 'LastModified')),
       }))
+      // Each <CommonPrefixes> holds one <Prefix>; the request's own <Prefix> is outside them.
+      const prefixes = tags(xml, 'CommonPrefixes').map((entry) => tag(entry, 'Prefix'))
       const cursor =
         tag(xml, 'IsTruncated') === 'true' ? tag(xml, 'NextContinuationToken') : undefined
-      return cursor ? { files, cursor } : { files }
+      return {
+        files,
+        ...(delimiter ? { prefixes } : {}),
+        ...(cursor ? { cursor } : {}),
+      }
     },
     async url(key, urlOptions = {}) {
       return presignFor('GET', urlOf(key), urlOptions.expiresIn ?? 3600)
@@ -523,6 +744,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
     multipart,
   }
+  return storage
 }
 
 function sizeHeader(size: number | undefined): Record<string, string> {
