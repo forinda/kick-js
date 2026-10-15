@@ -136,7 +136,19 @@ do {
 } while (cursor)
 ```
 
-Listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. Each folder's sorted listing is kept until the folder changes (a file added or removed), so paging through a folder of a million files reads it once.
+Without a delimiter, listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. Each folder's sorted listing is kept until the folder changes (a file added or removed), so paging through a folder of a million files reads it once.
+
+### Folders: `delimiter`
+
+Pass `delimiter: '/'` to list one level at a time, as a file browser does. Keys that continue past the next `/` collapse into a single entry in `prefixes`:
+
+```ts
+const page = await files.list({ prefix: 'users/42/', delimiter: '/' })
+page.files // users/42/avatar.png, users/42/cv.pdf
+page.prefixes // ['users/42/invoices/', 'users/42/photos/']
+```
+
+Files and prefixes are counted together against `limit` and paged together, the same as S3's `CommonPrefixes`. Open a folder by listing it as the next `prefix`. On disk, a folder with no files in it isn't a prefix, which matches buckets, where folders exist only through the keys in them.
 
 ## Create-only writes: `putIfAbsent`
 
@@ -202,6 +214,30 @@ await fetch(url, { method: 'PUT', body: file, headers: { 'content-type': file.ty
 ```
 
 `size` and `contentType` are signed into the URL, so the bucket refuses a body of any other size or a different `Content-Type`. Check them against your limits before you sign. Without `size`, the URL accepts any size up to S3's 5 GiB limit for a single upload. When the browser reports success, `files.stat(key)` confirms the file arrived and how big it is.
+
+### Size unknown up front: `uploadForm()`
+
+`uploadUrl()` fixes the exact size, so the browser must say it first. `uploadForm()` signs a form (an S3 POST policy) that accepts any size within a range instead. The bucket enforces the range, the key, and the content type or type family:
+
+```ts
+@Post('/uploads/form')
+async form(ctx: RequestContext) {
+  const key = `uploads/${ctx.get('user')!.id}/${randomUUID()}`
+  ctx.json(await this.files.uploadForm(key, { maxSize: 20 * 1024 * 1024, contentType: 'image/' }))
+}
+```
+
+```ts
+// browser: the fields first, the file last
+const { url, fields } = await api.post('/uploads/form')
+const form = new FormData()
+for (const [name, value] of Object.entries(fields)) form.append(name, value)
+form.append('Content-Type', file.type) // with a type family like 'image/'
+form.append('file', file)
+await fetch(url, { method: 'POST', body: form })
+```
+
+The bucket rejects a file over `maxSize` with `EntityTooLarge`, and a different key or a type outside the family with 403. AWS S3 and MinIO support form uploads; Cloudflare R2 doesn't, so use `uploadUrl()` with `size` there. The bucket's CORS rule must allow `POST`.
 
 ### Large and resumable: `multipart`
 
@@ -448,7 +484,7 @@ await createTestApp({
 
 ## Limits
 
-- **Direct and multipart uploads are bucket only.** `uploadUrl()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
+- **Direct and multipart uploads are bucket only.** `uploadUrl()`, `uploadForm()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
 - **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
 - **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, is refused, so a link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.

@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -109,6 +109,36 @@ describe.each([
     ])
   })
 
+  it('groups keys into prefixes with a delimiter, paging both together', async () => {
+    const files = await make()
+    for (const key of ['a/1', 'a/b/c', 'a/b/d', 'a/e/f', 'a/z', 'b/x', 'top'])
+      await files.put(key, key)
+    const root = await files.list({ delimiter: '/' })
+    expect(root.files.map((f) => f.key)).toEqual(['top'])
+    expect(root.prefixes).toEqual(['a/', 'b/'])
+
+    const first = await files.list({ prefix: 'a/', delimiter: '/', limit: 2 })
+    expect([first.files.map((f) => f.key), first.prefixes, first.cursor]).toEqual([
+      ['a/1'],
+      ['a/b/'],
+      'a/b/',
+    ])
+    const second = await files.list({
+      prefix: 'a/',
+      delimiter: '/',
+      limit: 2,
+      cursor: first.cursor,
+    })
+    expect([second.files.map((f) => f.key), second.prefixes, second.cursor]).toEqual([
+      ['a/z'],
+      ['a/e/'],
+      undefined,
+    ])
+    // Without a delimiter, nothing changes.
+    expect((await files.list({ prefix: 'a/' })).prefixes).toBeUndefined()
+    await expect(files.list({ delimiter: '' })).rejects.toThrow('delimiter')
+  })
+
   it('builds a URL from baseUrl, encoding each segment', async () => {
     const files = await make()
     expect(await files.url('my docs/r&d (1).pdf')).toBe(
@@ -165,6 +195,14 @@ describe('diskStorage', () => {
     await files.put('d/e', 'x')
     await expect(files.put('d', 'x')).rejects.toThrow("'d' clashes")
     expect(await files.get('d')).toBeNull()
+  })
+
+  it('lists an empty folder as nothing, not as a prefix', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kick-storage-'))
+    const files = diskStorage({ root })
+    await files.put('full/x', 'x')
+    await mkdir(join(root, 'empty'))
+    expect((await files.list({ delimiter: '/' })).prefixes).toEqual(['full/'])
   })
 
   it('lists nothing for a root not created yet', async () => {

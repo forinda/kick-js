@@ -1,4 +1,4 @@
-import { checkKey, checkLimit, collect, pageOf, publicUrl } from './keys'
+import { checkDelimiter, checkKey, checkLimit, collect, listPage, publicUrl } from './keys'
 import type { FileInfo, Storage } from './types'
 
 export interface MemoryStorageOptions {
@@ -61,13 +61,32 @@ export function memoryStorage(options: MemoryStorageOptions = {}): Storage {
       files.delete(checkKey(key))
     },
     async list(listOptions = {}) {
-      const page = pageOf(
-        files.keys(),
-        listOptions.prefix ?? '',
-        listOptions.cursor,
-        checkLimit(listOptions.limit),
-      )
-      return { files: page.keys.map((key) => ({ ...files.get(key)!.info })), cursor: page.cursor }
+      const prefix = listOptions.prefix ?? ''
+      const delimiter = checkDelimiter(listOptions.delimiter)
+      const sorted = [...files.keys()].filter((key) => key.startsWith(prefix)).toSorted()
+      async function* keysFrom(from: string | undefined) {
+        let i = 0
+        if (from !== undefined) {
+          let high = sorted.length
+          while (i < high) {
+            const mid = (i + high) >>> 1
+            if (sorted[mid] < from) i = mid + 1
+            else high = mid
+          }
+        }
+        for (; i < sorted.length; i++) yield sorted[i]
+      }
+      const page = await listPage(keysFrom, {
+        prefix,
+        cursor: listOptions.cursor,
+        limit: checkLimit(listOptions.limit),
+        delimiter,
+      })
+      return {
+        files: page.keys.map((key) => ({ ...files.get(key)!.info })),
+        ...(delimiter ? { prefixes: page.prefixes } : {}),
+        ...(page.cursor ? { cursor: page.cursor } : {}),
+      }
     },
     async url(key) {
       return publicUrl('memoryStorage', options.baseUrl, key)

@@ -1,5 +1,14 @@
 import type { FileInfo, PutOptions, Storage } from './types'
-import { checkLimit, concatBytes, encodeKey, encodeSegment, isStream, toBytes } from './keys'
+import {
+  checkDelimiter,
+  checkKey,
+  checkLimit,
+  concatBytes,
+  encodeKey,
+  encodeSegment,
+  isStream,
+  toBytes,
+} from './keys'
 
 export interface S3StorageOptions {
   bucket: string
@@ -136,6 +145,27 @@ export interface UploadUrlOptions {
   contentType?: string
 }
 
+export interface UploadFormOptions {
+  /** Seconds the form stays valid. Default 3600, at most 604800 (7 days). */
+  expiresIn?: number
+  /** Largest file accepted, in bytes. The bucket refuses anything bigger. */
+  maxSize: number
+  /** Smallest file accepted, in bytes. Default 0. */
+  minSize?: number
+  /**
+   * The `Content-Type` the file must be sent with: exact (`'application/pdf'`),
+   * or a family ending in `/` (`'image/'`), in which case the form sets
+   * `Content-Type` itself, to the file's type.
+   */
+  contentType?: string
+}
+
+/** What a browser form POSTs to: the URL, and fields to send before the file. */
+export interface UploadForm {
+  url: string
+  fields: Record<string, string>
+}
+
 /** A part already in a multipart upload. */
 export interface UploadedPart {
   partNumber: number
@@ -177,6 +207,12 @@ export interface Multipart {
 export interface S3Storage extends Storage {
   /** A signed URL the browser can `PUT` one file to, up to 5 GiB. */
   uploadUrl(key: string, options?: UploadUrlOptions): Promise<string>
+  /**
+   * A signed form (POST policy) the browser uploads one file through, with a
+   * size range the bucket enforces — for when the size isn't known up front.
+   * AWS S3 and MinIO support it; Cloudflare R2 doesn't (use `uploadUrl`).
+   */
+  uploadForm(key: string, options: UploadFormOptions): Promise<UploadForm>
   multipart: Multipart
   /**
    * Join objects already in this bucket, in order, into `key` — copied by
@@ -578,6 +614,52 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
   }
 
+  async function uploadForm(key: string, formOptions: UploadFormOptions): Promise<UploadForm> {
+    checkKey(key)
+    const { maxSize, minSize = 0, contentType } = formOptions
+    if (
+      !Number.isInteger(maxSize) ||
+      !Number.isInteger(minSize) ||
+      minSize < 0 ||
+      maxSize < minSize
+    ) {
+      throw new Error('s3Storage: uploadForm needs whole-number sizes, 0 <= minSize <= maxSize')
+    }
+    const expiresIn = checkExpires(formOptions.expiresIn ?? 3600)
+    const date = new Date()
+    const stamp = amzDate(date)
+    const credential = `${options.accessKeyId}/${stamp.slice(0, 8)}/${region}/s3/aws4_request`
+    const fields: Record<string, string> = {
+      key,
+      'x-amz-algorithm': 'AWS4-HMAC-SHA256',
+      'x-amz-credential': credential,
+      'x-amz-date': stamp,
+      ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
+    }
+    const family = contentType?.endsWith('/')
+    if (contentType && !family) fields['Content-Type'] = contentType
+    const policy = {
+      expiration: new Date(date.getTime() + expiresIn * 1000).toISOString(),
+      conditions: [
+        { bucket: options.bucket },
+        ...Object.entries(fields).map(([name, value]) => ({ [name]: value })),
+        ['content-length-range', minSize, maxSize],
+        ...(family ? [['starts-with', '$Content-Type', contentType]] : []),
+      ],
+    }
+    // Base64 without Buffer, for edge runtimes.
+    const encoded = btoa(String.fromCharCode(...utf8(JSON.stringify(policy))))
+    const signingKey = await keyFor(options.secretAccessKey, stamp.slice(0, 8), region)
+    return {
+      url: `${base}/`,
+      fields: {
+        ...fields,
+        policy: encoded,
+        'x-amz-signature': hex(await hmac(signingKey, encoded)),
+      },
+    }
+  }
+
   const statOf = async (key: string): Promise<FileInfo | null> => {
     const res = await call('HEAD', key, {}, true)
     if (res.status === 404) return null
@@ -592,6 +674,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   const storage: S3Storage = {
     location: base,
     compose,
+    uploadForm,
     async put(key, body, putOptions = {}) {
       if (isStream(body)) {
         await putStream(key, body, putOptions.contentType)
@@ -626,11 +709,13 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       await call('DELETE', key, {}, true)
     },
     async list(listOptions = {}) {
+      const delimiter = checkDelimiter(listOptions.delimiter)
       const query: Record<string, string> = {
         'list-type': '2',
         'max-keys': String(checkLimit(listOptions.limit)),
         ...(listOptions.prefix ? { prefix: listOptions.prefix } : {}),
         ...(listOptions.cursor ? { 'continuation-token': listOptions.cursor } : {}),
+        ...(delimiter ? { delimiter } : {}),
       }
       const xml = await (await call('GET', BUCKET, { query })).text()
       const files = tags(xml, 'Contents').map((entry) => ({
@@ -638,9 +723,15 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         size: Number(tag(entry, 'Size')),
         lastModified: new Date(tag(entry, 'LastModified')),
       }))
+      // Each <CommonPrefixes> holds one <Prefix>; the request's own <Prefix> is outside them.
+      const prefixes = tags(xml, 'CommonPrefixes').map((entry) => tag(entry, 'Prefix'))
       const cursor =
         tag(xml, 'IsTruncated') === 'true' ? tag(xml, 'NextContinuationToken') : undefined
-      return cursor ? { files, cursor } : { files }
+      return {
+        files,
+        ...(delimiter ? { prefixes } : {}),
+        ...(cursor ? { cursor } : {}),
+      }
     },
     async url(key, urlOptions = {}) {
       return presignFor('GET', urlOf(key), urlOptions.expiresIn ?? 3600)

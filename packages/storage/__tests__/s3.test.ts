@@ -177,6 +177,20 @@ describe('s3Storage', () => {
       await expect(files.multipart.create('k')).rejects.toThrow('returned no UploadId')
     })
 
+    it('reads CommonPrefixes with a delimiter, not the echoed request prefix', async () => {
+      const { files, calls } = scripted([
+        200,
+        `<ListBucketResult><Prefix>a/</Prefix><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>
+          <Contents><Key>a/1</Key><LastModified>2026-01-01T00:00:00Z</LastModified><Size>1</Size></Contents>
+          <CommonPrefixes><Prefix>a/b/</Prefix></CommonPrefixes>
+          <CommonPrefixes><Prefix>a/R&amp;D/</Prefix></CommonPrefixes></ListBucketResult>`,
+      ])
+      const page = await files.list({ prefix: 'a/', delimiter: '/' })
+      expect(page.prefixes).toEqual(['a/b/', 'a/R&D/'])
+      expect(page.files.map((f) => f.key)).toEqual(['a/1'])
+      expect(new URL(calls[0].url).searchParams.get('delimiter')).toBe('/')
+    })
+
     it('follows listParts pages', async () => {
       const part = (n: number) =>
         `<Part><PartNumber>${n}</PartNumber><ETag>&quot;e${n}&quot;</ETag><Size>5</Size></Part>`
@@ -252,6 +266,34 @@ describe('s3Storage', () => {
       expect([...completeBody.matchAll(/<PartNumber>(\d+)/g)].map((m) => Number(m[1]))).toEqual([
         1, 2, 3, 4, 5, 6, 7, 8,
       ])
+    })
+
+    it('uploadForm signs a POST policy with the size range and type', async () => {
+      const { files } = scripted()
+      const form = await files.uploadForm('up/a.pdf', {
+        maxSize: 1000,
+        minSize: 1,
+        contentType: 'application/pdf',
+        expiresIn: 60,
+      })
+      expect(form.url).toBe('http://s3.test/files/')
+      expect(form.fields).toMatchObject({ key: 'up/a.pdf', 'Content-Type': 'application/pdf' })
+      expect(form.fields['x-amz-signature']).toMatch(/^[0-9a-f]{64}$/)
+      const policy = JSON.parse(atob(form.fields.policy))
+      expect(policy.conditions).toContainEqual(['content-length-range', 1, 1000])
+      expect(policy.conditions).toContainEqual({ bucket: 'files' })
+      expect(policy.conditions).toContainEqual({ key: 'up/a.pdf' })
+      expect(new Date(policy.expiration).getTime() - Date.now()).toBeLessThanOrEqual(60_000)
+
+      const images = await files.uploadForm('up/b', { maxSize: 10, contentType: 'image/' })
+      expect(images.fields['Content-Type']).toBeUndefined()
+      expect(JSON.parse(atob(images.fields.policy)).conditions).toContainEqual([
+        'starts-with',
+        '$Content-Type',
+        'image/',
+      ])
+      await expect(files.uploadForm('x', { maxSize: 1, minSize: 2 })).rejects.toThrow('sizes')
+      await expect(files.uploadForm('../x', { maxSize: 1 })).rejects.toThrow('invalid key')
     })
 
     it('refuses a part size under S3 minimum', () => {
