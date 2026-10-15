@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { fork } from 'node:child_process'
 import type { Command } from 'commander'
+import { detectPackageManager } from '../utils/package-manager'
 
 export function registerTinkerCommand(program: Command): void {
   program
@@ -21,7 +22,9 @@ export function registerTinkerCommand(program: Command): void {
       // Find tsx for TypeScript + decorator support
       const tsxBin = findBin(cwd, 'tsx')
       if (!tsxBin) {
-        console.error('\n  Error: tsx not found. Install it: pnpm add -D tsx\n')
+        console.error(
+          `\n  Error: tsx not found. Install it: ${detectPackageManager(cwd)} add -D tsx\n`,
+        )
         process.exit(1)
       }
 
@@ -76,7 +79,7 @@ try {
   HttpStatus = core.HttpStatus
 } catch {
   console.error('  Error: @forinda/kickjs not found.')
-  console.error('  Install it: pnpm add @forinda/kickjs\\n')
+  console.error('  Install @forinda/kickjs in this project.\\n')
   process.exit(1)
 }
 

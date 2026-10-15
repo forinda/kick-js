@@ -33,6 +33,21 @@ export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
 export const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
 
 /**
+ * A package.json script as `pm` runs it. npm needs `run` for anything but
+ * `test`/`start`, and `bun test` / `bun build` are Bun's own tools, not the script.
+ */
+export function runScript(pm: PackageManager, script: string): string {
+  return pm === 'npm' || pm === 'bun' ? `${pm} run ${script}` : `${pm} ${script}`
+}
+
+/** A binary installed in the project, as `pm` runs it — a bare `kick` needs a global install. */
+export function execBin(pm: PackageManager, bin: string): string {
+  return { npm: `npx ${bin}`, pnpm: `pnpm exec ${bin}`, yarn: `yarn ${bin}`, bun: `bunx ${bin}` }[
+    pm
+  ]
+}
+
+/**
  * Built-in repository type with first-class code generation support.
  *
  * Only `inmemory` is built in — zero-dependency and framework-owned.
@@ -871,7 +886,7 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
         if (msg.includes("Cannot find package 'jiti'") || msg.includes('ERR_MODULE_NOT_FOUND')) {
           console.warn(
             `Warning: Failed to load ${filename} — 'jiti' is required for TypeScript configs. ` +
-              "Run `pnpm add -D jiti` (or your package manager's equivalent), or rename the file " +
+              'Install jiti as a dev dependency, or rename the file ' +
               'to kick.config.js / kick.config.mjs / kick.config.json.',
           )
         } else {

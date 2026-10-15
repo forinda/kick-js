@@ -1,3 +1,4 @@
+import { execBin, runScript, type PackageManager } from '../../config'
 import type { ModuleStyle } from './types'
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
@@ -60,13 +61,16 @@ prose.
 ## Quick reference (full version in .agents/AGENTS.md)
 
 \`\`\`bash
-${pm} install            # Install dependencies
-kick dev                 # Dev server with HMR + typegen
-kick build && kick start # Production
-${pm} run test           # Vitest
-kick typecheck           # tsc/tsgo, whichever the project has
-kick format              # oxfmt
+${pm} install
+${runScript(pm as PackageManager, 'dev')}     # Dev server with HMR + typegen
+${runScript(pm as PackageManager, 'build')} && ${runScript(pm as PackageManager, 'start')}  # Production
+${runScript(pm as PackageManager, 'test')}    # Vitest
+${execBin(pm as PackageManager, 'kick')} typecheck   # tsc/tsgo, whichever the project has
+${execBin(pm as PackageManager, 'kick')} format      # oxfmt
 \`\`\`
+
+\`kick\` is this project's dev dependency, not a global command: every \`kick …\`
+in these docs runs as \`${execBin(pm as PackageManager, 'kick')} …\` in a shell.
 
 ## v4 framework reminders
 
@@ -102,7 +106,10 @@ add tool-specific affordances on top.
 ## Before You Start
 
 1. Run \`${pm} install\` to install dependencies
-2. Run \`kick dev\` to verify the app starts${
+2. Run \`${runScript(pm as PackageManager, 'dev')}\` to verify the app starts
+
+\`kick\` is this project's dev dependency, not a global command: every \`kick …\`
+below runs as \`${execBin(pm as PackageManager, 'kick')} …\` in a shell.${
     template === 'fullstack'
       ? `
 
@@ -828,7 +835,7 @@ async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
       description:
         "Use when ConfigService.get('SOME_KEY') returns undefined or @Value silently falls back to process.env.",
       body: `**Fastest path**: \`kick explain "ConfigService.get('MY_KEY') returned undefined"\` —
-pipe a failing run straight in if you prefer (\`pnpm test 2>&1 | kick explain\`). It
+pipe a failing run straight in if you prefer (\`${runScript(pm as PackageManager, 'test')} 2>&1 | kick explain\`). It
 distinguishes the entry-file cause from the test-file one, which is the step most
 people lose time on. The manual checks below are the same reasoning.
 
@@ -1526,7 +1533,7 @@ fine and fails at runtime.
 **Local, and usually faster**
 
 - \`kick explain "<error message>"\` — matches known failures and gives the fix.
-  Pipe a failing run in: \`${pm} test 2>&1 | kick explain\`.
+  Pipe a failing run in: \`${runScript(pm as PackageManager, 'test')} 2>&1 | kick explain\`.
 - \`kick doctor\` — checks this project's wiring.
 - \`kick inspect\` — the live route / adapter table.
 - \`.kickjs/types/\` — generated types are ground truth for what exists.

@@ -35,7 +35,7 @@ export function devtoolsHooks(
  * an iframe, buttons that run server code, or a browser module.
  *
  * Uncomment with: import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
- * and add the kit as a dependency: \`pnpm add @forinda/kickjs-devtools-kit\`.
+ * and add \`@forinda/kickjs-devtools-kit\` to the dependencies.
  * (\`@forinda/kickjs\` deliberately does not depend on it.)
  * Delete this hook unless the ${kind} ships a panel.
  */

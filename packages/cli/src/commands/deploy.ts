@@ -21,8 +21,9 @@ import { dirname, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
 import { parseSync } from 'oxc-parser'
-import type { DeployConfig } from '../config'
+import { runScript, type DeployConfig } from '../config'
 import type { KickCliPluginContext } from '../plugin/types'
+import { detectPackageManager } from '../utils/package-manager'
 
 /** Deploy settings with every default filled in. */
 export interface ResolvedDeploy {
@@ -353,7 +354,7 @@ async function importFromProject(root: string, specifier: string): Promise<any> 
   }
   if (!existsSync(manifest)) {
     throw new Error(
-      `${specifier} is not installed in this project. Run: pnpm add -D vite unplugin-swc @forinda/kickjs-vite`,
+      `${specifier} is not installed in this project. Run: ${detectPackageManager(root)} add -D vite unplugin-swc @forinda/kickjs-vite`,
     )
   }
   const pkg = JSON.parse(readFileSync(manifest, 'utf-8')) as Record<string, unknown>
@@ -400,7 +401,7 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
         // An installed one is inlined: external, the function can't reach it.
         external: (id: string, importer: string | undefined) =>
           missingPackage(id, importer ? dirname(importer) : root) ||
-          (deploy.external.includes(id) && !existsSync(resolve(root, 'node_modules', id))),
+          (deploy.external.includes(id) && missingPackage(id, root)),
         output: { format: 'esm', entryFileNames: 'server.mjs', codeSplitting: false },
       },
     },
@@ -454,7 +455,7 @@ function requireIncluded(root: string, include: string[]): void {
   if (missing.length > 0) {
     throw new Error(
       `${missing.join(', ')} not found — the function reads ${missing.length === 1 ? 'it' : 'them'} at runtime. ` +
-        'Run the full build first (`pnpm build`), or fix `deploy.include`.',
+        `Run the full build first (\`${runScript(detectPackageManager(root), 'build')}\`), or fix \`deploy.include\`.`,
     )
   }
 }

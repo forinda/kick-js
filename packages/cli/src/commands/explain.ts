@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { findBestMatch, type Diagnosis, type ExplainContext } from '../explain/known-issues'
 import { askAi, type AskAiResult } from '../explain/ai-fallback'
+import { detectPackageManager } from '../utils/package-manager'
+import { runScript } from '../config'
 
 /**
  * `kick explain` — explain a KickJS error and suggest a fix.
@@ -47,7 +49,7 @@ export function registerExplainCommand(program: Command): void {
             '\n' +
             'Pass a message as a positional arg, --message flag, or pipe via stdin:\n' +
             '  kick explain "config.get returned undefined"\n' +
-            '  pnpm test 2>&1 | kick explain\n',
+            `  ${runScript(detectPackageManager(), 'test')} 2>&1 | kick explain\n`,
         )
         process.exit(1)
       }

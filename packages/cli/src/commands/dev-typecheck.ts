@@ -14,7 +14,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 export interface TypecheckBin {
   cmd: string
@@ -34,22 +34,26 @@ export interface TypecheckBin {
  * extensionless file is a POSIX shell script `spawn` can't launch.
  */
 export function resolveTypecheckBin(projectDir: string): TypecheckBin | null {
-  const binDir = join(projectDir, 'node_modules', '.bin')
   const isWin = process.platform === 'win32'
-  // `vue-tsc` first, and it being installed is the signal: plain tsc does not
-  // understand `.vue`, so in a Vue project it matches no inputs and reports
-  // TS18003 "No inputs were found" while real errors sit unchecked in the
-  // SFCs. vue-tsc checks plain `.ts` too, so preferring it costs nothing.
-  for (const kind of ['vue-tsc', 'tsgo', 'tsc'] as const) {
-    const names = isWin ? [`${kind}.CMD`, `${kind}.cmd`, `${kind}.exe`] : [kind]
-    for (const name of names) {
-      const candidate = join(binDir, name)
-      if (existsSync(candidate)) {
-        return { cmd: candidate, args: ['--noEmit'], shell: isWin, kind }
+  // Nearest `node_modules/.bin` up from the project: npm, yarn and bun install
+  // a workspace package's tools at the workspace root.
+  for (let dir = resolve(projectDir); ; dir = dirname(dir)) {
+    const binDir = join(dir, 'node_modules', '.bin')
+    // `vue-tsc` first, and it being installed is the signal: plain tsc does not
+    // understand `.vue`, so in a Vue project it matches no inputs and reports
+    // TS18003 "No inputs were found" while real errors sit unchecked in the
+    // SFCs. vue-tsc checks plain `.ts` too, so preferring it costs nothing.
+    for (const kind of ['vue-tsc', 'tsgo', 'tsc'] as const) {
+      const names = isWin ? [`${kind}.CMD`, `${kind}.cmd`, `${kind}.exe`] : [kind]
+      for (const name of names) {
+        const candidate = join(binDir, name)
+        if (existsSync(candidate)) {
+          return { cmd: candidate, args: ['--noEmit'], shell: isWin, kind }
+        }
       }
     }
+    if (dirname(dir) === dir) return null
   }
-  return null
 }
 
 export interface TypecheckResult {

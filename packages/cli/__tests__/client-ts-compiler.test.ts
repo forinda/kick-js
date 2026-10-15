@@ -33,7 +33,7 @@ describe('pickCompilerModule', () => {
 
   it('reports both candidates as missing rather than guessing', () => {
     expect(() => pickCompilerModule({ typescript: null, ts6: null })).toThrow(
-      /pnpm add -D @typescript\/typescript6/,
+      /(npm|pnpm|yarn|bun) add -D @typescript\/typescript6/,
     )
   })
 

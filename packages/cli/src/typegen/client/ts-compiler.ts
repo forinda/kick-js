@@ -20,6 +20,7 @@
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
+import { detectPackageManager } from '../../utils/package-manager'
 
 export type TsApi = typeof import('@typescript/typescript6')
 
@@ -52,7 +53,7 @@ export function pickCompilerModule(candidates: CompilerCandidates): CompilerPick
   if (hasCompilerApi(candidates.ts6)) {
     return { api: candidates.ts6, source: TS6 }
   }
-  const install = `Install it in the project:\n    pnpm add -D ${TS6}`
+  const install = `Install it in the project:\n    ${detectPackageManager()} add -D ${TS6}`
   if (candidates.typescript) {
     throw new Error(
       `kick typegen: the client route map needs a TypeScript compiler API.\n` +

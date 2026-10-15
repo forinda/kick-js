@@ -32,15 +32,17 @@ Or scaffold a new project:
 
 ```bash
 npx @forinda/kickjs-cli new my-api
-cd my-api && pnpm dev
+cd my-api && npm run dev   # or pnpm dev / yarn dev / bun run dev, for the package manager you picked
 ```
 
 Or a fullstack workspace — KickJS API + Vite/React frontend, typed end to end:
 
 ```bash
-npx @forinda/kickjs-cli new my-app --template fullstack
+pnpm dlx @forinda/kickjs-cli new my-app --template fullstack --pm pnpm
 cd my-app && pnpm dev   # server + web in parallel; rename a server field and the frontend stops compiling
 ```
+
+With npm, yarn or bun, run `dev:server` and `dev:web` in two terminals instead (`npm run dev:server`).
 
 ## Hello World
 

@@ -5,6 +5,7 @@ import { loadKickConfig, type KickConfig } from '../config'
 import { resolveAppRuntime, UPLOAD_DRIVERS, type AppRuntime } from './add'
 import { colors } from '../utils/colors'
 import { intro, outro, log } from '../utils/prompts'
+import { detectPackageManager } from '../utils/package-manager'
 
 /**
  * `kick doctor` — pre-flight checks for a KickJS project's dev
@@ -346,7 +347,7 @@ export function checkExpressInstalled(ctx: DoctorContext): DoctorResult | null {
     return {
       name: 'express installed',
       status: 'fail',
-      fix: '`@forinda/kickjs` declares `express` as a required peer dependency, but your package.json does not include it. Install: pnpm add express',
+      fix: `\`@forinda/kickjs\` declares \`express\` as a required peer dependency, but your package.json does not include it. Install: ${detectPackageManager(ctx.cwd)} add express`,
     }
   }
   return deps.express ? { name: 'express installed', status: 'pass', message: deps.express } : null
@@ -377,7 +378,7 @@ export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
     return {
       name,
       status: 'fail',
-      fix: `Resolved runtime '${ctx.runtime}' is missing engine peer(s): ${missing.join(', ')}.\nInstall: pnpm add ${missing.join(' ')}`,
+      fix: `Resolved runtime '${ctx.runtime}' is missing engine peer(s): ${missing.join(', ')}.\nInstall: ${detectPackageManager(ctx.cwd)} add ${missing.join(' ')}`,
     }
   }
   if (ctx.runtime === 'h3' && h3Major(ctx.cwd, deps.h3) === 1) {
@@ -385,7 +386,7 @@ export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
       name,
       status: 'fail',
       message: 'h3 v1',
-      fix: 'This version of @forinda/kickjs runs on h3 v2 only. Upgrade: pnpm add h3@^2 — no code change for apps that only use KickJS APIs.',
+      fix: `This version of @forinda/kickjs runs on h3 v2 only. Upgrade: ${detectPackageManager(ctx.cwd)} add h3@^2 — no code change for apps that only use KickJS APIs.`,
     }
   }
   return { name, status: 'pass' }
@@ -435,7 +436,7 @@ export function checkUploadDriver(ctx: DoctorContext): DoctorResult | null {
     return {
       name,
       status: 'fail',
-      fix: `This project uses file uploads on the '${ctx.runtime}' runtime, which needs '${driver.prod}'.\nInstall it: kick add upload (or pnpm add ${driver.prod})`,
+      fix: `This project uses file uploads on the '${ctx.runtime}' runtime, which needs '${driver.prod}'.\nInstall it: kick add upload (or ${detectPackageManager(ctx.cwd)} add ${driver.prod})`,
     }
   }
   return { name, status: 'pass', message: driver.prod }
@@ -485,7 +486,7 @@ export function checkReflectMetadata(ctx: DoctorContext): DoctorResult {
     return {
       name: 'reflect-metadata installed',
       status: 'fail',
-      fix: `KickJS decorators require the reflect-metadata polyfill.\nInstall it: pnpm add reflect-metadata\nThen import it at the top of src/index.ts:\n\n  import 'reflect-metadata'\n  // ... rest of bootstrap`,
+      fix: `KickJS decorators require the reflect-metadata polyfill.\nInstall it: ${detectPackageManager(ctx.cwd)} add reflect-metadata\nThen import it at the top of src/index.ts:\n\n  import 'reflect-metadata'\n  // ... rest of bootstrap`,
     }
   }
   return { name: 'reflect-metadata installed', status: 'pass', message: deps['reflect-metadata'] }

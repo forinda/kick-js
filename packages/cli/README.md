@@ -13,6 +13,8 @@ npx @forinda/kickjs-cli new my-api
 
 ## Commands
 
+The CLI is a dev dependency, so in a shell run it through your package manager — `npx kick dev`, `pnpm exec kick dev`, `yarn kick dev`, `bunx kick dev` — or through the project's scripts (`npm run dev`). A bare `kick` needs a global install.
+
 ```bash
 kick new <name>           # Scaffold a new KickJS project
 kick dev                  # Start dev server with Vite HMR

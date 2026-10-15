@@ -13,20 +13,21 @@ It works the same for every template — REST or minimal APIs, [Inertia](./inert
 
 ## A Node host
 
+<PmCommand install run="build" />
+
 ```bash
-pnpm install
-pnpm build
 NODE_ENV=production node dist/index.js
 ```
 
-`pnpm build` builds what the template needs: the server bundle, and for an Inertia app the pages and the server-rendering bundle too. A fullstack workspace builds both packages from its root and starts from `server/`:
+The `build` script builds what the template needs: the server bundle, and for an Inertia app the pages and the server-rendering bundle too. A fullstack workspace builds both packages from its root and starts from `server/`:
+
+<PmCommand run="build" />
 
 ```bash
-pnpm build
 cd server && NODE_ENV=production node dist/index.js
 ```
 
-Start the server with `node`, not `kick start`. The CLI is a dev dependency, so it is not there after a production install (`pnpm install --prod`).
+Start the server with `node`, not `kick start`. The CLI is a dev dependency, so it is not there after a production install (`npm ci --omit=dev`, `pnpm install --prod`).
 
 What the server reads from the environment:
 
@@ -51,7 +52,7 @@ docker run -p 3000:3000 -e SESSION_SECRET=… my-app
 It builds in three stages:
 
 1. **Production dependencies**, installed from the lockfile.
-2. **The build**, with every dependency: `pnpm build` (or the project's package manager) — for an Inertia app that includes the pages and the server-rendering bundle; for a fullstack workspace, both the server and the web app.
+2. **The build**, with every dependency: the `build` script, run with the project's package manager — for an Inertia app that includes the pages and the server-rendering bundle; for a fullstack workspace, both the server and the web app.
 3. **The runtime**: `node:22-slim` with the production dependencies and the build output, running `node dist/index.js` as the unprivileged `node` user on port 3000.
 
 Two things the build expects:
@@ -110,9 +111,9 @@ Metrics are per process: run Prometheus against each instance (the usual Kuberne
 
 ## Netlify and Vercel
 
-```bash
-pnpm run build:netlify   # → .netlify/
-pnpm run build:vercel    # → .vercel/output
-```
+<PmCommand run="build:netlify
+build:vercel" />
+
+`build:netlify` writes `.netlify/`, `build:vercel` writes `.vercel/output`.
 
 Both build the app as a function from `src/serverless.ts`, which serves the same app `src/index.ts` describes. The platform serves the static files — a fullstack web app, an Inertia app's built pages and assets — and the function answers the rest. Everything about the two platforms is in [Serverless](./serverless.md).

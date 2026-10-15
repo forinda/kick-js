@@ -8,6 +8,7 @@
  * the `kick` CLI included, which is why it starts `node` directly rather than
  * `kick start`.
  */
+import { specVersion } from './project-config'
 
 export type DockerProjectKind = 'api' | 'inertia' | 'fullstack'
 export type DockerPackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
@@ -64,18 +65,39 @@ const PM: Record<DockerPackageManager, PmCommands> = {
   },
 }
 
+const YARN_BERRY: PmCommands = {
+  lockfile: 'yarn.lock',
+  installFiles: ['.yarnrc.yml'],
+  install: 'yarn install --immutable',
+  installProd: 'yarn workspaces focus --all --production',
+  run: (script) => `yarn run ${script}`,
+  image: NODE_IMAGE,
+  setup: 'RUN corepack enable',
+}
+
 const RUN_HINT: Record<DockerProjectKind, string> = {
   api: 'docker run -p 3000:3000 <name>',
   inertia: 'docker run -p 3000:3000 -e SESSION_SECRET=<a long random string> <name>',
   fullstack: 'docker run -p 3000:3000 <name>',
 }
 
+/**
+ * `spec` is the project's `packageManager` (`yarn@4.1.0`): Yarn 2+ installs
+ * differently from Yarn 1, and Bun before 1.2 writes `bun.lockb`.
+ */
 export function generateDockerfile(
   kind: DockerProjectKind,
   pm: DockerPackageManager,
   name: string,
+  spec?: string,
 ): string {
-  const p = PM[pm]
+  const [major = 0, minor = 0] = specVersion(spec) ?? []
+  const p =
+    pm === 'yarn' && major >= 2
+      ? YARN_BERRY
+      : pm === 'bun' && spec && (major < 1 || (major === 1 && minor < 2))
+        ? { ...PM.bun, lockfile: 'bun.lockb' }
+        : PM[pm]
   const setup = p.setup ? `\n${p.setup}` : ''
   const manifests =
     kind === 'fullstack'
