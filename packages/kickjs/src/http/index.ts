@@ -5,6 +5,7 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
   type ConfigDescription,
+  type MountedRouteInfo,
 } from './application'
 export type { StartupStep, StartupTimelineSnapshot } from './startup-timeline'
 export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './conditional'

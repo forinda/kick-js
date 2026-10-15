@@ -114,6 +114,26 @@ export default async function setup() {
 
 Values set here reach the workers, which haven't imported anything yet. That's what makes a run-time value (a random port) work with config that's read once, at import ([Test Environment](./environment.md#how-config-is-read)).
 
+## A service per file: `startService()`
+
+When a file needs its own Postgres or Redis — or config read once per run doesn't suit — start it in the file and give the app its address through a [settings section](../configuration.md#supplying-the-value-provide):
+
+```ts
+import { createTestApp, startService } from '@forinda/kickjs-testing'
+
+const pg = await startService('postgres') // postgres:17-alpine, user/password/db "test"
+afterAll(() => pg.stop())
+
+const { app } = await createTestApp({
+  modules,
+  settings: [DbSettings.provide({ url: pg.url })],
+})
+```
+
+`startService('redis')` starts `redis:7-alpine`; `{ image }` picks another tag. For anything else, `startContainer({ image, port, env, waitFor: { log }, url: (host, port) => … })`. Each returns `{ url, host, port, stop() }`.
+
+Both need Docker and the `testcontainers` package (`pnpm add -D testcontainers`); it's an optional peer, loaded only when you call them. A container takes seconds to start — for many files, prefer one per run in `globalSetup` (above).
+
 ## Keep tests independent
 
 - **Unique data.** Tests that share a database shouldn't collide on unique columns: build names with a suffix (`` `acme-${crypto.randomUUID().slice(0, 8)}` ``).

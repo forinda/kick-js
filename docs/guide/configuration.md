@@ -504,6 +504,16 @@ class Reports {
 }
 ```
 
+### Supplying the value: `.provide()`
+
+Sometimes the value doesn't come from the environment — a test container's URL, a port picked at run time. `.provide(value)` declares the section with that value instead of reading env:
+
+```ts
+bootstrap({ modules, settings: [DbSettings.provide({ url: pg.url })] })
+```
+
+The value is validated like env (defaults applied, a bad value fails startup naming the variables), and it wins over the same section declared elsewhere — by a module or an adapter — so nothing reads env for it. `DbSettings.parse(value)` runs the same validation without declaring anything. In tests, [`startService()`](./testing/large-suites.md#a-service-per-file-startservice) hands you the URL to provide.
+
 ## Accessing Config in Services
 
 `ConfigService` is the recommended way to read env config from a DI-managed class. It's an injectable singleton that consumes the `KickEnv` global populated by `kick typegen`, so as long as your `src/env.ts` is in place you get full type safety with **zero extra setup** — no schema to pass around, no separate typed-service factory, no manual casts.

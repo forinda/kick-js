@@ -15,13 +15,16 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
   type ConfigDescription,
+  type MountedRouteInfo,
 } from './http/application'
 export type { FailureAdvice } from './core/failure-analysis'
 export {
   defineSettings,
   loadSettings,
   type ConfigVar,
+  type ProvidedSettings,
   type Settings,
+  type SettingsDeclaration,
   type SettingsOf,
 } from './config/settings'
 export {
@@ -103,7 +106,7 @@ export type {
   RouteFlagValue,
   RouteFlags,
 } from './core/route-flag'
-export type { MatchedRoute } from './http/runtime'
+export type { MatchedRoute, RouteContributor } from './http/runtime'
 
 // Return-value handlers + response inference
 export {

@@ -31,6 +31,7 @@ import type { Constructor, FileUploadConfig, MiddlewareHandler, RouteDefinition 
 import type { RequestContext } from './context'
 import type { ValidationErrorFactory } from './middleware/validate'
 import type { RouteUrls } from './url-for'
+import type { ContributorSource } from '../core/contributor-pipeline'
 
 /** HTTP verbs the router emits. Mirrors the decorator surface (@Get/@Post/...). */
 export type RouteMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -99,6 +100,24 @@ export interface RouteEntry {
 }
 
 /** Per-route metadata: introspection refs plus runtime-materialized concerns. */
+/**
+ * One context contributor on a route, as introspection sees it: the
+ * contributors a request runs, in execution order. Built with the route.
+ */
+export interface RouteContributor {
+  /** The key it sets with `ctx.set(...)`. */
+  key: string
+  /** Where it was registered — `method` / `class` decorators, or a module, adapter or global list. */
+  source: ContributorSource
+  /** The registering site, e.g. `UsersController.show#0(tenant)` or a module name. */
+  label?: string
+  dependsOn: readonly string[]
+  /** Runs before validation (`beforeValidation: true`). */
+  beforeValidation: boolean
+  /** Lower-precedence registrations of the same key this one replaced. */
+  overrides: ReadonlyArray<{ source: ContributorSource; label?: string }>
+}
+
 export interface RouteMeta {
   /**
    * Owning controller class — for DI resolution and adapter introspection.
@@ -108,6 +127,8 @@ export interface RouteMeta {
   controller?: Constructor
   /** Handler method name on the controller, when there is one. */
   handlerName?: string
+  /** The route's context contributors, in execution order — for devtools / introspection. */
+  contributors?: readonly RouteContributor[]
   /** Zod/JSON-schema validation config from the route decorator, if any. */
   validation?: RouteDefinition['validation']
   /** `@FileUpload` config, if present — the runtime supplies the backend. */
