@@ -114,7 +114,14 @@ function createMulter(options: UploadOptions) {
     let handler: Promise<RequestHandler> | undefined
     return (req, res, next) => {
       handler ??= (built ??= loadMulter().then((multer) => multer(multerOptions))).then(pick)
-      handler.then((run) => run(req, res, next), next)
+      handler.then(
+        (run) => run(req, res, next),
+        (err) => {
+          // Not cached: multer installed while `kick dev` runs works on the next upload.
+          handler = built = _multer = undefined
+          next(err)
+        },
+      )
     }
   }
   return {

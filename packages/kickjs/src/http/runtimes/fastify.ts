@@ -27,6 +27,7 @@ import { createRequestStore, disposeRequestStore } from '../middleware/request-s
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import { lazyServeStatic } from './lazy-serve-static'
+import { createLogger } from '../../core/logger'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -45,6 +46,7 @@ import type {
 const pluginOf = (mod: { default?: unknown }): any => mod.default ?? mod
 // Typed structurally below (FastifyAppLike), as when this was required untyped.
 const createFastify = Fastify as unknown as (options: object) => unknown
+const log = createLogger('FastifyRuntime')
 
 // Minimal structural surface we use from Fastify — avoids a hard type dep so
 // the root package never needs `fastify` installed to typecheck.
@@ -499,7 +501,11 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         readyP
           .then(() => app.routing(req, res))
           .catch((err) => {
-            if (next) next(err)
+            if (next) return next(err)
+            // No host to hand the error to: answer rather than leave the request open.
+            log.error(err, 'Fastify failed to start')
+            res.statusCode = 500
+            res.end('Internal Server Error')
           })
       }
     },
