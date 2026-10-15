@@ -635,3 +635,73 @@ describe('sweep', () => {
     }
   })
 })
+
+describe('limits', () => {
+  async function serve(handler: ReturnType<typeof createTusHandler>) {
+    const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+    await new Promise<void>((done) => server.listen(0, done))
+    return { server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/uploads` }
+  }
+
+  it('refuses a PATCH past 10,000 chunks', async () => {
+    const partials = memoryStorage()
+    const handler = createTusHandler({
+      path: '/uploads',
+      storage: memoryStorage(),
+      partials,
+      maxSize: 20_000,
+    })
+    const { server, url } = await serve(handler)
+    try {
+      const created = await fetch(url, {
+        method: 'POST',
+        headers: { ...TUS, 'Upload-Length': '20000' },
+      })
+      const id = created.headers.get('location')!.split('/').pop()!
+      // As if 10,000 one-byte PATCHes had landed.
+      for (let offset = 0; offset < 10_000; offset++) {
+        await partials.put(
+          `tus/${id}/at/${offset}`,
+          JSON.stringify({ chunk: `tus/${id}/chunk/${offset}`, size: 1 }),
+        )
+      }
+      const res = await fetch(`${url}/${id}`, {
+        method: 'PATCH',
+        headers: {
+          ...TUS,
+          'Upload-Offset': '10000',
+          'Content-Type': 'application/offset+octet-stream',
+        },
+        body: 'x',
+      })
+      expect(res.status).toBe(400)
+      expect(await res.text()).toContain('at most 10000')
+    } finally {
+      server.close()
+    }
+  })
+
+  it('keeps at most 1,000 uploads in the commit cache', async () => {
+    const partials = memoryStorage()
+    const writer = createTusHandler({ path: '/uploads', storage: memoryStorage(), partials })
+    const reader = createTusHandler({ path: '/uploads', storage: memoryStorage(), partials })
+    const a = await serve(writer)
+    const b = await serve(reader)
+    try {
+      // Uploads created on one instance and looked at on another, which never
+      // sees them finish: its cache stays at the cap.
+      for (let i = 0; i < 1005; i++) {
+        const created = await fetch(a.url, {
+          method: 'POST',
+          headers: { ...TUS, 'Upload-Length': '5' },
+        })
+        const id = created.headers.get('location')!.split('/').pop()!
+        await fetch(`${b.url}/${id}`, { method: 'HEAD', headers: TUS })
+      }
+      expect(reader.cachedUploads()).toBe(1000)
+    } finally {
+      a.server.close()
+      b.server.close()
+    }
+  }, 30_000)
+})

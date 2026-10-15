@@ -31,6 +31,10 @@ import type { Storage } from './types'
 const VERSION = '1.0.0'
 const EXTENSIONS = 'creation,creation-with-upload,termination,expiration,checksum,concatenation'
 const CHECKSUMS = ['sha1', 'sha256', 'md5']
+// ponytail: fixed limits. 10,000 chunks matches S3's part limit (a 1 GiB file
+// in 1 MiB chunks is 1,024); 1,000 cached uploads bounds the commit cache.
+const MAX_CHUNKS = 10_000
+const MAX_CACHED_UPLOADS = 1000
 const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** An upload in progress, or just completed. */
@@ -202,7 +206,12 @@ export function createTusHandler(
   // Same-instance requests to one upload wait their turn here (423). Across
   // instances, the commit markers below keep the upload consistent.
   const locked = new Set<string>()
-  /** Commit markers never change once written, so each is read once. */
+  /**
+   * Commit markers never change once written, so each is read once. An LRU
+   * of {@link MAX_CACHED_UPLOADS}: with shared partials, an instance that
+   * served part of an upload never sees it finish or expire, and would keep
+   * its entry for good.
+   */
   const commits = new Map<string, Map<number, Commit>>()
 
   const infoKey = (id: string) => `tus/${id}/info`
@@ -251,7 +260,12 @@ export function createTusHandler(
    */
   async function committed(id: string): Promise<{ offset: number; chunks: Commit[] }> {
     let known = commits.get(id)
-    if (!known) commits.set(id, (known = new Map()))
+    if (known) commits.delete(id) // re-set below: most recently used last
+    commits.set(id, (known ??= new Map()))
+    for (const oldest of commits.keys()) {
+      if (commits.size <= MAX_CACHED_UPLOADS) break
+      commits.delete(oldest)
+    }
     const chunks: Commit[] = []
     let offset = 0
     let listed: Set<number> | undefined
@@ -591,6 +605,13 @@ export function createTusHandler(
         throw new TusError(409, `Upload-Offset must be ${upload.offset}`)
       }
       if (done) return send(204, { 'Upload-Offset': String(upload.size) })
+      // Each PATCH is a chunk object and a marker: tiny ones would multiply them.
+      if ((await committed(id)).chunks.length >= MAX_CHUNKS) {
+        throw new TusError(
+          400,
+          `An upload takes at most ${MAX_CHUNKS} PATCH requests; send bigger chunks`,
+        )
+      }
       const next = touch(info)
       await saveInfo(next, info)
       const reached = await receive(req, id, offset, upload.size - offset)
@@ -674,7 +695,12 @@ export function createTusHandler(
     } while (cursor)
   }
 
-  return Object.assign(handler, { sweep, owns })
+  return Object.assign(handler, {
+    sweep,
+    owns,
+    /** @internal Uploads in the commit cache, for tests. */
+    cachedUploads: () => commits.size,
+  })
 }
 
 /**
