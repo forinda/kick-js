@@ -20,6 +20,7 @@ import {
   FileUpload,
   Get,
   Post,
+  defineContextDecorator,
   type RequestContext,
 } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
@@ -36,9 +37,12 @@ beforeEach(() => {
   Container.reset()
 })
 
+const LoadCaller = defineContextDecorator({ key: 'caller', resolve: () => 'tester' })
+
 async function boot(runtime: (() => unknown) | undefined, secret: string | false = false) {
   @Controller()
   class PingController {
+    @LoadCaller
     @Get('/:id')
     get(ctx: RequestContext) {
       ctx.json({ id: ctx.params.id })
@@ -118,6 +122,19 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     const startup = await http.get('/_debug/startup').expect(200)
     expect(startup.body.totalMs).toEqual(expect.any(Number))
     expect(startup.body.steps.map((s: { name: string }) => s.name)).toContain('routes')
+
+    // Decorator-applied contributors are visible: on the route, and in the topology.
+    const pingGet = routes.body.routes.find(
+      (r: { controller: string; handler: string }) =>
+        r.controller === 'PingController' && r.handler === 'get',
+    )
+    expect(pingGet.contributors).toEqual([
+      expect.objectContaining({ key: 'caller', source: 'method', beforeValidation: false }),
+    ])
+    const topology = await http.get('/_debug/topology').expect(200)
+    expect(topology.body.contributors).toContainEqual(
+      expect.objectContaining({ key: 'caller', source: 'method' }),
+    )
 
     const conditions = await http.get('/_debug/conditions').expect(200)
     expect(conditions.body).toEqual({ adapters: [] })

@@ -648,7 +648,26 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         }
 
         router.get('/routes', (ctx: RequestContext) => {
-          ctx.json({ routes })
+          // Each route's context-contributor chain, from what the app actually
+          // mounted — decorators, module, adapter and global, in execution order.
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          const mounted = kickApp?.getRoutes?.()
+          if (!mounted) {
+            ctx.json({ routes })
+            return
+          }
+          const chains = new Map(
+            mounted.map((r) => [
+              `${r.method.toUpperCase()} ${r.controller}.${r.handler}`,
+              r.contributors,
+            ]),
+          )
+          ctx.json({
+            routes: routes.map((r) => ({
+              ...r,
+              contributors: chains.get(`${r.method} ${r.controller}.${r.handler}`) ?? [],
+            })),
+          })
         })
 
         // Where a route's handler lives — "open in editor" in the dashboard

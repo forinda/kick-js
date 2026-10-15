@@ -30,6 +30,21 @@ export interface TopologyApplicationLike {
   getConditionReport?(): ReadonlyArray<{ adapter: string; enabled: boolean; reason?: string }>
   /** Where the last startup's time went — absent on older Applications. */
   getStartupTimeline?(): { totalMs: number; steps: ReadonlyArray<{ name: string; ms: number }> }
+  /** Mounted routes with their contributor chains — absent on older Applications. */
+  getRoutes?(): ReadonlyArray<{
+    method: string
+    pattern: string
+    controller: string
+    handler: string
+    contributors: ReadonlyArray<{
+      key: string
+      source: string
+      label?: string
+      dependsOn: readonly string[]
+      beforeValidation: boolean
+      overrides: ReadonlyArray<{ source: string; label?: string }>
+    }>
+  }>
   /**
    * Optional in older Application implementations — when present, returns
    * the union of contributors across adapters/plugins/global with proper
@@ -39,7 +54,7 @@ export interface TopologyApplicationLike {
    */
   getContributors?(): ReadonlyArray<{
     key: string
-    source: 'adapter' | 'plugin' | 'module' | 'global'
+    source: 'method' | 'class' | 'adapter' | 'plugin' | 'module' | 'global'
     label: string
     dependsOn: readonly string[]
   }>
@@ -195,22 +210,25 @@ function collectTokens(container: Container): TopologyTokenEntry[] {
  * `adapter.contributors()` + `plugin.contributors()` directly for
  * older Application implementations that don't expose the helper.
  *
- * Module-level contributors are still not surfaced here — module
- * instances aren't retained post-bootstrap. Per-route enumeration
- * lands in a later iteration alongside the route detail panel.
+ * Every source is covered, decorators included — the Application reads
+ * class / method contributors back from the routes it mounted. Each route's
+ * full chain, in execution order, is on `/_debug/routes`.
  */
 function collectContributors(app: TopologyApplicationLike): TopologyContributorEntry[] {
   const seen = new Map<string, TopologyContributorEntry>()
 
   if (typeof app.getContributors === 'function') {
     for (const c of app.getContributors()) {
-      if (seen.has(c.key)) continue
+      // One entry per key AND source: a method decorator overriding a module
+      // contributor of the same key is a different registration, not a repeat.
+      const id = `${c.source}:${c.key}`
+      if (seen.has(id)) continue
       // Pass `source` through unchanged — the kit's
       // `TopologyContributorSource` union accepts every value the
       // framework's `getContributors()` returns. Earlier versions
       // collapsed `'plugin' | 'global'` → `'adapter'` because the kit
       // type was narrower; that's no longer needed.
-      seen.set(c.key, {
+      seen.set(id, {
         key: c.key,
         source: c.source as TopologyContributorEntry['source'],
         dependsOn: c.dependsOn as string[],

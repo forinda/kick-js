@@ -62,7 +62,7 @@ import {
   type Observer,
 } from '../core/observers'
 import { ROUTE_SLOT } from '../core/route-flag'
-import type { MatchedRoute } from './runtime'
+import type { MatchedRoute, RouteContributor } from './runtime'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import type { ValidationErrorFactory } from './middleware/validate'
 import { allowedHosts, type AllowedHostsOptions } from './middleware/allowed-hosts'
@@ -157,6 +157,17 @@ export interface ServerOptions {
   headersTimeout?: number
   /** Milliseconds to receive the whole request. Default 300000; 0 disables. */
   requestTimeout?: number
+}
+
+/** A mounted controller route, as `app.getRoutes()` lists it. */
+export interface MountedRouteInfo {
+  method: string
+  /** Full pattern, prefix and version included: `/api/v1/users/:id`. */
+  pattern: string
+  controller: string
+  handler: string
+  /** Context contributors in execution order, with where each was registered. */
+  contributors: readonly RouteContributor[]
 }
 
 /** What `app.describeConfig()` returns. */
@@ -725,6 +736,7 @@ export class Application {
   private timeline = new StartupTimeline()
   private conditionReport: ConditionOutcome[] = []
   private mountedRoutes: MountedRoute[] = []
+  private mountedRouteInfo: MountedRouteInfo[] = []
   private routeUrls = new RouteUrls()
   /** Settings prefixes bound in this setup, across its two binding phases. */
   private settingsPrefixes = new Map<string, Settings<unknown>>()
@@ -1390,6 +1402,7 @@ export class Application {
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
     this.mountedRoutes = mountedPaths
+    this.mountedRouteInfo = []
 
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
@@ -1486,6 +1499,15 @@ export class Application {
               }
             })
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])
+            for (const entry of traced) {
+              this.mountedRouteInfo.push({
+                method: entry.method,
+                pattern: entry.meta.pattern ?? entry.path,
+                controller: route.controller.name,
+                handler: String(entry.meta.handlerName ?? ''),
+                contributors: entry.meta.contributors ?? [],
+              })
+            }
           } else {
             throw moduleRouteMissingControllerError(mountPath)
           }
@@ -2057,15 +2079,24 @@ export class Application {
    * `ContributorSource` (minus `'method'` / `'class'` which require
    * the per-route walk noted above).
    */
+  /**
+   * Every controller route the app mounted, with its full pattern and the
+   * context contributors a request runs, in execution order — decorators
+   * included. Devtools serves this per route.
+   */
+  getRoutes(): readonly MountedRouteInfo[] {
+    return this.mountedRouteInfo
+  }
+
   getContributors(): ReadonlyArray<{
     key: string
-    source: 'module' | 'adapter' | 'plugin' | 'global'
+    source: 'method' | 'class' | 'module' | 'adapter' | 'plugin' | 'global'
     label: string
     dependsOn: readonly string[]
   }> {
     const out: Array<{
       key: string
-      source: 'module' | 'adapter' | 'plugin' | 'global'
+      source: 'method' | 'class' | 'module' | 'adapter' | 'plugin' | 'global'
       label: string
       dependsOn: readonly string[]
     }> = []
@@ -2103,6 +2134,24 @@ export class Application {
       ingest([registration], 'module', label)
     }
     ingest(this.options.contributors, 'global', 'bootstrap')
+    // Decorator-applied contributors (`@LoadTenant` on a class or method) live
+    // in controller metadata and only reach the per-route pipelines — read
+    // them back from what was mounted, once per decorator site.
+    const sites = new Set<string>()
+    for (const route of this.mountedRouteInfo) {
+      for (const c of route.contributors) {
+        if (c.source !== 'class' && c.source !== 'method') continue
+        const site = `${c.source}:${c.label ?? `${route.controller}.${route.handler}`}`
+        if (sites.has(site)) continue
+        sites.add(site)
+        out.push({
+          key: c.key,
+          source: c.source,
+          label: c.label ?? `${route.controller}.${route.handler}`,
+          dependsOn: c.dependsOn,
+        })
+      }
+    }
     return out
   }
 

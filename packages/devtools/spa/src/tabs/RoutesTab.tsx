@@ -26,6 +26,24 @@ function loadCollapsed(): Set<string> {
 const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 type MethodFilter = (typeof METHODS)[number]
 
+/** A count only — the chain itself is listed in the route's panel, however long it is. */
+function formatContributors(r: RouteEntry): string {
+  const count = r.contributors?.length ?? 0
+  return count > 0 ? `ctx ${count}` : ''
+}
+
+/** One line per contributor for the tooltip: key, where it was registered, what it replaced. */
+function describeContributors(r: RouteEntry): string {
+  return (r.contributors ?? [])
+    .map((c) => {
+      const replaced = c.overrides.length
+        ? ` (overrides ${c.overrides.map((o) => o.source).join(', ')})`
+        : ''
+      return `  ${c.key} — ${c.source}${replaced}`
+    })
+    .join('\n')
+}
+
 /** Resolved route flags; a `true` flag carries no more than its name. */
 function formatFlags(flags?: Record<string, unknown>): string {
   return Object.entries(flags ?? {})
@@ -161,7 +179,7 @@ export const RoutesTab: Component = () => {
                       onClick={() => openApiRunner(r)}
                       title={`${r.controller}.${r.handler}${
                         r.middleware.length ? ` · middleware: ${r.middleware.join(', ')}` : ''
-                      }`}
+                      }${r.contributors?.length ? `\ncontext contributors:\n${describeContributors(r)}` : ''}`}
                     >
                       <span
                         class={`w-[3.4rem] shrink-0 font-mono text-[0.68rem] font-bold ${methodColor(r.method)}`}
@@ -169,6 +187,13 @@ export const RoutesTab: Component = () => {
                         {r.method}
                       </span>
                       <span class="min-w-0 flex-1 truncate font-mono">{r.path}</span>
+                      <Show when={formatContributors(r)}>
+                        {(c) => (
+                          <span class="shrink-0 font-mono text-[0.66rem] text-text-muted">
+                            {c()}
+                          </span>
+                        )}
+                      </Show>
                       <Show when={formatFlags(r.flags)}>
                         {(f) => (
                           <span class="max-w-[40%] truncate text-[0.66rem] text-text-muted">
