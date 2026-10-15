@@ -1,4 +1,5 @@
 import type { AdapterCondition } from './adapter-conditions'
+import type { Settings } from '../config/settings'
 import type { FailureAdvice } from './failure-analysis'
 import type http from 'node:http'
 import type https from 'node:https'
@@ -235,6 +236,12 @@ export interface AppAdapter {
    * `user`, a multi-tenant adapter contributing `tenant`, etc. Optional.
    */
   contributors?(): ContributorRegistrations
+
+  /**
+   * Settings sections this adapter needs — validated at startup and bound
+   * before any hook runs, only when the adapter is enabled (see `when`).
+   */
+  settings?(): readonly Settings<unknown>[]
 
   /**
    * Called before global middleware — register early routes (docs UI, health).

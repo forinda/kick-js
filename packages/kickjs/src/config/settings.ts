@@ -40,6 +40,12 @@ export interface Settings<T> extends InjectionToken<T> {
   get(): T
   /** Parse the section from `env` (default `process.env`) afresh; throws listing every problem. */
   load(env?: NodeJS.ProcessEnv): T
+  /**
+   * The same schema under another prefix, for a second instance:
+   * `DbSettings.scoped('ANALYTICS')` reads `ANALYTICS_DB_*` beside `DB_*`.
+   * Returns the same token for the same name.
+   */
+  scoped(name: string): Settings<T>
 }
 
 /** The value type of a section: `SettingsOf<typeof DbSettings>`. */
@@ -76,12 +82,6 @@ function leavesOf(shape: JsonShape, prefix: string, path: string[] = []): Leaf[]
   ]
 }
 
-/**
- * All sections defined in this process, by prefix, validated together at
- * startup. Keyed by prefix so an HMR re-evaluation replaces its section
- * instead of adding a second one.
- */
-const defined = new Map<string, Settings<unknown>>()
 /** Values validated at startup (or on first `get()`), by prefix. */
 const cached = new Map<string, unknown>()
 
@@ -103,12 +103,18 @@ const cached = new Map<string, unknown>()
  * }
  * ```
  *
- * Every section is validated when the app starts — a missing or invalid value
- * fails startup, naming the variable — and is injectable by its token. Values
+ * Declare it where it's used — `bootstrap({ settings })`, a module's, adapter's
+ * or plugin's `settings()` — and it is validated when the app starts (a
+ * missing or invalid value fails startup, naming the variable) and injectable
+ * by its token. Undeclared, `get()` validates it on first use. Values
  * come from the schema's coercion: use `z.coerce.number()`, and
  * `z.stringbool()` for booleans (`z.coerce.boolean()` reads `'false'` as true).
  */
 export function defineSettings<S>(prefix: string, schema: S): Settings<InferSchemaOutput<S>> {
+  return createSection(prefix, schema)
+}
+
+function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput<S>> {
   type T = InferSchemaOutput<S>
   if (!/^[A-Z][A-Z0-9_]*$/.test(prefix)) {
     throw new Error(`defineSettings: prefix '${prefix}' must be UPPER_SNAKE_CASE, e.g. 'DB'`)
@@ -157,6 +163,7 @@ export function defineSettings<S>(prefix: string, schema: S): Settings<InferSche
     throw new Error(`Settings '${prefix}' are invalid:\n${problems.join('\n')}`)
   }
 
+  const scopes = new Map<string, Settings<T>>()
   const settings: Settings<T> = Object.freeze({
     [INJECTION_TOKEN]: true as const,
     name: `Settings(${prefix})`,
@@ -171,27 +178,45 @@ export function defineSettings<S>(prefix: string, schema: S): Settings<InferSche
       if (!cached.has(prefix)) cached.set(prefix, load())
       return cached.get(prefix) as T
     },
+    scoped: (name: string): Settings<T> => {
+      const scopePrefix = `${name}_${prefix}`
+      let scoped = scopes.get(scopePrefix)
+      if (!scoped) {
+        scoped = createSection(scopePrefix, schema) as Settings<T>
+        scopes.set(scopePrefix, scoped)
+      }
+      return scoped
+    },
   }) as Settings<T>
-  defined.set(prefix, settings as Settings<unknown>)
   return settings
 }
 
 /**
- * Load every defined section, throwing once with all their problems — so a
- * misconfigured deploy fails at startup with the whole list, not one at a
- * time. Returns each section's value, for binding into the container.
+ * Validate the given sections — the ones the app declared — throwing once
+ * with every problem, so a misconfigured deploy fails at startup with the
+ * whole list. A section declared twice is loaded once; two different sections
+ * with one prefix would read the same variables, and are refused.
  */
-export function loadAllSettings(
+export function loadSettings(
+  sections: Iterable<Settings<unknown>>,
   env: NodeJS.ProcessEnv = process.env,
 ): Map<Settings<unknown>, unknown> {
   const values = new Map<Settings<unknown>, unknown>()
+  const byPrefix = new Map<string, Settings<unknown>>()
   const failures: string[] = []
-  for (const settings of defined.values()) {
+  for (const section of sections) {
+    if (values.has(section)) continue
+    const other = byPrefix.get(section.prefix)
+    if (other && other !== section) {
+      failures.push(`Two different settings sections use the prefix '${section.prefix}'.`)
+      continue
+    }
+    byPrefix.set(section.prefix, section)
     try {
-      const value = settings.load(env)
-      values.set(settings, value)
+      const value = section.load(env)
+      values.set(section, value)
       // `get()` returns what the app started with.
-      cached.set(settings.prefix, value)
+      cached.set(section.prefix, value)
     } catch (err) {
       failures.push((err as Error).message)
     }

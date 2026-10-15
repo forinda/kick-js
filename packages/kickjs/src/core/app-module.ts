@@ -1,3 +1,4 @@
+import type { Settings } from '../config/settings'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
 import type { RouteFlagDeclarations } from './route-flag'
@@ -92,6 +93,11 @@ export interface AppModule {
    * Optional — modules without per-module contributors omit this hook.
    */
   contributors?(): ContributorRegistrations
+  /**
+   * Settings sections this module needs — validated at startup and bound
+   * before its `register()` runs, only when the module is mounted.
+   */
+  settings?(): readonly Settings<unknown>[]
   /** Return route definitions for this module, or null for non-HTTP modules */
   routes(): ModuleRoutes | ModuleRoutes[] | null
 }

@@ -19,14 +19,7 @@ import {
 } from '../src/index'
 import { createWebApp } from '../src/web'
 
-beforeEach(() => {
-  Container.reset()
-  // Every section defined in the process is validated when an app starts —
-  // as an app's tests would get from .env.test.
-  vi.stubEnv('KT_MAIL_HOST', 'smtp')
-  vi.stubEnv('KT_MAIL_PORT', '587')
-  vi.stubEnv('KT_CACHE_URL', 'redis://c')
-})
+beforeEach(() => Container.reset())
 afterEach(() => vi.unstubAllEnvs())
 
 const DbSettings = defineSettings(
@@ -121,7 +114,7 @@ describe('defineSettings with other schema libraries', () => {
 describe('settings outside injection', () => {
   it('get() returns the value the app started with', async () => {
     vi.stubEnv('KT_DB_URL', 'postgres://started/app')
-    await new Application({ modules: [] }).setup()
+    await new Application({ modules: [], settings: [DbSettings] }).setup()
     // A later env change doesn't move what the app runs with…
     vi.stubEnv('KT_DB_URL', 'postgres://changed/app')
     expect(DbSettings.get().url).toBe('postgres://started/app')
@@ -137,26 +130,24 @@ describe('settings in the app', () => {
     class Database {
       constructor(@Inject(DbSettings) readonly settings: SettingsOf<typeof DbSettings>) {}
     }
-    const app = new Application({ modules: [] })
+    const app = new Application({ modules: [], settings: [DbSettings] })
     await app.setup()
     expect(app.getContainer().resolve(Database).settings.pool.max).toBe(10)
   })
 
   it('fails startup when a section is invalid', async () => {
     vi.stubEnv('KT_DB_URL', 'not a url')
-    await expect(new Application({ modules: [] }).setup()).rejects.toThrow(/KT_DB_URL/)
+    await expect(new Application({ modules: [], settings: [DbSettings] }).setup()).rejects.toThrow(
+      /KT_DB_URL/,
+    )
   })
 
   it('reads the platform env on the web entry', () => {
     createWebApp({
       h3: h3v2,
       modules: [],
-      env: {
-        KT_DB_URL: 'postgres://edge/app',
-        KT_MAIL_HOST: 'smtp',
-        KT_MAIL_PORT: '587',
-        KT_CACHE_URL: 'redis://c',
-      },
+      settings: [DbSettings],
+      env: { KT_DB_URL: 'postgres://edge/app' },
     })
     expect(Container.getInstance().resolve(DbSettings).url).toBe('postgres://edge/app')
   })
@@ -173,6 +164,7 @@ describe('settings from adapters and modules', () => {
     })
     const app = new Application({
       modules: [],
+      settings: [DbSettings],
       adapters: [
         DbAdapter.async({
           inject: [DbSettings],
@@ -187,6 +179,7 @@ describe('settings from adapters and modules', () => {
   it('a module can bind a value under its own token, or replace the section — get() follows', async () => {
     const DB_URL = createToken<string>('test/dbUrl')
     const app = new Application({
+      settings: [DbSettings],
       modules: [
         {
           register(container: Container) {
@@ -204,5 +197,79 @@ describe('settings from adapters and modules', () => {
     expect(app.getContainer().resolve(DB_URL)).toBe('postgres://module/app')
     // Outside DI, get() sees the same replacement injected code does.
     expect(DbSettings.get().url).toBe('postgres://module/app')
+  })
+})
+
+describe('declaring sections', () => {
+  const Broken = defineSettings('KT_BROKEN', z.object({ required: z.string() }))
+
+  it('validates only declared sections — an undeclared, invalid one does not fail startup', async () => {
+    await expect(new Application({ modules: [] }).setup()).resolves.toBeUndefined()
+    // …but get() validates it on first use.
+    expect(() => Broken.get()).toThrow(/KT_BROKEN_REQUIRED/)
+  })
+
+  it('binds a module section only when the module is mounted, before it registers', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://module/app')
+    let seenInRegister: string | undefined
+    const DbModule = {
+      settings: () => [DbSettings],
+      register(container: Container) {
+        seenInRegister = container.resolve(DbSettings).url
+      },
+      routes: () => null,
+    }
+    const app = new Application({ modules: [DbModule as never] })
+    await app.setup()
+    expect(seenInRegister).toBe('postgres://module/app')
+
+    // Not mounted, not validated: an invalid value doesn't fail an app that
+    // doesn't load the module.
+    Container.reset()
+    vi.stubEnv('KT_DB_URL', 'not a url')
+    await expect(new Application({ modules: [] }).setup()).resolves.toBeUndefined()
+    await expect(new Application({ modules: [DbModule as never] }).setup()).rejects.toThrow(
+      /KT_DB_URL/,
+    )
+  })
+
+  it('takes sections from adapters and plugins, skipping a disabled adapter', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://adapter/app')
+    const app = new Application({
+      modules: [],
+      plugins: [{ name: 'P', settings: () => [DbSettings] }],
+      adapters: [
+        { name: 'Off', when: () => false, settings: () => [Broken] },
+        { name: 'On', settings: () => [DbSettings] },
+      ],
+    })
+    await expect(app.setup()).resolves.toBeUndefined()
+    expect(app.getContainer().resolve(DbSettings).url).toBe('postgres://adapter/app')
+  })
+
+  it('lists every invalid section in one error, and refuses two sections sharing a prefix', async () => {
+    const Other = defineSettings('KT_BROKEN', z.object({ x: z.string().optional() }))
+    await expect(
+      new Application({ modules: [], settings: [DbSettings, Broken] }).setup(),
+    ).rejects.toThrow(/KT_DB_URL[\s\S]*KT_BROKEN_REQUIRED/)
+    await expect(
+      new Application({ modules: [], settings: [Broken, Other] }).setup(),
+    ).rejects.toThrow(/Two different settings sections use the prefix 'KT_BROKEN'/)
+  })
+})
+
+describe('scoped sections', () => {
+  it('reads a second instance under a prefixed name, as its own token', async () => {
+    const Analytics = DbSettings.scoped('ANALYTICS')
+    expect(Analytics).toBe(DbSettings.scoped('ANALYTICS'))
+    expect(Analytics.prefix).toBe('ANALYTICS_KT_DB')
+    expect(Analytics.envNames[0]).toBe('ANALYTICS_KT_DB_URL')
+
+    vi.stubEnv('KT_DB_URL', 'postgres://main/app')
+    vi.stubEnv('ANALYTICS_KT_DB_URL', 'postgres://analytics/app')
+    const app = new Application({ modules: [], settings: [DbSettings, Analytics] })
+    await app.setup()
+    expect(app.getContainer().resolve(DbSettings).url).toBe('postgres://main/app')
+    expect(app.getContainer().resolve(Analytics).url).toBe('postgres://analytics/app')
   })
 })

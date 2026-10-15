@@ -74,7 +74,7 @@ import {
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
-import { loadAllSettings } from '../config/settings'
+import { loadSettings, type Settings } from '../config/settings'
 // Registers the `<NAME>_FILE` secret reader settings sections use (Node only).
 import '../config/env'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
@@ -539,6 +539,14 @@ export interface ApplicationOptions {
 
   /** Check IDs to skip, e.g. `['KICK-SEC-W002']` — a deliberate, reviewable exception. */
   silenceChecks?: string[]
+
+  /**
+   * App-wide settings sections ({@link defineSettings}): validated at startup
+   * — a missing or invalid value fails it, naming the variables — and
+   * injectable by their tokens. Modules, adapters and plugins declare their
+   * own with `settings()`.
+   */
+  settings?: Settings<unknown>[]
 
   /**
    * Security defaults applied automatically unless opted out.
@@ -1045,6 +1053,13 @@ export class Application {
     return this.routeUrls.build(name, params as Record<string, unknown> | undefined, query)
   }
 
+  /** Validate settings sections and bind each under its token. */
+  private bindSettings(sections: readonly Settings<unknown>[]): void {
+    for (const [section, value] of loadSettings(sections)) {
+      this.container.registerInstance(section, value)
+    }
+  }
+
   /** Run the built-in and the app's startup checks against the assembled app. */
   private runChecks(): void {
     runStartupChecks(
@@ -1073,11 +1088,14 @@ export class Application {
     // routes fill it in as they mount.
     this.routeUrls = new RouteUrls()
     this.container.registerInstance(ROUTE_URLS, this.routeUrls)
-    // Every defineSettings() section, validated now — a bad value fails
-    // startup with the full list — and injectable by its token.
-    for (const [settings, value] of loadAllSettings()) {
-      this.container.registerInstance(settings, value)
-    }
+    // Settings sections declared by bootstrap, plugins and enabled adapters:
+    // validated now — a bad value fails startup with the full list — and bound
+    // before any hook runs. Modules' sections are bound before they register.
+    this.bindSettings([
+      ...(this.options.settings ?? []),
+      ...this.plugins.flatMap((plugin) => plugin.settings?.() ?? []),
+      ...this.adapters.flatMap((adapter) => adapter.settings?.() ?? []),
+    ])
 
     // Reset module-contributor snapshot at the very top of each
     // setup pass — before anything that could throw — so a partial
@@ -1246,13 +1264,14 @@ export class Application {
       moduleRegistry.mount(healthModule(this.options.health === true ? {} : this.options.health))
     }
     const allModuleEntries: AppModuleEntry[] = moduleRegistry.entries
-    const modules = allModuleEntries.map((entry) => {
-      const mod: AppModule = toAppModule(entry)
+    const modules = allModuleEntries.map(toAppModule)
+    // Mounted modules' settings sections, bound before any of them registers.
+    this.bindSettings(modules.flatMap((mod) => mod.settings?.() ?? []))
+    for (const mod of modules) {
       // `register()` is optional — modules whose classes are entirely
       // decorator-managed (@Service, @Controller, @Repository) don't need it.
       mod.register?.(this.container)
-      return mod
-    })
+    }
     this.container.bootstrap()
 
     // Register Logger as an injectable singleton so @Inject(Logger)

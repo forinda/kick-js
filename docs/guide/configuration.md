@@ -404,7 +404,7 @@ const { url, pool } = DbSettings.get()
 
 ### From an adapter or a module
 
-A section is an ordinary DI token, bound before modules register, so the usual patterns work.
+A declared section is an ordinary DI token, bound before the code that declared it runs, so the usual patterns work.
 
 **Configure an adapter from it** — `defineAdapter`'s `.async()` injects tokens into its config factory:
 
@@ -434,7 +434,7 @@ export const DbModule = defineModule({
 })
 ```
 
-**Replace the section** — in a module, or in a test — by binding the token again. Injected code and `DbSettings.get()` both see the replacement:
+**Replace the section** — in a module's `register()`, or in a test — by binding the token again. Injected code and `DbSettings.get()` both see the replacement:
 
 ```ts
 container.registerInstance(DbSettings, { ...DbSettings.load(), url: 'postgres://localhost/test' })
@@ -442,9 +442,37 @@ container.registerInstance(DbSettings, { ...DbSettings.load(), url: 'postgres://
 
 The container is one per process, so there's no per-module copy: whatever binds last is what every module sees.
 
-### Validated at startup
+### Declaring a section
 
-When the app starts, **every** section defined in the process is validated, and an invalid or missing value fails startup with the variables to fix:
+A section is validated, and bound for injection, when something the app mounts **declares** it. Declare it where it's needed:
+
+```ts
+// App-wide
+bootstrap({ modules, settings: [AppSettings] })
+
+// With a module — only when the module is mounted, and bound before its register() runs
+export const DbModule = defineModule({
+  name: 'DbModule',
+  build: () => ({
+    settings: () => [DbSettings],
+    routes: () => ({ path: '/db', controller: DbController }),
+  }),
+})
+
+// With an adapter — only when it's enabled (see `when`), and bound before any hook runs
+export const SearchAdapter = defineAdapter({
+  name: 'SearchAdapter',
+  build: () => ({ settings: () => [SearchSettings] /* , hooks */ }),
+})
+
+// With a plugin
+export const BillingPlugin = definePlugin({
+  name: 'BillingPlugin',
+  build: () => ({ settings: () => [StripeSettings] /* , modules, adapters */ }),
+})
+```
+
+At startup, every declared section is validated, and an invalid or missing value fails startup with the variables to fix:
 
 ```
 Settings 'DB' are invalid:
@@ -452,7 +480,25 @@ Settings 'DB' are invalid:
   DB_POOL_MAX: Invalid input: expected number, received NaN
 ```
 
-So a section is required wherever its module is loaded — including tests. Give test runs the values in `.env.test`, as you would for the env schema, or give the schema defaults. On the [web entry](./edge-deployment.md), sections read the `env` you pass to `createWebApp` (the Workers bindings).
+- **Only what's mounted is required.** A module that isn't loaded doesn't need its variables — including in tests, which give the values for what they mount (`.env.test`, or schema defaults).
+- **Declaring twice is fine** — a section shared by a module and an adapter is loaded once. Two _different_ sections with the same prefix would read the same variables and are refused.
+- **Undeclared sections** aren't validated at startup; `get()` validates one on first use.
+- On the [web entry](./edge-deployment.md), `createWebApp({ settings })` and its modules' sections read the `env` you pass (the Workers bindings).
+
+### Several instances: `.scoped()`
+
+Two databases, two mail providers — one schema, several prefixes. `.scoped(name)` puts the name in front of the prefix and returns a separate section (the same one each time for the same name):
+
+```ts
+export const AnalyticsDb = DbSettings.scoped('ANALYTICS') // reads ANALYTICS_DB_URL, ANALYTICS_DB_POOL_MAX, …
+
+bootstrap({ modules, settings: [DbSettings, AnalyticsDb] })
+
+@Service()
+class Reports {
+  constructor(@Inject(AnalyticsDb) private readonly db: SettingsOf<typeof AnalyticsDb>) {}
+}
+```
 
 ## Accessing Config in Services
 

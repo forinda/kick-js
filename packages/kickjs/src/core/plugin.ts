@@ -1,3 +1,4 @@
+import type { Settings } from '../config/settings'
 import type { Container } from './container'
 import type { AppAdapter } from './adapter'
 import type { AppModuleEntry } from './app-module'
@@ -178,6 +179,9 @@ export interface KickPlugin {
    * ```
    */
   contributors?(): ContributorRegistrations
+
+  /** Settings sections this plugin needs — validated at startup, bound before any hook runs. */
+  settings?(): readonly Settings<unknown>[]
 
   /**
    * Called after the application has fully bootstrapped.

@@ -218,7 +218,8 @@ mistakes:
   \`Env<'KEY'>\` — never \`process.env\`. Add a key to the schema before reading it.
   A concern with several keys (a database, a mail provider) gets a typed section
   instead: \`defineSettings('DB', schema)\` in the module's own
-  \`<name>.settings.ts\` — not in \`src/config\` — read through
+  \`<name>.settings.ts\` — not in \`src/config\` — declared by the module that
+  needs it (\`settings: () => [DbSettings]\`) and read through
   \`@Inject(DbSettings)\` or \`DbSettings.get()\`. Its variables are \`DB_*\`.
 
 - **Module entry files MUST be named \`<name>.module.ts\`** — see the Vite
