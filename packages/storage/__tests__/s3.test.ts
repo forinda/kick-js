@@ -285,13 +285,12 @@ describe('s3Storage', () => {
       expect(policy.conditions).toContainEqual({ key: 'up/a.pdf' })
       expect(new Date(policy.expiration).getTime() - Date.now()).toBeLessThanOrEqual(60_000)
 
-      const images = await files.uploadForm('up/b', { maxSize: 10, contentType: 'image/' })
-      expect(images.fields['Content-Type']).toBeUndefined()
-      expect(JSON.parse(atob(images.fields.policy)).conditions).toContainEqual([
-        'starts-with',
-        '$Content-Type',
-        'image/',
-      ])
+      // A family would admit image/svg+xml: exact types only.
+      for (const contentType of ['image/', 'image/*', 'image/png; x=1', 'text/html\r\nX: y']) {
+        await expect(files.uploadForm('up/b', { maxSize: 10, contentType })).rejects.toThrow(
+          'exact type',
+        )
+      }
       await expect(files.uploadForm('x', { maxSize: 1, minSize: 2 })).rejects.toThrow('sizes')
       await expect(files.uploadForm('../x', { maxSize: 1 })).rejects.toThrow('invalid key')
     })
@@ -353,16 +352,28 @@ describe('s3Storage', () => {
 
     it('compose copies big sources in even ranges of at most 5 GiB', async () => {
       const GiB = 1024 ** 3
-      const { files, calls } = scripted(
-        [200, '', { 'content-length': String(6 * GiB) }],
-        [200, '', { 'content-length': '7' }],
-        [200, '<R><UploadId>u</UploadId></R>'],
-        [200, '<CopyPartResult><ETag>"1"</ETag></CopyPartResult>'],
-        [200, '<CopyPartResult><ETag>"2"</ETag></CopyPartResult>'],
-        [200, '<CopyPartResult><ETag>"3"</ETag></CopyPartResult>'],
-        [200, '<CompleteMultipartUploadResult/>'],
-      )
-      await files.compose('dest', ['big', 'tail'])
+      const calls: Request[] = []
+      // Answered by request, not by order: the sources are checked in parallel.
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const req = new Request(input, init)
+        calls.push(req)
+        const url = new URL(req.url)
+        if (req.method === 'HEAD') {
+          const size = url.pathname.endsWith('/big') ? 6 * GiB : 7
+          return new Response(null, { headers: { 'content-length': String(size) } })
+        }
+        if (url.searchParams.has('uploads')) return new Response('<R><UploadId>u</UploadId></R>')
+        if (req.method === 'PUT') {
+          return new Response(
+            `<CopyPartResult><ETag>"${url.searchParams.get('partNumber')}"</ETag></CopyPartResult>`,
+          )
+        }
+        return new Response('<CompleteMultipartUploadResult/>')
+      }) as unknown as typeof globalThis.fetch
+      await s3Storage({ ...options, endpoint: 'http://s3.test', fetch }).compose('dest', [
+        'big',
+        'tail',
+      ])
       const ranges = calls
         .filter((c) => c.headers.get('x-amz-copy-source-range'))
         .map(

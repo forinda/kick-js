@@ -217,27 +217,30 @@ await fetch(url, { method: 'PUT', body: file, headers: { 'content-type': file.ty
 
 ### Size unknown up front: `uploadForm()`
 
-`uploadUrl()` fixes the exact size, so the browser must say it first. `uploadForm()` signs a form (an S3 POST policy) that accepts any size within a range instead. The bucket enforces the range, the key, and the content type or type family:
+`uploadUrl()` fixes the exact size, so the browser must say it first. `uploadForm()` signs a form (an S3 POST policy) that accepts any size within a range instead. The bucket enforces the range, the key and the content type:
 
 ```ts
+const TYPES = ['image/png', 'image/jpeg', 'application/pdf']
+
 @Post('/uploads/form')
 async form(ctx: RequestContext) {
+  const { type } = ctx.body as { type: string }
+  if (!TYPES.includes(type)) throw HttpException.badRequest('Unsupported type')
   const key = `uploads/${ctx.get('user')!.id}/${randomUUID()}`
-  ctx.json(await this.files.uploadForm(key, { maxSize: 20 * 1024 * 1024, contentType: 'image/' }))
+  ctx.json(await this.files.uploadForm(key, { maxSize: 20 * 1024 * 1024, contentType: type }))
 }
 ```
 
 ```ts
 // browser: the fields first, the file last
-const { url, fields } = await api.post('/uploads/form')
+const { url, fields } = await api.post('/uploads/form', { type: file.type })
 const form = new FormData()
 for (const [name, value] of Object.entries(fields)) form.append(name, value)
-form.append('Content-Type', file.type) // with a type family like 'image/'
 form.append('file', file)
 await fetch(url, { method: 'POST', body: form })
 ```
 
-The bucket rejects a file over `maxSize` with `EntityTooLarge`, and a different key or a type outside the family with 403. AWS S3 and MinIO support form uploads; Cloudflare R2 doesn't, so use `uploadUrl()` with `size` there. The bucket's CORS rule must allow `POST`.
+The bucket rejects a file over `maxSize` with `EntityTooLarge`, and a different key or `Content-Type` with 403. `contentType` takes one exact type: a family such as `image/*` would also admit `image/svg+xml`, which can carry script, so check the client's declared type against your own list and sign that one. AWS S3 and MinIO support form uploads; Cloudflare R2 doesn't, so use `uploadUrl()` with `size` there. The bucket's CORS rule must allow `POST`.
 
 ### Large and resumable: `multipart`
 

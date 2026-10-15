@@ -302,7 +302,7 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     expect(await pages(files)).toEqual(await pages(memory))
   })
 
-  it('uploadForm: the bucket enforces the size range, the type and the key', async () => {
+  it('uploadForm: the bucket enforces the size range, the exact type and the key', async () => {
     const post = async (
       form: { url: string; fields: Record<string, string> },
       body: string,
@@ -329,9 +329,8 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     // Another key than the one signed.
     expect((await post(pdf, 'x', { key: `${run}form/other` })).status).toBe(403)
 
-    const image = await files.uploadForm(`${run}form/img`, { maxSize: 100, contentType: 'image/' })
-    expect((await post(image, 'png', { 'Content-Type': 'image/png' })).status).toBe(204)
-    expect((await post(image, 'html', { 'Content-Type': 'text/html' })).status).toBe(403)
+    // A different type than the one signed.
+    expect((await post(pdf, 'svg', { 'Content-Type': 'image/svg+xml' })).status).toBe(403)
   })
 
   it('cleans up', async () => {

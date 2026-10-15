@@ -153,9 +153,10 @@ export interface UploadFormOptions {
   /** Smallest file accepted, in bytes. Default 0. */
   minSize?: number
   /**
-   * The `Content-Type` the file must be sent with: exact (`'application/pdf'`),
-   * or a family ending in `/` (`'image/'`), in which case the form sets
-   * `Content-Type` itself, to the file's type.
+   * The exact `Content-Type` the file must be sent with, and is served with.
+   * Exact only: a family (`image/`) would also admit `image/svg+xml`, which
+   * can carry script. Check the client's declared type against your
+   * allowlist, then sign that one.
    */
   contentType?: string
 }
@@ -636,15 +637,20 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       'x-amz-date': stamp,
       ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
     }
-    const family = contentType?.endsWith('/')
-    if (contentType && !family) fields['Content-Type'] = contentType
+    if (contentType !== undefined) {
+      if (!/^[\w.+-]+\/[\w.+-]+$/.test(contentType)) {
+        throw new Error(
+          `s3Storage: uploadForm contentType must be one exact type like 'image/png', not '${contentType}'`,
+        )
+      }
+      fields['Content-Type'] = contentType
+    }
     const policy = {
       expiration: new Date(date.getTime() + expiresIn * 1000).toISOString(),
       conditions: [
         { bucket: options.bucket },
         ...Object.entries(fields).map(([name, value]) => ({ [name]: value })),
         ['content-length-range', minSize, maxSize],
-        ...(family ? [['starts-with', '$Content-Type', contentType]] : []),
       ],
     }
     // Base64 without Buffer, for edge runtimes.
