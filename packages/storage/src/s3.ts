@@ -141,6 +141,7 @@ export interface S3Storage extends Storage {
 // S3's minimum part size; `put()` streams in parts of this size.
 const PART_SIZE = 5 * 1024 * 1024
 const MAX_PARTS = 10_000
+const BUCKET = Symbol('bucket')
 
 const xmlEscape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const xmlUnescape = (value: string) =>
@@ -189,9 +190,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       : origin.replace('://', `://${options.bucket}.`)
   const fetchFn = options.fetch ?? globalThis.fetch
   const signing = () => ({ ...options, region, date: new Date() })
-  /** The object's URL; `key` `''` for the bucket itself (listing). */
-  const urlOf = (key: string, query: Record<string, string> = {}) => {
-    const url = new URL(key === '' ? `${base}/` : `${base}/${encodeKey(key)}`)
+  // The bucket itself (for listing) is BUCKET, never a key: every key goes
+  // through encodeKey's check, so `''` can't address the bucket.
+  const urlOf = (key: string | typeof BUCKET, query: Record<string, string> = {}) => {
+    const url = new URL(key === BUCKET ? `${base}/` : `${base}/${encodeKey(key)}`)
     for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value)
     return url
   }
@@ -202,7 +204,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     contentType?: string
   }
 
-  async function send(method: string, key: string, request: Request = {}) {
+  async function send(method: string, key: string | typeof BUCKET, request: Request = {}) {
     const url = urlOf(key, request.query)
     const payloadHash = request.body ? sha256(request.body) : EMPTY_HASH
     const now = signing()
@@ -224,12 +226,17 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   }
 
   /** Send, and throw on anything but 2xx (and 404 when `missingOk`). */
-  async function call(method: string, key: string, request?: Request, missingOk = false) {
+  async function call(
+    method: string,
+    key: string | typeof BUCKET,
+    request?: Request,
+    missingOk = false,
+  ) {
     const res = await send(method, key, request)
     if (res.ok || (missingOk && res.status === 404)) return res
     const text = await res.text().catch(() => '')
     throw new Error(
-      `s3Storage: ${method} '${key}' failed with ${res.status}: ${text.slice(0, 300)}`,
+      `s3Storage: ${method} '${String(key === BUCKET ? options.bucket : key)}' failed with ${res.status}: ${text.slice(0, 300)}`,
     )
   }
 
@@ -382,7 +389,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         ...(listOptions.prefix ? { prefix: listOptions.prefix } : {}),
         ...(listOptions.cursor ? { 'continuation-token': listOptions.cursor } : {}),
       }
-      const xml = await (await call('GET', '', { query })).text()
+      const xml = await (await call('GET', BUCKET, { query })).text()
       const files = tags(xml, 'Contents').map((entry) => ({
         key: tag(entry, 'Key'),
         size: Number(tag(entry, 'Size')),

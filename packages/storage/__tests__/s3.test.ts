@@ -114,6 +114,24 @@ describe('s3Storage', () => {
     await expect(files.get('x')).rejects.toThrow("GET 'x' failed with 403: <Error>AccessDenied")
   })
 
+  it('never lets a key address the bucket itself', async () => {
+    const { fetch, calls } = bucket()
+    const files = s3Storage({ ...options, fetch })
+    for (const call of [
+      () => files.get(''),
+      () => files.put('', 'x'),
+      () => files.delete(''),
+      () => files.stat(''),
+      () => files.getStream(''),
+      () => files.url(''),
+      () => files.uploadUrl(''),
+      () => files.multipart.create(''),
+    ]) {
+      await expect(call()).rejects.toThrow('invalid key')
+    }
+    expect(calls).toEqual([])
+  })
+
   it('requires its credentials', () => {
     expect(() => s3Storage({ ...options, secretAccessKey: '' })).toThrow('secretAccessKey')
   })
