@@ -1,5 +1,123 @@
 # @forinda/kickjs
 
+## 10.2.0
+
+### Minor Changes
+
+- [#877](https://github.com/forinda/kick-js/pull/877) [`fb16eb7`](https://github.com/forinda/kick-js/commit/fb16eb7ee36bddb674dd3eec8d89d4e87be8a497) Thanks [@forinda](https://github.com/forinda)! - Conditional adapters. An adapter's `when` decides at startup whether it runs: helpers `onEnv('NAME', value?)`, `onPackage('name')` and `allOf(...)`, or any `() => boolean | string`. An adapter left out runs no hooks and adds no middleware, and adapters that `dependsOn` it are left out too. `app.getConditionReport()` lists each outcome with its reason, and DevTools serves it at `/_debug/conditions`.
+
+- [#873](https://github.com/forinda/kick-js/pull/873) [`3d378eb`](https://github.com/forinda/kick-js/commit/3d378eb70a05a9380c095349b07c0a6dd543107b) Thanks [@forinda](https://github.com/forinda)! - New `allowedHosts()` middleware and a `bootstrap({ security: { allowedHosts } })` option. Requests for any host not listed get a 400 problem-details response, so a client-chosen `Host` can't end up in password-reset links, redirects or cached responses. `'.example.com'` matches the domain and its subdomains. `X-Forwarded-Host` is read only with `trustForwardedHost: true`, and then every value in it must be allowed. Without that option the header is removed from the request. The bootstrap option runs the check before anything else is mounted, and exempts `GET`/`HEAD` on `/health/live` and `/health/ready`, which orchestrators probe by IP.
+
+- [#881](https://github.com/forinda/kick-js/pull/881) [`ff4a78f`](https://github.com/forinda/kick-js/commit/ff4a78fc4e5efe5c1de3dbe8d27c1da0b09c253f) Thanks [@forinda](https://github.com/forinda)! - `breachPadding()` is an opt-in BREACH mitigation for `compression()`. Mount it before `compression()`, and each gzip response gets 0–99 random bytes in its header's file-name field (Django's "Heal The Breach"). Decompressors ignore these bytes, but they stop compressed size from revealing a secret. Brotli has no such header field, so the middleware removes `br` and `zstd` from `Accept-Encoding` and clients get gzip instead. It works on Express, Fastify and h3.
+
+- [#879](https://github.com/forinda/kick-js/pull/879) [`b6cec54`](https://github.com/forinda/kick-js/commit/b6cec54f47ecc5261b4f7bae45d4a3d6d833183f) Thanks [@forinda](https://github.com/forinda)! - `ctx.conditional({ etag, lastModified })` answers conditional requests on every engine. It sets `ETag` and `Last-Modified`, then answers `304 Not Modified` when the client's copy is current, or `412 Precondition Failed` when an `If-Match` / `If-Unmodified-Since` write is based on a stale version. Preconditions are evaluated in RFC 9110 order. It returns `true` when it has answered, so a handler can skip loading the data. `evaluatePreconditions()` is exported for use on its own.
+
+- [#889](https://github.com/forinda/kick-js/pull/889) [`a0dc689`](https://github.com/forinda/kick-js/commit/a0dc6896238490a97198ff09407605ade14336cf) Thanks [@forinda](https://github.com/forinda)! - `app.configOrigins()` reports where each variable the app reads gets its value: `env`, `file` (a `_FILE` secret), `default`, `provided` or `unset`. It covers the env schema and every bound settings section, and returns names only, never values. `originsOf(vars, env)` is the same check for any variable list. DevTools adds it to `/_debug/config` as `origins`.
+
+- [#871](https://github.com/forinda/kick-js/pull/871) [`45c13e3`](https://github.com/forinda/kick-js/commit/45c13e340f2667cd6ee4d91315fb73fa9bc6c7b4) Thanks [@forinda](https://github.com/forinda)! - `csrf()` and `csrfGuard()` check where a state-changing request came from before the token. `Sec-Fetch-Site: same-origin` passes. Otherwise `Origin` (or `Referer`) must match the request's `Host` or a new `trustedOrigins` entry, and a browser request that says it is cross-site without an origin is refused (403 `CSRF origin not allowed`). Requests without these headers (servers, curl) still rely on the token.
+  
+  A frontend on another origin (for example `app.example.com` calling `api.example.com`) must now be listed in `trustedOrigins`. `checkOrigin: false` turns the check off.
+
+- [#886](https://github.com/forinda/kick-js/pull/886) [`ef61a1c`](https://github.com/forinda/kick-js/commit/ef61a1cfd8c7680a8b658b30dcc2e3b02af3aaa1) Thanks [@forinda](https://github.com/forinda)! - `kick env example` writes `.env.example` from the env schema and every declared settings section. Required variables are written bare; optional ones are commented, with their default and description. `--check` exits 1 when the file is missing or stale, for CI. The command loads the app through its Vite config with `bootstrap()` captured and the env loaders in describe mode, so it needs no environment. In kickjs, `app.describeConfig()` lists the same variables without reading or validating the environment, and settings sections gain `describe()`.
+
+- [#884](https://github.com/forinda/kick-js/pull/884) [`a9c1b92`](https://github.com/forinda/kick-js/commit/a9c1b92b1f568253c6a8bea577d97b92e8adc9a4) Thanks [@forinda](https://github.com/forinda)! - `<KEY>_FILE` secrets. For any key the env schema declares, setting `<KEY>_FILE=/run/secrets/…` reads that key's value from the file, following the Docker and Kubernetes convention, with one trailing newline dropped. The value reaches the parsed env (`getEnv`, `ConfigService`, `@Value`) but is not copied into `process.env`, which child processes inherit. Setting both `KEY` and `KEY_FILE`, or pointing at a file that can't be read, fails startup without printing the file's contents.
+
+- [#878](https://github.com/forinda/kick-js/pull/878) [`799d3b0`](https://github.com/forinda/kick-js/commit/799d3b094a65adb360f56b036507d0d8d68c1246) Thanks [@forinda](https://github.com/forinda)! - Startup failures come with advice. When an adapter's `beforeMount` or `beforeStart` throws, the app logs what went wrong and what to change, naming the failing hook, before the error itself. Built-in advice covers refused connections, unknown hosts, timeouts and rejected credentials, including through `cause` chains and `AggregateError`s. Adapters can explain their own failures first with `analyzeFailure(err)`. The original error is still thrown unchanged.
+
+- [#883](https://github.com/forinda/kick-js/pull/883) [`ad5e903`](https://github.com/forinda/kick-js/commit/ad5e90377928eb0701e7e69c1e64e9095949eccf) Thanks [@forinda](https://github.com/forinda)! - `metricsAdapter()` serves Prometheus metrics at `/metrics`. It exports a request-duration histogram by method, route pattern and status, with unmatched requests grouped under `route="unmatched"` so random URLs can't add series. It also reports resident memory, heap, event-loop lag and uptime. An optional bearer `token` protects the endpoint.
+
+- [#892](https://github.com/forinda/kick-js/pull/892) [`82d951a`](https://github.com/forinda/kick-js/commit/82d951af6fc3772507454c914d19bb8f3b5944ef) Thanks [@forinda](https://github.com/forinda)! - Adds `hashPassword` and `verifyPassword`, plus `createSigner` for signed tokens. All three are Node only.
+  
+  - **Password hashes:** scrypt with a self-describing `scrypt$N$r$p$salt$hash` format. The default cost is OWASP's 2^14/8/5 setting.
+  - **`verifyPassword` results:** it returns `{ ok, needsRehash }`, so stored hashes move to a new cost as users log in. Passing `undefined` for a missing user still spends the full hashing time, so response times don't reveal which accounts exist. A foreign or hostile hash fails rather than throws, and memory is capped at 256 MiB per hash.
+  - **Signed tokens:** `createSigner({ secret, salt })` makes URL-safe tokens with an issue time. They're for reset and confirmation links.
+    - `verify(token, { maxAge })` returns `{ ok, value, issuedAt }` or `{ ok: false, reason: 'invalid' | 'expired' }`.
+    - A secret list rotates keys.
+    - The salt separates purposes.
+
+- [#870](https://github.com/forinda/kick-js/pull/870) [`d916e6e`](https://github.com/forinda/kick-js/commit/d916e6e5b4e990f0917d0521e4f083349ff10900) Thanks [@forinda](https://github.com/forinda)! - Production behaviour behind load balancers and on Kubernetes:
+  
+  - `/health/live` stays `200` (`status: 'draining'`) during shutdown. Only `/health/ready` answers `503`. A failing liveness probe gets the container restarted, which cut graceful shutdowns short.
+  - Readiness checks get a timeout each (`health: { checkTimeout }`, default 2s). A hung or throwing `onHealthCheck()` counts as down (`reason: 'timeout' | 'error'`) instead of hanging the probe. Probes within a second share one run, and slow checks are logged.
+  - New `preStopDelay`: after shutdown begins, keep serving for that long with readiness already `503`, so balancers stop routing before connections are refused.
+  - The production server sets `keepAliveTimeout` 65s, `headersTimeout` 66s and `requestTimeout` 300s by default (configurable under `server`). Node's 5s keep-alive is shorter than common load balancer idle timeouts, which causes intermittent 502s.
+
+- [#887](https://github.com/forinda/kick-js/pull/887) [`a3b6dc5`](https://github.com/forinda/kick-js/commit/a3b6dc571d53d66b855266d41484b31c84c02475) Thanks [@forinda](https://github.com/forinda)! - DevTools now shows context contributors applied as decorators (`@LoadTenant` on a class or method). They used to be invisible because they live in controller metadata and only reach the per-route pipelines.
+  
+  - Each route records its contributor chain in execution order (`RouteMeta.contributors`): `beforeValidation` ones first, each with its source, label, `dependsOn` and the lower-precedence registrations it overrides.
+  - `app.getRoutes()` lists mounted routes with their chains.
+  - `app.getContributors()` now includes `class` and `method` sources, once per decorator site.
+  - In DevTools, `/_debug/routes` carries each route's chain, and the topology keeps contributors of the same key from different sources apart. The Routes tab shows a `ctx N` count per route, and the route panel has a "Context contributors" section listing the full chain however long it is.
+
+- [#872](https://github.com/forinda/kick-js/pull/872) [`ef47ef7`](https://github.com/forinda/kick-js/commit/ef47ef798024394a6cfecb7a1143f0f5693b0f32) Thanks [@forinda](https://github.com/forinda)! - `session({ secret })` accepts a list, so you can rotate the secret without logging everyone out. The first secret signs (or, with `store: 'cookie'`, encrypts) new cookies. Every listed secret is accepted, and a cookie made with an older one is re-issued with the first on the next response.
+
+- [#888](https://github.com/forinda/kick-js/pull/888) [`fa453e4`](https://github.com/forinda/kick-js/commit/fa453e45d7623560b5e99a8e474778bd581a217e) Thanks [@forinda](https://github.com/forinda)! - Settings sections gain `provide(value)` and `parse(value)`. `bootstrap({ settings: [DbSettings.provide({ url })] })` declares a section with a supplied value instead of reading env — validated the same way, and it wins over the same section declared by a module or adapter. Useful for values known only at run time, like a test container's URL.
+
+- [#885](https://github.com/forinda/kick-js/pull/885) [`56b77c4`](https://github.com/forinda/kick-js/commit/56b77c4c531a2232a6ae805dd07ce4746e4ebb30) Thanks [@forinda](https://github.com/forinda)! - `defineSettings(prefix, schema)` defines typed configuration sections, Spring's `@ConfigurationProperties`, for Zod, Valibot or Yup. Each key path reads one env variable under the prefix (`pool.max` → `DB_POOL_MAX`), lists are comma-separated, and `<NAME>_FILE` secrets work. A section is declared where it's needed: `bootstrap({ settings })`, or `settings()` on a module, adapter or plugin. Declared sections are validated at startup, but only when the declaring unit is mounted, and an invalid or missing value fails startup and names the variables to fix. Each section is injectable by its token (`@Inject(DbSettings)`). `.scoped(name)` gives a second instance under a prefixed name (`ANALYTICS_DB_*`). Outside DI, `get()` returns the validated value and `load(env?)` parses afresh. On the web entry, sections read the `env` passed to `createWebApp`.
+
+- [#875](https://github.com/forinda/kick-js/pull/875) [`d8fa75e`](https://github.com/forinda/kick-js/commit/d8fa75e6dad5e2f54569fd25488145ac7e3b3788) Thanks [@forinda](https://github.com/forinda)! - Startup checks. Once the app is assembled, and before it serves a request, it runs checks that report findings with stable IDs. Warnings are logged, and errors fail startup with every error and its fix listed. Two built-in checks run in production: `KICK-SEC-W001` (no `security.allowedHosts`) and `KICK-SEC-W002` (`trustProxy: true`). Add your own with `defineCheck` and `bootstrap({ checks })`, and skip a finding you've accepted with `silenceChecks: ['ID']`.
+
+- [#874](https://github.com/forinda/kick-js/pull/874) [`8d809b5`](https://github.com/forinda/kick-js/commit/8d809b503db27a927d1fdf3c4a8a81f3701a0667) Thanks [@forinda](https://github.com/forinda)! - Startup timeline. `app.getStartupTimeline()` returns `{ totalMs, steps }` for the last startup: one step for each phase (middleware, modules, routes, error handlers, listen, ready) and one for each adapter hook (`'<Adapter>.beforeStart'` and so on). When startup takes longer than a second, the app logs its three slowest steps. DevTools serves the timeline at `/_debug/startup`.
+
+- [#895](https://github.com/forinda/kick-js/pull/895) [`61771ba`](https://github.com/forinda/kick-js/commit/61771bab80bbbacec18287e75da6a83415ea32fd) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs-storage/tus` adds `TusAdapter`: a tus 1.0.0 endpoint (creation, creation-with-upload, termination, expiration) for resumable uploads through your own server, with tus-js-client, Uppy and other tus clients. Unfinished uploads are written to a local directory as they arrive, and completed files move into any `Storage`. `onCreate`, `authorize` and `onComplete` hooks check who uploads what and record the result. It works on Express, Fastify and h3.
+  
+  `@forinda/kickjs` exports `RAW_BODY` (`Symbol.for('kick/http/raw-body')`). Middleware that reads the request stream itself sets it in an adapter's `beforeGlobal` phase, so the Express 415 for unparsed body types leaves that request alone.
+
+- [#882](https://github.com/forinda/kick-js/pull/882) [`098d6ef`](https://github.com/forinda/kick-js/commit/098d6ef5065daac618513ca52fb15f1f3607af01) Thanks [@forinda](https://github.com/forinda)! - `ctx.urlFor(name, params?, query?)` and `app.urlFor(...)` build a route's full path (API prefix and version included) from its name, `'Controller.method'`. They fill and encode the `:params` and append an optional query string. An unknown name or a missing param throws. Outside a request, inject the builder with `@Inject(ROUTE_URLS) urls: UrlBuilder`. It works on `createWebApp` too. `kick typegen` now emits `KickRoutes.Named`, so names and params are type-checked.
+
+- [#869](https://github.com/forinda/kick-js/pull/869) [`a682865`](https://github.com/forinda/kick-js/commit/a682865381b66a7ce6e6f67a4a73984fb09ad0c3) Thanks [@forinda](https://github.com/forinda)! - `bootstrap({ validationError })` and `createWebApp({ validationError })` decide what a failed route validation throws. The hook receives `{ source, issues, req }` and returns (or throws) the error, for example a `ProblemException` with your own status and fields. Return `undefined` to keep the default 422 for that failure. Each app's routes use that app's hook; a standalone `validate(schema, { validationError })` takes it too. `defaultValidationError` and the `ValidationFailure` / `ValidationErrorFactory` types are exported.
+
+### Patch Changes
+
+- [#901](https://github.com/forinda/kick-js/pull/901) [`390f51c`](https://github.com/forinda/kick-js/commit/390f51c2087f975dd5e73e6f69b2fd217e573d0f) Thanks [@forinda](https://github.com/forinda)! - Bound long-lived state that client input could grow without limit:
+  
+  - **kickjs**
+    - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows drop from the front without a full scan. At the cap, only counters still at one hit are evicted (never when `max` is 1), so a flood can't reset a real counter. A new key is refused (429) only when every counter has two hits or more.
+    - The in-memory session store caps at 10,000 sessions. Empty ones (what a cookieless flood creates) are evicted first, then the least recently written.
+    - Metrics label unknown HTTP methods `OTHER`.
+  - **kickjs-db**
+    - Computed-field (`$extends({ result })`) bookkeeping no longer keeps an entry for every failed query.
+    - The `'schema'` tenancy strategy no longer caches a plugin per schema name.
+    - `maxOpenTenants` defaults to 100 instead of unlimited.
+  - **kickjs-ws:** `join()` is ignored for a socket that already closed (with ws and Socket.IO), and a socket can be in at most 1,000 rooms, on both. Socket.IO's own id room doesn't count.
+  - **kickjs-mcp:** each initialization holds one slot toward `maxSessions` (while in progress, then as the session) and the session counts as busy until its first response is sent, so the idle timer can't close it mid-response. The timer starts once that response is sent or fails, so a failed one no longer holds its slot forever.
+  - **kickjs-devtools:** route latency keys use `OTHER` for unknown methods.
+  - **kickjs-ai:** `AnthropicProvider` remembers at most 100 warned-about model names, then prints one overflow notice and stays quiet.
+
+- [#880](https://github.com/forinda/kick-js/pull/880) [`055dd74`](https://github.com/forinda/kick-js/commit/055dd74209b3ce9407541cac1ed749a39b0a3d8f) Thanks [@forinda](https://github.com/forinda)! - Responses work with the `compression` middleware on every runtime. `ctx.sse()` sends `Cache-Control: no-cache, no-transform`, so compression middleware and proxies no longer hold events back in a gzip buffer. Buffered responses on h3 and the web entry now carry `Content-Length`, as on Express and Fastify, so size-based decisions (compression's 1 KB threshold) apply and small replies skip chunked encoding.
+
+- [#864](https://github.com/forinda/kick-js/pull/864) [`a491988`](https://github.com/forinda/kick-js/commit/a491988980c78ef35481f6b7e67939f10ebeb32a) Thanks [@forinda](https://github.com/forinda)! - Runtime alignment fixes:
+  
+  - `csrf()` compares the header token to the cookie in constant time.
+  - On h3 and the web entry, route params are percent-decoded like on Express and Fastify (`/users/a%20b` gives `'a b'`); a malformed escape answers 400.
+  - On Fastify, `trustProxy` keeps Express semantics: a function is honoured (it was dropped), and a hop count trusts that many proxies (Fastify read it as "trust none").
+  - On Fastify, a handler that neither writes a response nor returns a value answers 404, as on h3, instead of an empty 200.
+
+- [#865](https://github.com/forinda/kick-js/pull/865) [`ecc320b`](https://github.com/forinda/kick-js/commit/ecc320baf0d89505362e597ca0f13e3a933b2b60) Thanks [@forinda](https://github.com/forinda)! - One error and not-found shape on every engine:
+  
+  - `createWebApp` (`@forinda/kickjs/web`) answers errors through the same handler as `bootstrap()`: RFC 9457 problem details, the error's own headers, and `requestId` on a 500. Unmatched paths get the problem-details 404, and a known path with the wrong method gets 405 with `Allow`.
+  - The h3 runtime falls back to the built-in error and not-found handlers when a configured one fails or doesn't answer, instead of a differently-shaped `{ error }` body.
+  - Every engine sends `X-Request-Id`. An id already assigned to the request wins over the inbound header on Fastify, as on Express and h3.
+  - Fastify's instance is closed on shutdown, so its `onClose` hooks run.
+  - The error handler reads `NODE_ENV` per error and no longer touches `process` where it doesn't exist.
+
+- [#867](https://github.com/forinda/kick-js/pull/867) [`fcc4987`](https://github.com/forinda/kick-js/commit/fcc498717e6f898bd44aee7bc77d4840f10e4f90) Thanks [@forinda](https://github.com/forinda)! - Request bodies and cookies behave the same on every engine:
+  
+  - `jsonLimit` (default `'1mb'`) now applies on Fastify, h3 and the web entry, not only Express. A larger body answers 413. h3 and the web entry used to read bodies with no limit. `createWebApp` takes `jsonLimit` too.
+  - Form bodies (`application/x-www-form-urlencoded`) turn a repeated field into an array on Fastify, h3 and the web entry, as on Express and as query strings already do.
+  - Setting two cookies on one response keeps both on Fastify and h3. One was dropped there, so for example `session()` and `csrf()` together could lose a cookie. `ctx.res.setHeader()` replaces a header on Fastify as it does elsewhere.
+
+- [#868](https://github.com/forinda/kick-js/pull/868) [`a181423`](https://github.com/forinda/kick-js/commit/a181423e4ed56317926059924bab8d9cba1557b7) Thanks [@forinda](https://github.com/forinda)! - Less work per request:
+  
+  - `validate()` detects each schema's type once, on the first request, instead of on every request.
+  - `Application.handle()`, which the serverless handler and `app.fetch()` call per request, builds the engine's node handler once per engine app.
+  - Fastify routes synchronously once ready, with no promise hop per request.
+  - `helmet()` and `cors()` build their header values when created.
+  - The matched route (`ctx.route`) is one shared, frozen object per route.
+  - Contributors list their dependency specs once.
+
+- [#863](https://github.com/forinda/kick-js/pull/863) [`807984e`](https://github.com/forinda/kick-js/commit/807984e2f9f56488ea0bfb81f13ca294ad42db05) Thanks [@forinda](https://github.com/forinda)! - `csrf()` and `session()` no longer throw on runtimes without `process` when choosing the cookie's `secure` default. Every production check in the framework now reads `NODE_ENV` the same way.
+
 ## 10.1.0
 
 ### Minor Changes
