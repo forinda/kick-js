@@ -264,6 +264,70 @@ const env = loadEnv(envSchema) // re-parsed with new PORT against fresh schema
 
 For the normal "edit `.env`, want the new value" flow, do nothing — `envWatchPlugin()` calls `reloadEnv()` for you and `ConfigService.get()` immediately returns the new value.
 
+## Secrets from files (`<KEY>_FILE`)
+
+Docker secrets, Kubernetes secret volumes and most secret managers mount secrets as files rather than environment variables. For any key your env schema declares, set `<KEY>_FILE` to the file's path and the value is read from it:
+
+```bash
+DB_PASSWORD_FILE=/run/secrets/db_password
+```
+
+```ts
+const envSchema = z.object({ DB_PASSWORD: z.string().min(1) })
+loadEnv(envSchema).DB_PASSWORD // the file's contents
+```
+
+Each key reads its own file, so several secrets sit side by side with ordinary variables. With Docker Compose:
+
+```yaml
+services:
+  api:
+    image: my-app
+    environment:
+      AWS_REGION: eu-west-1 # ordinary variable
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      STRIPE_KEY_FILE: /run/secrets/stripe_key
+    secrets: [db_password, jwt_secret, stripe_key]
+
+secrets:
+  db_password: { file: ./secrets/db_password.txt }
+  jwt_secret: { file: ./secrets/jwt_secret.txt }
+  stripe_key: { file: ./secrets/stripe_key.txt }
+```
+
+On Kubernetes, mount the Secret as a volume and point each `_FILE` variable into it:
+
+```yaml
+containers:
+  - name: api
+    env:
+      - { name: DB_PASSWORD_FILE, value: /etc/secrets/db_password }
+      - { name: JWT_SECRET_FILE, value: /etc/secrets/jwt_secret }
+      - { name: STRIPE_KEY_FILE, value: /etc/secrets/stripe_key }
+    volumeMounts:
+      - { name: secrets, mountPath: /etc/secrets, readOnly: true }
+volumes:
+  - name: secrets
+    secret: { secretName: api-secrets }
+```
+
+The schema is unchanged — it declares `DB_PASSWORD`, `JWT_SECRET` and `STRIPE_KEY`, and validates the file contents exactly as it would an environment variable (a `STRIPE_KEY` failing `startsWith('sk_')` still fails startup):
+
+```ts
+const envSchema = z.object({
+  AWS_REGION: z.string(),
+  DB_PASSWORD: z.string().min(1),
+  JWT_SECRET: z.string().min(32),
+  STRIPE_KEY: z.string().startsWith('sk_'),
+})
+```
+
+- Only keys in the schema — `LOG_FILE` meaning "where to write logs" is left alone unless the schema declares `LOG`.
+- One trailing newline (`\n` or `\r\n`, as `echo` and Windows editors leave) is dropped.
+- Setting both `DB_PASSWORD` and `DB_PASSWORD_FILE` fails at startup, so which secret is in use is never ambiguous; so does a file that can't be read. Neither error prints the contents.
+- The value reaches the parsed env — `getEnv`, `ConfigService`, `@Value` — but is **not** copied into `process.env`, which child processes inherit. Read it through the schema, not `process.env.DB_PASSWORD`.
+
 ## Accessing Config in Services
 
 `ConfigService` is the recommended way to read env config from a DI-managed class. It's an injectable singleton that consumes the `KickEnv` global populated by `kick typegen`, so as long as your `src/env.ts` is in place you get full type safety with **zero extra setup** — no schema to pass around, no separate typed-service factory, no manual casts.

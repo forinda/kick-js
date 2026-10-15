@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { z } from 'zod'
 import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
@@ -365,7 +365,7 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
   // Re-parse if schema changed or no cache yet
   if (cachedEnv && cachedSchema === s) return overlaid(cachedEnv)
   cachedSchema = s
-  cachedEnv = s.parse(process.env)
+  cachedEnv = s.parse(withSecretFiles(process.env, Object.keys(s.shape ?? {})))
 
   // Register env resolver so @Value() reads validated values
   Container._envResolver = resolveEnvKey
@@ -545,7 +545,11 @@ export function loadEnvFromSchema<TSchema>(
 ): unknown extends TSchema ? Record<string, unknown> : InferSchemaOutput<TSchema>
 export function loadEnvFromSchema(schema: unknown): unknown {
   const wrapped = detectSchema(schema)
-  const result = wrapped.safeParse(process.env)
+  const declared = Object.keys(
+    ((wrapped.toJsonSchema?.() as { properties?: Record<string, unknown> } | undefined)
+      ?.properties ?? {}) as Record<string, unknown>,
+  )
+  const result = wrapped.safeParse(withSecretFiles(process.env, declared))
   if (!result.success) {
     const details = result.issues
       .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
@@ -556,6 +560,44 @@ export function loadEnvFromSchema(schema: unknown): unknown {
   cachedSchema = schema
   Container._envResolver = resolveEnvKey
   return overlaid(result.data)
+}
+
+/**
+ * The env with `<KEY>_FILE` secrets read in — the Docker / Kubernetes
+ * convention: `DB_PASSWORD_FILE=/run/secrets/db` supplies `DB_PASSWORD`.
+ *
+ * Only for keys the schema declares (`LOG_FILE` meaning "where to log" must
+ * not be read as the secret `LOG`), and into the copy that is parsed — not
+ * into `process.env`, which child processes inherit. A key set both ways is
+ * an error, as in the official Postgres image; so is a file that can't be
+ * read. One trailing newline (as `echo` leaves) is dropped.
+ */
+export function withSecretFiles(
+  env: NodeJS.ProcessEnv,
+  keys: readonly string[],
+): Record<string, string | undefined> {
+  let out: Record<string, string | undefined> | undefined
+  for (const key of keys) {
+    const path = env[`${key}_FILE`]
+    if (!path) continue
+    if (env[key] !== undefined && env[key] !== '') {
+      throw new Error(`Environment: set either ${key} or ${key}_FILE, not both`)
+    }
+    let value: string
+    try {
+      value = readFileSync(path, 'utf8')
+    } catch (err) {
+      throw new Error(
+        `Environment: ${key}_FILE points at ${path}, which could not be read ` +
+          `(${(err as NodeJS.ErrnoException).code ?? 'error'})`,
+        // The fs error names the path, never the contents.
+        { cause: err },
+      )
+    }
+    out ??= { ...env }
+    out[key] = value.replace(/\r?\n$/, '')
+  }
+  return out ?? env
 }
 
 /**
