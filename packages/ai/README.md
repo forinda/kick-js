@@ -28,6 +28,20 @@ export const app = await bootstrap({
 })
 ```
 
+Or let the package read and validate its own variables (`OPENAI_API_KEY`,
+`OPENAI_BASE_URL`, `OPENAI_DEFAULT_CHAT_MODEL`, … — `ANTHROPIC_*` for Claude).
+A missing key fails startup by name, and `kick env example` lists them:
+
+```ts
+import { AiAdapter } from '@forinda/kickjs-ai'
+import { openAIFromSettings } from '@forinda/kickjs-ai/settings'
+
+export const app = await bootstrap({
+  modules,
+  adapters: [AiAdapter({ provider: openAIFromSettings() })],
+})
+```
+
 Then in any service:
 
 ```ts
@@ -50,7 +64,7 @@ class AgentService {
 
 ## Documentation
 
-[kickjs.app/guide/ai](https://kickjs.app/guide/ai) — providers, `@AiTool`, agent loops, memory, RAG.
+[kickjs.app/guide/ai](https://kickjs.app/guide/ai) — providers, provider config from env, `@AiTool`, agent loops, memory, RAG.
 
 ## License
 

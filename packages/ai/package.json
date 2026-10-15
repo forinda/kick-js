@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-ai",
   "version": "8.3.1",
-  "description": "AI runtime for KickJS — providers, @AiTool decorator, streaming, RAG, and agent loops",
+  "description": "AI runtime for KickJS \u2014 providers, @AiTool decorator, streaming, RAG, and agent loops",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -30,6 +30,10 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./settings": {
+      "import": "./dist/settings.mjs",
+      "types": "./dist/settings.d.mts"
     }
   },
   "files": [

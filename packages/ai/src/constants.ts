@@ -138,3 +138,10 @@ export function aiProviderToken(scope: string): InjectionToken<AiProvider> {
  * ```
  */
 export const VECTOR_STORE = createToken<VectorStore>('kick/ai/vector-store')
+
+/**
+ * Where a provider built from settings (`@forinda/kickjs-ai/settings`) keeps
+ * its section, so `AiAdapter` can declare it to the app.
+ * @internal
+ */
+export const PROVIDER_SETTINGS = Symbol.for('kickjs-ai.provider.settings')

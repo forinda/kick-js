@@ -12,8 +12,15 @@ import {
   type RouteDefinition,
   type RouteFlagTest,
   type RouteFlags,
+  type Settings,
 } from '@forinda/kickjs'
-import { AI_ADAPTER, AI_PROVIDER, aiAdapterToken, aiProviderToken } from './constants'
+import {
+  AI_ADAPTER,
+  AI_PROVIDER,
+  PROVIDER_SETTINGS,
+  aiAdapterToken,
+  aiProviderToken,
+} from './constants'
 import { getAiToolMeta } from './decorators'
 import type { RunAgentWithMemoryOptions } from './memory/types'
 import { buildRouteTool, type RouteTool } from '@forinda/kickjs-schema'
@@ -506,6 +513,13 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
     return {
       ...publicSurface,
+
+      // A provider from `@forinda/kickjs-ai/settings` brings its section: the
+      // app validates it at startup and `kick env example` lists it.
+      settings() {
+        const section = (provider as unknown as Record<symbol, unknown>)[PROVIDER_SETTINGS]
+        return section ? [section as Settings<unknown>] : []
+      },
 
       onRouteMount(controller, mountPath) {
         mountedControllers.push({ controller, mountPath })

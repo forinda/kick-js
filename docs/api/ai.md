@@ -37,6 +37,17 @@ Optional peers: `@anthropic-ai/sdk` for `AnthropicProvider`, `pg` for `PgVectorS
 | `ProviderError`     | Error with the HTTP `status` and response `body` of a failed provider call |
 | `ScriptedProvider`  | Test provider that answers with scripted turns and records each input      |
 
+### Settings (`@forinda/kickjs-ai/settings`)
+
+A separate entry; needs a `@forinda/kickjs` with `defineSettings`, and no schema library. See [Provider config from the environment](../guide/ai.md#provider-config-from-the-environment).
+
+| Export                                      | Description                                                                                               |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `OpenAISettings`                            | Section `OPENAI`: `apiKey` (required), `baseURL`, `defaultChatModel`, `defaultEmbedModel`, `organization` |
+| `AnthropicSettings`                         | Section `ANTHROPIC`: `apiKey`, `baseURL`, `defaultChatModel`, `defaultMaxTokens`                          |
+| `openAIFromSettings(section?, options?)`    | An `OpenAIProvider` built from the section on first use; `AiAdapter` declares the section                 |
+| `anthropicFromSettings(section?, options?)` | The same for `AnthropicProvider`                                                                          |
+
 ### Prompts and memory
 
 | Export                    | Description                                                      |
