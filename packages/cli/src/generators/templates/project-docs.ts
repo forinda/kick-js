@@ -73,8 +73,8 @@ ${pm} install
 ${devCommand(pm, template)}     # Dev server with HMR + typegen
 ${runScript(pm as PackageManager, 'build')} && ${runScript(pm as PackageManager, 'start')}  # Production
 ${runScript(pm as PackageManager, 'test')}    # Vitest
-${execBin(pm as PackageManager, 'kick')} typecheck   # tsc/tsgo, whichever the project has
-${execBin(pm as PackageManager, 'kick')} format      # oxfmt
+${template === 'fullstack' ? runScript(pm as PackageManager, 'typecheck') : `${execBin(pm as PackageManager, 'kick')} typecheck`}   # tsc/tsgo, whichever the project has
+${template === 'fullstack' ? runScript(pm as PackageManager, 'format') : `${execBin(pm as PackageManager, 'kick')} format`}      # oxfmt
 \`\`\`
 
 \`kick\` is this project's dev dependency, not a global command: every \`kick …\`
@@ -124,7 +124,9 @@ below runs as \`${execBin(pm as PackageManager, 'kick')} …\` in a shell.${
 ## Fullstack workspace layout
 
 This is a WORKSPACE root — the KickJS API lives in \`server/\`, the typed web
-app in \`web/\`. Run both with \`${pm === 'pnpm' ? 'pnpm dev' : `${pm} run dev:server + ${pm} run dev:web`}\`.
+app in \`web/\`. Run both with \`${devCommand(pm, template)}\`. From this root,
+\`${runScript(pm as PackageManager, 'test')}\`, \`${runScript(pm as PackageManager, 'typecheck')}\` and \`${runScript(pm as PackageManager, 'format')}\` reach into
+\`server/\` (and \`web/\` for typecheck).
 
 The type loop (do not break it):
 1. \`server/\` handlers RETURN their payloads → \`kick typegen\` emits
@@ -138,8 +140,8 @@ The type loop (do not break it):
    relative \`/api/v1\` (Vite proxies it in dev) unless \`VITE_API_URL\` points at
    an API on another origin.
 
-Rules: kick commands (\`kick g\`, \`kick typegen\`, \`kick dev\`) run in
-\`server/\`; never import server runtime code into \`web/\` (the d.ts bridge is
+Rules: kick commands (\`kick g\`, \`kick typegen\`, \`kick dev\`, \`kick typecheck\`)
+run in \`server/\` — the root has no \`kick.config.ts\`; never import server runtime code into \`web/\` (the d.ts bridge is
 type-only); prefer return-value handlers so responses stay inferable.`
       : ''
   }
