@@ -86,6 +86,7 @@ export interface TusOptions {
    * who is uploading (`headers.authorization`) and what (`metadata.filetype`,
    * `size`). Throw an `HttpException` to refuse with its status. `data` is
    * kept with the upload and handed to `authorize`. Default key: `uploads/<id>`.
+   * Keys under `tus/` are refused: that prefix holds the unfinished uploads.
    */
   onCreate?(
     request: TusCreateRequest,
@@ -439,9 +440,16 @@ export function createTusHandler(
 
     const request = { headers: req.headers, size, metadata, ...(concat ? { concat } : {}) }
     const chosen = (await options.onCreate?.(request, id)) ?? {}
+    const key = checkKey(chosen.key ?? `uploads/${id}`)
+    // `tus/` in partials holds every upload's records and commit markers. When
+    // storage and partials are one bucket, a final key there — built from a
+    // client's metadata, say — could overwrite another upload's markers.
+    if (key === 'tus' || key.startsWith('tus/')) {
+      throw new TusError(400, `Upload key '${key}' is under tus/, which is reserved`)
+    }
     const info: Info = touch({
       id,
-      key: checkKey(chosen.key ?? `uploads/${id}`),
+      key,
       size,
       metadata,
       rawMetadata,

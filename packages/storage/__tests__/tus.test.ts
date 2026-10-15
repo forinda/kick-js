@@ -350,6 +350,22 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     )
   })
 
+  it('refuses a key under tus/, where unfinished uploads are kept', async () => {
+    const { agent } = await boot(runtime, {
+      // As if the key were built from the client's file name.
+      onCreate: ({ metadata }) => ({ key: metadata.filename }),
+    })
+    for (const name of ['tus/00000000-0000-0000-0000-000000000000/at/0', 'tus']) {
+      const res = await agent
+        .post('/uploads')
+        .set(TUS)
+        .set('Upload-Length', '1')
+        .set('Upload-Metadata', `filename ${b64(name)}`)
+      expect(res.status).toBe(400)
+      expect(res.text).toContain('reserved')
+    }
+  })
+
   it('honours X-HTTP-Method-Override on POST only', async () => {
     const { agent } = await boot(runtime)
     const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)
