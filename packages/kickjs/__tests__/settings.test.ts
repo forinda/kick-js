@@ -358,3 +358,48 @@ describe('provided settings', () => {
     ).rejects.toThrow(/provided twice/)
   })
 })
+
+describe('value origins', () => {
+  it('reports env, file, default, provided and unset — names only', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kt-origins-'))
+    writeFileSync(join(dir, 'key'), 'secret')
+    const Mail = defineSettings(
+      'KT_MAIL',
+      z.object({
+        host: z.string(),
+        key: z.string(),
+        port: z.coerce.number().default(25),
+        from: z.string().optional(),
+      }),
+    )
+    vi.stubEnv('KT_MAIL_HOST', 'smtp.local')
+    vi.stubEnv('KT_MAIL_KEY_FILE', join(dir, 'key'))
+    const app = new Application({
+      modules: [],
+      settings: [Mail, DbSettings.provide({ url: 'postgres://provided/app' })],
+    })
+    await app.setup()
+    const { sections } = app.configOrigins()
+    expect(sections.find((s) => s.prefix === 'KT_MAIL')?.vars).toEqual([
+      { name: 'KT_MAIL_HOST', origin: 'env' },
+      { name: 'KT_MAIL_KEY', origin: 'file' },
+      { name: 'KT_MAIL_PORT', origin: 'default' },
+      { name: 'KT_MAIL_FROM', origin: 'unset' },
+    ])
+    expect(
+      sections.find((s) => s.prefix === 'KT_DB')?.vars.every((v) => v.origin === 'provided'),
+    ).toBe(true)
+    expect(JSON.stringify(sections)).not.toContain('secret')
+  })
+})
+
+describe('a failed rebuild', () => {
+  it('keeps the previous app’s config origins', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://env/app')
+    const app = new Application({ modules: [], settings: [DbSettings] })
+    await app.setup()
+    vi.stubEnv('KT_DB_URL', '')
+    await app.rebuild() // fails: KT_DB_URL is required; the old app stays
+    expect(app.configOrigins().sections.map((s) => s.prefix)).toContain('KT_DB')
+  })
+})

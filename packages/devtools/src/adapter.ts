@@ -216,7 +216,10 @@ export interface DevToolsOptions {
   basePath?: string
   /** Only enable when this is true (default: process.env.NODE_ENV !== 'production') */
   enabled?: boolean
-  /** Include environment variables (sanitized) at /_debug/config (default: false) */
+  /**
+   * Include environment variables (sanitized) at /_debug/config, with where
+   * each declared variable's value comes from (default: false)
+   */
   exposeConfig?: boolean
   /** Env var prefixes to expose (default: ['APP_', 'NODE_ENV']). Others are redacted. */
   configPrefixes?: string[]
@@ -1208,7 +1211,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               const allowed = configPrefixes.some((prefix) => key.startsWith(prefix))
               config[key] = allowed ? value : '[REDACTED]'
             }
-            ctx.json({ config })
+            // Where each declared variable's value comes from — names only.
+            const origins = (
+              appRef?.__kickApp as { configOrigins?: () => unknown } | undefined
+            )?.configOrigins?.()
+            ctx.json({ config, origins })
           })
         }
 

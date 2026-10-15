@@ -406,6 +406,15 @@ const { url, pool } = DbSettings.get()
 
 `kick env example` writes `.env.example` from the env schema and the declared sections — required variables bare, optional ones commented with their default — and `--check` fails CI when it's stale. In code, `app.describeConfig()` returns the same list without reading or validating the environment. See [kick env example](./cli-commands.md#kick-env-example).
 
+### Where a value came from
+
+"Why is the pool size 10?" `app.configOrigins()` answers it for every variable the app reads: set in `env`, read from a `_FILE` secret (`file`), the schema's `default`, supplied by `provide()` (`provided`), or `unset`. It returns names and origins, never values, so it's safe to log or show. DevTools serves it at [`/_debug/config`](./devtools.md#get-debug-config-opt-in).
+
+```ts
+app.configOrigins().sections
+// [{ prefix: 'DB', vars: [{ name: 'DB_URL', origin: 'file' }, { name: 'DB_POOL_MAX', origin: 'default' }] }]
+```
+
 ### From an adapter or a module
 
 A declared section is an ordinary DI token, bound before the code that declared it runs, so the usual patterns work.

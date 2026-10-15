@@ -21,6 +21,7 @@ import {
   Get,
   Post,
   defineContextDecorator,
+  defineSettings,
   type RequestContext,
 } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
@@ -292,5 +293,38 @@ describe.each(RUNTIMES)('DevTools under %s', (_name, runtime) => {
     const js = await http.get('/_debug/assets/index.js').expect(200)
     expect(js.headers['content-type']).toMatch(/javascript/)
     await http.get('/_debug/assets/style.css').expect(200)
+  })
+})
+
+describe('/_debug/config', () => {
+  it('lists where each settings variable comes from, without its value', async () => {
+    vi.stubEnv('DT_MAIL_HOST', 'smtp.secret.local')
+    const Mail = defineSettings(
+      'DT_MAIL',
+      z.object({ host: z.string(), port: z.coerce.number().default(25) }),
+    )
+    const app = new Application({
+      modules: [],
+      settings: [Mail],
+      adapters: [
+        DevToolsAdapter({
+          enabled: true,
+          secret: false,
+          exposeConfig: true,
+          runtime: { enabled: false },
+        }),
+      ],
+    })
+    await app.setup()
+    const res = await request(app.handle.bind(app)).get('/_debug/config').expect(200)
+    expect(res.body.origins.sections).toContainEqual({
+      prefix: 'DT_MAIL',
+      vars: [
+        { name: 'DT_MAIL_HOST', origin: 'env' },
+        { name: 'DT_MAIL_PORT', origin: 'default' },
+      ],
+    })
+    expect(JSON.stringify(res.body.origins)).not.toContain('smtp.secret.local')
+    vi.unstubAllEnvs()
   })
 })

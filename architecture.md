@@ -2082,7 +2082,13 @@ interface Registration {
   factory?: () => any
   // NEW fields:
   kind:
-    'service' | 'controller' | 'repository' | 'component' | 'injectable' | 'factory' | 'instance'
+    | 'service'
+    | 'controller'
+    | 'repository'
+    | 'component'
+    | 'injectable'
+    | 'factory'
+    | 'instance'
   resolveCount: number // How many times resolve() was called
   lastResolvedAt?: number // Timestamp of last resolution
   firstResolvedAt?: number // Timestamp of first resolution

@@ -15,17 +15,21 @@ export {
   type MiddlewareEntry,
   type ServerOptions,
   type ConfigDescription,
+  type ConfigOrigins,
   type MountedRouteInfo,
 } from './http/application'
 export type { FailureAdvice } from './core/failure-analysis'
 export {
   defineSettings,
   loadSettings,
+  originsOf,
   type ConfigVar,
   type ProvidedSettings,
   type Settings,
   type SettingsDeclaration,
   type SettingsOf,
+  type ValueOrigin,
+  type VarOrigin,
 } from './config/settings'
 export {
   allOf,
