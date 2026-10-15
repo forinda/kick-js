@@ -95,6 +95,19 @@ export {
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 export { assertFlagTest, defineRouteFlag, getRouteFlags, matchesFlagTest } from './core/route-flag'
 export { bindRoutePolicy, type RoutePolicyTable } from './core/route-policy'
+export {
+  hashPassword,
+  verifyPassword,
+  type PasswordCheck,
+  type PasswordHashOptions,
+} from './core/password'
+export {
+  createSigner,
+  type SignedCheck,
+  type Signer,
+  type SignerOptions,
+  type VerifyOptions,
+} from './core/signing'
 export type {
   KickRouteFlags,
   BareRouteFlag,

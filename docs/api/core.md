@@ -790,6 +790,30 @@ try {
 }
 ```
 
+## Passwords and signed tokens
+
+Node only. Guide: [Passwords and Signed Tokens](../guide/passwords-and-tokens.md).
+
+```ts
+hashPassword(password: string, options?: PasswordHashOptions): Promise<string>
+verifyPassword(
+  password: string,
+  stored: string | null | undefined,
+  options?: PasswordHashOptions,
+): Promise<{ ok: boolean; needsRehash: boolean }>
+
+interface PasswordHashOptions { N?: number; r?: number; p?: number } // default 2^14, 8, 5
+
+createSigner(options: { secret: string | string[]; salt: string }): Signer
+
+interface Signer {
+  sign(value: unknown): string
+  verify<T>(token: string, options?: { maxAge?: number }): // maxAge in ms
+    | { ok: true; value: T; issuedAt: Date }
+    | { ok: false; reason: 'invalid' | 'expired' }
+}
+```
+
 ## Cluster Mode
 
 Run multiple worker processes sharing the same port for multi-core utilization. The primary process forks workers and forwards SIGTERM/SIGINT signals. Dead workers are automatically restarted after a short delay.
