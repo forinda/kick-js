@@ -12,6 +12,8 @@ import {
   planWiring,
   projectVars,
   wireEntry,
+  importsAny,
+  sourceFilesInTheWay,
 } from './add-wire'
 
 interface PackageEntry {
@@ -808,10 +810,15 @@ export function registerAddCommand(program: Command): void {
         if (!installed) {
           console.log('  Skipped wiring — the install did not finish.\n')
         } else {
+          // The app's own file where the layer would write one (src/storage.ts):
+          // keep it, and leave what imports it for the user to wire.
+          const kept = sourceFilesInTheWay(cwd, wiring.files)
           for (const path of await applyLayerFiles(cwd, wiring.files)) {
             console.log(`  Updated ${path}`)
           }
-          const result = entry ? await wireEntry(cwd, entry, wiring.integrations) : undefined
+          const blocked = entry ? wiring.integrations.filter((i) => importsAny(i, entry, kept)) : []
+          const toWire = wiring.integrations.filter((i) => !blocked.includes(i))
+          const result = entry ? await wireEntry(cwd, entry, toWire) : undefined
           for (const name of result?.added ?? []) console.log(`  Added ${name} to ${entry}`)
           for (const name of result?.present ?? []) console.log(`  ${name} is already in ${entry}`)
           const fill = projectVars(cwd)
@@ -820,6 +827,15 @@ export function registerAddCommand(program: Command): void {
             : wiring.integrations
                 .filter((i) => i.slot && i.code)
                 .map((i) => ({ ...i, code: fill(i.code!) }))
+          if (kept.length > 0) {
+            const fillBlocked = blocked.map((i) => ({ ...i, code: fill(i.code ?? '') }))
+            console.log(
+              `\n  ${kept.join(', ')} already exist${kept.length === 1 ? 's' : ''} — left as ${kept.length === 1 ? 'it is' : 'they are'}.` +
+                ' Merge in what the layer needs, then wire it yourself:\n',
+            )
+            console.log(`${manualSnippet(fillBlocked)}`.replace(/^/gm, '    '))
+            console.log()
+          }
           if (manual.length > 0) {
             console.log(
               `\n  ${entry ? `Could not find bootstrap({ adapters: [...] }) in ${entry}` : 'No entry file found'}` +
