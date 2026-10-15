@@ -1,0 +1,96 @@
+{
+  "name": "@forinda/kickjs-storage",
+  "version": "0.0.0",
+  "description": "File storage for KickJS — one interface over memory, local disk, and S3-compatible buckets (AWS S3, Cloudflare R2, MinIO), with signed URLs and no SDK",
+  "keywords": [
+    "kickjs",
+    "nodejs",
+    "typescript",
+    "storage",
+    "files",
+    "uploads",
+    "s3",
+    "r2",
+    "minio",
+    "presigned-url",
+    "tus",
+    "resumable-upload"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./settings": {
+      "import": "./dist/settings.mjs",
+      "types": "./dist/settings.d.mts"
+    },
+    "./tus": {
+      "import": "./dist/tus.mjs",
+      "types": "./dist/tus.d.mts"
+    },
+    "./disk": {
+      "import": "./dist/disk.mjs",
+      "types": "./dist/disk.d.mts"
+    },
+    "./adapter": {
+      "import": "./dist/adapter.mjs",
+      "types": "./dist/adapter.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "dependencies": {
+    "@forinda/kickjs-schema": "workspace:^"
+  },
+  "peerDependencies": {
+    "@forinda/kickjs": ">=10.1.0 <11.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@forinda/kickjs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-testing": "workspace:*",
+    "@swc/core": "^1.16.13",
+    "@types/node": "^26.6.5",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "testcontainers": "12.2.0",
+    "tus-js-client": "^4.3.1",
+    "typescript": "^7.0.2",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^5.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://kickjs.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/storage"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

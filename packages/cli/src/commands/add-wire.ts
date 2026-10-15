@@ -5,7 +5,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 
 import { writeFileSafe } from '../utils/fs'
 import { renderLayers, type Integration, type RenderedProject } from '../scaffold/overlay'
@@ -22,6 +22,7 @@ export const FEATURE_LAYERS: Record<string, string> = {
   ws: 'feature-ws',
   queue: 'feature-queue',
   'queue:bullmq': 'feature-queue',
+  storage: 'feature-storage',
 }
 
 /** The layers `packages` bring, rendered — or undefined when none has one. */
@@ -56,9 +57,27 @@ export function dirtyFiles(cwd: string, files: readonly string[]): string[] {
   }
 }
 
+/** Source files: never merged line by line — appending a module duplicates its declarations. */
+const SOURCE = /\.(?:[cm]?[jt]sx?)$/
+
 /**
- * Write a layer's non-entry files. A file that exists only gains the lines it
- * doesn't already have (`.env` keeps its values); a missing one is created.
+ * A layer's source files that already exist with other contents — the app's
+ * own `src/storage.ts`, say. They're left alone, and what imports them isn't
+ * wired: merging is the user's call.
+ */
+export function sourceFilesInTheWay(cwd: string, files: ReadonlyMap<string, string>): string[] {
+  return [...files]
+    .filter(([path, contents]) => {
+      const abs = join(cwd, path)
+      return SOURCE.test(path) && existsSync(abs) && readFileSync(abs, 'utf-8') !== contents
+    })
+    .map(([path]) => path)
+}
+
+/**
+ * Write a layer's non-entry files. A missing one is created. An existing one
+ * only gains the lines it doesn't already have (`.env` keeps its values) —
+ * except a source file, which is left as it is (see {@link sourceFilesInTheWay}).
  * Returns the paths changed.
  */
 export async function applyLayerFiles(
@@ -73,6 +92,7 @@ export async function applyLayerFiles(
       changed.push(path)
       continue
     }
+    if (SOURCE.test(path)) continue
     const current = readFileSync(abs, 'utf-8')
     const have = new Set(current.split('\n').map((line) => envKey(line) ?? line))
     const missing = contents
@@ -84,6 +104,21 @@ export async function applyLayerFiles(
     changed.push(path)
   }
   return changed
+}
+
+/**
+ * Whether an integration imports one of `paths` (relative to the entry):
+ * `./storage` from `src/index.ts` is `src/storage.ts`.
+ */
+export function importsAny(
+  integration: Integration,
+  entry: string,
+  paths: readonly string[],
+): boolean {
+  const from = integration.import?.from
+  if (!from?.startsWith('.')) return false
+  const target = posix.join(posix.dirname(entry.replaceAll('\\', '/')), from)
+  return paths.some((path) => path.replace(SOURCE, '') === target)
 }
 
 /** `REDIS_HOST` for `REDIS_HOST=…`, so an existing value counts as present. */

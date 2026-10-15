@@ -1,0 +1,13 @@
+{
+  "dependencies": ["@forinda/kickjs-storage"],
+  "integrations": [
+    {
+      "import": {
+        "from": "./storage",
+        "names": ["storageAdapter"]
+      },
+      "slot": "adapter",
+      "code": "// Files on disk under uploads/ until S3_BUCKET is set. Inject with @Autowired(STORAGE).\nstorageAdapter()"
+    }
+  ]
+}

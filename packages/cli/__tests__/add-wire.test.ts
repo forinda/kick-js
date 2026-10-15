@@ -12,7 +12,9 @@ import {
   applyLayerFiles,
   dirtyFiles,
   findEntry,
+  importsAny,
   planWiring,
+  sourceFilesInTheWay,
   wireEntry,
 } from '../src/commands/add-wire'
 
@@ -110,6 +112,70 @@ describe('wireEntry', () => {
     const entry = readFileSync(join(dir, 'src/main.ts'), 'utf-8')
     expect(entry).toContain("import { SwaggerAdapter } from '@forinda/kickjs-swagger'")
     expect(entry).toContain('adapters: [')
+  })
+})
+
+describe('kick add storage', () => {
+  it('writes src/storage.ts, the env and gitignore lines, and wires storageAdapter()', async () => {
+    tmp()
+    mkdirSync(join(dir, 'src'))
+    writeFileSync(join(dir, '.gitignore'), 'node_modules\n')
+    writeFileSync(
+      join(dir, 'src/index.ts'),
+      "import { bootstrap } from '@forinda/kickjs'\n\nawait bootstrap({\n  modules,\n  adapters: [],\n})\n",
+    )
+    const plan = planWiring(['storage'])!
+    expect(plan.dependencies).toEqual(['@forinda/kickjs-storage'])
+    const changed = await applyLayerFiles(dir, plan.files)
+    expect(changed.toSorted()).toEqual(['.env.example', '.gitignore', 'src/storage.ts'])
+    expect(readFileSync(join(dir, '.gitignore'), 'utf-8')).toBe('node_modules\nuploads/\n.tus/\n')
+    expect(readFileSync(join(dir, 'src/storage.ts'), 'utf-8')).toContain(
+      'export const storageAdapter',
+    )
+
+    const result = await wireEntry(dir, 'src/index.ts', plan.integrations)
+    expect(result.added).toEqual(['storageAdapter'])
+    const entry = readFileSync(join(dir, 'src/index.ts'), 'utf-8')
+    expect(entry).toContain("import { storageAdapter } from './storage'")
+    expect(entry).toMatch(/adapters: \[[\s\S]*storageAdapter\(\)/)
+
+    // Again: nothing new.
+    expect(await applyLayerFiles(dir, plan.files)).toEqual([])
+    expect((await wireEntry(dir, 'src/index.ts', plan.integrations)).present).toEqual([
+      'storageAdapter',
+    ])
+  })
+})
+
+describe('kick add storage over an existing src/storage.ts', () => {
+  it("keeps the app's file and doesn't wire what imports it", async () => {
+    tmp()
+    mkdirSync(join(dir, 'src'))
+    const mine = 'export const storageAdapter = () => myOwnThing()\n'
+    writeFileSync(join(dir, 'src/storage.ts'), mine)
+    writeFileSync(join(dir, 'src/index.ts'), 'await bootstrap({\n  modules,\n  adapters: [],\n})\n')
+    const plan = planWiring(['storage'])!
+
+    expect(sourceFilesInTheWay(dir, plan.files)).toEqual(['src/storage.ts'])
+    await applyLayerFiles(dir, plan.files)
+    // Not appended to: a second declaration wouldn't compile.
+    expect(readFileSync(join(dir, 'src/storage.ts'), 'utf-8')).toBe(mine)
+    // The env and gitignore lines still land.
+    expect(readFileSync(join(dir, '.gitignore'), 'utf-8')).toContain('uploads/')
+
+    const blocked = plan.integrations.filter((i) =>
+      importsAny(i, 'src/index.ts', ['src/storage.ts']),
+    )
+    expect(blocked.map((i) => i.import?.names)).toEqual([['storageAdapter']])
+    expect(importsAny(plan.integrations[0], 'src/main.ts', ['src/storage.ts'])).toBe(true)
+    expect(importsAny(plan.integrations[0], 'src/app/index.ts', ['src/storage.ts'])).toBe(false)
+  })
+
+  it('counts the file it generated itself as in place, not in the way', async () => {
+    tmp()
+    const plan = planWiring(['storage'])!
+    await applyLayerFiles(dir, plan.files)
+    expect(sourceFilesInTheWay(dir, plan.files)).toEqual([])
   })
 })
 

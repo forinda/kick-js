@@ -63,6 +63,7 @@ const guideSidebar = [
     items: [
       { text: 'Query Parsing', link: '/guide/query-parsing' },
       { text: 'File Uploads', link: '/guide/file-uploads' },
+      { text: 'File Storage', link: '/guide/file-storage' },
       { text: 'CSRF Protection', link: '/guide/csrf' },
       { text: 'Rate Limiting', link: '/guide/rate-limiting' },
       { text: 'Sessions', link: '/guide/sessions' },
@@ -264,6 +265,7 @@ const apiSidebar = [
       { text: '@forinda/kickjs-queue', link: '/api/queue' },
       { text: '@forinda/kickjs-devtools', link: '/api/devtools' },
       { text: '@forinda/kickjs-ai', link: '/api/ai' },
+      { text: '@forinda/kickjs-storage', link: '/api/storage' },
       { text: '@forinda/kickjs-mcp', link: '/api/mcp' },
       { text: '@forinda/kickjs-vite', link: '/api/vite' },
       { text: '@forinda/kickjs-cli', link: '/api/cli' },

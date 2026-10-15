@@ -31,6 +31,10 @@ function workspaceManifests(): Map<string, { name: string; private?: boolean }> 
 describe('PACKAGE_REGISTRY catalog health', () => {
   const manifests = workspaceManifests()
 
+  it('covers storage', () => {
+    expect(PACKAGE_REGISTRY.storage?.pkg).toBe('@forinda/kickjs-storage')
+  })
+
   it('covers ai', () => {
     expect(PACKAGE_REGISTRY.ai?.pkg).toBe('@forinda/kickjs-ai')
   })

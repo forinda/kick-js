@@ -1,5 +1,5 @@
 /**
- * Real backing services for tests — a Postgres, a Redis — started in Docker
+ * Real backing services for tests — a Postgres, a Redis, a MinIO — started in Docker
  * through Testcontainers, handing back the connection details to give the app:
  *
  * ```ts
@@ -34,6 +34,10 @@ export interface ContainerSpec {
   /** The port the service listens on inside the container. */
   port: number
   env?: Record<string, string>
+  /** Replace the image's entrypoint, e.g. `['sh']`. */
+  entrypoint?: string[]
+  /** Replace the image's command. */
+  command?: string[]
   /** A log line that means "ready"; checked `times` times (default 1). */
   waitFor?: { log: RegExp; times?: number }
   /** Build the connection URL from the mapped host and port. */
@@ -60,6 +64,16 @@ const PRESETS = {
     waitFor: { log: /Ready to accept connections/ },
     url: (host: string, port: number) => `redis://${host}:${port}`,
   },
+  // S3-compatible, with an empty `test` bucket (a top-level folder is a
+  // bucket to MinIO). Credentials `minioadmin` / `minioadmin`.
+  minio: {
+    image: 'quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z',
+    port: 9000,
+    entrypoint: ['sh'],
+    command: ['-c', 'mkdir -p /data/test && exec minio server /data'],
+    waitFor: { log: /API: http/ },
+    url: (host: string, port: number) => `http://${host}:${port}`,
+  },
 } satisfies Record<string, ContainerSpec>
 
 export type ServiceKind = keyof typeof PRESETS
@@ -82,6 +96,8 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
   const { GenericContainer, Wait } = await loadTestcontainers()
   let container = new GenericContainer(spec.image).withExposedPorts(spec.port)
   if (spec.env) container = container.withEnvironment(spec.env)
+  if (spec.entrypoint) container = container.withEntrypoint(spec.entrypoint)
+  if (spec.command) container = container.withCommand(spec.command)
   if (spec.waitFor) {
     container = container.withWaitStrategy(
       Wait.forLogMessage(spec.waitFor.log, spec.waitFor.times ?? 1),
@@ -100,7 +116,7 @@ export async function startContainer(spec: ContainerSpec): Promise<StartedServic
   }
 }
 
-/** Start a preset service — `'postgres'` or `'redis'`. */
+/** Start a preset service — `'postgres'`, `'redis'` or `'minio'`. */
 export function startService(
   kind: ServiceKind,
   options: ServiceOptions = {},
