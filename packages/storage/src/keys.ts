@@ -29,6 +29,45 @@ export function encodeKey(key: string): string {
   return checkKey(key).split('/').map(encodeSegment).join('/')
 }
 
+/** What `put()` takes: bytes, text, or a stream (a web `ReadableStream`, a Node `Readable`). */
+export type Body = Uint8Array | string | AsyncIterable<Uint8Array>
+
 export function toBytes(body: Uint8Array | string): Uint8Array {
   return typeof body === 'string' ? new TextEncoder().encode(body) : body
+}
+
+export function isStream(body: Body): body is AsyncIterable<Uint8Array> {
+  return typeof body !== 'string' && !(body instanceof Uint8Array)
+}
+
+/** A whole body as bytes. */
+export async function collect(body: Body): Promise<Uint8Array> {
+  if (!isStream(body)) return toBytes(body)
+  const chunks: Uint8Array[] = []
+  for await (const chunk of body) chunks.push(typeof chunk === 'string' ? toBytes(chunk) : chunk)
+  return Buffer.concat(chunks)
+}
+
+export function checkLimit(limit = 1000): number {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+    throw new Error('storage: list() limit must be a whole number from 1 to 1000')
+  }
+  return limit
+}
+
+/**
+ * One page of sorted `keys` under `prefix`, after `cursor` — for drivers that
+ * hold every key (memory, disk). The cursor is the last key returned.
+ */
+export function pageOf(
+  keys: Iterable<string>,
+  prefix: string,
+  cursor: string | undefined,
+  limit: number,
+): { keys: string[]; cursor?: string } {
+  const matching = [...keys]
+    .filter((key) => key.startsWith(prefix) && (cursor === undefined || key > cursor))
+    .toSorted()
+  const page = matching.slice(0, limit)
+  return matching.length > limit ? { keys: page, cursor: page.at(-1) } : { keys: page }
 }

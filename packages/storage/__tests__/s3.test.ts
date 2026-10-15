@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { s3Storage } from '../src/index'
 import { presign, signV4 } from '../src/s3'
@@ -115,5 +116,96 @@ describe('s3Storage', () => {
 
   it('requires its credentials', () => {
     expect(() => s3Storage({ ...options, secretAccessKey: '' })).toThrow('secretAccessKey')
+  })
+
+  describe('responses', () => {
+    const scripted = (...replies: Array<[number, string, Record<string, string>?]>) => {
+      const calls: Request[] = []
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        const [status, body, headers] = replies.shift()!
+        return new Response(status === 204 ? null : body, { status, headers })
+      }) as unknown as typeof globalThis.fetch
+      return { files: s3Storage({ ...options, endpoint: 'http://s3.test', fetch }), calls }
+    }
+
+    it('reads a ListObjectsV2 page, unescaping keys', async () => {
+      const { files, calls } = scripted([
+        200,
+        `<ListBucketResult><IsTruncated>true</IsTruncated>
+          <Contents><Key>a/R&amp;D &lt;1&gt;.txt</Key><LastModified>2026-01-02T03:04:05.000Z</LastModified><Size>12</Size></Contents>
+          <NextContinuationToken>tok/en=</NextContinuationToken></ListBucketResult>`,
+      ])
+      expect(await files.list({ prefix: 'a/', limit: 1, cursor: 'prev' })).toEqual({
+        files: [{ key: 'a/R&D <1>.txt', size: 12, lastModified: new Date('2026-01-02T03:04:05Z') }],
+        cursor: 'tok/en=',
+      })
+      const url = new URL(calls[0].url)
+      expect(url.pathname).toBe('/files/')
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        'list-type': '2',
+        'max-keys': '1',
+        prefix: 'a/',
+        'continuation-token': 'prev',
+      })
+    })
+
+    it('follows listParts pages', async () => {
+      const part = (n: number) =>
+        `<Part><PartNumber>${n}</PartNumber><ETag>&quot;e${n}&quot;</ETag><Size>5</Size></Part>`
+      const { files } = scripted(
+        [
+          200,
+          `<R><IsTruncated>true</IsTruncated><NextPartNumberMarker>1</NextPartNumberMarker>${part(1)}</R>`,
+        ],
+        [200, `<R><IsTruncated>false</IsTruncated>${part(2)}</R>`],
+      )
+      expect(await files.multipart.listParts('k', 'u')).toEqual([
+        { partNumber: 1, etag: '"e1"', size: 5 },
+        { partNumber: 2, etag: '"e2"', size: 5 },
+      ])
+    })
+
+    it('throws when complete answers 200 with an error body', async () => {
+      const { files, calls } = scripted([
+        200,
+        '<Error><Code>InvalidPart</Code><Message>gone</Message></Error>',
+      ])
+      await expect(
+        files.multipart.complete('k', 'u', [{ partNumber: 1, etag: '"e"' }]),
+      ).rejects.toThrow('InvalidPart gone')
+      expect(await calls[0].text()).toBe(
+        '<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&#34;e&#34;</ETag></Part></CompleteMultipartUpload>',
+      )
+    })
+
+    it('aborts the multipart upload when a streamed part fails', async () => {
+      const { files, calls } = scripted(
+        [200, '<R><UploadId>up-1</UploadId></R>'],
+        [500, 'boom'],
+        [204, ''],
+      )
+      const big = new Uint8Array(5 * 1024 * 1024)
+      await expect(files.put('k', Readable.from([big]))).rejects.toThrow('500')
+      expect(calls.map((c) => `${c.method} ${new URL(c.url).search}`)).toEqual([
+        'POST ?uploads=',
+        'PUT ?partNumber=1&uploadId=up-1',
+        'DELETE ?uploadId=up-1',
+      ])
+    })
+
+    it('sends a small stream as one PUT', async () => {
+      const { files, calls } = scripted([200, ''])
+      await files.put('k', Readable.from([new Uint8Array([1, 2])]))
+      expect(calls.map((c) => c.method)).toEqual(['PUT'])
+    })
+
+    it('signs size and type into an upload URL', async () => {
+      const { files } = scripted()
+      const url = new URL(await files.uploadUrl('k', { size: 3, contentType: 'image/png' }))
+      expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host')
+      await expect(files.uploadUrl('k', { size: -1 })).rejects.toThrow('size')
+      await expect(files.multipart.partUrl('k', 'u', 10_001)).rejects.toThrow('partNumber')
+    })
   })
 })

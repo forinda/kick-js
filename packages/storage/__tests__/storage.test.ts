@@ -1,6 +1,7 @@
 import { mkdtemp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { checkKey, diskStorage, memoryStorage, type Storage } from '../src/index'
 
@@ -31,6 +32,38 @@ describe.each([
     expect(await files.get('a/b.txt')).toBeNull()
   })
 
+  it('stats and streams a file', async () => {
+    const files = await make()
+    await files.put('s/x.txt', 'hello', { contentType: 'text/plain' })
+    expect(await files.stat('s/x.txt')).toMatchObject({ key: 's/x.txt', size: 5 })
+    expect((await files.stat('s/x.txt'))!.lastModified).toBeInstanceOf(Date)
+    expect(await files.stat('s')).toBeNull()
+    expect(await new Response(await files.getStream('s/x.txt')).text()).toBe('hello')
+    expect(await files.getStream('nope')).toBeNull()
+  })
+
+  it('writes a stream as it arrives', async () => {
+    const files = await make()
+    const body = Readable.from([new TextEncoder().encode('ab'), new TextEncoder().encode('cd')])
+    await files.put('streamed.txt', body)
+    expect(text(await files.get('streamed.txt'))).toBe('abcd')
+    await files.put('web.txt', new Blob(['ef']).stream())
+    expect(text(await files.get('web.txt'))).toBe('ef')
+  })
+
+  it('lists by prefix in key order, a page at a time', async () => {
+    const files = await make()
+    for (const key of ['p/b.txt', 'p/a.txt', 'p/sub/c.txt', 'q.txt']) await files.put(key, key)
+    const first = await files.list({ prefix: 'p/', limit: 2 })
+    expect(first.files.map((f) => f.key)).toEqual(['p/a.txt', 'p/b.txt'])
+    expect(first.files[0].size).toBe(7)
+    const second = await files.list({ prefix: 'p/', limit: 2, cursor: first.cursor })
+    expect(second.files.map((f) => f.key)).toEqual(['p/sub/c.txt'])
+    expect(second.cursor).toBeUndefined()
+    expect((await files.list()).files).toHaveLength(4)
+    await expect(files.list({ limit: 0 })).rejects.toThrow('limit')
+  })
+
   it('builds a URL from baseUrl, encoding each segment', async () => {
     const files = await make()
     expect(await files.url('my docs/r&d (1).pdf')).toBe(
@@ -47,6 +80,11 @@ describe.each([
 })
 
 describe('diskStorage', () => {
+  it('lists nothing for a root not created yet', async () => {
+    const root = join(await mkdtemp(join(tmpdir(), 'kick-storage-')), 'later')
+    expect(await diskStorage({ root }).list()).toEqual({ files: [] })
+  })
+
   it('leaves no temp files behind', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kick-storage-'))
     await diskStorage({ root }).put('x.txt', 'x')
@@ -59,6 +97,12 @@ describe('diskStorage', () => {
 })
 
 describe('memoryStorage', () => {
+  it('keeps the content type', async () => {
+    const files = memoryStorage()
+    await files.put('k', 'x', { contentType: 'text/plain' })
+    expect((await files.stat('k'))!.contentType).toBe('text/plain')
+  })
+
   it('keeps its own copy of the bytes', async () => {
     const files = memoryStorage()
     const bytes = new TextEncoder().encode('abc')

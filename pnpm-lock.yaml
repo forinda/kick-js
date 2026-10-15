@@ -645,12 +645,18 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../kickjs
+      '@forinda/kickjs-testing':
+        specifier: workspace:*
+        version: link:../testing
       '@swc/core':
         specifier: ^1.16.13
         version: 1.16.13
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      testcontainers:
+        specifier: 12.2.0
+        version: 12.2.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
