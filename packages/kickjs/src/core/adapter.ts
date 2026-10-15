@@ -1,5 +1,5 @@
 import type { AdapterCondition } from './adapter-conditions'
-import type { Settings } from '../config/settings'
+import type { SettingsDeclaration } from '../config/settings'
 import type { FailureAdvice } from './failure-analysis'
 import type http from 'node:http'
 import type https from 'node:https'
@@ -241,7 +241,7 @@ export interface AppAdapter {
    * Settings sections this adapter needs — validated at startup and bound
    * before any hook runs, only when the adapter is enabled (see `when`).
    */
-  settings?(): readonly Settings<unknown>[]
+  settings?(): readonly SettingsDeclaration[]
 
   /**
    * Called before global middleware — register early routes (docs UI, health).

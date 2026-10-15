@@ -21,7 +21,7 @@ import {
   type RouteFlagDeclarations,
 } from '../core/route-flag'
 import { duplicateRouteError } from '../core/kick-errors'
-import type { CtxHandler, RouteEntry, RouteMethod } from './runtime'
+import type { CtxHandler, RouteContributor, RouteEntry, RouteMethod } from './runtime'
 
 /**
  * Per-module SourcedRegistration[] threaded through the route-mount loop by
@@ -185,6 +185,7 @@ export function buildRouteTable(
 
     let contributorRunner: CtxHandler | null = null
     let earlyContributorRunner: CtxHandler | null = null
+    let contributors: RouteContributor[] | undefined
     if (
       classContributors.length > 0 ||
       methodContributors.length > 0 ||
@@ -208,10 +209,9 @@ export function buildRouteTable(
         ...externalSources,
       ]
       const routeLabel = `${method} ${fullPath}`
-      const { early, late } = splitBeforeValidation(
-        buildPipeline(sources, { route: routeLabel }),
-        routeLabel,
-      )
+      const pipeline = buildPipeline(sources, { route: routeLabel })
+      contributors = describePipeline(pipeline.contributors, sources)
+      const { early, late } = splitBeforeValidation(pipeline, routeLabel)
       if (early) {
         earlyContributorRunner = (ctx) =>
           runContributors({ pipeline: early, ctx, container, flags })
@@ -237,9 +237,43 @@ export function buildRouteTable(
         validation: route.validation,
         upload: fileUploadConfig,
         flags,
+        ...(contributors ? { contributors } : {}),
       },
     })
   }
 
   return entries
+}
+
+/**
+ * The pipeline as introspection shows it. The built pipeline keeps only the
+ * registrations; their sources and labels are recovered from the inputs by
+ * identity, along with the lower-precedence registrations each one replaced.
+ */
+function describePipeline(
+  ordered: readonly SourcedRegistration['registration'][],
+  sources: readonly SourcedRegistration[],
+): RouteContributor[] {
+  const bySource = new Map(sources.map((s) => [s.registration, s]))
+  // Execution order: the pipeline is split at run time — `beforeValidation`
+  // ones run first, ahead of middleware and validation, then the rest. Each
+  // half keeps its dependency order.
+  const runOrder = [
+    ...ordered.filter((r) => r.beforeValidation === true),
+    ...ordered.filter((r) => r.beforeValidation !== true),
+  ]
+  return runOrder.map((registration) => {
+    const winner = bySource.get(registration)
+    const described: RouteContributor = {
+      key: registration.key,
+      source: winner?.source ?? 'global',
+      dependsOn: registration.dependsOn,
+      beforeValidation: registration.beforeValidation === true,
+      overrides: sources
+        .filter((s) => s.registration !== registration && s.registration.key === registration.key)
+        .map((s) => (s.label ? { source: s.source, label: s.label } : { source: s.source })),
+    }
+    if (winner?.label) described.label = winner.label
+    return described
+  })
 }

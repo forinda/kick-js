@@ -21,6 +21,7 @@ import { registerRemoveCommand } from '../commands/remove'
 import { registerTypegenCommand } from '../commands/typegen'
 import { registerCheckCommand } from '../commands/check'
 import { registerDoctorCommand } from '../commands/doctor'
+import { registerEnvCommand } from '../commands/env'
 import { registerCodemodCommands } from '../commands/codemod'
 import { registerDeployCommands } from '../commands/deploy'
 import { kickAssetsTypegen } from '../typegen/builtin/assets'
@@ -52,6 +53,7 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/typegen', register: registerTypegenCommand }),
   defineCliPlugin({ name: 'kick/check', register: registerCheckCommand }),
   defineCliPlugin({ name: 'kick/doctor', register: registerDoctorCommand }),
+  defineCliPlugin({ name: 'kick/env-command', register: registerEnvCommand }),
   // The `kick/db` commands AND its `.kickjs/types` generation both ship
   // from `@forinda/kickjs-db/cli` as the opt-in `dbCliPlugin` — add it to
   // `kick.config.ts` `plugins: []`.

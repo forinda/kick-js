@@ -40,12 +40,44 @@ export interface Settings<T> extends InjectionToken<T> {
   get(): T
   /** Parse the section from `env` (default `process.env`) afresh; throws listing every problem. */
   load(env?: NodeJS.ProcessEnv): T
+  /** Each variable the section reads — required or not, default, description. Reads no env. */
+  describe(): ConfigVar[]
+  /** Validate a value you supply against the schema — defaults applied — instead of reading env. */
+  parse(value: unknown): T
+  /**
+   * Declare the section with a value you supply instead of the environment —
+   * a test's container, a service you started, a secret manager's answer.
+   * Validated against the schema like env values; bound under this section's
+   * token, so everything injecting it gets the provided value.
+   *
+   * ```ts
+   * const pg = await startService('postgres')
+   * await createTestApp({ modules, settings: [DbSettings.provide({ url: pg.url })] })
+   * ```
+   */
+  provide(value: unknown): ProvidedSettings<T>
   /**
    * The same schema under another prefix, for a second instance:
    * `DbSettings.scoped('ANALYTICS')` reads `ANALYTICS_DB_*` beside `DB_*`.
    * Returns the same token for the same name.
    */
   scoped(name: string): Settings<T>
+}
+
+const PROVIDED = Symbol.for('kickjs.settings.provided')
+
+/** A section declared with a supplied value — see {@link Settings.provide}. */
+export interface ProvidedSettings<T> {
+  readonly [PROVIDED]: true
+  readonly section: Settings<T>
+  readonly value: unknown
+}
+
+/** What a `settings` list accepts: a section (read from env) or a provided one. */
+export type SettingsDeclaration = Settings<unknown> | ProvidedSettings<unknown>
+
+function isProvided(decl: SettingsDeclaration): decl is ProvidedSettings<unknown> {
+  return (decl as Partial<ProvidedSettings<unknown>>)[PROVIDED] === true
 }
 
 /** The value type of a section: `SettingsOf<typeof DbSettings>`. */
@@ -55,21 +87,47 @@ interface Leaf {
   path: string[]
   env: string
   list: boolean
+  required: boolean
+  default?: unknown
+  description?: string
+}
+
+/** One variable, as `describe()` and `app.describeConfig()` report it. */
+export interface ConfigVar {
+  name: string
+  /** Startup fails without it: required by the schema, with no default. */
+  required: boolean
+  /** The schema's default, when it has one. */
+  default?: unknown
+  /** The schema's description (`.describe('…')` in Zod). */
+  description?: string
+  /** Read as a comma-separated list. */
+  list: boolean
 }
 
 /** The part of a JSON schema the env mapping reads. */
 interface JsonShape {
   type?: string | string[]
   properties?: Record<string, JsonShape>
+  required?: string[]
+  default?: unknown
+  description?: string
 }
 
 /** `maxConnections` → `MAX_CONNECTIONS`. */
 const envSegment = (key: string) => key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()
 
-function leavesOf(shape: JsonShape, prefix: string, path: string[] = []): Leaf[] {
+/**
+ * The variables a JSON-schema shape reads. A leaf is required when every
+ * object on its path is required by its parent and none of them (nor the leaf)
+ * has a default — a defaulted parent object supplies its children.
+ */
+function leavesOf(shape: JsonShape, prefix: string, path: string[] = [], required = true): Leaf[] {
   if (shape.properties) {
+    const own = new Set(shape.required ?? [])
+    const parentRequired = required && shape.default === undefined
     return Object.entries(shape.properties).flatMap(([key, child]) =>
-      leavesOf(child, prefix, [...path, key]),
+      leavesOf(child, prefix, [...path, key], parentRequired && own.has(key)),
     )
   }
   const types = Array.isArray(shape.type) ? shape.type : [shape.type]
@@ -78,8 +136,35 @@ function leavesOf(shape: JsonShape, prefix: string, path: string[] = []): Leaf[]
       path,
       env: [prefix, ...path.map(envSegment)].join('_'),
       list: types.includes('array'),
+      required: required && shape.default === undefined,
+      ...(shape.default !== undefined ? { default: shape.default } : {}),
+      ...(shape.description ? { description: shape.description } : {}),
     },
   ]
+}
+
+const toConfigVar = (leaf: Leaf): ConfigVar => ({
+  name: leaf.env,
+  required: leaf.required,
+  list: leaf.list,
+  ...(leaf.default !== undefined ? { default: leaf.default } : {}),
+  ...(leaf.description ? { description: leaf.description } : {}),
+})
+
+/**
+ * The variables of a flat schema (the app's env schema), described the same
+ * way — no prefix, top-level keys only.
+ */
+export function describeSchemaVars(schema: unknown): ConfigVar[] {
+  const shape = detectSchema(schema).toJsonSchema() as JsonShape
+  const required = new Set(shape.required ?? [])
+  // The keys of an env schema are the variable names themselves.
+  return Object.entries(shape.properties ?? {}).map(([key, child]) => {
+    // A fresh object from toConfigVar — safe to set the name on directly.
+    const described = toConfigVar(leavesOf(child, '', [key], required.has(key))[0])
+    described.name = key
+    return described
+  })
 }
 
 /** Values validated at startup (or on first `get()`), by prefix. */
@@ -163,6 +248,10 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
             .filter(Boolean)
         : raw
     }
+    return validate(input)
+  }
+
+  const validate = (input: unknown): T => {
     const result = wrapped.safeParse(input)
     if (result.success) return result.data as T
     const problems = result.issues.map((issue) => {
@@ -183,6 +272,10 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
     prefix,
     envNames,
     load,
+    parse: (value: unknown): T => validate(value),
+    provide: (value: unknown): ProvidedSettings<T> =>
+      Object.freeze({ [PROVIDED]: true as const, section: settings, value }),
+    describe: () => leaves.map(toConfigVar),
     get: (): T => {
       // What injected code sees: the container's binding, which a module or a
       // test may have replaced. Before the app binds it, the validated env.
@@ -213,29 +306,51 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
  * with one prefix would read the same variables, and are refused.
  */
 export function loadSettings(
-  sections: Iterable<Settings<unknown>>,
+  declarations: Iterable<SettingsDeclaration>,
   env: NodeJS.ProcessEnv = process.env,
   /**
    * Prefixes already taken, across calls — an app binds in two phases (app
    * sections, then modules') and a clash between them must still be refused.
    */
   byPrefix: Map<string, Settings<unknown>> = new Map(),
+  /** Values passed to `provide()`, across calls — same reason as `byPrefix`. */
+  providedBefore: Map<Settings<unknown>, unknown> = new Map(),
 ): Map<Settings<unknown>, unknown> {
   const values = new Map<Settings<unknown>, unknown>()
   const failures: string[] = []
+  // A provided value wins over the same section read from env, wherever each
+  // was declared — a test's provide() must not lose to a module's section.
+  const provided = new Map<Settings<unknown>, unknown>()
+  const sections: Settings<unknown>[] = []
+  for (const decl of declarations) {
+    if (isProvided(decl)) {
+      // Two provides of one section would silently keep whichever came last.
+      const earlier = provided.has(decl.section) ? provided : providedBefore
+      if (earlier.has(decl.section) && earlier.get(decl.section) !== decl.value) {
+        failures.push(`Settings '${decl.section.prefix}' are provided twice with different values.`)
+        continue
+      }
+      provided.set(decl.section, decl.value)
+      sections.push(decl.section)
+    } else {
+      sections.push(decl)
+    }
+  }
   for (const section of sections) {
     if (values.has(section)) continue
     const other = byPrefix.get(section.prefix)
-    // Already bound in an earlier phase: same section, nothing to do.
-    if (other === section) continue
+    // Already bound in an earlier phase: nothing to do — unless that read env
+    // and this phase provides a value, which wins.
+    if (other === section && !(provided.has(section) && !providedBefore.has(section))) continue
     if (other && other !== section) {
       failures.push(`Two different settings sections use the prefix '${section.prefix}'.`)
       continue
     }
     byPrefix.set(section.prefix, section)
     try {
-      const value = section.load(env)
+      const value = provided.has(section) ? section.parse(provided.get(section)) : section.load(env)
       values.set(section, value)
+      if (provided.has(section)) providedBefore.set(section, provided.get(section))
       // `get()` returns what the app started with.
       cached.set(section, value)
     } catch (err) {

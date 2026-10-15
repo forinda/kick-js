@@ -42,6 +42,19 @@ export interface RouteEntry {
   upload?: { mode: 'single' | 'array' | 'none'; fieldName?: string; maxCount?: number }
   /** The request's body / query / params schemas, as JSON Schema — the runner prefills from them. */
   schemas?: RouteSchemas
+  /** Context contributors the route runs, in execution order — decorators included. */
+  contributors?: RouteContributorEntry[]
+}
+
+export interface RouteContributorEntry {
+  key: string
+  /** method / class decorator, or module / adapter / global registration. */
+  source: string
+  label?: string
+  dependsOn: string[]
+  beforeValidation: boolean
+  /** Lower-precedence registrations of the same key this one replaced. */
+  overrides: Array<{ source: string; label?: string }>
 }
 
 export interface RouteSchemas {

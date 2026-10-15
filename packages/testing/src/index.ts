@@ -42,6 +42,9 @@ type BootstrapPassthroughOptions = Pick<
   | 'security'
   | 'contributors'
   | 'contextStore'
+  // Settings sections — `Section.provide({ url })` hands a test's service in.
+  | 'settings'
+  | 'validationError'
   // The engine under test. Without this every test ran Express while
   // production ran Fastify or h3 — the one thing an integration test exists
   // to rule out.
@@ -200,6 +203,8 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     security: options.security,
     contributors: options.contributors,
     contextStore: options.contextStore,
+    settings: options.settings,
+    validationError: options.validationError,
     // Without this the option is accepted and ignored, which is worse than
     // not offering it: the suite reports Express while claiming Fastify.
     runtime: options.runtime,
@@ -589,3 +594,12 @@ export async function createTestPlugin(
 
 /** Alias for {@link createTestPlugin}, matching the `testPlugin` name used in the architecture spec. */
 export const testPlugin = createTestPlugin
+
+export {
+  startContainer,
+  startService,
+  type ContainerSpec,
+  type ServiceKind,
+  type ServiceOptions,
+  type StartedService,
+} from './services'

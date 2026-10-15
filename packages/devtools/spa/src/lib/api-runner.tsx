@@ -639,6 +639,46 @@ export const ApiRunnerPanel: Component = () => {
 
             {/* Sections */}
             <div class="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
+              {/* The route's context contributors, in the order a request runs
+                  them — however many there are, one row each. */}
+              <Show when={route().contributors?.length}>
+                <Section title="Context contributors" count={route().contributors!.length}>
+                  <ol class="flex flex-col gap-1 text-xs">
+                    <For each={route().contributors}>
+                      {(c, i) => (
+                        <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border/40 py-1 last:border-0">
+                          <span class="w-5 shrink-0 text-right text-text-muted">{i() + 1}.</span>
+                          <span class="font-mono font-semibold text-text-body">{c.key}</span>
+                          <span class="rounded bg-surface-2 px-1.5 text-[0.66rem] text-text-muted">
+                            {c.source}
+                          </span>
+                          <Show when={c.beforeValidation}>
+                            <span
+                              class="rounded bg-kick-500/15 px-1.5 text-[0.66rem] text-kick-500"
+                              title="Runs before request validation"
+                            >
+                              before validation
+                            </span>
+                          </Show>
+                          <Show when={c.dependsOn.length}>
+                            <span class="text-text-muted">needs {c.dependsOn.join(', ')}</span>
+                          </Show>
+                          <Show when={c.overrides.length}>
+                            <span class="text-text-muted">
+                              overrides {c.overrides.map((o) => o.source).join(', ')}
+                            </span>
+                          </Show>
+                          <Show when={c.label}>
+                            <span class="basis-full pl-7 font-mono text-[0.66rem] text-text-muted break-all">
+                              {c.label}
+                            </span>
+                          </Show>
+                        </li>
+                      )}
+                    </For>
+                  </ol>
+                </Section>
+              </Show>
               <Show when={inputs()}>
                 {(current) => (
                   <>

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { z } from 'zod'
 import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
-import { _useSecretFileReader } from './settings'
+import { _useSecretFileReader, describeSchemaVars, type ConfigVar } from './settings'
 import { Container } from '../core/container'
 import type { EnvKey } from '../core/decorators'
 
@@ -366,6 +366,7 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
   // Re-parse if schema changed or no cache yet
   if (cachedEnv && cachedSchema === s) return overlaid(cachedEnv)
   cachedSchema = s
+  if (describingConfig()) return {}
   cachedEnv = s.parse(withSecretFiles(process.env, Object.keys(s.shape ?? {})))
 
   // Register env resolver so @Value() reads validated values
@@ -545,6 +546,10 @@ export function loadEnvFromSchema<TSchema>(
   schema: TSchema,
 ): unknown extends TSchema ? Record<string, unknown> : InferSchemaOutput<TSchema>
 export function loadEnvFromSchema(schema: unknown): unknown {
+  if (describingConfig()) {
+    cachedSchema = schema
+    return {}
+  }
   const wrapped = detectSchema(schema)
   const declared = Object.keys(
     ((wrapped.toJsonSchema?.() as { properties?: Record<string, unknown> } | undefined)
@@ -616,3 +621,23 @@ export type Env = {
 
 // `defineSettings` sections read `<NAME>_FILE` secrets through this too.
 _useSecretFileReader(withSecretFiles)
+
+/**
+ * Set by `kick env example` while it loads the app: env loaders record the
+ * schema and skip validation — the environment it describes may not exist
+ * yet. @internal
+ */
+export const DESCRIBE_CONFIG = Symbol.for('kickjs.config.describe')
+
+function describingConfig(): boolean {
+  return (globalThis as Record<symbol, unknown>)[DESCRIBE_CONFIG] === true
+}
+
+/**
+ * The variables the app's env schema reads — the schema registered with
+ * `loadEnv` / `loadEnvFromSchema`, or the base schema — without parsing the
+ * environment. For `kick env example`.
+ */
+export function describeEnvSchema(): ConfigVar[] {
+  return describeSchemaVars(cachedSchema ?? getBaseEnvSchema())
+}

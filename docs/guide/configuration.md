@@ -402,6 +402,10 @@ const { url, pool } = DbSettings.get()
 
 `get()` returns what injected code sees — the value validated at startup, or a replacement bound in the container (below) — so it's cheap and never disagrees with DI. Called before the app starts (a CLI script, a seed file), the first call loads and validates it. `DbSettings.load(env?)` parses afresh — from `process.env`, or an env object you pass — when you need the current values instead.
 
+### Listing every variable: `.env.example`
+
+`kick env example` writes `.env.example` from the env schema and the declared sections — required variables bare, optional ones commented with their default — and `--check` fails CI when it's stale. In code, `app.describeConfig()` returns the same list without reading or validating the environment. See [kick env example](./cli-commands.md#kick-env-example).
+
 ### From an adapter or a module
 
 A declared section is an ordinary DI token, bound before the code that declared it runs, so the usual patterns work.
@@ -499,6 +503,16 @@ class Reports {
   constructor(@Inject(AnalyticsDb) private readonly db: SettingsOf<typeof AnalyticsDb>) {}
 }
 ```
+
+### Supplying the value: `.provide()`
+
+Sometimes the value doesn't come from the environment — a test container's URL, a port picked at run time. `.provide(value)` declares the section with that value instead of reading env:
+
+```ts
+bootstrap({ modules, settings: [DbSettings.provide({ url: pg.url })] })
+```
+
+The value is validated like env (defaults applied, a bad value fails startup naming the variables), and it wins over the same section declared elsewhere — by a module or an adapter — so nothing reads env for it. `DbSettings.parse(value)` runs the same validation without declaring anything. In tests, [`startService()`](./testing/large-suites.md#a-service-per-file-startservice) hands you the URL to provide.
 
 ## Accessing Config in Services
 

@@ -290,6 +290,31 @@ It reads scopes from `@Service` / `@Repository` / `@Component` / `@Injectable({ 
 
 The scan is conservative. It reports nothing it cannot pin down: a scope held in a variable, a name declared in more than one file, or a token registered under two different scopes. A finding is a request that will fail; a clean run is not proof that none will. Test files are skipped.
 
+## kick env example
+
+Writes `.env.example` from what the app actually reads: its env schema and every declared [settings section](./configuration.md#settings-sections-definesettings).
+
+```bash
+kick env example            # write .env.example
+kick env example --check    # exit 1 if it's missing or stale — for CI
+```
+
+```bash
+# ── App env schema ──
+# PORT=3000
+# Signs session cookies
+SESSION_SECRET=
+
+# ── DB settings (declared by app) ──
+# Postgres connection string
+DB_URL=
+# DB_POOL_MAX=10
+```
+
+Required variables are written bare; optional ones are commented, with their default. Descriptions come from the schema (`.describe('…')` in Zod).
+
+It loads `src/index.ts` through your `vite.config.ts` — the same way `kick dev` does — with `bootstrap()` captured instead of started and the env loaders recording the schema without validating it. Nothing listens and no environment is needed, so it works on a fresh clone. Options: `--entry <file>` (default `src/index.ts`), `--out <file>` (default `.env.example`).
+
 ## kick doctor
 
 Pre-flight checks for your KickJS project's dev environment. Catches the common "doesn't work on my machine" misconfigs before they bite — missing decorator flags, env-wiring footguns, stale typegen, wrong Node version.
