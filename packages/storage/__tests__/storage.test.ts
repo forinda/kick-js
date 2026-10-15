@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { checkKey, diskStorage, memoryStorage, type Storage } from '../src/index'
+import { checkKey, memoryStorage, type Storage } from '../src/index'
+import { diskStorage } from '../src/disk'
 
 const text = (bytes: Uint8Array | null) => (bytes ? new TextDecoder().decode(bytes) : bytes)
 
@@ -62,6 +63,43 @@ describe.each([
     expect(second.cursor).toBeUndefined()
     expect((await files.list()).files).toHaveLength(4)
     await expect(files.list({ limit: 0 })).rejects.toThrow('limit')
+  })
+
+  it('putIfAbsent stores once, and only one of several racing callers wins', async () => {
+    const files = await make()
+    expect(await files.putIfAbsent('m/once', 'first')).toBe(true)
+    expect(await files.putIfAbsent('m/once', 'second')).toBe(false)
+    expect(text(await files.get('m/once'))).toBe('first')
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => files.putIfAbsent('m/race', `caller ${i}`)),
+    )
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(text(await files.get('m/race'))).toBe(`caller ${results.indexOf(true)}`)
+  })
+
+  it('lists in the same order as plain string sorting, across folders', async () => {
+    const files = await make()
+    const keys = ['a', 'a-b', 'a0', 'a/b', 'a/b/c', 'a/b-c', 'a/b0', 'b', 'Z', 'a/A', '_x']
+    // On disk `a` can't be both a file and a folder: use the ones that can coexist there.
+    const usable = keys.filter((k) => k !== 'a' && k !== 'a/b')
+    for (const key of usable) await files.put(key, key)
+    const all: string[] = []
+    let cursor: string | undefined
+    do {
+      const page = await files.list({ limit: 2, cursor })
+      all.push(...page.files.map((f) => f.key))
+      cursor = page.cursor
+    } while (cursor)
+    expect(all).toEqual(usable.toSorted())
+    expect((await files.list({ prefix: 'a/b' })).files.map((f) => f.key)).toEqual([
+      'a/b-c',
+      'a/b/c',
+      'a/b0',
+    ])
+    expect((await files.list({ prefix: 'a/b/' })).files.map((f) => f.key)).toEqual(['a/b/c'])
+    expect((await files.list({ cursor: 'a/b-c', limit: 1 })).files.map((f) => f.key)).toEqual([
+      'a/b/c',
+    ])
   })
 
   it('builds a URL from baseUrl, encoding each segment', async () => {

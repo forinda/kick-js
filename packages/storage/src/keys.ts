@@ -45,7 +45,25 @@ export async function collect(body: Body): Promise<Uint8Array> {
   if (!isStream(body)) return toBytes(body)
   const chunks: Uint8Array[] = []
   for await (const chunk of body) chunks.push(typeof chunk === 'string' ? toBytes(chunk) : chunk)
-  return Buffer.concat(chunks)
+  return concatBytes(chunks)
+}
+
+/** `Buffer.concat` without `Buffer`, which edge runtimes may not have. */
+export function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0))
+  let at = 0
+  for (const chunk of chunks) {
+    out.set(chunk, at)
+    at += chunk.length
+  }
+  return out
+}
+
+export function publicUrl(driver: string, baseUrl: string | undefined, key: string) {
+  if (baseUrl === undefined) {
+    throw new Error(`${driver}: url() needs the \`baseUrl\` the files are served from`)
+  }
+  return `${baseUrl.replace(/\/+$/, '')}/${encodeKey(key)}`
 }
 
 export function checkLimit(limit = 1000): number {

@@ -10,11 +10,14 @@ description: Save, stream and list files in memory, on local disk, or in an S3-c
 
 Or `kick add storage`. It has no SDK dependency: the S3 driver signs requests itself (AWS Signature V4) and sends them with `fetch`.
 
+The main entry, with `memoryStorage` and `s3Storage`, uses only `fetch` and WebCrypto, so it runs on Node, Bun, Deno and Cloudflare Workers. `diskStorage` is Node only and comes from `@forinda/kickjs-storage/disk`.
+
 ## The interface
 
 ```ts
 interface Storage {
   put(key: string, body: Body, options?: { contentType?: string }): Promise<void>
+  putIfAbsent(key: string, body: Body, options?: { contentType?: string }): Promise<boolean>
   get(key: string): Promise<Uint8Array | null> // null when there is no such file
   getStream(key: string): Promise<ReadableStream<Uint8Array> | null>
   stat(key: string): Promise<FileInfo | null> // { key, size, lastModified, contentType? }
@@ -43,7 +46,8 @@ Bind a token to a driver, then inject it where files are saved:
 ```ts
 // src/modules/files/files.ts
 import { createToken } from '@forinda/kickjs'
-import { diskStorage, s3Storage, type Storage } from '@forinda/kickjs-storage'
+import { s3Storage, type Storage } from '@forinda/kickjs-storage'
+import { diskStorage } from '@forinda/kickjs-storage/disk'
 
 export const FILES = createToken<Storage>('Files')
 
@@ -84,7 +88,7 @@ class AvatarController {
 
 ## Streaming
 
-`put()` takes a stream as well as bytes. Disk writes it to the file as it arrives. A bucket gets one request if the stream fits in 5 MiB, and a multipart upload in 5 MiB parts if not, so memory use stays at one part however large the file is. A failed part aborts the upload, so no half-written parts are left behind.
+`put()` takes a stream as well as bytes. Disk writes it to the file as it arrives. A bucket gets one request if the stream fits in one part, and a multipart upload if not, with four parts in flight at once. A failed part aborts the upload, so no half-written parts are left behind. Memory use stays at about `partSize` × `partConcurrency` (20 MiB by default) however large the file is. Tune both on `s3Storage`: `partSize` is at least 5 MiB, S3's minimum, and since S3 allows 10,000 parts, raise it for streams over about 48 GiB.
 
 ```ts
 import { createReadStream } from 'node:fs'
@@ -125,7 +129,19 @@ do {
 } while (cursor)
 ```
 
-Listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. The disk driver walks the whole directory tree for every page. That's fine for an uploads folder, but for millions of files, use a bucket or keep the keys in your database.
+Listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. A folder with a very large number of files is still read whole each time a page passes through it.
+
+## Create-only writes: `putIfAbsent`
+
+`putIfAbsent(key, body)` stores the body only if nothing is stored under `key` yet. It returns `true` when it stored it and `false` when the key was taken. It is atomic: of several callers racing for the same key, on one server or many, exactly one gets `true`. Use it for idempotency markers, claims and "first writer wins" records:
+
+```ts
+// Process a webhook once, however many times it is delivered.
+if (!(await files.putIfAbsent(`webhooks/${event.id}`, JSON.stringify(event)))) return
+await handle(event)
+```
+
+Buckets use S3 conditional writes (`If-None-Match: *`), which AWS S3, Cloudflare R2 and MinIO support. Disk uses an atomic hard link. The body is read into memory first, so this is for small objects.
 
 ## Keys
 
@@ -416,4 +432,4 @@ await createTestApp({
 - **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
 - **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, is refused, so a link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.
-- **Node only.** The package uses `node:crypto` and `node:fs`. On Cloudflare Workers, use the R2 binding directly.
+- **Edge runtimes.** `memoryStorage` and `s3Storage` run on Workers, Bun and Deno, so a Worker can reach R2 through its S3 API with an access key. `diskStorage`, `TusAdapter` and the settings entry are Node only.

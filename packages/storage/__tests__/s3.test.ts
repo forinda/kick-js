@@ -13,22 +13,26 @@ const aws = {
 const EMPTY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 
 describe('SigV4', () => {
-  it("matches AWS's signed GET with a Range header", () => {
+  it("matches AWS's signed GET with a Range header", async () => {
     const url = new URL('https://examplebucket.s3.amazonaws.com/test.txt')
     const headers = {
       range: 'bytes=0-9',
       'x-amz-content-sha256': EMPTY,
       'x-amz-date': '20130524T000000Z',
     }
-    expect(signV4('GET', url, headers, EMPTY, aws)).toEqual({
+    expect(await signV4('GET', url, headers, EMPTY, aws)).toEqual({
       signature: 'f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41',
       credential: 'AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request',
       signedHeaders: 'host;range;x-amz-content-sha256;x-amz-date',
     })
   })
 
-  it("matches AWS's presigned URL", () => {
-    const url = presign(new URL('https://examplebucket.s3.amazonaws.com/test.txt'), 86400, aws)
+  it("matches AWS's presigned URL", async () => {
+    const url = await presign(
+      new URL('https://examplebucket.s3.amazonaws.com/test.txt'),
+      86400,
+      aws,
+    )
     expect(url).toContain(
       'X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404',
     )
@@ -215,6 +219,52 @@ describe('s3Storage', () => {
         'PUT ?partNumber=1&uploadId=up-1',
         'DELETE ?uploadId=up-1',
       ])
+    })
+
+    it('uploads stream parts in parallel, up to partConcurrency', async () => {
+      let active = 0
+      let peak = 0
+      let completeBody = ''
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const req = new Request(input, init)
+        const url = new URL(req.url)
+        if (req.method === 'POST' && url.searchParams.has('uploads')) {
+          return new Response('<R><UploadId>up</UploadId></R>')
+        }
+        if (req.method === 'POST') {
+          completeBody = await req.text()
+          return new Response('<CompleteMultipartUploadResult/>')
+        }
+        active++
+        peak = Math.max(peak, active)
+        // Later parts finish first, so completion order differs from part order.
+        const n = Number(url.searchParams.get('partNumber'))
+        await new Promise((done) => setTimeout(done, 60 - n * 5))
+        active--
+        return new Response(null, { headers: { etag: `"e${n}"` } })
+      }) as unknown as typeof globalThis.fetch
+      const part = new Uint8Array(5 * 1024 * 1024)
+      await s3Storage({ ...options, fetch, partConcurrency: 3 }).put(
+        'k',
+        Readable.from(Array.from({ length: 8 }, () => part)),
+      )
+      expect(peak).toBe(3)
+      expect([...completeBody.matchAll(/<PartNumber>(\d+)/g)].map((m) => Number(m[1]))).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ])
+    })
+
+    it('refuses a part size under S3 minimum', () => {
+      expect(() => s3Storage({ ...options, partSize: 1024 })).toThrow('partSize')
+      expect(() => s3Storage({ ...options, partConcurrency: 0 })).toThrow('partConcurrency')
+    })
+
+    it('putIfAbsent sends If-None-Match and reads 412 / 409 as taken', async () => {
+      const { files, calls } = scripted([200, ''], [412, ''], [409, ''])
+      expect(await files.putIfAbsent('k', 'a')).toBe(true)
+      expect(await files.putIfAbsent('k', 'b')).toBe(false)
+      expect(await files.putIfAbsent('k', 'c')).toBe(false)
+      expect(calls[0].headers.get('if-none-match')).toBe('*')
     })
 
     it('sends a small stream as one PUT', async () => {

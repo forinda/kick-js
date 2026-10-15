@@ -1,6 +1,13 @@
-import { createHash, createHmac } from 'node:crypto'
-import type { FileInfo, Storage } from './index'
-import { checkLimit, encodeKey, encodeSegment, isStream, toBytes } from './keys'
+import type { FileInfo, Storage } from './types'
+import {
+  checkLimit,
+  collect,
+  concatBytes,
+  encodeKey,
+  encodeSegment,
+  isStream,
+  toBytes,
+} from './keys'
 
 export interface S3StorageOptions {
   bucket: string
@@ -23,14 +30,58 @@ export interface S3StorageOptions {
   sessionToken?: string
   /** Default the global `fetch`. */
   fetch?: typeof fetch
+  /**
+   * Bytes per part when `put()` uploads a stream in parts. At least 5 MiB
+   * (S3's minimum), the default. With S3's 10,000-part limit, the largest
+   * stream is 10,000 × `partSize`: raise it for files over ~48 GiB.
+   */
+  partSize?: number
+  /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */
+  partConcurrency?: number
 }
 
-const EMPTY_HASH = createHash('sha256').digest('hex')
+// SHA-256 of nothing.
+const EMPTY_HASH = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 const MAX_EXPIRES = 7 * 24 * 60 * 60
 
-const sha256 = (data: Uint8Array | string) => createHash('sha256').update(data).digest('hex')
-const hmac = (key: Uint8Array | string, data: string) =>
-  createHmac('sha256', key).update(data).digest()
+// WebCrypto, not node:crypto, so the driver runs on edge runtimes too.
+const utf8 = (text: string) => new TextEncoder().encode(text)
+const hex = (bytes: ArrayBuffer | Uint8Array) =>
+  Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('')
+const sha256 = async (data: Uint8Array | string) =>
+  hex(
+    await crypto.subtle.digest(
+      'SHA-256',
+      (typeof data === 'string' ? utf8(data) : data) as Uint8Array<ArrayBuffer>,
+    ),
+  )
+async function hmac(key: Uint8Array, data: string): Promise<Uint8Array> {
+  const imported = await crypto.subtle.importKey(
+    'raw',
+    key as Uint8Array<ArrayBuffer>,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  return new Uint8Array(await crypto.subtle.sign('HMAC', imported, utf8(data)))
+}
+
+// The signing key changes once a day per region: derive it once.
+let signingKey: { id: string; key: Promise<Uint8Array> } | undefined
+function keyFor(secret: string, day: string, region: string) {
+  const id = `${secret}\n${day}\n${region}`
+  if (signingKey?.id !== id) {
+    signingKey = {
+      id,
+      key: (async () => {
+        let key = await hmac(utf8(`AWS4${secret}`), day)
+        for (const part of [region, 's3', 'aws4_request']) key = await hmac(key, part)
+        return key
+      })(),
+    }
+  }
+  return signingKey.key
+}
 /** `20130524T000000Z` */
 const amzDate = (date: Date) => date.toISOString().replace(/[-:]|\.\d{3}/g, '')
 
@@ -46,7 +97,7 @@ interface Signing {
  * request, and the credential scope it was made for. `headers` are the
  * lowercase headers to sign besides `host`.
  */
-export function signV4(
+export async function signV4(
   method: string,
   url: URL,
   headers: Record<string, string>,
@@ -72,11 +123,10 @@ export function signV4(
     signedHeaders,
     payloadHash,
   ].join('\n')
-  const toSign = ['AWS4-HMAC-SHA256', stamp, scope, sha256(canonical)].join('\n')
-  let key: Uint8Array = hmac(`AWS4${signing.secretAccessKey}`, stamp.slice(0, 8))
-  for (const part of [signing.region, 's3', 'aws4_request']) key = hmac(key, part)
+  const toSign = ['AWS4-HMAC-SHA256', stamp, scope, await sha256(canonical)].join('\n')
+  const key = await keyFor(signing.secretAccessKey, stamp.slice(0, 8), signing.region)
   return {
-    signature: createHmac('sha256', key).update(toSign).digest('hex'),
+    signature: hex(await hmac(key, toSign)),
     credential: `${signing.accessKeyId}/${scope}`,
     signedHeaders,
   }
@@ -189,6 +239,14 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       ? `${origin}/${encodeSegment(options.bucket)}`
       : origin.replace('://', `://${options.bucket}.`)
   const fetchFn = options.fetch ?? globalThis.fetch
+  const partSize = options.partSize ?? PART_SIZE
+  const partConcurrency = options.partConcurrency ?? 4
+  if (!Number.isInteger(partSize) || partSize < PART_SIZE) {
+    throw new Error(`s3Storage: partSize must be a whole number of bytes, at least ${PART_SIZE}`)
+  }
+  if (!Number.isInteger(partConcurrency) || partConcurrency < 1) {
+    throw new Error('s3Storage: partConcurrency must be a whole number, at least 1')
+  }
   const signing = () => ({ ...options, region, date: new Date() })
   // The bucket itself (for listing) is BUCKET, never a key: every key goes
   // through encodeKey's check, so `''` can't address the bucket.
@@ -200,25 +258,34 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
 
   interface Request {
     query?: Record<string, string>
+    /** Sent unsigned, besides the signed ones. */
+    headers?: Record<string, string>
     body?: Uint8Array
     contentType?: string
   }
 
   async function send(method: string, key: string | typeof BUCKET, request: Request = {}) {
     const url = urlOf(key, request.query)
-    const payloadHash = request.body ? sha256(request.body) : EMPTY_HASH
+    const payloadHash = request.body ? await sha256(request.body) : EMPTY_HASH
     const now = signing()
     const headers: Record<string, string> = {
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate(now.date),
       ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
     }
-    const { signature, credential, signedHeaders } = signV4(method, url, headers, payloadHash, now)
+    const { signature, credential, signedHeaders } = await signV4(
+      method,
+      url,
+      headers,
+      payloadHash,
+      now,
+    )
     return fetchFn(signedUrl(url), {
       method,
       headers: {
         ...headers,
         ...(request.contentType ? { 'content-type': request.contentType } : {}),
+        ...request.headers,
         authorization: `AWS4-HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
       },
       body: request.body,
@@ -234,6 +301,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   ) {
     const res = await send(method, key, request)
     if (res.ok || (missingOk && res.status === 404)) return res
+    return fail(res, method, key)
+  }
+
+  async function fail(res: Response, method: string, key: string | typeof BUCKET): Promise<never> {
     const text = await res.text().catch(() => '')
     throw new Error(
       `s3Storage: ${method} '${String(key === BUCKET ? options.bucket : key)}' failed with ${res.status}: ${text.slice(0, 300)}`,
@@ -315,38 +386,60 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
   }
 
-  /** A stream in parts of PART_SIZE: one PUT if it fits in one, a multipart upload if not. */
+  /**
+   * A stream in parts of `partSize`, `partConcurrency` at a time: one PUT if
+   * it fits in one part, a multipart upload if not, aborted on any failure.
+   */
   async function putStream(key: string, body: AsyncIterable<Uint8Array>, contentType?: string) {
     let buffered: Uint8Array[] = []
     let size = 0
-    let uploadId: string | undefined
+    let uploadId: Promise<string> | undefined
+    let nextPart = 1
+    let failed: { error: unknown } | undefined
     const parts: CompletedPart[] = []
-    const flush = async () => {
-      const bytes = Buffer.concat(buffered)
+    const inFlight = new Set<Promise<void>>()
+    const send = () => {
+      const bytes = concatBytes(buffered)
+      const partNumber = checkPartNumber(nextPart++)
       buffered = []
       size = 0
-      uploadId ??= await multipart.create(key, { contentType })
-      const partNumber = parts.length + 1
-      const query = { partNumber: String(checkPartNumber(partNumber)), uploadId }
-      const res = await call('PUT', key, { query, body: bytes })
-      parts.push({ partNumber, etag: res.headers.get('etag') ?? '' })
+      uploadId ??= multipart.create(key, { contentType })
+      const upload = uploadId.then(async (id) => {
+        const query = { partNumber: String(partNumber), uploadId: id }
+        const res = await call('PUT', key, { query, body: bytes })
+        parts.push({ partNumber, etag: res.headers.get('etag') ?? '' })
+      })
+      const tracked: Promise<void> = upload.then(
+        () => void inFlight.delete(tracked),
+        (error: unknown) => {
+          inFlight.delete(tracked)
+          failed ??= { error }
+        },
+      )
+      inFlight.add(tracked)
     }
     try {
       for await (const chunk of body) {
         const bytes = typeof chunk === 'string' ? toBytes(chunk) : chunk
         buffered.push(bytes)
         size += bytes.length
-        // ponytail: one part in flight at a time; send several at once if throughput matters.
-        if (size >= PART_SIZE) await flush()
+        if (size >= partSize) {
+          send()
+          while (inFlight.size >= partConcurrency) await Promise.race(inFlight)
+        }
+        if (failed) throw failed.error
       }
       if (!uploadId) {
-        await call('PUT', key, { body: Buffer.concat(buffered), contentType })
+        await call('PUT', key, { body: concatBytes(buffered), contentType })
         return
       }
-      if (size > 0) await flush()
-      await multipart.complete(key, uploadId, parts)
+      if (size > 0) send()
+      await Promise.all(inFlight)
+      if (failed) throw failed.error
+      await multipart.complete(key, await uploadId, parts)
     } catch (err) {
-      if (uploadId) await multipart.abort(key, uploadId).catch(() => {})
+      await Promise.all(inFlight)
+      if (uploadId) await uploadId.then((id) => multipart.abort(key, id)).catch(() => {})
       throw err
     }
   }
@@ -366,6 +459,22 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     async put(key, body, putOptions = {}) {
       if (isStream(body)) return putStream(key, body, putOptions.contentType)
       await call('PUT', key, { body: toBytes(body), contentType: putOptions.contentType })
+    },
+    async putIfAbsent(key, body, putOptions = {}) {
+      // S3 conditional writes: 412 when the key exists, 409 when another
+      // conditional write to it is in progress — both mean someone else has it.
+      const res = await send('PUT', key, {
+        body: await collect(body),
+        contentType: putOptions.contentType,
+        headers: { 'if-none-match': '*' },
+      })
+      if (res.status === 412 || res.status === 409) {
+        await res.body?.cancel()
+        return false
+      }
+      if (!res.ok) await fail(res, 'PUT', key)
+      await res.body?.cancel()
+      return true
     },
     async get(key) {
       const res = await call('GET', key, {}, true)
@@ -434,13 +543,13 @@ function signedUrl(url: URL): string {
  * A query-string signed URL for `method`, valid for `expiresIn` seconds.
  * `headers` (lowercase) are signed too, and the request must send them as given.
  */
-export function presign(
+export async function presign(
   url: URL,
   expiresIn: number,
   signing: Signing & { sessionToken?: string },
   method = 'GET',
   headers: Record<string, string> = {},
-): string {
+): Promise<string> {
   const scope = `${amzDate(signing.date).slice(0, 8)}/${signing.region}/s3/aws4_request`
   url.searchParams.set('X-Amz-Algorithm', 'AWS4-HMAC-SHA256')
   url.searchParams.set('X-Amz-Credential', `${signing.accessKeyId}/${scope}`)
@@ -451,6 +560,6 @@ export function presign(
     'X-Amz-SignedHeaders',
     ['host', ...Object.keys(headers)].toSorted().join(';'),
   )
-  const { signature } = signV4(method, url, headers, 'UNSIGNED-PAYLOAD', signing)
+  const { signature } = await signV4(method, url, headers, 'UNSIGNED-PAYLOAD', signing)
   return `${signedUrl(url)}&X-Amz-Signature=${signature}`
 }

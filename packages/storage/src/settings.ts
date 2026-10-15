@@ -94,6 +94,7 @@ export function s3FromSettings(
   }
   return {
     put: (...args) => real().put(...args),
+    putIfAbsent: (...args) => real().putIfAbsent(...args),
     get: (...args) => real().get(...args),
     getStream: (...args) => real().getStream(...args),
     stat: (...args) => real().stat(...args),

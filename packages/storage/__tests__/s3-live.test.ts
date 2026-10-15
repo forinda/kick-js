@@ -112,6 +112,30 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     await expect(files.multipart.listParts(key, uploadId)).rejects.toThrow('404')
   })
 
+  it('putIfAbsent: one of several racing writers wins', async () => {
+    const key = `${run}claim`
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => files.putIfAbsent(key, `w${i}`)),
+    )
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(new TextDecoder().decode((await files.get(key))!)).toBe(`w${results.indexOf(true)}`)
+  })
+
+  it('streams parts in parallel', async () => {
+    const parallel = s3Storage({
+      bucket: 'test',
+      endpoint: endpoint ?? minio!.url,
+      accessKeyId: 'minioadmin',
+      secretAccessKey: 'minioadmin',
+      partConcurrency: 3,
+    })
+    const chunks = Array.from({ length: 4 }, (_, i) => new Uint8Array(5 * MiB).fill(i))
+    await parallel.put(`${run}parallel.bin`, Readable.from(chunks))
+    const bytes = (await files.get(`${run}parallel.bin`))!
+    expect(bytes.length).toBe(20 * MiB)
+    expect([0, 5, 10, 15].map((at) => bytes[at * MiB])).toEqual([0, 1, 2, 3])
+  })
+
   it('cleans up', async () => {
     for (let page = await files.list({ prefix: run }); ;) {
       for (const file of page.files) await files.delete(file.key)

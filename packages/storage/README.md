@@ -11,7 +11,8 @@ kick add storage
 ## Quick Example
 
 ```ts
-import { diskStorage, s3Storage } from '@forinda/kickjs-storage'
+import { s3Storage } from '@forinda/kickjs-storage' // Node, Bun, Deno, Workers
+import { diskStorage } from '@forinda/kickjs-storage/disk' // Node
 
 const files =
   process.env.NODE_ENV === 'production'

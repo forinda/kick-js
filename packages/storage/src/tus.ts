@@ -28,7 +28,7 @@ import { join, resolve } from 'node:path'
 import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { defineAdapter, type InjectionToken } from '@forinda/kickjs'
-import type { Storage } from './index'
+import type { Storage } from './types'
 import { checkKey } from './keys'
 
 const VERSION = '1.0.0'
