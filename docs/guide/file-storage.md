@@ -350,7 +350,12 @@ bootstrap({
         if (!['video/mp4', 'application/pdf'].includes(metadata.filetype)) {
           throw HttpException.badRequest('Unsupported file type')
         }
-        return { key: `uploads/${user.id}/${id}`, data: { owner: user.id } }
+        // The type the file is served as: only after checking it, as above.
+        return {
+          key: `uploads/${user.id}/${id}`,
+          data: { owner: user.id },
+          contentType: metadata.filetype,
+        }
       },
       authorize: (headers, upload) => {
         if (verifyToken(headers.authorization).id !== (upload.data as { owner: string }).owner) {
@@ -379,7 +384,7 @@ new Upload(file, {
 How it works:
 
 - **Arrival.** Each request's bytes are kept as a chunk in `partials`, a `Storage` of its own: by default a `diskStorage` under `dir` (`.tus`). If the connection drops, the bytes already received are kept, and the client asks (`HEAD`) where to continue and sends only the rest. tus-js-client remembers upload URLs across page reloads.
-- **Completion.** When the last byte arrives, the file is streamed into `storage` under the key `onCreate` chose (default `uploads/<id>`), with `metadata.filetype` as its content type. Then `onComplete` runs. The response to that last request waits for both, so a client that sees success knows the file is stored. If storing or `onComplete` fails, the client gets a 500 and its retry runs both again. So `onComplete` runs at least once, and can run twice if it succeeded but the step after it failed. Make it idempotent, for example an upsert keyed by `upload.id`.
+- **Completion.** When the last byte arrives, the file is streamed into `storage` under the key `onCreate` chose (default `uploads/<id>`), with the `contentType` `onCreate` returned, or `application/octet-stream` without one. The client's `metadata.filetype` is never used as-is: a client could declare `text/html` and turn the file into a page that runs script. Check it against your own list and return it, as in the example. Then `onComplete` runs. The response to that last request waits for both, so a client that sees success knows the file is stored. If storing or `onComplete` fails, the client gets a 500 and its retry runs both again. So `onComplete` runs at least once, and can run twice if it succeeded but the step after it failed. Make it idempotent, for example an upsert keyed by `upload.id`.
 - **Checks.** `onCreate` sees every new upload's headers, size and metadata before anything is written. `authorize` sees every later request to that upload. Without `authorize`, anyone holding an upload's URL, which contains an unguessable id, can continue or cancel it. Throw an `HttpException` from either hook to refuse with its status.
 - **Limits.** `maxSize` (default 1 GiB) is checked against the declared length, and the body can never run past it. An upload takes at most 10,000 PATCH requests: each one is a chunk object and a marker, so a client sending tiny chunks can't multiply them. That is plenty for a 1 GiB file in 1 MiB chunks, and tus-js-client and Uppy send one chunk by default. Unfinished uploads expire `expiresIn` seconds (default one day) after their last write and are swept hourly.
 - **Middleware.** The adapter runs after the global middleware, so `cors()`, rate limits and `csrf()` apply. Pass the CSRF header through tus-js-client's `headers`. For a browser on another origin, `cors()` must expose the tus headers: `exposedHeaders: ['Location', 'Upload-Offset', 'Upload-Length', 'Upload-Expires', 'Tus-Resumable']`.
