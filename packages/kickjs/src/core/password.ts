@@ -92,6 +92,7 @@ export interface PasswordCheck {
  * const bcryptHashes: LegacyHasher = {
  *   matches: (stored) => /^\$2[aby]\$/.test(stored),
  *   verify: (password, stored) => bcrypt.compare(password, stored),
+ *   dummy: await bcrypt.hash('dummy', 12), // the cost your rows use
  * }
  * await verifyPassword(input, user?.passwordHash, { legacy: [bcryptHashes] })
  * ```
@@ -101,6 +102,14 @@ export interface LegacyHasher {
   matches(stored: string): boolean
   /** Whether `password` matches `stored`: the library's own check. */
   verify(password: string, stored: string): boolean | Promise<boolean>
+  /**
+   * A hash in this format, of any password, at the cost your stored rows use.
+   * Every check runs scrypt once and each legacy hasher once — against this
+   * when the account isn't in its format — so a login takes as long for a
+   * scrypt account, an imported one or a missing one, and timing can't tell
+   * them apart.
+   */
+  dummy: string
 }
 
 /** {@link verifyPassword}'s options: the scrypt cost, and older formats that still verify. */
@@ -125,31 +134,41 @@ export async function verifyPassword(
   stored: string | null | undefined,
   options: VerifyPasswordOptions = {},
 ): Promise<PasswordCheck> {
-  const { legacy, ...scryptCost } = options
+  const { legacy = [], ...scryptCost } = options
   const parsed = stored ? parse(stored) : undefined
-  const older = !parsed && stored ? legacy?.find((hasher) => hasher.matches(stored)) : undefined
+  const older = !parsed && stored ? legacy.find((hasher) => hasher.matches(stored)) : undefined
+  // The same work on every path: scrypt once, and each legacy hasher once —
+  // on its dummy unless the account is in its format.
+  const [scrypt, checks] = await Promise.all([
+    // Costs OpenSSL still refuses (N >= 2^(16r) with a small r) fail, not throw.
+    parsed
+      ? derive(password, parsed.salt, parsed.cost).catch(() => undefined)
+      : derive(password, DUMMY_SALT, costOf(scryptCost)),
+    Promise.all(
+      legacy.map((hasher) => check(hasher, password, hasher === older ? stored! : hasher.dummy)),
+    ),
+  ])
   if (older) {
-    // The library's own check; a throw (a malformed row) is a failed match.
-    const ok =
-      (await Promise.resolve()
-        .then(() => older.verify(password, stored!))
-        .catch(() => false)) === true
+    const ok = checks[legacy.indexOf(older)]!
     return { ok, needsRehash: ok }
   }
-  if (!parsed) {
-    // At the cost real hashes are checked at (`options`, not the defaults),
-    // and one derivation, so "no such user" takes as long as "wrong password".
-    await derive(password, DUMMY_SALT, costOf(scryptCost))
-    return { ok: false, needsRehash: false }
-  }
-  // Costs OpenSSL still refuses (N >= 2^(16r) with a small r) fail, not throw.
-  const key = await derive(password, parsed.salt, parsed.cost).catch(() => undefined)
-  if (!key) return { ok: false, needsRehash: false }
-  const ok = key.length === parsed.key.length && timingSafeEqual(key, parsed.key)
+  // No such user, or a hash nobody here reads: the work is done, and it fails.
+  if (!parsed || !scrypt) return { ok: false, needsRehash: false }
+  const ok = scrypt.length === parsed.key.length && timingSafeEqual(scrypt, parsed.key)
   const wanted = costOf(scryptCost)
   const needsRehash =
     ok && (parsed.cost.N !== wanted.N || parsed.cost.r !== wanted.r || parsed.cost.p !== wanted.p)
   return { ok, needsRehash }
+}
+
+/** A legacy hasher's verdict: only `true` is a match; a throw (a malformed row) is not. */
+function check(hasher: LegacyHasher, password: string, hash: string): Promise<boolean> {
+  return Promise.resolve()
+    .then(() => hasher.verify(password, hash))
+    .then(
+      (result) => result === true,
+      () => false,
+    )
 }
 
 function parse(stored: string) {

@@ -56,6 +56,8 @@ import { type LegacyHasher, verifyPassword } from '@forinda/kickjs'
 const bcryptHashes: LegacyHasher = {
   matches: (stored) => /^\$2[aby]\$/.test(stored),
   verify: (password, stored) => bcrypt.compare(password, stored),
+  // Any password, hashed at the cost your imported rows use.
+  dummy: await bcrypt.hash('dummy', 12),
 }
 
 const { ok, needsRehash } = await verifyPassword(password, user?.passwordHash, {
@@ -63,7 +65,7 @@ const { ok, needsRehash } = await verifyPassword(password, user?.passwordHash, {
 })
 ```
 
-Scrypt hashes are never handed to a legacy hasher. A `verify` that throws (a malformed row) counts as a failed match. An old-format check takes that library's time, not scrypt's, so until those rows are gone a login's timing can tell an imported account from a missing one, the same trade-off as changing the cost. Once no rows in the old format remain, drop the hasher and its dependency.
+Scrypt hashes are never handed to a legacy hasher. A `verify` that throws (a malformed row) counts as a failed match. `dummy` keeps logins indistinguishable: every check runs scrypt once and each legacy hasher once, against `dummy` when the account isn't in that format. A scrypt account, an imported one and a missing one therefore take the same time, so hash `dummy` at the same cost as your rows. Scrypt logins pay for one extra bcrypt check while the hasher is configured. Once no rows in the old format remain, drop the hasher and its dependency.
 
 ## Signed tokens: `createSigner`
 
