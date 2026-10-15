@@ -22,7 +22,9 @@ export {
   defineSettings,
   loadSettings,
   type ConfigVar,
+  type ProvidedSettings,
   type Settings,
+  type SettingsDeclaration,
   type SettingsOf,
 } from './config/settings'
 export {

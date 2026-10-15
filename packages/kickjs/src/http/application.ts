@@ -74,7 +74,12 @@ import {
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
-import { loadSettings, type ConfigVar, type Settings } from '../config/settings'
+import {
+  loadSettings,
+  type ConfigVar,
+  type Settings,
+  type SettingsDeclaration,
+} from '../config/settings'
 import { describeEnvSchema } from '../config/env'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
@@ -564,7 +569,7 @@ export interface ApplicationOptions {
    * injectable by their tokens. Modules, adapters and plugins declare their
    * own with `settings()`.
    */
-  settings?: Settings<unknown>[]
+  settings?: SettingsDeclaration[]
 
   /**
    * Security defaults applied automatically unless opted out.
@@ -1096,8 +1101,10 @@ export class Application {
   describeConfig(): ConfigDescription {
     const sections: ConfigDescription['sections'] = []
     const seen = new Set<Settings<unknown>>()
-    const add = (declaredBy: string, list: readonly Settings<unknown>[] | undefined) => {
-      for (const section of list ?? []) {
+    const add = (declaredBy: string, list: readonly SettingsDeclaration[] | undefined) => {
+      for (const decl of list ?? []) {
+        // A provided section still reads these variables when not provided.
+        const section = 'section' in decl ? decl.section : decl
         if (seen.has(section)) continue
         seen.add(section)
         sections.push({ prefix: section.prefix, declaredBy, vars: section.describe() })
@@ -1118,7 +1125,7 @@ export class Application {
   }
 
   /** Validate settings sections and bind each under its token. */
-  private bindSettings(sections: readonly Settings<unknown>[]): void {
+  private bindSettings(sections: readonly SettingsDeclaration[]): void {
     for (const [section, value] of loadSettings(sections, process.env, this.settingsPrefixes)) {
       this.container.registerInstance(section, value)
     }

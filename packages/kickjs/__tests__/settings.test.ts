@@ -303,3 +303,34 @@ describe('review fixes', () => {
     ).resolves.toBeUndefined()
   })
 })
+
+describe('provided settings', () => {
+  it('binds a supplied value, validated with defaults, instead of reading env', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://from-env/app')
+    const app = new Application({
+      modules: [],
+      settings: [DbSettings.provide({ url: 'postgres://container:5432/test' })],
+    })
+    await app.setup()
+    const value = app.getContainer().resolve(DbSettings)
+    expect(value.url).toBe('postgres://container:5432/test')
+    expect(value.pool.max).toBe(10)
+    expect(DbSettings.get().url).toBe('postgres://container:5432/test')
+  })
+
+  it('wins over the same section declared by a module, and needs no env for it', async () => {
+    const DbModule = { settings: () => [DbSettings], routes: () => null }
+    const app = new Application({
+      modules: [DbModule as never],
+      settings: [DbSettings.provide({ url: 'postgres://provided/app' })],
+    })
+    await app.setup()
+    expect(app.getContainer().resolve(DbSettings).url).toBe('postgres://provided/app')
+  })
+
+  it('fails startup when the provided value is invalid', async () => {
+    await expect(
+      new Application({ modules: [], settings: [DbSettings.provide({ url: 'nope' })] }).setup(),
+    ).rejects.toThrow(/KT_DB_URL/)
+  })
+})

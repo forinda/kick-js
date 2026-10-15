@@ -16,6 +16,7 @@ KickJS apps are tested with [Vitest](https://vitest.dev). `@forinda/kickjs-testi
 | `runContributor`, `createTestPlugin`, `createTestModule`                      | contributors, plugins and hand-wired modules in isolation — [Contributors, Middleware and Plugins](./testing/contributors.md) |
 | `withEnv` (`@forinda/kickjs`)                                                 | different config values for one test — [Test Environment](./testing/environment.md)                                           |
 | `createTestDb`, `createPgTestDb`, `rolledBack` (`@forinda/kickjs-db/testing`) | a database per file, a rolled-back transaction per test — [Testing with kick/db](./database/testing.md)                       |
+| `startService`, `startContainer`                                              | a real Postgres, Redis or any container in Docker — [Large Suites](./testing/large-suites.md#a-service-per-file-startservice) |
 | `createTestClient` (`@forinda/kickjs-client`)                                 | typed, in-process requests to a `createWebApp` app — [Typed Client](./typed-client.md#network-free-testing)                   |
 
 ## Setup
@@ -98,7 +99,7 @@ That's the real `UserModule` (controller, service, repository) answering real HT
 - [Jobs, Cron, WebSockets and Mail](./testing/background.md): work that happens outside a request.
 - [Contributors, Middleware and Plugins](./testing/contributors.md): `runContributor`, middleware, adapters, `createTestPlugin`.
 - [Test Environment](./testing/environment.md): `.env.test`, `withEnv`, `KICKJS_ENV_FILE`, `vi.stubEnv`.
-- [Large Suites](./testing/large-suites.md): one app per worker, resets, database strategies, containers, independence.
+- [Large Suites](./testing/large-suites.md): one app per worker, resets, database strategies, containers, `startService`, independence.
 - [Testing with kick/db](./database/testing.md): an in-memory database per file, a rolled-back transaction per test.
 
 Feature guides with their own testing notes: [Asset Manager](./asset-manager.md#testing) (fixtures and the asset cache), [AI](./ai.md#testing) (a scripted provider), [MCP](./mcp/testing.md) (tool tests and the MCP Inspector), [Context Decorators](./context-decorators.md#testing-contributors) (contributor recipes).

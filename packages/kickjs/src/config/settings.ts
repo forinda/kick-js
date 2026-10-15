@@ -42,12 +42,42 @@ export interface Settings<T> extends InjectionToken<T> {
   load(env?: NodeJS.ProcessEnv): T
   /** Each variable the section reads — required or not, default, description. Reads no env. */
   describe(): ConfigVar[]
+  /** Validate a value you supply against the schema — defaults applied — instead of reading env. */
+  parse(value: unknown): T
+  /**
+   * Declare the section with a value you supply instead of the environment —
+   * a test's container, a service you started, a secret manager's answer.
+   * Validated against the schema like env values; bound under this section's
+   * token, so everything injecting it gets the provided value.
+   *
+   * ```ts
+   * const pg = await startService('postgres')
+   * await createTestApp({ modules, settings: [DbSettings.provide({ url: pg.url })] })
+   * ```
+   */
+  provide(value: unknown): ProvidedSettings<T>
   /**
    * The same schema under another prefix, for a second instance:
    * `DbSettings.scoped('ANALYTICS')` reads `ANALYTICS_DB_*` beside `DB_*`.
    * Returns the same token for the same name.
    */
   scoped(name: string): Settings<T>
+}
+
+const PROVIDED = Symbol.for('kickjs.settings.provided')
+
+/** A section declared with a supplied value — see {@link Settings.provide}. */
+export interface ProvidedSettings<T> {
+  readonly [PROVIDED]: true
+  readonly section: Settings<T>
+  readonly value: unknown
+}
+
+/** What a `settings` list accepts: a section (read from env) or a provided one. */
+export type SettingsDeclaration = Settings<unknown> | ProvidedSettings<unknown>
+
+function isProvided(decl: SettingsDeclaration): decl is ProvidedSettings<unknown> {
+  return (decl as Partial<ProvidedSettings<unknown>>)[PROVIDED] === true
 }
 
 /** The value type of a section: `SettingsOf<typeof DbSettings>`. */
@@ -218,6 +248,10 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
             .filter(Boolean)
         : raw
     }
+    return validate(input)
+  }
+
+  const validate = (input: unknown): T => {
     const result = wrapped.safeParse(input)
     if (result.success) return result.data as T
     const problems = result.issues.map((issue) => {
@@ -238,6 +272,9 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
     prefix,
     envNames,
     load,
+    parse: (value: unknown): T => validate(value),
+    provide: (value: unknown): ProvidedSettings<T> =>
+      Object.freeze({ [PROVIDED]: true as const, section: settings, value }),
     describe: () => leaves.map(toConfigVar),
     get: (): T => {
       // What injected code sees: the container's binding, which a module or a
@@ -269,7 +306,7 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
  * with one prefix would read the same variables, and are refused.
  */
 export function loadSettings(
-  sections: Iterable<Settings<unknown>>,
+  declarations: Iterable<SettingsDeclaration>,
   env: NodeJS.ProcessEnv = process.env,
   /**
    * Prefixes already taken, across calls — an app binds in two phases (app
@@ -279,6 +316,18 @@ export function loadSettings(
 ): Map<Settings<unknown>, unknown> {
   const values = new Map<Settings<unknown>, unknown>()
   const failures: string[] = []
+  // A provided value wins over the same section read from env, wherever each
+  // was declared — a test's provide() must not lose to a module's section.
+  const provided = new Map<Settings<unknown>, unknown>()
+  const sections: Settings<unknown>[] = []
+  for (const decl of declarations) {
+    if (isProvided(decl)) {
+      provided.set(decl.section, decl.value)
+      sections.push(decl.section)
+    } else {
+      sections.push(decl)
+    }
+  }
   for (const section of sections) {
     if (values.has(section)) continue
     const other = byPrefix.get(section.prefix)
@@ -290,7 +339,7 @@ export function loadSettings(
     }
     byPrefix.set(section.prefix, section)
     try {
-      const value = section.load(env)
+      const value = provided.has(section) ? section.parse(provided.get(section)) : section.load(env)
       values.set(section, value)
       // `get()` returns what the app started with.
       cached.set(section, value)
