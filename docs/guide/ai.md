@@ -41,9 +41,9 @@ Optional peers, installed only if you use the matching feature:
 
 ## Wire up the adapter
 
-Register `AiAdapter` with a provider. Environment variables flow
-through the framework's `getEnv` utility so the values participate in
-your Zod env schema:
+Register `AiAdapter` with a provider. Here the key comes from the app's
+env schema through `getEnv`; to have the package read and validate its
+own variables instead, see [Provider config from the environment](#provider-config-from-the-environment):
 
 ```ts
 import { bootstrap, getEnv } from '@forinda/kickjs'
@@ -81,6 +81,122 @@ export class AgentService {
       ],
     })
     return res.content
+  }
+}
+```
+
+### Provider config from the environment
+
+`@forinda/kickjs-ai/settings` builds a provider from a [settings section](./configuration.md#settings-sections-definesettings) instead of `getEnv` calls. It reads the variables the providers' own SDKs already use, and the app validates them at startup:
+
+```ts
+import { AiAdapter } from '@forinda/kickjs-ai'
+import { openAIFromSettings } from '@forinda/kickjs-ai/settings'
+
+export const app = await bootstrap({
+  modules,
+  adapters: [AiAdapter({ provider: openAIFromSettings() })],
+})
+```
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...
+OPENAI_DEFAULT_CHAT_MODEL=gpt-4o-mini
+# OPENAI_BASE_URL=http://localhost:11434/v1   # any OpenAI-compatible endpoint
+```
+
+| Section             | Variables                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `OpenAISettings`    | `OPENAI_API_KEY` (required), `OPENAI_BASE_URL`, `OPENAI_DEFAULT_CHAT_MODEL`, `OPENAI_DEFAULT_EMBED_MODEL`, `OPENAI_ORGANIZATION` |
+| `AnthropicSettings` | `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_CHAT_MODEL`, `ANTHROPIC_DEFAULT_MAX_TOKENS`                        |
+
+Each variable maps to the provider option of the same name (`OPENAI_DEFAULT_CHAT_MODEL` is `defaultChatModel`), and any of them can come from a file: `OPENAI_API_KEY_FILE=/run/secrets/openai` ([secrets from files](./configuration.md#secrets-from-files)).
+
+What you get over `new OpenAIProvider({ apiKey: getEnv(...) })`:
+
+- **Startup validation.** `AiAdapter` declares the provider's section, so a missing `OPENAI_API_KEY` or a malformed `OPENAI_BASE_URL` fails startup naming the variable, not the first request.
+- **Listed in `.env.example`.** [`kick env example`](./cli-commands.md#kick-env-example) picks the section up from the adapter.
+- **Visible origins.** [`app.configOrigins()`](./configuration.md#where-a-value-came-from) and DevTools' `/_debug/config` show whether each value came from env, a file, or nothing.
+- **Testable.** The provider is built on first use, after the app has bound its settings. Loading the app reads no environment, and a test can supply the values with `provide()`.
+
+No schema library is needed. The sections validate themselves, so they work the same whether the app uses Zod, Valibot, Yup or none. The entry is separate from the main one because it needs a `@forinda/kickjs` that has `defineSettings`. The main entry still works with older versions.
+
+#### Anthropic
+
+```ts
+import { anthropicFromSettings } from '@forinda/kickjs-ai/settings'
+
+AiAdapter({ provider: anthropicFromSettings(undefined, { effort: 'medium' }) })
+```
+
+`ANTHROPIC_API_KEY` is optional here, as it is for the SDK: unset, the SDK uses its own credential lookup (an `ant auth login` profile).
+
+#### Options env can't carry
+
+The second argument takes the rest of the provider's options (`retry`, `fetch`, `name`, `effort`, `client`). A variable that is set wins over the same option, so code can hold a default that the environment overrides:
+
+```ts
+openAIFromSettings(OpenAISettings, {
+  defaultChatModel: 'gpt-4o-mini', // OPENAI_DEFAULT_CHAT_MODEL overrides it
+  retry: { maxRetries: 5 },
+})
+```
+
+#### A second provider
+
+`.scoped(name)` puts the name in front of the prefix, so a local Ollama reads `OLLAMA_OPENAI_*` beside OpenAI's `OPENAI_*`:
+
+```ts
+import { OpenAISettings, openAIFromSettings } from '@forinda/kickjs-ai/settings'
+
+const Ollama = OpenAISettings.scoped('OLLAMA')
+
+export const app = await bootstrap({
+  modules,
+  // AiAdapter declares only its own provider's section; declare the other one.
+  settings: [Ollama],
+  adapters: [AiAdapter({ provider: openAIFromSettings() })],
+})
+
+// later, from a plugin or module
+ai.registerProvider('ollama', openAIFromSettings(Ollama, { name: 'ollama' }))
+```
+
+```bash
+OLLAMA_OPENAI_API_KEY=ollama
+OLLAMA_OPENAI_BASE_URL=http://localhost:11434/v1
+OLLAMA_OPENAI_DEFAULT_CHAT_MODEL=llama3.1
+```
+
+#### In tests
+
+Supply the values instead of setting env. A provided value wins over the section the adapter declares:
+
+```ts
+const { app } = await createTestApp({
+  modules,
+  adapters: [AiAdapter({ provider: openAIFromSettings(OpenAISettings, { fetch: fakeFetch }) })],
+  settings: [OpenAISettings.provide({ apiKey: 'test', baseURL: 'http://llm.test/v1' })],
+})
+```
+
+To skip the network altogether, use [`ScriptedProvider`](#testing) instead.
+
+#### Reading the values elsewhere
+
+The section is an injection token, like any other:
+
+```ts
+import { Inject, Service, type SettingsOf } from '@forinda/kickjs'
+import { OpenAISettings } from '@forinda/kickjs-ai/settings'
+
+@Service()
+class ModelInfo {
+  constructor(@Inject(OpenAISettings) private readonly openai: SettingsOf<typeof OpenAISettings>) {}
+
+  model() {
+    return this.openai.defaultChatModel ?? 'gpt-4o-mini'
   }
 }
 ```
@@ -947,6 +1063,11 @@ new OpenAIProvider({
 
 The `name` override is optional but helpful — it shows up in logs and
 debug UIs so you can tell at a glance which endpoint is being hit.
+
+To configure these from env instead, give each its own scoped section:
+`openAIFromSettings(OpenAISettings.scoped('OPENROUTER'), { name: 'openrouter' })`
+reads `OPENROUTER_OPENAI_API_KEY`, `OPENROUTER_OPENAI_BASE_URL`, and so on.
+See [A second provider](#a-second-provider).
 
 ## Testing
 
