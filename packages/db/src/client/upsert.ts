@@ -12,12 +12,16 @@ import {
   type UpdateObject,
 } from 'kysely'
 import { UniqueViolationError } from '../db-errors'
+import { MAX_PARAMS, chunksFor, inChunks, type InsertManyOptions } from './insert-many'
 import type { KickDbClient } from './types'
 
 type Row = Record<string, unknown>
 
-export interface UpsertOptions<DB, T extends keyof DB & string> {
-  /** The row — or rows — to insert. */
+export interface UpsertOptions<DB, T extends keyof DB & string> extends InsertManyOptions {
+  /**
+   * The row — or rows — to insert. Many rows are split into statements that
+   * fit the dialect's parameter limit, in one transaction (see `insertMany`).
+   */
   values: Insertable<DB[T]> | ReadonlyArray<Insertable<DB[T]>>
   /**
    * The unique key (or primary key) whose conflict turns the insert into an
@@ -66,6 +70,17 @@ export async function upsert<DB, T extends keyof DB & string>(
 ): Promise<Selectable<DB[T]>[]> {
   const rows = (Array.isArray(opts.values) ? opts.values : [opts.values]) as Row[]
   if (rows.length === 0) return []
+  const chunks = chunksFor(rows, opts.maxParams ?? MAX_PARAMS[db.dialect])
+  return inChunks(db, chunks, opts.atomic ?? true, (chunk) => upsertChunk(db, table, opts, chunk))
+}
+
+/** One statement's worth of `upsert`. */
+async function upsertChunk<DB, T extends keyof DB & string>(
+  db: KickDbClient<DB>,
+  table: T,
+  opts: UpsertOptions<DB, T>,
+  rows: Row[],
+): Promise<Selectable<DB[T]>[]> {
   const target = [...opts.target] as string[]
   if (target.length === 0) throw new Error('kickjs-db: upsert() needs at least one target column')
 

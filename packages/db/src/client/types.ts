@@ -176,8 +176,9 @@ export interface KickDbClient<DB = RegisteredDB> {
 
   /**
    * Insert, or update the rows whose `target` key already exists — one
-   * statement (`ON CONFLICT … DO UPDATE` / `ON DUPLICATE KEY UPDATE`).
-   * Returns the rows as stored.
+   * statement (`ON CONFLICT … DO UPDATE` / `ON DUPLICATE KEY UPDATE`), or
+   * several in one transaction when the rows pass the dialect's parameter
+   * limit. Returns the rows as stored.
    *
    *   await db.upsert('users', { values: { email, name }, target: ['email'] })
    */
@@ -188,6 +189,27 @@ export interface KickDbClient<DB = RegisteredDB> {
   upsert<T extends keyof DB & string>(
     table: T,
     opts: import('./upsert').UpsertOptions<DB, T> & { values: ReadonlyArray<Insertable<DB[T]>> },
+  ): Promise<Selectable<DB[T]>[]>
+
+  /**
+   * Insert any number of rows, in as few statements as the dialect's limit on
+   * bind parameters allows (65,535 on Postgres and MySQL, 32,766 on SQLite),
+   * in one transaction. `insertInto(t).values(rows)` is one statement, and
+   * fails past that limit. Returns how many rows went in — or, with
+   * `returning: true`, the rows (Postgres, SQLite).
+   *
+   *   await db.insertMany('events', rows)
+   *   await db.insertMany('events', rows, { maxParams: 100, atomic: false }) // Cloudflare D1
+   */
+  insertMany<T extends keyof DB & string>(
+    table: T,
+    rows: ReadonlyArray<Insertable<DB[T]>>,
+    options?: import('./insert-many').InsertManyOptions & { returning?: false },
+  ): Promise<number>
+  insertMany<T extends keyof DB & string>(
+    table: T,
+    rows: ReadonlyArray<Insertable<DB[T]>>,
+    options: import('./insert-many').InsertManyOptions & { returning: true },
   ): Promise<Selectable<DB[T]>[]>
 
   /**
