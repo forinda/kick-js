@@ -106,6 +106,16 @@ export interface SlowQueryEvent extends QueryEvent {
   thresholdMs: number
 }
 
+/** A read about to run, for {@link CreateDbClientOptions.route}. */
+export interface ReadRoute {
+  /** The table it reads — `undefined` for a join list, a subquery, raw SQL. */
+  table: string | undefined
+  /** How many replicas there are: valid indexes are `0` to `replicas - 1`. */
+  replicas: number
+}
+
+export type ReadRouter = (read: ReadRoute) => 'primary' | number | undefined
+
 export interface KickDbClientEvents {
   beforeQuery: BeforeQueryEvent
   query: QueryEvent
@@ -322,6 +332,17 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * own writes through `db.primary`.
    */
   replica?: KyselyDialect | readonly KyselyDialect[]
+  /**
+   * Where each read outside a transaction goes, when there are replicas:
+   * return `'primary'`, a replica's index, or `undefined` for the default
+   * (replicas in turn). Called per read with the table it reads (`undefined`
+   * for a query not on one table). For read-your-writes after a request
+   * wrote, tables that replicate late, a replica in the caller's region, or
+   * skipping one that lags:
+   *
+   *   route: ({ table }) => (wroteThisRequest() || table === 'balances' ? 'primary' : undefined)
+   */
+  route?: ReadRouter
   /**
    * Enable lifecycle event emission for `query` / `queryError` /
    * `slowQuery` / `transactionStart` / `transactionCommit` /

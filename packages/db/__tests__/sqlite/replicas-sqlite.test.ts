@@ -95,3 +95,69 @@ describe('read replicas', () => {
     expect(db.primary).toBe(db)
   })
 })
+
+describe('route', () => {
+  const make = (route: Parameters<typeof createDbClient>[0]['route']) =>
+    createDbClient({
+      schema,
+      dialect: sqliteDialect({ database: database('from primary') }),
+      replica: [
+        sqliteDialect({ database: database('from replica 0') }),
+        sqliteDialect({ database: database('from replica 1') }),
+      ],
+      route,
+    })
+  const read = async (db: ReturnType<typeof make>) =>
+    bodies(await db.selectFrom('notes').select('body').execute())
+
+  it('sends each read where it says, with the table it reads', async () => {
+    const seen: unknown[] = []
+    let target: 'primary' | number | undefined = 'primary'
+    const db = make((r) => {
+      seen.push(r)
+      return target
+    })
+    expect(await read(db)).toEqual(['from primary'])
+    target = 1
+    expect(await read(db)).toEqual(['from replica 1'])
+    expect(bodies(await db.query.notes.findMany())).toEqual(['from replica 1'])
+    expect(seen).toEqual([
+      { table: 'notes', replicas: 2 },
+      { table: 'notes', replicas: 2 },
+      { table: 'notes', replicas: 2 },
+    ])
+  })
+
+  it('falls back to replicas in turn when it returns undefined', async () => {
+    const db = make(() => undefined)
+    expect([...(await read(db)), ...(await read(db))]).toEqual(['from replica 0', 'from replica 1'])
+  })
+
+  it('reads a table from the primary while others use replicas: read-your-writes', async () => {
+    const pinned = new Set(['notes'])
+    const db = make(({ table }) => (table && pinned.has(table) ? 'primary' : undefined))
+    expect(bodies(await db.selectFrom('notes as n').select('n.body').execute())).toEqual([
+      'from primary',
+    ])
+  })
+
+  it('is not asked inside a transaction or through db.primary', async () => {
+    let calls = 0
+    const db = make(() => {
+      calls++
+      return 0
+    })
+    await db.transaction(async () => {
+      expect(await read(db)).toEqual(['from primary'])
+    })
+    expect(bodies(await db.primary.selectFrom('notes').select('body').execute())).toEqual([
+      'from primary',
+    ])
+    expect(calls).toBe(0)
+  })
+
+  it('throws on an index out of range', async () => {
+    const db = make(() => 5)
+    await expect(read(db)).rejects.toThrow('route() returned 5')
+  })
+})

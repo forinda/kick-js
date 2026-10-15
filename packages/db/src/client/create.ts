@@ -183,6 +183,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     root: kysely,
     replicas,
     nextReplica: 0,
+    route: opts.route,
     transactions: new AsyncLocalStorage(),
     query: {
       relations,
