@@ -230,6 +230,14 @@ const qs = (params: Record<string, string | number | undefined>): string =>
     Object.entries(params).flatMap(([k, v]) => (v === undefined ? [] : [[k, String(v)]])),
   ).toString()
 
+/** Where a variable's value comes from (`app.configOrigins()`). */
+export type ValueOrigin = 'env' | 'file' | 'provided' | 'default' | 'unset'
+
+export interface ConfigOrigins {
+  env: Array<{ name: string; origin: ValueOrigin }>
+  sections: Array<{ prefix: string; vars: Array<{ name: string; origin: ValueOrigin }> }>
+}
+
 export const rpc = {
   jobs: () => get<{ sources: JobSource[] }>('/jobs'),
   jobList: (p: { source: string; queue: string; state: JobState; start: number; end: number }) =>
@@ -257,6 +265,8 @@ export const rpc = {
       process?: ProcessInfo
     }>('/runtime'),
   topology: () => get<TopologySnapshot>('/topology'),
+  /** Where each declared config variable's value comes from — names only. */
+  configOrigins: () => get<ConfigOrigins>('/config/origins'),
   /** Request counters and per-route latency. */
   metrics: () => get<MetricsResponse>('/metrics'),
   /** Where a route's handler is declared — for "open in editor". */

@@ -15,6 +15,7 @@ import { SocketsTab } from './tabs/SocketsTab'
 import { DatabaseTab } from './tabs/DatabaseTab'
 import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
+import { ConfigTab } from './tabs/ConfigTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
 import { startTrafficSampler } from './lib/traffic'
@@ -39,6 +40,7 @@ type BuiltInTabId =
   | 'queues'
   | 'database'
   | 'activity'
+  | 'config'
 
 interface BuiltInTabSpec {
   id: BuiltInTabId
@@ -71,6 +73,7 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
       count: () => Object.keys(store.ws().namespaces ?? {}).length || undefined,
     },
     { id: 'metrics', label: 'Metrics' },
+    { id: 'config', label: 'Config' },
     { id: 'requests', label: 'Requests' },
     {
       id: 'container',
@@ -117,7 +120,7 @@ interface TabGroup {
 }
 const TAB_GROUPS: readonly TabGroup[] = [
   { label: null, ids: ['overview'] },
-  { label: 'Runtime', ids: ['runtime', 'metrics', 'requests'] },
+  { label: 'Runtime', ids: ['runtime', 'metrics', 'requests', 'config'] },
   { label: 'Architecture', ids: ['routes', 'sockets', 'container'] },
   { label: 'Data & Jobs', ids: ['database', 'queues'] },
   { label: null, ids: ['activity'] },
@@ -516,6 +519,9 @@ export const App: Component = () => {
               <RuntimeTab />
               <TopologyTab />
             </div>
+          </Show>
+          <Show when={active() === 'config'}>
+            <ConfigTab />
           </Show>
           <Show when={active() === 'routes'}>
             <RoutesTab />

@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 import { writeFileSafe } from '../utils/fs'
-import { execBin } from '../config'
+import { execBin, runScript, type PackageManager } from '../config'
 import { packageManagerSpec, yarnrc } from './templates/project-config'
 import { generateDockerfile, generateDockerignore } from './templates/docker'
 import { runCommand } from '../utils/shell'
@@ -309,7 +309,7 @@ function webPackageJson(name: string, versions: Record<string, string>): string 
 
 // ── root templates ────────────────────────────────────────────────────
 
-function rootPackageJson(
+export function rootPackageJson(
   name: string,
   pm: string,
   cliVersion: string,
@@ -339,6 +339,9 @@ function rootPackageJson(
           // scripts, so the bare name resolves locally, and a missing install
           // fails loudly instead of fetching a stranger.
           typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web',
+          test: 'pnpm --filter ./server test',
+          // The server's own `format` command (kick.config.ts).
+          format: 'cd server && kick format',
         }
       : {
           // cd-based scripts — the one form npm, yarn (classic AND berry),
@@ -365,6 +368,9 @@ function rootPackageJson(
           // scripts, so the bare name resolves locally, and a missing install
           // fails loudly instead of fetching a stranger.
           typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web',
+          test: `cd server && ${pm} run test`,
+          // The server's own `format` command (kick.config.ts).
+          format: 'cd server && kick format',
         }
   return `${JSON.stringify(
     {
@@ -403,6 +409,10 @@ ${pm === 'pnpm' ? 'pnpm dev            # server (kick dev) + web (vite), in para
 \`\`\`
 
 Server: http://localhost:3000 · Web: http://localhost:5173 (Vite proxies \`/api\`).
+
+From this root: \`${runScript(pm as PackageManager, 'test')}\` (the server's tests), \`${runScript(pm as PackageManager, 'typecheck')}\` (both packages),
+\`${runScript(pm as PackageManager, 'format')}\` and \`${runScript(pm as PackageManager, 'build')}\`. The \`kick\` CLI itself runs in \`server/\`, which holds
+\`kick.config.ts\`: \`cd server && ${execBin(pm as PackageManager, 'kick')} typegen\`.
 
 ## The type loop
 
