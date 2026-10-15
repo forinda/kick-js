@@ -1,5 +1,16 @@
 # @forinda/kickjs-devtools
 
+## 7.11.0
+
+### Minor Changes
+
+- [#911](https://github.com/forinda/kick-js/pull/911) [`06ff901`](https://github.com/forinda/kick-js/commit/06ff9014e0dd9b82077b4fdbb039c3e01c41f3ac) Thanks [@forinda](https://github.com/forinda)! - A **Config** tab shows where each variable the app declares gets its value: the environment, a `<NAME>_FILE`, the schema's default, `provide()`, or unset. The env schema comes first, then each settings section. Its data comes from a new `/_debug/config/origins` endpoint. That endpoint serves names only, never values, so it's available without `exposeConfig`.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.10.0
 
 ### Minor Changes

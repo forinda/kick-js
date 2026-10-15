@@ -1,5 +1,24 @@
 # @forinda/kickjs-cli
 
+## 8.10.1
+
+### Patch Changes
+
+- [#906](https://github.com/forinda/kick-js/pull/906) [`642032f`](https://github.com/forinda/kick-js/commit/642032faf1c3e0f8e91b3c294112ec15cac67584) Thanks [@forinda](https://github.com/forinda)! - Commands printed and written for npm, yarn and bun projects run as printed.
+  
+  - `kick new` ends with `npm run dev` (not `npm dev`) and lists the CLI as `npx kick …` / `pnpm exec kick …` / `yarn kick …` / `bunx kick …`. A bare `kick` needs a global install. The README, `CLAUDE.md` and `AGENTS.md` it writes say the same.
+  - Install hints in `kick doctor`, `kick dev`, `kick typecheck`, `kick tinker`, `kick explain`, `kick build:*` and typegen name the project's package manager instead of `pnpm`.
+  - `kick typecheck` finds a type-checker installed at the workspace root, where npm, yarn and bun put it.
+  - `kick build:netlify` / `build:vercel` bundles a package installed at the workspace root instead of leaving it out of the function.
+  - Yarn 2+ projects get `.yarnrc.yml` with `nodeLinker: node-modules`, and a Dockerfile using `yarn install --immutable` and `yarn workspaces focus --all --production`. Bun before 1.2 gets `bun.lockb` in its Dockerfile.
+  - The `test` script passes on a new project with no tests yet (`vitest run --passWithNoTests`).
+  - `kick g agents` and `kick add` read the package manager from the nearest lockfile, not the first kind found up the tree. With nothing to go on, `kick g agents` assumes npm, like `kick add`.
+
+- [#910](https://github.com/forinda/kick-js/pull/910) [`023a544`](https://github.com/forinda/kick-js/commit/023a54438c71ad67c7a159378df39e4e35fb3e82) Thanks [@forinda](https://github.com/forinda)! - A fullstack workspace root gets `test` (the server's tests) and `format` (the server's `kick format`) scripts. Its `CLAUDE.md`, `AGENTS.md` and README list `run test`, `run typecheck` and `run format` from the root, rather than `kick typecheck` / `kick format`, which have no `kick.config.ts` at the root to run against.
+- Updated dependencies [[`4613b07`](https://github.com/forinda/kick-js/commit/4613b07fc8b80597bd67e033b5c3c992e4a15c9e), [`10f4bc2`](https://github.com/forinda/kick-js/commit/10f4bc213a8301a5c6fabd6bb3fc929be35c5db8), [`5292e9a`](https://github.com/forinda/kick-js/commit/5292e9a568d00d5c11f24b775c4b9c71161e38a7)]:
+  - @forinda/kickjs@10.3.0
+  - @forinda/kickjs-db@8.7.0
+
 ## 8.10.0
 
 ### Minor Changes

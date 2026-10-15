@@ -1,5 +1,17 @@
 # @forinda/kickjs
 
+## 10.3.0
+
+### Minor Changes
+
+- [#912](https://github.com/forinda/kick-js/pull/912) [`4613b07`](https://github.com/forinda/kick-js/commit/4613b07fc8b80597bd67e033b5c3c992e4a15c9e) Thanks [@forinda](https://github.com/forinda)! - `verifyPassword(password, stored, { legacy })` verifies hashes in other formats, such as bcrypt or argon2 rows imported from another system, through a `LegacyHasher` (`matches` + `verify`, your library's own check). A match returns `needsRehash: true`, so the account moves to scrypt at its next login. Each hasher gives a `dummy` hash. Every check runs scrypt once and each hasher once, so a scrypt account, an imported one and a missing one take the same time. Scrypt hashes never reach a legacy hasher, and a `verify` that throws counts as a failed match.
+
+### Patch Changes
+
+- [#913](https://github.com/forinda/kick-js/pull/913) [`10f4bc2`](https://github.com/forinda/kick-js/commit/10f4bc213a8301a5c6fabd6bb3fc929be35c5db8) Thanks [@forinda](https://github.com/forinda)! - Fastify and h3 apps work on Netlify and Vercel. `kick build:netlify|vercel` bundles the app into one file, but the runtimes loaded `fastify`, `h3`, `@fastify/middie`, `@fastify/multipart`, `serve-static` and `multer` through `createRequire`. A bundler leaves those calls in place, and the deployed function has no `node_modules`, so every request failed with "Cannot find module 'fastify'" (or 'h3'). Express uploads (`multer`) failed the same way. They now load through `import`, which the bundle inlines: `fastify` and `h3` statically in their own runtime entries, the rest when first used. A missing `multer` is now reported on the first upload request rather than when the route is built. `h3` is now declared as an optional peer dependency (`^2.0.0`), as `fastify` already was, so strict installs (pnpm) link it where `@forinda/kickjs/h3` can resolve it.
+
+- [#907](https://github.com/forinda/kick-js/pull/907) [`5292e9a`](https://github.com/forinda/kick-js/commit/5292e9a568d00d5c11f24b775c4b9c71161e38a7) Thanks [@forinda](https://github.com/forinda)! - `ViewAdapter` renders in production builds. It resolved `viewsDir` from the working directory only, so a deployment holding just `dist/` — the Dockerfile `kick new` writes — answered every `ctx.render()` with a 500 ("Failed to lookup view"). It now looks in the project first (`KICK_APP_ROOT` when a Netlify or Vercel function sets it, else the working directory), then beside the running entry file, where `copyDirs: ['src/views']` puts the templates (`dist/src/views`).
+
 ## 10.2.0
 
 ### Minor Changes
