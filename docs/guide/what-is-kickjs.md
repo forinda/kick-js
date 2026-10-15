@@ -46,6 +46,7 @@ db  swagger  ws  devtools  ...
 - **@forinda/kickjs-devtools** — Debug dashboard at /\_debug
 - **@forinda/kickjs-ai** — AI/LLM integration adapter
 - **@forinda/kickjs-mcp** — Model Context Protocol adapter
+- **@forinda/kickjs-storage** — File storage: memory, disk, S3 / R2 / MinIO, signed URLs
 - **@forinda/kickjs-cli** — Project scaffolding, module and adapter generators, custom commands
 - **@forinda/kickjs-vite** — Vite HMR plugin, envWatchPlugin, dev tooling
 - **@forinda/kickjs-testing** — Test utilities for integration testing

@@ -636,6 +636,31 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/storage:
+    dependencies:
+      '@forinda/kickjs-schema':
+        specifier: workspace:^
+        version: link:../schema
+    devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
+      '@swc/core':
+        specifier: ^1.16.13
+        version: 1.16.13
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      unplugin-swc:
+        specifier: ^2.0.0
+        version: 2.0.0(@swc/core@1.16.13)(esbuild@0.27.4)(rolldown@1.2.13)(rollup@4.59.0)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.1))
+      vitest:
+        specifier: ^5.0.3
+        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.1))
+
   packages/swagger:
     dependencies:
       '@forinda/kickjs-schema':

@@ -104,6 +104,13 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     description: 'AI toolkit — LLM providers, tool definitions from controllers',
   },
 
+  // Files — memory, disk, S3 / R2 / MinIO. No SDK peers.
+  storage: {
+    pkg: '@forinda/kickjs-storage',
+    peers: [],
+    description: 'File storage — memory, disk, S3-compatible buckets, signed URLs',
+  },
+
   // API
   swagger: {
     pkg: '@forinda/kickjs-swagger',

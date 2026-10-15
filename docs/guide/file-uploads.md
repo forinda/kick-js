@@ -138,7 +138,7 @@ importCsv(ctx: RequestContext) {}
 doc(ctx: RequestContext) {}
 ```
 
-Rule of thumb: **portable + memory → `@FileUpload`; Express-specific storage engine → `upload.*()` middleware.**
+Rule of thumb: **portable + memory → `@FileUpload`; Express-specific storage engine → `upload.*()` middleware.** To keep the file after the request, on disk or in an S3 / R2 bucket on any runtime, pass `ctx.file.buffer` to [File Storage](./file-storage.md).
 :::
 
 ## UploadOptions

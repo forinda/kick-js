@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "@forinda/kickjs": ["../kickjs/src/index.ts"],
+      "@forinda/kickjs/*": ["../kickjs/src/*"],
+      "@forinda/kickjs-storage": ["./src/index.ts"],
+      "@forinda/kickjs-storage/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "__tests__"]
+}
