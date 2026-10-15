@@ -122,6 +122,29 @@ What you get over `new OpenAIProvider({ apiKey: getEnv(...) })`:
 
 No schema library is needed. The sections validate themselves, so they work the same whether the app uses Zod, Valibot, Yup or none. The entry is separate from the main one because it needs a `@forinda/kickjs` that has `defineSettings`. The main entry still works with older versions.
 
+#### Your own schema
+
+The built-in sections check only what every app needs. For your own rules, or other variable names, define the section with your own schema (Zod, Valibot, Yup, anything [`defineSettings`](./configuration.md#any-schema-library) reads) and pass it in:
+
+```ts
+import { defineSettings } from '@forinda/kickjs'
+import { openAIFromSettings } from '@forinda/kickjs-ai/settings'
+
+export const LlmSettings = defineSettings(
+  'LLM',
+  z.object({
+    apiKey: z.string().startsWith('sk-'),
+    baseURL: z.url().default('https://api.openai.com/v1'),
+    defaultChatModel: z.string().default('gpt-4o-mini'),
+    budgetCents: z.coerce.number().default(500), // your own field, ignored by the provider
+  }),
+)
+
+AiAdapter({ provider: openAIFromSettings(LlmSettings) }) // reads LLM_API_KEY, LLM_BASE_URL, …
+```
+
+The section's value must fit the provider's options: an `apiKey` string, and optional `baseURL`, `defaultChatModel` and so on. A section that doesn't fit is a type error. It's declared, validated and listed exactly like the built-in one, and failures carry your schema's messages, naming the variable.
+
 #### Anthropic
 
 ```ts

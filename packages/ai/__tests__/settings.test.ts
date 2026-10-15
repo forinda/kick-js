@@ -4,7 +4,7 @@
  */
 import 'reflect-metadata'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Application, Container } from '@forinda/kickjs'
+import { Application, Container, defineSettings } from '@forinda/kickjs'
 import { AiAdapter } from '@forinda/kickjs-ai'
 import { AnthropicSettings, OpenAISettings, openAIFromSettings } from '../src/settings'
 
@@ -100,5 +100,44 @@ describe('the sections need no schema library', () => {
         .filter((v) => v.required)
         .map((v) => v.name),
     ).toEqual(['OPENAI_API_KEY'])
+  })
+})
+
+describe('a section from your own schema', () => {
+  it('works with any schema library, prefix and extra fields', async () => {
+    const { z } = await import('zod')
+    const Llm = defineSettings(
+      'LLM',
+      z.object({
+        apiKey: z.string().startsWith('sk-'),
+        baseURL: z.url(),
+        defaultChatModel: z.string().default('gpt-4o-mini'),
+        budgetCents: z.coerce.number().default(500), // the app's own field
+      }),
+    )
+    vi.stubEnv('LLM_API_KEY', 'sk-custom')
+    vi.stubEnv('LLM_BASE_URL', 'http://llm.test/v1')
+    let body: { model?: string } = {}
+    const provider = openAIFromSettings(Llm, {
+      fetch: (async (_url: string | URL | Request, init?: RequestInit) => {
+        body = JSON.parse(String(init?.body))
+        return reply()
+      }) as typeof globalThis.fetch,
+    })
+    await new Application({ modules: [], adapters: [AiAdapter({ provider })] }).setup()
+    await provider.chat({ messages: [{ role: 'user', content: 'x' }] })
+    expect(body.model).toBe('gpt-4o-mini')
+    expect(Llm.get().budgetCents).toBe(500)
+  })
+
+  it('fails startup with the schema’s own rules, naming the variable', async () => {
+    const { z } = await import('zod')
+    const Llm = defineSettings('LLM2', z.object({ apiKey: z.string().min(20) }))
+    vi.stubEnv('LLM2_API_KEY', 'short')
+    const app = new Application({
+      modules: [],
+      adapters: [AiAdapter({ provider: openAIFromSettings(Llm) })],
+    })
+    await expect(app.setup()).rejects.toThrow(/LLM2_API_KEY/)
   })
 })
