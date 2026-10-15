@@ -13,7 +13,7 @@
  * adopter may already have an IDE or separate watch doing the job.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 export interface TypecheckBin {
@@ -35,10 +35,7 @@ export interface TypecheckBin {
  */
 export function resolveTypecheckBin(projectDir: string): TypecheckBin | null {
   const isWin = process.platform === 'win32'
-  // Nearest `node_modules/.bin` up from the project: npm, yarn and bun install
-  // a workspace package's tools at the workspace root.
-  for (let dir = resolve(projectDir); ; dir = dirname(dir)) {
-    const binDir = join(dir, 'node_modules', '.bin')
+  for (const binDir of localBinDirs(projectDir)) {
     // `vue-tsc` first, and it being installed is the signal: plain tsc does not
     // understand `.vue`, so in a Vue project it matches no inputs and reports
     // TS18003 "No inputs were found" while real errors sit unchecked in the
@@ -52,8 +49,33 @@ export function resolveTypecheckBin(projectDir: string): TypecheckBin | null {
         }
       }
     }
-    if (dirname(dir) === dir) return null
   }
+  return null
+}
+
+/**
+ * The `node_modules/.bin` folders whose tools are this project's: its own,
+ * then its workspace root's — npm, yarn and bun install a workspace package's
+ * tools there. No further up: a binary in some parent folder is not ours to run.
+ */
+export function localBinDirs(projectDir: string): string[] {
+  const project = resolve(projectDir)
+  const root = workspaceRoot(project)
+  return (root ? [project, root] : [project]).map((dir) => join(dir, 'node_modules', '.bin'))
+}
+
+/** The nearest folder above `dir` that declares a workspace holding it, if any. */
+function workspaceRoot(dir: string): string | undefined {
+  for (let up = dirname(dir); up !== dirname(up); up = dirname(up)) {
+    if (existsSync(join(up, 'pnpm-workspace.yaml'))) return up
+    try {
+      const pkg = JSON.parse(readFileSync(join(up, 'package.json'), 'utf-8'))
+      if (pkg.workspaces) return up
+    } catch {
+      // no package.json here — keep looking
+    }
+  }
+  return undefined
 }
 
 export interface TypecheckResult {

@@ -54,16 +54,30 @@ describe('detectPackageManager', () => {
   })
 })
 
-it('finds the type-checker a workspace installed at its root (npm, yarn, bun hoist it)', () => {
-  const root = tmp()
-  mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true })
-  writeFileSync(
-    join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc'),
-    '',
-  )
-  const server = join(root, 'server')
-  mkdirSync(server)
-  expect(resolveTypecheckBin(server)?.kind).toBe('tsc')
+describe('resolveTypecheckBin', () => {
+  const tsc = process.platform === 'win32' ? 'tsc.cmd' : 'tsc'
+  const withTsc = (dir: string) => {
+    mkdirSync(join(dir, 'node_modules', '.bin'), { recursive: true })
+    writeFileSync(join(dir, 'node_modules', '.bin', tsc), '')
+  }
+
+  it('finds the type-checker a workspace installed at its root (npm, yarn, bun hoist it)', () => {
+    const root = tmp()
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ workspaces: ['server'] }))
+    withTsc(root)
+    const server = join(root, 'server')
+    mkdirSync(server)
+    expect(resolveTypecheckBin(server)?.cmd).toBe(join(root, 'node_modules', '.bin', tsc))
+  })
+
+  it("never runs one from a parent folder that isn't the project's workspace", () => {
+    const parent = tmp()
+    withTsc(parent) // e.g. a node_modules/.bin someone left in /tmp
+    const project = join(parent, 'app')
+    mkdirSync(project)
+    writeFileSync(join(project, 'package.json'), '{}')
+    expect(resolveTypecheckBin(project)).toBeNull()
+  })
 })
 
 describe('Yarn 2+ and older Bun', () => {

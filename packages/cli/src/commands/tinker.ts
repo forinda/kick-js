@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { fork } from 'node:child_process'
 import type { Command } from 'commander'
 import { detectPackageManager } from '../utils/package-manager'
+import { localBinDirs } from './dev-typecheck'
 
 export function registerTinkerCommand(program: Command): void {
   program
@@ -118,13 +119,9 @@ server.on('exit', () => {
 }
 
 function findBin(startDir: string, name: string): string | null {
-  let dir = startDir
-  while (true) {
-    const candidate = join(dir, 'node_modules', '.bin', name)
+  for (const binDir of localBinDirs(startDir)) {
+    const candidate = join(binDir, name)
     if (existsSync(candidate)) return candidate
-    const parent = resolve(dir, '..')
-    if (parent === dir) break
-    dir = parent
   }
   return null
 }
