@@ -68,10 +68,11 @@ interface H3v2Module {
 
 export interface H3RuntimeOptions {
   /**
-   * Pre-imported h3 module, for when the app's `h3` is not the one this
-   * package resolves (a linked checkout, a bundler):
+   * Pre-imported h3 module, for when the app's `h3` is a different copy from
+   * the one this package resolves (a linked checkout):
    * `h3Runtime({ h3: await import('h3') })`.
-   * Omitted → the installed `h3` peer.
+   * Omitted → the installed `h3` peer. The peer must be installed either way:
+   * this entry imports it statically so `kick build:netlify|vercel` bundles it.
    */
   h3?: unknown
 }
