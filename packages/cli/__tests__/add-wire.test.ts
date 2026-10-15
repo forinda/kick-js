@@ -113,6 +113,38 @@ describe('wireEntry', () => {
   })
 })
 
+describe('kick add storage', () => {
+  it('writes src/storage.ts, the env and gitignore lines, and wires storageAdapter()', async () => {
+    tmp()
+    mkdirSync(join(dir, 'src'))
+    writeFileSync(join(dir, '.gitignore'), 'node_modules\n')
+    writeFileSync(
+      join(dir, 'src/index.ts'),
+      "import { bootstrap } from '@forinda/kickjs'\n\nawait bootstrap({\n  modules,\n  adapters: [],\n})\n",
+    )
+    const plan = planWiring(['storage'])!
+    expect(plan.dependencies).toEqual(['@forinda/kickjs-storage'])
+    const changed = await applyLayerFiles(dir, plan.files)
+    expect(changed.toSorted()).toEqual(['.env.example', '.gitignore', 'src/storage.ts'])
+    expect(readFileSync(join(dir, '.gitignore'), 'utf-8')).toBe('node_modules\nuploads/\n.tus/\n')
+    expect(readFileSync(join(dir, 'src/storage.ts'), 'utf-8')).toContain(
+      'export const storageAdapter',
+    )
+
+    const result = await wireEntry(dir, 'src/index.ts', plan.integrations)
+    expect(result.added).toEqual(['storageAdapter'])
+    const entry = readFileSync(join(dir, 'src/index.ts'), 'utf-8')
+    expect(entry).toContain("import { storageAdapter } from './storage'")
+    expect(entry).toMatch(/adapters: \[[\s\S]*storageAdapter\(\)/)
+
+    // Again: nothing new.
+    expect(await applyLayerFiles(dir, plan.files)).toEqual([])
+    expect((await wireEntry(dir, 'src/index.ts', plan.integrations)).present).toEqual([
+      'storageAdapter',
+    ])
+  })
+})
+
 describe('kick add --entry', () => {
   it('stops before installing when the entry file does not exist', async () => {
     tmp()

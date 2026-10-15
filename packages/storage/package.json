@@ -31,6 +31,14 @@
     "./tus": {
       "import": "./dist/tus.mjs",
       "types": "./dist/tus.d.mts"
+    },
+    "./disk": {
+      "import": "./dist/disk.mjs",
+      "types": "./dist/disk.d.mts"
+    },
+    "./adapter": {
+      "import": "./dist/adapter.mjs",
+      "types": "./dist/adapter.d.mts"
     }
   },
   "files": [

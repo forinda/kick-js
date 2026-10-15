@@ -6,8 +6,10 @@ const pkg = readPkg(import.meta.dirname)
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    disk: 'src/disk.ts',
     settings: 'src/settings.ts',
     tus: 'src/tus.ts',
+    adapter: 'src/adapter.ts',
   },
   format: ['esm'],
   platform: 'node',

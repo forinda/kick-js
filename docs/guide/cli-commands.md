@@ -515,7 +515,7 @@ kick add --list --all     # full optional catalog
 
 ### Wiring: adapters added for you
 
-`swagger`, `devtools`, `ws` and `queue` (BullMQ; also `queue:bullmq`) are wired as well as installed — the same way `kick new --packages` wires them:
+`swagger`, `devtools`, `ws`, `queue` (BullMQ; also `queue:bullmq`) and `storage` are wired as well as installed — the same way `kick new --packages` wires them:
 
 - the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), with its import. An `adapters` list is created if the call has none;
 - `queue` adds `REDIS_HOST` / `REDIS_PORT` to `.env` and `.env.example` — only the keys that aren't there, so existing values stay;

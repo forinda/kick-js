@@ -13,6 +13,7 @@ const OPTIONAL_PACKAGES = [
   { value: 'ws', label: 'WebSocket', hint: 'rooms, heartbeat' },
   { value: 'queue', label: 'Queue', hint: 'BullMQ/RabbitMQ/Kafka' },
   { value: 'devtools', label: 'DevTools', hint: 'debug dashboard' },
+  { value: 'storage', label: 'Storage', hint: 'disk, S3 / R2 / MinIO' },
 ] as const
 
 export function registerInitCommand(program: Command): void {

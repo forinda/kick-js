@@ -22,6 +22,7 @@ export const FEATURE_LAYERS: Record<string, string> = {
   ws: 'feature-ws',
   queue: 'feature-queue',
   'queue:bullmq': 'feature-queue',
+  storage: 'feature-storage',
 }
 
 /** The layers `packages` bring, rendered — or undefined when none has one. */

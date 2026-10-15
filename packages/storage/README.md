@@ -8,10 +8,13 @@ File storage for KickJS — one `Storage` interface over memory, local disk, and
 kick add storage
 ```
 
+This writes `src/storage.ts` and adds `storageAdapter()` to `bootstrap()`. Files go to `uploads/` until `S3_BUCKET` is set. Inject the storage with `@Autowired(STORAGE)`.
+
 ## Quick Example
 
 ```ts
-import { diskStorage, s3Storage } from '@forinda/kickjs-storage'
+import { s3Storage } from '@forinda/kickjs-storage' // Node, Bun, Deno, Workers
+import { diskStorage } from '@forinda/kickjs-storage/disk' // Node
 
 const files =
   process.env.NODE_ENV === 'production'

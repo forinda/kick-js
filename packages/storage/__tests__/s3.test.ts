@@ -13,22 +13,26 @@ const aws = {
 const EMPTY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 
 describe('SigV4', () => {
-  it("matches AWS's signed GET with a Range header", () => {
+  it("matches AWS's signed GET with a Range header", async () => {
     const url = new URL('https://examplebucket.s3.amazonaws.com/test.txt')
     const headers = {
       range: 'bytes=0-9',
       'x-amz-content-sha256': EMPTY,
       'x-amz-date': '20130524T000000Z',
     }
-    expect(signV4('GET', url, headers, EMPTY, aws)).toEqual({
+    expect(await signV4('GET', url, headers, EMPTY, aws)).toEqual({
       signature: 'f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41',
       credential: 'AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request',
       signedHeaders: 'host;range;x-amz-content-sha256;x-amz-date',
     })
   })
 
-  it("matches AWS's presigned URL", () => {
-    const url = presign(new URL('https://examplebucket.s3.amazonaws.com/test.txt'), 86400, aws)
+  it("matches AWS's presigned URL", async () => {
+    const url = await presign(
+      new URL('https://examplebucket.s3.amazonaws.com/test.txt'),
+      86400,
+      aws,
+    )
     expect(url).toContain(
       'X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404',
     )
@@ -173,6 +177,20 @@ describe('s3Storage', () => {
       await expect(files.multipart.create('k')).rejects.toThrow('returned no UploadId')
     })
 
+    it('reads CommonPrefixes with a delimiter, not the echoed request prefix', async () => {
+      const { files, calls } = scripted([
+        200,
+        `<ListBucketResult><Prefix>a/</Prefix><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>
+          <Contents><Key>a/1</Key><LastModified>2026-01-01T00:00:00Z</LastModified><Size>1</Size></Contents>
+          <CommonPrefixes><Prefix>a/b/</Prefix></CommonPrefixes>
+          <CommonPrefixes><Prefix>a/R&amp;D/</Prefix></CommonPrefixes></ListBucketResult>`,
+      ])
+      const page = await files.list({ prefix: 'a/', delimiter: '/' })
+      expect(page.prefixes).toEqual(['a/b/', 'a/R&D/'])
+      expect(page.files.map((f) => f.key)).toEqual(['a/1'])
+      expect(new URL(calls[0].url).searchParams.get('delimiter')).toBe('/')
+    })
+
     it('follows listParts pages', async () => {
       const part = (n: number) =>
         `<Part><PartNumber>${n}</PartNumber><ETag>&quot;e${n}&quot;</ETag><Size>5</Size></Part>`
@@ -215,6 +233,173 @@ describe('s3Storage', () => {
         'PUT ?partNumber=1&uploadId=up-1',
         'DELETE ?uploadId=up-1',
       ])
+    })
+
+    it('uploads stream parts in parallel, up to partConcurrency', async () => {
+      let active = 0
+      let peak = 0
+      let completeBody = ''
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const req = new Request(input, init)
+        const url = new URL(req.url)
+        if (req.method === 'POST' && url.searchParams.has('uploads')) {
+          return new Response('<R><UploadId>up</UploadId></R>')
+        }
+        if (req.method === 'POST') {
+          completeBody = await req.text()
+          return new Response('<CompleteMultipartUploadResult/>')
+        }
+        active++
+        peak = Math.max(peak, active)
+        // Later parts finish first, so completion order differs from part order.
+        const n = Number(url.searchParams.get('partNumber'))
+        await new Promise((done) => setTimeout(done, 60 - n * 5))
+        active--
+        return new Response(null, { headers: { etag: `"e${n}"` } })
+      }) as unknown as typeof globalThis.fetch
+      const part = new Uint8Array(5 * 1024 * 1024)
+      await s3Storage({ ...options, fetch, partConcurrency: 3 }).put(
+        'k',
+        Readable.from(Array.from({ length: 8 }, () => part)),
+      )
+      expect(peak).toBe(3)
+      expect([...completeBody.matchAll(/<PartNumber>(\d+)/g)].map((m) => Number(m[1]))).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ])
+    })
+
+    it('uploadForm signs a POST policy with the size range and type', async () => {
+      const { files } = scripted()
+      const form = await files.uploadForm('up/a.pdf', {
+        maxSize: 1000,
+        minSize: 1,
+        contentType: 'application/pdf',
+        expiresIn: 60,
+      })
+      expect(form.url).toBe('http://s3.test/files/')
+      expect(form.fields).toMatchObject({ key: 'up/a.pdf', 'Content-Type': 'application/pdf' })
+      expect(form.fields['x-amz-signature']).toMatch(/^[0-9a-f]{64}$/)
+      const policy = JSON.parse(atob(form.fields.policy))
+      expect(policy.conditions).toContainEqual(['content-length-range', 1, 1000])
+      expect(policy.conditions).toContainEqual({ bucket: 'files' })
+      expect(policy.conditions).toContainEqual({ key: 'up/a.pdf' })
+      expect(new Date(policy.expiration).getTime() - Date.now()).toBeLessThanOrEqual(60_000)
+
+      // A family would admit image/svg+xml: exact types only.
+      for (const contentType of ['image/', 'image/*', 'image/png; x=1', 'text/html\r\nX: y']) {
+        await expect(files.uploadForm('up/b', { maxSize: 10, contentType })).rejects.toThrow(
+          'exact type',
+        )
+      }
+      await expect(files.uploadForm('x', { maxSize: 1, minSize: 2 })).rejects.toThrow('sizes')
+      await expect(files.uploadForm('../x', { maxSize: 1 })).rejects.toThrow('invalid key')
+    })
+
+    it('refuses a part size under S3 minimum', () => {
+      expect(() => s3Storage({ ...options, partSize: 1024 })).toThrow('partSize')
+      expect(() => s3Storage({ ...options, partConcurrency: 0 })).toThrow('partConcurrency')
+    })
+
+    it('putIfAbsent sends If-None-Match and reads 412 / 409 as taken', async () => {
+      const { files, calls } = scripted([200, ''], [412, ''], [409, ''])
+      expect(await files.putIfAbsent('k', 'a')).toBe(true)
+      expect(await files.putIfAbsent('k', 'b')).toBe(false)
+      expect(await files.putIfAbsent('k', 'c')).toBe(false)
+      expect(calls[0].headers.get('if-none-match')).toBe('*')
+    })
+
+    it('putIfAbsent streams a large body in parts, conditional on completing', async () => {
+      const big = () => Readable.from([new Uint8Array(5 * 1024 * 1024), new Uint8Array(10)])
+      const won = scripted(
+        [404, ''], // HEAD: not there yet
+        [200, '<R><UploadId>u1</UploadId></R>'],
+        [200, '', { etag: '"p1"' }],
+        [200, '', { etag: '"p2"' }],
+        [200, '<CompleteMultipartUploadResult/>'],
+      )
+      expect(await won.files.putIfAbsent('k', big())).toBe(true)
+      expect(won.calls.at(-1)!.headers.get('if-none-match')).toBe('*')
+
+      const lost = scripted(
+        [404, ''],
+        [200, '<R><UploadId>u2</UploadId></R>'],
+        [200, '', { etag: '"p1"' }],
+        [200, '', { etag: '"p2"' }],
+        [412, '<Error><Code>PreconditionFailed</Code></Error>'],
+        [204, ''],
+      )
+      expect(await lost.files.putIfAbsent('k', big())).toBe(false)
+      expect(lost.calls.at(-1)!.method).toBe('DELETE') // the upload is aborted
+
+      // Already there: found before uploading anything.
+      const there = scripted([200, ''])
+      expect(await there.files.putIfAbsent('k', big())).toBe(false)
+      expect(there.calls.map((c) => c.method)).toEqual(['HEAD'])
+    })
+
+    it('compose copies one source with CopyObject, signing the copy headers', async () => {
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': '10' }],
+        [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+      )
+      await files.compose('dest', ['tus/a b'], { contentType: 'text/plain' })
+      const copy = calls[1]
+      expect(copy.method).toBe('PUT')
+      expect(copy.headers.get('x-amz-copy-source')).toBe('/files/tus/a%20b')
+      expect(copy.headers.get('content-type')).toBe('text/plain')
+      expect(copy.headers.get('authorization')).toContain('x-amz-copy-source')
+    })
+
+    it('compose copies big sources in even ranges of at most 5 GiB', async () => {
+      const GiB = 1024 ** 3
+      const calls: Request[] = []
+      // Answered by request, not by order: the sources are checked in parallel.
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        const req = new Request(input, init)
+        calls.push(req)
+        const url = new URL(req.url)
+        if (req.method === 'HEAD') {
+          const size = url.pathname.endsWith('/big') ? 6 * GiB : 7
+          return new Response(null, { headers: { 'content-length': String(size) } })
+        }
+        if (url.searchParams.has('uploads')) return new Response('<R><UploadId>u</UploadId></R>')
+        if (req.method === 'PUT') {
+          return new Response(
+            `<CopyPartResult><ETag>"${url.searchParams.get('partNumber')}"</ETag></CopyPartResult>`,
+          )
+        }
+        return new Response('<CompleteMultipartUploadResult/>')
+      }) as unknown as typeof globalThis.fetch
+      await s3Storage({ ...options, endpoint: 'http://s3.test', fetch }).compose('dest', [
+        'big',
+        'tail',
+      ])
+      const ranges = calls
+        .filter((c) => c.headers.get('x-amz-copy-source-range'))
+        .map(
+          (c) =>
+            `${c.headers.get('x-amz-copy-source')} ${c.headers.get('x-amz-copy-source-range')}`,
+        )
+        .toSorted()
+      expect(ranges).toEqual([
+        `/files/big bytes=0-${3 * GiB - 1}`,
+        `/files/big bytes=${3 * GiB}-${6 * GiB - 1}`,
+        '/files/tail bytes=0-6',
+      ])
+      expect(await calls.at(-1)!.text()).toContain('<PartNumber>3</PartNumber>')
+    })
+
+    it('compose streams through when a source before the last is under 5 MiB', async () => {
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': '3' }],
+        [200, '', { 'content-length': '3' }],
+        [200, 'abc'],
+        [200, 'def'],
+        [200, ''],
+      )
+      await files.compose('dest', ['a', 'b'])
+      expect(calls.map((c) => c.method)).toEqual(['HEAD', 'HEAD', 'GET', 'GET', 'PUT'])
+      expect(await calls[4].text()).toBe('abcdef')
     })
 
     it('sends a small stream as one PUT', async () => {
