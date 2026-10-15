@@ -1,6 +1,21 @@
 # @forinda/kickjs-swagger
 
-Auto-generates an OpenAPI 3.0.3 spec from controller decorators and serves Swagger UI and ReDoc.
+Auto-generates an OpenAPI 3.0.3 spec from controller decorators and route schemas, and serves Swagger UI (local assets from `swagger-ui-dist`) and ReDoc. See the [Swagger guide](../guide/swagger.md) for the walkthrough.
+
+## Installation
+
+<PmCommand add="@forinda/kickjs-swagger" />
+
+```ts
+import { bootstrap } from '@forinda/kickjs'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
+
+bootstrap({
+  modules,
+  adapters: [SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' }, bearerAuth: true })],
+})
+// GET /docs — Swagger UI, GET /redoc — ReDoc, GET /openapi.json — the spec
+```
 
 ## SwaggerAdapter
 
@@ -34,7 +49,7 @@ SwaggerAdapter({ bearerAuth: true, publicFlag: ['auth.public', 'health.probe'] }
 ```
 
 Resolution order per route: `@ApiPublic` → `securityResolver()` → `publicFlag` →
-`bearerAuth`. The name is configuration because the framework names no flags.
+`@ApiSecurity` / `@ApiBearerAuth` → global `bearerAuth`. The name is configuration because the framework names no flags.
 
 For anything richer than a name — a flag's value, two flags combined — use
 `securityResolver` with `getRouteFlags`, which resolves method, class **and**
@@ -63,13 +78,15 @@ Pluggable interface for converting validation library schemas to JSON Schema.
 interface SchemaParser {
   readonly name: string
   supports(schema: unknown): boolean
-  toJsonSchema(schema: unknown): Record<string, unknown>
+  toJsonSchema(schema: unknown, context?: { io: 'input' | 'output' }): Record<string, unknown>
 }
 ```
 
+`io` is `'input'` for request schemas and `'output'` for response schemas, for libraries whose input and output shapes differ (defaults, transforms).
+
 ## zodSchemaParser
 
-Default schema parser for Zod v4+. Uses Zod's built-in `.toJSONSchema()` method.
+The default parser (`name: 'kickjs-schema'`). Despite the name it is not Zod-only: it goes through `@forinda/kickjs-schema`, so it handles every library that package supports (Zod, Valibot, Yup, Standard Schema) and emits OpenAPI 3.0 JSON Schema.
 
 ```typescript
 const zodSchemaParser: SchemaParser
@@ -83,20 +100,22 @@ Build a complete OpenAPI 3.0.3 spec object from all registered controllers and t
 function buildOpenAPISpec(options?: SwaggerOptions): any
 ```
 
+Memoised per `options` object; `registerControllerForDocs` and `clearRegisteredRoutes` invalidate the cache.
+
 ## registerControllerForDocs
 
-Register a controller class for OpenAPI introspection. Called automatically by `Application` during route mounting.
+Register a controller class for OpenAPI introspection. `SwaggerAdapter` calls it from `onRouteMount`, scoped to its own options object, so two adapters keep separate route lists.
 
 ```typescript
-function registerControllerForDocs(controllerClass: any, mountPath: string): void
+function registerControllerForDocs(controllerClass: any, mountPath: string, scope?: object): void
 ```
 
 ## clearRegisteredRoutes
 
-Clear all registered route metadata. Called on HMR rebuild.
+Clear registered route metadata — one adapter's scope, or every scope when omitted. Called on HMR rebuild.
 
 ```typescript
-function clearRegisteredRoutes(): void
+function clearRegisteredRoutes(scope?: object): void
 ```
 
 ## Decorators
@@ -127,6 +146,7 @@ interface ApiResponseOptions {
   status: number
   description?: string
   schema?: any
+  name?: string // component name under components/schemas; derived from the handler when omitted
 }
 ```
 
@@ -143,7 +163,7 @@ function ApiTags(...tags: string[]): ClassDecorator & MethodDecorator
 Mark an endpoint or controller as requiring Bearer token authentication.
 
 ```typescript
-function ApiBearerAuth(name?: string): ClassDecorator & MethodDecorator
+function ApiBearerAuth(name?: string): ClassDecorator & MethodDecorator // name defaults to 'BearerAuth'
 ```
 
 ### ApiSecurity
@@ -217,13 +237,25 @@ interface SwaggerOptions {
     ctx: SecurityResolverContext,
   ) => string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[] | null | undefined
   securitySchemes?: Record<string, OpenAPISecurityScheme>
+  /** Defaults to `zodSchemaParser`. */
   schemaParser?: SchemaParser
 }
+
+/** Any OpenAPI 3 SecuritySchemeObject (`http`, `apiKey`, `oauth2`, `openIdConnect`, `mutualTLS`). */
+type OpenAPISecurityScheme = Record<string, any>
 ```
 
 ## UI Generators
 
 ```typescript
-function swaggerUIHtml(specPath: string, title?: string): string
-function redocHtml(specPath: string, title?: string): string
+function swaggerUIHtml(specUrl: string, title = 'API Docs', assetsPath?: string): string
+function redocHtml(specUrl: string, title = 'API Docs'): string
 ```
+
+Pass your own `UIRenderer` as `renderSwaggerUI` / `renderReDoc` to swap either shell (Scalar, RapiDoc, Stoplight Elements).
+
+## Related
+
+- [Swagger guide](../guide/swagger.md)
+- [Schema validation](../guide/schema.md)
+- [Route flags](../guide/route-flags.md)

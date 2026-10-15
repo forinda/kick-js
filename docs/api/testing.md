@@ -39,18 +39,19 @@ const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
 interface TestClientOptions {
   headers?: Record<string, string> // sent with every request
   bearer?: string // Authorization: Bearer <token>
+  auth?: (credential: string) => Record<string, string> // what .as() sends; default Bearer
   basePath?: string // prefixed to every path
   cookies?: boolean // keep cookies between requests (a supertest agent)
 }
 
 interface TestClient {
-  get(path: string): Test // also post, put, patch, delete, head, options
-  as(token: string): TestClient // same client, with Authorization: Bearer <token>
+  get(path: string): TestRequest // also post, put, patch, delete, head, options
+  as(credential: string): TestClient // same client, authenticated via `auth` (default Bearer)
   withHeaders(headers: Record<string, string>): TestClient
 }
 ```
 
-Each method returns a supertest `Test`. `as()` and `withHeaders()` return a new client and leave the original unchanged; one scoped from a `cookies: true` client shares its cookie jar. Guide: [The request client](../guide/testing/http.md#the-request-client).
+Each method returns a supertest `Test` (typed as the exported `TestRequest`, since supertest is an optional peer). `as()` and `withHeaders()` return a new client and leave the original unchanged; one scoped from a `cookies: true` client shares its cookie jar. Guide: [The request client](../guide/testing/http.md#the-request-client).
 
 ## useTestApp
 
@@ -175,6 +176,9 @@ interface CreateTestAppOptions {
   trustProxy?: boolean | number | string
   jsonLimit?: string
   security?: ApplicationOptions['security']
+  /** Settings sections — `Section.provide({ url })` hands a test's service in. */
+  settings?: SettingsDeclaration[]
+  validationError?: ValidationErrorFactory
 }
 ```
 
@@ -217,11 +221,14 @@ interface PluginTestHarness {
 
 ## runContributor
 
-Run a single Context Contributor in isolation against a fake `ExecutionContext`. Skips the DI container, the topo-sort, and the §20.9 error matrix — calls `decorator.registration.resolve(ctx, deps)` directly so unit tests can assert pure resolve behaviour.
+Run a single Context Contributor in isolation against a fake `ExecutionContext`. Skips the DI container, the topo-sort, and the contributor error matrix — calls `decorator.registration.resolve(ctx, deps)` directly so unit tests can assert pure resolve behaviour.
 
 ```typescript
-async function runContributor<K extends string, D extends Record<string, any>>(
-  decorator: ContextDecorator<K, D, ExecutionContext>,
+async function runContributor<
+  K extends ContextMetaKey,
+  D extends Record<string, any> = Record<string, never>,
+>(
+  decorator: ContextDecorator<K, D>,
   options?: {
     /** Resolved deps passed to resolve() — skips container lookup. */
     deps?: Record<string, unknown>
@@ -262,6 +269,50 @@ const { value } = await runContributor(LoadProject, {
 expect(value).toEqual({ id: 'p-1', tenantId: 't-1' })
 ```
 
-Errors thrown by `resolve()` propagate so tests can `await expect(...).rejects.toThrow()` against them. To exercise the full §20.9 error matrix (`optional` skip, `onError` replacement), build a one-element pipeline with `buildPipeline()` and use `runContributors()` from `@forinda/kickjs` instead.
+Errors thrown by `resolve()` propagate so tests can `await expect(...).rejects.toThrow()` against them. To exercise the full error matrix (`optional` skip, `onError` replacement), build a one-element pipeline with `buildPipeline()` and use `runContributors()` from `@forinda/kickjs` instead.
 
 See [Context Decorators](../guide/context-decorators.md) for the full pipeline reference.
+
+## startService / startContainer
+
+Start a real backing service in Docker through [Testcontainers](https://node.testcontainers.org/) and get back how to reach it. Needs Docker and the optional `testcontainers` peer (`pnpm add -D testcontainers`); without it the call throws with that install hint.
+
+```typescript
+function startService(kind: ServiceKind, options?: ServiceOptions): Promise<StartedService>
+function startContainer(spec: ContainerSpec): Promise<StartedService>
+
+type ServiceKind = 'postgres' | 'redis' | 'minio'
+
+interface ServiceOptions {
+  image?: string // override the preset image, e.g. 'postgres:16-alpine'
+}
+
+interface ContainerSpec {
+  image: string
+  port: number // port inside the container
+  env?: Record<string, string>
+  entrypoint?: string[]
+  command?: string[]
+  waitFor?: { log: RegExp; times?: number } // "ready" log line, checked `times` times (default 1)
+  url: (host: string, port: number) => string
+}
+
+interface StartedService {
+  url: string // e.g. postgres://test:test@127.0.0.1:55012/test
+  host: string
+  port: number // mapped host port
+  stop(): Promise<void>
+}
+```
+
+Presets: `postgres` (`postgres:17-alpine`, user/password/db `test`), `redis` (`redis:7-alpine`), `minio` (serves `/data`, bucket `test` pre-created).
+
+```typescript
+const pg = await startService('postgres')
+afterAll(() => pg.stop())
+
+const { app } = await createTestApp({
+  modules,
+  settings: [DbSettings.provide({ url: pg.url })],
+})
+```

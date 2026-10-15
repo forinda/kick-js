@@ -31,9 +31,6 @@
  * - No Babel/SWC parsing needed
  * - False positives are harmless (extra invalidation is safe)
  *
- * @see bench-mark/tanstack-router-analysis.md — Detection pattern origin
- * @see v3/plan.md Step 5 — Design rationale
- *
  * @module @forinda/kickjs-vite/hmr-plugin
  */
 
@@ -46,7 +43,7 @@ import { rewarmApp } from './warm'
  * Test whether a watcher event refers to a file we should react to.
  *
  * Vite's chokidar fires for everything under the project root. We only
- * want code that the running Express app could realistically depend on:
+ * want code that the running app could realistically depend on:
  *
  *  - **Source extensions only.** `.ts`, `.tsx`, `.js`, `.jsx`, `.mts`,
  *    `.cts`, `.mjs`, `.cjs`. JSON / lockfiles / images / typegen

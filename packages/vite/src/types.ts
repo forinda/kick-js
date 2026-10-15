@@ -24,7 +24,7 @@
 export interface KickJSPluginOptions {
   /**
    * Path to the application entry file, relative to the project root.
-   * This file should export an Express app instance from `bootstrap()`.
+   * This file should export the app from `bootstrap()`.
    *
    * @default 'src/index.ts'
    *

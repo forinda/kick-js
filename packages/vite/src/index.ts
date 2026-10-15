@@ -2,7 +2,7 @@
  * @forinda/kickjs-vite — Vite plugin for the KickJS framework.
  *
  * Provides first-class Vite integration for KickJS backend applications:
- * - **Dev server**: Mounts Express on Vite's HTTP server (single port)
+ * - **Dev server**: Mounts the app on Vite's HTTP server (single port)
  * - **HMR**: Fresh server code on every request via `ssrLoadModule()`
  * - **httpServer piping**: Real `http.Server` available to all adapters
  * - **Virtual modules**: Auto-generated application entry
@@ -28,7 +28,7 @@
  * import { bootstrap } from '@forinda/kickjs'
  * import { UserModule } from './modules/users/user.module'
  *
- * // Export the Express app — Vite serves it in dev, you start it in prod
+ * // Export the app — Vite serves it in dev, you start it in prod
  * export const app = bootstrap({
  *   modules: [UserModule],
  *   middlewares: [express.json()],
@@ -50,7 +50,7 @@
  * | `kickjs:module-discovery` | Auto-discover `@Module` classes via `transform()` |
  * | `kickjs:hmr` | Selective container invalidation via `handleHotUpdate()` |
  * | `kickjs:virtual-modules` | `virtual:kickjs/app` resolution and generation |
- * | `kickjs:dev-server` | `configureServer()` — mounts Express, pipes httpServer |
+ * | `kickjs:dev-server` | `configureServer()` — mounts the app, pipes httpServer |
  *
  * ## httpServer Piping
  *
@@ -59,9 +59,7 @@
  * GraphQL subscriptions) attach to this server via the standard
  * `afterStart({ server })` hook. Zero adapter code changes needed.
  *
- * @see v3/architecture.md — Full architecture documentation
- * @see v3/plan.md — Implementation plan and rationale
- * @see bench-mark/react-router-analysis.md — Pattern origin
+ * @see https://kickjs.app/api/vite
  *
  * @module @forinda/kickjs-vite
  */
