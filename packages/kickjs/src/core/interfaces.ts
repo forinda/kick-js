@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { DI_METADATA } from './di/interfaces'
+import { DI_METADATA } from '@forinda/kickjs-di'
 
 export {
   Scope,
@@ -10,7 +10,7 @@ export {
   type Buildable,
   type ClassKind,
   type PostConstructStatus,
-} from './di/interfaces'
+} from '@forinda/kickjs-di'
 
 /** A value that may or may not be wrapped in a Promise */
 export type MaybePromise<T = void> = T | Promise<T>

@@ -1,3 +1,9 @@
 import './di-hooks'
 
-export * from './di/container'
+export {
+  Container,
+  tokenName,
+  type ContainerChangeEvent,
+  type ContainerChangeListener,
+  type KickJsRegistry,
+} from '@forinda/kickjs-di'

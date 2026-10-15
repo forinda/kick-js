@@ -1,18 +1,33 @@
 import 'reflect-metadata'
 import './di-hooks'
+import { _registerInjectable } from '@forinda/kickjs-di'
 import { METADATA, Scope } from './interfaces'
-import { _registerInjectable } from './di/decorators'
 import {
   setClassMeta,
   setMethodMeta,
   pushClassMeta,
   pushMethodMeta,
   setInMetaMap,
-} from './di/metadata'
+} from './metadata'
 
-// The DI decorators (`@Service`, `@Inject`, `@Value`, …) live in `./di`;
+// The DI decorators (`@Service`, `@Inject`, `@Value`, …) live in `@forinda/kickjs-di`;
 // this module adds the HTTP ones and `@Asset`, and re-exports both.
-export * from './di/decorators'
+export {
+  Injectable,
+  Service,
+  Component,
+  Repository,
+  PostConstruct,
+  PreDestroy,
+  Autowired,
+  Inject,
+  Value,
+  Builder,
+  withBuilder,
+  type PropertyOrParameterDecorator,
+  type EnvKey,
+  type Env,
+} from '@forinda/kickjs-di'
 
 /**
  * Mark a class as an HTTP controller and register it in the DI container.

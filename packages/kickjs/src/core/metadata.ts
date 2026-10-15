@@ -1,1 +1,15 @@
-export * from './di/metadata'
+export {
+  setClassMeta,
+  setMethodMeta,
+  getClassMeta,
+  getMethodMeta,
+  hasClassMeta,
+  getClassMetaOrUndefined,
+  getMethodMetaOrUndefined,
+  pushClassMeta,
+  pushMethodMeta,
+  setInMetaMap,
+  getMetaMap,
+  setInMetaRecord,
+  getMetaRecord,
+} from '@forinda/kickjs-di'
