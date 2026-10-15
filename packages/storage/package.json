@@ -12,7 +12,9 @@
     "s3",
     "r2",
     "minio",
-    "presigned-url"
+    "presigned-url",
+    "tus",
+    "resumable-upload"
   ],
   "type": "module",
   "main": "dist/index.mjs",
@@ -25,6 +27,10 @@
     "./settings": {
       "import": "./dist/settings.mjs",
       "types": "./dist/settings.d.mts"
+    },
+    "./tus": {
+      "import": "./dist/tus.mjs",
+      "types": "./dist/tus.d.mts"
     }
   },
   "files": [
@@ -51,8 +57,13 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-testing": "workspace:*",
     "@swc/core": "^1.16.13",
     "@types/node": "^26.6.5",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "testcontainers": "12.2.0",
+    "tus-js-client": "^4.3.1",
     "typescript": "^7.0.2",
     "unplugin-swc": "^2.0.0",
     "vitest": "^5.0.3"

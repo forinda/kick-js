@@ -130,7 +130,7 @@ const { app } = await createTestApp({
 })
 ```
 
-`startService('redis')` starts `redis:7-alpine`; `{ image }` picks another tag. For anything else, `startContainer({ image, port, env, waitFor: { log }, url: (host, port) => … })`. Each returns `{ url, host, port, stop() }`.
+`startService('redis')` starts `redis:7-alpine`, and `startService('minio')` starts an S3-compatible MinIO with an empty `test` bucket and the credentials `minioadmin` / `minioadmin` (see [File Storage](../file-storage.md#in-tests)). `{ image }` picks another tag. For anything else, use `startContainer({ image, port, env, entrypoint, command, waitFor: { log }, url: (host, port) => … })`. Each returns `{ url, host, port, stop() }`.
 
 Both need Docker and the `testcontainers` package (`pnpm add -D testcontainers`); it's an optional peer, loaded only when you call them. A container takes seconds to start — for many files, prefer one per run in `globalSetup` (above).
 

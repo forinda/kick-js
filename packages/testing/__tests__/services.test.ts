@@ -66,6 +66,16 @@ describe.skipIf(!enabled)('startService', () => {
     expect(postgres.url).toMatch(/^postgres:\/\/test:test@.+:\d+\/test$/)
   })
 
+  it('starts MinIO', async () => {
+    const minio = await startService('minio')
+    try {
+      // The bucket itself is checked by kickjs-storage's live tests.
+      expect((await fetch(`${minio.url}/minio/health/ready`)).status).toBe(200)
+    } finally {
+      await minio.stop()
+    }
+  }, 120_000)
+
   it('starts Redis', async () => {
     const reply = await new Promise<string>((resolve, reject) => {
       const socket = createConnection({ host: redis.host, port: redis.port }, () =>

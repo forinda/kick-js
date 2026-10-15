@@ -334,6 +334,27 @@ construction.
 | `beforeRoutes` | Just before module routes are mounted                   |
 | `afterRoutes`  | After module routes, before error handlers              |
 
+### Reading the raw body
+
+With the default pipeline on Express, a body whose type the framework doesn't parse is answered with 415 before `afterGlobal` runs. An adapter that reads the request stream itself, such as an upload endpoint or a proxy, claims the body in `beforeGlobal` by setting `RAW_BODY`, then reads it in a later phase:
+
+```ts
+import { RAW_BODY } from '@forinda/kickjs'
+
+middleware: () => [
+  {
+    phase: 'beforeGlobal',
+    handler: (req, _res, next) => {
+      if (req.url?.startsWith('/ingest')) (req as any)[RAW_BODY] = true
+      next()
+    },
+  },
+  { handler: ingest }, // afterGlobal: cors(), csrf() and rate limits have run
+]
+```
+
+`RAW_BODY` is `Symbol.for('kick/http/raw-body')`, so a package can set it without importing it from a particular version of `@forinda/kickjs`. Fastify and h3 parse bodies inside the route, so a middleware that ends the response never reaches their parsers.
+
 ## Application Setup Pipeline
 
 The `Application.setup()` method executes these steps in order:

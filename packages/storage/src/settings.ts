@@ -15,8 +15,7 @@
  */
 import { defineSettings, type Settings, type SettingsOf } from '@forinda/kickjs'
 import type { KickSchema, SchemaIssue } from '@forinda/kickjs-schema'
-import type { Storage } from './index'
-import { s3Storage, type S3StorageOptions } from './s3'
+import { s3Storage, type S3Storage, type S3StorageOptions } from './s3'
 
 type S3Fields = {
   bucket: string
@@ -82,8 +81,8 @@ export const S3Settings = defineSettings('S3', schema)
 export function s3FromSettings(
   section: Settings<SettingsOf<typeof S3Settings>> = S3Settings,
   options: Partial<S3StorageOptions> = {},
-): Storage {
-  let storage: Storage | undefined
+): S3Storage {
+  let storage: S3Storage | undefined
   let built: S3Fields | undefined
   const real = () => {
     const settings = section.get()
@@ -94,10 +93,21 @@ export function s3FromSettings(
     return storage
   }
   return {
-    put: (key, body, putOptions) => real().put(key, body, putOptions),
-    get: (key) => real().get(key),
-    exists: (key) => real().exists(key),
-    delete: (key) => real().delete(key),
-    url: (key, urlOptions) => real().url(key, urlOptions),
+    put: (...args) => real().put(...args),
+    get: (...args) => real().get(...args),
+    getStream: (...args) => real().getStream(...args),
+    stat: (...args) => real().stat(...args),
+    exists: (...args) => real().exists(...args),
+    delete: (...args) => real().delete(...args),
+    list: (...args) => real().list(...args),
+    url: (...args) => real().url(...args),
+    uploadUrl: (...args) => real().uploadUrl(...args),
+    multipart: {
+      create: (...args) => real().multipart.create(...args),
+      partUrl: (...args) => real().multipart.partUrl(...args),
+      listParts: (...args) => real().multipart.listParts(...args),
+      complete: (...args) => real().multipart.complete(...args),
+      abort: (...args) => real().multipart.abort(...args),
+    },
   }
 }
