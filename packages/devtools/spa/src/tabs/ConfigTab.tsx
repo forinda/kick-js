@@ -81,7 +81,14 @@ export const ConfigTab: Component = () => {
         <div class="card text-sm text-red-500">{error()}</div>
       </Show>
 
-      <Show when={origins()} fallback={<div class="empty">Loading config…</div>}>
+      <Show
+        when={origins()}
+        fallback={
+          <Show when={!error()}>
+            <div class="empty">Loading config…</div>
+          </Show>
+        }
+      >
         <Show
           when={groups().length}
           fallback={<div class="empty">The app declares no env schema or settings sections.</div>}

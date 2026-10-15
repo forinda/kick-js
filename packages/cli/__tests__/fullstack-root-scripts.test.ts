@@ -20,8 +20,8 @@ describe.each(PACKAGE_MANAGERS)('fullstack root on %s', (pm) => {
     const prefix = runScript(pm, '§').replace('§', '')
     const named = [...docs.matchAll(new RegExp(`${prefix.replace(/ /g, '\\s')}([\\w:]+)`, 'g'))]
       .map((m) => m[1]!)
-      // Package-manager verbs, not scripts: `pnpm exec`, `yarn kick`, `yarn run`.
-      .filter((name) => !['install', 'add', 'exec', 'dlx', 'run', 'kick'].includes(name))
+      // Package-manager verbs, not scripts: `pnpm exec`, `pnpm link`, `yarn kick`, `yarn run`.
+      .filter((name) => !['install', 'add', 'exec', 'dlx', 'link', 'run', 'kick'].includes(name))
     expect(named.length).toBeGreaterThan(3)
     expect(named.filter((name) => !scripts.includes(name))).toEqual([])
   })

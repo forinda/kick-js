@@ -103,11 +103,13 @@ export interface LegacyHasher {
   /** Whether `password` matches `stored`: the library's own check. */
   verify(password: string, stored: string): boolean | Promise<boolean>
   /**
-   * A hash in this format, of any password, at the cost your stored rows use.
-   * Every check runs scrypt once and each legacy hasher once — against this
-   * when the account isn't in its format — so a login takes as long for a
-   * scrypt account, an imported one or a missing one, and timing can't tell
-   * them apart.
+   * A hash in this format, of any password, at the cost the rows it
+   * `matches` use. Every check runs scrypt once and each legacy hasher once —
+   * against this when the account isn't in its format — so a login takes as
+   * long for a scrypt account, an imported one or a missing one, and timing
+   * can't tell them apart. Rows at several costs: one hasher per cost, each
+   * matching its own (bcrypt's `$2b$10$` vs `$2b$12$`) with a dummy at that
+   * cost; every login then runs all of them and takes the slowest's time.
    */
   dummy: string
 }
@@ -136,7 +138,7 @@ export async function verifyPassword(
 ): Promise<PasswordCheck> {
   const { legacy = [], ...scryptCost } = options
   const parsed = stored ? parse(stored) : undefined
-  const older = !parsed && stored ? legacy.find((hasher) => hasher.matches(stored)) : undefined
+  const older = !parsed && stored ? legacy.find((hasher) => matches(hasher, stored)) : undefined
   // The same work on every path: scrypt once, and each legacy hasher once —
   // on its dummy unless the account is in its format.
   const [scrypt, checks] = await Promise.all([
@@ -159,6 +161,15 @@ export async function verifyPassword(
   const needsRehash =
     ok && (parsed.cost.N !== wanted.N || parsed.cost.r !== wanted.r || parsed.cost.p !== wanted.p)
   return { ok, needsRehash }
+}
+
+/** Whether `hasher` reads `stored`; a matcher that throws on a malformed row doesn't. */
+function matches(hasher: LegacyHasher, stored: string): boolean {
+  try {
+    return hasher.matches(stored) === true
+  } catch {
+    return false
+  }
 }
 
 /** A legacy hasher's verdict: only `true` is a match; a throw (a malformed row) is not. */

@@ -65,7 +65,19 @@ const { ok, needsRehash } = await verifyPassword(password, user?.passwordHash, {
 })
 ```
 
-Scrypt hashes are never handed to a legacy hasher. A `verify` that throws (a malformed row) counts as a failed match. `dummy` keeps logins indistinguishable: every check runs scrypt once and each legacy hasher once, against `dummy` when the account isn't in that format. A scrypt account, an imported one and a missing one therefore take the same time, so hash `dummy` at the same cost as your rows. Scrypt logins pay for one extra bcrypt check while the hasher is configured. Once no rows in the old format remain, drop the hasher and its dependency.
+Scrypt hashes are never handed to a legacy hasher. A `verify` that throws (a malformed row) counts as a failed match. `dummy` keeps logins indistinguishable: every check runs scrypt once and each legacy hasher once, against `dummy` when the account isn't in that format. A scrypt account, an imported one and a missing one therefore take the same time, provided `dummy` has the same cost as the rows the hasher matches. If imported rows use several costs, give each cost its own hasher, matched by prefix, with a dummy at that cost. Every login then runs all of them and takes as long as the slowest:
+
+```ts
+const bcryptAt = async (cost: number): Promise<LegacyHasher> => ({
+  matches: (stored) =>
+    /^\$2[aby]\$/.test(stored) && stored.slice(4, 6) === String(cost).padStart(2, '0'),
+  verify: (password, stored) => bcrypt.compare(password, stored),
+  dummy: await bcrypt.hash('dummy', cost),
+})
+const legacy = [await bcryptAt(10), await bcryptAt(12)]
+```
+
+A `matches` that throws counts as no match. Scrypt logins pay for one extra bcrypt check while the hasher is configured. Once no rows in the old format remain, drop the hasher and its dependency.
 
 ## Signed tokens: `createSigner`
 

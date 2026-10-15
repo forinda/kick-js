@@ -126,6 +126,19 @@ describe('verifyPassword with legacy formats', () => {
     }
   })
 
+  it('treats a matcher that throws on a malformed row as no match', async () => {
+    const fussy: LegacyHasher = {
+      ...sha,
+      matches: () => {
+        throw new Error('unparseable')
+      },
+    }
+    expect(await verifyPassword('hunter2', old, { ...fast, legacy: [fussy] })).toEqual({
+      ok: false,
+      needsRehash: false,
+    })
+  })
+
   it('leaves scrypt hashes to scrypt', async () => {
     const stored = await hashPassword('hunter2', fast)
     const never: LegacyHasher = { matches: () => true, verify: () => true, dummy: 'x' }
