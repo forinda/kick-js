@@ -1,34 +1,28 @@
 import { HttpException, HttpStatus } from '../../core/errors'
 import { unlink } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import type { Options as MulterOptions } from 'multer'
 import type { BaseUploadOptions, FileUploadConfig } from '../../core'
 
-// `multer` is an optional peer dependency. We load it lazily via
-// `createRequire` so importing this module never touches `multer` —
-// only constructing an upload middleware does. Adopters who never
-// call `upload.single/array/none()` or use `@FileUpload` don't need
-// `multer` installed at all.
-//
-// multer uses CJS `export = multer`, so the module is itself the
-// callable factory — no `.default` indirection on either the type
-// or the runtime side.
-const requireFromHere = createRequire(import.meta.url)
+// `multer` is an optional peer dependency, imported when the first upload
+// arrives — adopters who never take uploads don't need it installed. An
+// `import()`, not `createRequire`: a bundler follows it, so a Netlify or
+// Vercel function built by `kick build:*` carries multer with it.
 type MulterFactory = typeof import('multer')
-let _multer: MulterFactory | undefined
+type Multer = ReturnType<MulterFactory>
+let _multer: Promise<MulterFactory> | undefined
 
-function loadMulter(): MulterFactory {
-  if (_multer) return _multer
-  try {
-    _multer = requireFromHere('multer') as MulterFactory
-    return _multer
-  } catch {
-    throw new Error(
-      "@forinda/kickjs: file uploads require the 'multer' package, which is not installed.\n" +
-        'Install it as a peer dependency: pnpm add multer (or npm i multer / yarn add multer).',
-    )
-  }
+function loadMulter(): Promise<MulterFactory> {
+  return (_multer ??= import('multer').then(
+    // multer is CJS `export = multer`: the factory is the module's default.
+    (mod) => ((mod as { default?: unknown }).default ?? mod) as MulterFactory,
+    () => {
+      throw new Error(
+        "@forinda/kickjs: file uploads require the 'multer' package, which is not installed. " +
+          'Add it to your dependencies.',
+      )
+    },
+  ))
 }
 
 // Pure upload core (MIME map, type filter, applyUploadConfig) moved to
@@ -114,7 +108,28 @@ function createMulter(options: UploadOptions) {
     ...(options.dest ? { dest: options.dest } : {}),
   }
 
-  return loadMulter()(multerOptions)
+  // Built on the first request that needs it, then reused.
+  let built: Promise<Multer> | undefined
+  const lazy = (pick: (multer: Multer) => RequestHandler): RequestHandler => {
+    let handler: Promise<RequestHandler> | undefined
+    return (req, res, next) => {
+      handler ??= (built ??= loadMulter().then((multer) => multer(multerOptions))).then(pick)
+      handler.then(
+        (run) => run(req, res, next),
+        (err) => {
+          // Not cached: multer installed while `kick dev` runs works on the next upload.
+          handler = built = _multer = undefined
+          next(err)
+        },
+      )
+    }
+  }
+  return {
+    single: (field: string) => lazy((m) => m.single(field) as RequestHandler),
+    array: (field: string, maxCount: number) =>
+      lazy((m) => m.array(field, maxCount) as RequestHandler),
+    none: () => lazy((m) => m.none() as RequestHandler),
+  }
 }
 
 /**
@@ -158,7 +173,7 @@ function bothConventions(handler: RequestHandler): RequestHandler {
 
 function single(fieldName: string, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.single(fieldName) as RequestHandler, options))
+  return bothConventions(translateMulterErrors(m.single(fieldName), options))
 }
 
 /**
@@ -166,9 +181,7 @@ function single(fieldName: string, options: UploadOptions = {}): RequestHandler 
  */
 function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(
-    translateMulterErrors(m.array(fieldName, maxCount) as RequestHandler, options),
-  )
+  return bothConventions(translateMulterErrors(m.array(fieldName, maxCount), options))
 }
 
 /**
@@ -176,7 +189,7 @@ function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): R
  */
 function none(options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.none() as RequestHandler, options))
+  return bothConventions(translateMulterErrors(m.none(), options))
 }
 
 /**

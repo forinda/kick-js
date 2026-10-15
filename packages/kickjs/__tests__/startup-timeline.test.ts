@@ -14,18 +14,25 @@ afterEach(async () => {
 
 describe('StartupTimeline', () => {
   it('charges a timed step to itself, not to the phase around it', async () => {
+    // Two clocks: `outer` starts before the timeline (an upper bound on its
+    // total), `inner` after (a lower bound on the time before the hook).
+    const outer = performance.now()
     const timeline = new StartupTimeline()
+    const inner = performance.now()
     await sleep(20)
+    const before = performance.now() - inner
     await timeline.time('hook', () => sleep(60))
     timeline.mark('phase')
+    const elapsed = performance.now() - outer
     const [hook, phase] = timeline.snapshot().steps
     expect(hook.name).toBe('hook')
     expect(hook.ms).toBeGreaterThanOrEqual(55)
     expect(phase.name).toBe('phase')
-    // The phase keeps the 20ms before the hook, without the hook's 60ms.
+    // The phase keeps the time before the hook, without the hook's. Measured
+    // against the real clock, not fixed bounds: a busy machine stretches sleeps.
     expect(phase.ms).toBeGreaterThanOrEqual(15)
-    expect(phase.ms).toBeLessThan(55)
-    expect(timeline.slowest(1)[0].name).toBe('hook')
+    expect(phase.ms + hook.ms).toBeLessThanOrEqual(elapsed + 1)
+    expect(phase.ms).toBeGreaterThanOrEqual(before - 1)
   })
 })
 

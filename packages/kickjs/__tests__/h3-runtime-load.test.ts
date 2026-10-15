@@ -10,7 +10,7 @@ describe('h3Runtime() loading', () => {
   })
 
   it('fails fast on h3 v1 with the upgrade command', () => {
-    expect(() => h3Runtime({ h3: { createApp: () => ({}) } })).toThrow(/pnpm add h3@\^2/)
+    expect(() => h3Runtime({ h3: { createApp: () => ({}) } })).toThrow(/Upgrade h3 to \^2/)
   })
 
   it('keeps h3WebRuntime as an alias', () => {

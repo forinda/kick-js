@@ -15,7 +15,7 @@
 // everywhere else kick's notFound handler answers them.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createRequire } from 'node:module'
+import * as h3Peer from 'h3'
 
 import type {
   ConnectMiddleware,
@@ -24,6 +24,7 @@ import type {
   RuntimeAppOptions,
   UseConnectOptions,
 } from '../runtime'
+import { lazyServeStatic } from './lazy-serve-static'
 import { compileWebRoute, readThrough, type WebRouteHooks } from '../web/handler'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
 import { createLogger } from '../../core/logger'
@@ -32,8 +33,6 @@ import { errorHandler, notFoundHandler } from '../middleware/error-handler'
 const builtInError = errorHandler()
 const builtInNotFound = notFoundHandler()
 const log = createLogger('H3Runtime')
-
-const peerRequire = createRequire(import.meta.url)
 
 const NOTFOUND_MW = Symbol('kickjs.h3web.notFoundMw')
 const ERROR_MW = Symbol('kickjs.h3web.errorMw')
@@ -69,10 +68,11 @@ interface H3v2Module {
 
 export interface H3RuntimeOptions {
   /**
-   * Pre-imported h3 module, for when the app's `h3` is not the one this
-   * package resolves (a linked checkout, a bundler):
+   * Pre-imported h3 module, for when the app's `h3` is a different copy from
+   * the one this package resolves (a linked checkout):
    * `h3Runtime({ h3: await import('h3') })`.
-   * Omitted → the installed `h3` peer.
+   * Omitted → the installed `h3` peer. The peer must be installed either way:
+   * this entry imports it statically so `kick build:netlify|vercel` bundles it.
    */
   h3?: unknown
 }
@@ -88,11 +88,12 @@ function unwrapH3Module(mod: unknown): Record<string, unknown> {
 
 /** Resolve h3 (injected or peer-required) and fail fast unless it is v2. */
 function loadH3v2(injected?: unknown): H3v2Module {
-  const resolved = unwrapH3Module(injected ?? peerRequire('h3')) as unknown as H3v2Module
+  // A static import, so a bundle (`kick build:netlify|vercel`) carries h3.
+  const resolved = unwrapH3Module(injected ?? h3Peer) as unknown as H3v2Module
   if (typeof resolved.H3 !== 'function') {
     throw new Error(
       '@forinda/kickjs: h3Runtime() requires h3 v2, but the installed h3 has no H3 class — that is the v1 line, ' +
-        'which this version of KickJS no longer supports. Upgrade: `pnpm add h3@^2`.',
+        'which this version of KickJS no longer supports. Upgrade h3 to ^2.',
     )
   }
   return resolved
@@ -588,8 +589,7 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
 
     serveStatic(app, prefix, dir) {
       // serve-static bridged like any other connect middleware (node only).
-      const serveStatic = peerRequire('serve-static')
-      this.useConnect(app, serveStatic(dir) as ConnectMiddleware, { path: prefix })
+      this.useConnect(app, lazyServeStatic(dir), { path: prefix })
     },
 
     setNotFound(app, mw: ConnectMiddleware) {
