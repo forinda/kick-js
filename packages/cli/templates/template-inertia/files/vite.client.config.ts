@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Production builds of the pages (`pnpm build` runs both):
+// Production builds of the pages (`{{runBuild}}` runs both):
 //   vite build --config vite.client.config.ts                         → dist/client
 //   vite build --config vite.client.config.ts --ssr src/client/ssr.tsx → dist/ssr/ssr.js
 // InertiaAdapter reads dist/client/.vite/manifest.json for the script tags

@@ -23,6 +23,7 @@
  */
 
 import type { Diagnosis } from './known-issues'
+import { detectPackageManager } from '../utils/package-manager'
 
 /** Options for the AI fallback call. */
 export interface AskAiOptions {
@@ -97,7 +98,7 @@ export async function askAi(options: AskAiOptions): Promise<AskAiResult> {
         '  kick add ai\n' +
         '\n' +
         'Or manually:\n' +
-        '  pnpm add @forinda/kickjs-ai',
+        `  ${detectPackageManager()} add @forinda/kickjs-ai`,
     }
   }
 

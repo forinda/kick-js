@@ -61,7 +61,8 @@ const RECIPES: Record<Manager, (p: typeof props) => string[]> = {
       p.install && 'bun install',
       p.add && `bun add ${p.dev ? '-d ' : ''}${p.add}`,
       p.dlx && `bunx ${p.dlx}`,
-      ...lines(p.run).map((c) => `bun ${c}`),
+      // `bun run`: bare `bun test` / `bun build` are Bun's own runner and bundler.
+      ...lines(p.run).map((c) => `bun run ${c}`),
       ...lines(p.exec).map((c) => `bunx ${c}`),
     ].filter(Boolean) as string[],
 }

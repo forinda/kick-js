@@ -182,7 +182,7 @@ This config is separate from `vite.config.ts`, so changing its entry does not af
 
 ## Before the platform builds
 
-**Build from the repo root.** In a fullstack workspace that is the folder holding `pnpm-workspace.yaml` and the lockfile, not `server/`. Only an install from there covers `server/` and `web/`, the platform config files (`netlify.toml`, `vercel.json`) live there, and `.netlify/` / `.vercel/` are written there.
+**Build from the repo root.** In a fullstack workspace that is the folder holding the lockfile (and `pnpm-workspace.yaml` with pnpm), not `server/`. Only an install from there covers `server/` and `web/`, the platform config files (`netlify.toml`, `vercel.json`) live there, and `.netlify/` / `.vercel/` are written there.
 
 | Platform | Setting                           | Value                                       |
 | -------- | --------------------------------- | ------------------------------------------- |
@@ -301,12 +301,22 @@ Run them **after** `kick build`, and for fullstack after the web build too — `
 
 ::: code-group
 
-```json [Fullstack (root package.json)]
+```json [Fullstack, pnpm (root package.json)]
 {
   "scripts": {
     "build": "pnpm --filter ./server exec kick typegen && pnpm -r run build",
     "build:netlify": "pnpm build && pnpm --filter ./server exec kick build:netlify",
     "build:vercel": "pnpm build && pnpm --filter ./server exec kick build:vercel"
+  }
+}
+```
+
+```json [Fullstack, npm (yarn and bun alike)]
+{
+  "scripts": {
+    "build": "cd server && kick typegen && cd .. && npm run build:server && npm run build:web",
+    "build:netlify": "npm run build && cd server && kick build:netlify",
+    "build:vercel": "npm run build && cd server && kick build:vercel"
   }
 }
 ```

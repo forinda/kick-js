@@ -15,6 +15,7 @@ import {
   resolveTypecheckBin,
   type DevTypechecker,
 } from './dev-typecheck'
+import { detectPackageManager } from '../utils/package-manager'
 
 /**
  * Start the Vite dev server with @forinda/kickjs-vite plugin.
@@ -316,7 +317,9 @@ export function registerRunCommands(program: Command): void {
         })
       } catch (err: any) {
         if (err.code === 'ERR_MODULE_NOT_FOUND' && err.message?.includes('vite')) {
-          console.error('\n  Error: vite is not installed.\n  Run: pnpm add -D vite unplugin-swc\n')
+          console.error(
+            `\n  Error: vite is not installed.\n  Run: ${detectPackageManager()} add -D vite unplugin-swc\n`,
+          )
         } else {
           console.error('\n  Dev server failed:', err.message ?? err)
         }
@@ -443,8 +446,8 @@ export function registerRunCommands(program: Command): void {
       if (!bin) {
         console.error(
           '\n  No type-checker found. Install one in this project:' +
-            '\n    pnpm add -D typescript        (tsc)' +
-            '\n    pnpm add -D @typescript/native-preview   (tsgo, faster)\n',
+            `\n    ${detectPackageManager(dir)} add -D typescript        (tsc)` +
+            `\n    ${detectPackageManager(dir)} add -D @typescript/native-preview   (tsgo, faster)\n`,
         )
         process.exit(1)
         return

@@ -6,20 +6,22 @@ A **{{templateLabel}}** built with [KickJS](https://kickjs.app/) — a decorator
 
 ```bash
 {{packageManager}} install
-kick dev
+{{runDev}}
 ```
 
 ## Scripts
 
-| Command                              | Description                          |
-| ------------------------------------ | ------------------------------------ |
-| `kick dev`                           | Start dev server with Vite HMR       |
-| `kick build`                         | Production build                     |
-| `kick start`                         | Run production build                 |
-| `{{packageManager}} run test`        | Run tests with Vitest                |
-| `kick g module <name>`               | Generate a DDD module                |
-| `kick g scaffold <name> <fields...>` | Generate CRUD from field definitions |
-| `kick add <package>`                 | Add a KickJS package                 |
+| Command                                  | Description                          |
+| ---------------------------------------- | ------------------------------------ |
+| `{{runDev}}`                             | Start dev server with Vite HMR       |
+| `{{runBuild}}`                           | Production build                     |
+| `{{runStart}}`                           | Run production build                 |
+| `{{runTest}}`                            | Run tests with Vitest                |
+| `{{kick}} g module <name>`               | Generate a DDD module                |
+| `{{kick}} g scaffold <name> <fields...>` | Generate CRUD from field definitions |
+| `{{kick}} add <package>`                 | Add a KickJS package                 |
+
+The `kick` CLI is a dev dependency of this project, so it runs through your package manager (`{{kick}} …`) unless you install `@forinda/kickjs-cli` globally.
 
 ## Project Structure
 
@@ -38,10 +40,10 @@ src/
 ## Adding Features
 
 ```bash
-kick add swagger       # OpenAPI documentation
-kick add ws            # WebSocket support
-kick add queue         # Background job processing
-kick add --list        # Show all available packages
+{{kick}} add swagger    # OpenAPI documentation
+{{kick}} add ws         # WebSocket support
+{{kick}} add queue      # Background job processing
+{{kick}} add --list     # Show all available packages
 ```
 
 For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and notifications use the BYO recipes in the [KickJS guides](https://kickjs.app/guide/) — they wire the upstream library through `defineAdapter()` / `definePlugin()` directly, so you keep control of the integration.
@@ -89,7 +91,7 @@ export class StatusService {
 }
 ```
 
-Keys and types come from the schema: `kick dev` keeps them up to date as you edit it (or run `kick typegen`), so a misspelt key is a type error.
+Keys and types come from the schema: `{{runDev}}` keeps them up to date as you edit it (or run `{{kick}} typegen`), so a misspelt key is a type error.
 
 ## Learn More
 

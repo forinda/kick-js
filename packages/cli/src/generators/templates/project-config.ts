@@ -52,6 +52,24 @@ export function packageManagerSpec(pm: string): string | undefined {
   }
 }
 
+/** `[major, minor]` of a `packageManager` spec — `yarn@4.1.0` → `[4, 1]`. */
+export function specVersion(spec: string | undefined): [number, number] | undefined {
+  const match = spec?.match(/@(\d+)\.(\d+)\./)
+  return match ? [Number(match[1]), Number(match[2])] : undefined
+}
+
+/**
+ * Yarn 2+ installs with Plug'n'Play by default: no `node_modules`, which the
+ * CLI (typecheck, typegen, deploy), Vite and the Dockerfile all read. Yarn
+ * reads this file before it installs, so it goes in with the project.
+ */
+export function yarnrc(pm: string, spec: string | undefined): string | undefined {
+  const major = specVersion(spec)?.[0]
+  return pm === 'yarn' && major !== undefined && major >= 2
+    ? 'nodeLinker: node-modules\n'
+    : undefined
+}
+
 export function generatePackageJson(
   name: string,
   versions: SiblingVersions,
@@ -90,7 +108,7 @@ export function generatePackageJson(
         dev: 'kick dev',
         build: 'kick build',
         start: 'kick start',
-        test: 'vitest run',
+        test: 'vitest run --passWithNoTests',
         // Serverless targets — see guide/serverless.md. Each bundles
         // src/serverless.ts and writes the platform's build output.
         'build:netlify': 'kick build && kick build:netlify',

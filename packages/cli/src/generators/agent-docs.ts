@@ -10,6 +10,7 @@ import {
   generateCopilot,
 } from './templates/project-docs'
 import { loadKickConfig } from '../config'
+import { resolvePackageManager } from '../utils/package-manager'
 import type { ModuleStyle } from './templates/types'
 
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
@@ -32,7 +33,7 @@ export interface GenerateAgentDocsOptions {
   outDir: string
   /** Override project name (defaults to package.json `name`). */
   name?: string
-  /** Override package manager (defaults to package.json `packageManager` field, then 'pnpm'). */
+  /** Override package manager (default: detected as `kick add` does — config, `packageManager`, lockfile, then npm). */
   pm?: string
   /** Override template (defaults to kick.config.ts `pattern`, then 'rest'). */
   template?: ProjectTemplate
@@ -67,19 +68,6 @@ function detectName(outDir: string, override?: string): string {
   return outDir.split('/').findLast(Boolean) ?? 'app'
 }
 
-function detectPm(outDir: string, override?: string): string {
-  if (override) return override
-  try {
-    const pkg = JSON.parse(readFileSync(join(outDir, 'package.json'), 'utf-8')) as {
-      packageManager?: string
-    }
-    if (pkg.packageManager) return pkg.packageManager.split('@')[0]
-  } catch {
-    // ignore
-  }
-  return 'pnpm'
-}
-
 /**
  * Module declaration style, so generated examples show the form this project
  * actually uses. A `class` module passed as `UserModule()` calls a class
@@ -112,7 +100,7 @@ async function detectTemplate(
 export async function generateAgentDocs(options: GenerateAgentDocsOptions): Promise<string[]> {
   const only = options.only ?? 'all'
   const name = detectName(options.outDir, options.name)
-  const pm = detectPm(options.outDir, options.pm)
+  const pm = await resolvePackageManager(options.pm, options.outDir)
   const template = await detectTemplate(options.outDir, options.template)
   const style = await detectStyle(options.outDir)
 

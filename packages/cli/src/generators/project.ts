@@ -4,10 +4,11 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
+import { execBin, runScript, type PackageManager } from '../config'
 import { fillVars, renderLayers, TEMPLATES_DIR, type Integration } from '../scaffold/overlay'
 import { generateDockerfile, generateDockerignore } from './templates/docker'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
-import { generatePackageJson, packageManagerSpec } from './templates/project-config'
+import { generatePackageJson, packageManagerSpec, yarnrc } from './templates/project-config'
 import {
   AVAILABLE_ADD_PACKAGES,
   TEMPLATE_BUILDS,
@@ -16,6 +17,17 @@ import {
 } from '../commands/add'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/** Template vars for the commands a project's docs print, spelled for `pm`. */
+export function commandVars(pm: PackageManager): Record<string, string> {
+  return {
+    kick: execBin(pm, 'kick'),
+    runDev: runScript(pm, 'dev'),
+    runBuild: runScript(pm, 'build'),
+    runStart: runScript(pm, 'start'),
+    runTest: runScript(pm, 'test'),
+  }
+}
 
 /**
  * The CLI's own package.json sits one level up from the bundle
@@ -465,16 +477,14 @@ export async function initProject(
   )
 
   // ── package.json ─────────────────────────────────────────────────────
+  // A workspace member inherits the root's.
+  const pmSpec = options.platformConfig !== false ? packageManagerSpec(packageManager) : undefined
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(
-      name,
-      versions,
-      project,
-      // A workspace member inherits the root's.
-      options.platformConfig !== false ? packageManagerSpec(packageManager) : undefined,
-    ),
+    generatePackageJson(name, versions, project, pmSpec),
   )
+  const yarnConfig = yarnrc(packageManager, pmSpec)
+  if (yarnConfig) await writeFileSafe(join(dir, '.yarnrc.yml'), yarnConfig)
 
   // tsconfig, vite/vitest/kick config, formatter/editor/git config, .env
   // files (`.env.test` is read INSTEAD of `.env` under a test run, so
@@ -486,6 +496,7 @@ export async function initProject(
     template,
     runtime,
     packageManager,
+    ...commandVars(packageManager),
     // Netlify serves this directory before the function: an Inertia app's
     // built pages and assets, else an empty one so nothing shadows the API.
     netlifyPublish: template === 'inertia' ? 'dist/client' : 'dist/public',
@@ -505,7 +516,10 @@ export async function initProject(
   // the workspace's own Dockerfile instead.
   if (options.platformConfig !== false) {
     const kind = template === 'inertia' ? 'inertia' : 'api'
-    await writeFileSafe(join(dir, 'Dockerfile'), generateDockerfile(kind, packageManager, name))
+    await writeFileSafe(
+      join(dir, 'Dockerfile'),
+      generateDockerfile(kind, packageManager, name, pmSpec),
+    )
     await writeFileSafe(join(dir, '.dockerignore'), generateDockerignore())
   }
 
@@ -583,33 +597,44 @@ export async function initProject(
   if (needsCd) log(`  cd ${name}`)
   if (!options.installDeps) log(`  ${packageManager} install`)
 
+  const kick = execBin(packageManager, 'kick')
   const genHint: Record<string, string> = {
-    rest: 'kick g module user',
+    rest: `${kick} g module user`,
     minimal: '# add your routes to src/index.ts',
     inertia: '# pages: src/modules/pages + src/client/pages',
   }
   log(`  ${genHint[template] ?? genHint.rest}`)
-  log('  kick dev')
+  log(`  ${runScript(packageManager, 'dev')}`)
+  const rows = (list: [string, string][]) => {
+    const width = Math.max(...list.map(([cmd]) => cmd.length)) + 2
+    for (const [cmd, what] of list) log(`  ${cmd.padEnd(width)}${what}`)
+  }
   log('')
   log('Commands:')
-  log('  kick dev                  Start dev server with Vite HMR')
-  log('  kick build                Production build via Vite')
-  log('  kick start                Run production build')
+  rows([
+    [runScript(packageManager, 'dev'), 'Start dev server with Vite HMR'],
+    [runScript(packageManager, 'build'), 'Production build via Vite'],
+    [runScript(packageManager, 'start'), 'Run production build'],
+  ])
   log('')
   log('Generators:')
-  log('  kick g module <name>      REST module (controller, service, DTOs, repository)')
-  log('  kick g scaffold <n> <f..> CRUD module from field definitions')
-  log('  kick g controller <name>  Standalone controller')
-  log('  kick g service <name>     @Service() class')
-  log('  kick g middleware <name>   Global connect-style middleware')
-  log('  kick g guard <name>       Route guard (auth, roles, etc.)')
-  log('  kick g adapter <name>     AppAdapter with lifecycle hooks')
-  log('  kick g dto <name>         DTO schema (Zod / Valibot / Yup)')
-  log('  kick g config             Generate kick.config.ts')
+  rows([
+    [`${kick} g module <name>`, 'REST module (controller, service, DTOs, repository)'],
+    [`${kick} g scaffold <n> <f..>`, 'CRUD module from field definitions'],
+    [`${kick} g controller <name>`, 'Standalone controller'],
+    [`${kick} g service <name>`, '@Service() class'],
+    [`${kick} g middleware <name>`, 'Global connect-style middleware'],
+    [`${kick} g guard <name>`, 'Route guard (auth, roles, etc.)'],
+    [`${kick} g adapter <name>`, 'AppAdapter with lifecycle hooks'],
+    [`${kick} g dto <name>`, 'DTO schema (Zod / Valibot / Yup)'],
+    [`${kick} g config`, 'Generate kick.config.ts'],
+  ])
   log('')
   log('Add packages:')
-  log('  kick add <pkg>            Install a KickJS package + peers')
-  log('  kick add --list           Show all available packages')
+  rows([
+    [`${kick} add <pkg>`, 'Install a KickJS package + peers'],
+    [`${kick} add --list`, 'Show all available packages'],
+  ])
   log('')
   log(`Available: ${AVAILABLE_ADD_PACKAGES}`)
   log('')

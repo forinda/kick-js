@@ -57,7 +57,7 @@ Paths in `types` resolve relative to the config file, so a config in a subdirect
 Producing the map builds a TypeScript program over the whole server, so it is a build step, not a per-save one:
 
 - `kick new` writes it once, and the root `build` script runs `kick typegen` before building `web/`, so a production build always has a current map.
-- **`kick dev` writes it when it starts, not on save.** After you add a route or change what a handler returns, run `kick typegen` in `server/` — `pnpm --filter ./server exec kick typegen` from the root — and the web app's types follow.
+- **`kick dev` writes it when it starts, not on save.** After you add a route or change what a handler returns, run `kick typegen` in `server/` — `pnpm --filter ./server exec kick typegen` from the root with pnpm, `cd server && npx kick typegen` with npm — and the web app's types follow.
 - `kick typegen --check` fails when the map is stale; put it in CI.
 - On TypeScript 7 the map needs the TypeScript 6 compiler API. The fullstack server already has `@typescript/typescript6` as a dev dependency; without it, `kick typegen` warns and skips the map.
 
@@ -106,14 +106,15 @@ The question is whether the browser reaches the API on the same origin as the we
 
 **One Node process** — Render, Railway, Fly.io, a VM, a container. The root `build` script builds both apps, and the server serves the web app through `SpaAdapter`:
 
+<PmCommand install run="build" />
+
 ```bash
-pnpm install && pnpm build    # typegen, server build, web build
-cd server && pnpm start       # kick start — API on /api, web/dist for everything else
+cd server && NODE_ENV=production node dist/index.js   # API on /api, web/dist for everything else
 ```
 
 Deploy the whole workspace, since the server reads `../web/dist` at runtime. Set `PORT` to whatever the platform gives you; nothing in `web/` changes.
 
-**Netlify or Vercel** — `pnpm build:netlify` or `pnpm build:vercel`. The platform serves `web/dist` and runs the API as a function on `/api/*` of the same site. [Serverless](./serverless.md) covers both, including the `serverless.ts` entry that leaves `SpaAdapter` out.
+**Netlify or Vercel** — the root `build:netlify` or `build:vercel` script. The platform serves `web/dist` and runs the API as a function on `/api/*` of the same site. [Serverless](./serverless.md) covers both, including the `serverless.ts` entry that leaves `SpaAdapter` out.
 
 ### Separate deploys
 

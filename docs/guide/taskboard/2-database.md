@@ -33,17 +33,36 @@ export default defineConfig({
     schemaPath: 'src/db/schema.ts',
     migrationsDir: 'db/migrations',
     dialect: 'sqlite',
-    adapter: async () => {
-      const Database = (await import('better-sqlite3')).default
-      const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
-      return sqliteAdapter({ database: new Database(process.env.DB_FILE ?? 'taskboard.db') })
-    },
+    // The app's own connection, from src/db/client.ts (below).
+    adapter: async () => (await import('./src/db/client')).migrationAdapter,
   },
   // …the rest of the generated config
 })
 ```
 
-`schemaPath` is where `kick db generate` reads your tables; `adapter` is the connection `kick db migrate` uses. `DB_FILE` lets production point at a different file — you'll use it in Part 5.
+`schemaPath` is where `kick db generate` reads your tables. `adapter` is the connection `kick db migrate` uses: the app's own, from `src/db/client.ts` below. The import is inside the function, so the client loads only when a `kick db` command calls `adapter`. Other `kick` commands read this config without loading it. The app imports the same file when it starts, so the database is opened in one file, with one handle shared by the app's queries and its migrations.
+
+One file opens the database. It builds the typed client the app queries through, and the migration adapter both the app and `kick db` run migrations with. It imports the schema you write next:
+
+```ts
+// src/db/client.ts
+import Database from 'better-sqlite3'
+import { createDbClient } from '@forinda/kickjs-db'
+import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import * as schema from './schema'
+
+const database = new Database(process.env.DB_FILE ?? 'taskboard.db')
+// SQLite leaves foreign keys off by default; ON DELETE CASCADE needs them on.
+database.pragma('foreign_keys = ON')
+
+export const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })
+export type AppDb = typeof db
+
+// The same connection runs migrations — one handle, not two.
+export const migrationAdapter = sqliteAdapter({ database })
+```
+
+`DB_FILE` lets production point at a different file; you'll use it in Part 5. `kick db` reads it from this file too, through the config's `adapter`, so the app and the CLI always open the same database. This file is imported on its own by `kick db`, without `src/index.ts`. If it reads `getEnv()` rather than `process.env`, give it `import '../config'` first.
 
 ## The schema
 
@@ -155,13 +174,10 @@ A generated migration is a draft until someone has read it. Mark it reviewed, th
 
 Outside development the runner refuses unreviewed migrations, so a migration nobody looked at never reaches production. [Migrations](../database/migrations.md) covers status, rollback and the rest.
 
-In development you rarely need `migrate latest` by hand — the app applies pending migrations as it boots. That's the `kickDbAdapter` in `src/index.ts` (`migrationAdapter` comes from `src/db/client.ts`, written in [the next section](#the-client-in-di)):
+In development you rarely need `migrate latest` by hand — the app applies pending migrations as it boots. That's the `kickDbAdapter` in `src/index.ts` (`migrationAdapter` comes from `src/db/client.ts`, [above](#mount-the-kick-db-commands)):
 
 ```ts
 // src/index.ts
-import { kickDbAdapter } from '@forinda/kickjs-db'
-import { migrationAdapter } from './db/client'
-
 import 'reflect-metadata'
 import './config'
 import { bootstrap, cors, expressRuntime, helmet, requestId, requestLogger } from '@forinda/kickjs'
@@ -191,27 +207,7 @@ Anywhere else, the app refuses to start while a migration is pending — Part 5 
 
 ## The client, in DI
 
-One file opens the database and builds the typed client:
-
-```ts
-// src/db/client.ts
-import Database from 'better-sqlite3'
-import { createDbClient } from '@forinda/kickjs-db'
-import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
-import * as schema from './schema'
-
-const database = new Database(process.env.DB_FILE ?? 'taskboard.db')
-// SQLite leaves foreign keys off by default; ON DELETE CASCADE needs them on.
-database.pragma('foreign_keys = ON')
-
-export const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })
-export type AppDb = typeof db
-
-// The same connection runs migrations — one handle, not two.
-export const migrationAdapter = sqliteAdapter({ database })
-```
-
-Code reaches it through a token rather than an import, so a test can hand in a different database:
+`src/db/client.ts`, from [above](#mount-the-kick-db-commands), builds the typed client. Code reaches it through a token rather than an import, so a test can hand in a different database:
 
 ```ts
 // src/db/token.ts

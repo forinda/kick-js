@@ -10,7 +10,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { SIBLING_PACKAGES, THIRD_PARTY_PACKAGES, scaffoldLayers } from '../src/generators/project'
+import {
+  SIBLING_PACKAGES,
+  THIRD_PARTY_PACKAGES,
+  commandVars,
+  scaffoldLayers,
+} from '../src/generators/project'
 import {
   TEMPLATES_DIR,
   fillVars,
@@ -204,6 +209,7 @@ describe('the shipped layers', () => {
           template,
           runtime,
           packageManager: 'pnpm',
+          ...commandVars('pnpm'),
           netlifyPublish: 'dist/public',
           templateLabel: 'Minimal',
           packages: '- `@forinda/kickjs`',

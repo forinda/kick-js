@@ -13,8 +13,8 @@
  * adopter may already have an IDE or separate watch doing the job.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 
 export interface TypecheckBin {
   cmd: string
@@ -34,22 +34,88 @@ export interface TypecheckBin {
  * extensionless file is a POSIX shell script `spawn` can't launch.
  */
 export function resolveTypecheckBin(projectDir: string): TypecheckBin | null {
-  const binDir = join(projectDir, 'node_modules', '.bin')
   const isWin = process.platform === 'win32'
-  // `vue-tsc` first, and it being installed is the signal: plain tsc does not
-  // understand `.vue`, so in a Vue project it matches no inputs and reports
-  // TS18003 "No inputs were found" while real errors sit unchecked in the
-  // SFCs. vue-tsc checks plain `.ts` too, so preferring it costs nothing.
-  for (const kind of ['vue-tsc', 'tsgo', 'tsc'] as const) {
-    const names = isWin ? [`${kind}.CMD`, `${kind}.cmd`, `${kind}.exe`] : [kind]
-    for (const name of names) {
-      const candidate = join(binDir, name)
-      if (existsSync(candidate)) {
-        return { cmd: candidate, args: ['--noEmit'], shell: isWin, kind }
+  for (const binDir of localBinDirs(projectDir)) {
+    // `vue-tsc` first, and it being installed is the signal: plain tsc does not
+    // understand `.vue`, so in a Vue project it matches no inputs and reports
+    // TS18003 "No inputs were found" while real errors sit unchecked in the
+    // SFCs. vue-tsc checks plain `.ts` too, so preferring it costs nothing.
+    for (const kind of ['vue-tsc', 'tsgo', 'tsc'] as const) {
+      const names = isWin ? [`${kind}.CMD`, `${kind}.cmd`, `${kind}.exe`] : [kind]
+      for (const name of names) {
+        const candidate = join(binDir, name)
+        if (existsSync(candidate)) {
+          return { cmd: candidate, args: ['--noEmit'], shell: isWin, kind }
+        }
       }
     }
   }
   return null
+}
+
+/**
+ * The `node_modules/.bin` folders whose tools are this project's: its own,
+ * then its workspace root's — npm, yarn and bun install a workspace package's
+ * tools there. No further up: a binary in some parent folder is not ours to run.
+ */
+export function localBinDirs(projectDir: string): string[] {
+  const project = resolve(projectDir)
+  const root = workspaceRoot(project)
+  return (root ? [project, root] : [project]).map((dir) => join(dir, 'node_modules', '.bin'))
+}
+
+/**
+ * The workspace root `dir` belongs to: the first folder above it with a
+ * `package.json` or `pnpm-workspace.yaml`, and only when that file lists `dir`
+ * as a member. Anything else above — a stray `package.json` in `/tmp` — is not
+ * this project's, and nothing further up is searched.
+ */
+function workspaceRoot(dir: string): string | undefined {
+  for (let up = dirname(dir); up !== dirname(up); up = dirname(up)) {
+    const pnpmFile = join(up, 'pnpm-workspace.yaml')
+    const pkgFile = join(up, 'package.json')
+    if (!existsSync(pnpmFile) && !existsSync(pkgFile)) continue
+    return workspaceMembers(pnpmFile, pkgFile).some((glob) => globMatch(glob, relative(up, dir)))
+      ? up
+      : undefined
+  }
+  return undefined
+}
+
+/** Member globs from `pnpm-workspace.yaml`'s `packages:` or package.json's `workspaces`. */
+function workspaceMembers(pnpmFile: string, pkgFile: string): string[] {
+  try {
+    if (existsSync(pnpmFile)) {
+      // The list right under `packages:`, up to the next key.
+      const after = readFileSync(pnpmFile, 'utf-8').split(/^packages:\s*$/m)[1] ?? ''
+      const globs: string[] = []
+      for (const line of after.split('\n')) {
+        if (!line.trim() || line.trim().startsWith('#')) continue
+        const item = /^\s+-\s*['"]?([^'"#]+?)['"]?\s*$/.exec(line)
+        if (!item) break
+        globs.push(item[1]!)
+      }
+      return globs
+    }
+    const { workspaces } = JSON.parse(readFileSync(pkgFile, 'utf-8'))
+    const globs = Array.isArray(workspaces) ? workspaces : workspaces?.packages
+    return Array.isArray(globs) ? globs.filter((g): g is string => typeof g === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Workspace globs: `*` is one path segment, `**` any depth. No negation. */
+function globMatch(glob: string, path: string): boolean {
+  const pattern = glob
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .map((part) =>
+      part === '**' ? '.*' : part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'),
+    )
+    .join('/')
+  return new RegExp(`^${pattern}$`).test(path.split(sep).join('/'))
 }
 
 export interface TypecheckResult {

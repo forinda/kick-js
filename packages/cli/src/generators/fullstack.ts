@@ -15,7 +15,8 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 import { writeFileSafe } from '../utils/fs'
-import { packageManagerSpec } from './templates/project-config'
+import { execBin } from '../config'
+import { packageManagerSpec, yarnrc } from './templates/project-config'
 import { generateDockerfile, generateDockerignore } from './templates/docker'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
@@ -167,10 +168,13 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   }
 
   // ── workspace root ──────────────────────────────────────────────────
+  const pmSpec = packageManagerSpec(packageManager)
   await writeFileSafe(
     join(dir, 'package.json'),
-    rootPackageJson(name, packageManager, versions['@forinda/kickjs-cli']),
+    rootPackageJson(name, packageManager, versions['@forinda/kickjs-cli'], pmSpec),
   )
+  const yarnConfig = yarnrc(packageManager, pmSpec)
+  if (yarnConfig) await writeFileSafe(join(dir, '.yarnrc.yml'), yarnConfig)
   // Only pnpm reads this file. npm / yarn / bun declare workspaces via the
   // `workspaces` field in the root package.json instead — see rootPackageJson.
   if (packageManager === 'pnpm') {
@@ -188,7 +192,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager, frontend))
   await writeFileSafe(
     join(dir, 'Dockerfile'),
-    generateDockerfile('fullstack', packageManager, name),
+    generateDockerfile('fullstack', packageManager, name, pmSpec),
   )
   await writeFileSafe(join(dir, '.dockerignore'), generateDockerignore())
 
@@ -259,7 +263,9 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     log(`  ${FRONTEND_WIRING_URL}`)
   } else {
     log('The web app calls the API through @forinda/kickjs-client —')
-    log('edit server/src/modules/hello, run `kick typegen` in server/, and')
+    log(
+      `edit server/src/modules/hello, run \`${execBin(packageManager, 'kick')} typegen\` in server/, and`,
+    )
     log("web/src/App.tsx's types follow.")
   }
   log('')
@@ -341,10 +347,12 @@ function rootPackageJson(
           start: `cd server && ${pm} run start`,
           'dev:server': `cd server && ${pm} run dev`,
           'dev:web': `cd web && ${pm} run dev`,
-          // Typegen first — see the pnpm branch above.
-          build: `cd server && ${pm} exec kick typegen && cd .. && ${pm} run build:server && ${pm} run build:web`,
-          'build:netlify': `${pm} run build && cd server && ${pm} exec kick build:netlify`,
-          'build:vercel': `${pm} run build && cd server && ${pm} exec kick build:vercel`,
+          // Typegen first — see the pnpm branch above. A bare `kick`, not
+          // `<pm> exec kick` (`bun exec` runs a shell string): the root depends
+          // on the CLI, so scripts have it on PATH — see `typecheck` below.
+          build: `cd server && kick typegen && cd .. && ${pm} run build:server && ${pm} run build:web`,
+          'build:netlify': `${pm} run build && cd server && kick build:netlify`,
+          'build:vercel': `${pm} run build && cd server && kick build:vercel`,
           'build:server': `cd server && ${pm} run build`,
           'build:web': `cd web && ${pm} run build`,
           // No `npx`: the binary is `kick` but the package is

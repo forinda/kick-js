@@ -4,7 +4,7 @@ import type { Command } from 'commander'
 import { initProject } from '../generators/project'
 import { intro, outro, text, select, multiSelect, confirm, log } from '../utils/prompts'
 import { colors } from '../utils/colors'
-import { warnIfDeprecatedRepo } from '../config'
+import { runScript, warnIfDeprecatedRepo, type PackageManager } from '../config'
 import { resolvePackageManager } from './add'
 
 /** All optional packages available for selection */
@@ -367,6 +367,8 @@ export function registerInitCommand(program: Command): void {
         runtime,
       })
 
-      outro(`Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager} dev`)}`)
+      outro(
+        `Done! Next steps: ${colors.cyan(`cd ${name} && ${runScript(packageManager as PackageManager, 'dev')}`)}`,
+      )
     })
 }

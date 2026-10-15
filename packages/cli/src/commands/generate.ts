@@ -764,7 +764,10 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       'all',
     )
     .option('--name <name>', 'Project name (defaults to package.json name)')
-    .option('--pm <pm>', 'Package manager (defaults to package.json packageManager)')
+    .option(
+      '--pm <pm>',
+      'Package manager (default: detected from kick.config, packageManager, or the lockfile)',
+    )
     .option('--template <template>', 'Template: rest | minimal | fullstack | inertia')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (opts: AgentDocsOpts, cmd: Command) => {

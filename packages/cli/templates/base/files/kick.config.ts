@@ -31,7 +31,7 @@ export default defineConfig({
     {
       name: 'test',
       description: 'Run tests with Vitest',
-      steps: 'vitest run',
+      steps: 'vitest run --passWithNoTests',
     },
     {
       name: 'lint',

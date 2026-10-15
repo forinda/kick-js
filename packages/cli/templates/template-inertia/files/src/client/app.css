@@ -1,5 +1,5 @@
 /* Global styles, imported by main.tsx (browser) and ssr.tsx (server).
- * Tailwind: pnpm add -D tailwindcss @tailwindcss/vite, add tailwindcss() to
+ * Tailwind: {{packageManager}} add -D tailwindcss @tailwindcss/vite, add tailwindcss() to
  * the plugins in vite.config.ts and vite.client.config.ts, then replace this
  * file's contents with: @import "tailwindcss";
  */
