@@ -77,8 +77,8 @@ export interface PasswordCheck {
   needsRehash: boolean
 }
 
-// Hashed once, on first need: what a missing user is checked against.
-let dummy: Promise<string> | undefined
+// What a missing user is checked against: the same work as a real check.
+const DUMMY_SALT = randomBytes(SALT_BYTES)
 
 /**
  * Check a password against a stored hash. Constant-time, and pass
@@ -94,9 +94,9 @@ export async function verifyPassword(
 ): Promise<PasswordCheck> {
   const parsed = stored ? parse(stored) : undefined
   if (!parsed) {
-    dummy ??= hashPassword('kickjs-dummy-password')
-    const fallback = parse(await dummy)!
-    await derive(password, fallback.salt, fallback.cost)
+    // At the cost real hashes are checked at (`options`, not the defaults),
+    // and one derivation, so "no such user" takes as long as "wrong password".
+    await derive(password, DUMMY_SALT, costOf(options))
     return { ok: false, needsRehash: false }
   }
   const key = await derive(password, parsed.salt, parsed.cost)

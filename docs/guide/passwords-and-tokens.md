@@ -27,7 +27,7 @@ if (needsRehash) {
 
 **Upgrade on login.** `needsRehash` is true when a password matched but its hash was made with a different cost than you passed (or the defaults). Hash it again and store it, and accounts move to the new cost as people sign in. It is only ever true when `ok` is, so it can't be used to upgrade a wrong password.
 
-**Pass `undefined` for a missing user.** `verifyPassword(password, user?.passwordHash)` still runs the hash when there's no user, so "no such account" takes as long as "wrong password" and response times don't reveal which emails are registered. Return the same message for both.
+**Pass `undefined` for a missing user.** `verifyPassword(password, user?.passwordHash)` still runs the hash when there's no user, at the cost you pass, so "no such account" takes as long as "wrong password" and response times don't reveal which emails are registered. Return the same message for both.
 
 **Never throws on bad input.** A hash in another format (bcrypt from a previous system, a corrupt column) returns `{ ok: false }`. So does a hash whose cost would need more than 256 MiB, so a tampered row can't exhaust memory.
 
@@ -43,7 +43,7 @@ await hashPassword(password, cost)
 await verifyPassword(password, stored, cost) // needsRehash: true for hashes made at 2^14
 ```
 
-Memory is `128 * N * r` bytes per concurrent hash. Mind it on small containers, and in tests pass a low cost (`{ N: 2 ** 10, r: 8, p: 1 }`) to keep them fast.
+While accounts are moving to a new cost, those still on the old one verify at the old speed. That's a timing difference, but it reveals an account's age, not whether it exists. Memory is `128 * N * r` bytes per concurrent hash. Mind it on small containers, and in tests pass a low cost (`{ N: 2 ** 10, r: 8, p: 1 }`) to keep them fast.
 
 ## Signed tokens: `createSigner`
 

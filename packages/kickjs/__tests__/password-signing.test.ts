@@ -53,6 +53,11 @@ describe('hashPassword / verifyPassword', () => {
     }
   })
 
+  it('checks a missing user at the configured cost, not the default', async () => {
+    // The dummy check reads `options`: an invalid cost surfaces from it too.
+    await expect(verifyPassword('pw', undefined, { N: 1000 })).rejects.toThrow(/power of two/)
+  })
+
   it('rejects a cost that is not a power of two', async () => {
     await expect(hashPassword('pw', { N: 1000 })).rejects.toThrow(/power of two/)
   })
