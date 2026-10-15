@@ -39,40 +39,47 @@ Three drivers implement it:
 | `diskStorage({ root, baseUrl? })`     | A directory on the server. Writes go to a temp file and are renamed into place.                                     |
 | `s3Storage({ bucket, region?, ... })` | AWS S3, Cloudflare R2, MinIO, and other S3-compatible APIs. Adds [direct uploads](#uploads-straight-to-the-bucket). |
 
-## Saving an upload
+## Setting it up
 
-Bind a token to a driver, then inject it where files are saved:
+`kick add storage`, or `kick new --packages storage`, installs the package and writes `src/storage.ts`:
 
 ```ts
-// src/modules/files/files.ts
-import { createToken } from '@forinda/kickjs'
-import { s3Storage, type Storage } from '@forinda/kickjs-storage'
+// src/storage.ts
+import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
 import { diskStorage } from '@forinda/kickjs-storage/disk'
+import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 
-export const FILES = createToken<Storage>('Files')
+export { STORAGE } from '@forinda/kickjs-storage/adapter'
+export type { Storage } from '@forinda/kickjs-storage'
 
-export const createFiles = (): Storage =>
-  process.env.NODE_ENV === 'production'
-    ? s3Storage({
-        bucket: 'avatars',
-        region: 'eu-west-1',
-        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
-      })
-    : diskStorage({ root: './uploads', baseUrl: '/uploads' })
+export const storageAdapter = () =>
+  StorageAdapter({
+    storage: process.env.S3_BUCKET ? s3FromSettings() : diskStorage({ root: 'uploads' }),
+  })
 ```
+
+It also adds `storageAdapter()` to `bootstrap({ adapters })`, the `S3_*` variables to `.env.example`, and `uploads/` and `.tus/` to `.gitignore`. Files go to the `uploads/` folder until `S3_BUCKET` is set, then to that bucket. Change the file to pick drivers differently.
+
+`StorageAdapter({ storage })` binds the storage to the `STORAGE` token, so it can be injected anywhere. A storage from `s3FromSettings()` also brings its settings section, so a missing `S3_BUCKET` stops startup. A second storage binds its own token:
 
 ```ts
-// in the module
-register(container: Container) {
-  container.registerFactory(FILES, createFiles)
-}
+const BACKUPS = createToken<Storage>('app/storage/backups')
+
+adapters: [
+  storageAdapter(),
+  StorageAdapter.scoped('backups', {
+    storage: s3FromSettings(S3Settings.scoped('BACKUPS')),
+    token: BACKUPS,
+  }),
+]
 ```
+
+## Saving an upload
 
 ```ts
 @Controller()
 class AvatarController {
-  @Autowired(FILES) private files!: Storage
+  @Autowired(STORAGE) private files!: Storage
 
   @Post('/')
   @FileUpload({ mode: 'single', fieldName: 'avatar', allowedTypes: ['png', 'jpg'] })
@@ -129,7 +136,19 @@ do {
 } while (cursor)
 ```
 
-Listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. A folder with a very large number of files is still read whole each time a page passes through it.
+Without a delimiter, listing isn't split into folders: `prefix: 'a/'` includes `a/b/c.txt`. On disk, a page reads only the folders it needs: the ones that can hold keys after the cursor and under the prefix. Each folder's sorted listing is kept until the folder changes (a file added or removed), so paging through a folder of a million files reads it once.
+
+### Folders: `delimiter`
+
+Pass `delimiter: '/'` to list one level at a time, as a file browser does. Keys that continue past the next `/` collapse into a single entry in `prefixes`:
+
+```ts
+const page = await files.list({ prefix: 'users/42/', delimiter: '/' })
+page.files // users/42/avatar.png, users/42/cv.pdf
+page.prefixes // ['users/42/invoices/', 'users/42/photos/']
+```
+
+Files and prefixes are counted together against `limit` and paged together, the same as S3's `CommonPrefixes`. Open a folder by listing it as the next `prefix`. On disk, a folder with no files in it isn't a prefix, which matches buckets, where folders exist only through the keys in them.
 
 ## Create-only writes: `putIfAbsent`
 
@@ -141,7 +160,17 @@ if (!(await files.putIfAbsent(`webhooks/${event.id}`, JSON.stringify(event)))) r
 await handle(event)
 ```
 
-Buckets use S3 conditional writes (`If-None-Match: *`), which AWS S3, Cloudflare R2 and MinIO support. Disk uses an atomic hard link. The body is read into memory first, so this is for small objects.
+Buckets use S3 conditional writes (`If-None-Match: *`), which AWS S3, Cloudflare R2 and MinIO support. Disk uses an atomic hard link. A stream is written as it arrives: on a bucket, a body larger than one part goes up in parts, and completing the upload is the conditional step, so two large writers racing for one key still leave exactly one.
+
+## Joining objects in the bucket: `compose`
+
+`s3Storage` has `compose(key, sources)`, which joins objects already in the bucket into `key`, in order. The bucket does the copying (CopyObject, or UploadPartCopy in ranges of up to 5 GiB), so the bytes never pass through your server:
+
+```ts
+await files.compose('reports/2026.csv', ['reports/q1.csv', 'reports/q2.csv', 'reports/q3.csv'])
+```
+
+S3 requires every part except the last to be at least 5 MiB. If an earlier source is smaller, `compose` streams the sources through instead, so it always works and copies inside the bucket whenever it can. `files.location` is the bucket's address: two storages with the same `location` are the same bucket.
 
 ## Keys
 
@@ -186,6 +215,30 @@ await fetch(url, { method: 'PUT', body: file, headers: { 'content-type': file.ty
 
 `size` and `contentType` are signed into the URL, so the bucket refuses a body of any other size or a different `Content-Type`. Check them against your limits before you sign. Without `size`, the URL accepts any size up to S3's 5 GiB limit for a single upload. When the browser reports success, `files.stat(key)` confirms the file arrived and how big it is.
 
+### Size unknown up front: `uploadForm()`
+
+`uploadUrl()` fixes the exact size, so the browser must say it first. `uploadForm()` signs a form (an S3 POST policy) that accepts any size within a range instead. The bucket enforces the range, the key, and the content type or type family:
+
+```ts
+@Post('/uploads/form')
+async form(ctx: RequestContext) {
+  const key = `uploads/${ctx.get('user')!.id}/${randomUUID()}`
+  ctx.json(await this.files.uploadForm(key, { maxSize: 20 * 1024 * 1024, contentType: 'image/' }))
+}
+```
+
+```ts
+// browser: the fields first, the file last
+const { url, fields } = await api.post('/uploads/form')
+const form = new FormData()
+for (const [name, value] of Object.entries(fields)) form.append(name, value)
+form.append('Content-Type', file.type) // with a type family like 'image/'
+form.append('file', file)
+await fetch(url, { method: 'POST', body: form })
+```
+
+The bucket rejects a file over `maxSize` with `EntityTooLarge`, and a different key or a type outside the family with 403. AWS S3 and MinIO support form uploads; Cloudflare R2 doesn't, so use `uploadUrl()` with `size` there. The bucket's CORS rule must allow `POST`.
+
 ### Large and resumable: `multipart`
 
 A multipart upload sends the file in parts, each through its own signed URL. A dropped connection costs one part, not the whole file. If the page reloads, `listParts()` says which parts the bucket already has, so only the rest are sent. The server needs five endpoints:
@@ -193,7 +246,7 @@ A multipart upload sends the file in parts, each through its own signed URL. A d
 ```ts
 @Controller()
 class MultipartController {
-  @Autowired(FILES) private files!: S3Storage
+  @Autowired(STORAGE) private files!: S3Storage
 
   // Every key is under the user's own prefix, so no one can touch another user's upload.
   private own(ctx: RequestContext, key: string) {
@@ -287,7 +340,7 @@ bootstrap({
   adapters: [
     TusAdapter({
       path: '/api/uploads',
-      storage: FILES, // a Storage, or a token bound to one
+      storage: STORAGE, // a Storage, or a token bound to one
       maxSize: 2 * 1024 ** 3,
       onCreate: ({ headers, metadata, size }, id) => {
         const user = verifyToken(headers.authorization) // throw HttpException.unauthorized() to refuse
@@ -327,6 +380,7 @@ How it works:
 - **Checks.** `onCreate` sees every new upload's headers, size and metadata before anything is written. `authorize` sees every later request to that upload. Without `authorize`, anyone holding an upload's URL, which contains an unguessable id, can continue or cancel it. Throw an `HttpException` from either hook to refuse with its status.
 - **Limits.** `maxSize` (default 1 GiB) is checked against the declared length, and the body can never run past it. Unfinished uploads expire `expiresIn` seconds (default one day) after their last write and are swept hourly.
 - **Middleware.** The adapter runs after the global middleware, so `cors()`, rate limits and `csrf()` apply. Pass the CSRF header through tus-js-client's `headers`. For a browser on another origin, `cors()` must expose the tus headers: `exposedHeaders: ['Location', 'Upload-Offset', 'Upload-Length', 'Upload-Expires', 'Tus-Resumable']`.
+- **Finishing in the bucket.** When `storage` and `partials` are the same bucket (same `location`), the finished file is joined from its chunks with `compose`, inside the bucket. Chunks of at least 5 MiB are copied, so set tus-js-client's `chunkSize` to 5 MiB or more for large files. Smaller ones stream through.
 - **Several instances.** Pass a `partials` that every instance shares, such as a bucket (`partials: s3Storage({...})`, or a DI token), and any instance can take any request of any upload. No sticky sessions or locks are needed: a chunk counts once its commit marker is written with `putIfAbsent`, so of two requests racing to write the same offset, one wins and the other gets 409 and asks `HEAD` again. With the default local `partials`, have the load balancer send an upload's requests to one instance. Unfinished uploads live under `tus/` in `partials`, so final keys under `tus/` are refused: with one bucket for both, such a key could overwrite another upload's records.
 
 The protocol is tus 1.0.0 with the creation, creation-with-upload, termination, expiration, checksum and concatenation extensions:
@@ -384,27 +438,25 @@ S3_SECRET_ACCESS_KEY=...
 ```
 
 ```ts
-import { S3Settings, s3FromSettings } from '@forinda/kickjs-storage/settings'
+import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
+import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 
-bootstrap({ modules, settings: [S3Settings] })
-
-// in the module
-container.registerFactory(FILES, () => s3FromSettings())
+bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
 ```
 
-`s3FromSettings()` reads the section on first use, after the app has bound it. A missing `S3_BUCKET`, `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. A missing `S3_BUCKET`, `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
 
-A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Declare it in `settings` too, and pass it as `s3FromSettings(Backups)`.
+A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Pass it as `s3FromSettings(Backups)`; the adapter that takes that storage declares it.
 
 ## In tests
 
-Bind the token to `memoryStorage()` and read back what the handler stored:
+Override `STORAGE` with `memoryStorage()` and read back what the handler stored:
 
 ```ts
 const files = memoryStorage()
 const { client } = await createTestApp({
   modules,
-  overrides: [[FILES, files]],
+  overrides: [[STORAGE, files]],
 })
 
 const res = await client().post('/api/v1/avatars').attach('avatar', png, 'a.png').expect(200)
@@ -432,8 +484,7 @@ await createTestApp({
 
 ## Limits
 
-- **Direct and multipart uploads are bucket only.** `uploadUrl()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
-- **tus finishing passes the bytes through the server.** When the last chunk arrives, the chunks are streamed from `partials` into `storage`. With both in the same bucket, that is a download and an upload the bucket could have done itself.
+- **Direct and multipart uploads are bucket only.** `uploadUrl()`, `uploadForm()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
 - **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
 - **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, is refused, so a link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.

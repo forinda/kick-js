@@ -177,6 +177,20 @@ describe('s3Storage', () => {
       await expect(files.multipart.create('k')).rejects.toThrow('returned no UploadId')
     })
 
+    it('reads CommonPrefixes with a delimiter, not the echoed request prefix', async () => {
+      const { files, calls } = scripted([
+        200,
+        `<ListBucketResult><Prefix>a/</Prefix><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>
+          <Contents><Key>a/1</Key><LastModified>2026-01-01T00:00:00Z</LastModified><Size>1</Size></Contents>
+          <CommonPrefixes><Prefix>a/b/</Prefix></CommonPrefixes>
+          <CommonPrefixes><Prefix>a/R&amp;D/</Prefix></CommonPrefixes></ListBucketResult>`,
+      ])
+      const page = await files.list({ prefix: 'a/', delimiter: '/' })
+      expect(page.prefixes).toEqual(['a/b/', 'a/R&D/'])
+      expect(page.files.map((f) => f.key)).toEqual(['a/1'])
+      expect(new URL(calls[0].url).searchParams.get('delimiter')).toBe('/')
+    })
+
     it('follows listParts pages', async () => {
       const part = (n: number) =>
         `<Part><PartNumber>${n}</PartNumber><ETag>&quot;e${n}&quot;</ETag><Size>5</Size></Part>`
@@ -254,6 +268,34 @@ describe('s3Storage', () => {
       ])
     })
 
+    it('uploadForm signs a POST policy with the size range and type', async () => {
+      const { files } = scripted()
+      const form = await files.uploadForm('up/a.pdf', {
+        maxSize: 1000,
+        minSize: 1,
+        contentType: 'application/pdf',
+        expiresIn: 60,
+      })
+      expect(form.url).toBe('http://s3.test/files/')
+      expect(form.fields).toMatchObject({ key: 'up/a.pdf', 'Content-Type': 'application/pdf' })
+      expect(form.fields['x-amz-signature']).toMatch(/^[0-9a-f]{64}$/)
+      const policy = JSON.parse(atob(form.fields.policy))
+      expect(policy.conditions).toContainEqual(['content-length-range', 1, 1000])
+      expect(policy.conditions).toContainEqual({ bucket: 'files' })
+      expect(policy.conditions).toContainEqual({ key: 'up/a.pdf' })
+      expect(new Date(policy.expiration).getTime() - Date.now()).toBeLessThanOrEqual(60_000)
+
+      const images = await files.uploadForm('up/b', { maxSize: 10, contentType: 'image/' })
+      expect(images.fields['Content-Type']).toBeUndefined()
+      expect(JSON.parse(atob(images.fields.policy)).conditions).toContainEqual([
+        'starts-with',
+        '$Content-Type',
+        'image/',
+      ])
+      await expect(files.uploadForm('x', { maxSize: 1, minSize: 2 })).rejects.toThrow('sizes')
+      await expect(files.uploadForm('../x', { maxSize: 1 })).rejects.toThrow('invalid key')
+    })
+
     it('refuses a part size under S3 minimum', () => {
       expect(() => s3Storage({ ...options, partSize: 1024 })).toThrow('partSize')
       expect(() => s3Storage({ ...options, partConcurrency: 0 })).toThrow('partConcurrency')
@@ -265,6 +307,88 @@ describe('s3Storage', () => {
       expect(await files.putIfAbsent('k', 'b')).toBe(false)
       expect(await files.putIfAbsent('k', 'c')).toBe(false)
       expect(calls[0].headers.get('if-none-match')).toBe('*')
+    })
+
+    it('putIfAbsent streams a large body in parts, conditional on completing', async () => {
+      const big = () => Readable.from([new Uint8Array(5 * 1024 * 1024), new Uint8Array(10)])
+      const won = scripted(
+        [404, ''], // HEAD: not there yet
+        [200, '<R><UploadId>u1</UploadId></R>'],
+        [200, '', { etag: '"p1"' }],
+        [200, '', { etag: '"p2"' }],
+        [200, '<CompleteMultipartUploadResult/>'],
+      )
+      expect(await won.files.putIfAbsent('k', big())).toBe(true)
+      expect(won.calls.at(-1)!.headers.get('if-none-match')).toBe('*')
+
+      const lost = scripted(
+        [404, ''],
+        [200, '<R><UploadId>u2</UploadId></R>'],
+        [200, '', { etag: '"p1"' }],
+        [200, '', { etag: '"p2"' }],
+        [412, '<Error><Code>PreconditionFailed</Code></Error>'],
+        [204, ''],
+      )
+      expect(await lost.files.putIfAbsent('k', big())).toBe(false)
+      expect(lost.calls.at(-1)!.method).toBe('DELETE') // the upload is aborted
+
+      // Already there: found before uploading anything.
+      const there = scripted([200, ''])
+      expect(await there.files.putIfAbsent('k', big())).toBe(false)
+      expect(there.calls.map((c) => c.method)).toEqual(['HEAD'])
+    })
+
+    it('compose copies one source with CopyObject, signing the copy headers', async () => {
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': '10' }],
+        [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+      )
+      await files.compose('dest', ['tus/a b'], { contentType: 'text/plain' })
+      const copy = calls[1]
+      expect(copy.method).toBe('PUT')
+      expect(copy.headers.get('x-amz-copy-source')).toBe('/files/tus/a%20b')
+      expect(copy.headers.get('content-type')).toBe('text/plain')
+      expect(copy.headers.get('authorization')).toContain('x-amz-copy-source')
+    })
+
+    it('compose copies big sources in even ranges of at most 5 GiB', async () => {
+      const GiB = 1024 ** 3
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': String(6 * GiB) }],
+        [200, '', { 'content-length': '7' }],
+        [200, '<R><UploadId>u</UploadId></R>'],
+        [200, '<CopyPartResult><ETag>"1"</ETag></CopyPartResult>'],
+        [200, '<CopyPartResult><ETag>"2"</ETag></CopyPartResult>'],
+        [200, '<CopyPartResult><ETag>"3"</ETag></CopyPartResult>'],
+        [200, '<CompleteMultipartUploadResult/>'],
+      )
+      await files.compose('dest', ['big', 'tail'])
+      const ranges = calls
+        .filter((c) => c.headers.get('x-amz-copy-source-range'))
+        .map(
+          (c) =>
+            `${c.headers.get('x-amz-copy-source')} ${c.headers.get('x-amz-copy-source-range')}`,
+        )
+        .toSorted()
+      expect(ranges).toEqual([
+        `/files/big bytes=0-${3 * GiB - 1}`,
+        `/files/big bytes=${3 * GiB}-${6 * GiB - 1}`,
+        '/files/tail bytes=0-6',
+      ])
+      expect(await calls.at(-1)!.text()).toContain('<PartNumber>3</PartNumber>')
+    })
+
+    it('compose streams through when a source before the last is under 5 MiB', async () => {
+      const { files, calls } = scripted(
+        [200, '', { 'content-length': '3' }],
+        [200, '', { 'content-length': '3' }],
+        [200, 'abc'],
+        [200, 'def'],
+        [200, ''],
+      )
+      await files.compose('dest', ['a', 'b'])
+      expect(calls.map((c) => c.method)).toEqual(['HEAD', 'HEAD', 'GET', 'GET', 'PUT'])
+      expect(await calls[4].text()).toBe('abcdef')
     })
 
     it('sends a small stream as one PUT', async () => {

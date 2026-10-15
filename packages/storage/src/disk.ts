@@ -24,7 +24,15 @@ import {
 } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
-import { checkKey, checkLimit, collect, isStream, publicUrl, toBytes } from './keys'
+import {
+  checkDelimiter,
+  checkKey,
+  checkLimit,
+  isStream,
+  listPage,
+  publicUrl,
+  toBytes,
+} from './keys'
 import type { FileInfo, Storage } from './types'
 
 export interface DiskStorageOptions {
@@ -41,8 +49,61 @@ export interface DiskStorageOptions {
 // `put()` writes `<file>.<uuid>.tmp` and renames it; list() skips those.
 const TEMP_FILE = /\.[0-9a-f-]{36}\.tmp$/
 
+interface Listing {
+  /** The folder's change stamp when read: an added or removed entry changes it. */
+  stamp: string
+  entries: { dir: boolean; name: string; key: string; sortAs: string }[]
+}
+
 /**
- * Keys under `dir` in key order, from just after `after`, matching `prefix` —
+ * A folder's entries, sorted in key order — read once, then reused while the
+ * folder's mtime/ctime (nanoseconds) stay the same, so paging through a folder
+ * of a million files reads it once, not once per page.
+ */
+async function sortedEntries(
+  dir: string,
+  base: string,
+  cache: Map<string, Listing>,
+): Promise<Listing['entries'] | null> {
+  let stamp: string
+  try {
+    const info = await stat(dir, { bigint: true })
+    stamp = `${info.mtimeNs}:${info.ctimeNs}`
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
+  }
+  const cached = cache.get(dir)
+  if (cached?.stamp === stamp) {
+    // Most recently used last, for the eviction below.
+    cache.delete(dir)
+    cache.set(dir, cached)
+    return cached.entries
+  }
+  let read
+  try {
+    read = await readdir(dir, { withFileTypes: true })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
+  }
+  const entries = read
+    .filter((entry) => entry.isFile() || entry.isDirectory())
+    .map((entry) => ({
+      dir: entry.isDirectory(),
+      name: entry.name,
+      key: base + entry.name,
+      sortAs: base + entry.name + (entry.isDirectory() ? '/' : ''),
+    }))
+    .toSorted((a, b) => (a.sortAs < b.sortAs ? -1 : a.sortAs > b.sortAs ? 1 : 0))
+  cache.set(dir, { stamp, entries })
+  // ponytail: 256 folders' listings kept; raise it for wide trees paged often.
+  if (cache.size > 256) cache.delete(cache.keys().next().value!)
+  return entries
+}
+
+/**
+ * Keys under `dir` in key order, from `from` (inclusive), matching `prefix` —
  * reading only the folders that can hold such keys, so a page costs the
  * folders along its path, not the whole tree.
  *
@@ -54,33 +115,32 @@ async function* keysInOrder(
   dir: string,
   base: string,
   prefix: string,
-  after: string | undefined,
+  from: string | undefined,
+  cache: Map<string, Listing>,
 ): AsyncGenerator<string> {
-  let entries
-  try {
-    entries = await readdir(dir, { withFileTypes: true })
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return
-    throw err
+  const sorted = await sortedEntries(dir, base, cache)
+  if (!sorted) return
+  // Skip, by binary search, every entry whose keys all sort before `from`:
+  // a file `key`, or a folder's keys, which all sort before `<folder>0`.
+  let start = 0
+  if (from !== undefined) {
+    let high = sorted.length
+    while (start < high) {
+      const mid = (start + high) >>> 1
+      const { dir: isDir, key } = sorted[mid]
+      if (isDir ? `${key}0` <= from : key < from) start = mid + 1
+      else high = mid
+    }
   }
-  const sorted = entries
-    .filter((entry) => entry.isFile() || entry.isDirectory())
-    .map((entry) => ({
-      entry,
-      key: base + entry.name,
-      sortAs: base + entry.name + (entry.isDirectory() ? '/' : ''),
-    }))
-    .toSorted((a, b) => (a.sortAs < b.sortAs ? -1 : a.sortAs > b.sortAs ? 1 : 0))
-  for (const { entry, key, sortAs } of sorted) {
-    if (entry.isDirectory()) {
-      // Every key inside starts with `sortAs`: skip the folder if none can match the prefix…
+  for (let i = start; i < sorted.length; i++) {
+    const { dir: isDir, name, key, sortAs } = sorted[i]
+    if (isDir) {
+      // Every key inside starts with `sortAs`: skip the folder if none can match the prefix.
       if (!sortAs.startsWith(prefix) && !prefix.startsWith(sortAs)) continue
-      // …or all of them sort at or before the cursor (they all sort before `<folder>0`).
-      if (after !== undefined && after >= `${key}0`) continue
-      yield* keysInOrder(join(dir, entry.name), sortAs, prefix, after)
+      yield* keysInOrder(join(dir, name), sortAs, prefix, from, cache)
     } else if (
       key.startsWith(prefix) &&
-      (after === undefined || key > after) &&
+      (from === undefined || key >= from) &&
       !TEMP_FILE.test(key) &&
       isKey(key)
     ) {
@@ -101,6 +161,7 @@ function isKey(key: string) {
 /** Files under a directory on local disk. */
 export function diskStorage(options: DiskStorageOptions): Storage {
   const root = resolve(options.root)
+  const listings = new Map<string, Listing>()
   // ENOTDIR: a parent of the key is a file (`a` exists, reading `a/b`) — also "no such file".
   const missing = (err: unknown) =>
     ['ENOENT', 'ENOTDIR'].includes((err as NodeJS.ErrnoException).code ?? '')
@@ -189,9 +250,10 @@ export function diskStorage(options: DiskStorageOptions): Storage {
     async putIfAbsent(key, body) {
       const path = await writable(key)
       const temp = `${path}.${randomUUID()}.tmp`
-      await writeFile(temp, await collect(body))
       try {
-        // link() fails if the name exists — an atomic create-only.
+        // Streamed to a temp file, then linked: link() fails if the name
+        // exists — an atomic create-only.
+        await writeFile(temp, isStream(body) ? body : toBytes(body))
         await link(temp, path)
         return true
       } catch (err) {
@@ -227,16 +289,24 @@ export function diskStorage(options: DiskStorageOptions): Storage {
     },
     async list(listOptions = {}) {
       const prefix = listOptions.prefix ?? ''
-      const after = listOptions.cursor
-      const limit = checkLimit(listOptions.limit)
+      const delimiter = checkDelimiter(listOptions.delimiter)
+      const page = await listPage((from) => keysInOrder(root, '', prefix, from, listings), {
+        prefix,
+        cursor: listOptions.cursor,
+        limit: checkLimit(listOptions.limit),
+        delimiter,
+      })
       const files: FileInfo[] = []
-      // One more than a page: if it exists, there is a next page.
-      for await (const key of keysInOrder(root, '', prefix, after)) {
-        if (files.length === limit) return { files, cursor: files.at(-1)!.key }
+      for (const key of page.keys) {
+        // Links aren't followed, so they aren't listed either.
         const info = await statOf(key).catch(() => null)
         if (info) files.push(info)
       }
-      return { files }
+      return {
+        files,
+        ...(delimiter ? { prefixes: page.prefixes } : {}),
+        ...(page.cursor ? { cursor: page.cursor } : {}),
+      }
     },
     async url(key) {
       return publicUrl('diskStorage', options.baseUrl, key)
