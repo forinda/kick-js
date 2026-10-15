@@ -409,6 +409,34 @@ Phasing: **1)** primitive + `ctx.route` + contributor `skipWhen`/`onlyWhen`; **2
 
 **Risk.** `kickjs-auth` was deprecated for baking in an auth opinion. Mitigation: core ships `defineRouteFlag` and names no flags. `auth.public` is a string the adopter picks; nothing in core branches on it.
 
+### B.7 `kick dev` starts your backing services {#b-7-kick-dev-starts-your-backing-services}
+
+**Status:** `proposed`
+**Effort:** ~1 week
+
+**Why it matters.** Starting the app's database or Redis is a separate step before every `kick dev`. After it, the connection details have to be copied into `.env` by hand. Tests already have this covered: [`startService()`](./testing/large-suites.md#a-service-per-file-startservice) starts a container and hands its URL to a settings section with `provide()`. Local development has no equivalent.
+
+**What it looks like.** It's an explicit opt-in in `kick.config.ts`. Nothing starts just because a compose file exists:
+
+```ts
+export default defineConfig({
+  dev: { services: { file: 'compose.yaml' } },
+})
+```
+
+1. **Start.** `kick dev` runs `docker compose up -d --wait` before the app boots. `--no-services` skips it for one run.
+2. **Connect.** For images it recognises (postgres, redis, mysql), it reads the mapped ports and supplies the connection details through the same path `provide()` uses. A value set in env wins.
+3. **Restarts.** A hot reload leaves the containers alone.
+4. **Exit.** It leaves the containers running, so the next start is fast. `stop: true` stops them on exit.
+
+Tests are unchanged: they call `startService()` themselves.
+
+**Open questions**
+
+- Should the default on exit be to leave containers running (faster restarts) or to stop them (cleaner, and Spring Boot's default)?
+- How does a recognised image map to a settings section: by convention (`postgres` gives `DB_URL`), or by naming the section in the config?
+- Should it use only `docker compose`, or also Podman?
+
 ## Track C — Bold Bets
 
 High-risk, high-reward. Each of these could be the thing KickJS is famous for, if it works.
@@ -856,6 +884,7 @@ above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** 
 Rough order if we were optimizing for **impact-per-effort**:
 
 1. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+2. **B.7 — `kick dev` backing services** (~1 week; not urgent)
 
 Open for redirection — these are starting points, not commitments.
 
