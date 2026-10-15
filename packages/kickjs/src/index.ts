@@ -101,6 +101,8 @@ export {
   verifyPassword,
   type PasswordCheck,
   type PasswordHashOptions,
+  type LegacyHasher,
+  type VerifyPasswordOptions,
 } from './core/password'
 export {
   createSigner,
