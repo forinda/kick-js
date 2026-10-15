@@ -12,12 +12,16 @@ import {
   type UpdateObject,
 } from 'kysely'
 import { UniqueViolationError } from '../db-errors'
+import { MAX_PARAMS, chunksFor, inChunks, type InsertManyOptions } from './insert-many'
 import type { KickDbClient } from './types'
 
 type Row = Record<string, unknown>
 
-export interface UpsertOptions<DB, T extends keyof DB & string> {
-  /** The row — or rows — to insert. */
+export interface UpsertOptions<DB, T extends keyof DB & string> extends InsertManyOptions {
+  /**
+   * The row — or rows — to insert. Many rows are split into statements that
+   * fit the dialect's parameter limit, in one transaction (see `insertMany`).
+   */
   values: Insertable<DB[T]> | ReadonlyArray<Insertable<DB[T]>>
   /**
    * The unique key (or primary key) whose conflict turns the insert into an
@@ -66,6 +70,29 @@ export async function upsert<DB, T extends keyof DB & string>(
 ): Promise<Selectable<DB[T]>[]> {
   const rows = (Array.isArray(opts.values) ? opts.values : [opts.values]) as Row[]
   if (rows.length === 0) return []
+  const statement = (chunk: Row[]) => upsertStatement(db, table, opts, chunk)
+  const chunks = chunksFor(rows, opts.maxParams ?? MAX_PARAMS[db.dialect], statement)
+  return inChunks(db, chunks, opts.atomic ?? true, async (chunk) => {
+    if (db.dialect !== 'mysql') return statement(chunk).execute()
+    await statement(chunk).execute()
+    // No RETURNING on MySQL: read the rows back by their target values — from
+    // the primary, which has them; a replica may not yet.
+    return (db.primary.selectFrom as (t: string) => any)(table)
+      .selectAll()
+      .where((eb: ExpressionBuilder<any, any>) =>
+        eb.or(chunk.map((r) => eb.and(opts.target.map((c: string) => eb(c, '=', r[c]))))),
+      )
+      .execute()
+  }) as Promise<Selectable<DB[T]>[]>
+}
+
+/** One statement's worth of `upsert` — with RETURNING, except on MySQL. */
+function upsertStatement<DB, T extends keyof DB & string>(
+  db: KickDbClient<DB>,
+  table: T,
+  opts: UpsertOptions<DB, T>,
+  rows: Row[],
+): any {
   const target = [...opts.target] as string[]
   if (target.length === 0) throw new Error('kickjs-db: upsert() needs at least one target column')
 
@@ -90,18 +117,10 @@ export async function upsert<DB, T extends keyof DB & string>(
     const set = takeIncoming
       ? Object.fromEntries(columns.map((c) => [c, sql`VALUES(${sql.ref(c)})`]))
       : update
-    await insert.onDuplicateKeyUpdate(set).execute()
-    // No RETURNING on MySQL: read the rows back by their target values — from
-    // the primary, which has them; a replica may not yet.
-    return (await (db.primary.selectFrom as (t: string) => any)(table)
-      .selectAll()
-      .where((eb: ExpressionBuilder<any, any>) =>
-        eb.or(rows.map((r) => eb.and(target.map((c) => eb(c, '=', r[c]))))),
-      )
-      .execute()) as Selectable<DB[T]>[]
+    return insert.onDuplicateKeyUpdate(set)
   }
 
-  return (await insert
+  return insert
     .onConflict((oc: any) => {
       let conflict = oc.columns(target)
       if (opts.where) conflict = conflict.where(opts.where)
@@ -113,7 +132,6 @@ export async function upsert<DB, T extends keyof DB & string>(
       )
     })
     .returningAll()
-    .execute()) as Selectable<DB[T]>[]
 }
 
 /**

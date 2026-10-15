@@ -106,6 +106,30 @@ export const db = createDbClient({
 
 Replicas lag behind the primary. A read that must see a write made a moment ago — the redirect after a form post, the response that returns what was just saved — goes through `db.primary`: `db.primary.query.posts.findFirst(…)`. `db.findOrCreate()` and `db.upsert()` already read the primary. `db.destroy()` closes the replicas too.
 
+### Choosing where each read goes: `route`
+
+By default reads take the replicas in turn. `route` decides per read instead. It is called for each read outside a transaction with the table it reads, and returns `'primary'`, a replica's index, or `undefined` to keep the default:
+
+```ts
+import { getRequestValue } from '@forinda/kickjs'
+
+export const db = createDbClient({
+  schema,
+  dialect: pgDialect({ pool }),
+  replica: [pgDialect({ pool: euReplica }), pgDialect({ pool: usReplica })],
+  route: ({ table }) => {
+    // Read-your-writes: once this request wrote, its reads see the primary.
+    if (getRequestValue('wrote')) return 'primary'
+    // Balances replicate late; never serve a stale one.
+    if (table === 'balances') return 'primary'
+    // Otherwise the replica nearest the caller.
+    return getRequestValue('region') === 'us' ? 1 : 0
+  },
+})
+```
+
+`table` is the table a `selectFrom` or `db.query.<table>` reads (without its alias), and `undefined` for a list of tables or a subquery. `route` isn't asked inside a transaction or through `db.primary`, which always use the primary. It runs when the read is built — at `db.selectFrom(…)` or `db.query.<table>` — so a query built before a write keeps the connection it was given: for read-your-writes, build the read after the write. Keep it fast and free of I/O, because it runs before every read. To skip a replica that is lagging, check its lag elsewhere on a timer and read the result here.
+
 ## Transactions hold a connection
 
 A `db.transaction()` keeps one connection for its whole duration — every query inside it, including those made by services holding the plain client, runs on that connection. While it's open, the connection serves nobody else.

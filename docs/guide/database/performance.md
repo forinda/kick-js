@@ -101,7 +101,19 @@ await db
   .execute()
 ```
 
-One statement, one round trip. Every row should have the same keys. On SQLite, a key missing from some rows is sent as `NULL` — there's no per-row `DEFAULT` there — so a `NOT NULL` column with a default fails with a NOT NULL violation instead of taking its default. Postgres and MySQL fill the default. Spell the value out in every row, or insert rows that differ separately.
+One statement, one round trip. Every row should have the same keys.
+
+Every database caps the parameters one statement can carry: 65,535 on Postgres and MySQL, and 32,766 on SQLite (100 on Cloudflare D1). Each value is one, so 25,000 rows of 3 columns is already too many for Postgres. Past the cap, the statement fails. For batches that can get that big, such as imports and backfills, use `insertMany`. It splits the rows into statements that fit, inside one transaction, so they all land or none do:
+
+```ts
+const count = await db.insertMany('events', rows) // number of rows inserted
+const stored = await db.insertMany('events', rows, { returning: true }) // Postgres, SQLite
+
+// Cloudflare D1: a lower limit and no BEGIN.
+await db.insertMany('events', rows, { maxParams: 100, atomic: false })
+```
+
+Inside an open `transaction()` it joins that transaction. `db.upsert()` with an array of rows splits them the same way. On SQLite, a key missing from some rows is sent as `NULL` — there's no per-row `DEFAULT` there — so a `NOT NULL` column with a default fails with a NOT NULL violation instead of taking its default. Postgres and MySQL fill the default. Spell the value out in every row, or insert rows that differ separately.
 
 ## Count in the database
 
