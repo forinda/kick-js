@@ -214,16 +214,14 @@ export function tenancyPlugin(tenancy: Tenancy, schema: unknown): KyselyPlugin |
   // 'database' routes connections instead (tenancy-connections.ts).
   if (tenancy.strategy === 'database') return undefined
   if (tenancy.strategy === 'schema') {
-    const plugins = new Map<string, WithSchemaPlugin>()
     return {
       transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
         const tenant = tenancy.current()
         if (tenant === null) return args.node
         if (tenant === undefined) throw new TenantRequiredError('(any table)')
-        const name = tenancy.schemaFor(tenant)
-        let plugin = plugins.get(name)
-        if (!plugin) plugins.set(name, (plugin = new WithSchemaPlugin(name)))
-        return plugin.transformQuery(args)
+        // Built per query, not cached by schema name: the tenant often comes
+        // from a request, and a cache would grow with every name sent.
+        return new WithSchemaPlugin(tenancy.schemaFor(tenant)).transformQuery(args)
       },
       async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
         return args.result

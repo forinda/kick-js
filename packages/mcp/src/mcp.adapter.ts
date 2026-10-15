@@ -417,6 +417,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
     >()
     const maxSessions = options.maxSessions ?? 1000
+    /** `initialize` requests between the cap check and becoming a session. */
+    let initializing = 0
     const sessionIdleTimeoutMs = options.sessionIdleTimeoutMs ?? 30 * 60_000
 
     /** The MCP endpoint's path. */
@@ -1428,15 +1430,21 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           // Each session holds an MCP server and transport, and initialize needs
           // no session — cap them so clients (authenticated or not) can't
           // exhaust memory, and close abandoned ones after an idle timeout.
-          if (sessions.size >= maxSessions) {
+          // Initializations still in progress count too: they become sessions
+          // only once the SDK reports them, after the awaits below.
+          if (sessions.size + initializing >= maxSessions) {
             await sendJsonRpcError(ctx, 503, 'Too many MCP sessions; try again later')
             return
           }
+          initializing++
           const server = buildMcpServer()
           const sessionTransport = new WebStandardStreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (id) => {
               sessions.set(id, { server, transport: sessionTransport, active: 0 })
+              // Armed now, not after the response: if sending it fails (the
+              // client went away), the session still expires.
+              armIdleTimer(id)
             },
           })
           // Set before connect(): the SDK wraps an existing onclose, but a
@@ -1448,10 +1456,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             clearTimeout(sessions.get(id)?.idleTimer)
             sessions.delete(id)
           }
-          await server.connect(sessionTransport)
-          await ctx.sendResponse(
-            await sessionTransport.handleRequest(webRequest, { parsedBody, authInfo }),
-          )
+          try {
+            await server.connect(sessionTransport)
+            await ctx.sendResponse(
+              await sessionTransport.handleRequest(webRequest, { parsedBody, authInfo }),
+            )
+          } finally {
+            initializing--
+          }
           if (sessionTransport.sessionId) armIdleTimer(sessionTransport.sessionId)
         } catch (err) {
           log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)

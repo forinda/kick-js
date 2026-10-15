@@ -136,6 +136,7 @@ function latencyHistogram(samples: readonly number[]): number[] {
 }
 
 const MAX_SAMPLES = 1000
+const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'QUERY'])
 
 /**
  * Where every runtime publishes the matched route on the raw request — the
@@ -466,7 +467,9 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       if (status >= 500) errorCount.value++
       else if (status >= 400) clientErrorCount.value++
 
-      const routeKey = `${method} ${route ?? '<unmatched>'}`
+      // Known methods only: a fetch-based host (Bun, Deno) passes any token.
+      const verb = METHODS.has(method.toUpperCase()) ? method.toUpperCase() : 'OTHER'
+      const routeKey = `${verb} ${route ?? '<unmatched>'}`
       if (!routeLatency[routeKey]) {
         routeLatency[routeKey] = {
           count: 0,

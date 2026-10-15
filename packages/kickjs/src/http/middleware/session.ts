@@ -89,7 +89,12 @@ export interface SessionOptions {
 
 // ── In-Memory Store ───────────────────────────────────────────────────
 
-class MemoryStore implements SessionStore {
+// ponytail: fixed cap for the single-instance default; a shared store
+// (KvSessionStore, Redis) is the answer for more.
+const MAX_SESSIONS = 10_000
+
+/** @internal Exported for tests. */
+export class MemoryStore implements SessionStore {
   private readonly sessions = new Map<string, { data: SessionData; expires: number }>()
   private readonly cleanupInterval: ReturnType<typeof setInterval>
 
@@ -120,7 +125,16 @@ class MemoryStore implements SessionStore {
   }
 
   async set(sid: string, data: SessionData, maxAge: number): Promise<void> {
+    // Deleted first so the map stays in last-written order, oldest at the front.
+    this.sessions.delete(sid)
     this.sessions.set(sid, { data, expires: Date.now() + maxAge })
+    // A session is created for every visitor without a cookie, so a client
+    // can make as many as it sends requests: past the cap, the least
+    // recently written goes (that visitor starts a new session).
+    for (const oldest of this.sessions.keys()) {
+      if (this.sessions.size <= MAX_SESSIONS) break
+      this.sessions.delete(oldest)
+    }
   }
 
   async destroy(sid: string): Promise<void> {
@@ -131,6 +145,8 @@ class MemoryStore implements SessionStore {
     const entry = this.sessions.get(sid)
     if (entry) {
       entry.expires = Date.now() + maxAge
+      this.sessions.delete(sid)
+      this.sessions.set(sid, entry)
     }
   }
 

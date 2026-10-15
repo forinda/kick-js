@@ -398,8 +398,10 @@ export class AnthropicProvider implements AiProvider {
   }
 
   private warnOnce(key: string, text: string): void {
+    // Keys carry the model name, which an app may take from a request, so at
+    // most 100 are remembered; past that, a new one warns every time.
     if (this.warned.has(key)) return
-    this.warned.add(key)
+    if (this.warned.size < 100) this.warned.add(key)
     console.warn(text)
   }
 }

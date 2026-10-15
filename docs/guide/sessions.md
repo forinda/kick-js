@@ -117,7 +117,7 @@ session({
 
 ## Cookie store
 
-The default store keeps sessions in the memory of one process. With more than one — several containers behind a load balancer, or Netlify and Vercel functions, where each request may land on a new instance — the next request can reach a process that has never seen the session.
+The default store keeps sessions in the memory of one process, at most 10,000 of them. A visitor without a cookie gets a session, so a client could otherwise create one per request. Past the cap, the least recently written session is dropped, and that visitor starts a new one. With more than one — several containers behind a load balancer, or Netlify and Vercel functions, where each request may land on a new instance — the next request can reach a process that has never seen the session.
 
 `store: 'cookie'` keeps the session data in the cookie itself, so every instance reads it, with nothing shared between them:
 

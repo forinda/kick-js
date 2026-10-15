@@ -68,8 +68,18 @@ export interface RateLimitGuardOptions {
   exemptWhen?: RouteFlagTest
 }
 
-/** Timer-free in-memory store: sweeps expired entries when the map grows. */
-class LazyMemoryStore implements RateLimitStore {
+// ponytail: fixed cap; a store shared between instances has its own limits.
+const MAX_KEYS = 100_000
+
+/**
+ * Timer-free in-memory store. Kept in window order (a refreshed key moves to
+ * the back), so expired entries are always at the front: each insert drops
+ * them from there and stops at the first live one — no full scan. Keys come
+ * from clients (on an edge host, the first `x-forwarded-for` hop), so past
+ * {@link MAX_KEYS} the oldest live one goes too.
+ */
+/** @internal Exported for tests. */
+export class LazyMemoryStore implements RateLimitStore {
   private readonly hits = new Map<string, { hits: number; reset: number }>()
 
   constructor(private readonly windowMs: number) {}
@@ -81,13 +91,13 @@ class LazyMemoryStore implements RateLimitStore {
       entry.hits++
       return { totalHits: entry.hits, resetTime: new Date(entry.reset) }
     }
-    // ponytail: sweep-on-growth instead of a cleanup interval — no timer to
-    // dispose, edge-safe. Bound is 10k live keys before a full sweep.
-    if (this.hits.size > 10_000) {
-      for (const [k, e] of this.hits) if (e.reset <= now) this.hits.delete(k)
-    }
     const fresh = { hits: 1, reset: now + this.windowMs }
+    this.hits.delete(key)
     this.hits.set(key, fresh)
+    for (const [k, e] of this.hits) {
+      if (e.reset > now && this.hits.size <= MAX_KEYS) break
+      this.hits.delete(k)
+    }
     return { totalHits: 1, resetTime: new Date(fresh.reset) }
   }
 

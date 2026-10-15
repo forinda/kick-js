@@ -110,6 +110,9 @@ export class SocketIoContext {
 
   /** Join a room in this namespace. Returns the adapter's promise when its join is async. */
   join(room: string): void | Promise<void> {
+    // Socket.IO removes a socket from its rooms once, on disconnect; a join
+    // after that (a handler that awaited) would stay for good.
+    if (!this.socket.connected) return
     return this.socket.join(room)
   }
 

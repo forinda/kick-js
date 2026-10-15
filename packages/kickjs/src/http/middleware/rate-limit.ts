@@ -52,12 +52,16 @@ export interface RateLimitOptions {
   exemptWhen?: RouteFlagTest
 }
 
+// ponytail: fixed cap; a store shared between instances (Redis) has its own limits.
+const MAX_KEYS = 100_000
+
 interface MemoryStoreEntry {
   totalHits: number
   resetTime: Date
 }
 
-class MemoryStore implements RateLimitStore {
+/** @internal Exported for tests. */
+export class MemoryStore implements RateLimitStore {
   private hits = new Map<string, MemoryStoreEntry>()
   private cleanupTimer: ReturnType<typeof setInterval>
 
@@ -89,9 +93,25 @@ class MemoryStore implements RateLimitStore {
     }
 
     const resetTime = new Date(now + this.windowMs)
-    const newEntry: MemoryStoreEntry = { totalHits: 1, resetTime }
-    this.hits.set(key, newEntry)
+    // Deleted first so the map stays in window order: the oldest window, the
+    // first to expire, is always at the front.
+    this.hits.delete(key)
+    this.hits.set(key, { totalHits: 1, resetTime })
+    this.bound(now)
     return { totalHits: 1, resetTime }
+  }
+
+  /**
+   * Keys come from clients (an IP, or a header behind a proxy that passes it
+   * through), so the map is capped: expired windows go first, from the front;
+   * past {@link MAX_KEYS} the oldest live one goes too — a reset counter for
+   * that client, better than running out of memory.
+   */
+  private bound(now: number) {
+    for (const [key, entry] of this.hits) {
+      if (entry.resetTime.getTime() > now && this.hits.size <= MAX_KEYS) break
+      this.hits.delete(key)
+    }
   }
 
   async decrement(key: string): Promise<void> {

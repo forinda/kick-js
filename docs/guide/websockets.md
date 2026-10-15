@@ -100,24 +100,24 @@ Messages must be JSON with an `event` and `data` field:
 
 Every handler receives a `WsContext` with these properties and methods:
 
-| Property/Method                  | Description                                                                  |
-| -------------------------------- | ---------------------------------------------------------------------------- |
-| `ctx.id`                         | Unique connection ID                                                         |
-| `ctx.data`                       | Parsed message payload                                                       |
-| `ctx.event`                      | Event name from the message                                                  |
-| `ctx.namespace`                  | Namespace path                                                               |
-| `ctx.socket`                     | Raw WebSocket instance                                                       |
-| `ctx.request`                    | The HTTP upgrade `IncomingMessage` — read cookies, headers, query, client IP |
-| `ctx.cookies`                    | Parsed cookie map from the upgrade `Cookie` header                           |
-| `ctx.get(key)`                   | Get metadata value                                                           |
-| `ctx.set(key, value)`            | Set metadata (persists for connection lifetime)                              |
-| `ctx.send(event, data)`          | Send to this client                                                          |
-| `ctx.broadcast(event, data)`     | Send to all clients in namespace except sender                               |
-| `ctx.broadcastAll(event, data)`  | Send to all clients in namespace including sender                            |
-| `ctx.join(room)`                 | Join a room                                                                  |
-| `ctx.leave(room)`                | Leave a room                                                                 |
-| `ctx.rooms()`                    | Get rooms this client is in                                                  |
-| `ctx.to(room).send(event, data)` | Send to all clients in a room                                                |
+| Property/Method                  | Description                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------- |
+| `ctx.id`                         | Unique connection ID                                                            |
+| `ctx.data`                       | Parsed message payload                                                          |
+| `ctx.event`                      | Event name from the message                                                     |
+| `ctx.namespace`                  | Namespace path                                                                  |
+| `ctx.socket`                     | Raw WebSocket instance                                                          |
+| `ctx.request`                    | The HTTP upgrade `IncomingMessage` — read cookies, headers, query, client IP    |
+| `ctx.cookies`                    | Parsed cookie map from the upgrade `Cookie` header                              |
+| `ctx.get(key)`                   | Get metadata value                                                              |
+| `ctx.set(key, value)`            | Set metadata (persists for connection lifetime)                                 |
+| `ctx.send(event, data)`          | Send to this client                                                             |
+| `ctx.broadcast(event, data)`     | Send to all clients in namespace except sender                                  |
+| `ctx.broadcastAll(event, data)`  | Send to all clients in namespace including sender                               |
+| `ctx.join(room)`                 | Join a room. Skipped once the socket has closed; at most 1,000 rooms per socket |
+| `ctx.leave(room)`                | Leave a room                                                                    |
+| `ctx.rooms()`                    | Get rooms this client is in                                                     |
+| `ctx.to(room).send(event, data)` | Send to all clients in a room                                                   |
 
 ## Rooms
 

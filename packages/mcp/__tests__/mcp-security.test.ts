@@ -155,6 +155,13 @@ describe('McpAdapter — session limits', () => {
     expect((await post(endpoint)).status).toBe(503)
   })
 
+  it('holds the cap when many clients initialize at once', async () => {
+    const { endpoint } = await start(McpAdapter({ name: 't', transport: 'http', maxSessions: 2 }))
+    const results = await Promise.all(Array.from({ length: 8 }, () => post(endpoint)))
+    expect(results.filter((r) => r.status === 200)).toHaveLength(2)
+    expect(results.filter((r) => r.status === 503)).toHaveLength(6)
+  })
+
   it('closes a session left idle past sessionIdleTimeoutMs', async () => {
     const { endpoint } = await start(
       McpAdapter({ name: 't', transport: 'http', sessionIdleTimeoutMs: 50 }),
