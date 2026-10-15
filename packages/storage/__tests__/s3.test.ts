@@ -239,6 +239,14 @@ describe('s3Storage', () => {
       let active = 0
       let peak = 0
       let completeBody = ''
+      let released = false
+      let release!: () => void
+      const gate = new Promise<void>((done) => {
+        release = () => {
+          released = true
+          done()
+        }
+      })
       const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         const req = new Request(input, init)
         const url = new URL(req.url)
@@ -251,9 +259,16 @@ describe('s3Storage', () => {
         }
         active++
         peak = Math.max(peak, active)
-        // Later parts finish first, so completion order differs from part order.
         const n = Number(url.searchParams.get('partNumber'))
-        await new Promise((done) => setTimeout(done, 60 - n * 5))
+        // Hold the first parts until three are in flight at once, so the peak
+        // doesn't depend on how fast this machine hashes 5 MiB (a fallback
+        // releases them, and the test fails, if three never get there).
+        if (!released) {
+          if (active === 3) release()
+          else await Promise.race([gate, new Promise((done) => setTimeout(done, 2000))])
+        }
+        // Later parts finish first, so completion order differs from part order.
+        await new Promise((done) => setTimeout(done, 20 - n * 2))
         active--
         return new Response(null, { headers: { etag: `"e${n}"` } })
       }) as unknown as typeof globalThis.fetch
