@@ -10,7 +10,7 @@
 Bound long-lived state that client input could grow without limit:
 
 - **kickjs**
-  - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows drop from the front without a full scan. At the cap, only counters still at one hit are evicted, so a flood can't reset a real counter. A new key is refused (429) only when every counter has two hits or more.
+  - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows drop from the front without a full scan. At the cap, only counters still at one hit are evicted (never when `max` is 1), so a flood can't reset a real counter. A new key is refused (429) only when every counter has two hits or more.
   - The in-memory session store caps at 10,000 sessions. Empty ones (what a cookieless flood creates) are evicted first, then the least recently written.
   - Metrics label unknown HTTP methods `OTHER`.
 - **kickjs-db**

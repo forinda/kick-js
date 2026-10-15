@@ -78,8 +78,9 @@ export interface RateLimitGuardOptions {
 export class LazyMemoryStore implements RateLimitStore {
   private readonly counters: BoundedCounters
 
-  constructor(windowMs: number) {
-    this.counters = new BoundedCounters(windowMs)
+  /** @param limit The `max` it enforces, so it never evicts a counter at the limit. */
+  constructor(windowMs: number, limit?: number) {
+    this.counters = new BoundedCounters(windowMs, limit)
   }
 
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
@@ -124,7 +125,7 @@ export function rateLimitGuard(options: RateLimitGuardOptions = {}): MiddlewareH
   const statusCode = options.statusCode ?? 429
   const keyGenerator = options.keyGenerator ?? defaultKey
   const sendHeaders = options.headers ?? true
-  const store = options.store ?? new LazyMemoryStore(windowMs)
+  const store = options.store ?? new LazyMemoryStore(windowMs, max)
 
   const exemptWhen = options.exemptWhen
   if (exemptWhen !== undefined) assertFlagTest(exemptWhen, 'rateLimitGuard({ exemptWhen })')

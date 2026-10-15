@@ -58,8 +58,9 @@ export class MemoryStore implements RateLimitStore {
   private readonly counters: BoundedCounters
   private cleanupTimer: ReturnType<typeof setInterval>
 
-  constructor(windowMs: number) {
-    this.counters = new BoundedCounters(windowMs)
+  /** @param limit The `max` it enforces, so it never evicts a counter at the limit. */
+  constructor(windowMs: number, limit?: number) {
+    this.counters = new BoundedCounters(windowMs, limit)
     this.cleanupTimer = setInterval(() => this.counters.sweep(), windowMs)
     // Allow the process to exit without waiting for the timer
     if (this.cleanupTimer.unref) {
@@ -122,7 +123,7 @@ export function rateLimit(options: RateLimitOptions = {}) {
     options.keyGenerator ??
     ((req: Request) => resolveClientIp(req as ClientRequestLike) ?? 'global')
   const sendHeaders = options.headers ?? true
-  const store = options.store ?? new MemoryStore(windowMs)
+  const store = options.store ?? new MemoryStore(windowMs, max)
   const skip = options.skip
   const skipPaths = new Set(options.skipPaths ?? [])
   const exemptWhen = options.exemptWhen

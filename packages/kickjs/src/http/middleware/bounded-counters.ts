@@ -7,10 +7,12 @@
  * - Expired windows go first. The map is kept in window order (a key starting
  *   a new window moves to the back), so they are always at the front, and a
  *   sweep stops at the first live one — no full scan.
- * - Then a counter still at one hit, oldest first. A flood of single requests
- *   from made-up keys just recycles itself; a counter a client has hit twice
- *   (a username with failed logins) is never pushed out, so flooding can't
- *   reset it. At most it costs a key one hit, while that key is at one.
+ * - Then a counter still at one hit, oldest first — when the limit is above
+ *   one, so a single hit is below it. A flood of single requests from made-up
+ *   keys just recycles itself; a counter a client has hit twice (a username
+ *   with failed logins) is never pushed out, so flooding can't reset it. At
+ *   most it costs a key one hit, while that key is at one. With a limit of
+ *   one, a single hit is already the limit, so nothing live is evicted.
  * - Only when every counter is at two or more is a new key refused, counted
  *   as over any limit until the oldest window ends. Reaching that takes two
  *   requests per key across the whole cap within one window.
@@ -22,8 +24,13 @@ export class BoundedCounters {
   /** Keys at one hit (or fewer), oldest first: the only ones evicted. */
   private readonly singles = new Set<string>()
 
+  /**
+   * @param limit The rate limit these counters enforce (`max`): one-hit
+   * counters are only evictable while that's below it.
+   */
   constructor(
     private readonly windowMs: number,
+    private readonly limit = Number.POSITIVE_INFINITY,
     // ponytail: fixed cap; a store shared between instances (Redis) has its own limits.
     private readonly max = 100_000,
   ) {}
@@ -43,7 +50,7 @@ export class BoundedCounters {
     this.remove(key)
     this.sweep(now)
     if (this.hits.size >= this.max) {
-      const single = this.singles.values().next().value
+      const single = this.limit > 1 ? this.singles.values().next().value : undefined
       if (single === undefined) {
         const oldest = this.hits.values().next().value!
         return { totalHits: Number.POSITIVE_INFINITY, resetTime: new Date(oldest.reset) }

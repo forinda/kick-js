@@ -14,7 +14,7 @@ const sizeOf = (store: object, field: string) =>
 
 describe('BoundedCounters (the in-memory rate-limit stores)', () => {
   it('recycles one-hit keys, so a flood of made-up keys never resets a real counter', () => {
-    const counters = new BoundedCounters(60_000, 5)
+    const counters = new BoundedCounters(60_000, 10, 5)
     for (let i = 0; i < 3; i++) counters.increment('victim')
     for (let i = 0; i < 50; i++) expect(counters.increment(`flood-${i}`).totalHits).toBe(1)
     expect(counters.size).toBe(5)
@@ -24,7 +24,7 @@ describe('BoundedCounters (the in-memory rate-limit stores)', () => {
   it('refuses a new key only once every counter has two hits or more', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
-      const counters = new BoundedCounters(60_000, 3)
+      const counters = new BoundedCounters(60_000, 10, 3)
       for (const key of ['a', 'b', 'c']) {
         counters.increment(key)
         counters.increment(key)
@@ -40,7 +40,7 @@ describe('BoundedCounters (the in-memory rate-limit stores)', () => {
   })
 
   it('a counter brought back to one hit becomes evictable again', () => {
-    const counters = new BoundedCounters(60_000, 2)
+    const counters = new BoundedCounters(60_000, 10, 2)
     counters.increment('a')
     counters.increment('a')
     counters.increment('b')
@@ -49,6 +49,15 @@ describe('BoundedCounters (the in-memory rate-limit stores)', () => {
     expect(counters.increment('c').totalHits).toBe(1) // took a's place
     expect(counters.increment('b').totalHits).toBe(3)
     expect(counters.increment('a').totalHits).toBe(1) // a started over
+  })
+
+  it('evicts nothing live when the limit is one: a single hit is already the limit', () => {
+    const counters = new BoundedCounters(60_000, 1, 2)
+    counters.increment('reset-request:alice')
+    counters.increment('reset-request:bob')
+    // A flood can't push alice out to buy her another request.
+    expect(counters.increment('flood').totalHits).toBe(Number.POSITIVE_INFINITY)
+    expect(counters.increment('reset-request:alice').totalHits).toBe(2)
   })
 
   it('drops expired windows from the front without touching live ones', () => {
