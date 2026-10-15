@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { z } from 'zod'
 import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
+import { _useSecretFileReader } from './settings'
 import { Container } from '../core/container'
 import type { EnvKey } from '../core/decorators'
 
@@ -612,3 +613,6 @@ export type Env = {
   NODE_ENV: 'development' | 'production' | 'test'
   LOG_LEVEL: string
 }
+
+// `defineSettings` sections read `<NAME>_FILE` secrets through this too.
+_useSecretFileReader(withSecretFiles)
