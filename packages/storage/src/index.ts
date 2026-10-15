@@ -26,6 +26,8 @@ export {
   type S3Storage,
   type S3StorageOptions,
   type UploadedPart,
+  type UploadForm,
+  type UploadFormOptions,
   type UploadUrlOptions,
 } from './s3'
 export type { FileInfo, ListOptions, ListPage, PutOptions, Storage, UrlOptions } from './types'

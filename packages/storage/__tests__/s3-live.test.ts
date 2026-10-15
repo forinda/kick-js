@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startService, type StartedService } from '@forinda/kickjs-testing'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { s3Storage, type S3Storage } from '../src/index'
+import { memoryStorage, s3Storage, type S3Storage, type Storage } from '../src/index'
 import { createTusHandler } from '../src/tus'
 
 const endpoint = process.env.KICK_TEST_S3_ENDPOINT
@@ -280,6 +280,58 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     } finally {
       for (const server of servers) server.close()
     }
+  })
+
+  it('groups by delimiter exactly as memoryStorage does', async () => {
+    const memory = memoryStorage()
+    const keys = ['g/1', 'g/b/c', 'g/b/d', 'g/e/f', 'g/z', 'g/b-x', 'g/b0']
+    for (const key of keys) {
+      await files.put(`${run}${key}`, 'x')
+      await memory.put(`${run}${key}`, 'x')
+    }
+    const pages = async (storage: Storage) => {
+      const out: unknown[] = []
+      let cursor: string | undefined
+      do {
+        const page = await storage.list({ prefix: `${run}g/`, delimiter: '/', limit: 2, cursor })
+        out.push([page.files.map((f) => f.key), page.prefixes])
+        cursor = page.cursor
+      } while (cursor)
+      return out
+    }
+    expect(await pages(files)).toEqual(await pages(memory))
+  })
+
+  it('uploadForm: the bucket enforces the size range, the type and the key', async () => {
+    const post = async (
+      form: { url: string; fields: Record<string, string> },
+      body: string,
+      extra: Record<string, string> = {},
+    ) => {
+      const data = new FormData()
+      for (const [name, value] of Object.entries({ ...form.fields, ...extra }))
+        data.append(name, value)
+      data.append('file', new Blob([body]))
+      return fetch(form.url, { method: 'POST', body: data })
+    }
+    const pdf = await files.uploadForm(`${run}form/a.pdf`, {
+      maxSize: 10,
+      contentType: 'application/pdf',
+    })
+    expect((await post(pdf, 'small')).status).toBe(204)
+    expect((await files.stat(`${run}form/a.pdf`))!).toMatchObject({
+      size: 5,
+      contentType: 'application/pdf',
+    })
+    const tooBig = await post(pdf, 'x'.repeat(11))
+    expect(tooBig.status).toBe(400)
+    expect(await tooBig.text()).toContain('EntityTooLarge')
+    // Another key than the one signed.
+    expect((await post(pdf, 'x', { key: `${run}form/other` })).status).toBe(403)
+
+    const image = await files.uploadForm(`${run}form/img`, { maxSize: 100, contentType: 'image/' })
+    expect((await post(image, 'png', { 'Content-Type': 'image/png' })).status).toBe(204)
+    expect((await post(image, 'html', { 'Content-Type': 'text/html' })).status).toBe(403)
   })
 
   it('cleans up', async () => {
