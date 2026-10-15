@@ -137,6 +137,14 @@ export function hasRequestBody(headers: Record<string, unknown>): boolean {
 }
 
 /**
+ * Set to `true` on a request (`req[RAW_BODY] = true`) by middleware that will
+ * read the body stream itself — a tus endpoint, a proxy — so the 415 below
+ * leaves it alone. Mark it in an earlier phase (an adapter's `beforeGlobal`),
+ * consume it later.
+ */
+export const RAW_BODY = Symbol.for('kick/http/raw-body')
+
+/**
  * Connect middleware that answers 415 for a body Express's parsers left
  * untouched.
  *
@@ -148,6 +156,7 @@ export function hasRequestBody(headers: Record<string, unknown>): boolean {
 export function rejectUnsupportedBody() {
   return (req: any, _res: unknown, next: (err?: unknown) => void): void => {
     if (!BODY_METHODS.has((req.method ?? 'GET').toUpperCase())) return next()
+    if (req[RAW_BODY]) return next()
     if (classifyMediaType(req.headers?.['content-type']) !== 'unsupported') return next()
 
     const reject = (): void => next(unsupportedMediaTypeError(req.headers?.['content-type']))

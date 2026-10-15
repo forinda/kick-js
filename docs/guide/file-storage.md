@@ -1,5 +1,5 @@
 ---
-description: Save, stream and list files in memory, on local disk, or in an S3-compatible bucket (AWS S3, Cloudflare R2, MinIO) behind one interface — with signed URLs, uploads straight from the browser, and resumable multipart uploads. No AWS SDK.
+description: Save, stream and list files in memory, on local disk, or in an S3-compatible bucket (AWS S3, Cloudflare R2, MinIO) behind one interface — with signed URLs, uploads straight from the browser, resumable multipart uploads, and a tus endpoint for resumable uploads through your server. No AWS SDK.
 ---
 
 # File Storage
@@ -259,6 +259,62 @@ The browser splits the file and sends each part to its URL. It keeps the `ETag` 
 
 - **Abandoned uploads.** Parts of an upload that is never completed or aborted stay in the bucket and are billed. Add a lifecycle rule that aborts incomplete multipart uploads after a day or so (`AbortIncompleteMultipartUpload` on S3, and the same option on R2).
 
+## Resumable uploads through your server: tus
+
+When files should pass through your own server, use `TusAdapter`. This suits disk storage, a bucket you don't want browsers writing to, or a server that checks each file. It speaks [tus](https://tus.io), the open protocol for resumable uploads, so [tus-js-client](https://github.com/tus/tus-js-client), [Uppy](https://uppy.io/docs/tus/) (`@uppy/tus`) and tus clients for iOS, Android and other platforms work with it unchanged.
+
+```ts
+import { TusAdapter } from '@forinda/kickjs-storage/tus'
+
+bootstrap({
+  modules,
+  adapters: [
+    TusAdapter({
+      path: '/api/uploads',
+      storage: FILES, // a Storage, or a token bound to one
+      maxSize: 2 * 1024 ** 3,
+      onCreate: ({ headers, metadata, size }, id) => {
+        const user = verifyToken(headers.authorization) // throw HttpException.unauthorized() to refuse
+        if (!['video/mp4', 'application/pdf'].includes(metadata.filetype)) {
+          throw HttpException.badRequest('Unsupported file type')
+        }
+        return { key: `uploads/${user.id}/${id}`, data: { owner: user.id } }
+      },
+      authorize: (headers, upload) => {
+        if (verifyToken(headers.authorization).id !== (upload.data as { owner: string }).owner) {
+          throw HttpException.forbidden()
+        }
+      },
+      onComplete: (upload) => uploads.markReady(upload.key, upload.size),
+    }),
+  ],
+})
+```
+
+```ts
+// browser
+import { Upload } from 'tus-js-client'
+
+new Upload(file, {
+  endpoint: '/api/uploads',
+  headers: { authorization: `Bearer ${token}` },
+  metadata: { filename: file.name, filetype: file.type },
+  chunkSize: 8 * 1024 * 1024,
+  onProgress: (sent, total) => render(sent / total),
+}).start()
+```
+
+How it works:
+
+- **Arrival.** Each upload is written to a file under `dir` (default `.tus`) as it arrives. If the connection drops, the bytes already received stay, and the client asks (`HEAD`) where to continue and sends only the rest. tus-js-client remembers upload URLs across page reloads.
+- **Completion.** When the last byte arrives, the file is streamed into `storage` under the key `onCreate` chose (default `uploads/<id>`), with `metadata.filetype` as its content type. Then `onComplete` runs. The response to that last request waits for both, so a client that sees success knows the file is stored.
+- **Checks.** `onCreate` sees every new upload's headers, size and metadata before anything is written. `authorize` sees every later request to that upload. Without `authorize`, anyone holding an upload's URL, which contains an unguessable id, can continue or cancel it. Throw an `HttpException` from either hook to refuse with its status.
+- **Limits.** `maxSize` (default 1 GiB) is checked against the declared length, and the body can never run past it. Unfinished uploads expire `expiresIn` seconds (default one day) after their last write and are swept hourly.
+- **Middleware.** The adapter runs after the global middleware, so `cors()`, rate limits and `csrf()` apply. Pass the CSRF header through tus-js-client's `headers`. For a browser on another origin, `cors()` must expose the tus headers: `exposedHeaders: ['Location', 'Upload-Offset', 'Upload-Length', 'Upload-Expires', 'Tus-Resumable']`.
+- **Several instances.** Unfinished uploads live on local disk. Either give every instance the same `dir` on a shared volume, or have the load balancer send an upload's requests to one instance. Parts already received are never lost; a request that reaches the wrong instance gets 404, and the client starts over.
+
+The protocol is tus 1.0.0 with the creation, creation-with-upload, termination and expiration extensions. For a server that isn't KickJS, `createTusHandler(options)` from the same entry is the same endpoint as a Node `(req, res, next)` handler.
+
 ## Cloudflare R2, MinIO and other S3-compatible services
 
 Pass `endpoint`. Objects are then addressed path-style, as `<endpoint>/<bucket>/<key>`:
@@ -356,6 +412,6 @@ await createTestApp({
 ## Limits
 
 - **Direct and multipart uploads are bucket only.** `uploadUrl()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
-- **Resumable uploads through your own server**, such as the [tus](https://tus.io) protocol for disk-backed storage, aren't built. Multipart covers resumable uploads when the files end up in a bucket.
+- **tus checksums and concatenation** (parallel uploads of one file) aren't supported. Clients fall back to plain sequential uploads.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.
 - **Node only.** The package uses `node:crypto` and `node:fs`. On Cloudflare Workers, use the R2 binding directly.

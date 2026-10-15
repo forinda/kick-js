@@ -36,6 +36,14 @@ bootstrap({ modules, settings: [S3Settings] })
 const files = s3FromSettings()
 ```
 
+Resumable uploads through your server, for tus-js-client and Uppy:
+
+```ts
+import { TusAdapter } from '@forinda/kickjs-storage/tus'
+
+bootstrap({ modules, adapters: [TusAdapter({ path: '/api/uploads', storage: files })] })
+```
+
 ## Documentation
 
 [kickjs.app/guide/file-storage](https://kickjs.app/guide/file-storage)
