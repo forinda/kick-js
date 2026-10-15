@@ -264,6 +264,242 @@ const env = loadEnv(envSchema) // re-parsed with new PORT against fresh schema
 
 For the normal "edit `.env`, want the new value" flow, do nothing — `envWatchPlugin()` calls `reloadEnv()` for you and `ConfigService.get()` immediately returns the new value.
 
+## Secrets from files (`<KEY>_FILE`) {#secrets-from-files}
+
+Docker secrets, Kubernetes secret volumes and most secret managers mount secrets as files rather than environment variables. For any key your env schema declares, set `<KEY>_FILE` to the file's path and the value is read from it:
+
+```bash
+DB_PASSWORD_FILE=/run/secrets/db_password
+```
+
+```ts
+const envSchema = z.object({ DB_PASSWORD: z.string().min(1) })
+loadEnv(envSchema).DB_PASSWORD // the file's contents
+```
+
+Each key reads its own file, so several secrets sit side by side with ordinary variables. With Docker Compose:
+
+```yaml
+services:
+  api:
+    image: my-app
+    environment:
+      AWS_REGION: eu-west-1 # ordinary variable
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      STRIPE_KEY_FILE: /run/secrets/stripe_key
+    secrets: [db_password, jwt_secret, stripe_key]
+
+secrets:
+  db_password: { file: ./secrets/db_password.txt }
+  jwt_secret: { file: ./secrets/jwt_secret.txt }
+  stripe_key: { file: ./secrets/stripe_key.txt }
+```
+
+On Kubernetes, mount the Secret as a volume and point each `_FILE` variable into it:
+
+```yaml
+containers:
+  - name: api
+    env:
+      - { name: DB_PASSWORD_FILE, value: /etc/secrets/db_password }
+      - { name: JWT_SECRET_FILE, value: /etc/secrets/jwt_secret }
+      - { name: STRIPE_KEY_FILE, value: /etc/secrets/stripe_key }
+    volumeMounts:
+      - { name: secrets, mountPath: /etc/secrets, readOnly: true }
+volumes:
+  - name: secrets
+    secret: { secretName: api-secrets }
+```
+
+The schema is unchanged — it declares `DB_PASSWORD`, `JWT_SECRET` and `STRIPE_KEY`, and validates the file contents exactly as it would an environment variable (a `STRIPE_KEY` failing `startsWith('sk_')` still fails startup):
+
+```ts
+const envSchema = z.object({
+  AWS_REGION: z.string(),
+  DB_PASSWORD: z.string().min(1),
+  JWT_SECRET: z.string().min(32),
+  STRIPE_KEY: z.string().startsWith('sk_'),
+})
+```
+
+- Only keys in the schema — `LOG_FILE` meaning "where to write logs" is left alone unless the schema declares `LOG`.
+- One trailing newline (`\n` or `\r\n`, as `echo` and Windows editors leave) is dropped.
+- Setting both `DB_PASSWORD` and `DB_PASSWORD_FILE` fails at startup, so which secret is in use is never ambiguous; so does a file that can't be read. Neither error prints the contents.
+- The value reaches the parsed env — `getEnv`, `ConfigService`, `@Value` — but is **not** copied into `process.env`, which child processes inherit. Read it through the schema, not `process.env.DB_PASSWORD`.
+
+## Settings sections (`defineSettings`)
+
+One flat env schema gets crowded, and every service reads from all of it. A **settings section** groups a concern's configuration under one prefix, with its own schema, and is injected only where it's needed:
+
+```ts
+// src/modules/db/db.settings.ts
+import { defineSettings } from '@forinda/kickjs'
+import { z } from 'zod'
+
+export const DbSettings = defineSettings(
+  'DB',
+  z.object({
+    url: z.string().url(),
+    pool: z.object({ max: z.coerce.number().int().default(10) }).default({ max: 10 }),
+    replicas: z.array(z.string()).default([]),
+    ssl: z.stringbool().default(false),
+  }),
+)
+```
+
+Each key path becomes one env variable under the prefix, in `UPPER_SNAKE_CASE`:
+
+| Key        | Variable                                               |
+| ---------- | ------------------------------------------------------ |
+| `url`      | `DB_URL`                                               |
+| `pool.max` | `DB_POOL_MAX`                                          |
+| `replicas` | `DB_REPLICAS` — a list, comma-separated: `r1.db,r2.db` |
+| `ssl`      | `DB_SSL`                                               |
+
+`DbSettings.envNames` lists them, and [`<NAME>_FILE` secrets](#secrets-from-files) work for every one (`DB_URL_FILE=/run/secrets/db_url`).
+
+### Where sections live
+
+Put a section next to the code that uses it — `src/modules/db/db.settings.ts` — and import its token from there. Not in `src/config`: that file registers the app-wide env schema as a side effect and is imported once, first, by `src/index.ts`; a section has no side effect (the environment is read at startup or on `get()`), so it can be imported from anywhere, in any order. `.env` files are loaded by `@forinda/kickjs` itself, so sections see them even in an app without an env schema.
+
+### Any schema library
+
+Valibot and Yup work as well as Zod — anything [`@forinda/kickjs-schema`](./schema.md) reads, as long as it's an object schema (the keys are what become variable names):
+
+```ts
+import * as v from 'valibot'
+
+export const MailSettings = defineSettings(
+  'MAIL',
+  v.object({
+    host: v.string(),
+    port: v.pipe(v.string(), v.transform(Number), v.number()),
+  }),
+)
+```
+
+Variables are strings, so let the schema convert them: `z.coerce.number()`, `v.pipe(v.string(), v.transform(Number))`, or Yup's `number()` (which casts). For booleans use `z.stringbool()` — `z.coerce.boolean()` reads the string `'false'` as `true`.
+
+### Using a section
+
+**Injected**, in a service or controller:
+
+```ts
+import { Inject, Service, type SettingsOf } from '@forinda/kickjs'
+
+@Service()
+export class Database {
+  constructor(@Inject(DbSettings) private readonly db: SettingsOf<typeof DbSettings>) {}
+}
+```
+
+**Anywhere else** — a plain function, a script, a factory outside DI — call `get()`:
+
+```ts
+const { url, pool } = DbSettings.get()
+```
+
+`get()` returns what injected code sees — the value validated at startup, or a replacement bound in the container (below) — so it's cheap and never disagrees with DI. Called before the app starts (a CLI script, a seed file), the first call loads and validates it. `DbSettings.load(env?)` parses afresh — from `process.env`, or an env object you pass — when you need the current values instead.
+
+### From an adapter or a module
+
+A declared section is an ordinary DI token, bound before the code that declared it runs, so the usual patterns work.
+
+**Configure an adapter from it** — `defineAdapter`'s `.async()` injects tokens into its config factory:
+
+```ts
+bootstrap({
+  modules,
+  adapters: [
+    DatabaseAdapter.async({
+      inject: [DbSettings],
+      useFactory: (db: SettingsOf<typeof DbSettings>) => ({ url: db.url, poolSize: db.pool.max }),
+    }),
+  ],
+})
+```
+
+**Bind a value under a module's own token** — when a library expects `DB_URL`, not your section:
+
+```ts
+export const DbModule = defineModule({
+  name: 'DbModule',
+  build: () => ({
+    register(container) {
+      container.registerFactory(DB_URL, () => container.resolve(DbSettings).url)
+    },
+    routes: () => null,
+  }),
+})
+```
+
+**Replace the section** — in a module's `register()`, or in a test — by binding the token again. Injected code and `DbSettings.get()` both see the replacement:
+
+```ts
+container.registerInstance(DbSettings, { ...DbSettings.load(), url: 'postgres://localhost/test' })
+```
+
+The container is one per process, so there's no per-module copy: whatever binds last is what every module sees.
+
+### Declaring a section
+
+A section is validated, and bound for injection, when something the app mounts **declares** it. Declare it where it's needed:
+
+```ts
+// App-wide
+bootstrap({ modules, settings: [AppSettings] })
+
+// With a module — only when the module is mounted, and bound before its register() runs
+export const DbModule = defineModule({
+  name: 'DbModule',
+  build: () => ({
+    settings: () => [DbSettings],
+    routes: () => ({ path: '/db', controller: DbController }),
+  }),
+})
+
+// With an adapter — only when it's enabled (see `when`), and bound before any hook runs
+export const SearchAdapter = defineAdapter({
+  name: 'SearchAdapter',
+  build: () => ({ settings: () => [SearchSettings] /* , hooks */ }),
+})
+
+// With a plugin
+export const BillingPlugin = definePlugin({
+  name: 'BillingPlugin',
+  build: () => ({ settings: () => [StripeSettings] /* , modules, adapters */ }),
+})
+```
+
+At startup, every declared section is validated, and an invalid or missing value fails startup with the variables to fix:
+
+```
+Settings 'DB' are invalid:
+  DB_URL: Invalid URL
+  DB_POOL_MAX: Invalid input: expected number, received NaN
+```
+
+- **Only what's mounted is required.** A module that isn't loaded doesn't need its variables — including in tests, which give the values for what they mount (`.env.test`, or schema defaults).
+- **Declaring twice is fine** — a section shared by a module and an adapter is loaded once. Two _different_ sections with the same prefix would read the same variables and are refused.
+- **Undeclared sections** aren't validated at startup; `get()` validates one on first use.
+- On the [web entry](./edge-deployment.md), `createWebApp({ settings })` and its modules' sections read the `env` you pass (the Workers bindings).
+
+### Several instances: `.scoped()`
+
+Two databases, two mail providers — one schema, several prefixes. `.scoped(name)` puts the name in front of the prefix and returns a separate section (the same one each time for the same name):
+
+```ts
+export const AnalyticsDb = DbSettings.scoped('ANALYTICS') // reads ANALYTICS_DB_URL, ANALYTICS_DB_POOL_MAX, …
+
+bootstrap({ modules, settings: [DbSettings, AnalyticsDb] })
+
+@Service()
+class Reports {
+  constructor(@Inject(AnalyticsDb) private readonly db: SettingsOf<typeof AnalyticsDb>) {}
+}
+```
+
 ## Accessing Config in Services
 
 `ConfigService` is the recommended way to read env config from a DI-managed class. It's an injectable singleton that consumes the `KickEnv` global populated by `kick typegen`, so as long as your `src/env.ts` is in place you get full type safety with **zero extra setup** — no schema to pass around, no separate typed-service factory, no manual casts.

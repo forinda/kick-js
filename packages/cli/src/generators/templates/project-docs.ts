@@ -216,6 +216,11 @@ mistakes:
   imports from \`src/config\`: read values with \`getEnv('KEY')\`, an injected
   \`ConfigService\` (\`config.get('KEY')\`), or \`@Value('KEY')\` typed as
   \`Env<'KEY'>\` — never \`process.env\`. Add a key to the schema before reading it.
+  A concern with several keys (a database, a mail provider) gets a typed section
+  instead: \`defineSettings('DB', schema)\` in the module's own
+  \`<name>.settings.ts\` — not in \`src/config\` — declared by the module that
+  needs it (\`settings: () => [DbSettings]\`) and read through
+  \`@Inject(DbSettings)\` or \`DbSettings.get()\`. Its variables are \`DB_*\`.
 
 - **Module entry files MUST be named \`<name>.module.ts\`** — see the Vite
   HMR contract at the top of "Module Pattern" below. The CLI enforces this;

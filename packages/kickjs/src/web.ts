@@ -37,6 +37,7 @@ import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
 import { ROUTE_URLS, RouteUrls } from './http/url-for'
+import { loadSettings, type Settings } from './config/settings'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
@@ -117,6 +118,8 @@ export interface CreateWebAppOptions {
    * — parity with `bootstrap({ jsonLimit })`. A larger body answers 413.
    */
   jsonLimit?: string | number
+  /** App-wide settings sections — parity with `bootstrap({ settings })`. */
+  settings?: Settings<unknown>[]
   /** What a failed route validation throws — parity with `bootstrap({ validationError })`. */
   validationError?: ValidationErrorFactory
 }
@@ -152,7 +155,6 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   // register so their services can inject it.
   const routeUrls = new RouteUrls()
   container.registerInstance(ROUTE_URLS, routeUrls)
-
   // Wire ConfigService/@Value env resolution when the platform has no
   // ambient process.env (Workers). Latest-wins like loadEnv().
   if (options.env) {
@@ -167,11 +169,20 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   // path (plugins/adapters are out of scope for the edge entry at launch).
   const registry = new MutableModuleRegistry()
   for (const m of options.modules) registry.mount(m)
-  const modules = registry.entries.map((entry) => {
-    const mod: AppModule = typeof entry === 'function' ? new (entry as AppModuleClass)() : entry
-    mod.register?.(container)
-    return mod
-  })
+  const modules = registry.entries.map((entry) =>
+    typeof entry === 'function' ? new (entry as AppModuleClass)() : (entry as AppModule),
+  )
+  // Declared settings sections — app-wide and mounted modules' — from the
+  // platform env (Workers bindings) when given, bound before modules register.
+  const settingsEnv = (options.env ??
+    (typeof process !== 'undefined' ? process.env : {})) as NodeJS.ProcessEnv
+  for (const [section, value] of loadSettings(
+    [...(options.settings ?? []), ...modules.flatMap((mod) => mod.settings?.() ?? [])],
+    settingsEnv,
+  )) {
+    container.registerInstance(section, value)
+  }
+  for (const mod of modules) mod.register?.(container)
   container.bootstrap()
 
   const app = new h3mod.H3()
