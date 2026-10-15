@@ -113,6 +113,8 @@ export type {
   TransactionRetryEvent,
   TransactionRollbackEvent,
   CreateDbClientOptions,
+  ReadRoute,
+  ReadRouter,
 } from './client/types'
 export type { SchemaToTypes } from './client/schema-types'
 export type { KickDbRegister, RegisteredDB } from './client/register'
