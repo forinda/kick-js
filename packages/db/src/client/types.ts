@@ -58,6 +58,15 @@ export interface TransactionOptions extends TransactionEvent {
    */
   nested?: 'reuse' | 'savepoint' | 'separate'
   /**
+   * Must be the outermost transaction, so that when the callback returns its
+   * work is committed — not just folded into a caller's transaction that may
+   * still roll back. Throws if a transaction is already open on this call
+   * chain (unless `nested: 'separate'`, which commits on its own). For work
+   * that has to be on disk before anything else happens: a payment recorded
+   * before the confirmation email goes out.
+   */
+  durable?: boolean
+  /**
    * Start the transaction read-only (Postgres, MySQL): a write inside it fails.
    * For reports that must see one consistent view and must not change it.
    * SQLite has no read-only transactions, so it's refused there.

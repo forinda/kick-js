@@ -76,6 +76,23 @@ await this.db.transaction({ nested: 'separate' }, async () => {
 })
 ```
 
+## Durable: commit means committed
+
+Because transactions follow the call chain, a `transaction()` called from code that is already inside one joins it. Its work commits only when the outermost transaction does, and is lost if that one rolls back. Usually that's what you want. Sometimes it isn't: a payment must be recorded before the confirmation email goes out, whatever the caller does next.
+
+`durable: true` makes that a rule. The transaction must be the outermost one, and it throws if it is called inside an open transaction:
+
+```ts
+async recordPayment(payment: NewPayment) {
+  await this.db.transaction({ durable: true }, async () => {
+    await this.db.insertInto('payments').values(payment).execute()
+  })
+  // Here the payment is committed — safe to send the receipt.
+}
+```
+
+Called from inside another transaction, `recordPayment` fails straight away instead of quietly joining it, which would hide the bug until a rollback lost a payment. A durable transaction can still open savepoints and nested transactions of its own. On Postgres, `{ durable: true, nested: 'separate' }` runs on its own connection and commits independently, even inside another transaction.
+
 ## After commit
 
 `afterCommit(fn)` runs `fn` once the transaction commits — send the email, publish the event — and drops it if the transaction (or the savepoint it was registered in) rolls back. Outside a transaction it runs right away. A hook that throws is reported to the error observers; the transaction stays committed.

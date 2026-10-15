@@ -321,6 +321,15 @@ export function wrap<DB>(
       const fn = (typeof a === 'function' ? a : b) as (tx: KickDbClient<DB>) => Promise<unknown>
       const frame = currentFrame()
       const nested = opts.nested ?? 'reuse'
+      // Joined or behind a savepoint, it would only commit when the caller's
+      // transaction does — not what `durable` promises.
+      if (opts.durable && frame && nested !== 'separate') {
+        return Promise.reject(
+          new Error(
+            "kickjs-db: transaction({ durable: true }) inside an open transaction wouldn't commit on its own — call it outside one, or use nested: 'separate'",
+          ),
+        )
+      }
       if (opts.readOnly && ctx.dialect === 'sqlite') {
         return Promise.reject(
           new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly'),
