@@ -76,9 +76,11 @@ import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timelin
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
 import {
   loadSettings,
+  originsOf,
   type ConfigVar,
   type Settings,
   type SettingsDeclaration,
+  type VarOrigin,
 } from '../config/settings'
 import { describeEnvSchema } from '../config/env'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
@@ -181,6 +183,14 @@ export interface ConfigDescription {
   env: ConfigVar[]
   /** Declared settings sections, in declaration order, each once. */
   sections: Array<{ prefix: string; declaredBy: string; vars: ConfigVar[] }>
+}
+
+/** What `app.configOrigins()` returns. */
+export interface ConfigOrigins {
+  /** The app's env schema. */
+  env: VarOrigin[]
+  /** The settings sections the app bound, in binding order. */
+  sections: Array<{ prefix: string; vars: VarOrigin[] }>
 }
 
 export interface ApplicationOptions {
@@ -1123,6 +1133,24 @@ export class Application {
       )
     }
     return { env: describeEnvSchema(), sections }
+  }
+
+  /**
+   * Where each variable the app reads gets its value — env, a `_FILE` secret,
+   * the schema's default, `provide()`, or nothing — for the env schema and
+   * every bound settings section. Names only, never values. Read from the
+   * current environment; call it on a started app.
+   */
+  configOrigins(): ConfigOrigins {
+    return {
+      env: originsOf(describeEnvSchema()),
+      sections: Array.from(this.settingsPrefixes.values(), (section) => ({
+        prefix: section.prefix,
+        vars: this.settingsProvided.has(section)
+          ? section.envNames.map((name) => ({ name, origin: 'provided' as const }))
+          : originsOf(section.describe()),
+      })),
+    }
   }
 
   /** Validate settings sections and bind each under its token. */

@@ -249,7 +249,7 @@ Full reactive state snapshot — everything in one endpoint.
 
 ### `GET /_debug/config` (opt-in)
 
-Sanitized environment variables. Only variables matching configured prefixes are shown; everything else is `[REDACTED]`.
+Sanitized environment variables. Only variables matching configured prefixes are shown; everything else is `[REDACTED]`. `origins` says where each variable the app declares (its env schema and [settings sections](./configuration.md#where-a-value-came-from)) gets its value: `env`, `file` (a `_FILE` secret), `default`, `provided`, or `unset`. It lists names only, never values.
 
 ```json
 {
@@ -259,6 +259,18 @@ Sanitized environment variables. Only variables matching configured prefixes are
     "NODE_ENV": "development",
     "DATABASE_URL": "[REDACTED]",
     "JWT_SECRET": "[REDACTED]"
+  },
+  "origins": {
+    "env": [{ "name": "PORT", "origin": "default" }],
+    "sections": [
+      {
+        "prefix": "DB",
+        "vars": [
+          { "name": "DB_URL", "origin": "file" },
+          { "name": "DB_POOL_MAX", "origin": "default" }
+        ]
+      }
+    ]
   }
 }
 ```

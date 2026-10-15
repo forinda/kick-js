@@ -167,6 +167,36 @@ export function describeSchemaVars(schema: unknown): ConfigVar[] {
   })
 }
 
+/** Where a variable's value comes from. */
+export type ValueOrigin = 'env' | 'file' | 'provided' | 'default' | 'unset'
+
+/** A variable and where its value comes from — never the value itself. */
+export interface VarOrigin {
+  name: string
+  origin: ValueOrigin
+}
+
+/**
+ * Where each variable's value comes from in `env`: set directly, read from
+ * `<NAME>_FILE`, the schema's default, or not set at all. Names only — safe
+ * to show where the values themselves must not appear.
+ */
+export function originsOf(
+  vars: readonly ConfigVar[],
+  env: NodeJS.ProcessEnv = process.env,
+): VarOrigin[] {
+  // Empty counts as unset, as the secret-file reader treats it.
+  const has = (name: string) => env[name] !== undefined && env[name] !== ''
+  return vars.map((v) => {
+    let origin: ValueOrigin = 'unset'
+    if (has(v.name)) origin = 'env'
+    // `_FILE` is only read where a reader is registered (Node, not the web entry).
+    else if (readSecretFiles && has(`${v.name}_FILE`)) origin = 'file'
+    else if (v.default !== undefined) origin = 'default'
+    return { name: v.name, origin }
+  })
+}
+
 /** Values validated at startup (or on first `get()`), by prefix. */
 const cached = new WeakMap<Settings<unknown>, unknown>()
 
