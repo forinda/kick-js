@@ -1,5 +1,41 @@
 # @forinda/kickjs-devtools
 
+## 7.10.0
+
+### Minor Changes
+
+- [#877](https://github.com/forinda/kick-js/pull/877) [`fb16eb7`](https://github.com/forinda/kick-js/commit/fb16eb7ee36bddb674dd3eec8d89d4e87be8a497) Thanks [@forinda](https://github.com/forinda)! - Conditional adapters. An adapter's `when` decides at startup whether it runs: helpers `onEnv('NAME', value?)`, `onPackage('name')` and `allOf(...)`, or any `() => boolean | string`. An adapter left out runs no hooks and adds no middleware, and adapters that `dependsOn` it are left out too. `app.getConditionReport()` lists each outcome with its reason, and DevTools serves it at `/_debug/conditions`.
+
+- [#889](https://github.com/forinda/kick-js/pull/889) [`a0dc689`](https://github.com/forinda/kick-js/commit/a0dc6896238490a97198ff09407605ade14336cf) Thanks [@forinda](https://github.com/forinda)! - `app.configOrigins()` reports where each variable the app reads gets its value: `env`, `file` (a `_FILE` secret), `default`, `provided` or `unset`. It covers the env schema and every bound settings section, and returns names only, never values. `originsOf(vars, env)` is the same check for any variable list. DevTools adds it to `/_debug/config` as `origins`.
+
+- [#887](https://github.com/forinda/kick-js/pull/887) [`a3b6dc5`](https://github.com/forinda/kick-js/commit/a3b6dc571d53d66b855266d41484b31c84c02475) Thanks [@forinda](https://github.com/forinda)! - DevTools now shows context contributors applied as decorators (`@LoadTenant` on a class or method). They used to be invisible because they live in controller metadata and only reach the per-route pipelines.
+  
+  - Each route records its contributor chain in execution order (`RouteMeta.contributors`): `beforeValidation` ones first, each with its source, label, `dependsOn` and the lower-precedence registrations it overrides.
+  - `app.getRoutes()` lists mounted routes with their chains.
+  - `app.getContributors()` now includes `class` and `method` sources, once per decorator site.
+  - In DevTools, `/_debug/routes` carries each route's chain, and the topology keeps contributors of the same key from different sources apart. The Routes tab shows a `ctx N` count per route, and the route panel has a "Context contributors" section listing the full chain however long it is.
+
+- [#874](https://github.com/forinda/kick-js/pull/874) [`8d809b5`](https://github.com/forinda/kick-js/commit/8d809b503db27a927d1fdf3c4a8a81f3701a0667) Thanks [@forinda](https://github.com/forinda)! - Startup timeline. `app.getStartupTimeline()` returns `{ totalMs, steps }` for the last startup: one step for each phase (middleware, modules, routes, error handlers, listen, ready) and one for each adapter hook (`'<Adapter>.beforeStart'` and so on). When startup takes longer than a second, the app logs its three slowest steps. DevTools serves the timeline at `/_debug/startup`.
+
+### Patch Changes
+
+- [#901](https://github.com/forinda/kick-js/pull/901) [`390f51c`](https://github.com/forinda/kick-js/commit/390f51c2087f975dd5e73e6f69b2fd217e573d0f) Thanks [@forinda](https://github.com/forinda)! - Bound long-lived state that client input could grow without limit:
+  
+  - **kickjs**
+    - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows drop from the front without a full scan. At the cap, only counters still at one hit are evicted (never when `max` is 1), so a flood can't reset a real counter. A new key is refused (429) only when every counter has two hits or more.
+    - The in-memory session store caps at 10,000 sessions. Empty ones (what a cookieless flood creates) are evicted first, then the least recently written.
+    - Metrics label unknown HTTP methods `OTHER`.
+  - **kickjs-db**
+    - Computed-field (`$extends({ result })`) bookkeeping no longer keeps an entry for every failed query.
+    - The `'schema'` tenancy strategy no longer caches a plugin per schema name.
+    - `maxOpenTenants` defaults to 100 instead of unlimited.
+  - **kickjs-ws:** `join()` is ignored for a socket that already closed (with ws and Socket.IO), and a socket can be in at most 1,000 rooms, on both. Socket.IO's own id room doesn't count.
+  - **kickjs-mcp:** each initialization holds one slot toward `maxSessions` (while in progress, then as the session) and the session counts as busy until its first response is sent, so the idle timer can't close it mid-response. The timer starts once that response is sent or fails, so a failed one no longer holds its slot forever.
+  - **kickjs-devtools:** route latency keys use `OTHER` for unknown methods.
+  - **kickjs-ai:** `AnthropicProvider` remembers at most 100 warned-about model names, then prints one overflow notice and stays quiet.
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.9.0
 
 ### Minor Changes

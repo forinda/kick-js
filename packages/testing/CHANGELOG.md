@@ -1,5 +1,13 @@
 # @forinda/kickjs-testing
 
+## 8.3.0
+
+### Minor Changes
+
+- [#894](https://github.com/forinda/kick-js/pull/894) [`69ea446`](https://github.com/forinda/kick-js/commit/69ea44686b6eabac1a0443d0dacd1cbfdef23be1) Thanks [@forinda](https://github.com/forinda)! - Storage adds `list({ prefix, cursor, limit })`, `stat()` and `getStream()`, and `put()` takes a stream: disk writes it as it arrives, buckets upload it in 5 MiB parts. `s3Storage` adds uploads that go from the browser straight to the bucket. `uploadUrl(key, { size, contentType })` signs the exact size and type into the URL. `multipart` provides `create`, `partUrl`, `listParts`, `complete` and `abort` for large, resumable uploads (Uppy-compatible). `startService('minio')` starts an S3-compatible MinIO with a `test` bucket, and `startContainer` takes `entrypoint` and `command`.
+
+- [#888](https://github.com/forinda/kick-js/pull/888) [`fa453e4`](https://github.com/forinda/kick-js/commit/fa453e45d7623560b5e99a8e474778bd581a217e) Thanks [@forinda](https://github.com/forinda)! - `startService('postgres' | 'redis')` and `startContainer(spec)` start real services in Docker through Testcontainers (an optional peer) and return `{ url, host, port, stop() }`. `createTestApp` now passes `settings` and `validationError` through to the app, so a test can hand the URL to a settings section with `provide()`.
+
 ## 8.2.0
 
 ### Minor Changes

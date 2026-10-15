@@ -1,5 +1,35 @@
 # @forinda/kickjs-db
 
+## 8.7.0
+
+### Minor Changes
+
+- [#904](https://github.com/forinda/kick-js/pull/904) [`e4865fc`](https://github.com/forinda/kick-js/commit/e4865fc7c7e49877c8d529ce8c36a06ddac12a0f) Thanks [@forinda](https://github.com/forinda)! - `transaction({ durable: true })` must be the outermost transaction, so its work is committed when the callback returns. Inside an open transaction on the call chain it throws instead of quietly joining one that may still roll back. `nested: 'separate'` is allowed, because it commits on its own connection.
+
+- [#903](https://github.com/forinda/kick-js/pull/903) [`42320e6`](https://github.com/forinda/kick-js/commit/42320e68b950f7e470359c748c25d7ce3b7b02c1) Thanks [@forinda](https://github.com/forinda)! - - **`db.insertMany(table, rows, options?)`** inserts any number of rows in as few statements as the dialect's bind-parameter limit allows (65,535 on Postgres and MySQL, 32,766 on SQLite), in one transaction. It joins an open one. It returns the count, or the rows with `returning: true` (Postgres and SQLite). `maxParams` and `atomic: false` handle drivers with lower limits or no transactions, such as Cloudflare D1.
+  - **`db.upsert()`** with many rows splits them the same way.
+
+- [#905](https://github.com/forinda/kick-js/pull/905) [`0e85954`](https://github.com/forinda/kick-js/commit/0e85954d244821ca0b5ff0d78f8a92254b49a39a) Thanks [@forinda](https://github.com/forinda)! - `createDbClient({ route })` decides where each read outside a transaction goes when there are replicas. It returns `'primary'`, a replica index, or `undefined` for the default round-robin, and is called with the table being read. Use it for read-your-writes, pinning tables that replicate late, choosing a replica by region, or skipping a lagging one. Transactions and `db.primary` still always use the primary.
+
+- [#876](https://github.com/forinda/kick-js/pull/876) [`c5acae7`](https://github.com/forinda/kick-js/commit/c5acae736f1159865e8dcfe14c93537cf30d44a9) Thanks [@forinda](https://github.com/forinda)! - `expectQueries(db, count, fn)` and `captureQueries(db, fn)` in `@forinda/kickjs-db/testing` count the queries a block of code sends, to catch N+1 regressions. On a mismatch the error lists every query that ran. `createTestDb` and `createPgTestDb` now create their clients with events on. A client without events is refused, rather than reporting zero queries.
+
+### Patch Changes
+
+- [#901](https://github.com/forinda/kick-js/pull/901) [`390f51c`](https://github.com/forinda/kick-js/commit/390f51c2087f975dd5e73e6f69b2fd217e573d0f) Thanks [@forinda](https://github.com/forinda)! - Bound long-lived state that client input could grow without limit:
+  
+  - **kickjs**
+    - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows drop from the front without a full scan. At the cap, only counters still at one hit are evicted (never when `max` is 1), so a flood can't reset a real counter. A new key is refused (429) only when every counter has two hits or more.
+    - The in-memory session store caps at 10,000 sessions. Empty ones (what a cookieless flood creates) are evicted first, then the least recently written.
+    - Metrics label unknown HTTP methods `OTHER`.
+  - **kickjs-db**
+    - Computed-field (`$extends({ result })`) bookkeeping no longer keeps an entry for every failed query.
+    - The `'schema'` tenancy strategy no longer caches a plugin per schema name.
+    - `maxOpenTenants` defaults to 100 instead of unlimited.
+  - **kickjs-ws:** `join()` is ignored for a socket that already closed (with ws and Socket.IO), and a socket can be in at most 1,000 rooms, on both. Socket.IO's own id room doesn't count.
+  - **kickjs-mcp:** each initialization holds one slot toward `maxSessions` (while in progress, then as the session) and the session counts as busy until its first response is sent, so the idle timer can't close it mid-response. The timer starts once that response is sent or fails, so a failed one no longer holds its slot forever.
+  - **kickjs-devtools:** route latency keys use `OTHER` for unknown methods.
+  - **kickjs-ai:** `AnthropicProvider` remembers at most 100 warned-about model names, then prints one overflow notice and stays quiet.
+
 ## 8.6.0
 
 ### Minor Changes

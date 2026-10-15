@@ -1,5 +1,24 @@
 # @forinda/kickjs-mcp
 
+## 9.1.2
+
+### Patch Changes
+
+- [#901](https://github.com/forinda/kick-js/pull/901) [`390f51c`](https://github.com/forinda/kick-js/commit/390f51c2087f975dd5e73e6f69b2fd217e573d0f) Thanks [@forinda](https://github.com/forinda)! - Bound long-lived state that client input could grow without limit:
+  
+  - **kickjs**
+    - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows drop from the front without a full scan. At the cap, only counters still at one hit are evicted (never when `max` is 1), so a flood can't reset a real counter. A new key is refused (429) only when every counter has two hits or more.
+    - The in-memory session store caps at 10,000 sessions. Empty ones (what a cookieless flood creates) are evicted first, then the least recently written.
+    - Metrics label unknown HTTP methods `OTHER`.
+  - **kickjs-db**
+    - Computed-field (`$extends({ result })`) bookkeeping no longer keeps an entry for every failed query.
+    - The `'schema'` tenancy strategy no longer caches a plugin per schema name.
+    - `maxOpenTenants` defaults to 100 instead of unlimited.
+  - **kickjs-ws:** `join()` is ignored for a socket that already closed (with ws and Socket.IO), and a socket can be in at most 1,000 rooms, on both. Socket.IO's own id room doesn't count.
+  - **kickjs-mcp:** each initialization holds one slot toward `maxSessions` (while in progress, then as the session) and the session counts as busy until its first response is sent, so the idle timer can't close it mid-response. The timer starts once that response is sent or fails, so a failed one no longer holds its slot forever.
+  - **kickjs-devtools:** route latency keys use `OTHER` for unknown methods.
+  - **kickjs-ai:** `AnthropicProvider` remembers at most 100 warned-about model names, then prints one overflow notice and stays quiet.
+
 ## 9.1.1
 
 ### Patch Changes
