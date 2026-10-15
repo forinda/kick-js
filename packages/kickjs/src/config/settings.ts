@@ -40,6 +40,8 @@ export interface Settings<T> extends InjectionToken<T> {
   get(): T
   /** Parse the section from `env` (default `process.env`) afresh; throws listing every problem. */
   load(env?: NodeJS.ProcessEnv): T
+  /** Each variable the section reads — required or not, default, description. Reads no env. */
+  describe(): ConfigVar[]
   /**
    * The same schema under another prefix, for a second instance:
    * `DbSettings.scoped('ANALYTICS')` reads `ANALYTICS_DB_*` beside `DB_*`.
@@ -55,21 +57,47 @@ interface Leaf {
   path: string[]
   env: string
   list: boolean
+  required: boolean
+  default?: unknown
+  description?: string
+}
+
+/** One variable, as `describe()` and `app.describeConfig()` report it. */
+export interface ConfigVar {
+  name: string
+  /** Startup fails without it: required by the schema, with no default. */
+  required: boolean
+  /** The schema's default, when it has one. */
+  default?: unknown
+  /** The schema's description (`.describe('…')` in Zod). */
+  description?: string
+  /** Read as a comma-separated list. */
+  list: boolean
 }
 
 /** The part of a JSON schema the env mapping reads. */
 interface JsonShape {
   type?: string | string[]
   properties?: Record<string, JsonShape>
+  required?: string[]
+  default?: unknown
+  description?: string
 }
 
 /** `maxConnections` → `MAX_CONNECTIONS`. */
 const envSegment = (key: string) => key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()
 
-function leavesOf(shape: JsonShape, prefix: string, path: string[] = []): Leaf[] {
+/**
+ * The variables a JSON-schema shape reads. A leaf is required when every
+ * object on its path is required by its parent and none of them (nor the leaf)
+ * has a default — a defaulted parent object supplies its children.
+ */
+function leavesOf(shape: JsonShape, prefix: string, path: string[] = [], required = true): Leaf[] {
   if (shape.properties) {
+    const own = new Set(shape.required ?? [])
+    const parentRequired = required && shape.default === undefined
     return Object.entries(shape.properties).flatMap(([key, child]) =>
-      leavesOf(child, prefix, [...path, key]),
+      leavesOf(child, prefix, [...path, key], parentRequired && own.has(key)),
     )
   }
   const types = Array.isArray(shape.type) ? shape.type : [shape.type]
@@ -78,8 +106,33 @@ function leavesOf(shape: JsonShape, prefix: string, path: string[] = []): Leaf[]
       path,
       env: [prefix, ...path.map(envSegment)].join('_'),
       list: types.includes('array'),
+      required: required && shape.default === undefined,
+      ...(shape.default !== undefined ? { default: shape.default } : {}),
+      ...(shape.description ? { description: shape.description } : {}),
     },
   ]
+}
+
+const toConfigVar = (leaf: Leaf): ConfigVar => ({
+  name: leaf.env,
+  required: leaf.required,
+  list: leaf.list,
+  ...(leaf.default !== undefined ? { default: leaf.default } : {}),
+  ...(leaf.description ? { description: leaf.description } : {}),
+})
+
+/**
+ * The variables of a flat schema (the app's env schema), described the same
+ * way — no prefix, top-level keys only.
+ */
+export function describeSchemaVars(schema: unknown): ConfigVar[] {
+  const shape = detectSchema(schema).toJsonSchema() as JsonShape
+  const required = new Set(shape.required ?? [])
+  // The keys of an env schema are the variable names themselves.
+  return Object.entries(shape.properties ?? {}).map(([key, child]) => ({
+    ...toConfigVar(leavesOf(child, '', [key], required.has(key))[0]),
+    name: key,
+  }))
 }
 
 /** Values validated at startup (or on first `get()`), by prefix. */
@@ -183,6 +236,7 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
     prefix,
     envNames,
     load,
+    describe: () => leaves.map(toConfigVar),
     get: (): T => {
       // What injected code sees: the container's binding, which a module or a
       // test may have replaced. Before the app binds it, the validated env.

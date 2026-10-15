@@ -14,9 +14,16 @@ export {
   type ApplicationOptions,
   type MiddlewareEntry,
   type ServerOptions,
+  type ConfigDescription,
 } from './http/application'
 export type { FailureAdvice } from './core/failure-analysis'
-export { defineSettings, loadSettings, type Settings, type SettingsOf } from './config/settings'
+export {
+  defineSettings,
+  loadSettings,
+  type ConfigVar,
+  type Settings,
+  type SettingsOf,
+} from './config/settings'
 export {
   allOf,
   onEnv,

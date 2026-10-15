@@ -74,9 +74,8 @@ import {
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
-import { loadSettings, type Settings } from '../config/settings'
-// Registers the `<NAME>_FILE` secret reader settings sections use (Node only).
-import '../config/env'
+import { loadSettings, type ConfigVar, type Settings } from '../config/settings'
+import { describeEnvSchema } from '../config/env'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
@@ -158,6 +157,14 @@ export interface ServerOptions {
   headersTimeout?: number
   /** Milliseconds to receive the whole request. Default 300000; 0 disables. */
   requestTimeout?: number
+}
+
+/** What `app.describeConfig()` returns. */
+export interface ConfigDescription {
+  /** The app's env schema (`loadEnv` / `loadEnvFromSchema`), or the base schema. */
+  env: ConfigVar[]
+  /** Declared settings sections, in declaration order, each once. */
+  sections: Array<{ prefix: string; declaredBy: string; vars: ConfigVar[] }>
 }
 
 export interface ApplicationOptions {
@@ -1055,6 +1062,49 @@ export class Application {
     return this.routeUrls.build(name, params as Record<string, unknown> | undefined, query)
   }
 
+  /** The app's modules — plugins', then its own — in registration order. */
+  private collectModules(): MutableModuleRegistry {
+    const registry = new MutableModuleRegistry()
+    for (const plugin of this.plugins) {
+      for (const m of plugin.modules?.() ?? []) registry.mount(m)
+      plugin.setup?.(registry)
+    }
+    for (const m of this.options.modules) registry.mount(m)
+    this.options.setup?.(registry)
+    return registry
+  }
+
+  /**
+   * Every variable the app reads — its env schema, and each declared settings
+   * section with who declared it — and whether each is required, its default
+   * and description. Reads no environment and validates nothing, so it works
+   * when the environment is missing: it's what `kick env example` writes.
+   * Call it on an app that hasn't started.
+   */
+  describeConfig(): ConfigDescription {
+    const sections: ConfigDescription['sections'] = []
+    const seen = new Set<Settings<unknown>>()
+    const add = (declaredBy: string, list: readonly Settings<unknown>[] | undefined) => {
+      for (const section of list ?? []) {
+        if (seen.has(section)) continue
+        seen.add(section)
+        sections.push({ prefix: section.prefix, declaredBy, vars: section.describe() })
+      }
+    }
+    add('app', this.options.settings)
+    for (const plugin of this.plugins) add(`plugin ${plugin.name}`, plugin.settings?.())
+    for (const adapter of this.adapters) add(`adapter ${adapter.name}`, adapter.settings?.())
+    for (const entry of this.collectModules().entries) {
+      const mod = toAppModule(entry)
+      const name = (mod as { name?: unknown }).name
+      add(
+        `module ${typeof name === 'string' && name ? name : (mod.constructor?.name ?? 'module')}`,
+        mod.settings?.(),
+      )
+    }
+    return { env: describeEnvSchema(), sections }
+  }
+
   /** Validate settings sections and bind each under its token. */
   private bindSettings(sections: readonly Settings<unknown>[]): void {
     for (const [section, value] of loadSettings(sections, process.env, this.settingsPrefixes)) {
@@ -1239,13 +1289,7 @@ export class Application {
     //   2. plugin setup() calls (in plugin dependsOn-sorted order)
     //   3. user static modules (`options.modules`)
     //   4. user setup() callback
-    const moduleRegistry = new MutableModuleRegistry()
-    for (const plugin of this.plugins) {
-      for (const m of plugin.modules?.() ?? []) moduleRegistry.mount(m)
-      plugin.setup?.(moduleRegistry)
-    }
-    for (const m of this.options.modules) moduleRegistry.mount(m)
-    this.options.setup?.(moduleRegistry)
+    const moduleRegistry = this.collectModules()
 
     // The built-in health endpoints, as an ordinary module. Registered last so
     // an app's own `/health` module wins by being mounted first, and skipped

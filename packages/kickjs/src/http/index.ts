@@ -4,6 +4,7 @@ export {
   type ApplicationOptions,
   type MiddlewareEntry,
   type ServerOptions,
+  type ConfigDescription,
 } from './application'
 export type { StartupStep, StartupTimelineSnapshot } from './startup-timeline'
 export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './conditional'
