@@ -30,7 +30,7 @@ const RUNTIMES = [
   ['h3', h3Runtime],
 ] as const
 
-const FILES = createToken<Storage>('Files')
+const FILES = createToken<Storage>('app/storage/files')
 const TUS = { 'Tus-Resumable': '1.0.0' }
 const b64 = (value: string) => Buffer.from(value).toString('base64')
 

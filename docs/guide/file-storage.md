@@ -39,40 +39,47 @@ Three drivers implement it:
 | `diskStorage({ root, baseUrl? })`     | A directory on the server. Writes go to a temp file and are renamed into place.                                     |
 | `s3Storage({ bucket, region?, ... })` | AWS S3, Cloudflare R2, MinIO, and other S3-compatible APIs. Adds [direct uploads](#uploads-straight-to-the-bucket). |
 
-## Saving an upload
+## Setting it up
 
-Bind a token to a driver, then inject it where files are saved:
+`kick add storage`, or `kick new --packages storage`, installs the package and writes `src/storage.ts`:
 
 ```ts
-// src/modules/files/files.ts
-import { createToken } from '@forinda/kickjs'
-import { s3Storage, type Storage } from '@forinda/kickjs-storage'
+// src/storage.ts
+import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
 import { diskStorage } from '@forinda/kickjs-storage/disk'
+import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 
-export const FILES = createToken<Storage>('Files')
+export { STORAGE } from '@forinda/kickjs-storage/adapter'
+export type { Storage } from '@forinda/kickjs-storage'
 
-export const createFiles = (): Storage =>
-  process.env.NODE_ENV === 'production'
-    ? s3Storage({
-        bucket: 'avatars',
-        region: 'eu-west-1',
-        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
-      })
-    : diskStorage({ root: './uploads', baseUrl: '/uploads' })
+export const storageAdapter = () =>
+  StorageAdapter({
+    storage: process.env.S3_BUCKET ? s3FromSettings() : diskStorage({ root: 'uploads' }),
+  })
 ```
+
+It also adds `storageAdapter()` to `bootstrap({ adapters })`, the `S3_*` variables to `.env.example`, and `uploads/` and `.tus/` to `.gitignore`. Files go to the `uploads/` folder until `S3_BUCKET` is set, then to that bucket. Change the file to pick drivers differently.
+
+`StorageAdapter({ storage })` binds the storage to the `STORAGE` token, so it can be injected anywhere. A storage from `s3FromSettings()` also brings its settings section, so a missing `S3_BUCKET` stops startup. A second storage binds its own token:
 
 ```ts
-// in the module
-register(container: Container) {
-  container.registerFactory(FILES, createFiles)
-}
+const BACKUPS = createToken<Storage>('app/storage/backups')
+
+adapters: [
+  storageAdapter(),
+  StorageAdapter.scoped('backups', {
+    storage: s3FromSettings(S3Settings.scoped('BACKUPS')),
+    token: BACKUPS,
+  }),
+]
 ```
+
+## Saving an upload
 
 ```ts
 @Controller()
 class AvatarController {
-  @Autowired(FILES) private files!: Storage
+  @Autowired(STORAGE) private files!: Storage
 
   @Post('/')
   @FileUpload({ mode: 'single', fieldName: 'avatar', allowedTypes: ['png', 'jpg'] })
@@ -193,7 +200,7 @@ A multipart upload sends the file in parts, each through its own signed URL. A d
 ```ts
 @Controller()
 class MultipartController {
-  @Autowired(FILES) private files!: S3Storage
+  @Autowired(STORAGE) private files!: S3Storage
 
   // Every key is under the user's own prefix, so no one can touch another user's upload.
   private own(ctx: RequestContext, key: string) {
@@ -287,7 +294,7 @@ bootstrap({
   adapters: [
     TusAdapter({
       path: '/api/uploads',
-      storage: FILES, // a Storage, or a token bound to one
+      storage: STORAGE, // a Storage, or a token bound to one
       maxSize: 2 * 1024 ** 3,
       onCreate: ({ headers, metadata, size }, id) => {
         const user = verifyToken(headers.authorization) // throw HttpException.unauthorized() to refuse
@@ -384,27 +391,25 @@ S3_SECRET_ACCESS_KEY=...
 ```
 
 ```ts
-import { S3Settings, s3FromSettings } from '@forinda/kickjs-storage/settings'
+import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
+import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 
-bootstrap({ modules, settings: [S3Settings] })
-
-// in the module
-container.registerFactory(FILES, () => s3FromSettings())
+bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
 ```
 
-`s3FromSettings()` reads the section on first use, after the app has bound it. A missing `S3_BUCKET`, `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. A missing `S3_BUCKET`, `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
 
-A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Declare it in `settings` too, and pass it as `s3FromSettings(Backups)`.
+A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Pass it as `s3FromSettings(Backups)`; the adapter that takes that storage declares it.
 
 ## In tests
 
-Bind the token to `memoryStorage()` and read back what the handler stored:
+Override `STORAGE` with `memoryStorage()` and read back what the handler stored:
 
 ```ts
 const files = memoryStorage()
 const { client } = await createTestApp({
   modules,
-  overrides: [[FILES, files]],
+  overrides: [[STORAGE, files]],
 })
 
 const res = await client().post('/api/v1/avatars').attach('avatar', png, 'a.png').expect(200)

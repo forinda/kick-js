@@ -37,6 +37,16 @@ Needs `@forinda/kickjs` 10.1 or later.
 | `S3Settings`                         | Section `S3`: `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_SESSION_TOKEN`, `S3_FORCE_PATH_STYLE` |
 | `s3FromSettings(section?, options?)` | An `S3Storage` read from the section on first use; set variables win over `options`                                                          |
 
+### Adapter (`@forinda/kickjs-storage/adapter`)
+
+Needs `@forinda/kickjs` 10.1 or later.
+
+| Export                    | Description                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `StorageAdapter(options)` | Binds `options.storage` to `options.token` (default `STORAGE`) and declares the storage's settings section, if it has one. `.scoped(name, options)` for a second storage |
+| `STORAGE`                 | The default token                                                                                                                                                        |
+| `StorageAdapterOptions`   | `storage`, `token`                                                                                                                                                       |
+
 ### tus (`@forinda/kickjs-storage/tus`)
 
 Needs `@forinda/kickjs` 10.1 or later.

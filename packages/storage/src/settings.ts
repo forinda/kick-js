@@ -92,7 +92,7 @@ export function s3FromSettings(
     }
     return storage
   }
-  return {
+  const wrapper: S3Storage = {
     put: (...args) => real().put(...args),
     putIfAbsent: (...args) => real().putIfAbsent(...args),
     get: (...args) => real().get(...args),
@@ -111,4 +111,6 @@ export function s3FromSettings(
       abort: (...args) => real().multipart.abort(...args),
     },
   }
+  // For StorageAdapter: the section to declare, so the app validates it at startup.
+  return Object.assign(wrapper, { [Symbol.for('kickjs-storage.settings')]: section })
 }
