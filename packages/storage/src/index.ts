@@ -15,7 +15,17 @@
  * @module @forinda/kickjs-storage
  */
 import { createReadStream } from 'node:fs'
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
@@ -185,21 +195,80 @@ const TEMP_FILE = /\.[0-9a-f-]{36}\.tmp$/
 /** Files under a directory on local disk. */
 export function diskStorage(options: DiskStorageOptions): Storage {
   const root = resolve(options.root)
-  const pathOf = (key: string) => join(root, checkKey(key))
-  const missing = (err: unknown) => (err as NodeJS.ErrnoException).code === 'ENOENT'
-  const statOf = async (key: string): Promise<FileInfo | null> => {
+  // ENOTDIR: a parent of the key is a file (`a` exists, reading `a/b`) — also "no such file".
+  const missing = (err: unknown) =>
+    ['ENOENT', 'ENOTDIR'].includes((err as NodeJS.ErrnoException).code ?? '')
+  const code = (err: unknown) => (err as NodeJS.ErrnoException).code ?? ''
+
+  /**
+   * The real folder must be under the real root: a symbolic link inside the
+   * root (`root/link -> /etc`) would otherwise let the valid key `link/passwd`
+   * read, replace or delete a file outside it.
+   */
+  async function assertInside(dir: string, key: string) {
+    const [real, base] = await Promise.all([realpath(dir), realpath(root)])
+    if (real !== base && !real.startsWith(base + sep)) {
+      throw new Error(`diskStorage: '${key}' leads outside the root through a symbolic link`)
+    }
+  }
+
+  /** The path for reading `key`, or null when the file (or a folder above it) doesn't exist. */
+  async function readable(key: string): Promise<string | null> {
+    const path = join(root, checkKey(key))
+    let info
     try {
-      const info = await stat(pathOf(key))
-      return info.isFile() ? { key, size: info.size, lastModified: info.mtime } : null
+      await assertInside(dirname(path), key)
+      info = await lstat(path)
     } catch (err) {
       if (missing(err)) return null
       throw err
     }
+    if (info.isSymbolicLink()) {
+      throw new Error(`diskStorage: '${key}' is a symbolic link, which isn't followed`)
+    }
+    return info.isFile() ? path : null
+  }
+
+  // A key can't be both a file and a folder on disk; buckets and memory allow it.
+  const conflict = (key: string) =>
+    new Error(`diskStorage: '${key}' clashes with an existing file or folder of the same name`)
+
+  /** The path for writing `key`, its folders created — none of them through a link. */
+  async function writable(key: string): Promise<string> {
+    const path = join(root, checkKey(key))
+    await mkdir(root, { recursive: true })
+    // Check the deepest folder that exists before creating the rest: mkdir
+    // follows links, so checking afterwards would be too late.
+    let existing = dirname(path)
+    for (;;) {
+      try {
+        await lstat(existing)
+        break
+      } catch (err) {
+        if (!missing(err)) throw err
+        existing = dirname(existing)
+      }
+    }
+    try {
+      await assertInside(existing, key)
+      await mkdir(dirname(path), { recursive: true })
+      await assertInside(dirname(path), key)
+    } catch (err) {
+      if (['EEXIST', 'ENOTDIR'].includes(code(err))) throw conflict(key)
+      throw err
+    }
+    return path
+  }
+
+  const statOf = async (key: string): Promise<FileInfo | null> => {
+    const path = await readable(key)
+    if (!path) return null
+    const info = await stat(path)
+    return { key, size: info.size, lastModified: info.mtime }
   }
   return {
     async put(key, body) {
-      const path = pathOf(key)
-      await mkdir(dirname(path), { recursive: true })
+      const path = await writable(key)
       // Written aside, then renamed: a reader never sees half a file.
       const temp = `${path}.${randomUUID()}.tmp`
       try {
@@ -207,27 +276,32 @@ export function diskStorage(options: DiskStorageOptions): Storage {
         await rename(temp, path)
       } catch (err) {
         await rm(temp, { force: true })
+        if (['EISDIR', 'ENOTEMPTY', 'EEXIST'].includes(code(err))) throw conflict(key)
         throw err
       }
     },
     async get(key) {
-      try {
-        return await readFile(pathOf(key))
-      } catch (err) {
-        if (missing(err)) return null
-        throw err
-      }
+      const path = await readable(key)
+      return path ? readFile(path) : null
     },
     async getStream(key) {
-      if (!(await statOf(key))) return null
-      return Readable.toWeb(createReadStream(pathOf(key))) as ReadableStream<Uint8Array>
+      const path = await readable(key)
+      return path ? (Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>) : null
     },
     stat: statOf,
     async exists(key) {
       return (await statOf(key)) !== null
     },
     async delete(key) {
-      await rm(pathOf(key), { force: true })
+      const path = join(root, checkKey(key))
+      try {
+        await assertInside(dirname(path), key)
+      } catch (err) {
+        if (missing(err)) return
+        throw err
+      }
+      // rm removes a link itself, never what it points to.
+      await rm(path, { force: true })
     },
     async list(listOptions = {}) {
       // ponytail: walks the whole tree for every page; fine for an upload
@@ -258,7 +332,8 @@ export function diskStorage(options: DiskStorageOptions): Storage {
       for (;;) {
         const page = pageOf(keys, prefix, cursor, limit - files.length)
         for (const key of page.keys) {
-          const info = await statOf(key)
+          // Links aren't followed, so they aren't listed either.
+          const info = await statOf(key).catch(() => null)
           if (info) files.push(info)
         }
         cursor = page.cursor

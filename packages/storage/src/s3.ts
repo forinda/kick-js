@@ -260,7 +260,11 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         query: { uploads: '' },
         contentType: createOptions.contentType,
       })
-      return tag(await res.text(), 'UploadId')
+      const uploadId = tag(await res.text(), 'UploadId')
+      // Some S3-compatible servers answer 200 with an unexpected body.
+      if (!uploadId)
+        throw new Error(`s3Storage: starting a multipart upload of '${key}' returned no UploadId`)
+      return uploadId
     },
     async partUrl(key, uploadId, partNumber, partOptions = {}) {
       const url = urlOf(key, { partNumber: String(checkPartNumber(partNumber)), uploadId })

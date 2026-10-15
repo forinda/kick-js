@@ -285,7 +285,7 @@ bootstrap({
           throw HttpException.forbidden()
         }
       },
-      onComplete: (upload) => uploads.markReady(upload.key, upload.size),
+      onComplete: (upload) => uploads.upsert(upload.id, { key: upload.key, size: upload.size }),
     }),
   ],
 })
@@ -307,7 +307,7 @@ new Upload(file, {
 How it works:
 
 - **Arrival.** Each upload is written to a file under `dir` (default `.tus`) as it arrives. If the connection drops, the bytes already received stay, and the client asks (`HEAD`) where to continue and sends only the rest. tus-js-client remembers upload URLs across page reloads.
-- **Completion.** When the last byte arrives, the file is streamed into `storage` under the key `onCreate` chose (default `uploads/<id>`), with `metadata.filetype` as its content type. Then `onComplete` runs. The response to that last request waits for both, so a client that sees success knows the file is stored.
+- **Completion.** When the last byte arrives, the file is streamed into `storage` under the key `onCreate` chose (default `uploads/<id>`), with `metadata.filetype` as its content type. Then `onComplete` runs. The response to that last request waits for both, so a client that sees success knows the file is stored. If storing or `onComplete` fails, the client gets a 500 and its retry runs both again. So `onComplete` runs at least once, and can run twice if it succeeded but the step after it failed. Make it idempotent, for example an upsert keyed by `upload.id`.
 - **Checks.** `onCreate` sees every new upload's headers, size and metadata before anything is written. `authorize` sees every later request to that upload. Without `authorize`, anyone holding an upload's URL, which contains an unguessable id, can continue or cancel it. Throw an `HttpException` from either hook to refuse with its status.
 - **Limits.** `maxSize` (default 1 GiB) is checked against the declared length, and the body can never run past it. Unfinished uploads expire `expiresIn` seconds (default one day) after their last write and are swept hourly.
 - **Middleware.** The adapter runs after the global middleware, so `cors()`, rate limits and `csrf()` apply. Pass the CSRF header through tus-js-client's `headers`. For a browser on another origin, `cors()` must expose the tus headers: `exposedHeaders: ['Location', 'Upload-Offset', 'Upload-Length', 'Upload-Expires', 'Tus-Resumable']`.
@@ -413,5 +413,7 @@ await createTestApp({
 
 - **Direct and multipart uploads are bucket only.** `uploadUrl()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
 - **tus checksums and concatenation** (parallel uploads of one file) aren't supported. Clients fall back to plain sequential uploads.
+- **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
+- **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, is refused, so a link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.
 - **Node only.** The package uses `node:crypto` and `node:fs`. On Cloudflare Workers, use the R2 binding directly.

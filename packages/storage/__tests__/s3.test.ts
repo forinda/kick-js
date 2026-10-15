@@ -168,6 +168,11 @@ describe('s3Storage', () => {
       })
     })
 
+    it('throws when starting a multipart upload returns no UploadId', async () => {
+      const { files } = scripted([200, '<Unexpected/>'])
+      await expect(files.multipart.create('k')).rejects.toThrow('returned no UploadId')
+    })
+
     it('follows listParts pages', async () => {
       const part = (n: number) =>
         `<Part><PartNumber>${n}</PartNumber><ETag>&quot;e${n}&quot;</ETag><Size>5</Size></Part>`

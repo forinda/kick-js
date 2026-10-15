@@ -1,4 +1,4 @@
-import { mkdtemp, readdir } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -80,6 +80,48 @@ describe.each([
 })
 
 describe('diskStorage', () => {
+  it('never follows a symbolic link out of the root', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'kick-outside-'))
+    await writeFile(join(outside, 'secret.txt'), 'secret')
+    const root = await mkdtemp(join(tmpdir(), 'kick-storage-'))
+    await symlink(outside, join(root, 'link'))
+    await symlink(join(outside, 'secret.txt'), join(root, 'file-link'))
+    const files = diskStorage({ root })
+
+    await expect(files.get('link/secret.txt')).rejects.toThrow('symbolic link')
+    await expect(files.stat('link/secret.txt')).rejects.toThrow('symbolic link')
+    await expect(files.put('link/secret.txt', 'pwned')).rejects.toThrow('symbolic link')
+    await expect(files.put('link/new/deep.txt', 'x')).rejects.toThrow('symbolic link')
+    await expect(files.delete('link/secret.txt')).rejects.toThrow('symbolic link')
+    await expect(files.get('file-link')).rejects.toThrow('symbolic link')
+    expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('secret')
+    expect(await readdir(outside)).toEqual(['secret.txt'])
+    expect((await files.list()).files).toEqual([])
+
+    // Removing the link removes the link, not the file it points to.
+    await files.delete('file-link')
+    expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('secret')
+  })
+
+  it('follows a root that is itself a link', async () => {
+    const real = await mkdtemp(join(tmpdir(), 'kick-real-'))
+    const link = join(await mkdtemp(join(tmpdir(), 'kick-root-')), 'root')
+    await symlink(real, link)
+    const files = diskStorage({ root: link })
+    await files.put('a/b.txt', 'ok')
+    expect(text(await files.get('a/b.txt'))).toBe('ok')
+  })
+
+  it('explains a key that clashes with a file or folder', async () => {
+    const files = diskStorage({ root: await mkdtemp(join(tmpdir(), 'kick-storage-')) })
+    await files.put('a', 'file')
+    await expect(files.put('a/b', 'x')).rejects.toThrow("'a/b' clashes")
+    expect(await files.get('a/b')).toBeNull()
+    await files.put('d/e', 'x')
+    await expect(files.put('d', 'x')).rejects.toThrow("'d' clashes")
+    expect(await files.get('d')).toBeNull()
+  })
+
   it('lists nothing for a root not created yet', async () => {
     const root = join(await mkdtemp(join(tmpdir(), 'kick-storage-')), 'later')
     expect(await diskStorage({ root }).list()).toEqual({ files: [] })

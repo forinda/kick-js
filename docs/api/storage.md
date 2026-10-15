@@ -10,7 +10,7 @@ One `Storage` interface over memory, local disk, and S3-compatible buckets, with
 
 | Export                           | Description                                                                                                 |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `Storage`                        | `put`, `get` (`null` when missing), `exists`, `delete`, `url`                                               |
+| `Storage`                        | `put`, `get`, `getStream`, `stat`, `exists`, `delete`, `list`, `url`                                        |
 | `memoryStorage(options?)`        | Files in a `Map`, for tests. `baseUrl` for `url()`                                                          |
 | `diskStorage(options)`           | Files under `root`, written atomically. `baseUrl` for `url()`                                               |
 | `s3Storage(options)`             | S3, R2, MinIO over `fetch` with SigV4. `url()` presigns a GET                                               |

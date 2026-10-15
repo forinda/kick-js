@@ -92,7 +92,11 @@ export interface TusOptions {
    * (an unguessable id) can continue or cancel it.
    */
   authorize?(headers: IncomingHttpHeaders, upload: TusUpload): void | Promise<void>
-  /** Runs once the file is in the storage — record it in your database. */
+  /**
+   * Runs once the file is in the storage — record it in your database. If it
+   * throws, the client gets a 500 and its retry runs it again, so it runs at
+   * least once: make it idempotent (an upsert keyed by `upload.id`).
+   */
   onComplete?(upload: TusUpload): void | Promise<void>
 }
 
@@ -204,15 +208,20 @@ export function createTusHandler(options: Omit<TusOptions, 'storage'> & { storag
     return (await stat(dataPath(id))).size
   }
 
-  /** Move a complete upload into the storage, once. */
+  /**
+   * Move a complete upload into the storage, run `onComplete`, then mark it
+   * done. A failure anywhere leaves it not done: the client's retry (a PATCH
+   * at the final offset) runs all of it again — so `onComplete` runs at least
+   * once, and more than once if it, or marking done, fails after it ran.
+   */
   async function finish(info: Info) {
     const { rawMetadata: _, done: __, expiresAt, ...rest } = info
     await options.storage.put(info.key, createReadStream(dataPath(info.id)), {
       contentType: info.metadata.filetype || info.metadata.contentType || undefined,
     })
+    await options.onComplete?.({ ...rest, offset: info.size, expiresAt: new Date(expiresAt) })
     await save({ ...info, done: true })
     await rm(dataPath(info.id), { force: true })
-    await options.onComplete?.({ ...rest, offset: info.size, expiresAt: new Date(expiresAt) })
   }
 
   const touch = (info: Info) => ({
@@ -370,7 +379,8 @@ export function createTusHandler(options: Omit<TusOptions, 'storage'> & { storag
       const status = (err as { status?: number }).status
       const known = typeof status === 'number' && status >= 400 && status < 600
       // The client went away mid-PATCH: what arrived is kept, and it resumes from there.
-      if (!known && (req.destroyed || res.destroyed)) return
+      // (Not req.destroyed: Node sets it once a body has been read to the end.)
+      if (!known && (res.destroyed || req.socket?.destroyed)) return
       if (!known) return next(err)
       if (!res.headersSent) {
         res.writeHead(status, {

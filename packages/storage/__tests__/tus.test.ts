@@ -228,6 +228,32 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     expect(completed[0]).toMatch(/^avatars\/u1\/[0-9a-f-]{36}\.png$/)
   })
 
+  it('runs onComplete again on retry when it failed', async () => {
+    let attempts = 0
+    const { agent, files } = await boot(runtime, {
+      onComplete: () => {
+        if (++attempts === 1) throw new Error('database down')
+      },
+    })
+    const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '2').expect(201)
+    const send = (offset: string, body: string) =>
+      agent
+        .patch(headers.location)
+        .set(TUS)
+        .set('Upload-Offset', offset)
+        .set('Content-Type', 'application/offset+octet-stream')
+        .send(Buffer.from(body))
+    expect((await send('0', 'ok')).status).toBe(500)
+    // Not done: HEAD still says complete-length, and the retry finishes it.
+    expect((await agent.head(headers.location).set(TUS)).headers['upload-offset']).toBe('2')
+    expect((await send('2', '')).status).toBe(204)
+    expect(attempts).toBe(2)
+    expect(await files.exists(`uploads/${headers.location.split('/').pop()}`)).toBe(true)
+    // Done now: a further retry doesn't run it a third time.
+    expect((await send('2', '')).status).toBe(204)
+    expect(attempts).toBe(2)
+  })
+
   it('honours X-HTTP-Method-Override on POST only', async () => {
     const { agent } = await boot(runtime)
     const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)

@@ -67,7 +67,7 @@ const PRESETS = {
   // S3-compatible, with an empty `test` bucket (a top-level folder is a
   // bucket to MinIO). Credentials `minioadmin` / `minioadmin`.
   minio: {
-    image: 'quay.io/minio/minio:latest',
+    image: 'quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z',
     port: 9000,
     entrypoint: ['sh'],
     command: ['-c', 'mkdir -p /data/test && exec minio server /data'],
