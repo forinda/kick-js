@@ -392,3 +392,14 @@ describe('value origins', () => {
     expect(JSON.stringify(sections)).not.toContain('secret')
   })
 })
+
+describe('a failed rebuild', () => {
+  it('keeps the previous app’s config origins', async () => {
+    vi.stubEnv('KT_DB_URL', 'postgres://env/app')
+    const app = new Application({ modules: [], settings: [DbSettings] })
+    await app.setup()
+    vi.stubEnv('KT_DB_URL', '')
+    await app.rebuild() // fails: KT_DB_URL is required; the old app stays
+    expect(app.configOrigins().sections.map((s) => s.prefix)).toContain('KT_DB')
+  })
+})

@@ -42,6 +42,8 @@ describe('openAIFromSettings', () => {
   })
 
   it('is declared by AiAdapter, so a missing key fails startup naming the variable', async () => {
+    // Independent of a key in the host's environment.
+    vi.stubEnv('OPENAI_API_KEY', '')
     const app = new Application({
       modules: [],
       adapters: [AiAdapter({ provider: openAIFromSettings() })],
@@ -86,6 +88,12 @@ describe('the sections need no schema library', () => {
       }),
     ).toThrow(/ANTHROPIC_BASE_URL: Expected a URL[\s\S]*ANTHROPIC_DEFAULT_MAX_TOKENS/)
     expect(() => OpenAISettings.load({ OPENAI_API_KEY: '' })).toThrow(/OPENAI_API_KEY: Required/)
+  })
+
+  it('reject a boolean or decimal where an integer is expected', () => {
+    expect(() => AnthropicSettings.parse({ defaultMaxTokens: true })).toThrow(/positive integer/)
+    expect(() => AnthropicSettings.parse({ defaultMaxTokens: '1e3' })).toThrow(/positive integer/)
+    expect(AnthropicSettings.parse({ defaultMaxTokens: 2048 })).toEqual({ defaultMaxTokens: 2048 })
   })
 
   it('parse integers and drop unset values', () => {
@@ -139,5 +147,26 @@ describe('a section from your own schema', () => {
       adapters: [AiAdapter({ provider: openAIFromSettings(Llm) })],
     })
     await expect(app.setup()).rejects.toThrow(/LLM2_API_KEY/)
+  })
+})
+
+describe('after a rebuild', () => {
+  it('builds the provider again from the newly bound settings', async () => {
+    const auth: Array<string | null> = []
+    const provider = openAIFromSettings(OpenAISettings, {
+      fetch: (async (_url: string | URL | Request, init?: RequestInit) => {
+        auth.push(new Headers(init?.headers).get('authorization'))
+        return reply()
+      }) as typeof globalThis.fetch,
+    })
+    vi.stubEnv('OPENAI_API_KEY', 'sk-old')
+    const app = new Application({ modules: [], adapters: [AiAdapter({ provider })] })
+    await app.setup()
+    await provider.chat({ messages: [{ role: 'user', content: 'x' }] })
+
+    vi.stubEnv('OPENAI_API_KEY', 'sk-new')
+    await app.rebuild()
+    await provider.chat({ messages: [{ role: 'user', content: 'x' }] })
+    expect(auth).toEqual(['Bearer sk-old', 'Bearer sk-new'])
   })
 })

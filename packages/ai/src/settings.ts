@@ -45,7 +45,11 @@ function fields<T>(spec: Record<string, Field>): KickSchema<T> {
           continue
         }
         if (field.type === 'integer') {
-          const n = Number(raw)
+          // A number, or a string of digits — not `true`, which Number() makes 1.
+          const n =
+            typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw))
+              ? Number(raw)
+              : Number.NaN
           if (Number.isInteger(n) && n > 0) out[key] = n
           else issues.push({ path: [key], message: 'Expected a positive integer', code: 'type' })
           continue
@@ -123,7 +127,17 @@ function lazyProvider<T>(
   create: (settings: T) => AiProvider,
 ): AiProvider {
   let provider: AiProvider | undefined
-  const real = () => (provider ??= create(section.get()))
+  let built: T | undefined
+  // Rebuilt when the bound value changes — an HMR rebuild binds a fresh one,
+  // and the provider must not keep the old key or base URL.
+  const real = () => {
+    const settings = section.get()
+    if (!provider || settings !== built) {
+      built = settings
+      provider = create(settings)
+    }
+    return provider
+  }
   return {
     name,
     [PROVIDER_SETTINGS]: section,
