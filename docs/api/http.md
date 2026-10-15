@@ -268,7 +268,17 @@ function buildQueryParams(parsed: Partial<ParsedQuery>): Record<string, string |
 
 ```typescript
 type FilterOperator =
-  'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | 'in' | 'contains' | 'starts' | 'ends'
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'between'
+  | 'in'
+  | 'contains'
+  | 'starts'
+  | 'ends'
 
 interface FilterItem {
   field: string

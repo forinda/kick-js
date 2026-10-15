@@ -243,7 +243,7 @@ await dbX.posts.latest(5) // each row carries the computed `url`
 - needs columns aren't compile-time validated against the schema — typos surface at runtime when the SELECT executes. Type-level narrowing lands once `SchemaToTypes` exposes the column-name union per table.
 - async `compute()` is rejected — keep the post-fetch transform synchronous to bound the cost of every row.
 - joined / multi-from selects pass through. Use a model method that hand-writes the JSON-aggregation path for those today.
-  :::
+:::
 
 ## DI integration
 
