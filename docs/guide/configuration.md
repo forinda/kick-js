@@ -359,6 +359,10 @@ Each key path becomes one env variable under the prefix, in `UPPER_SNAKE_CASE`:
 
 `DbSettings.envNames` lists them, and [`<NAME>_FILE` secrets](#secrets-from-files-key-file) work for every one (`DB_URL_FILE=/run/secrets/db_url`).
 
+### Where sections live
+
+Put a section next to the code that uses it — `src/modules/db/db.settings.ts` — and import its token from there. Not in `src/config`: that file registers the app-wide env schema as a side effect and is imported once, first, by `src/index.ts`; a section has no side effect (the environment is read at startup or on `get()`), so it can be imported from anywhere, in any order. `.env` files are loaded by `@forinda/kickjs` itself, so sections see them even in an app without an env schema.
+
 ### Any schema library
 
 Valibot and Yup work as well as Zod — anything [`@forinda/kickjs-schema`](./schema.md) reads, as long as it's an object schema (the keys are what become variable names):
