@@ -7,7 +7,10 @@ import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startService, type StartedService } from '@forinda/kickjs-testing'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { s3Storage, type S3Storage } from '../src/index'
+import { createTusHandler } from '../src/tus'
 
 const endpoint = process.env.KICK_TEST_S3_ENDPOINT
 const containers = process.env.KICK_TEST_CONTAINERS === '1'
@@ -134,6 +137,54 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     const bytes = (await files.get(`${run}parallel.bin`))!
     expect(bytes.length).toBe(20 * MiB)
     expect([0, 5, 10, 15].map((at) => bytes[at * MiB])).toEqual([0, 1, 2, 3])
+  })
+
+  it('runs tus with unfinished uploads in the bucket, across two instances', async () => {
+    const servers: Server[] = []
+    const urls: string[] = []
+    for (let i = 0; i < 2; i++) {
+      const handler = createTusHandler({
+        path: '/uploads',
+        storage: files,
+        partials: files,
+        onCreate: (_request, id) => ({ key: `${run}tus/${id}` }),
+      })
+      const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+      await new Promise<void>((done) => server.listen(0, done))
+      servers.push(server)
+      urls.push(`http://127.0.0.1:${(server.address() as AddressInfo).port}`)
+    }
+    try {
+      const tus = { 'Tus-Resumable': '1.0.0' }
+      const created = await fetch(`${urls[0]}/uploads`, {
+        method: 'POST',
+        headers: { ...tus, 'Upload-Length': String(6 * MiB) },
+      })
+      const path = created.headers.get('location')!
+      const patch = (url: string, offset: number, body: Uint8Array) =>
+        fetch(url + path, {
+          method: 'PATCH',
+          headers: {
+            ...tus,
+            'Upload-Offset': String(offset),
+            'Content-Type': 'application/offset+octet-stream',
+          },
+          body,
+        })
+      expect((await patch(urls[0], 0, new Uint8Array(4 * MiB).fill(1))).status).toBe(204)
+      expect((await patch(urls[1], 4 * MiB, new Uint8Array(2 * MiB).fill(2))).status).toBe(204)
+      const key = `${run}tus/${path.split('/').pop()}`
+      const bytes = (await files.get(key))!
+      expect(bytes.length).toBe(6 * MiB)
+      expect([bytes[0], bytes[6 * MiB - 1]]).toEqual([1, 2])
+      // Only the upload's record is left in the bucket.
+      const left = (await files.list({ prefix: `tus/${path.split('/').pop()}/` })).files.map((f) =>
+        f.key.split('/').pop(),
+      )
+      expect(left.toSorted()).toEqual(['done', 'info'])
+    } finally {
+      for (const server of servers) server.close()
+    }
   })
 
   it('cleans up', async () => {

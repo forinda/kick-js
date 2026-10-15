@@ -1,5 +1,7 @@
 import 'reflect-metadata'
-import { mkdtemp, readdir } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { connect } from 'node:net'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -19,7 +21,8 @@ import {
 import { fastifyRuntime } from '../../kickjs/src/http/runtimes/fastify'
 import { h3Runtime } from '../../kickjs/src/http/runtimes/h3'
 import { memoryStorage, type Storage } from '../src/index'
-import { TusAdapter, type TusOptions } from '../src/tus'
+import { diskStorage } from '../src/disk'
+import { TusAdapter, createTusHandler, type TusOptions } from '../src/tus'
 
 const RUNTIMES = [
   ['express', undefined],
@@ -32,6 +35,11 @@ const TUS = { 'Tus-Resumable': '1.0.0' }
 const b64 = (value: string) => Buffer.from(value).toString('base64')
 
 beforeEach(() => Container.reset())
+
+const keysIn = async (dir: string) =>
+  (await diskStorage({ root: dir }).list()).files.map((f) => f.key)
+const sha = (algorithm: string, body: string) =>
+  `${algorithm} ${createHash(algorithm).update(body).digest('base64')}`
 
 @Controller()
 class PingController {
@@ -79,8 +87,9 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     const options = await agent.options('/uploads')
     expect(options.status).toBe(204)
     expect(options.headers['tus-extension']).toBe(
-      'creation,creation-with-upload,termination,expiration',
+      'creation,creation-with-upload,termination,expiration,checksum,concatenation',
     )
+    expect(options.headers['tus-checksum-algorithm']).toBe('sha1,sha256,md5')
     expect(options.headers['tus-max-size']).toBe('100')
 
     const created = await agent
@@ -118,7 +127,8 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     expect((await files.stat(completed[0]))!.contentType).toBe('text/plain')
     expect(completed).toEqual([`uploads/${location.split('/').pop()}`])
     // Only the finished record is left, until it expires.
-    expect(await readdir(dir)).toEqual([`${location.split('/').pop()}.json`])
+    const id = location.split('/').pop()
+    expect(await keysIn(dir)).toEqual([`tus/${id}/done`, `tus/${id}/info`])
     // A client that missed the last response sees the upload as complete.
     expect((await agent.head(location).set(TUS)).headers['upload-offset']).toBe('11')
     expect((await patch(11, '')).status).toBe(204)
@@ -254,6 +264,92 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     expect(attempts).toBe(2)
   })
 
+  it('checks Upload-Checksum, and drops a chunk that fails it', async () => {
+    const { agent, files, completed } = await boot(runtime)
+    const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '6').expect(201)
+    const patch = (offset: string, body: string, checksum: string) =>
+      agent
+        .patch(headers.location)
+        .set(TUS)
+        .set('Upload-Offset', offset)
+        .set('Upload-Checksum', checksum)
+        .set('Content-Type', 'application/offset+octet-stream')
+        .send(Buffer.from(body))
+    expect((await patch('0', 'abc', sha('sha1', 'abc'))).headers['upload-offset']).toBe('3')
+    const bad = await patch('3', 'def', sha('sha256', 'xyz'))
+    expect(bad.status).toBe(460)
+    expect((await agent.head(headers.location).set(TUS)).headers['upload-offset']).toBe('3')
+    expect((await patch('3', 'def', 'crc32 AAAA')).status).toBe(400)
+    expect((await patch('3', 'def', sha('md5', 'def'))).headers['upload-offset']).toBe('6')
+    expect(new TextDecoder().decode((await files.get(completed[0]))!)).toBe('abcdef')
+  })
+
+  it('joins parallel partial uploads into a final one (concatenation)', async () => {
+    const { agent, files, completed } = await boot(runtime)
+    const partial = async (body: string) => {
+      const { headers } = await agent
+        .post('/uploads')
+        .set(TUS)
+        .set('Upload-Concat', 'partial')
+        .set('Upload-Length', String(body.length))
+        .expect(201)
+      await agent
+        .patch(headers.location)
+        .set(TUS)
+        .set('Upload-Offset', '0')
+        .set('Content-Type', 'application/offset+octet-stream')
+        .send(Buffer.from(body))
+        .expect(204)
+      return headers.location as string
+    }
+    const [a, b] = await Promise.all([partial('hello '), partial('world')])
+    // A part completes without reaching the storage.
+    expect(completed).toEqual([])
+    expect((await agent.head(a).set(TUS)).headers['upload-concat']).toBe('partial')
+
+    const final = await agent
+      .post('/uploads')
+      .set(TUS)
+      .set('Upload-Concat', `final;${a} http://example.test${b}`)
+      .set('Upload-Metadata', `filetype ${b64('text/plain')}`)
+      .expect(201)
+    expect(new TextDecoder().decode((await files.get(completed[0]))!)).toBe('hello world')
+    const head = await agent.head(final.headers.location).set(TUS).expect(200)
+    expect(head.headers).toMatchObject({ 'upload-offset': '11', 'upload-length': '11' })
+    expect(head.headers['upload-concat']).toBe(`final;${a} ${b}`)
+    // The parts are gone once joined, and a final upload takes no PATCH.
+    expect((await agent.head(a).set(TUS)).status).toBe(404)
+    const patched = await agent
+      .patch(final.headers.location)
+      .set(TUS)
+      .set('Upload-Offset', '11')
+      .set('Content-Type', 'application/offset+octet-stream')
+      .send(Buffer.from(''))
+    expect(patched.status).toBe(403)
+  })
+
+  it('refuses a final upload of parts that are missing, ordinary or unfinished', async () => {
+    const { agent } = await boot(runtime)
+    const ordinary = (await agent.post('/uploads').set(TUS).set('Upload-Length', '1')).headers
+      .location
+    const unfinished = (
+      await agent
+        .post('/uploads')
+        .set(TUS)
+        .set('Upload-Concat', 'partial')
+        .set('Upload-Length', '1')
+    ).headers.location
+    const final = (urls: string) =>
+      agent.post('/uploads').set(TUS).set('Upload-Concat', `final;${urls}`)
+    expect((await final(ordinary)).status).toBe(400)
+    expect((await final(unfinished)).text).toContain('not complete')
+    expect((await final('/uploads/00000000-0000-0000-0000-000000000000')).status).toBe(400)
+    expect((await final('/elsewhere/x')).status).toBe(400)
+    expect((await agent.post('/uploads').set(TUS).set('Upload-Concat', 'nonsense')).status).toBe(
+      400,
+    )
+  })
+
   it('honours X-HTTP-Method-Override on POST only', async () => {
     const { agent } = await boot(runtime)
     const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)
@@ -297,7 +393,7 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
     const { headers } = await agent.post('/uploads').set(TUS).set('Upload-Length', '5').expect(201)
     await agent.delete(headers.location).set(TUS).expect(204)
     expect((await agent.head(headers.location).set(TUS)).status).toBe(404)
-    expect(await readdir(dir)).toEqual([])
+    expect(await keysIn(dir)).toEqual([])
     expect((await agent.get('/api/v1/ping').expect(200)).body).toEqual({ ok: true })
   })
 })
@@ -344,5 +440,134 @@ describe('with tus-js-client', () => {
     })
     expect(offsets).toEqual([2000, 3000, 4000, 5000])
     expect(Buffer.from((await files.get(completed[0]))!).equals(data)).toBe(true)
+  })
+})
+
+describe('across instances, sharing partials', () => {
+  const servers: Server[] = []
+  afterEach(() => {
+    for (const server of servers.splice(0)) server.close()
+  })
+
+  /** Two "instances": separate handlers, separate memory, one shared partials store. */
+  async function instances(
+    count: number,
+    extra: Partial<Omit<TusOptions, 'storage' | 'partials'>> = {},
+  ) {
+    const partials = memoryStorage()
+    const files = memoryStorage()
+    const completed: string[] = []
+    const urls: string[] = []
+    for (let i = 0; i < count; i++) {
+      const handler = createTusHandler({
+        path: '/uploads',
+        storage: files,
+        partials,
+        maxSize: 10_000_000,
+        onComplete: (upload) => void completed.push(upload.key),
+        ...extra,
+      })
+      const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+      servers.push(server)
+      await new Promise<void>((done) => server.listen(0, done))
+      urls.push(`http://127.0.0.1:${(server.address() as AddressInfo).port}`)
+    }
+    return { partials, files, completed, urls }
+  }
+
+  const patch = (url: string, offset: number, body: string | Uint8Array) =>
+    fetch(url, {
+      method: 'PATCH',
+      headers: {
+        ...TUS,
+        'Upload-Offset': String(offset),
+        'Content-Type': 'application/offset+octet-stream',
+      },
+      body,
+    })
+
+  it('lets any instance take any request of an upload', async () => {
+    const { files, completed, urls } = await instances(2)
+    const created = await fetch(`${urls[0]}/uploads`, {
+      method: 'POST',
+      headers: { ...TUS, 'Upload-Length': '9' },
+    })
+    const path = created.headers.get('location')!
+    expect((await patch(urls[1] + path, 0, 'abc')).headers.get('upload-offset')).toBe('3')
+    const head = await fetch(urls[0] + path, { method: 'HEAD', headers: TUS })
+    expect(head.headers.get('upload-offset')).toBe('3')
+    expect((await patch(urls[0] + path, 3, 'def')).headers.get('upload-offset')).toBe('6')
+    expect((await patch(urls[1] + path, 6, 'ghi')).status).toBe(204)
+    expect(new TextDecoder().decode((await files.get(completed[0]))!)).toBe('abcdefghi')
+  })
+
+  it('keeps one of two writes racing for the same offset on two instances', async () => {
+    const { urls, files, completed } = await instances(2)
+    const created = await fetch(`${urls[0]}/uploads`, {
+      method: 'POST',
+      headers: { ...TUS, 'Upload-Length': '4' },
+    })
+    const path = created.headers.get('location')!
+    const [a, b] = await Promise.all([
+      patch(urls[0] + path, 0, 'ab'),
+      patch(urls[1] + path, 0, 'xy'),
+    ])
+    expect([a.status, b.status].toSorted()).toEqual([204, 409])
+    const winner = a.status === 204 ? 'ab' : 'xy'
+    expect(
+      (await fetch(urls[1] + path, { method: 'HEAD', headers: TUS })).headers.get('upload-offset'),
+    ).toBe('2')
+    await patch(urls[0] + path, 2, 'cd')
+    expect(new TextDecoder().decode((await files.get(completed[0]))!)).toBe(`${winner}cd`)
+  })
+
+  it('keeps the bytes that arrived before the client disconnected', async () => {
+    const { urls, partials } = await instances(1)
+    const created = await fetch(`${urls[0]}/uploads`, {
+      method: 'POST',
+      headers: { ...TUS, 'Upload-Length': '1000' },
+    })
+    const path = created.headers.get('location')!
+    const { hostname, port } = new URL(urls[0])
+    // Promise 1000 bytes, send 400, then drop the connection.
+    await new Promise<void>((done) => {
+      const socket = connect(Number(port), hostname, () => {
+        socket.write(
+          `PATCH ${path} HTTP/1.1\r\nHost: x\r\nTus-Resumable: 1.0.0\r\nUpload-Offset: 0\r\n` +
+            'Content-Type: application/offset+octet-stream\r\nContent-Length: 1000\r\n\r\n',
+        )
+        socket.write('z'.repeat(400), () => setTimeout(() => (socket.destroy(), done()), 50))
+      })
+    })
+    let offset = ''
+    for (let i = 0; i < 20 && offset !== '400'; i++) {
+      await new Promise((done) => setTimeout(done, 25))
+      offset = (await fetch(urls[0] + path, { method: 'HEAD', headers: TUS })).headers.get(
+        'upload-offset',
+      )!
+    }
+    expect(offset).toBe('400')
+    expect(
+      (await partials.list({ prefix: 'tus/' })).files.some((f) => f.key.includes('/chunk/')),
+    ).toBe(true)
+  })
+
+  it('uploads in parallel with tus-js-client (parallelUploads)', async () => {
+    const { urls, files, completed } = await instances(2)
+    const data = Buffer.from(
+      Array.from({ length: 3000 }, (_, i) => String.fromCharCode(97 + (i % 26))).join(''),
+    )
+    await new Promise<void>((done, fail) => {
+      new tus.Upload(data, {
+        endpoint: `${urls[0]}/uploads`,
+        parallelUploads: 3,
+        metadata: { filetype: 'text/plain' },
+        onError: fail,
+        onSuccess: () => done(),
+      }).start()
+    })
+    expect(completed).toHaveLength(1)
+    expect(Buffer.from((await files.get(completed[0]))!).equals(data)).toBe(true)
+    expect((await files.stat(completed[0]))!.contentType).toBe('text/plain')
   })
 })

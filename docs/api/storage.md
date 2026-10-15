@@ -41,10 +41,10 @@ Needs `@forinda/kickjs` 10.1 or later.
 
 Needs `@forinda/kickjs` 10.1 or later.
 
-| Export                      | Description                                                                                               |
-| --------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `TusAdapter(options)`       | A tus 1.0.0 endpoint at `path` (creation, creation-with-upload, termination, expiration) on every runtime |
-| `createTusHandler(options)` | The same endpoint as a Node `(req, res, next)` handler                                                    |
-| `TusOptions`                | `path`, `storage`, `dir`, `maxSize`, `expiresIn`, `onCreate`, `authorize`, `onComplete`                   |
-| `TusUpload`                 | `id`, `key`, `size`, `offset`, `metadata`, `data`, `expiresAt`                                            |
-| `TusCreateRequest`          | `headers`, `size`, `metadata`                                                                             |
+| Export                      | Description                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `TusAdapter(options)`       | A tus 1.0.0 endpoint at `path` (creation, creation-with-upload, termination, expiration, checksum, concatenation) on every runtime |
+| `createTusHandler(options)` | The same endpoint as a Node `(req, res, next)` handler                                                                             |
+| `TusOptions`                | `path`, `storage`, `partials`, `dir`, `maxSize`, `expiresIn`, `onCreate`, `authorize`, `onComplete`                                |
+| `TusUpload`                 | `id`, `key`, `size`, `offset`, `metadata`, `data`, `expiresAt`, `concat?`                                                          |
+| `TusCreateRequest`          | `headers`, `size`, `metadata`, `concat?`                                                                                           |
