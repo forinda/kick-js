@@ -16,6 +16,7 @@ export {
   type ServerOptions,
 } from './http/application'
 export type { FailureAdvice } from './core/failure-analysis'
+export { defineSettings, type Settings, type SettingsOf } from './config/settings'
 export {
   allOf,
   onEnv,

@@ -74,6 +74,9 @@ import {
 } from './router-builder'
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
+import { loadAllSettings } from '../config/settings'
+// Registers the `<NAME>_FILE` secret reader settings sections use (Node only).
+import '../config/env'
 import { evaluateCondition, type ConditionOutcome } from '../core/adapter-conditions'
 import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure-analysis'
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
@@ -1070,6 +1073,11 @@ export class Application {
     // routes fill it in as they mount.
     this.routeUrls = new RouteUrls()
     this.container.registerInstance(ROUTE_URLS, this.routeUrls)
+    // Every defineSettings() section, validated now — a bad value fails
+    // startup with the full list — and injectable by its token.
+    for (const [settings, value] of loadAllSettings()) {
+      this.container.registerInstance(settings, value)
+    }
 
     // Reset module-contributor snapshot at the very top of each
     // setup pass — before anything that could throw — so a partial

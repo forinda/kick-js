@@ -37,6 +37,7 @@ import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
 import { ROUTE_URLS, RouteUrls } from './http/url-for'
+import { loadAllSettings } from './config/settings'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
@@ -152,6 +153,12 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   // register so their services can inject it.
   const routeUrls = new RouteUrls()
   container.registerInstance(ROUTE_URLS, routeUrls)
+  // defineSettings() sections, from the platform env (Workers bindings) when given.
+  for (const [settings, value] of loadAllSettings(
+    (options.env ?? (typeof process !== 'undefined' ? process.env : {})) as NodeJS.ProcessEnv,
+  )) {
+    container.registerInstance(settings, value)
+  }
 
   // Wire ConfigService/@Value env resolution when the platform has no
   // ambient process.env (Workers). Latest-wins like loadEnv().

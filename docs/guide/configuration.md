@@ -328,6 +328,88 @@ const envSchema = z.object({
 - Setting both `DB_PASSWORD` and `DB_PASSWORD_FILE` fails at startup, so which secret is in use is never ambiguous; so does a file that can't be read. Neither error prints the contents.
 - The value reaches the parsed env — `getEnv`, `ConfigService`, `@Value` — but is **not** copied into `process.env`, which child processes inherit. Read it through the schema, not `process.env.DB_PASSWORD`.
 
+## Settings sections (`defineSettings`)
+
+One flat env schema gets crowded, and every service reads from all of it. A **settings section** groups a concern's configuration under one prefix, with its own schema, and is injected only where it's needed:
+
+```ts
+// src/modules/db/db.settings.ts
+import { defineSettings } from '@forinda/kickjs'
+import { z } from 'zod'
+
+export const DbSettings = defineSettings(
+  'DB',
+  z.object({
+    url: z.string().url(),
+    pool: z.object({ max: z.coerce.number().int().default(10) }).default({ max: 10 }),
+    replicas: z.array(z.string()).default([]),
+    ssl: z.stringbool().default(false),
+  }),
+)
+```
+
+Each key path becomes one env variable under the prefix, in `UPPER_SNAKE_CASE`:
+
+| Key        | Variable                                               |
+| ---------- | ------------------------------------------------------ |
+| `url`      | `DB_URL`                                               |
+| `pool.max` | `DB_POOL_MAX`                                          |
+| `replicas` | `DB_REPLICAS` — a list, comma-separated: `r1.db,r2.db` |
+| `ssl`      | `DB_SSL`                                               |
+
+`DbSettings.envNames` lists them, and [`<NAME>_FILE` secrets](#secrets-from-files-key-file) work for every one (`DB_URL_FILE=/run/secrets/db_url`).
+
+### Any schema library
+
+Valibot and Yup work as well as Zod — anything [`@forinda/kickjs-schema`](./schema.md) reads, as long as it's an object schema (the keys are what become variable names):
+
+```ts
+import * as v from 'valibot'
+
+export const MailSettings = defineSettings(
+  'MAIL',
+  v.object({
+    host: v.string(),
+    port: v.pipe(v.string(), v.transform(Number), v.number()),
+  }),
+)
+```
+
+Variables are strings, so let the schema convert them: `z.coerce.number()`, `v.pipe(v.string(), v.transform(Number))`, or Yup's `number()` (which casts). For booleans use `z.stringbool()` — `z.coerce.boolean()` reads the string `'false'` as `true`.
+
+### Using a section
+
+**Injected**, in a service or controller:
+
+```ts
+import { Inject, Service, type SettingsOf } from '@forinda/kickjs'
+
+@Service()
+export class Database {
+  constructor(@Inject(DbSettings) private readonly db: SettingsOf<typeof DbSettings>) {}
+}
+```
+
+**Anywhere else** — a plain function, a script, a factory outside DI — call `get()`:
+
+```ts
+const { url, pool } = DbSettings.get()
+```
+
+`get()` returns the value the app validated when it started, so it's cheap and always matches what injected code sees. Called before the app starts (a CLI script, a seed file), the first call loads and validates it. `DbSettings.load(env?)` parses afresh — from `process.env`, or an env object you pass — when you need the current values instead.
+
+### Validated at startup
+
+When the app starts, **every** section defined in the process is validated, and an invalid or missing value fails startup with the variables to fix:
+
+```
+Settings 'DB' are invalid:
+  DB_URL: Invalid URL
+  DB_POOL_MAX: Invalid input: expected number, received NaN
+```
+
+So a section is required wherever its module is loaded — including tests. Give test runs the values in `.env.test`, as you would for the env schema, or give the schema defaults. On the [web entry](./edge-deployment.md), sections read the `env` you pass to `createWebApp` (the Workers bindings).
+
 ## Accessing Config in Services
 
 `ConfigService` is the recommended way to read env config from a DI-managed class. It's an injectable singleton that consumes the `KickEnv` global populated by `kick typegen`, so as long as your `src/env.ts` is in place you get full type safety with **zero extra setup** — no schema to pass around, no separate typed-service factory, no manual casts.
