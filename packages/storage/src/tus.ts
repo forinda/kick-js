@@ -25,6 +25,7 @@ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'node:
 import { defineAdapter, type InjectionToken } from '@forinda/kickjs'
 import { diskStorage } from './disk'
 import { checkKey } from './keys'
+import type { S3Storage } from './s3'
 import type { Storage } from './types'
 
 const VERSION = '1.0.0'
@@ -207,13 +208,23 @@ export function createTusHandler(
   const infoKey = (id: string) => `tus/${id}/info`
   const doneKey = (id: string) => `tus/${id}/done`
   const commitKey = (id: string, offset: number) => `tus/${id}/at/${offset}`
+  // An index by expiry hour (`tus/_expiry/2026-10-15T14/<id>`), so the sweep
+  // reads only uploads that may have expired. Not an id: ids are UUIDs.
+  const hourOf = (iso: string) => iso.slice(0, 13)
+  const expiryKey = (id: string, iso: string) => `tus/_expiry/${hourOf(iso)}/${id}`
   const decode = <T>(bytes: Uint8Array) => JSON.parse(new TextDecoder().decode(bytes)) as T
 
   async function loadInfo(id: string): Promise<Info | null> {
     const bytes = await partials.get(infoKey(id))
     return bytes ? decode<Info>(bytes) : null
   }
-  const saveInfo = (info: Info) => partials.put(infoKey(info.id), JSON.stringify(info))
+  /** Save, indexing the expiry when its hour changes (an older entry is cleared by the sweep). */
+  async function saveInfo(info: Info, previous?: Info) {
+    await partials.put(infoKey(info.id), JSON.stringify(info))
+    if (!previous || hourOf(previous.expiresAt) !== hourOf(info.expiresAt)) {
+      await partials.put(expiryKey(info.id, info.expiresAt), '')
+    }
+  }
   const isDone = (id: string) => partials.exists(doneKey(id))
 
   /** Every key an upload has in `partials`. */
@@ -345,16 +356,33 @@ export function createTusHandler(
     return offset + received
   }
 
-  /** The file, read from its chunks in order — of this upload, or of each part of a final one. */
-  async function* contents(info: Info): AsyncGenerator<Uint8Array> {
+  /** The chunk keys that make up the file, in order — of this upload, or of each part of a final one. */
+  async function chunksOf(info: Info): Promise<string[]> {
+    const keys: string[] = []
     for (const id of info.parts ?? [info.id]) {
-      for (const { chunk } of (await committed(id)).chunks) {
-        const stream = await partials.getStream(chunk)
-        if (!stream) throw new Error(`tus: chunk '${chunk}' of upload ${id} is missing`)
-        yield* stream as unknown as AsyncIterable<Uint8Array>
-      }
+      keys.push(...(await committed(id)).chunks.map((c) => c.chunk))
+    }
+    return keys
+  }
+
+  /** The file, read from its chunks in order. */
+  async function* contents(chunks: string[]): AsyncGenerator<Uint8Array> {
+    for (const chunk of chunks) {
+      const stream = await partials.getStream(chunk)
+      if (!stream) throw new Error(`tus: chunk '${chunk}' is missing`)
+      yield* stream as unknown as AsyncIterable<Uint8Array>
     }
   }
+
+  // With partials and storage in one bucket, the bucket joins the chunks
+  // itself (S3Storage.compose) instead of the bytes passing through here.
+  type Composer = Storage & Pick<S3Storage, 'compose' | 'location'>
+  const composes = (storage: Storage): storage is Composer =>
+    typeof (storage as Partial<Composer>).compose === 'function'
+  const sameBucket =
+    composes(options.storage) &&
+    composes(partials) &&
+    options.storage.location === partials.location
 
   /**
    * Move a complete upload into the storage, run `onComplete`, then mark it
@@ -366,11 +394,12 @@ export function createTusHandler(
    */
   async function finish(info: Info) {
     if (info.concat !== 'partial') {
-      // ponytail: the bytes pass through this server once more; a bucket-side copy
-      // (UploadPartCopy) would skip that when partials and storage share a bucket.
-      await options.storage.put(info.key, contents(info), {
+      const chunks = await chunksOf(info)
+      const putOptions = {
         contentType: info.metadata.filetype || info.metadata.contentType || undefined,
-      })
+      }
+      if (sameBucket) await (options.storage as Composer).compose(info.key, chunks, putOptions)
+      else await options.storage.put(info.key, contents(chunks), putOptions)
       await options.onComplete?.(toUpload(info, info.size))
     }
     await partials.putIfAbsent(doneKey(info.id), '')
@@ -563,7 +592,7 @@ export function createTusHandler(
       }
       if (done) return send(204, { 'Upload-Offset': String(upload.size) })
       const next = touch(info)
-      await saveInfo(next)
+      await saveInfo(next, info)
       const reached = await receive(req, id, offset, upload.size - offset)
       if (reached === upload.size) await finish(next)
       return send(204, {
@@ -620,24 +649,29 @@ export function createTusHandler(
     }
   }
 
-  /** Drop expired uploads: unfinished ones past their expiry, and finished ones' records. */
+  /**
+   * Drop expired uploads: unfinished ones past their expiry, and finished
+   * ones' records. Walks the expiry index in time order and stops at the
+   * first hour not yet over, so it reads only what may have expired.
+   */
   async function sweep() {
-    // ponytail: lists every partials key; fine for thousands of uploads in flight.
-    const ids = new Set<string>()
+    const now = new Date()
+    const prefix = 'tus/_expiry/'
     let cursor: string | undefined
     do {
-      const page = await partials.list({ prefix: 'tus/', cursor })
-      for (const file of page.files) {
-        const id = file.key.split('/')[1]
-        if (UPLOAD_ID.test(id)) ids.add(id)
+      const page = await partials.list({ prefix, cursor })
+      for (const { key } of page.files) {
+        const [hour, id] = key.slice(prefix.length).split('/')
+        // The hour's last expiry has passed only once the hour is over.
+        if (new Date(`${hour}:00:00Z`).getTime() + 3_600_000 > now.getTime()) return
+        if (locked.has(id)) continue
+        const info = UPLOAD_ID.test(id) ? await loadInfo(id).catch(() => null) : null
+        if (info && new Date(info.expiresAt) < now) await drop(id)
+        // Expired and dropped, already gone, or touched since (indexed again later).
+        await partials.delete(key)
       }
       cursor = page.cursor
     } while (cursor)
-    for (const id of ids) {
-      if (locked.has(id)) continue
-      const info = await loadInfo(id).catch(() => null)
-      if (!info || new Date(info.expiresAt) < new Date()) await drop(id)
-    }
   }
 
   return Object.assign(handler, { sweep, owns })

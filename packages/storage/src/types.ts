@@ -11,8 +11,7 @@ export interface Storage {
   /**
    * Store `body` only if nothing is stored under `key` yet: `true` when it was
    * stored, `false` when the key was taken. Atomic — of several callers, only
-   * one gets `true`. For markers and small records: a stream is read into
-   * memory first.
+   * one gets `true`. A stream is written as it arrives, as with `put()`.
    */
   putIfAbsent(key: string, body: Body, options?: PutOptions): Promise<boolean>
   /** The bytes under `key`, or `null` when there are none. */
@@ -27,7 +26,8 @@ export interface Storage {
   /**
    * Files whose key starts with `prefix`, in key order, a page at a time:
    * pass the returned `cursor` back for the next page; no `cursor` means the
-   * last page. Not split into folders: `prefix: 'a/'` includes `a/b/c`.
+   * last page. Not split into folders (`prefix: 'a/'` includes `a/b/c`)
+   * unless `delimiter` asks for it.
    */
   list(options?: ListOptions): Promise<ListPage>
   /**
@@ -56,14 +56,21 @@ export interface FileInfo {
 
 export interface ListOptions {
   prefix?: string
+  /**
+   * Group keys into folders: with `'/'`, `a/b/c` under prefix `a/` lists as
+   * the prefix `a/b/` (in `prefixes`), not as a file. Like S3's delimiter.
+   */
+  delimiter?: string
   /** From the previous page. */
   cursor?: string
-  /** Files per page, 1 to 1000. Default 1000. */
+  /** Files (and prefixes) per page, 1 to 1000. Default 1000. */
   limit?: number
 }
 
 export interface ListPage {
   files: FileInfo[]
+  /** With a `delimiter`: the folders, each once, ending in the delimiter. */
+  prefixes?: string[]
   /** Pass to the next `list()` call; absent on the last page. */
   cursor?: string
 }

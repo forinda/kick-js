@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import request from 'supertest'
 import * as tus from 'tus-js-client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   Application,
   Container,
@@ -36,8 +36,11 @@ const b64 = (value: string) => Buffer.from(value).toString('base64')
 
 beforeEach(() => Container.reset())
 
+// Upload records, without the expiry index (which the sweep clears).
 const keysIn = async (dir: string) =>
-  (await diskStorage({ root: dir }).list()).files.map((f) => f.key)
+  (await diskStorage({ root: dir }).list()).files
+    .map((f) => f.key)
+    .filter((key) => !key.startsWith('tus/_expiry/'))
 const sha = (algorithm: string, body: string) =>
   `${algorithm} ${createHash(algorithm).update(body).digest('base64')}`
 
@@ -585,5 +588,50 @@ describe('across instances, sharing partials', () => {
     expect(completed).toHaveLength(1)
     expect(Buffer.from((await files.get(completed[0]))!).equals(data)).toBe(true)
     expect((await files.stat(completed[0]))!.contentType).toBe('text/plain')
+  })
+})
+
+describe('sweep', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('drops expired uploads through the expiry index, and reads nothing newer', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-15T10:30:00Z'))
+    const partials = memoryStorage()
+    const handler = createTusHandler({
+      path: '/uploads',
+      storage: memoryStorage(),
+      partials,
+      expiresIn: 60,
+    })
+    const server = createServer((req, res) => handler(req, res, () => res.writeHead(404).end()))
+    await new Promise<void>((done) => server.listen(0, done))
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/uploads`
+    const create = async () =>
+      (await fetch(url, { method: 'POST', headers: { ...TUS, 'Upload-Length': '5' } })).headers.get(
+        'location',
+      )!
+    try {
+      const old = await create()
+      const keys = async () => (await partials.list()).files.map((f) => f.key)
+      expect(await keys()).toContain(`tus/_expiry/2026-10-15T10/${old.split('/').pop()}`)
+
+      // Still inside the hour: nothing is over yet.
+      vi.setSystemTime(new Date('2026-10-15T10:59:00Z'))
+      await handler.sweep()
+      expect((await keys()).length).toBe(2)
+
+      vi.setSystemTime(new Date('2026-10-15T12:00:00Z'))
+      const fresh = await create()
+      const get = vi.spyOn(partials, 'get')
+      await handler.sweep()
+      // Only the expired upload's record was read.
+      expect(get.mock.calls.map(([key]) => key)).toEqual([`tus/${old.split('/').pop()}/info`])
+      const left = await keys()
+      expect(left.some((k) => k.includes(old.split('/').pop()!))).toBe(false)
+      expect(left.some((k) => k.includes(fresh.split('/').pop()!))).toBe(true)
+    } finally {
+      server.close()
+    }
   })
 })

@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -75,6 +75,13 @@ describe.each([
     )
     expect(results.filter(Boolean)).toHaveLength(1)
     expect(text(await files.get('m/race'))).toBe(`caller ${results.indexOf(true)}`)
+    expect(
+      await files.putIfAbsent('m/stream', Readable.from([new TextEncoder().encode('s1')])),
+    ).toBe(true)
+    expect(
+      await files.putIfAbsent('m/stream', Readable.from([new TextEncoder().encode('s2')])),
+    ).toBe(false)
+    expect(text(await files.get('m/stream'))).toBe('s1')
   })
 
   it('lists in the same order as plain string sorting, across folders', async () => {
@@ -100,6 +107,36 @@ describe.each([
     expect((await files.list({ cursor: 'a/b-c', limit: 1 })).files.map((f) => f.key)).toEqual([
       'a/b/c',
     ])
+  })
+
+  it('groups keys into prefixes with a delimiter, paging both together', async () => {
+    const files = await make()
+    for (const key of ['a/1', 'a/b/c', 'a/b/d', 'a/e/f', 'a/z', 'b/x', 'top'])
+      await files.put(key, key)
+    const root = await files.list({ delimiter: '/' })
+    expect(root.files.map((f) => f.key)).toEqual(['top'])
+    expect(root.prefixes).toEqual(['a/', 'b/'])
+
+    const first = await files.list({ prefix: 'a/', delimiter: '/', limit: 2 })
+    expect([first.files.map((f) => f.key), first.prefixes, first.cursor]).toEqual([
+      ['a/1'],
+      ['a/b/'],
+      'a/b/',
+    ])
+    const second = await files.list({
+      prefix: 'a/',
+      delimiter: '/',
+      limit: 2,
+      cursor: first.cursor,
+    })
+    expect([second.files.map((f) => f.key), second.prefixes, second.cursor]).toEqual([
+      ['a/z'],
+      ['a/e/'],
+      undefined,
+    ])
+    // Without a delimiter, nothing changes.
+    expect((await files.list({ prefix: 'a/' })).prefixes).toBeUndefined()
+    await expect(files.list({ delimiter: '' })).rejects.toThrow('delimiter')
   })
 
   it('builds a URL from baseUrl, encoding each segment', async () => {
@@ -158,6 +195,14 @@ describe('diskStorage', () => {
     await files.put('d/e', 'x')
     await expect(files.put('d', 'x')).rejects.toThrow("'d' clashes")
     expect(await files.get('d')).toBeNull()
+  })
+
+  it('lists an empty folder as nothing, not as a prefix', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kick-storage-'))
+    const files = diskStorage({ root })
+    await files.put('full/x', 'x')
+    await mkdir(join(root, 'empty'))
+    expect((await files.list({ delimiter: '/' })).prefixes).toEqual(['full/'])
   })
 
   it('lists nothing for a root not created yet', async () => {

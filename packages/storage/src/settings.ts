@@ -103,6 +103,11 @@ export function s3FromSettings(
     list: (...args) => real().list(...args),
     url: (...args) => real().url(...args),
     uploadUrl: (...args) => real().uploadUrl(...args),
+    uploadForm: (...args) => real().uploadForm(...args),
+    compose: (...args) => real().compose(...args),
+    get location() {
+      return real().location
+    },
     multipart: {
       create: (...args) => real().multipart.create(...args),
       partUrl: (...args) => real().multipart.partUrl(...args),
