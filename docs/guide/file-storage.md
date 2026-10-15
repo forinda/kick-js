@@ -135,7 +135,7 @@ Build keys from ids you control, such as `avatars/${user.id}.png` or a `randomUU
 
 ## Where disk files go
 
-A relative `root` resolves from `process.cwd()` when `diskStorage()` is called. That is the same base KickJS uses for `.env` files, assets and the SPA adapter, so `./uploads` sits next to them in the project root. Start the app from that directory: `kick dev` and `kick start` do, and in production set the working directory (Docker `WORKDIR`, systemd `WorkingDirectory`, pm2 `cwd`). To put files elsewhere, pass an absolute path, such as `/var/lib/myapp/uploads` on a mounted volume.
+A relative `root` resolves from `process.cwd()` when `diskStorage()` is called. That is the same base KickJS uses for `.env` files, assets and the SPA adapter, so `./uploads` sits next to them in the project root. Run `kick dev` and `kick start` from the project root, and in production set the working directory (Docker `WORKDIR`, systemd `WorkingDirectory`, pm2 `cwd`). To put files elsewhere, pass an absolute path, such as `/var/lib/myapp/uploads` on a mounted volume.
 
 ## URLs
 
