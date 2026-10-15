@@ -16,7 +16,9 @@ The `ViewAdapter` registers a template engine with the underlying Express app an
 
 ## Installation
 
-The `ViewAdapter` ships with `@forinda/kickjs`. Import it from the main barrel or the sub-path `@forinda/kickjs/views`. You only need to install the template engine of your choice:
+The `ViewAdapter` ships with `@forinda/kickjs`. Import it from the main barrel or the sub-path `@forinda/kickjs/views`. It runs on the **Express** runtime only. Fastify and h3 have no view engine, and `ctx.render()` throws there ([HTTP Runtimes](./http-runtimes.md)).
+
+You only need to install the template engine of your choice, and its types for TypeScript (`@types/ejs`, `@types/pug`, `@types/nunjucks`; express-handlebars ships its own):
 
 ::: code-group
 
@@ -239,27 +241,40 @@ In EJS, these are accessed directly:
 <% } %>
 ```
 
-## Build-Time Folder Copying
+## In production
 
-Template files are not TypeScript, so they are not included in the Vite build output. Use the `copyDirs` option in `kick.config.ts` to copy your views directory into `dist/` after each build:
+Template files are not TypeScript, so the Vite build leaves them out. Copy them into `dist/` with `copyDirs` in `kick.config.ts`:
 
 ```ts
 // kick.config.ts
 import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
-  copyDirs: [
-    'src/views', // copies to dist/src/views
-    { src: 'src/views', dest: 'dist/views' }, // custom destination
-    'src/emails', // additional template dirs
-  ],
+  copyDirs: ['src/views'], // → dist/src/views, after every `kick build`
 })
 ```
 
-When you run `kick build`, the CLI copies these directories automatically after Vite finishes. See the [CLI Commands](./cli-commands.md#kick-config-ts-reference) page for the full `kick.config.ts` reference.
+`ViewAdapter` looks for `viewsDir` in two places, in order:
+
+1. The project: `src/views` from the folder the server starts in, which is the source in development.
+2. Beside the running entry file: `node dist/index.js` looks in `dist/src/views`, where `copyDirs` put them.
+
+So a deployment that holds only `dist/` and `node_modules`, like the `Dockerfile` `kick new` writes, renders from the copy. If you copy to another destination (`{ src: 'src/views', dest: 'dist/views' }`), point `viewsDir` at it in production.
+
+**Netlify and Vercel.** The function bundle holds code, not templates. List the folder in `deploy.include` so it ships with the function:
+
+```ts
+export default defineConfig({
+  copyDirs: ['src/views'],
+  deploy: { include: ['src/views'] },
+})
+```
+
+The function sets `KICK_APP_ROOT` to where included files land, and `ViewAdapter` looks there first. See [Serverless](./serverless.md#when-you-need-something-else).
 
 ## Related
 
 - [Adapters](./adapters.md) -- how the adapter lifecycle works
 - [Controllers & Routes](./controllers.md) -- controller decorators and `RequestContext`
 - [CLI Commands](./cli-commands.md) -- `kick build` and `copyDirs` configuration
+- [Deploying](./deployment.md) -- Docker and Node hosts
