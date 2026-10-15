@@ -43,6 +43,7 @@
     "@forinda/kickjs": ">=5.18.0",
     "express": "^5.3.0",
     "supertest": ">=7.0.0",
+    "testcontainers": ">=11.0.0",
     "vitest": ">=3.0.0"
   },
   "devDependencies": {
@@ -51,11 +52,14 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.5",
+    "@types/pg": "8.15.5",
     "@types/supertest": "^7.2.1",
     "express": "^5.3.0",
     "jsonwebtoken": "^9.0.3",
+    "pg": "8.16.3",
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.3.1",
+    "testcontainers": "12.2.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   },
@@ -81,6 +85,9 @@
       "optional": true
     },
     "vitest": {
+      "optional": true
+    },
+    "testcontainers": {
       "optional": true
     }
   }

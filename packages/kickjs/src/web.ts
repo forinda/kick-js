@@ -37,7 +37,7 @@ import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
 import { compileWebRoute } from './http/web/handler'
 import { ROUTE_URLS, RouteUrls } from './http/url-for'
-import { loadSettings, type Settings } from './config/settings'
+import { loadSettings, type SettingsDeclaration } from './config/settings'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
 import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
@@ -119,7 +119,7 @@ export interface CreateWebAppOptions {
    */
   jsonLimit?: string | number
   /** App-wide settings sections — parity with `bootstrap({ settings })`. */
-  settings?: Settings<unknown>[]
+  settings?: SettingsDeclaration[]
   /** What a failed route validation throws — parity with `bootstrap({ validationError })`. */
   validationError?: ValidationErrorFactory
 }
