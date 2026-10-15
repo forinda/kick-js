@@ -15,7 +15,7 @@
 // registers middie, then the queued middleware, then awaits `ready()`.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { createRequire } from 'node:module'
+import Fastify from 'fastify'
 
 import { HttpException } from '../../core/errors'
 import { parseForm, unsupportedMediaTypeError } from '../body-policy'
@@ -26,6 +26,7 @@ import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
+import { lazyServeStatic } from './lazy-serve-static'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -36,13 +37,14 @@ import type {
   UseConnectOptions,
 } from '../runtime'
 
-// ESM-safe require for the optional peers (fastify / @fastify/middie /
-// serve-static), resolved from wherever this module is installed.
-const peerRequire = createRequire(import.meta.url)
-const loadPeer = (name: string): any => {
-  const mod = peerRequire(name)
-  return mod && mod.__esModule && mod.default ? mod.default : (mod.default ?? mod)
-}
+// The peers load through `import`, never `createRequire`: a bundler follows an
+// import, so `kick build:netlify|vercel` inlines them into the function. A
+// computed require is left for the platform to resolve, and the function has
+// no node_modules. `fastify` is static (this entry is the Fastify runtime);
+// the plugins are imported when first needed.
+const pluginOf = (mod: { default?: unknown }): any => mod.default ?? mod
+// Typed structurally below (FastifyAppLike), as when this was required untyped.
+const createFastify = Fastify as unknown as (options: object) => unknown
 
 // Minimal structural surface we use from Fastify — avoids a hard type dep so
 // the root package never needs `fastify` installed to typecheck.
@@ -357,8 +359,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
     name: 'fastify',
 
     createApp(options: RuntimeAppOptions = {}): FastifyAppLike {
-      const Fastify = loadPeer('fastify')
-      const app = Fastify({
+      const app = createFastify({
         logger: false,
         // Match Express / h3 routing leniency: `/api/v1/hello` and
         // `/api/v1/hello/` resolve to the same route. Without this, Fastify's
@@ -468,10 +469,10 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
           // real per-file maxSize, so give the plugin a generous fileSize ceiling
           // (its 1MB default would silently truncate larger uploads first).
           if (state[NEEDS_MULTIPART]) {
-            const multipart = loadPeer('@fastify/multipart')
+            const multipart = pluginOf(await import('@fastify/multipart'))
             await app.register(multipart, { limits: { fileSize: Number.MAX_SAFE_INTEGER } })
           }
-          const middie = loadPeer('@fastify/middie')
+          const middie = pluginOf(await import('@fastify/middie'))
           await app.register(middie)
           for (const { mw, opts } of state[QUEUE] ?? []) {
             if (opts?.path !== undefined)
@@ -524,8 +525,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       // Serve via `serve-static` (the standalone connect middleware behind
       // express.static) so the Fastify runtime carries no `express` dependency —
       // queued like any other connect middleware, bridged through middie.
-      const serveStatic = loadPeer('serve-static')
-      this.useConnect(app, serveStatic(dir) as ConnectMiddleware, { path: prefix })
+      this.useConnect(app, lazyServeStatic(dir), { path: prefix })
     },
 
     setNotFound(app, mw: ConnectMiddleware) {
