@@ -10,8 +10,8 @@
 Bound long-lived state that client input could grow without limit:
 
 - **kickjs**
-  - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. They drop expired windows from the front without a full scan, then the oldest live window.
-  - The in-memory session store caps at 10,000 sessions, dropping the least recently written.
+  - The in-memory `rateLimit()` and `rateLimitGuard()` stores cap at 100,000 keys. Expired windows are dropped from the front without a full scan. When the store is still full, a new key is refused (429) instead of evicting a live counter, which would let a flood of keys reset another client's count.
+  - The in-memory session store caps at 10,000 sessions. Empty ones (what a cookieless flood creates) are evicted first, then the least recently written.
   - Metrics label unknown HTTP methods `OTHER`.
 - **kickjs-db**
   - Computed-field (`$extends({ result })`) bookkeeping no longer keeps an entry for every failed query.

@@ -2,7 +2,7 @@
 
 KickJS includes a built-in rate limiting middleware that protects your API from abuse. It uses an in-memory store by default and supports pluggable stores for distributed deployments.
 
-The in-memory store holds at most 100,000 keys. Keys come from the client, as its IP, or a header when a proxy passes one through, so a flood of new keys can't grow it without limit. Past the cap, the oldest window is dropped first, which gives that client a fresh count. The `rateLimitGuard` store works the same way. For several instances, or more keys than that, use a shared store such as Redis.
+The in-memory store holds at most 100,000 keys. Keys come from the client, as its IP, or a header when a proxy passes one through, so a flood of new keys can't grow it without limit. Expired windows are cleared first. If it's still full, a new key is refused (answered 429) until the oldest window ends. A live counter is never dropped, because that would let someone reset another client's count, such as the attempts against one username, by flooding new keys. The `rateLimitGuard` store works the same way. For several instances, or more keys than that, use a shared store such as Redis.
 
 ## Basic Usage
 

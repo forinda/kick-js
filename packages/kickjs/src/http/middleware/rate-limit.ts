@@ -92,26 +92,31 @@ export class MemoryStore implements RateLimitStore {
       return { totalHits: entry.totalHits, resetTime: entry.resetTime }
     }
 
-    const resetTime = new Date(now + this.windowMs)
     // Deleted first so the map stays in window order: the oldest window, the
     // first to expire, is always at the front.
     this.hits.delete(key)
+    const full = this.full(now)
+    if (full) return full
+    const resetTime = new Date(now + this.windowMs)
     this.hits.set(key, { totalHits: 1, resetTime })
-    this.bound(now)
     return { totalHits: 1, resetTime }
   }
 
   /**
-   * Keys come from clients (an IP, or a header behind a proxy that passes it
-   * through), so the map is capped: expired windows go first, from the front;
-   * past {@link MAX_KEYS} the oldest live one goes too — a reset counter for
-   * that client, better than running out of memory.
+   * Keys come from clients (an IP, a header behind a proxy, a username from a
+   * custom key), so the map is capped. Expired windows are dropped from the
+   * front. When it's still full, a new key is refused — counted as over any
+   * limit until the oldest window ends — rather than dropping a live counter,
+   * which would let someone reset another client's count by flooding keys.
    */
-  private bound(now: number) {
+  private full(now: number): { totalHits: number; resetTime: Date } | undefined {
     for (const [key, entry] of this.hits) {
-      if (entry.resetTime.getTime() > now && this.hits.size <= MAX_KEYS) break
+      if (entry.resetTime.getTime() > now) break
       this.hits.delete(key)
     }
+    if (this.hits.size < MAX_KEYS) return undefined
+    const oldest = this.hits.values().next().value!
+    return { totalHits: Number.POSITIVE_INFINITY, resetTime: oldest.resetTime }
   }
 
   async decrement(key: string): Promise<void> {
