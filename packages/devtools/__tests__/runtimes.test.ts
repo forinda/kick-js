@@ -328,6 +328,32 @@ describe('/_debug/config', () => {
     vi.unstubAllEnvs()
   })
 
+  it('shows prefixed values, redacts other declared variables, and leaves the rest out', async () => {
+    vi.stubEnv('APP_NAME', 'kickjs')
+    vi.stubEnv('DT_MAIL_HOST', 'smtp.secret.local')
+    vi.stubEnv('UNRELATED_TOKEN', 'not-the-apps')
+    const Mail = defineSettings('DT_MAIL', z.object({ host: z.string() }))
+    const app = new Application({
+      modules: [],
+      settings: [Mail],
+      adapters: [
+        DevToolsAdapter({
+          enabled: true,
+          secret: false,
+          exposeConfig: true,
+          runtime: { enabled: false },
+        }),
+      ],
+    })
+    await app.setup()
+    const res = await request(app.handle.bind(app)).get('/_debug/config').expect(200)
+    expect(res.body.config.APP_NAME).toBe('kickjs')
+    expect(res.body.config.DT_MAIL_HOST).toBe('[REDACTED]')
+    expect(res.body.config).not.toHaveProperty('UNRELATED_TOKEN')
+    expect(res.body.config).not.toHaveProperty('PATH')
+    vi.unstubAllEnvs()
+  })
+
   it('serves the origins (names only) at /config/origins without exposeConfig', async () => {
     vi.stubEnv('DT_MAIL_HOST', 'smtp.secret.local')
     const Mail = defineSettings('DT_MAIL', z.object({ host: z.string() }))
