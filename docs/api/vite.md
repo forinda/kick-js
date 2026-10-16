@@ -118,7 +118,7 @@ interface DevtoolsFlagOptions {
 }
 ```
 
-Defines a boolean global through Vite's `define`. Its value: `enabled` if set, else `KICKJS_DEVTOOLS=1|true|0|false`, else `true` under `vite serve` and `false` under `vite build` (outside Vite, `NODE_ENV !== 'production'`). Gate devtools imports on it and the branch is tree-shaken from production bundles. For the type, reference `@forinda/kickjs-vite/globals`:
+Defines a boolean global through Vite's `define`. Its value: `enabled` if set, else `KICKJS_DEVTOOLS=1|true|0|false`, else `true` under `vite serve` and `false` under `vite build` (outside Vite, only when `NODE_ENV` is `development` or `test`). Gate devtools imports on it and the branch is tree-shaken from production bundles. For the type, reference `@forinda/kickjs-vite/globals`:
 
 ```typescript
 /// <reference types="@forinda/kickjs-vite/globals" />
