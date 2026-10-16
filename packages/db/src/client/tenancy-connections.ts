@@ -61,10 +61,11 @@ class TenantConnection implements DatabaseConnection {
   /**
    * `begin` and the tenant in one round trip: a parameterless query goes out
    * as a simple query, which may hold several statements. The values are
-   * quoted as SQL literals (standard strings, `'` doubled).
+   * quoted as escape-string literals (`\\` and `'` escaped), which read the
+   * same whatever `standard_conforming_strings` is set to.
    */
   private beginBound(): Promise<QueryResult<unknown>> {
-    const literal = (v: string) => `'${v.replace(/'/g, "''")}'`
+    const literal = (v: string) => `E'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
     return this.inner.executeQuery(
       raw(`begin; select set_config(${literal(this.setting)}, ${literal(this.tenant)}, true)`),
     )

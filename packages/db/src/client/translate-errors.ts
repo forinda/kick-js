@@ -60,7 +60,10 @@ export function translatingDialect(dialect: Dialect, tag: DbDialect): Dialect {
 
   const patchDriver = (driver: Driver): Driver => {
     const acquire = driver.acquireConnection.bind(driver)
-    driver.acquireConnection = guard(async () => patchConnection(await acquire()))
+    // Pass the options on: they carry the query's abort signal.
+    driver.acquireConnection = guard(async (...args: Parameters<Driver['acquireConnection']>) =>
+      patchConnection(await acquire(...args)),
+    )
     for (const name of [
       'beginTransaction',
       'commitTransaction',

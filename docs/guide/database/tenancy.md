@@ -74,7 +74,11 @@ Under `'rls'` the generated policy casts the setting to the column's type (`::uu
 
 ### `'column'`
 
-Every `select`, `update` and `delete` on a tenanted table gets `tenantId = <current>`, joined tables included (in the join's `ON`, so a left join stays a left join), at every level of `db.query`. Inserts get the tenant filled in, and a row for another tenant is refused. Raw `sql` isn't rewritten.
+Every `select`, `update` and `delete` on a tenanted table gets `tenantId = <current>`, joined tables included (in the join's `ON`, so a left join stays a left join), at every level of `db.query`. Inserts get the tenant filled in, and a row for another tenant is refused. So is an update or upsert that sets the tenant column to another tenant, or to an expression.
+
+The table is recognised however a query spells it: `main.tasks`, `public.tasks`, `TASKS` and `sql.table('tasks')` are all filtered. What can't be filtered is refused: a tenanted table inside a larger piece of raw SQL, and `mergeInto`. Raw `sql` on its own (``sql`select * from tasks`.execute(db)``) isn't rewritten — use it only for what isn't tenant data, or inside `bypass`.
+
+With an `integer()` or `bigint()` tenant column, the tenant id has to be an integer as the database would print it: `'01'`, `'1.0'` or `' 1'` is refused rather than read as tenant 1. `db.upsert()` that collides with another tenant's row throws instead of returning nothing.
 
 ### `'rls'`
 
