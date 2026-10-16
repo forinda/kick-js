@@ -56,6 +56,28 @@ beforeEach(async () => {
 const db = () => createDbClient({ schema, dialect: pgDialect({ pool }) })
 
 describe('upsert on Postgres', () => {
+  it('update: false leaves a conflicting row as it is and returns it as stored', async () => {
+    const client = db()
+    const kept = await client.upsert('users', {
+      values: { email: 'keep@x.com', name: 'Kept' },
+      target: ['email'],
+    })
+    const rows = await client.upsert('users', {
+      values: [
+        { email: 'keep@x.com', name: 'Overwritten?' },
+        { email: 'new@x.com', name: 'New' },
+        { email: 'new@x.com', name: 'New again' },
+      ],
+      target: ['email'],
+      update: false,
+    })
+    expect(rows.map((r) => [r.email, r.name]).toSorted()).toEqual([
+      ['keep@x.com', 'Kept'],
+      ['new@x.com', 'New'],
+    ])
+    expect(rows.find((r) => r.email === 'keep@x.com')!.id).toBe(kept.id)
+  }, 60_000)
+
   it('inserts, updates, and takes many rows', async () => {
     const client = db()
     await client.upsert('users', { values: { email: 'a@x.com', name: 'Ada' }, target: ['email'] })
