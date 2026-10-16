@@ -43,6 +43,7 @@ import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
 // \`ctx.problem.*\` for error branches — those send immediately and return
 // nothing, so they stay out of the success type.
 
+// Require a signed-in user for these routes: https://kickjs.app/guide/authentication
 @Controller()
 export class ${pascal}Controller {
   @Autowired() private readonly ${camel}Service!: ${pascal}Service

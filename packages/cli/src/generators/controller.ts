@@ -44,6 +44,7 @@ export async function generateController(options: GenerateControllerOptions): Pr
 //
 // The bodies below are placeholders: wire them to a service or repository.
 
+// Require a signed-in user for these routes: https://kickjs.app/guide/authentication
 @Controller()
 export class ${pascal}Controller {
   // @Autowired() private readonly myService!: MyService

@@ -145,6 +145,10 @@ describe('generated controllers infer a real response type', () => {
       const src = codeOnly(readFileSync(join(fixture, path), 'utf-8'))
       expect(src, path).toMatch(/@Patch\('\/:id'/)
       expect(src, path).not.toMatch(/\bPut\b/)
+      // One line pointing at the auth guide, right above the class.
+      expect(readFileSync(join(fixture, path), 'utf-8'), path).toMatch(
+        /\/\/ .*https:\/\/kickjs\.app\/guide\/authentication\n@Controller\(\)/,
+      )
     }
   })
 

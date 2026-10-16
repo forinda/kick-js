@@ -105,6 +105,7 @@ It also adds `.mount(ProjectModule())` to `src/modules/index.ts`. Each layer has
 
 ```ts
 // src/modules/projects/project.controller.ts
+// Require a signed-in user for these routes: https://kickjs.app/guide/authentication
 @Controller()
 export class ProjectController {
   @Autowired() private readonly projectService!: ProjectService

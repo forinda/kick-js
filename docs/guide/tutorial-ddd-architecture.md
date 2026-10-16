@@ -149,6 +149,7 @@ import { createTaskSchema } from './dtos/create-task.dto'
 import { updateTaskSchema } from './dtos/update-task.dto'
 import { TASK_QUERY_CONFIG } from './task.constants'
 
+// Require a signed-in user for these routes: https://kickjs.app/guide/authentication
 @Controller()
 export class TaskController {
   @Autowired() private readonly taskService!: TaskService

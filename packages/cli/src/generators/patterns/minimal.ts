@@ -25,6 +25,7 @@ export async function generateMinimalFiles(ctx: ModuleContext): Promise<void> {
 // "Minimal" is about the file count, not the route surface — you get the whole
 // CRUD shape here in one file.
 
+// Require a signed-in user for these routes: https://kickjs.app/guide/authentication
 @Controller()
 export class ${pascal}Controller {
   @Get('/')
