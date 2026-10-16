@@ -2,6 +2,10 @@
 
 KickJS doesn't ship a first-party multi-tenant package — tenant resolution, scoping, and per-tenant DB switching are app-specific enough that the previous wrapper rarely fit a real adopter without modification. This guide shows how to compose tenant resolution from the framework's existing primitives: a `defineHttpContextDecorator` for resolution, `ContextMeta` augmentation for typing, and `getRequestValue` for service-level access.
 
+::: tip Example
+[`multi-tenant-kickdb-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/multi-tenant-kickdb-api): kick/db column tenancy on SQLite with per-user tenant membership. More in [Examples](../examples/index.md).
+:::
+
 ::: tip This pattern is not tenant-only
 "Tenant" here is a placeholder for any per-request scope your app cares about — workspace, organisation, team, project, room, deployment, region. Same recipe, different ContextMeta key.
 :::

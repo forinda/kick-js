@@ -2,6 +2,10 @@
 
 `@Job` and `@Process` mark the methods that handle background jobs. What runs them depends on where the app is deployed — the same way [`@Cron`](./cron.md) works:
 
+::: tip Example
+[`queue-jobs-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/queue-jobs-api): BullMQ jobs with retries, progress, a status endpoint and a separate worker process. More in [Examples](../examples/index.md).
+:::
+
 | Where                       | What runs the jobs                                                            |
 | --------------------------- | ----------------------------------------------------------------------------- |
 | Node server, Redis          | `QueueAdapter({ redis })` from `@forinda/kickjs-queue` (BullMQ)               |

@@ -2,6 +2,10 @@
 
 [Inertia.js](https://inertiajs.com/) lets controllers return pages instead of JSON. A route names a React, Vue or Svelte component and its props; Inertia renders it in the browser and turns later link clicks and form posts into JSON visits, so the app behaves like a SPA without a client-side router or an API layer between them.
 
+::: tip Example
+[`inertia-app`](https://github.com/forinda/kickjs-examples-archive/tree/main/inertia-app): an Inertia (React, SSR) notes app with form errors, flash toasts and deferred props. More in [Examples](../examples/index.md).
+:::
+
 `@forinda/kickjs-inertia` is the Inertia v3 adapter. It runs on Express, Fastify and h3, renders pages on the server when you ask it to, and needs `@forinda/kickjs` 10 or later.
 
 ## Start from the template

@@ -2,6 +2,10 @@
 
 `@Cron` marks a service method as a scheduled job. What runs it depends on where the app is deployed:
 
+::: tip Example
+[`cron-jobs-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/cron-jobs-api): timezone-aware schedules, overlap protection and the serverless trigger route. More in [Examples](../examples/index.md).
+:::
+
 | Where                  | What runs the job                                                      |
 | ---------------------- | ---------------------------------------------------------------------- |
 | Node server            | `KickCronAdapter()` — opt-in, uses the optional peer `croner`          |

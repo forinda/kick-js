@@ -4,6 +4,10 @@
 The framework ships **no roles system and no policy engine**. `@Roles`, `@Policy`, `@Can` and `AuthorizationService` belonged to `@forinda/kickjs-auth`, removed in **v8**, and have no first-party replacement by design. Authorization is **your code**: the sections below are the recommended shapes to compose from [context decorators](./context-decorators.md).
 :::
 
+::: tip Example
+[`task-mongoose-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/task-mongoose-api): workspace membership checked on every resource route, route flags and role checks. More in [Examples](../examples/index.md).
+:::
+
 ::: tip Scaffold the pieces
 The role check below is a contributor — `kick g contributor <name> --params "roles:string"` writes the parameterised form. For a check that must short-circuit the response, `kick g guard <name>` writes middleware instead.
 
