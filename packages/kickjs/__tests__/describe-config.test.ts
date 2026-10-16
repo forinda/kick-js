@@ -2,6 +2,7 @@ import 'reflect-metadata'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
+  APPLICATION,
   Application,
   Container,
   defineModule,
@@ -85,5 +86,15 @@ describe('app.describeConfig', () => {
     })
     const app = new Application({ modules: [MailModule(), MailModule.scoped('eu')] as never })
     expect(app.describeConfig().sections.map((s) => s.declaredBy)).toEqual(['module Mail'])
+  })
+})
+
+describe('APPLICATION token', () => {
+  it('resolves the constructed Application, and the new one after setup()', async () => {
+    const app = new Application({ modules: [] })
+    expect(Container.getInstance().resolve(APPLICATION)).toBe(app)
+    Container.reset()
+    await app.setup()
+    expect(Container.getInstance().resolve(APPLICATION)).toBe(app)
   })
 })

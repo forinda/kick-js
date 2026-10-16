@@ -64,6 +64,20 @@ type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler 
 The option is `middlewares`. The singular alias is deleted, so passing it is a type error rather than a silently ignored object. See the [v8 migration guide](../guide/migration-v7-to-v8.md#breaking-middleware-is-now-middlewares).
 :::
 
+A service that needs the running app — to call `describeConfig()` or `urlFor()` — injects it with the `APPLICATION` token. The app binds it when constructed and again on each `setup()`; like every DI binding it is one per process.
+
+```typescript
+import { APPLICATION, Application, Inject, Service } from '@forinda/kickjs'
+
+@Service()
+class ConfigReport {
+  constructor(@Inject(APPLICATION) private readonly app: Application) {}
+  sections() {
+    return this.app.describeConfig().sections
+  }
+}
+```
+
 Plugins (`KickPlugin[]`) are the highest-level extension primitive — they can bundle modules, adapters, middleware, DI bindings, and context contributors into one reusable unit. Build them with `definePlugin()` and pass the factory output here. See the [Plugins guide](../guide/plugins.md) and the [`definePlugin` API reference](./core.md#plugins).
 
 ## bootstrap

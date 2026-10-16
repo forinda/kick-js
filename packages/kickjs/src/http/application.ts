@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { HttpException } from '../core/errors'
 import { isProduction } from '../core/is-production'
 import { moduleName } from '../core/define-module'
+import { createToken } from '../core/token'
 import { runCronJobs } from '../core/cron'
 import https from 'node:https'
 import http2 from 'node:http2'
@@ -732,6 +733,18 @@ function isConstructible(fn: unknown): boolean {
   }
 }
 
+/**
+ * The running {@link Application} — for a service that needs the app itself,
+ * e.g. to call `describeConfig()` or `urlFor()`. Bound when the app is
+ * constructed and again on each `setup()` (an HMR rebuild resets the
+ * container). One per process, like every DI binding.
+ *
+ * ```ts
+ * constructor(@Inject(APPLICATION) private readonly app: Application) {}
+ * ```
+ */
+export const APPLICATION = createToken<Application>('kick/Http/Application')
+
 export class Application {
   private app: Express
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
@@ -802,6 +815,7 @@ export class Application {
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
     this.app = this.createEngineApp()
     this.container = Container.getInstance()
+    this.container.registerInstance(APPLICATION, this)
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
     // Plugins without `dependsOn` keep their declaration order — this is a
@@ -1191,6 +1205,7 @@ export class Application {
     // routes fill it in as they mount.
     this.routeUrls = new RouteUrls()
     this.container.registerInstance(ROUTE_URLS, this.routeUrls)
+    this.container.registerInstance(APPLICATION, this)
     this.settingsPrefixes = new Map()
     this.settingsProvided = new Map()
     // Settings sections declared by bootstrap, plugins and enabled adapters:
