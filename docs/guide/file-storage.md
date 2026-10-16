@@ -6,6 +6,10 @@ description: Save, stream and list files in memory, on local disk, or in an S3-c
 
 `@forinda/kickjs-storage` puts every place an app keeps files behind one `Storage` interface. The code that saves an avatar stays the same when it moves from a local folder in development to a bucket in production, or to memory in tests.
 
+::: tip Example
+[`file-storage-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/file-storage-api): uploads, signed URLs, local disk in development and S3/MinIO in production. More in [Examples](../examples/index.md).
+:::
+
 <PmCommand add="@forinda/kickjs-storage" />
 
 Or `kick add storage`. It has no SDK dependency: the S3 driver signs requests itself (AWS Signature V4) and sends them with `fetch`.

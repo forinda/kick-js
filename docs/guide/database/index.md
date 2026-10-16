@@ -2,6 +2,10 @@
 
 `@forinda/kickjs-db` is the first-party database layer for KickJS — a code-first ORM. You declare your schema in TypeScript, get typed queries with no codegen step, and ship reversible migrations through the `kick db` CLI.
 
+::: tip Example
+[`task-kickdb-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/task-kickdb-api): kick/db on Postgres with reviewed migrations and relational queries. More in [Examples](../../examples/index.md).
+:::
+
 This page is one continuous path: install → schema → migration → query, with nothing assumed between the steps. It uses **SQLite** so you can finish it without provisioning anything. The same path on a server database: [PostgreSQL](./get-started-postgres.md), [MySQL](./get-started-mysql.md). Not starting fresh? [Start Here](./start-here.md) lists the other ways in.
 
 The deeper references — every column type, the relational query layer, the full migration command set — are linked from [Where to go next](#where-to-go-next).

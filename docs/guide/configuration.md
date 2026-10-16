@@ -2,6 +2,10 @@
 
 `@forinda/kickjs` ships schema-validated environment configuration with caching, an injectable typed service, and tight integration with `kick typegen` — every API in this guide is type-safe with no manual schema passing. No extra package install is required.
 
+::: tip Example
+[`settings-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/settings-api): settings sections, `.scoped()` adapters, `_FILE` secrets and the DevTools Config tab. More in [Examples](../examples/index.md).
+:::
+
 ::: tip Moved from `@forinda/kickjs-config`
 Earlier releases shipped these APIs in a separate `@forinda/kickjs-config` package. They now live inside `@forinda/kickjs` itself. The standalone package still exists as a thin re-export shim for one release and will be removed in v3 — migrate your imports to `@forinda/kickjs`.
 

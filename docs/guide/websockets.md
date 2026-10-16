@@ -2,6 +2,10 @@
 
 KickJS provides decorator-driven WebSocket support with namespaces, rooms, and full DI integration. Built on the lightweight `ws` library.
 
+::: tip Example
+[`ws-chat`](https://github.com/forinda/kickjs-examples-archive/tree/main/ws-chat): a chat with rooms, token auth on connect and the Redis broker across instances. More in [Examples](../examples/index.md).
+:::
+
 ## Setup
 
 ```ts
