@@ -149,6 +149,12 @@ function getPersistentStore(): PersistentStore {
 export class Container {
   private static instance: Container
   private registrations = new Map<any, Registration>()
+  /**
+   * Bindings from {@link registerFallback}, kept apart from `registrations`
+   * so a normal binding wins whenever it arrives and `has()` keeps answering
+   * "did the app bind its own?".
+   */
+  private fallbacks = new Map<any, Registration>()
   private resolving = new Set<any>()
 
   // ── Reactive change tracking ──────────────────────────────────────
@@ -297,6 +303,7 @@ export class Container {
 
   /** Register a class constructor under the given token */
   register(token: any, target: Constructor, scope: Scope = Scope.SINGLETON): void {
+    this.assertFallbackUnused(token)
     const kind = getClassMeta<ClassKind>(METADATA.CLASS_KIND, target, 'unknown')
     const dependencies = this.extractDependencies(target)
     const reg = createReg({ target, scope, kind, dependencies })
@@ -311,6 +318,7 @@ export class Container {
 
   /** Register a factory function under the given token */
   registerFactory(token: any, factory: () => any, scope: Scope = Scope.SINGLETON): void {
+    this.assertFallbackUnused(token)
     const store = getPersistentStore()
     const name = tokenName(token)
     // Check if we already have a resolved instance from a previous HMR cycle.
@@ -360,6 +368,7 @@ export class Container {
 
   /** Register a pre-constructed singleton instance */
   registerInstance(token: any, instance: any): void {
+    this.assertFallbackUnused(token)
     const store = getPersistentStore()
     const name = tokenName(token)
 
@@ -391,14 +400,55 @@ export class Container {
     this.emit(name, 'registered', 'instance')
   }
 
-  /** Check if a binding exists for the given token */
+  /**
+   * Register a default for `token`, used only while nothing else binds it.
+   *
+   * `resolve()` prefers a `register` / `registerFactory` / `registerInstance`
+   * binding whenever it was made — before or after this call — and falls back
+   * to this factory otherwise. `has()` stays `false` for a token that only has
+   * a fallback. A second fallback for the same token replaces the first.
+   *
+   * Binding the token normally once its SINGLETON fallback has been resolved
+   * throws KICK010: whoever resolved it holds the fallback instance, and would
+   * disagree with everyone resolving the new binding. Fallbacks are not kept
+   * across `Container.reset()` — register them from a hook that runs on every
+   * boot (an adapter's `beforeMount`, a module's `register`).
+   */
+  registerFallback<T>(
+    token: InjectionToken<T> | Constructor<T> | string | symbol,
+    factory: () => NoInfer<T>,
+    scope: Scope = Scope.SINGLETON,
+  ): void {
+    this.assertFallbackUnused(token)
+    this.fallbacks.set(token, createReg({ target: Object as any, scope, factory, kind: 'factory' }))
+    if (!this.registrations.has(token)) this.emit(token, 'registered', 'factory')
+  }
+
+  /** A fallback whose singleton is already out there can't be replaced. */
+  private assertFallbackUnused(token: any): void {
+    if (this.fallbacks.get(token)?.instance !== undefined) {
+      throw Container._error('KICK010', tokenName(token))
+    }
+  }
+
+  /** The binding `resolve(token)` uses: a normal registration, else the fallback. */
+  private binding(token: any): Registration | undefined {
+    return this.registrations.get(token) ?? this.fallbacks.get(token)
+  }
+
+  /** Check if a binding exists for the given token. A {@link registerFallback} alone does not count. */
   has(token: any): boolean {
     return this.registrations.has(token)
   }
 
-  /** Return a snapshot of all registered tokens with their scope and instantiation status */
+  /**
+   * Return a snapshot of all registered tokens with their scope and instantiation status.
+   * A token served by its {@link registerFallback} is listed with `fallback: true`;
+   * a fallback that a normal binding overrides is not listed.
+   */
   getRegistrations(): Array<{
     token: string
+    fallback?: true
     scope: string
     kind: ClassKind
     instantiated: boolean
@@ -410,9 +460,14 @@ export class Container {
     dependencies: string[]
   }> {
     const entries: Array<ReturnType<Container['getRegistrations']>[number]> = []
-    for (const [token, reg] of this.registrations) {
+    const active = [...this.registrations]
+    for (const [token, reg] of this.fallbacks) {
+      if (!this.registrations.has(token)) active.push([token, reg])
+    }
+    for (const [token, reg] of active) {
       entries.push({
         token: tokenName(token),
+        ...(this.fallbacks.get(token) === reg && { fallback: true as const }),
         scope: reg.scope,
         kind: reg.kind,
         // Singletons check cached instance; transients check resolveCount
@@ -453,6 +508,7 @@ export class Container {
     if (!reg && typeof token === 'function' && token.name) {
       reg = this.registrations.get(`__hmr__${token.name}`)
     }
+    reg ??= this.fallbacks.get(token)
     if (!reg) {
       throw Container._error('KICK001', tokenName(token))
     }
@@ -607,7 +663,10 @@ export class Container {
   invalidate(token: any, visited = new Set<Registration>()): void {
     const name = tokenName(token)
     // Try both the token itself and the HMR fallback name
-    const reg = this.registrations.get(token) ?? this.registrations.get(`__hmr__${name}`)
+    const reg =
+      this.registrations.get(token) ??
+      this.registrations.get(`__hmr__${name}`) ??
+      this.fallbacks.get(token)
     // `visited`: two classes that @Autowired each other depend on each other,
     // and the walk below went round that cycle until the stack overflowed.
     if (!reg || visited.has(reg)) return
@@ -734,7 +793,7 @@ export class Container {
       }
       // Scope validation: SINGLETON cannot inject REQUEST-scoped dependencies
       if (reg.scope === Scope.SINGLETON) {
-        const depReg = this.registrations.get(token)
+        const depReg = this.binding(token)
         if (depReg && depReg.scope === Scope.REQUEST) {
           // The fix depends on the parent: @Controller() takes no options and
           // is always SINGLETON, so "change the parent's scope" is advice a
@@ -880,7 +939,7 @@ export class Container {
       Object.defineProperty(instance, prop, {
         get: () => {
           const value = this.resolve(resolvedToken)
-          const depReg = this.registrations.get(resolvedToken)
+          const depReg = this.binding(resolvedToken)
           if (depReg?.scope === Scope.SINGLETON) {
             Object.defineProperty(instance, prop, {
               value,

@@ -7,6 +7,7 @@ import {
   requestScopeOutsideRequestError,
   envValueMissingError,
   moduleRouteMissingControllerError,
+  fallbackAlreadyResolvedError,
 } from '../src/core/kick-errors'
 
 // ── KickError class ───────────────────────────────────────────────────
@@ -163,6 +164,7 @@ describe('kick-errors catalog', () => {
       requestScopeOutsideRequestError('X'),
       envValueMissingError('X'),
       moduleRouteMissingControllerError('/x'),
+      fallbackAlreadyResolvedError('X'),
     ]
     for (const e of errs) {
       expect(e.docsUrl).toBeDefined()
@@ -178,6 +180,7 @@ describe('kick-errors catalog', () => {
       requestScopeOutsideRequestError('X'),
       envValueMissingError('X'),
       moduleRouteMissingControllerError('/x'),
+      fallbackAlreadyResolvedError('X'),
     ]
     for (const e of errs) {
       expect(codes.has(e.code)).toBe(false)

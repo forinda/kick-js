@@ -12,6 +12,8 @@ export type DiErrorCode =
   | 'KICK003'
   /** `@Value` key not set, and no default. */
   | 'KICK004'
+  /** A token bound normally after its `registerFallback` singleton was already resolved. */
+  | 'KICK010'
 
 export class DiError extends Error {
   constructor(
@@ -30,6 +32,8 @@ const MESSAGES: Record<DiErrorCode, (subject: string) => string> = {
   KICK002: (s) => `Cannot resolve REQUEST-scoped "${s}": no request store is installed`,
   KICK003: (s) => `Cannot resolve REQUEST-scoped "${s}" outside a request`,
   KICK004: (s) => `@Value('${s}'): not set and no default provided`,
+  KICK010: (s) =>
+    `Cannot bind "${s}": its fallback was already resolved, so code holding it would disagree with the new binding. Bind "${s}" before anything resolves it.`,
 }
 
 export function diError(code: DiErrorCode, subject: string): Error {

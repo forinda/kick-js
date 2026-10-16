@@ -175,6 +175,7 @@ KICK001: No provider for UserService
 | `KICK007` | Server: `server.http2` on a runtime that cannot serve HTTP/2 (Express); thrown by `start()` before setup                                                    |
 | `KICK008` | Server: `server.http2` without `server.tls` (no cleartext HTTP/2); thrown by `start()` before setup                                                         |
 | `KICK009` | Server: `server.tls` cannot identify the server (key without cert, no identity, unreadable PEM, key/cert mismatch); thrown by `start()` before setup        |
+| `KICK010` | DI: a token bound normally after its `registerFallback()` singleton was already resolved; thrown by the late `register*` call                               |
 
 More framework errors will migrate to `KickError` over time. Each new entry gets the next free code; codes are stable and never reused.
 

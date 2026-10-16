@@ -71,6 +71,8 @@ A class constructor parameter is injected by its type; a token or an interface n
 
 `register(token, Class, scope?)`, `registerFactory(token, () => value, scope?)` and `registerInstance(token, value)` bind tokens by hand; `resolve(token)` and `has(token)` read them.
 
+`registerFallback(token, () => value, scope?)` binds a default that `resolve` uses only while none of the three above binds the token — whichever order they run in. `has(token)` is `false` for a token with only a fallback, and `getRegistrations()` marks a token its fallback serves with `fallback: true`. A later `registerFallback` replaces an earlier one; `Container.reset()` drops them all. Binding the token normally after its SINGLETON fallback was resolved throws `KICK010`. See [Fallback bindings](../guide/dependency-injection.md#fallback-bindings).
+
 ## Errors
 
 Without the framework the container throws `DiError`, with a stable `code` and the token name (or env key) as `subject`:
@@ -81,6 +83,7 @@ Without the framework the container throws `DiError`, with a stable `code` and t
 | `KICK002` | A `Scope.REQUEST` token, but no request store is installed. |
 | `KICK003` | A `Scope.REQUEST` token, resolved outside a request.        |
 | `KICK004` | `@Value(key)` with the key unset and no default.            |
+| `KICK010` | A token bound after its `registerFallback` was resolved.    |
 
 ```ts
 import { DiError } from '@forinda/kickjs-di'

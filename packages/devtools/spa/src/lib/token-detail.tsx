@@ -75,6 +75,14 @@ export const TokenDetail: Component<{ token: string; onSelect: (token: string) =
             <div class="mt-1.5 flex flex-wrap gap-1.5">
               <span class={kindTone(r().kind)}>{r().kind ?? 'unknown'}</span>
               <span class="dt-tone dt-tone-gray">{r().scope ?? 'singleton'}</span>
+              <Show when={r().fallback}>
+                <span
+                  class="dt-tone dt-tone-gray"
+                  title="Served by its registerFallback() default — the app binds nothing of its own"
+                >
+                  fallback
+                </span>
+              </Show>
               <span class={tokenStatus(r()).tone}>{tokenStatus(r()).label}</span>
             </div>
           </header>

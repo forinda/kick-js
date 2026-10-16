@@ -182,6 +182,26 @@ register(container: Container): void {
 }
 ```
 
+## Fallback Bindings
+
+`registerFallback(token, factory, scope?)` gives a token a default that is used only while nothing else binds it. A `register`, `registerFactory` or `registerInstance` for the same token wins, whether it comes before or after the fallback — so an adapter can offer a default in `beforeMount` (which runs before modules register) and a module can still replace it:
+
+```typescript
+export const MAILER = createToken<Mailer>('app/mailer')
+
+// An adapter's beforeMount: the default
+container.registerFallback(MAILER, () => new ConsoleMailer())
+
+// A module's register(), later in boot: the app's own — this one is used
+container.registerFactory(MAILER, () => new SmtpMailer(config))
+```
+
+- The factory is typed by the token, like `registerFactory`. `scope` defaults to `Scope.SINGLETON`.
+- `has(token)` stays `false` while only a fallback exists — it still answers "did the app bind its own?". `getRegistrations()` lists a token served by its fallback with `fallback: true` (DevTools shows a _fallback_ badge); a fallback that a normal binding overrides is not listed.
+- A second `registerFallback` for the same token replaces the first.
+- Fallbacks are not kept across `Container.reset()` (HMR rebuilds call it), and `Container.create()` starts without any. Register them from a hook that runs on every boot.
+- Binding the token normally **after** its singleton fallback was resolved throws `KICK010`: whatever resolved it holds the fallback instance and would disagree with everything resolving the new binding. Bind your own in a module's `register()` — before anything resolves the token — and keep adapters from resolving the token during boot.
+
 ## Lifecycle Hooks
 
 ### @PostConstruct
