@@ -147,7 +147,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
           c.default !== null &&
           !c.defaultSql &&
           !allowsExpressionDefault(c.type) &&
-          isFunctionCall(c.default)
+          (isFunctionCall(c.default) || /^(CURRENT_\w+|NULL)$/i.test(c.default))
         ) {
           opts.onCallShapedDefault({ table, column, value: c.default })
         }

@@ -202,18 +202,18 @@ Guide: [Queries → Upsert and find-or-create](../guide/database/queries.md#upse
 
 Subscribe via `db.on(event, listener)`. Events fire when `events: true` (or `slowQueryThresholdMs` / `bus` is set).
 
-| Event         | Payload                                        | When                                                                      |
-| ------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
-| `beforeQuery` | `{ sql, parameters }` (mutable)                | Before query executes — mutate `sql`/`parameters` for RLS-style rewriting |
-| `query`       | `{ sql, parameters, durationMs }`              | After successful query                                                    |
-| `queryError`  | `{ sql, parameters, error }`                   | On query failure                                                          |
-| `slowQuery`   | `{ sql, parameters, durationMs, thresholdMs }` | When duration exceeds `slowQueryThresholdMs`                              |
+| Event                 | Payload                                        | When                                                                      |
+| --------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `beforeQuery`         | `{ sql, parameters }` (mutable)                | Before query executes — mutate `sql`/`parameters` for RLS-style rewriting |
+| `query`               | `{ sql, parameters, durationMs }`              | After successful query                                                    |
+| `queryError`          | `{ sql, parameters, error }`                   | On query failure                                                          |
+| `slowQuery`           | `{ sql, parameters, durationMs, thresholdMs }` | When duration exceeds `slowQueryThresholdMs`                              |
+| `transactionStart`    | `{ isolation? }`                               | Transaction opens                                                         |
+| `transactionCommit`   | `{ isolation? }`                               | Transaction commits                                                       |
+| `transactionRollback` | `{ isolation?, error }`                        | Transaction rolls back                                                    |
+| `transactionRetry`    | `{ isolation?, attempt, error, delayMs }`      | A `retry` transaction is about to run again                               |
 
 `beforeQuery`, `query`, `slowQuery` and `queryError` also carry `queryId`, and `txId` inside a `transaction()`.
-| `transactionStart` | `{ isolation? }` | Transaction opens |
-| `transactionCommit` | `{ isolation? }` | Transaction commits |
-| `transactionRollback` | `{ isolation?, error }` | Transaction rolls back |
-| `transactionRetry` | `{ isolation?, attempt, error, delayMs }` | A `retry` transaction is about to run again |
 
 ```ts
 db.on('slowQuery', ({ sql, durationMs }) => logger.warn({ sql, durationMs }, 'slow query'))

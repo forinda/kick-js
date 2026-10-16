@@ -2,6 +2,7 @@
  * `db.upsert()` and `db.findOrCreate()` on MySQL — `ON DUPLICATE KEY
  * UPDATE`, with the rows read back (no RETURNING).
  */
+import { sql } from 'kysely'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { createPool, type Pool } from 'mysql2/promise'
@@ -71,6 +72,15 @@ describe('upsert and findOrCreate on MySQL', () => {
       target: ['email'],
       update: false,
     })
+    // A partial index can't be targeted on MySQL, skipping or not.
+    await expect(
+      createDbClient({ schema, dialect: mysqlDialect({ pool }) }).upsert('users', {
+        values: { email: 'keep@x.com', name: 'K' },
+        target: ['email'],
+        where: () => sql<boolean>`1 = 1`,
+        update: false,
+      }),
+    ).rejects.toThrow(/partial unique index, which MySQL has no syntax for/)
     expect(rows.map((r) => [r.email, r.name]).toSorted()).toEqual([
       ['keep@x.com', 'Kept'],
       ['new@x.com', 'New'],

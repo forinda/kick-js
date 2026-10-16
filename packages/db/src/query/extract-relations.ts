@@ -367,7 +367,12 @@ function resolveMorph(
 
 /** Which keys compare with which: integers with integers, strings with strings, else the type itself. */
 function keyFamily(type: string): string {
-  const t = type.toLowerCase().replace(/\(.*$/, '').trim()
+  // `int unsigned`, `int(11) unsigned` (MySQL) are integers too.
+  const t = type
+    .toLowerCase()
+    .replace(/\(.*?\)/, '')
+    .replace(/\s+(unsigned|zerofill)\b/g, '')
+    .trim()
   if (/^(tiny|small|medium|big)?(int|integer|serial)[248]?$/.test(t)) return 'integer'
   if (/^(text|varchar|char|character|character varying|citext)$/.test(t)) return 'text'
   return t

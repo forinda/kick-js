@@ -8,6 +8,7 @@ import Database from 'better-sqlite3'
 import {
   bigSerial,
   checkDrift,
+  timestamp,
   date,
   diff,
   invertChanges,
@@ -470,4 +471,31 @@ it('pairs a column that went from its snake_case name to its key as a rename', (
   expect(
     diff(a, b).map((c) => (c.kind === 'renameColumn' ? `${c.from}->${c.to}` : c.kind)),
   ).toEqual(['project_id->projectId', 'created_at->createdAt'])
+})
+
+describe('.defaultSql() as written, .default() as a value', () => {
+  it('keeps an explicit SQLite keyword, quotes keyword-shaped values, and alters on a mode switch', () => {
+    const t = table('t', {
+      id: serial().primaryKey(),
+      at: timestamp().defaultSql('CURRENT_TIMESTAMP'),
+      helper: timestamp().defaultNow(),
+      word: text().default('NULL'),
+      stamp: text().default('CURRENT_TIMESTAMP'),
+    })
+    const lite = emitSqlite(diff(empty, snap({ t })), { from: empty, to: snap({ t }) })
+    expect(lite).toContain('"at" TEXT DEFAULT CURRENT_TIMESTAMP')
+    expect(lite).toMatch(/"helper" TEXT DEFAULT \(strftime/)
+    expect(lite).toContain(`"word" TEXT DEFAULT 'NULL'`)
+    expect(lite).toContain(`"stamp" TEXT DEFAULT 'CURRENT_TIMESTAMP'`)
+    const my = emitMysql(diff({ ...empty, dialect: 'mysql' }, snap({ t }, 'mysql')))
+    expect(my).toContain("`word` TEXT DEFAULT ('NULL')")
+    const as = (sql: boolean) => ({
+      t: table('t', {
+        id: serial().primaryKey(),
+        v: text()[sql ? 'defaultSql' : 'default']('lower(x)'),
+      }),
+    })
+    const pg = emitPg(diff(snap(as(true), 'postgres'), snap(as(false), 'postgres')))
+    expect(pg).toContain(`ALTER COLUMN "v" SET DEFAULT 'lower(x)'`)
+  })
 })

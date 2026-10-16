@@ -414,12 +414,19 @@ export function wrap<DB>(
       const tx = wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins, frame })
       const finish = (commit: boolean) => async (): Promise<void> => {
         if (frame.done) throw new TransactionFinishedError()
-        frame.done = true
         if (!commit) {
-          await trx.rollback().execute()
+          // Done only once it's rolled back: a failed rollback can be tried again.
+          try {
+            await trx.rollback().execute()
+          } catch (err) {
+            ctx.events?.emit('transactionRollback', { isolation, error: err })
+            throw err
+          }
+          frame.done = true
           ctx.events?.emit('transactionRollback', { isolation, error: undefined })
           return
         }
+        frame.done = true
         try {
           await trx.commit().execute()
         } catch (err) {

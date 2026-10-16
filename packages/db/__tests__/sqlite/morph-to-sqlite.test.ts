@@ -23,6 +23,7 @@ import {
   timestamp,
 } from '@forinda/kickjs-db'
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import { unsigned } from '../../src/dsl/columns/mysql'
 import { compileSqlite } from '../../src/query/compile-sqlite'
 import { extractRelations } from '../../src/query/extract-relations'
 
@@ -185,6 +186,24 @@ describe('morphTo on SQLite', () => {
     expect(build({ pair: pairs as never })).toThrow(/'pairs' has a composite primary key/)
     expect(build({ '': posts as never })).toThrow(/a type value in `targets` is an empty string/)
     expect(build({})).toThrow(/`targets` is empty/)
+    // MySQL's int unsigned is an integer too.
+    const counters = table('counters', { id: unsigned(integer()).primaryKey() })
+    expect(() =>
+      createDbClient({
+        schema: {
+          counters,
+          comments,
+          rel: relations(comments, ({ morphTo }) => ({
+            subject: morphTo({
+              type: comments.subjectType,
+              id: comments.subjectId,
+              targets: { c: counters },
+            }),
+          })),
+        },
+        dialect: sqliteDialect({ database: new Database(':memory:') }),
+      }),
+    ).not.toThrow()
     // A target whose key can't be compared with the id column, on any dialect.
     expect(build({ token: tokens as never })).toThrow(
       /'subjectId' is integer, but tokens.id is text — every target's key has to compare with it/,

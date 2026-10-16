@@ -247,10 +247,10 @@ function mysqlDefault(value: unknown, type?: string, sql?: boolean): string {
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
   // `.default()` on a text-like column is a value, whatever it looks like
   // (`'now()'` is the string now()); `.defaultSql()` is SQL on any column.
-  const literalOnly = !sql && type !== undefined && !allowsExpressionDefault(type)
-  if (literalOnly && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
-    return literal(str)
-  }
+  // `.defaultSql()` is the caller's MySQL SQL, as written.
+  if (sql) return /^[A-Za-z_]+$/.test(str) || /^-?\d+(\.\d+)?$/.test(str) ? str : `(${str})`
+  // A value on a text-like column, even `NULL` or `CURRENT_TIMESTAMP`.
+  if (type !== undefined && !allowsExpressionDefault(type)) return literal(str)
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
 
@@ -262,6 +262,5 @@ function mysqlDefault(value: unknown, type?: string, sql?: boolean): string {
 
   // Other function calls are expressions, which MySQL takes only in parentheses.
   if (isFunctionCall(str)) return `(${str})`
-  // SQL that isn't a single call (`a || b`): an expression, in parentheses.
-  return sql ? `(${str})` : literal(str)
+  return literal(str)
 }

@@ -88,20 +88,44 @@ export async function upsert<DB, T extends keyof DB & string>(
   }
   // The rows by their target values — from the primary, which has them; a
   // replica may not yet.
-  const readBack = (chunk: Row[]): Promise<Row[]> =>
-    (db.primary.selectFrom as (t: string) => any)(table)
+  // A partial index's predicate too: a row outside it can share the target.
+  const readBack = (chunk: Row[]): Promise<Row[]> => {
+    let q = (db.primary.selectFrom as (t: string) => any)(table)
       .selectAll()
       .where((eb: ExpressionBuilder<any, any>) =>
         eb.or(chunk.map((r) => eb.and(opts.target.map((c: string) => eb(c, '=', r[c]))))),
       )
-      .execute()
+    if (opts.where) q = q.where(opts.where)
+    return q.execute()
+  }
+  if (opts.update === false) {
+    // Each row is read back by its target, so every row needs one — a key
+    // the database generates can't be the target here.
+    for (const row of rows) {
+      const missing = opts.target.find((c) => row[c] === undefined || row[c] === null)
+      if (missing) {
+        throw new Error(
+          `kickjs-db: upsert({ update: false }) reads each row back by its target, and a row has no ${missing}`,
+        )
+      }
+    }
+    if (db.dialect === 'mysql' && opts.where) {
+      throw new Error(
+        'kickjs-db: upsert({ where }) needs a partial unique index, which MySQL has no syntax for',
+      )
+    }
+  }
+  /** How many different targets a chunk names (a row may repeat one). */
   const distinctTargets = (chunk: Row[]) =>
-    new Set(chunk.map((r) => JSON.stringify(opts.target.map((c) => r[c])))).size
+    new Set(
+      chunk.map((r) => opts.target.map((c) => `${typeof r[c]}:${String(r[c])}`).join('\u0000')),
+    ).size
   return inChunks(db, chunks, opts.atomic ?? true, async (chunk) => {
     if (opts.update === false) {
+      const expected = distinctTargets(chunk)
       // DO NOTHING returns only what it inserted: read every row back.
       await statement(chunk).execute()
-      return written(await readBack(chunk), distinctTargets(chunk))
+      return written(await readBack(chunk), expected)
     }
     if (db.dialect !== 'mysql') return written(await statement(chunk).execute(), chunk.length)
     await statement(chunk).execute()

@@ -153,7 +153,7 @@ await this.db.upsert('page_views', {
 })
 ```
 
-With `update: false` a row whose key exists is skipped (`ON CONFLICT DO NOTHING`; on MySQL a no-op update rather than `INSERT IGNORE`, which would hide other errors), and every row comes back as stored — the new ones and the ones that were already there.
+With `update: false` a row whose key exists is skipped (`ON CONFLICT DO NOTHING`; on MySQL a no-op update rather than `INSERT IGNORE`, which would hide other errors), and every row comes back as stored — the new ones and the ones that were already there, read back by `target`, so every row has to give its `target` values. On MySQL the no-op update still runs the table's `UPDATE` triggers for a skipped row.
 
 `findOrCreate` returns the row matching `where`, creating it from `where` + `create` when there's none:
 

@@ -156,6 +156,29 @@ describe('upsert on SQLite', () => {
     })
     expect(again).toMatchObject({ id: 1, owner: 'two' })
   })
+
+  it('update: false reads back inside the partial index, and needs every target before writing', async () => {
+    const db = make()
+    const where = () => sql<boolean>`active = 1`
+    // The same handle outside the index (inactive) mustn't come back with it.
+    await db.insertInto('handles').values({ handle: 'ada', active: false, owner: 'old' }).execute()
+    const rows = await db.upsert('handles', {
+      values: [{ handle: 'ada', active: true, owner: 'new' }],
+      target: ['handle'],
+      where,
+      update: false,
+    })
+    expect(rows.map((r) => r.owner)).toEqual(['new'])
+    // A generated key can't be the target: refused before anything is written.
+    await expect(
+      db.upsert('users', {
+        values: [{ email: 'x@x.com', name: 'X' }],
+        target: ['id'],
+        update: false,
+      }),
+    ).rejects.toThrow(/reads each row back by its target, and a row has no id/)
+    expect(await db.selectFrom('users').selectAll().execute()).toEqual([])
+  })
 })
 
 describe('findOrCreate on SQLite', () => {

@@ -12,4 +12,4 @@
 - Nested `with` levels don't take `maxDepth`; result extensions only look at a query whose rows can have computed fields.
 - Docs: streaming large results with `.stream()`.
 
-Behaviour change: on SQLite and MySQL, a `.default()` on a text column that looks like a call — `text().default('uuid()')` — was evaluated; it's the text now, as on Postgres. An existing column keeps its database default until the table is rebuilt or the default changes, and `kick db generate` warns about each one: switch it to `.defaultSql('uuid()')`.
+Behaviour change: on SQLite and MySQL, a `.default()` on a text column that looks like SQL — a call like `text().default('uuid()')`, or `NULL` / `CURRENT_TIMESTAMP` — was evaluated; it's the text now, as on Postgres. An existing column keeps its database default until the table is rebuilt or the default changes, and `kick db generate` warns about each one: switch it to `.defaultSql('uuid()')`.

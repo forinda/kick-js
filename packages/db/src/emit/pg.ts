@@ -373,7 +373,9 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
 
   const typeChanged = before.type !== after.type
   const nullChanged = before.nullable !== after.nullable
-  const defaultChanged = before.default !== after.default
+  // A value becoming SQL (or back) is a change even with the same text.
+  const defaultChanged =
+    before.default !== after.default || !before.defaultSql !== !after.defaultSql
   const losingNotNull = !before.nullable && after.nullable
 
   if (typeChanged) {

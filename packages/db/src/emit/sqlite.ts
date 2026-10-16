@@ -334,10 +334,10 @@ function sqliteDefault(value: unknown, type?: string, sql?: boolean): string {
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
   // `.default()` on a text-like column is a value, whatever it looks like
   // (`'now()'` is the string now()); `.defaultSql()` is SQL on any column.
-  const literalOnly = !sql && type !== undefined && !allowsExpressionDefault(type)
-  if (literalOnly && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
-    return quoteLiteral(str)
-  }
+  // `.defaultSql()` is the caller's SQLite SQL, as written.
+  if (sql) return /^[A-Za-z_]+$/.test(str) || /^-?\d+(\.\d+)?$/.test(str) ? str : `(${str})`
+  // A value on a text-like column, even `NULL` or `CURRENT_TIMESTAMP`.
+  if (type !== undefined && !allowsExpressionDefault(type)) return quoteLiteral(str)
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
   if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return SQLITE_UUID_V4
@@ -346,6 +346,5 @@ function sqliteDefault(value: unknown, type?: string, sql?: boolean): string {
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
   // A function call is an expression, which SQLite takes only in parentheses.
   if (isFunctionCall(str)) return `(${str})`
-  // SQL that isn't a single call (`a || b`): an expression, in parentheses.
-  return sql ? `(${str})` : quoteLiteral(str)
+  return quoteLiteral(str)
 }
