@@ -117,10 +117,22 @@ function localName(program: Node, from: string, imported: string): string {
   return imported
 }
 
-/** `SwaggerAdapter` for `// comment\nSwaggerAdapter({ ... })`. */
+/**
+ * `SwaggerAdapter` for `// comment\nSwaggerAdapter({ ... })`; for an entry
+ * that doesn't start with a call (`...(flag ? [(await import('x')).DevToolsAdapter()] : [])`),
+ * the first call in it other than `import(`.
+ */
 function callName(code: string): string | undefined {
-  const line = code.split('\n').find((l) => l.trim() && !l.trim().startsWith('//'))
-  return /^\s*([A-Za-z_$][\w$.]*)\s*\(/.exec(line ?? '')?.[1]
+  const body = code
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n')
+  const leading = /^\s*([A-Za-z_$][\w$.]*)\s*\(/.exec(body)?.[1]
+  if (leading) return leading
+  for (const match of body.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g)) {
+    if (match[1] !== 'import') return match[1]
+  }
+  return undefined
 }
 
 const firstLine = (code: string) =>

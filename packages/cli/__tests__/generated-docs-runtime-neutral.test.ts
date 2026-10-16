@@ -34,6 +34,17 @@ describe('CLI-emitted samples', () => {
   })
 })
 
+describe('CLI-emitted env reads', () => {
+  // The scaffolded src/config/index.ts exports no env object, so every sample
+  // reads env through getEnv / ConfigService / @Value — never `env.KEY`.
+  it.each(EMITTERS)('%s never exports or imports an env object', (file) => {
+    const source = readFileSync(join(ROOT, file), 'utf8')
+    expect(source).not.toMatch(/export const env\s*=/)
+    expect(source).not.toMatch(/import \{[^}]*\benv\b[^}]*\}/)
+    expect(source).not.toMatch(/(?<![\w.])env\.[A-Z][A-Z0-9_]*/)
+  })
+})
+
 describe('generated skill docs follow modules.style', () => {
   // `buildSkills` emitted `UserModule()` unconditionally. Under
   // `modules.style: 'class'` that calls a class without `new`; under

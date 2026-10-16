@@ -56,10 +56,10 @@ export function resolveDevtoolsFlag(opts: DevtoolsFlagOptions = {}, env?: Config
   if (envOverride === '1' || envOverride === 'true') return true
   if (envOverride === '0' || envOverride === 'false') return false
   // env may be undefined when callers compute the flag outside a
-  // Vite plugin invocation (tests). Fall back to NODE_ENV as a last
-  // resort so the resolver still gives a sensible answer.
+  // Vite plugin invocation (tests). Fall back to NODE_ENV, failing
+  // closed: an unset NODE_ENV leaves devtools out.
   if (env) return env.command === 'serve'
-  return process.env.NODE_ENV !== 'production'
+  return process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
 }
 
 export function devtoolsFlagPlugin(opts: DevtoolsFlagOptions = {}): Plugin {

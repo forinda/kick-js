@@ -28,19 +28,16 @@ describe('planWiring', () => {
   it('renders the layers of packages that have one, and nothing for the rest', () => {
     expect(planWiring(['pg', 'queue:kafka'])).toBeUndefined()
     const plan = planWiring(['devtools', 'queue', 'queue:bullmq', 'pg'])!
-    // devtools is imported by the entry file, so it's a regular dependency here.
     expect(plan.dependencies).toEqual(
-      expect.arrayContaining([
-        '@forinda/kickjs-devtools',
-        '@forinda/kickjs-queue',
-        'bullmq',
-        'ioredis',
-      ]),
+      expect.arrayContaining(['@forinda/kickjs-queue', 'bullmq', 'ioredis']),
     )
-    expect(plan.integrations.map((i) => i.import?.names?.[0])).toEqual([
-      'DevToolsAdapter',
-      'QueueAdapter',
-    ])
+    // The entry imports devtools only under `kick dev`, so it stays a dev dependency.
+    expect(plan.dependencies).not.toContain('@forinda/kickjs-devtools')
+    expect(plan.devDependencies).toContain('@forinda/kickjs-devtools')
+    expect(plan.integrations.map((i) => i.import?.names?.[0])).toEqual([undefined, 'QueueAdapter'])
+    expect(plan.files.get('src/devtools.d.ts')).toContain(
+      '/// <reference types="@forinda/kickjs-vite/globals" />',
+    )
     expect(plan.builds).toEqual({ 'msgpackr-extract': false })
   })
 })

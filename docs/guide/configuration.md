@@ -31,7 +31,7 @@ const envSchema = fromZod(
   }),
 )
 
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema
 export default envSchema
 ```
 
@@ -51,7 +51,7 @@ const envSchema = fromValibot(
   }),
 )
 
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema
 export default envSchema
 ```
 
@@ -73,9 +73,11 @@ const envSchema = fromYup(
   }),
 )
 
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema
 export default envSchema
 ```
+
+The file registers the schema and exports it for `kick typegen` — it exports no parsed env object. Read values anywhere with `getEnv('DATABASE_URL')` from `@forinda/kickjs` (typed from the schema), an injected [`ConfigService`](#accessing-config-in-services), or [`@Value`](#value-decorator); `src/index.ts` and tests import `./config` only for its side effect.
 
 ::: tip Scaffold straight from the CLI
 `kick new --schema zod` (default), `--schema valibot`, or `--schema yup` writes the right `src/config/index.ts` for you and sets `typegen.schemaValidator: 'kickjs-schema'` in `kick.config.ts` so type generation flows through `InferSchemaOutput`. See [CLI commands](cli-commands.md#kick-new) for the full flag list.
@@ -132,7 +134,7 @@ const envSchema = defineEnv((base) =>
 // Side-effect: register the extended schema with kickjs's env cache
 // **at module-load time**. ConfigService and @Value() both consume
 // this cache.
-export const env = loadEnv(envSchema)
+loadEnv(envSchema)
 
 export default envSchema
 ```
@@ -198,7 +200,7 @@ const envSchema = fromZod(
   }),
 )
 
-export const env = loadEnvFromSchema(envSchema)
+const env = loadEnvFromSchema(envSchema)
 env.DATABASE_URL // string (inferred from the wrapped schema)
 env.PORT // number
 ```

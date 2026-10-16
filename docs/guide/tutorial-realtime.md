@@ -139,7 +139,7 @@ export class ChatWsController {
   handleConnect(ctx: WsContext) {
     try {
       const token = ctx.data?.token || ''
-      const payload = jwt.verify(token, env.JWT_SECRET) as any
+      const payload = jwt.verify(token, getEnv('JWT_SECRET')) as any
 
       ctx.set('userId', payload.sub)
       ctx.set('email', payload.email)

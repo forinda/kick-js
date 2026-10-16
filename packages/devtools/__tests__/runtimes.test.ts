@@ -5,7 +5,7 @@
  * Fastify or h3 app.
  */
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -346,5 +346,38 @@ describe('/_debug/config', () => {
     })
     expect(JSON.stringify(res.body)).not.toContain('smtp.secret.local')
     vi.unstubAllEnvs()
+  })
+})
+
+describe('DevTools default enabled', () => {
+  async function bootDefault(options: { enabled?: boolean } = {}) {
+    const app = new Application({
+      modules: [],
+      adapters: [DevToolsAdapter({ ...options, secret: false, runtime: { enabled: false } })],
+    })
+    await app.setup()
+    return request(app.handle.bind(app))
+  }
+
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('stays off when NODE_ENV is unset', async () => {
+    vi.stubEnv('NODE_ENV', undefined)
+    await (await bootDefault()).get('/_debug/health').expect(404)
+  })
+
+  it('stays off under NODE_ENV=staging', async () => {
+    vi.stubEnv('NODE_ENV', 'staging')
+    await (await bootDefault()).get('/_debug/health').expect(404)
+  })
+
+  it('mounts under NODE_ENV=development', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    await (await bootDefault()).get('/_debug/health').expect(200)
+  })
+
+  it('mounts when enabled: true, whatever NODE_ENV says', async () => {
+    vi.stubEnv('NODE_ENV', undefined)
+    await (await bootDefault({ enabled: true })).get('/_debug/health').expect(200)
   })
 })

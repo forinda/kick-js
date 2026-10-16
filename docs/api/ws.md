@@ -137,9 +137,9 @@ bootstrap({ modules, adapters: [SocketIoAdapter({ cors: { origin: 'https://app.e
 ```ts
 import { CentrifugoAdapter, connectionToken } from '@forinda/kickjs-ws/centrifugo'
 
-CentrifugoAdapter({ url: 'http://centrifugo:8000', apiKey: env.CENTRIFUGO_API_KEY })
+CentrifugoAdapter({ url: 'http://centrifugo:8000', apiKey: getEnv('CENTRIFUGO_API_KEY') })
 const token = connectionToken({
-  secret: env.CENTRIFUGO_SECRET,
+  secret: getEnv('CENTRIFUGO_SECRET'),
   sub: user.id,
   expiresInSeconds: 3600,
 })

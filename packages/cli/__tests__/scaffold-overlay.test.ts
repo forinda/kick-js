@@ -252,7 +252,15 @@ describe('the shipped layers', () => {
     )
     const entry = project.files.get('src/index.ts')!
     expect(entry).toContain("SwaggerAdapter({ info: { title: 'demo', version: '1.2.3' } }),")
-    expect(entry).toContain('DevToolsAdapter(),')
+    // DevTools is dev-only: a flag-gated dynamic import, never a static one.
+    expect(entry).toContain('...(__KICKJS_DEVTOOLS__')
+    expect(entry).toContain("? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()]")
+    expect(entry).not.toMatch(/import \{[^}]*DevToolsAdapter[^}]*\} from/)
+    expect(project.devDependencies).toContain('@forinda/kickjs-devtools')
+    expect(project.dependencies).not.toContain('@forinda/kickjs-devtools')
+    expect(project.files.get('src/devtools.d.ts')).toMatch(
+      /^\/\/\/ <reference types="@forinda\/kickjs-vite\/globals" \/>$/m,
+    )
     expect(entry).toContain("WsAdapter({ path: '/ws' }),")
     expect(entry).toContain('QueueAdapter({')
     expect(project.dependencies).toEqual(
@@ -266,6 +274,27 @@ describe('the shipped layers', () => {
     )
     expect(project.files.get('.env')).toContain('REDIS_HOST=127.0.0.1')
     expect(project.files.get('.env.example')).toContain('REDIS_PORT=6379')
+  })
+
+  it('never import an env object or read env.KEY in any template', () => {
+    for (const template of ['minimal', 'rest', 'inertia'] as const) {
+      for (const lib of ['zod', 'valibot', 'yup'] as const) {
+        const { files } = renderLayers(
+          scaffoldLayers({
+            template,
+            runtime: 'express',
+            schemaLib: lib,
+            packages: ['swagger', 'devtools', 'ws', 'queue', 'storage'],
+          }),
+        )
+        for (const [path, contents] of files) {
+          if (!/\.(?:[cm]?[jt]sx?)$/.test(path)) continue
+          expect(contents, path).not.toMatch(/import \{[^}]*\benv\b[^}]*\}/)
+          expect(contents, path).not.toMatch(/(?<![\w.])env\.[A-Z][A-Z0-9_]*/)
+          expect(contents, path).not.toMatch(/export const env\b/)
+        }
+      }
+    }
   })
 
   it('answer the install scripts their packages bring in', () => {
@@ -360,7 +389,12 @@ describe('the shipped layers', () => {
   it('ship one env schema per schema library', () => {
     for (const lib of ['zod', 'valibot', 'yup'] as const) {
       const project = renderLayers([`schema-${lib}`])
-      expect(project.files.get('src/config/index.ts')).toContain(`from '${lib}'`)
+      const config = project.files.get('src/config/index.ts')!
+      expect(config).toContain(`from '${lib}'`)
+      // A side effect only: app code reads env through getEnv('KEY'), not an export.
+      expect(config).toMatch(/^loadEnvFromSchema\(envSchema\)$/m)
+      expect(config).not.toMatch(/export const env\b/)
+      expect(config).toContain('export default envSchema')
       // Valibot's JSON Schema converter ships with it — Swagger reads Valibot schemas through it.
       expect(project.dependencies).toEqual(
         lib === 'valibot' ? ['valibot', '@valibot/to-json-schema'] : [lib],

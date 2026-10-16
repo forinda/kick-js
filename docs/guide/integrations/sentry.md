@@ -112,7 +112,8 @@ const envSchema = defineEnv((base) =>
   }),
 )
 
-export const env = loadEnv(envSchema)
+loadEnv(envSchema) // side effect: registers the schema
+export default envSchema
 ```
 
 ## Capturing Errors in Controllers
