@@ -346,6 +346,79 @@ describe("'column' tenancy: ways around the filter", () => {
     })
   })
 
+  it('keeps a right or full join to the tenant, filtering the joined table in WHERE', async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      for (const join of ['rightJoin', 'fullJoin'] as const) {
+        const from = db.selectFrom('plans') as any
+        const rows = await from[join]('tasks', (j: any) => j.onTrue())
+          .select(['tasks.title', 'tasks.tenantId'])
+          .execute()
+        expect(rows, join).toEqual([{ title: 'fuel', tenantId: 'acme' }])
+      }
+    })
+  })
+
+  it('treats sql.id() as the table it names, and refuses a tenanted table named in raw SQL text', async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      const rows = await db
+        .selectFrom(sql.id('tasks').as('t') as never)
+        .select('id' as never)
+        .execute()
+      expect(rows).toEqual([{ id: 1 }])
+      await db
+        .updateTable(sql.id('tasks') as never)
+        .set({ title: 'mine' } as never)
+        .execute()
+      await db
+        .deleteFrom(sql.id('main', 'tasks') as never)
+        .where('id' as never, '=', 2 as never)
+        .execute()
+      for (const raw of [
+        sql`tasks`,
+        sql.raw('tasks'),
+        sql`(select * from "tasks")`,
+        sql`${sql.ref('tasks')}`,
+        sql`(select * from ${sql.ref('main.tasks')})`,
+      ]) {
+        await expect(
+          db
+            .selectFrom(raw.as('t') as never)
+            .selectAll()
+            .execute(),
+        ).rejects.toThrow(/tasks is tenanted, and inside raw SQL/)
+      }
+      await expect(db.deleteFrom(sql.raw('tasks') as never).execute()).rejects.toThrow(
+        /tasks is tenanted/,
+      )
+    })
+    expect(await owners(db)).toEqual([
+      { id: 1, tenantId: 'acme' },
+      { id: 2, tenantId: 'globex' },
+    ])
+  })
+
+  it("refuses INSERT OR REPLACE, which would overwrite another tenant's row", async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      await expect(
+        db
+          .insertInto('tasks')
+          .orReplace()
+          .values({ id: 2, projectId: 1, title: 'stolen' })
+          .execute(),
+      ).rejects.toThrow(/REPLACE deletes whatever row it collides with/)
+      expect(() =>
+        db.qb.replaceInto('tasks').values({ id: 2, projectId: 1, title: 'stolen' }).compile(),
+      ).toThrow(/REPLACE/)
+    })
+    expect(await owners(db)).toEqual([
+      { id: 1, tenantId: 'acme' },
+      { id: 2, tenantId: 'globex' },
+    ])
+  })
+
   it("refuses a tenant id an integer column wouldn't store as written", async () => {
     const numeric = defineTenancy({ strategy: 'column', current: () => undefined })
     const accounts = table('accounts', {
@@ -363,7 +436,7 @@ describe("'column' tenancy: ways around the filter", () => {
       tenancy: numeric,
       dialect: sqliteDialect({ database }),
     })
-    for (const id of ['01', '1.0', ' 1', '1abc']) {
+    for (const id of ['01', '1.0', ' 1', '1abc', '-0']) {
       await expect(
         numeric.run(id, () => db.selectFrom('accounts').select('name').execute()),
         id,

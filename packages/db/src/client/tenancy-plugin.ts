@@ -63,16 +63,23 @@ export function collectTenantColumns(schema: unknown): Map<string, TenantColumn>
   return out
 }
 
-/** A table, or `sql.table('tasks')` — a raw node that is only a table name. */
+/**
+ * A table, or a raw node that is only a table's name: `sql.table('tasks')`,
+ * `sql.id('tasks')`, `sql.id('main', 'tasks')`.
+ */
 function tableNodeOf(node: OperationNode): TableNode | undefined {
   if (TableNode.is(node)) return node
-  if (
-    RawNode.is(node) &&
-    node.parameters.length === 1 &&
-    TableNode.is(node.parameters[0]) &&
-    node.sqlFragments.every((f) => f.trim() === '')
-  ) {
-    return node.parameters[0]
+  if (!RawNode.is(node)) return undefined
+  const { parameters: params, sqlFragments: parts } = node
+  if (params.length === 1 && TableNode.is(params[0]) && parts.every((f) => f.trim() === '')) {
+    return params[0]
+  }
+  const ids = params.filter(IdentifierNode.is)
+  const dotted = parts.every((f, i) => f.trim() === (i === 0 || i === parts.length - 1 ? '' : '.'))
+  if (ids.length === params.length && dotted && (ids.length === 1 || ids.length === 2)) {
+    return ids.length === 1
+      ? TableNode.create(ids[0]!.name)
+      : TableNode.createWithSchema(ids[0]!.name, ids[1]!.name)
   }
   return undefined
 }
@@ -87,14 +94,44 @@ function tableOf(node: OperationNode): { table: string; ref: string } | undefine
   return t ? { table: nameOf(t), ref: nameOf(t) } : undefined
 }
 
-/** The tables a raw FROM item names that `tableOf` can't see into. */
-function rawTables(node: OperationNode): TableNode[] {
+/**
+ * The names a raw FROM item mentions that `tableOf` can't see into: tables
+ * and identifiers among its parameters, and the words of its own SQL text
+ * (`` sql`tasks` ``, `sql.raw('tasks')`).
+ */
+function rawNames(node: OperationNode): string[] {
   const raw = AliasNode.is(node) ? node.node : node
   if (!RawNode.is(raw) || tableNodeOf(raw)) return []
-  return raw.parameters.flatMap((p) => {
-    const t = tableNodeOf(p)
-    return t ? [t] : rawTables(p)
-  })
+  const words = raw.sqlFragments.flatMap(
+    (f) => f.match(/[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)?/g) ?? [],
+  )
+  return [
+    ...words,
+    ...raw.parameters.flatMap((p) => {
+      const t = tableNodeOf(p)
+      return t ? [nameOf(t)] : identifiersIn(p)
+    }),
+  ]
+}
+
+/**
+ * Every identifier a node holds, however deep — `sql.ref('tasks')`, a table,
+ * a nested raw node — except inside a query, which the filter rewrites itself.
+ */
+function identifiersIn(node: unknown): string[] {
+  if (!node || typeof node !== 'object') return []
+  const n = node as OperationNode
+  if (
+    SelectQueryNode.is(n) ||
+    UpdateQueryNode.is(n) ||
+    DeleteQueryNode.is(n) ||
+    InsertQueryNode.is(n)
+  ) {
+    return []
+  }
+  if (IdentifierNode.is(n)) return [n.name]
+  if (RawNode.is(n)) return rawNames(n)
+  return Object.values(node).flatMap(identifiersIn)
 }
 
 /** MySQL's multi-table `UPDATE a, b` puts a list where the table goes. */
@@ -120,7 +157,7 @@ function sameColumn(a: string | undefined, b: string): boolean {
 }
 
 /** An integer tenant column's id: digits only, as the database would store them. */
-const CANONICAL_INTEGER = /^-?(0|[1-9][0-9]*)$/
+const CANONICAL_INTEGER = /^(0|-?[1-9][0-9]*)$/
 
 function nameOf(node: TableNode): string {
   const { schema, identifier } = node.table
@@ -180,10 +217,10 @@ class TenantColumnFilter extends OperationNodeTransformer {
   /** Refuse a raw FROM item that hides a tenanted table the filter can't reach. */
   private refuseHidden(item: OperationNode): void {
     if (!this.filter) return
-    for (const t of rawTables(item)) {
-      if (this.columnOf(nameOf(t))) {
+    for (const name of rawNames(item)) {
+      if (this.columnOf(name)) {
         throw new Error(
-          `kickjs-db: ${nameOf(t)} is tenanted, and inside raw SQL its tenant can't be added — select from the table itself`,
+          `kickjs-db: ${name} is tenanted, and inside raw SQL its tenant can't be added — use the table itself, or bypass()`,
         )
       }
     }
@@ -203,17 +240,30 @@ class TenantColumnFilter extends OperationNodeTransformer {
     return out
   }
 
-  /** A join's tenant condition goes in its ON, so a LEFT JOIN stays a left join. */
-  private withJoinFilters(joins: readonly JoinNode[] | undefined) {
-    if (!this.filter) return joins
-    return joins?.map((join) => {
+  /**
+   * A left join's tenant condition goes in its ON, so it stays a left join.
+   * Any other join can keep the joined table's rows whatever its ON says (a
+   * right or full join keeps them all), so there it goes in WHERE.
+   */
+  private withJoinFilters(
+    joins: readonly JoinNode[] | undefined,
+    where: WhereNode | undefined,
+  ): { joins: readonly JoinNode[] | undefined; where: WhereNode | undefined } {
+    if (!this.filter || !joins) return { joins, where }
+    let w = where
+    const out = joins.map((join) => {
       this.refuseHidden(join.table)
       const t = tableOf(join.table)
       const column = t && this.columnOf(t.table)
       if (!t || !column) return join
       const condition = matches(t.ref, column.name, this.need(t.table, column))
-      return JoinNode.cloneWithOn(join, condition)
+      if (join.joinType === 'LeftJoin' || join.joinType === 'LateralLeftJoin') {
+        return JoinNode.cloneWithOn(join, condition)
+      }
+      w = w ? WhereNode.cloneWithOperation(w, 'And', condition) : WhereNode.create(condition)
+      return join
     })
+    return { joins: out, where: w }
   }
 
   /** A value written to a tenant column must be the current tenant. */
@@ -261,8 +311,9 @@ class TenantColumnFilter extends OperationNodeTransformer {
 
   protected override transformSelectQuery(node: SelectQueryNode): SelectQueryNode {
     const out = super.transformSelectQuery(node)
-    const where = this.withFilters(out.where, out.from?.froms ?? [])
-    return { ...out, ...(where ? { where } : {}), joins: this.withJoinFilters(out.joins) }
+    const filtered = this.withFilters(out.where, out.from?.froms ?? [])
+    const { joins, where } = this.withJoinFilters(out.joins, filtered)
+    return { ...out, ...(where ? { where } : {}), joins }
   }
 
   protected override transformUpdateQuery(node: UpdateQueryNode): UpdateQueryNode {
@@ -270,8 +321,9 @@ class TenantColumnFilter extends OperationNodeTransformer {
     const targets = itemsOf(out.table)
     this.checkUpdates(out.updates, [...targets, ...(out.joins ?? []).map((j) => j.table)])
     // The target(s) and every source table in UPDATE … FROM.
-    const where = this.withFilters(out.where, [...targets, ...(out.from?.froms ?? [])])
-    return { ...out, ...(where ? { where } : {}), joins: this.withJoinFilters(out.joins) }
+    const filtered = this.withFilters(out.where, [...targets, ...(out.from?.froms ?? [])])
+    const { joins, where } = this.withJoinFilters(out.joins, filtered)
+    return { ...out, ...(where ? { where } : {}), joins }
   }
 
   /** MERGE can't be limited to the tenant's rows on either side: refused. */
@@ -291,8 +343,9 @@ class TenantColumnFilter extends OperationNodeTransformer {
   protected override transformDeleteQuery(node: DeleteQueryNode): DeleteQueryNode {
     const out = super.transformDeleteQuery(node)
     // The target and every source table in DELETE … USING.
-    const where = this.withFilters(out.where, [...out.from.froms, ...(out.using?.tables ?? [])])
-    return { ...out, ...(where ? { where } : {}), joins: this.withJoinFilters(out.joins) }
+    const filtered = this.withFilters(out.where, [...out.from.froms, ...(out.using?.tables ?? [])])
+    const { joins, where } = this.withJoinFilters(out.joins, filtered)
+    return { ...out, ...(where ? { where } : {}), joins }
   }
 
   /**
@@ -318,6 +371,9 @@ class TenantColumnFilter extends OperationNodeTransformer {
       return refuse(
         'its tenant can only be checked on a values(...) insert, not INSERT … SELECT or DEFAULT VALUES',
       )
+    }
+    if (this.filter && (out.replace || out.orAction?.action.toLowerCase() === 'replace')) {
+      refuse("REPLACE deletes whatever row it collides with, another tenant's included")
     }
     if (this.filter && out.onDuplicateKey) {
       refuse("MySQL's ON DUPLICATE KEY UPDATE can't be limited to the tenant's rows")
