@@ -217,7 +217,7 @@ import type { AppDb } from './client'
 export const APP_DB = createToken<AppDb>('taskboard/Db')
 ```
 
-Token names follow `<scope>/<area>/<key>` — your project's scope (lowercase), then the thing. `kick typegen` warns about names that don't.
+Token names start with `<scope>/<key>` — your project's scope, all lowercase, then the thing — and may add more slash-separated segments (`<scope>/<area>/<key>`). `kick typegen` warns about names that don't.
 
 A small module registers the client. It serves no HTTP routes, so `routes` returns `null`:
 

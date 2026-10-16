@@ -22,12 +22,12 @@
 import type { DiscoveredToken } from './scanner'
 
 /**
- * - `^[a-z][\w-]*` — the lowercase scope (`kick`, `app`, `mycorp`).
+ * - `^[a-z][a-z\d_-]*` — the scope, lowercase throughout (`kick`, `app`, `mycorp`).
  * - `(\/[A-Za-z][\w-]*)+` — one or more `/area`, `/key` segments.
  * - `(:[a-z][\w-]+)*` — optional `:instance` (and further `:extra`
  *   sections) for `.scoped()` shards.
  */
-const TOKEN_CONVENTION_REGEX = /^[a-z][\w-]*(\/[A-Za-z][\w-]*)+(:[a-z][\w-]+)*$/
+const TOKEN_CONVENTION_REGEX = /^[a-z][a-z\d_-]*(\/[A-Za-z][\w-]*)+(:[a-z][\w-]+)*$/
 
 const LEGACY_PREFIX = 'kickjs.'
 

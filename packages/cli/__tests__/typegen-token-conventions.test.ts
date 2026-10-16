@@ -95,8 +95,8 @@ describe('validateTokenConventions — non-conformant tokens', () => {
   })
 
   it('flags uppercase scope', () => {
-    const out = validateTokenConventions([token('Mycorp/Foo')])
-    expect(out).toHaveLength(1)
+    const out = validateTokenConventions([token('Mycorp/Foo'), token('myCorp/Foo')])
+    expect(out).toHaveLength(2)
   })
 
   it('flags entirely missing scope', () => {
