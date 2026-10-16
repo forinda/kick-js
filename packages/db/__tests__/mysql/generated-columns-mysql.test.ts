@@ -4,6 +4,7 @@ import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysq
 import { createPool, type Pool } from 'mysql2/promise'
 import {
   checkDrift,
+  createDbClient,
   diff,
   emitMysql,
   extractSnapshot,
@@ -16,6 +17,8 @@ import {
   text,
   varchar,
 } from '@forinda/kickjs-db'
+import { mysqlDialect } from '@forinda/kickjs-db/mysql'
+import { sql } from 'kysely'
 
 let container: StartedMySqlContainer
 let pool: Pool
@@ -96,4 +99,25 @@ describe('defaults and serial keys on MySQL', () => {
     const [ids] = await pool.query('SELECT id FROM d ORDER BY id')
     expect((ids as Array<{ id: number }>).map((r) => Number(r.id))).toEqual([1, 2])
   }, 60_000)
+})
+
+describe('db.timeout() on MySQL', () => {
+  it('kills the query on the server', async () => {
+    const db = createDbClient({ schema: {}, dialect: mysqlDialect({ pool }) })
+    const start = Date.now()
+    await expect(
+      db.qb.selectNoFrom(sql<number>`sleep(10)`.as('slept')).execute(db.timeout(100)),
+    ).rejects.toMatchObject({ name: 'TimeoutError' })
+    expect(Date.now() - start).toBeLessThan(3_000)
+    const running = async () => {
+      const [rows] = (await pool.query(
+        `SELECT count(*) AS n FROM information_schema.processlist
+            WHERE command = 'Query' AND id <> CONNECTION_ID() AND info LIKE '%sleep(10)%'`,
+      )) as [Array<{ n: number }>, unknown]
+      return Number(rows[0]!.n)
+    }
+    const until = Date.now() + 2_000
+    while ((await running()) > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
+    expect(await running()).toBe(0)
+  }, 30_000)
 })

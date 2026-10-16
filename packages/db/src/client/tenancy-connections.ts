@@ -51,6 +51,20 @@ class TenantConnection implements DatabaseConnection {
     private readonly tenant: string,
   ) {}
 
+  // Kysely's cancellation hooks reach the real connection: it learns its
+  // backend pid in collectSessionInfo, which cancelQuery / killSession use.
+  collectSessionInfo(): Promise<void> {
+    return this.inner.collectSessionInfo?.() ?? Promise.resolve()
+  }
+
+  cancelQuery(...args: Parameters<NonNullable<DatabaseConnection['cancelQuery']>>): Promise<void> {
+    return this.inner.cancelQuery?.(...args) ?? Promise.resolve()
+  }
+
+  killSession(...args: Parameters<NonNullable<DatabaseConnection['killSession']>>): Promise<void> {
+    return this.inner.killSession?.(...args) ?? Promise.resolve()
+  }
+
   /** Set the tenant for the transaction just begun. */
   bind(): Promise<QueryResult<unknown>> {
     return this.inner.executeQuery(

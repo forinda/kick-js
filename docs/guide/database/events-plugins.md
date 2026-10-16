@@ -29,7 +29,7 @@ db.on('queryError', ({ sql, error }) => {
 
 | Event                 | Payload                                        | When                                           |
 | --------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| `beforeQuery`         | `{ sql, parameters }` (mutable)                | before a query runs                            |
+| `beforeQuery`         | `{ sql, parameters }` (mutable)                | each statement, as it's sent                   |
 | `query`               | `{ sql, parameters, durationMs }`              | after a query succeeds                         |
 | `queryError`          | `{ sql, parameters, error }`                   | a query fails                                  |
 | `slowQuery`           | `{ sql, parameters, durationMs, thresholdMs }` | a query ran longer than `slowQueryThresholdMs` |
@@ -37,6 +37,8 @@ db.on('queryError', ({ sql, error }) => {
 | `transactionCommit`   | `{ isolation? }`                               | it commits                                     |
 | `transactionRollback` | `{ isolation?, error }`                        | it rolls back                                  |
 | `transactionRetry`    | `{ isolation?, attempt, error, delayMs }`      | a `retry` transaction is about to run again    |
+
+`beforeQuery` runs synchronously, as each statement goes to the driver, and a listener may rewrite `sql` or `parameters` — to add a trace comment, say. It sees every statement sent, transaction control and the `'rls'` tenant setting included; `query` and `queryError` report the statement as built.
 
 While the [DevTools](../devtools.md) adapter runs, every client reports its queries to it as `db:query`, `db:query-error` and `db:slow-query` — what the **Database** tab shows. Nothing to wire: it works for a client created at import time too. To send them to a bus of your own instead, pass it as `createDbClient({ bus })`. A `bus` or `slowQueryThresholdMs` turns events on by itself.
 

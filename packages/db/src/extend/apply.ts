@@ -45,6 +45,7 @@ export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
     const plugin = new ResultExtensionPlugin(
       ext.result as ResultExtensions<unknown>,
       ctx.query.relations,
+      ctx.naming,
     )
     baseClient = rewrap<DB>(client, ctx, plugin)
   }

@@ -85,6 +85,8 @@ export interface InternalContext {
    * present after `createDbClient` runs — the compiler may be a
    * throw-stub for unsupported dialects (MySQL until M4.A.3).
    */
+  /** Database names ↔ schema keys, under `casing` or `.colName()`. */
+  naming?: import('../extend/result-plugin').Naming
   query: {
     relations: ResolvedRelations
     tables: Record<string, TableSnapshot>
@@ -400,6 +402,15 @@ export function wrap<DB>(
       }
       return startTransaction(opts, fn)
     }) as KickDbClient<DB>['transaction'],
+
+    timeout: (ms: number, opts?: { signal?: AbortSignal }) => {
+      const timer = AbortSignal.timeout(ms)
+      return {
+        signal: opts?.signal ? AbortSignal.any([opts.signal, timer]) : timer,
+        // Every client connection can cancel (a no-op where the driver can't).
+        inflightQueryAbortStrategy: 'cancel query' as const,
+      }
+    },
 
     upsert: (async (table: string, opts: UpsertOptions<DB, any>) => {
       const rows = await upsert(client, table as never, opts)

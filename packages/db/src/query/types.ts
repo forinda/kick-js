@@ -162,9 +162,10 @@ export interface FindManyOptions<
   with?: WithClause<DB, TableRelations<Table>>
   /**
    * Cancellation handle. When the signal aborts, the in-flight
-   * query is cancelled at the dialect level (PG `pg_cancel_backend`,
-   * SQLite synchronous abort, MySQL `KILL QUERY`) and the promise
-   * rejects with `RelationalQueryCancelledError`.
+   * query is cancelled on the server (Postgres `pg_cancel_backend`,
+   * MySQL `KILL QUERY`; better-sqlite3 runs synchronously, so there is
+   * nothing in flight) and the promise rejects with
+   * `RelationalQueryCancelledError`.
    *
    * Bind to `RequestContext.signal` from kickjs-http to short-circuit
    * the query when the client disconnects or the request times out.
@@ -174,6 +175,12 @@ export interface FindManyOptions<
    * nested LATERAL/correlated subqueries inherit the parent signal.
    */
   signal?: AbortSignal
+  /**
+   * Cancel the read on the server once it has run this long, and reject with
+   * `RelationalQueryCancelledError` (whose `cause` is a `TimeoutError`).
+   * Combines with `signal`: whichever fires first.
+   */
+  timeoutMs?: number
 }
 
 /**

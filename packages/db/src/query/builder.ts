@@ -63,6 +63,13 @@ export function buildQueryNamespace<DB>(
   })
 }
 
+/** The read's signal: its own, its `timeoutMs`, or whichever fires first. */
+function signalOf(opts: FindManyOptions | undefined): AbortSignal | undefined {
+  if (opts?.timeoutMs === undefined) return opts?.signal
+  const timer = AbortSignal.timeout(opts.timeoutMs)
+  return opts.signal ? AbortSignal.any([opts.signal, timer]) : timer
+}
+
 function makeTableNamespace<DB, Table extends keyof DB & string>(
   qb: Kysely<DB>,
   table: Table,
@@ -73,7 +80,8 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
   return {
     async findMany(options?: unknown) {
       const opts = (options ?? {}) as FindManyOptions
-      assertNotAlreadyAborted(opts.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compiled = compile(
         qb as Kysely<any>,
         table,
@@ -82,13 +90,14 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         tables,
         'many',
       )
-      const rows = await execute(qb, compiled, opts.signal)
+      const rows = await execute(qb, compiled, signal)
       return rows as never
     },
 
     async findFirst(options?: unknown) {
       const opts = (options ?? {}) as FindManyOptions
-      assertNotAlreadyAborted(opts.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compiled = compile(
         qb as Kysely<any>,
         table,
@@ -97,18 +106,19 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         tables,
         'first',
       )
-      const rows = await execute(qb, compiled, opts.signal)
+      const rows = await execute(qb, compiled, signal)
       return (rows[0] ?? null) as never
     },
 
     async findManyAndCount(options?: unknown) {
       const opts = (options ?? {}) as FindManyOptions
-      assertNotAlreadyAborted(opts.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compileAs = (mode: CompileMode) =>
         compile(qb as Kysely<any>, table, opts as CompilePgOptions, relations, tables, mode)
       const [rows, counted] = await Promise.all([
-        execute(qb, compileAs('many'), opts.signal),
-        execute(qb, compileAs('count'), opts.signal),
+        execute(qb, compileAs('many'), signal),
+        execute(qb, compileAs('count'), signal),
       ])
       // pg returns count(*) as a bigint string; SQLite and MySQL as a number.
       const total = Number((counted[0] as { total: number | string | bigint }).total)
@@ -117,7 +127,8 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
 
     async findUnique(options: unknown) {
       const opts = options as FindManyOptions
-      assertNotAlreadyAborted(opts?.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compiled = compile(
         qb as Kysely<any>,
         table,
@@ -126,7 +137,7 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         tables,
         'unique',
       )
-      const rows = await execute(qb, compiled, opts?.signal)
+      const rows = await execute(qb, compiled, signal)
       return (rows[0] ?? null) as never
     },
   } as unknown as TableQueryNamespace<DB, Table>
@@ -147,12 +158,13 @@ function assertNotAlreadyAborted(signal: AbortSignal | undefined): void {
  * the same path Kysely's `.execute()` would — events, plugins, and
  * connection pooling all keep working without bypassing the wrapper.
  *
- * When `signal` is supplied, threads it into Kysely 0.29's
- * `executeQuery(q, { signal })` second arg. Kysely + the dialect
- * driver handle the actual cancellation (PG `pg_cancel_backend`,
- * SQLite synchronous abort, MySQL `KILL QUERY`). On abort, Kysely
- * rejects with an AbortError-shaped error which we map to the
- * adopter-facing `RelationalQueryCancelledError`.
+ * When `signal` is supplied, threads it into Kysely's
+ * `executeQuery(q, { signal, inflightQueryAbortStrategy: 'cancel query' })`:
+ * on abort the query is cancelled on the server (Postgres
+ * `pg_cancel_backend`, MySQL `KILL QUERY`) and Kysely rejects with an
+ * AbortError-shaped error, mapped to `RelationalQueryCancelledError`.
+ * Every client connection has a `cancelQuery` (a no-op on better-sqlite3,
+ * which runs synchronously), so the strategy works on every dialect.
  */
 async function execute<DB>(
   qb: Kysely<DB>,
@@ -160,29 +172,17 @@ async function execute<DB>(
   signal?: AbortSignal,
 ): Promise<unknown[]> {
   try {
-    // Kysely 0.29's default `inflightQueryAbortStrategy` is
-    // `'ignore query'` — it stops waiting for results on abort but
-    // lets the in-flight query finish on the DB side. The stricter
-    // `'cancel query'` strategy throws on dialects without
-    // `cancelQuery` support (better-sqlite3 has no such hook), so we
-    // can't safely default it across all dialects.
-    //
-    // Adopters who need `pg_cancel_backend` / `KILL QUERY` semantics
-    // for long-running PG/MySQL queries can wrap a Kysely call site
-    // directly (`db.qb.selectFrom(...).$call(qb => qb.executeQuery(c, { signal, inflightQueryAbortStrategy: 'cancel query' }))`)
-    // until a future release exposes a per-call override on
-    // FindManyOptions. The signal STILL fires correctly here — the
-    // promise rejects with RelationalQueryCancelledError as soon as
-    // the abort fires; only the DB-side resource cleanup is
-    // best-effort under the default strategy.
     const result = await (
       qb as unknown as {
         executeQuery: (
           q: CompiledQuery,
-          opts?: { signal?: AbortSignal },
+          opts?: { signal?: AbortSignal; inflightQueryAbortStrategy?: 'cancel query' },
         ) => Promise<{ rows: unknown[] }>
       }
-    ).executeQuery(compiled, signal ? { signal } : undefined)
+    ).executeQuery(
+      compiled,
+      signal ? { signal, inflightQueryAbortStrategy: 'cancel query' } : undefined,
+    )
     return result.rows
   } catch (err) {
     // Two paths to a cancellation diagnosis:
