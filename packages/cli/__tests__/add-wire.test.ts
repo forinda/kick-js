@@ -15,6 +15,7 @@ import {
   findEnvSchema,
   importsAny,
   planWiring,
+  rebaseImports,
   sourceFilesInTheWay,
   wireEntry,
   wireEnv,
@@ -275,6 +276,20 @@ describe('kick add queue — which schema gets the keys', () => {
     expect(schema).toContain("    PORT: p,\n    REDIS_HOST: v.optional(v.string(), '127.0.0.1'),")
     expect(schema).toContain('export const userSchema = z.object({\n  name: z.string(),\n})')
     expect(schema).toContain('const other = wrap(v.object({\n  A: v.string(),\n}))')
+  })
+})
+
+describe('rebaseImports', () => {
+  it("points a layer's imports at the same files from a custom entry", () => {
+    const { integrations } = planWiring(['queue', 'storage'])!
+    const from = (entry: string) =>
+      rebaseImports(integrations, entry).flatMap((i) => (i.import ? [i.import.from] : []))
+    expect(from('src/index.ts')).toEqual(['./adapters/queue', './adapters/storage'])
+    expect(from('src/app/index.ts')).toEqual(['../adapters/queue', '../adapters/storage'])
+    expect(from('server.ts')).toEqual(['./src/adapters/queue', './src/adapters/storage'])
+    // So the guard against overwriting the app's own adapter still matches.
+    const [, storage] = rebaseImports(integrations, 'src/app/index.ts').filter((i) => i.import)
+    expect(importsAny(storage!, 'src/app/index.ts', ['src/adapters/storage.ts'])).toBe(true)
   })
 })
 

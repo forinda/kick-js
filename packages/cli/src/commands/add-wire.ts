@@ -140,6 +140,23 @@ export function importsAny(
   return paths.some((path) => path.replace(SOURCE, '') === target)
 }
 
+/**
+ * Layers write their imports for `src/index.ts` (`./adapters/queue`); point
+ * them at the same files from `entry` — `../adapters/queue` from `src/app/index.ts`.
+ */
+export function rebaseImports(integrations: readonly Integration[], entry: string): Integration[] {
+  const dir = posix.dirname(entry.replaceAll('\\', '/'))
+  return integrations.map((integration) => {
+    const from = integration.import?.from
+    if (!from?.startsWith('.')) return integration
+    const path = posix.relative(dir, posix.join('src', from))
+    return {
+      ...integration,
+      import: { ...integration.import!, from: path.startsWith('.') ? path : `./${path}` },
+    }
+  })
+}
+
 /** `REDIS_HOST` for `REDIS_HOST=…`, so an existing value counts as present. */
 const envKey = (line: string) => /^\s*([A-Za-z_][\w]*)\s*=/.exec(line)?.[1]
 

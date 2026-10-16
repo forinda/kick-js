@@ -22,6 +22,7 @@ import {
   wireEntry,
   wireEnv,
   importsAny,
+  rebaseImports,
   sourceFilesInTheWay,
 } from './add-wire'
 
@@ -670,6 +671,7 @@ export function registerAddCommand(program: Command): void {
       }
       const wiring = opts.wire === false ? undefined : planWiring(packages)
       const entry = wiring ? findEntry(cwd, opts.entry) : undefined
+      if (wiring && entry) wiring.integrations = rebaseImports(wiring.integrations, entry)
       const envEntries = wiring?.integrations.filter((i) => i.slot?.startsWith('env-')) ?? []
       const envSchema = envEntries.length > 0 ? findEnvSchema(cwd) : undefined
       if (wiring) {
