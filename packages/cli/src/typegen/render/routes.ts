@@ -332,7 +332,8 @@ function renderQueryShape(m: DiscoveredRoute): string {
   const sortable = m.querySortable ?? []
   const sortType =
     sortable.length > 0 ? sortable.flatMap((f) => [`'${f}'`, `'-${f}'`]).join(' | ') : 'string'
-  return `{ filter?: string | string[]; sort?: ${sortType}; q?: string; page?: string; limit?: string }`
+  // `cursor` rides along for `ctx.paginateCursor` routes; an offset route ignores it.
+  return `{ filter?: string | string[]; sort?: ${sortType}; q?: string; page?: string; limit?: string; cursor?: string }`
 }
 
 function renderQueryDocLines(m: DiscoveredRoute): string[] {
