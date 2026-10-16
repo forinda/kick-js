@@ -27,6 +27,12 @@ interface QueueAdapterCommon {
   /** Default worker concurrency (default: 1) */
   concurrency?: number
   /**
+   * `false` starts no workers: this process only dispatches (an API server
+   * whose jobs run in a separate worker process). `@Job` classes may still
+   * be imported — their handlers just don't run here. Default `true`.
+   */
+  workers?: boolean
+  /**
    * @deprecated No effect. Queues and their jobs are in the DevTools
    * **Queues** tab, which needs nothing from this adapter but itself.
    */
@@ -60,11 +66,18 @@ export interface QueueProvider {
   /** Create a worker that processes jobs from a queue */
   createWorker(
     queue: string,
-    processor: (job: { name: string; data: any; id?: string }) => Promise<void>,
+    /** Resolves with the handler's return value — store it where your backend keeps results. */
+    processor: (job: { name: string; data: any; id?: string }) => Promise<unknown>,
     concurrency?: number,
   ): any
   /** Get or create a queue by name */
   getQueue?(name: string): any
+  /**
+   * Check the backend is reachable — reject (or hang) when it isn't. The
+   * adapter's `onHealthCheck()` calls it for `/health/ready`; a provider
+   * without one reports `up`.
+   */
+  ping?(): Promise<unknown>
   /** Graceful shutdown — close all workers and queues */
   shutdown(): Promise<void>
 }

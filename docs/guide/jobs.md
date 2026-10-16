@@ -73,7 +73,21 @@ import { QueueAdapter, RabbitMQProvider } from '@forinda/kickjs-queue'
 QueueAdapter({ provider: new RabbitMQProvider(process.env.AMQP_URL!) })
 ```
 
-A provider implements `QueueProvider`: `addJob`, `createWorker(queue, processor, concurrency)` and `shutdown`, plus optional `addBulk` / `getQueue`.
+A provider implements `QueueProvider`: `addJob`, `createWorker(queue, processor, concurrency)` and `shutdown`, plus optional `addBulk` / `getQueue` / `ping`. The `processor` resolves with the handler's return value, so a provider can store it where a status endpoint reads it.
+
+### API and worker processes
+
+By default every process running `QueueAdapter` starts a worker for each queue a `@Job` class handles. To keep job execution out of the API process, give it `workers: false` — it creates the queues and dispatches, but runs no handlers, even though the `@Job` classes are imported through its modules. Run the same app with workers in a second process:
+
+```ts
+const workers = process.env.ROLE === 'worker'
+
+QueueAdapter({ redis, workers })
+```
+
+### Readiness
+
+`QueueAdapter` reports to [`/health/ready`](./adapters.md#health-check-adapter): with `redis` it PINGs the Redis connection behind each queue; with a `provider` it calls the provider's `ping()` (a provider without one reports `up`). A ping that fails or takes longer than the health timeout marks the adapter `down`.
 
 ## Cloudflare Workers
 
@@ -150,6 +164,25 @@ registerJobContext<string>({
 ```
 
 The value travels in the job's data under `__kickContext`, which `runJob` takes off before the handler sees `job.data`. Only plain-object data can carry it. `QueueAdapter`'s dispatcher stamps it; a dispatcher of your own calls `stampJobContext(data)`, as above. kick/db's [tenancy](./database/tenancy.md#background-jobs) registers itself as a carrier, so a job dispatched as a tenant runs as that tenant.
+
+## Testing
+
+`@forinda/kickjs-queue/testing` has `MemoryQueueProvider`, which runs `@Process` handlers in the test process — no Redis. It honours the job options `attempts`, `backoff` (milliseconds, fixed), `delay` and `jobId`; the handler gets `job.updateProgress()` and `job.attemptsMade`; and the job keeps its `state`, `progress`, `returnvalue` and `failedReason`:
+
+```ts
+import { JOB_DISPATCHER } from '@forinda/kickjs'
+import { QueueAdapter } from '@forinda/kickjs-queue'
+import { MemoryQueueProvider } from '@forinda/kickjs-queue/testing'
+
+const queue = new MemoryQueueProvider()
+const app = await createTestApp({ modules, adapters: [QueueAdapter({ provider: queue })] })
+
+await app.container.resolve(JOB_DISPATCHER).dispatch('email', 'welcome', { to: 'a@b.c' })
+await queue.drain() // until nothing is running or waiting on a delay
+expect(queue.jobs('email')[0]).toMatchObject({ state: 'completed', returnvalue: 'sent' })
+```
+
+`jobs(queue?)` lists jobs in the order added and `getJob(id)` finds one. With `workers: false`, dispatched jobs stay `waiting`, which is how to assert what an API-only process enqueued. `drain()` waits on real timers — under fake timers, advance them instead. Jobs run as soon as they are ready, without a concurrency limit.
 
 ## In DevTools
 

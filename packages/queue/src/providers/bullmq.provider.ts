@@ -1,4 +1,5 @@
 import type { QueueProvider } from '../types'
+import { pingQueue } from '../ping'
 
 /**
  * BullMQ queue provider — uses Redis via BullMQ.
@@ -25,7 +26,7 @@ export class BullMQProvider implements QueueProvider {
 
   createWorker(
     queue: string,
-    processor: (job: { name: string; data: any; id?: string }) => Promise<void>,
+    processor: (job: { name: string; data: any; id?: string }) => Promise<unknown>,
     concurrency?: number,
   ) {
     const { Worker } = require('bullmq')
@@ -40,6 +41,10 @@ export class BullMQProvider implements QueueProvider {
 
   getQueue(name: string) {
     return this.getOrCreateQueue(name)
+  }
+
+  async ping() {
+    await Promise.all([...this.queues.values()].map(pingQueue))
   }
 
   async shutdown() {

@@ -23,12 +23,15 @@ Background job runner for KickJS: [BullMQ](https://docs.bullmq.io/) on Redis by 
 
 Types: `QueueAdapterOptions`, `QueueProvider`, `BulkJobEntry`.
 
+`@forinda/kickjs-queue/testing` exports `MemoryQueueProvider`, an in-process provider for tests — see [Testing](../guide/jobs.md#testing).
+
 ## QueueAdapter
 
 ```ts
 type QueueAdapterOptions = {
   queues?: string[] // queue names to pre-create
   concurrency?: number // worker concurrency, default 1
+  workers?: boolean // false: dispatch only, start no workers
 } & (
   | { redis: { host: string; port: number; password?: string }; provider?: undefined }
   | { provider: QueueProvider; redis?: undefined }
@@ -41,9 +44,12 @@ type QueueAdapterOptions = {
 | `provider`    | `QueueProvider`             | —       | Any other backend                                                                      |
 | `queues`      | `string[]`                  | `[]`    | Queue names to pre-create. Queues that have a `@Job` handler are created automatically |
 | `concurrency` | `number`                    | `1`     | Jobs each worker processes at once                                                     |
+| `workers`     | `boolean`                   | `true`  | `false` starts no workers — an API process that only dispatches                        |
 | `panel`       | `boolean`                   | —       | Deprecated, no effect — queues show in the DevTools **Queues** tab                     |
 
-At `beforeStart` the adapter finds every resolvable `@Job` class, creates its queue, and starts one worker per handled queue. With BullMQ the handler receives BullMQ's own `Job`, so `job.attemptsMade` and `job.updateProgress()` work. Failed jobs are logged and reported to error observers with `source: 'job'`, then rethrown so the runner's retries apply.
+At `beforeStart` the adapter finds every resolvable `@Job` class, creates its queue, and starts one worker per handled queue. With BullMQ the handler receives BullMQ's own `Job`, so `job.attemptsMade` and `job.updateProgress()` work. Failed jobs are logged and reported to error observers with `source: 'job'`, then rethrown so the runner's retries apply. A handler's return value is kept: BullMQ stores it as `job.returnvalue`, and a provider's `processor` resolves with it.
+
+`onHealthCheck()` feeds `/health/ready`: a Redis PING behind each queue, or the provider's `ping()`.
 
 ::: warning
 Pass queue **name strings** (e.g. `['email', 'notifications']`), not class references. Processor classes are discovered from `@Job`; you don't list them.
@@ -124,10 +130,11 @@ interface QueueProvider {
   addBulk?(queue: string, jobs: Array<{ name: string; data: any; opts?: any }>): Promise<any[]>
   createWorker(
     queue: string,
-    processor: (job: { name: string; data: any; id?: string }) => Promise<void>,
+    processor: (job: { name: string; data: any; id?: string }) => Promise<unknown>, // resolves with the handler's return value
     concurrency?: number,
   ): any
   getQueue?(name: string): any
+  ping?(): Promise<unknown> // reject when the backend is unreachable — used by /health/ready
   shutdown(): Promise<void>
 }
 ```
