@@ -513,6 +513,39 @@ function diffTable(
     }
   }
 
+  // Foreign keys, indexes and checks that change or go are dropped before any
+  // column: a column can't be dropped while an index or key still uses it
+  // (SQLite refuses; Postgres and MySQL drop them along, so a later DROP
+  // would fail). Their replacements are added after the columns.
+  const prevFks = new Map(prev.foreignKeys.map((f) => [f.name, f]))
+  const nextFks = new Map(next.foreignKeys.map((f) => [f.name, f]))
+  for (const [n, f] of prevFks) {
+    const after = nextFks.get(n)
+    if (!after || fkDefinition(after) !== fkDefinition(f)) {
+      changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f })
+    }
+  }
+  const prevIndexes = new Map(prev.indexes.map((i) => [i.name, i]))
+  const nextIndexes = new Map(next.indexes.map((i) => [i.name, i]))
+  // An index whose definition changed is dropped and created again — there
+  // is no ALTER for its keys, predicate or method.
+  for (const [n, i] of prevIndexes) {
+    const after = nextIndexes.get(n)
+    if (!after || indexDefinition(after) !== indexDefinition(i)) {
+      // A rebuild of a concurrently-built index drops it concurrently too.
+      const index = after?.concurrently && !i.concurrently ? { ...i, concurrently: true } : i
+      changes.push({ kind: 'dropIndex', table: tableRef, index })
+    }
+  }
+  // A CHECK whose expression changed is dropped and added again.
+  const prevChecks = new Map(prev.checks.map((c) => [c.name, c]))
+  const nextChecks = new Map(next.checks.map((c) => [c.name, c]))
+  for (const [n, c] of prevChecks) {
+    if (nextChecks.get(n)?.expression !== c.expression) {
+      changes.push({ kind: 'dropCheck', table: tableRef, check: c })
+    }
+  }
+
   // The primary key is compared as a whole (columns in key order, and the
   // name on Postgres, the only dialect that keeps one) and changed in two
   // steps: the old key goes before any column is dropped (Postgres drops a
@@ -566,30 +599,9 @@ function diffTable(
     })
   }
 
-  // A CHECK whose expression changed is dropped and added again.
-  const prevChecks = new Map(prev.checks.map((c) => [c.name, c]))
-  const nextChecks = new Map(next.checks.map((c) => [c.name, c]))
-  for (const [n, c] of prevChecks) {
-    if (nextChecks.get(n)?.expression !== c.expression) {
-      changes.push({ kind: 'dropCheck', table: tableRef, check: c })
-    }
-  }
   for (const [n, c] of nextChecks) {
     if (prevChecks.get(n)?.expression !== c.expression) {
       changes.push({ kind: 'addCheck', table: tableRef, check: c })
-    }
-  }
-
-  // An index whose definition changed is dropped and created again — there
-  // is no ALTER for its keys, predicate or method.
-  const prevIndexes = new Map(prev.indexes.map((i) => [i.name, i]))
-  const nextIndexes = new Map(next.indexes.map((i) => [i.name, i]))
-  for (const [n, i] of prevIndexes) {
-    const after = nextIndexes.get(n)
-    if (!after || indexDefinition(after) !== indexDefinition(i)) {
-      // A rebuild of a concurrently-built index drops it concurrently too.
-      const index = after?.concurrently && !i.concurrently ? { ...i, concurrently: true } : i
-      changes.push({ kind: 'dropIndex', table: tableRef, index })
     }
   }
   for (const [n, i] of nextIndexes) {
@@ -598,13 +610,12 @@ function diffTable(
       changes.push({ kind: 'addIndex', table: tableRef, index: i })
     }
   }
-
-  diffByName(
-    prev.foreignKeys,
-    next.foreignKeys,
-    (f) => changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f }),
-    (f) => changes.push({ kind: 'addForeignKey', table: tableRef, fk: f }),
-  )
+  for (const [n, f] of nextFks) {
+    const before = prevFks.get(n)
+    if (!before || fkDefinition(before) !== fkDefinition(f)) {
+      changes.push({ kind: 'addForeignKey', table: tableRef, fk: f })
+    }
+  }
 
   if ((prev.comment ?? null) !== (next.comment ?? null)) {
     changes.push({
@@ -614,6 +625,12 @@ function diffTable(
       to: next.comment ?? null,
     })
   }
+}
+
+/** What makes two foreign keys the same key: a changed action or target is a new one. */
+function fkDefinition(f: import('../snapshot/types').ForeignKeySnapshot): string {
+  const { name: _name, ...rest } = f
+  return JSON.stringify(Object.entries(rest).toSorted(([a], [b]) => a.localeCompare(b)))
 }
 
 /** What makes two indexes the same index. `concurrently` is how it is built, not what it is. */
@@ -627,18 +644,6 @@ function indexDefinition(i: import('../snapshot/types').IndexSnapshot): string {
     i.include ?? [],
     Object.entries(i.opclasses ?? {}).toSorted(([a], [b]) => a.localeCompare(b)),
   ])
-}
-
-function diffByName<T extends { name: string }>(
-  prev: T[],
-  next: T[],
-  onDrop: (item: T) => void,
-  onAdd: (item: T) => void,
-) {
-  const prevByName = new Map(prev.map((p) => [p.name, p]))
-  const nextByName = new Map(next.map((n) => [n.name, n]))
-  for (const [n, p] of prevByName) if (!nextByName.has(n)) onDrop(p)
-  for (const [n, x] of nextByName) if (!prevByName.has(n)) onAdd(x)
 }
 
 function columnsEqual(

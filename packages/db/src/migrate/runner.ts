@@ -330,7 +330,10 @@ export async function migrateDown(opts: RunnerOptions & { to?: string }): Promis
     // Sort by batch then appliedAt so 'most recent' is unambiguous even if
     // two migrations share a batch number (same `migrate latest` run).
     const sorted = [...applied].toSorted((a, b) =>
-      a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+      a.batch !== b.batch
+        ? a.batch - b.batch
+        : // Applied in the same second (SQLite's resolution): the id says which ran first.
+          a.appliedAt.localeCompare(b.appliedAt) || a.id.localeCompare(b.id),
     )
     let targets = sorted.slice(-1)
     if (opts.to !== undefined) {
@@ -410,7 +413,10 @@ export async function migrateRollback(
     const targets = applied
       .filter((r) => opts.all || r.batch === lastBatch)
       .toSorted((a, b) =>
-        a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+        a.batch !== b.batch
+          ? a.batch - b.batch
+          : // Applied in the same second (SQLite's resolution): the id says which ran first.
+            a.appliedAt.localeCompare(b.appliedAt) || a.id.localeCompare(b.id),
       )
       .toReversed()
 
