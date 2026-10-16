@@ -1,5 +1,35 @@
 # @forinda/kickjs-db
 
+## 8.9.0
+
+### Minor Changes
+
+- [#945](https://github.com/forinda/kick-js/pull/945) [`f69ec9c`](https://github.com/forinda/kick-js/commit/f69ec9c8ec6ea958eba8a66ea684b0530fa7c411) Thanks [@forinda](https://github.com/forinda)! - - **`.defaultSql(expression)`** — a default the database evaluates, on any column: `text().defaultSql('gen_random_uuid()::text')`. `.default()` is a value on every dialect.
+  - **`db.startTransaction()`** — a transaction you finish yourself, with `commit()` and `rollback()`: transaction events, `afterCommit` hooks, savepoints and nested `transaction()` calls work as in `transaction(fn)`, whose guards it shares.
+  - **`upsert({ update: false })`** — skips a row whose key exists and returns every row as stored (`ON CONFLICT DO NOTHING`; a no-op update on MySQL, not `INSERT IGNORE`).
+  - **`queryId` and `txId` on query events** — `beforeQuery`, `query`, `slowQuery` and `queryError` pair by `queryId`, and every statement of a `transaction()`, `BEGIN` and `COMMIT` included, carries its `txId`.
+  - **`createDbClient({ asyncStackTraces: true })`** — a failed query's stack shows where it was built.
+  - `morphTo` refuses a target whose key can't compare with the id column when the client is created, instead of failing every query on Postgres.
+  - `kick db generate` takes a column that went from its snake_case name to its key with nothing else changed (`project_id` → `projectId`) as a rename.
+  - Nested `with` levels don't take `maxDepth`; result extensions only look at a query whose rows can have computed fields.
+  - Docs: streaming large results with `.stream()`.
+  
+  Behaviour change: on SQLite and MySQL, a `.default()` on a text column that looks like SQL — a call like `text().default('uuid()')`, or `NULL` / `CURRENT_TIMESTAMP` — was evaluated; it's the text now, as on Postgres. An existing column keeps its database default until the table is rebuilt or the default changes, and `kick db generate` warns about each one: switch it to `.defaultSql('uuid()')`.
+
+- [#949](https://github.com/forinda/kick-js/pull/949) [`cc744b1`](https://github.com/forinda/kick-js/commit/cc744b1e59d763ba7d7660de0c4da2ae6c2d4bdd) Thanks [@forinda](https://github.com/forinda)! - `morphTo` takes options per target: `with: { subject: { withDeleted?, targets: { post: { columns, extras, where, with, withDeleted }, podcast: true } } }`. Each target is one row, so it takes no `orderBy`, `limit` or `offset`; a target's `where` that matches nothing gives `null`. The result is a union shaped per target and narrowed by `__type`. An unknown target, or an option that needs one table given beside `targets`, is refused with what to write instead. On SQLite a `bytea` column named in a target's `columns` is refused; left unnamed, it's skipped.
+
+- [#946](https://github.com/forinda/kick-js/pull/946) [`977234e`](https://github.com/forinda/kick-js/commit/977234ef812dc785d0e5f8cbae4c1aa4aab0929c) Thanks [@forinda](https://github.com/forinda)! - - A `morphTo` subject carries `__type`, the type value it was found by, and is typed as a tagged union — `(Post & { __type: 'post' }) | (Podcast & { __type: 'podcast' }) | null` — so `subject.__type === 'post'` narrows it. Result extensions find the subject's table by it, even when `columns` leaves out the source's type column.
+  - `insertMany({ returning: true, readBack: ['code'] })` on MySQL, which has no RETURNING: the rows are read back by a unique key every row gives, in input order, inside a transaction (a key that turns out not to be unique rolls the insert back). Without `readBack` the error says what to pass.
+  
+  Behaviour change: a `morphTo` subject has one more key, `__type`. Code comparing subjects with a deep equality check sees it.
+
+- [#948](https://github.com/forinda/kick-js/pull/948) [`8634a41`](https://github.com/forinda/kick-js/commit/8634a411bcb3bc79cda7f20c4de1beb8b8fa8dec) Thanks [@forinda](https://github.com/forinda)! - - `timestamp({ precision: 3 })`, `timestamptz(…)` and `time(…)` — fractional-second digits, 0–6. Emitted as `timestamp(3)` / `TIMESTAMP(3)`, kept through MySQL's `MODIFY`, and a MySQL `defaultNow()` on such a column uses `CURRENT_TIMESTAMP(3)`. Postgres introspection reads the precision back (a bare type when it's the default 6), so drift and `kick db introspect` see it.
+  - A SQLite table rebuild keeps the table's hand-written triggers: the migration reads them first and creates them again after, in the same transaction. One that uses a column the rebuild drops is refused before anything runs, instead of being created to fail on every write.
+
+### Patch Changes
+
+- [#952](https://github.com/forinda/kick-js/pull/952) [`0f29cee`](https://github.com/forinda/kick-js/commit/0f29cee752cf43bb87e90e71de00e17931dfaa81) Thanks [@forinda](https://github.com/forinda)! - `upsert({ update: false })` takes a per-tenant unique key as its `target` — `target: ['tenantId', 'name']` — when the rows leave the tenant column out for tenancy to fill: they're read back by the current tenant. It used to refuse each row for having no `tenantId`.
+
 ## 8.8.0
 
 ### Minor Changes

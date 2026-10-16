@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 8.12.1
+
+### Patch Changes
+
+- [#947](https://github.com/forinda/kick-js/pull/947) [`3993043`](https://github.com/forinda/kick-js/commit/39930432ea6df732f10d8beb5d97f205edb1180a) Thanks [@forinda](https://github.com/forinda)! - The repository `kick g module` generates passes `vp check` / type-aware oxlint with no warnings: stored values are turned into text for search, filters and sorting by a small `asText()` helper instead of `String(value)` on an `unknown`, which the `no-base-to-string` rule flagged (an object field would have read as `[object Object]`).
+- Updated dependencies [[`f69ec9c`](https://github.com/forinda/kick-js/commit/f69ec9c8ec6ea958eba8a66ea684b0530fa7c411), [`cc744b1`](https://github.com/forinda/kick-js/commit/cc744b1e59d763ba7d7660de0c4da2ae6c2d4bdd), [`977234e`](https://github.com/forinda/kick-js/commit/977234ef812dc785d0e5f8cbae4c1aa4aab0929c), [`8634a41`](https://github.com/forinda/kick-js/commit/8634a411bcb3bc79cda7f20c4de1beb8b8fa8dec), [`0f29cee`](https://github.com/forinda/kick-js/commit/0f29cee752cf43bb87e90e71de00e17931dfaa81)]:
+  - @forinda/kickjs-db@8.9.0
+
 ## 8.12.0
 
 ### Minor Changes
