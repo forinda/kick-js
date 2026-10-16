@@ -252,7 +252,15 @@ describe('the shipped layers', () => {
     )
     const entry = project.files.get('src/index.ts')!
     expect(entry).toContain("SwaggerAdapter({ info: { title: 'demo', version: '1.2.3' } }),")
-    expect(entry).toContain('DevToolsAdapter(),')
+    // DevTools is dev-only: a flag-gated dynamic import, never a static one.
+    expect(entry).toContain('...(__KICKJS_DEVTOOLS__')
+    expect(entry).toContain("? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()]")
+    expect(entry).not.toMatch(/import \{[^}]*DevToolsAdapter[^}]*\} from/)
+    expect(project.devDependencies).toContain('@forinda/kickjs-devtools')
+    expect(project.dependencies).not.toContain('@forinda/kickjs-devtools')
+    expect(project.files.get('src/devtools.d.ts')).toMatch(
+      /^\/\/\/ <reference types="@forinda\/kickjs-vite\/globals" \/>$/m,
+    )
     expect(entry).toContain("WsAdapter({ path: '/ws' }),")
     expect(entry).toContain('QueueAdapter({')
     expect(project.dependencies).toEqual(

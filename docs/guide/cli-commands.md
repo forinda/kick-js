@@ -136,12 +136,14 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 
 Each one is installed with the packages it needs and wired into `src/index.ts`:
 
-| Package    | Adds to `adapters`                         | Installs                                     |
-| ---------- | ------------------------------------------ | -------------------------------------------- |
-| `swagger`  | `SwaggerAdapter` — docs at `/docs`         | `@forinda/kickjs-swagger`                    |
-| `devtools` | `DevToolsAdapter` — dashboard at `/_debug` | `@forinda/kickjs-devtools`                   |
-| `ws`       | `WsAdapter({ path: '/ws' })`               | `@forinda/kickjs-ws`, `ws`                   |
-| `queue`    | `QueueAdapter` over Redis (BullMQ)         | `@forinda/kickjs-queue`, `bullmq`, `ioredis` |
+| Package    | Adds to `adapters`                                          | Installs                                     |
+| ---------- | ----------------------------------------------------------- | -------------------------------------------- |
+| `swagger`  | `SwaggerAdapter` — docs at `/docs`                          | `@forinda/kickjs-swagger`                    |
+| `devtools` | `DevToolsAdapter` — dashboard at `/_debug`, `kick dev` only | `@forinda/kickjs-devtools` (dev dependency)  |
+| `ws`       | `WsAdapter({ path: '/ws' })`                                | `@forinda/kickjs-ws`, `ws`                   |
+| `queue`    | `QueueAdapter` over Redis (BullMQ)                          | `@forinda/kickjs-queue`, `bullmq`, `ioredis` |
+
+`devtools` is imported behind the `__KICKJS_DEVTOOLS__` build flag (`...(__KICKJS_DEVTOOLS__ ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()] : [])`, typed by `src/devtools.d.ts`), so `kick build` leaves the package out of `dist/` — see [Stripping DevTools from production bundles](./devtools.md#stripping-devtools-from-production-bundles).
 
 `queue` reads `REDIS_HOST` / `REDIS_PORT` (added to `.env`). Nothing connects until a `@Job` class or a queue is used, so the app boots without Redis. An unknown name is skipped with a warning.
 
@@ -519,7 +521,7 @@ kick add --list --all     # full optional catalog
 
 - the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), with its import. An `adapters` list is created if the call has none;
 - `queue` adds `REDIS_HOST` / `REDIS_PORT` to `.env` and `.env.example` — only the keys that aren't there, so existing values stay;
-- the package goes into `dependencies` (the entry file imports it) along with the peers the adapter uses.
+- the package goes into `dependencies` (the entry file imports it) along with the peers the adapter uses — except `devtools`, which is only imported under `kick dev`: it stays in `devDependencies`, and its entry is the flag-gated dynamic import above, plus `src/devtools.d.ts` for the flag's type.
 
 ```text
   Added SwaggerAdapter to src/index.ts

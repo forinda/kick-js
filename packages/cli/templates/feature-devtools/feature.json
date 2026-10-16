@@ -1,13 +1,9 @@
 {
-  "dependencies": ["@forinda/kickjs-devtools"],
+  "devDependencies": ["@forinda/kickjs-devtools"],
   "integrations": [
     {
-      "import": {
-        "from": "@forinda/kickjs-devtools",
-        "names": ["DevToolsAdapter"]
-      },
       "slot": "adapter",
-      "code": "DevToolsAdapter()"
+      "code": "// DevTools at /_debug under `kick dev` only. `kick build` compiles this\n// branch out, so the package never reaches the production bundle\n// (guide/devtools, \"Stripping DevTools from production bundles\").\n...(__KICKJS_DEVTOOLS__\n  ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()]\n  : [])"
     }
   ]
 }

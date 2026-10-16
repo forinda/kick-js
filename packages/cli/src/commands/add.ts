@@ -653,7 +653,8 @@ export function registerAddCommand(program: Command): void {
       // Packages with a scaffold layer (swagger, devtools, ws, queue, storage) are also
       // wired: their adapter goes into the entry file and their .env lines in.
       // The entry file imports them, so they install as regular dependencies
-      // (devtools is otherwise a dev dependency), with the peers the layer uses.
+      // with the peers the layer uses — except devtools, imported only under
+      // `kick dev`, which stays a dev dependency.
       const cwd = process.cwd()
       // A mistyped --entry would otherwise install first and only then say
       // there was nothing to wire.

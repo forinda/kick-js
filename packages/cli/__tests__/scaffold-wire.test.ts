@@ -18,6 +18,10 @@ const ws: Integration = {
   code: "// WebSocket upgrades on /ws.\nWsAdapter({ path: '/ws' })",
 }
 const fill = (text: string) => text.replace('{{name}}', 'demo')
+const devtools: Integration = {
+  slot: 'adapter',
+  code: "...(__KICKJS_DEVTOOLS__\n  ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()]\n  : [])",
+}
 
 describe('wireIntegrations', () => {
   it('appends to an existing adapters array and adds the import', () => {
@@ -88,6 +92,19 @@ describe('wireIntegrations', () => {
     expect(twice.added).toEqual([])
     expect(twice.present).toHaveLength(1)
     expect(twice.source).toBe(once.source)
+  })
+
+  it('wires the dev-only DevTools entry once, and sees an eager DevToolsAdapter() as present', () => {
+    const once = wireIntegrations('bootstrap({\n  modules,\n})\n', [devtools])
+    expect(once.added).toEqual(['DevToolsAdapter'])
+    expect(once.source).toContain("(await import('@forinda/kickjs-devtools')).DevToolsAdapter()")
+    expect(once.source).not.toContain('import {')
+    expect(wireIntegrations(once.source, [devtools]).source).toBe(once.source)
+
+    const eager = 'bootstrap({\n  adapters: [DevToolsAdapter()],\n})\n'
+    const out = wireIntegrations(eager, [devtools])
+    expect(out.present).toEqual(['DevToolsAdapter'])
+    expect(out.source).toBe(eager)
   })
 
   it('recognises an adapter imported under another name', () => {

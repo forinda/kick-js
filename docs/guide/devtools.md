@@ -16,7 +16,15 @@ bootstrap({
 
 DevTools endpoints are now available at `/_debug/*` — when `NODE_ENV` is `development` or `test`. Under any other value, **including an unset `NODE_ENV`**, the adapter stays off; pass `enabled: true` to mount it anyway (a staging box, say).
 
-`kick add devtools` (and `kick new` with DevTools selected) writes the dev-only form below instead, so the package never reaches the production bundle.
+`kick add devtools` (and `kick new` with DevTools selected) writes the dev-only form below instead, so the package never reaches the production bundle — as a spread in the `adapters` list, with the flag's type referenced from `src/devtools.d.ts`:
+
+```ts
+adapters: [
+  ...(__KICKJS_DEVTOOLS__
+    ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()]
+    : []),
+],
+```
 
 ### Stripping DevTools from production bundles
 
