@@ -15,10 +15,10 @@ For the short-circuiting kind, see [Guards](#guards) below. Full flag list: [Gen
 All KickJS middleware follows the same signature:
 
 ```ts
-type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
+type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => unknown
 ```
 
-The generic `TCtx` defaults to `any`. For full type safety, pass `RequestContext`:
+The return value is ignored: a guard stops the request by writing a response and not calling `next()`, so `return ctx.problem.unauthorized()` works the same as calling it and then `return`. The generic `TCtx` defaults to `any`. For full type safety, pass `RequestContext`:
 
 ```ts
 import type { MiddlewareHandler } from '@forinda/kickjs'

@@ -248,8 +248,12 @@ export function ApiQueryParams(
  *   next()
  * }
  * ```
+ *
+ * A guard stops the request by writing a response and not calling `next()`.
+ * Whatever it returns is ignored, so `if (!user) return ctx.problem.unauthorized()`
+ * — the idiom handlers use — type-checks here too.
  */
-export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
+export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => unknown
 
 /** Attach middleware handlers to a class or method */
 export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator {

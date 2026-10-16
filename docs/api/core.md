@@ -120,10 +120,10 @@ interface RouteDefinition {
 ```typescript
 function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator
 
-type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
+type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => unknown
 ```
 
-Attach middleware at class or method level. Type it `MiddlewareHandler<RequestContext>` for a typed `ctx`.
+Attach middleware at class or method level. The handler's return value is ignored, so a guard may `return ctx.problem.unauthorized()`. Type it `MiddlewareHandler<RequestContext>` for a typed `ctx`.
 
 ### @FileUpload
 
