@@ -499,3 +499,85 @@ describe('.defaultSql() as written, .default() as a value', () => {
     expect(pg).toContain(`ALTER COLUMN "v" SET DEFAULT 'lower(x)'`)
   })
 })
+
+describe('time precision', () => {
+  it('emits timestamp(p) on every dialect, with a matching CURRENT_TIMESTAMP on MySQL', () => {
+    const t = {
+      t: table('t', {
+        id: serial().primaryKey(),
+        at: timestamp({ precision: 3 }).notNull().defaultNow(),
+        plain: timestamp(),
+      }),
+    }
+    const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap(t, 'postgres')))
+    expect(pg).toContain('"at" timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP')
+    expect(pg).toContain('"plain" timestamp')
+    const my = emitMysql(diff({ ...empty, dialect: 'mysql' }, snap(t, 'mysql')))
+    expect(my).toContain('`at` TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)')
+    expect(() => timestamp({ precision: 9 })).toThrow(/precision is a whole number from 0 to 6/)
+  })
+})
+
+describe('triggers through a SQLite rebuild', () => {
+  const setup = () => {
+    const database = new Database(':memory:')
+    const a = snap({ t: table('t', { id: serial().primaryKey(), a: text(), b: text() }) })
+    database.exec(emitSqlite(diff(empty, a), { from: empty, to: a }))
+    database.exec(`CREATE TABLE log (x TEXT);
+      CREATE TRIGGER t_ai AFTER INSERT ON t BEGIN INSERT INTO log VALUES (new.a); END;`)
+    return { database, a }
+  }
+  const asyncDriver = (database: Database.Database): AsyncSqliteDriver => ({
+    async query(q, params = []) {
+      const stmt = database.prepare(q)
+      return stmt.reader ? stmt.all(...params) : (stmt.run(...params), [])
+    },
+    async batch(statements) {
+      database.transaction(() => {
+        for (const st of statements) {
+          const stmt = database.prepare(st.sql)
+          if (stmt.reader) stmt.all(...(st.params ?? []))
+          else stmt.run(...(st.params ?? []))
+        }
+      })()
+    },
+  })
+
+  for (const kind of ['sync', 'async'] as const) {
+    it(`keeps a table's trigger (${kind})`, async () => {
+      const { database, a } = setup()
+      // a: nullable → not null with a default, which SQLite only does by rebuilding.
+      const b = snap({
+        t: table('t', { id: serial().primaryKey(), a: text().notNull().default('x'), b: text() }),
+      })
+      const sql = emitSqlite(diff(a, b), { from: a, to: b })
+      expect(sql).toMatch(/_kick_new_t/)
+      const adapter =
+        kind === 'sync'
+          ? sqliteAdapter({ database })
+          : asyncSqliteAdapter({ driver: asyncDriver(database) })
+      await adapter.applyMigrationInTx!(sql, null)
+      database.exec(`INSERT INTO t (a) VALUES ('fired')`)
+      expect(database.prepare('SELECT x FROM log').all()).toEqual([{ x: 'fired' }])
+    })
+
+    it(`refuses a rebuild that leaves a trigger on a dropped column (${kind})`, async () => {
+      const { database, a } = setup()
+      const b = snap({
+        t: table('t', { id: serial().primaryKey(), b: text().notNull().default('y') }),
+      })
+      const sql = emitSqlite(diff(a, b), { from: a, to: b })
+      const adapter =
+        kind === 'sync'
+          ? sqliteAdapter({ database })
+          : asyncSqliteAdapter({ driver: asyncDriver(database) })
+      await expect(adapter.applyMigrationInTx!(sql, null)).rejects.toThrow(
+        /trigger t_ai on t uses a, which this migration's rebuild of t no longer has/,
+      )
+      // Nothing ran: the column and the trigger are still there.
+      expect(database.prepare("SELECT name FROM pragma_table_info('t')").all()).toContainEqual({
+        name: 'a',
+      })
+    })
+  }
+})
