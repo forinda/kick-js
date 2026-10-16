@@ -260,7 +260,14 @@ export interface KickDbClient<DB = RegisteredDB> {
   insertMany<T extends keyof DB & string>(
     table: T,
     rows: ReadonlyArray<Insertable<DB[T]>>,
-    options: import('./insert-many').InsertManyOptions & { returning: true },
+    options: import('./insert-many').InsertManyOptions & {
+      returning: true
+      /**
+       * MySQL, which has no RETURNING: a unique key every row gives, to read
+       * the inserted rows back by. Required there; ignored elsewhere.
+       */
+      readBack?: ReadonlyArray<keyof DB[T] & string>
+    },
   ): Promise<Selectable<DB[T]>[]>
 
   /**

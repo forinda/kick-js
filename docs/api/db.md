@@ -150,7 +150,7 @@ interface KickDbClient<DB = RegisteredDB> {
   readonly query: QueryNamespace<DB> // relational layer
 
   upsert(table, { values, target, update? /* or false */, where?, maxParams?, atomic? }): Promise<Row | Row[]>
-  insertMany(table, rows, { returning?, maxParams?, atomic? }?): Promise<number | Row[]>
+  insertMany(table, rows, { returning?, readBack?, maxParams?, atomic? }?): Promise<number | Row[]>
   findOrCreate(table, { where, create? }): Promise<{ row: Row; created: boolean }>
   refreshMaterializedView(name, { concurrently? }?): Promise<void>
   timeout(ms, { signal? }?): { signal; inflightQueryAbortStrategy } // .execute(db.timeout(5_000)) — cancels on the server
@@ -187,14 +187,15 @@ await db.upsert('pageViews', {
 const { row, created } = await db.findOrCreate('tags', { where: { slug }, create: { label } })
 ```
 
-| Option      | Applies to             | Default              | Description                                                                                       |
-| ----------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
-| `maxParams` | `insertMany`, `upsert` | dialect limit        | Bind parameters per statement (65,535 Postgres/MySQL, 32,766 SQLite); `100` for Cloudflare D1     |
-| `atomic`    | `insertMany`, `upsert` | `true`               | All statements in one transaction (joining an open one); `false` for drivers without transactions |
-| `returning` | `insertMany`           | `false`              | `true` returns the inserted rows instead of the count                                             |
-| `target`    | `upsert`               | required             | Unique / primary key columns whose conflict turns the insert into an update                       |
-| `update`    | `upsert`               | every non-key column | Column names to take from the incoming row, or an object of values / expressions                  |
-| `where`     | `upsert`               | —                    | Predicate of a partial unique index `target` refers to (Postgres, SQLite)                         |
+| Option      | Applies to             | Default              | Description                                                                                           |
+| ----------- | ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `maxParams` | `insertMany`, `upsert` | dialect limit        | Bind parameters per statement (65,535 Postgres/MySQL, 32,766 SQLite); `100` for Cloudflare D1         |
+| `atomic`    | `insertMany`, `upsert` | `true`               | All statements in one transaction (joining an open one); `false` for drivers without transactions     |
+| `returning` | `insertMany`           | `false`              | `true` returns the inserted rows instead of the count                                                 |
+| `readBack`  | `insertMany`           | —                    | MySQL, with `returning`: a unique key every row gives, to read the rows back by (it has no RETURNING) |
+| `target`    | `upsert`               | required             | Unique / primary key columns whose conflict turns the insert into an update                           |
+| `update`    | `upsert`               | every non-key column | Column names to take from the incoming row, or an object of values / expressions                      |
+| `where`     | `upsert`               | —                    | Predicate of a partial unique index `target` refers to (Postgres, SQLite)                             |
 
 Guide: [Queries → Upsert and find-or-create](../guide/database/queries.md#upsert-and-find-or-create), [Performance → Insert many rows](../guide/database/performance.md#insert-many-rows-in-one-statement).
 

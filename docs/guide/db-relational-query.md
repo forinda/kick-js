@@ -312,10 +312,10 @@ export const commentRelations = relations(comments, ({ morphTo }) => ({
 }))
 
 const rows = await db.query.comments.findMany({ with: { subject: true } })
-// rows[0].subject: Post | Podcast | null
+// rows[0].subject: (Post & { __type: 'post' }) | (Podcast & { __type: 'podcast' }) | null
 ```
 
-Each target's primary key is matched against `id`, only for rows whose `type` holds that target's value (bound as a parameter). The subject is `null` when the type has no entry in `targets`, the row is gone, or it's soft-deleted. The subject comes back as its table's row, without the type, so switch on the comment's `subjectType` to narrow it.
+Each target's primary key is matched against `id`, only for rows whose `type` holds that target's value (bound as a parameter). The subject is `null` when the type has no entry in `targets`, the row is gone, or it's soft-deleted. The subject comes back as its table's row plus `__type`, the type value it was found by, so `if (subject?.__type === 'post')` narrows it to a post — even when `columns` leaves the comment's `subjectType` out.
 
 Since the subject can come from any of the tables, `with: { subject: … }` takes `true` or `{ withDeleted: true }` only — no `where`, `columns` or nested `with`. [Computed fields](./db-extensions.md) on the subject run when the comment's type column is selected, since that is what says which table the subject came from — so don't leave `subjectType` out with `columns`. Every target's key has to compare with the `id` column — integers with integers, strings with strings, a `uuid` with a `uuid` — since Postgres refuses to compare an `integer` column with a `uuid` key even for rows of another type. A target that doesn't is refused when the client is created.
 
