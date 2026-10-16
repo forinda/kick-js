@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -15,6 +15,7 @@ describe('resolvePackageManager', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     process.chdir(originalCwd)
     rmSync(fixture, { recursive: true, force: true })
   })
@@ -68,7 +69,21 @@ describe('resolvePackageManager', () => {
   })
 
   it('defaults to npm when no signal is present', async () => {
+    vi.stubEnv('npm_config_user_agent', '')
     expect(await resolvePackageManager(undefined)).toBe('npm')
+  })
+
+  it('uses the package manager that launched it when nothing else says (pnpm dlx, bunx)', async () => {
+    vi.stubEnv('npm_config_user_agent', 'pnpm/10.12.1 npm/? node/v22.0.0 linux x64')
+    expect(await resolvePackageManagerWithSource(undefined)).toEqual({
+      pm: 'pnpm',
+      source: 'user-agent',
+    })
+    vi.stubEnv('npm_config_user_agent', 'bun/1.2.5 npm/? node/v22.0.0 linux x64')
+    expect(await resolvePackageManager(undefined)).toBe('bun')
+    // A lockfile still wins: it is the project's choice.
+    writeFileSync(join(fixture, 'yarn.lock'), '')
+    expect(await resolvePackageManager(undefined)).toBe('yarn')
   })
 
   it('config beats package.json packageManager', async () => {

@@ -17,6 +17,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineAdapter, Logger, type RequestContext } from '@forinda/kickjs'
 import { bindInertiaRuntime, requestUrl, type InertiaRuntime, type Page } from './inertia'
 import { defaultTemplate, devHead, manifestHead, pageBody, type HtmlTemplate } from './html'
+import { dedupeHead, metaTags, type MetaDefaults } from './seo'
 
 export interface InertiaAdapterOptions {
   /**
@@ -24,24 +25,45 @@ export interface InertiaAdapterOptions {
    * `createInertiaApp`. Served by Vite in dev, looked up in the build
    * manifest in production. Default: `'src/client/main.tsx'`.
    */
-  entry: string
-  /** Where `vite build` wrote the client, with `build.manifest: true`. Default: `'dist/client'`. */
-  clientDir: string
+  entry?: string
+  /**
+   * Where `vite build` wrote the client, with `build.manifest: true`. Default: `'dist/client'`.
+   * Under NODE_ENV development or test a missing build is not an error: pages render without
+   * asset tags (a warning says so), so tests run before the client is built.
+   */
+  clientDir?: string
   /**
    * Asset version. A client on another version reloads the page on its next
    * visit. Default: a hash of the build manifest in production, none in dev
-   * (Vite reloads changed modules itself).
+   * (Vite reloads changed modules itself) or without a build. A test that
+   * sends `X-Inertia` requests pins it (`version: 'test'`) and sends the same
+   * value as `X-Inertia-Version`, so a built client doesn't turn them into 409s.
    */
   version?: string | (() => string)
   /** Props every page gets — the current user, app name. */
   share?: (ctx: RequestContext) => Record<string, unknown> | Promise<Record<string, unknown>>
-  /** `<title>` of the default HTML shell. */
-  title: string
   /**
-   * Tags added to every page's `<head>` — a favicon, meta tags, fonts. Per-page
-   * titles and meta belong in the page, with Inertia's `<Head>` component.
+   * `<title>` of the default HTML shell, until a page sets its own with
+   * Inertia's `<Head>`. Default: `'KickJS'`.
+   */
+  title?: string
+  /**
+   * Tags added to every page's `<head>` — a favicon, fonts. Titles and meta
+   * tags: `meta` here and per page, or Inertia's `<Head>` in the page.
    */
   head?: string
+  /**
+   * Meta every page starts from, under the `meta` a handler passes to
+   * `inertia()`: `{ titleTemplate: '%s · My App', description, og: { image } }`.
+   */
+  meta?: MetaDefaults
+  /**
+   * The site's public URL, e.g. `getEnv('APP_URL')`. Canonical URLs and
+   * meta image paths are made absolute with it, and a page without a
+   * `canonical` gets this + its path. Never taken from the request's Host
+   * header, which the client chooses.
+   */
+  baseUrl?: string
   /** Replace the HTML shell entirely. */
   template?: HtmlTemplate
   /**
@@ -69,6 +91,12 @@ export interface SsrResult {
 }
 
 type SsrRender = (page: Page) => Promise<SsrResult>
+
+/** The options with their defaults applied. */
+type ResolvedOptions = InertiaAdapterOptions &
+  Required<Pick<InertiaAdapterOptions, 'entry' | 'clientDir' | 'title'>>
+
+let warnedNoBuild = false
 
 const log = Logger.for('InertiaAdapter')
 
@@ -149,7 +177,7 @@ function safeDecode(path: string): string {
 
 type NodeMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
-export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
+export const InertiaAdapter = defineAdapter<ResolvedOptions>({
   name: 'InertiaAdapter',
   defaults: {
     entry: 'src/client/main.tsx',
@@ -159,6 +187,11 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
   build: (config) => {
     const clientDir = fromAppRoot(config.clientDir)
     const template = config.template ?? defaultTemplate(config.title)
+    if (config.baseUrl !== undefined && !/^https?:\/\/[^/]/.test(config.baseUrl)) {
+      throw new Error(
+        `InertiaAdapter: baseUrl must be an absolute http(s) URL, got '${config.baseUrl}'.`,
+      )
+    }
     let version: () => string | null = () => null
 
     // Built in beforeMount, once the dev server / build is known.
@@ -204,15 +237,29 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
         const vite = viteServer()
         let head: (page: Page) => string
 
+        const manifest = join(clientDir, '.vite', 'manifest.json')
         if (vite) {
           head = () => devHead(config.entry)
+        } else if (
+          // Only where a missing build is expected. Production and an unset
+          // NODE_ENV (a deploy that forgot it) fail at startup instead of
+          // serving pages without their scripts.
+          ['development', 'test'].includes(process.env.NODE_ENV ?? '') &&
+          !existsSync(manifest)
+        ) {
+          // Tests and a fresh clone: pages render (as JSON or a shell without
+          // scripts), there is no asset version, and nothing to serve.
+          head = () => ''
+          if (!warnedNoBuild) {
+            warnedNoBuild = true
+            log.warn(
+              `No client build at ${manifest} — pages render without their scripts. Build the client, or run kick dev.`,
+            )
+          }
         } else {
           const tags = manifestHead(clientDir, config.entry)
           head = () => tags
-          const hash = createHash('sha1')
-            .update(readFileSync(join(clientDir, '.vite', 'manifest.json')))
-            .digest('hex')
-            .slice(0, 12)
+          const hash = createHash('sha1').update(readFileSync(manifest)).digest('hex').slice(0, 12)
           version = () => hash
           // The whole build: hashed `assets/` plus what Vite copied from
           // `public/` — favicon, robots.txt, a static sitemap.
@@ -273,11 +320,16 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
           version: () => version(),
           share: config.share,
           errorPage: config.errorPage,
+          meta: config.meta,
+          baseUrl: config.baseUrl,
           async renderHtml(page, ctx) {
             const rendered = await render(page)
             const styles = vite && rendered && ssr ? devStylesheets(vite, ssr.entry) : []
+            const ssrHead = rendered?.head ?? []
+            // A tag the server-rendered <Head> set wins over the same one from meta.
+            const meta = dedupeHead(metaTags(page.meta), ssrHead)
             const html = template({
-              head: [config.head ?? '', head(page), ...styles, ...(rendered?.head ?? [])]
+              head: [config.head ?? '', head(page), ...styles, ...meta, ...ssrHead]
                 .filter(Boolean)
                 .join('\n    '),
               body: rendered?.body ?? pageBody(page),

@@ -7,9 +7,6 @@ import './config'
 // @kick:imports
 import { modules } from './modules'
 
-const sessionSecret = process.env.SESSION_SECRET
-if (!sessionSecret) throw new Error('SESSION_SECRET is not set — see .env.example')
-
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
   modules,
@@ -20,14 +17,23 @@ export const app = await bootstrap({
     // Carries validation errors and flash messages to the next page. Kept in
     // an encrypted cookie, so it works on any number of instances — several
     // containers, or Netlify / Vercel functions — with nothing shared.
-    session({ secret: sessionSecret, store: 'cookie' }),
+    session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' }),
   ],
   adapters: [
     InertiaAdapter({
       title: '{{name}}',
       entry: 'src/client/main.tsx',
-      // On every page. Per-page titles and meta: Inertia's <Head> component.
       head: '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />',
+      // Canonical URLs and absolute image URLs start here — not at the Host header.
+      baseUrl: getEnv('APP_URL'),
+      // Every page's meta starts from these; a controller adds its own with
+      // inertia(component, props, { meta }), and src/client/Seo.tsx keeps the
+      // browser's <head> in sync on client-side visits.
+      meta: {
+        titleTemplate: '%s · {{name}}',
+        description: '{{name}}, built with KickJS and Inertia.',
+        og: { site_name: '{{name}}', type: 'website' },
+      },
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),
       ssr: { entry: 'src/client/ssr.tsx' },

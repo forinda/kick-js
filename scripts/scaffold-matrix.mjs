@@ -67,9 +67,14 @@ const SCENARIOS = {
   inertia: {
     args: ['--template', 'inertia'],
     buildScript: true,
-    get: ['/api/v1/hello', '/', '/posts'],
-    // Rendered on the server, not the client-side fallback.
-    contains: { '/': 'data-server-rendered' },
+    get: ['/api/v1/hello', '/', '/posts', '/sitemap.xml', '/robots.txt'],
+    // Rendered on the server, not the client-side fallback; meta in the head.
+    contains: {
+      '/': 'data-server-rendered',
+      '/posts': 'name="description"',
+      '/sitemap.xml': '<loc>',
+      '/robots.txt': 'Sitemap: ',
+    },
     deploy: true,
     docker: true,
   },
@@ -239,7 +244,12 @@ const { default: handle } = await import(${JSON.stringify(pathToFileURL(join(fn,
 http.createServer((req, res) => handle(req, res)).listen(${port}, '127.0.0.1')`
   const child = spawn('node', ['--input-type=module', '-e', harness], {
     cwd: tmpdir(),
-    env: { ...process.env, NODE_ENV: 'production', SESSION_SECRET: 'matrix-secret-matrix-secret' },
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      SESSION_SECRET: 'matrix-secret-matrix-secret-matrix',
+      APP_URL: 'https://matrix.example',
+    },
     detached: true,
   })
   let log = ''
@@ -285,7 +295,9 @@ async function dockerImage(name, root, paths, contains) {
       '-p',
       `127.0.0.1:${port}:3000`,
       '-e',
-      'SESSION_SECRET=matrix-secret-matrix-secret',
+      'SESSION_SECRET=matrix-secret-matrix-secret-matrix',
+      '-e',
+      'APP_URL=https://matrix.example',
       tag,
     ],
     root,

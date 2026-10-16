@@ -1,2 +1,6 @@
-# Signs the session cookie — at least 32 random characters.
-SESSION_SECRET=
+# Signs the session cookie — at least 32 random characters. Required everywhere
+# except NODE_ENV=development or test, which fall back to a fixed dev-only value.
+# SESSION_SECRET=
+# The site's public URL, e.g. https://example.com. Required everywhere except
+# NODE_ENV=development or test, which fall back to http://localhost:3000.
+# APP_URL=

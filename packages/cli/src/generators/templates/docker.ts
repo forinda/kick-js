@@ -77,7 +77,8 @@ const YARN_BERRY: PmCommands = {
 
 const RUN_HINT: Record<DockerProjectKind, string> = {
   api: 'docker run -p 3000:3000 <name>',
-  inertia: 'docker run -p 3000:3000 -e SESSION_SECRET=<a long random string> <name>',
+  inertia:
+    'docker run -p 3000:3000 -e SESSION_SECRET=<a long random string> -e APP_URL=<https://your.site> <name>',
   fullstack: 'docker run -p 3000:3000 <name>',
 }
 
@@ -187,6 +188,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 COPY --from=build /app/dist ./dist
+# The image's filesystem is replaced on every deploy. Keep a SQLite file (or
+# uploads) in /app/data and mount a volume there: docker run -v ${name}-data:/app/data
+RUN mkdir -p data && chown node:node data
 USER node
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

@@ -47,17 +47,19 @@ bootstrap({
 
 ### InertiaAdapterOptions
 
-| Field       | Type                                                                                   | Default                                  | Description                                                                                                                                                                 |
-| ----------- | -------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `entry`     | `string`                                                                               | `'src/client/main.tsx'`                  | Client entry (the file calling `createInertiaApp`), relative to the project root. Served by Vite in dev, looked up in the build manifest in production.                     |
-| `clientDir` | `string`                                                                               | `'dist/client'`                          | Where `vite build` wrote the client (with `build.manifest: true`). Resolved against `KICK_APP_ROOT` when set, else the working directory.                                   |
-| `version`   | `string \| (() => string)`                                                             | manifest hash in production, none in dev | Asset version. A client on another version reloads on its next visit.                                                                                                       |
-| `share`     | `(ctx: RequestContext) => Record<string, unknown> \| Promise<Record<string, unknown>>` | —                                        | Props every page gets.                                                                                                                                                      |
-| `title`     | `string`                                                                               | `'KickJS'`                               | `<title>` of the default HTML shell.                                                                                                                                        |
-| `head`      | `string`                                                                               | —                                        | Tags added to every page's `<head>` (favicon, meta, fonts).                                                                                                                 |
-| `template`  | `HtmlTemplate`                                                                         | `defaultTemplate(title)`                 | Replace the HTML shell entirely.                                                                                                                                            |
-| `errorPage` | `string`                                                                               | —                                        | Page component for errors and unknown URLs; receives `{ status, message }`. Used by `inertiaErrorHandler()` and `inertiaNotFound()`.                                        |
-| `ssr`       | `{ entry: string; bundle?: string }`                                                   | —                                        | Server-side rendering. `entry` is loaded through Vite in dev; production loads `bundle` (default `'dist/ssr/ssr.js'`). A render that throws falls back to client rendering. |
+| Field       | Type                                                                                   | Default                                  | Description                                                                                                                                                                                                |
+| ----------- | -------------------------------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `entry`     | `string`                                                                               | `'src/client/main.tsx'`                  | Client entry (the file calling `createInertiaApp`), relative to the project root. Served by Vite in dev, looked up in the build manifest in production.                                                    |
+| `clientDir` | `string`                                                                               | `'dist/client'`                          | Where `vite build` wrote the client (with `build.manifest: true`). Resolved against `KICK_APP_ROOT` when set, else the working directory.                                                                  |
+| `version`   | `string \| (() => string)`                                                             | manifest hash in production, none in dev | Asset version. A client on another version reloads on its next visit.                                                                                                                                      |
+| `share`     | `(ctx: RequestContext) => Record<string, unknown> \| Promise<Record<string, unknown>>` | —                                        | Props every page gets.                                                                                                                                                                                     |
+| `title`     | `string`                                                                               | `'KickJS'`                               | `<title>` of the default HTML shell.                                                                                                                                                                       |
+| `head`      | `string`                                                                               | —                                        | Tags added to every page's `<head>` (favicon, fonts).                                                                                                                                                      |
+| `meta`      | `MetaDefaults`                                                                         | —                                        | Meta every page starts from; a page's `meta` is merged over it. `titleTemplate` (`'%s · App'`) wraps a page's title.                                                                                       |
+| `baseUrl`   | `string`                                                                               | —                                        | Absolute http(s) URL of the site. Makes `canonical` / `og:url` / `og:image` / `twitter:image` paths absolute; a 2xx page without a `canonical` gets `baseUrl` + its path. Never read from the Host header. |
+| `template`  | `HtmlTemplate`                                                                         | `defaultTemplate(title)`                 | Replace the HTML shell entirely.                                                                                                                                                                           |
+| `errorPage` | `string`                                                                               | —                                        | Page component for errors and unknown URLs; receives `{ status, message }`. Used by `inertiaErrorHandler()` and `inertiaNotFound()`.                                                                       |
+| `ssr`       | `{ entry: string; bundle?: string }`                                                   | —                                        | Server-side rendering. `entry` is loaded through Vite in dev; production loads `bundle` (default `'dist/ssr/ssr.js'`). A render that throws falls back to client rendering.                                |
 
 ```typescript
 interface SsrResult {
@@ -87,8 +89,25 @@ interface PageOptions {
   encryptHistory?: boolean // encrypt this page's history entry
   clearHistory?: boolean // wipe the browser's Inertia history (e.g. after logout)
   status?: number // default 200
+  meta?: PageMeta // title, description, social tags — see below
+}
+
+interface PageMeta {
+  title?: string
+  description?: string
+  canonical?: string // a path (made absolute with baseUrl) or a full URL
+  robots?: string // 'noindex, nofollow'
+  og?: Record<string, string> // without the prefix: { type: 'article', image: '/cover.png' }
+  twitter?: Record<string, string> // { card: 'summary_large_image' }
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[]
+}
+
+interface MetaDefaults extends PageMeta {
+  titleTemplate?: string // '%s · My App'
 }
 ```
+
+The resolved meta (defaults merged, template applied, URLs absolute) is the page's `meta` field on every response, and is rendered — escaped — into the first-visit `<head>` as tags with `data-inertia="<key>"` (`description`, `robots`, `canonical`, `og:<key>`, `twitter:<key>`, `json-ld`), the same keys a `<Head>` tag with that `head-key` gets. A tag a server-rendered `<Head>` sets is left out. `og:title`, `og:description` and `og:url` default to the title, description and canonical URL. `errorPage()` responses carry `robots: 'noindex'`.
 
 ```ts
 @Get('/users')
@@ -238,6 +257,46 @@ const precognitive: MiddlewareHandler<RequestContext>
 create(ctx: RequestContext) { … }
 ```
 
+## SEO responses
+
+### sitemap
+
+`/sitemap.xml` as `application/xml`. Each `loc` is XML-escaped; a path is made absolute with `baseUrl`.
+
+```typescript
+function sitemap(entries: Iterable<SitemapEntry>, options?: { baseUrl?: string }): Respondable
+
+interface SitemapEntry {
+  loc: string
+  lastmod?: Date | string
+  changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never'
+  priority?: number // 0.0 – 1.0
+}
+```
+
+### robots
+
+`/robots.txt` as `text/plain`. With no `allow` / `disallow`, everything is allowed. Line breaks in values are dropped.
+
+```typescript
+function robots(options?: RobotsOptions): Respondable
+
+interface RobotsOptions {
+  userAgent?: string // default '*'
+  allow?: string[]
+  disallow?: string[]
+  sitemap?: string | string[] // a path is made absolute with baseUrl
+  baseUrl?: string
+}
+```
+
+```ts
+@Get('/robots.txt')
+robots() {
+  return robots({ disallow: ['/admin'], sitemap: '/sitemap.xml', baseUrl: getEnv('APP_URL') })
+}
+```
+
 ## Lower-level helpers
 
 ### buildPage
@@ -282,6 +341,7 @@ interface Page {
   encryptHistory?: boolean
   clearHistory?: boolean
   preserveFragment?: boolean
+  meta?: PageMeta
 }
 ```
 
@@ -293,7 +353,7 @@ interface Page {
 type HtmlTemplate = (parts: HtmlParts) => string
 
 interface HtmlParts {
-  head: string // script and style tags for the client entry
+  head: string // script and style tags for the client entry, then the page's meta tags
   body: string // page data and mount element
   page: Page
 }

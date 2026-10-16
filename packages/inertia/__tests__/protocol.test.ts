@@ -410,6 +410,8 @@ for (const rt of RUNTIMES)
       const app = await makeApp({ ssrBundle: bundle })
       const res = await request(app.handle.bind(app)).get('/users').expect(200)
       expect(res.text).toContain('<title inertia>Users/Index</title>')
+      // The page's title replaces the shell's.
+      expect(res.text.match(/<title/g)).toHaveLength(1)
       expect(res.text).toContain('<div data-server-rendered="true" id="app"><h1>1 users</h1></div>')
       expect(res.text).toContain('<script type="module" src="/assets/main-abc.js"></script>')
 
@@ -443,6 +445,36 @@ for (const rt of RUNTIMES)
       writeFileSync(join(dir, 'package.json'), '{}')
       const app = new Application({ modules: [], adapters: [InertiaAdapter({ clientDir: dir })] })
       await expect(app.setup()).rejects.toThrow(/looks like a project root/)
+    })
+
+    it('renders without a client build outside production, and refuses to in production', async () => {
+      const empty = mkdtempSync(join(tmpdir(), 'kick-inertia-none-'))
+      const app = await makeApp({ clientDir: empty, version: null })
+      const res = await request(app.handle.bind(app)).get('/users').expect(200)
+      expect(res.text).toContain('<script data-page="app" type="application/json">')
+      expect(res.text).not.toContain('<script type="module"')
+      // No build, no asset version: an Inertia visit without one is not a 409.
+      const json = await request(app.handle.bind(app)).get('/users').set('X-Inertia', 'true')
+      expect(json.status).toBe(200)
+
+      const env = process.env.NODE_ENV
+      process.env.NODE_ENV = 'production'
+      try {
+        await expect(makeApp({ clientDir: empty })).rejects.toThrow(/manifest\.json/)
+      } finally {
+        process.env.NODE_ENV = env
+      }
+    })
+
+    it('refuses to render without a client build when NODE_ENV is unset', async () => {
+      const empty = mkdtempSync(join(tmpdir(), 'kick-inertia-none-'))
+      const env = process.env.NODE_ENV
+      delete process.env.NODE_ENV
+      try {
+        await expect(makeApp({ clientDir: empty })).rejects.toThrow(/manifest\.json/)
+      } finally {
+        process.env.NODE_ENV = env
+      }
     })
 
     it('adds the head option to every page', async () => {

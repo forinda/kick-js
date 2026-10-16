@@ -25,3 +25,11 @@ export {
 } from './props'
 export { inertiaErrorHandler, inertiaNotFound, precognitive } from './errors'
 export { defaultTemplate, pageBody, type HtmlParts, type HtmlTemplate } from './html'
+export {
+  sitemap,
+  robots,
+  type PageMeta,
+  type MetaDefaults,
+  type SitemapEntry,
+  type RobotsOptions,
+} from './seo'

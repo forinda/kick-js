@@ -1,4 +1,0 @@
-# Files in public/ are served at the site root as-is: by Vite in dev, and
-# from dist/client (where the client build copies them) in production.
-User-agent: *
-Allow: /

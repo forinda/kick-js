@@ -21,6 +21,11 @@ export type HtmlTemplate = (parts: HtmlParts) => string
 const escapeHtml = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+/**
+ * The default shell. Its `<title>` is a fallback: left out when the head
+ * already has one (a server-rendered `<Head>`). In the browser, Inertia drops
+ * it itself once a page's `<Head>` sets a title.
+ */
 export const defaultTemplate =
   (title: string): HtmlTemplate =>
   ({ head, body }) =>
@@ -29,7 +34,7 @@ export const defaultTemplate =
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(title)}</title>
+    ${/<title[\s>]/i.test(head) ? '' : `<title>${escapeHtml(title)}</title>`}
     ${head}
   </head>
   <body>

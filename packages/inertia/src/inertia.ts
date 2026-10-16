@@ -7,6 +7,7 @@
  */
 import { RESPOND, type RequestContext, type Respondable } from '@forinda/kickjs'
 import { isInertiaProp, propKind, resolveProp, type ScrollMeta } from './props'
+import { resolveMeta, type MetaDefaults, type PageMeta } from './seo'
 
 export const ERRORS_KEY = '__inertia_errors'
 export const FLASH_KEY = '__inertia_flash'
@@ -33,6 +34,8 @@ export interface Page {
   encryptHistory?: boolean
   clearHistory?: boolean
   preserveFragment?: boolean
+  /** Title, description and social tags — see `PageOptions.meta`. */
+  meta?: PageMeta
 }
 
 export interface PageOptions {
@@ -42,6 +45,13 @@ export interface PageOptions {
   clearHistory?: boolean
   /** Response status. Default 200; error pages send theirs (404, 500). */
   status?: number
+  /**
+   * Title, description, canonical URL and social tags, under the adapter's
+   * `meta` defaults. Rendered into the first-visit HTML and sent as the
+   * page's `meta` on every visit, for a `<Head>` in the client to keep the
+   * browser's head in sync. A server-rendered `<Head>` tag wins over the same tag here.
+   */
+  meta?: PageMeta
 }
 
 /** What the adapter hands the page renderer. Set in `beforeMount`. */
@@ -51,6 +61,10 @@ export interface InertiaRuntime {
   renderHtml(page: Page, ctx: RequestContext): Promise<string>
   /** Component that renders error and not-found pages, when configured. */
   errorPage?: string
+  /** Meta every page starts from. */
+  meta?: MetaDefaults
+  /** Origin (and base path) for canonical and absolute URLs. */
+  baseUrl?: string
 }
 
 /**
@@ -209,6 +223,12 @@ export async function buildPage(
     delete ctx.session.data[FRAGMENT_KEY]
     page.preserveFragment = true
   }
+  const meta = resolveMeta(rt.meta, options.meta, {
+    baseUrl: rt.baseUrl,
+    path: page.url,
+    status: options.status,
+  })
+  if (meta) page.meta = meta
   if (options.encryptHistory) page.encryptHistory = true
   if (options.clearHistory) page.clearHistory = true
   return page
@@ -372,5 +392,10 @@ export function errorPage(component: string, status: number, error?: unknown): R
   const fallback = STATUS_TEXT[status] ?? (status >= 500 ? 'Server Error' : 'Error')
   const raw = error instanceof Error && error.message ? error.message : fallback
   const message = status >= 500 && process.env.NODE_ENV === 'production' ? fallback : raw
-  return inertia(component, { status, message }, { status })
+  // Not for search results: no canonical, and `noindex`.
+  return inertia(
+    component,
+    { status, message },
+    { status, meta: { title: fallback, robots: 'noindex' } },
+  )
 }

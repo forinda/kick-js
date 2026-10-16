@@ -1,2 +1,4 @@
 # Signs the session cookie. Generated for this project; never commit it.
 SESSION_SECRET={{sessionSecret}}
+# Public URL of the site — canonical links and the sitemap use it.
+APP_URL=http://localhost:3000
