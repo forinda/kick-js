@@ -387,7 +387,7 @@ Without that check the database would round `1.005` away silently. [Validation f
 
 Generate the module, then point it at the database the same way:
 
-<PmCommand exec="kick g module task" />
+<PmCommand exec="kick g module task --pluralize" />
 
 The task DTOs stay in Zod — the status list comes from the schema, so the API and the CHECK agree:
 

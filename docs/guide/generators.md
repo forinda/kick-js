@@ -32,7 +32,7 @@ Generates a flat, simple module with a controller that delegates to a service. E
 <PmCommand exec="kick g module product --pattern rest" />
 
 ```
-products/
+product/
   product.module.ts                 # Module declaration (register + routes)
   product.constants.ts              # Query config (filterable, sortable, searchable)
   product.controller.ts             # @Controller with full CRUD
@@ -56,7 +56,7 @@ Generates only a module declaration and a bare controller. Use this as a startin
 <PmCommand exec="kick g module product --pattern minimal" />
 
 ```
-products/
+product/
   product.module.ts      # Module declaration
   product.controller.ts  # Bare @Controller with a single GET endpoint
 ```
@@ -125,7 +125,7 @@ The framework runtime accepts both shapes regardless of this setting — the fla
 # Pin a project to class form (existing-codebase consistency, etc.)
 # kick.config.ts → modules: { style: 'class' }
 kick g module task
-# → src/modules/tasks/task.module.ts emits:
+# → src/modules/task/task.module.ts emits:
 #     export class TaskModule implements AppModule { register() {...} routes() {...} }
 # → src/modules/index.ts: [TaskModule]
 ```

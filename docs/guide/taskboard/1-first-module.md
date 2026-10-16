@@ -84,9 +84,9 @@ It serves on `http://localhost:3000` and reloads on save. It also runs `kick typ
 
 ## Generate the projects module
 
-<PmCommand exec="kick g module project" />
+<PmCommand exec="kick g module project --pluralize" />
 
-The module name is pluralised for the folder and the URL, so this writes `src/modules/projects/` and mounts it at `/api/v1/projects`:
+`--pluralize` makes the folder and the URL plural (without it, names are used as typed), so this writes `src/modules/projects/` and mounts it at `/api/v1/projects`:
 
 ```text
 src/modules/projects/

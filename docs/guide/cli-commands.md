@@ -850,7 +850,7 @@ Module generation settings — controls how `kick g module` produces code.
 | ------------------- | ---------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `modules.dir`       | `string`                     | `'src/modules'` | Where generators place module files                                                                                                                       |
 | `modules.repo`      | `string \| { name: string }` | `'inmemory'`    | Repository name. Built-in: `'inmemory'` (working in-memory impl). Any other name (e.g. `{ name: 'postgres' }`) scaffolds a generic custom-repository stub |
-| `modules.pluralize` | `boolean`                    | `true`          | Whether to pluralize module folder and route names                                                                                                        |
+| `modules.pluralize` | `boolean`                    | `false`         | Whether to pluralize module folder and route names                                                                                                        |
 | `modules.schemaDir` | `string`                     | `undefined`     | Schema output directory (e.g. `'src/db/schema'`)                                                                                                          |
 
 ### Other Options

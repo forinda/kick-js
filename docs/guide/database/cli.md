@@ -81,7 +81,7 @@ export default defineKickDbConfig({
 })
 ```
 
-A `.ts` / `.mts` config loads through `jiti`, which kick/db ships with; `.js`, `.mjs` and `.json` work too. Both `kick db` and the standalone binary resolve the project's `tsconfig.json` path aliases in what the config loads — so a `db.adapter()` that imports `./src/db/client`, which imports `@/config`, works outside Vite. The standalone binary doesn't load `.env` — set `NODE_ENV` and `DATABASE_URL` in the environment.
+A `.ts` / `.mts` config loads through `jiti`, which kick/db ships with; `.js`, `.mjs` and `.json` work too. For a `.ts` / `.mts` config, both `kick db` and the standalone binary resolve the project's `tsconfig.json` path aliases in what the config loads — so a `db.adapter()` that imports `./src/db/client`, which imports `@/config`, works outside Vite. A `.js` / `.mjs` config is imported natively, without alias resolution. The standalone binary doesn't load `.env` — set `NODE_ENV` and `DATABASE_URL` in the environment.
 
 ### Config fields
 

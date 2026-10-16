@@ -62,23 +62,24 @@ Creating this structure by hand for a dozen modules would be tedious and error-p
 fastest path is `kick g scaffold`, which generates the same flat layout as `kick g module`
 but builds the DTOs from `<field>:<type>` definitions instead of leaving empty stubs:
 
-<PmCommand exec="kick g scaffold task title:string done:boolean" />
+<PmCommand exec="kick g scaffold task title:string done:boolean --pluralize" />
 
 This writes the module under `src/modules/tasks/` and auto-registers it in
 `src/modules/index.ts` so it's mounted on the next dev-server restart.
 
 ::: tip Always pass the singular name
-`kick g scaffold task` creates `src/modules/tasks/`. The generator pluralizes the folder and
-route prefix for you. Pass the singular noun.
+`kick g scaffold task --pluralize` creates `src/modules/tasks/`: the flag pluralizes the folder
+and route prefix for you. Without it (or `modules: { pluralize: true }` in `kick.config.ts`), the
+name is used as typed — `src/modules/task/`. Pass the singular noun either way.
 :::
 
 Supported field types include `string`, `text`, `number`, `int`, `float`, `boolean`, `date`,
 `email`, `url`, `uuid`, `json`, and `enum:a,b,c`. Mark a field optional with a trailing
 `:optional` segment (shell-safe — no quoting needed):
 
-<PmCommand exec="kick g scaffold post title:string body:text:optional published:boolean:optional" />
+<PmCommand exec="kick g scaffold post title:string body:text:optional published:boolean:optional --pluralize" />
 
-If you don't have fields in mind yet, `kick g module task` produces the identical structure
+If you don't have fields in mind yet, `kick g module task --pluralize` produces the identical structure
 with a single placeholder `name` field you fill in later. See
 [Generators](./generators.md) for the full command reference and
 [Project Structure](./project-structure.md) for where everything lands.
