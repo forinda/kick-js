@@ -173,4 +173,12 @@ describe('Dockerfile install stages', () => {
       expect(file).toContain('COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma')
     },
   )
+
+  it('fullstack: copies a Prisma client generated under server/node_modules too', () => {
+    const file = generateDockerfile('fullstack', 'pnpm', 'app')
+    expect(file).toContain('RUN mkdir -p node_modules/.prisma server/node_modules/.prisma')
+    expect(file).toContain(
+      'COPY --from=build /app/server/node_modules/.prisma ./server/node_modules/.prisma',
+    )
+  })
 })

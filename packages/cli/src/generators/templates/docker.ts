@@ -158,7 +158,8 @@ ${copyManifests}
 RUN ${p.install}
 COPY . .
 RUN ${p.run('build')}
-RUN mkdir -p node_modules/.prisma
+# The generated Prisma client lands beside whichever install holds @prisma/client.
+RUN mkdir -p node_modules/.prisma server/node_modules/.prisma
 
 FROM ${NODE_IMAGE}
 ENV NODE_ENV=production PORT=3000
@@ -166,6 +167,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/server/node_modules ./server/node_modules
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/server/node_modules/.prisma ./server/node_modules/.prisma
 COPY --from=build /app/package.json ./
 COPY --from=build /app/server/package.json ./server/
 COPY --from=build /app/server/dist ./server/dist

@@ -63,7 +63,7 @@ Two things the build expects:
 
 `.dockerignore` keeps `node_modules`, build output and every `.env` file out of the build context: the image never contains secrets. Pass them with `-e`, `--env-file` or your platform's settings.
 
-The install stages carry `python3`, `make` and `g++`, so a native addon with no prebuilt binary for the image — `better-sqlite3` after `kick add sqlite`, say — compiles there; the runtime image doesn't get them. The production install sets `PRISMA_SKIP_POSTINSTALL_GENERATE=1`: it has no Prisma CLI (a dev dependency), so `@prisma/client`'s postinstall would fail it. Generate the client in your `build` script (`prisma generate && kick build`); a client generated into `node_modules/.prisma` is copied into the runtime from the build stage.
+The install stages carry `python3`, `make` and `g++`, so a native addon with no prebuilt binary for the image — `better-sqlite3` after `kick add sqlite`, say — compiles there; the runtime image doesn't get them. The production install sets `PRISMA_SKIP_POSTINSTALL_GENERATE=1`: it has no Prisma CLI (a dev dependency), so `@prisma/client`'s postinstall would fail it. Generate the client in your `build` script (`prisma generate && kick build`); a client generated into `node_modules/.prisma` (in a fullstack workspace, also `server/node_modules/.prisma`) is copied into the runtime from the build stage.
 
 A fullstack image serves the built web app from the server, as `kick start` does locally — one container, one port.
 
