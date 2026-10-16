@@ -428,7 +428,7 @@ DELETE /api/v1/things/1     405   Allow: GET, PATCH
 
 Both responses are RFC 9457 problem details (`application/problem+json`). `bootstrap({ onNotFound })` still wins over the whole thing.
 
-`errorHandler()` treats any `NODE_ENV` but `development` or `test` as production — an unset one included. Production responses carry no stack, no error summary and no `details`, except a 422's per-field `[{ field, message }]` list, which is kept with every other member dropped.
+`errorHandler()` treats any `NODE_ENV` but `development` or `test` as production — an unset one included. Production responses carry no stack, no error summary and no `details`, except the per-field `[{ field, message }]` list of a 422 from route validation or `HttpException.unprocessable()` / `fromZodError()`, which is kept with every other member dropped. A raw thrown `ZodError` shows no field paths in production.
 
 ### csrf / csrfGuard
 

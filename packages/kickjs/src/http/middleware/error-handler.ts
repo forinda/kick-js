@@ -147,17 +147,16 @@ export function errorHandler() {
       return res.status(body.status).json(body)
     }
 
-    // Zod validation errors
+    // A raw ZodError never comes from the framework's own validation (that
+    // raises an HttpException 422 with `[{ field, message }]`). It is the app
+    // parsing something — possibly internal data — so production shows no
+    // field paths; route validation (`@Post('/', { body })`) or an explicit
+    // `HttpException` is how a form gets its field errors.
     if (err?.name === 'ZodError') {
       const firstIssue = err.issues?.[0]
       return res.status(422).json({
         message: firstIssue?.message || 'Validation failed',
-        errors: isProduction
-          ? (err.issues ?? []).map((i: { path?: PropertyKey[]; message: string }) => ({
-              field: (i.path ?? []).map(String).join('.'),
-              message: i.message,
-            }))
-          : err.issues,
+        ...(isProduction ? {} : { errors: err.issues }),
       })
     }
 

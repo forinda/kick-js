@@ -175,15 +175,16 @@ describe('HttpException', () => {
       expect(res.body).not.toHaveProperty('errors')
     })
 
-    it('keeps a ZodError 422 field list in production, as field + message only', async () => {
+    it("hides a raw ZodError's field paths in production — it may be the app parsing internal data", async () => {
       process.env.NODE_ENV = 'production'
       const zodError = Object.assign(new Error('bad'), {
         name: 'ZodError',
-        issues: [{ path: ['user', 'email'], message: 'Invalid email', code: 'invalid_string' }],
+        issues: [{ path: ['dbRow', 'secret_column'], message: 'Required', code: 'invalid_type' }],
       })
       const res = await request(appThrowing(zodError)).get('/boom')
       expect(res.status).toBe(422)
-      expect(res.body.errors).toEqual([{ field: 'user.email', message: 'Invalid email' }])
+      expect(res.body).not.toHaveProperty('errors')
+      expect(JSON.stringify(res.body)).not.toContain('secret_column')
     })
 
     it('keeps headers in production even when details are hidden', async () => {

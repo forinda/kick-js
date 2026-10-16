@@ -65,7 +65,7 @@ Any error with `name === 'ZodError'` is caught and returned as a **422** respons
 { "message": "Expected string, received number", "errors": [ ... ] }
 ```
 
-In production `errors` keeps only each issue's `field` (the dotted path) and `message`.
+In production `errors` is left out. A raw `ZodError` is your code parsing something, possibly internal data such as a database row or an upstream response, so its field paths aren't sent to clients. To give a form its field errors in production, validate in the route (`@Post('/', { body: schema })`) or throw `HttpException.fromZodError(result.error)` / `HttpException.unprocessable(message, fields)`: those 422s keep `[{ field, message }]`.
 
 ### 2. HttpException Instances
 
