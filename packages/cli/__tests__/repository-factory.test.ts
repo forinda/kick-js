@@ -63,6 +63,12 @@ describe('generated repository', () => {
     expect(plain).not.toContain('postgres')
   })
 
+  it("turns stored values into text without String(unknown), which vp check's no-base-to-string flags", () => {
+    // An object field would read as '[object Object]'; asText handles each kind.
+    expect(plain).toContain('function asText(value: unknown): string')
+    expect(plain).not.toMatch(/String\((stored|other|value|field)\b[^)]*\?\?/)
+  })
+
   it('keeps the token-scope rule documented inline', () => {
     // Explains why the prefix is what it is; `kick-lint` reserves `kick/`.
     expect(plain).toMatch(/`'app\/'` prefix matches the project scope/)
