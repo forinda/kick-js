@@ -59,11 +59,17 @@ Values may contain colons (useful for timestamps like `2025-01-01T00:00:00`), be
 
 ### Sort
 
-Format: `?sort=field:asc` or `?sort=field:desc` (repeatable).
+Either form works, repeated or comma-separated, and the order is the order of the keys:
+
+- `field:asc` / `field:desc`
+- `-field` for descending, `field` (or `+field`) for ascending
 
 ```
 GET /tasks?sort=createdAt:desc&sort=title:asc
+GET /tasks?sort=-createdAt,title          # the same
 ```
+
+An item with an unknown direction, or a field outside `sortable`, is dropped.
 
 ### Pagination
 
