@@ -187,15 +187,15 @@ await db.upsert('pageViews', {
 const { row, created } = await db.findOrCreate('tags', { where: { slug }, create: { label } })
 ```
 
-| Option      | Applies to             | Default              | Description                                                                                           |
-| ----------- | ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
-| `maxParams` | `insertMany`, `upsert` | dialect limit        | Bind parameters per statement (65,535 Postgres/MySQL, 32,766 SQLite); `100` for Cloudflare D1         |
-| `atomic`    | `insertMany`, `upsert` | `true`               | All statements in one transaction (joining an open one); `false` for drivers without transactions     |
-| `returning` | `insertMany`           | `false`              | `true` returns the inserted rows instead of the count                                                 |
-| `readBack`  | `insertMany`           | —                    | MySQL, with `returning`: a unique key every row gives, to read the rows back by (it has no RETURNING) |
-| `target`    | `upsert`               | required             | Unique / primary key columns whose conflict turns the insert into an update                           |
-| `update`    | `upsert`               | every non-key column | Column names to take from the incoming row, or an object of values / expressions                      |
-| `where`     | `upsert`               | —                    | Predicate of a partial unique index `target` refers to (Postgres, SQLite)                             |
+| Option      | Applies to             | Default              | Description                                                                                                                                     |
+| ----------- | ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxParams` | `insertMany`, `upsert` | dialect limit        | Bind parameters per statement (65,535 Postgres/MySQL, 32,766 SQLite); `100` for Cloudflare D1                                                   |
+| `atomic`    | `insertMany`, `upsert` | `true`               | All statements in one transaction (joining an open one); `false` for drivers without transactions                                               |
+| `returning` | `insertMany`           | `false`              | `true` returns the inserted rows instead of the count                                                                                           |
+| `readBack`  | `insertMany`           | —                    | MySQL, with `returning`: a unique key every row gives, to read the rows back by (it has no RETURNING)                                           |
+| `target`    | `upsert`               | required             | Unique / primary key columns whose conflict turns the insert into an update                                                                     |
+| `update`    | `upsert`               | every non-key column | Column names to take from the incoming row, or an object of values / expressions; `false` skips a row whose key exists and returns it as stored |
+| `where`     | `upsert`               | —                    | Predicate of a partial unique index `target` refers to (Postgres, SQLite)                                                                       |
 
 Guide: [Queries → Upsert and find-or-create](../guide/database/queries.md#upsert-and-find-or-create), [Performance → Insert many rows](../guide/database/performance.md#insert-many-rows-in-one-statement).
 
@@ -284,9 +284,9 @@ The same table can be declared as a class or with a fluent builder — `tableFro
 
 ### Column constructors
 
-Cross-dialect (package root): `serial`, `bigSerial`, `smallSerial`, `integer`, `bigint({ mode? })`, `smallint`, `version` (optimistic-locking counter), `decimal(p?, s?, { mode? })`, `numeric(p?, s?, { mode? })`, `real`, `doublePrecision`, `varchar(n = 255)`, `char(n = 1)`, `text`, `boolean`, `timestamp`, `timestamptz`, `date`, `time`, `interval`, `uuid`, `json<T>()`, `jsonb<T>()`, `bytea`.
+Cross-dialect (package root): `serial`, `bigSerial`, `smallSerial`, `integer`, `bigint({ mode? })`, `smallint`, `version` (optimistic-locking counter), `decimal(p?, s?, { mode? })`, `numeric(p?, s?, { mode? })`, `real`, `doublePrecision`, `varchar(n = 255)`, `char(n = 1)`, `text`, `boolean`, `timestamp({ precision? })`, `timestamptz({ precision? })`, `date`, `time({ precision? })`, `interval`, `uuid`, `json<T>()`, `jsonb<T>()`, `bytea`.
 
-Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.array()`, `.default(value)`, `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.$defaultFn(fn)`, `.$onUpdate(fn)`, `.onUpdateNow()`, `.softDelete()`, `.generatedAlwaysAs(sql, { stored? })`, `.generatedAlwaysAsIdentity()`, `.generatedByDefaultAsIdentity()`, `.references(() => col, { onDelete?, onUpdate?, name? })`, `.comment(text)`, `.colName(name)`. Details: [Schema → Column builders](../guide/database/schema.md#column-builders).
+Modifiers: `.notNull()`, `.primaryKey()`, `.unique()`, `.array()`, `.default(value)` (a value), `.defaultSql(expression)` (SQL the database evaluates), `.defaultNow()` (timestamps), `.defaultRandom()` (uuid), `.$defaultFn(fn)`, `.$onUpdate(fn)`, `.onUpdateNow()`, `.softDelete()`, `.generatedAlwaysAs(sql, { stored? })`, `.generatedAlwaysAsIdentity()`, `.generatedByDefaultAsIdentity()`, `.references(() => col, { onDelete?, onUpdate?, name? })`, `.comment(text)`, `.colName(name)`. Details: [Schema → Column builders](../guide/database/schema.md#column-builders).
 
 PG-only (`@forinda/kickjs-db/pg`): `pgEnum(name, ...values)`, `tsvector`, `vector(dim?)`, `halfvec(dim?)`, `point`, `geometry(type?, srid?)`, `macaddr`, `macaddr8`, `citext`, `money`, `inet`, `cidr`, `xml`. MySQL-only (`@forinda/kickjs-db/mysql`): `mysqlEnum(...values)`, `unsigned(col)`, `tinyint`, `mediumint`, `datetime(fsp?)`. See [Postgres enums](../guide/database/schema.md#postgres-enums) and [MySQL-only types](../guide/database/schema.md#mysql-only-types).
 

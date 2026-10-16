@@ -88,8 +88,8 @@ export const posts = table(
       .references(() => users.id, { onDelete: 'cascade' }),
     title: varchar(200).notNull(),
     slug: varchar(200).notNull(),
-    published: boolean().notNull().default('false'),
-    views: integer().notNull().default('0'),
+    published: boolean().notNull().default(false),
+    views: integer().notNull().default(0),
     createdAt: timestamp().notNull().defaultNow(),
   },
   (t) => ({
@@ -114,9 +114,10 @@ export const postsRelations = relations(posts, ({ one }) => ({
 | `.generatedAlwaysAs(sql)`, `.generatedAlwaysAsIdentity()` | the same names — [Generated columns](./schema.md#generated-columns)                                                                                                           |
 | `primaryKey({ columns: [t.a, t.b] })`                     | `primaryKey().on(t.a, t.b)` ([Keys & Constraints](./constraints.md))                                                                                                          |
 | `check('name', sql\`…\`)`                                 | `check('name', 'sql as a string')`                                                                                                                                            |
-| `.default(false)`                                         | `.default('false')` — the SQL default as written                                                                                                                              |
+| `.default(false)`, `.default(sql\`now()\`)`               | `.default(false)` — a value; `.defaultSql('now()')` — SQL the database evaluates                                                                                              |
 | `.defaultRandom()`, `.defaultNow()`                       | the same                                                                                                                                                                      |
-| `.$defaultFn(() => …)`, `.$onUpdate(() => …)`             | no equivalent — set the value in your insert or update                                                                                                                        |
+| `timestamp({ precision: 3 })`, `time({ precision: 3 })`   | the same                                                                                                                                                                      |
+| `.$defaultFn(() => …)`, `.$onUpdate(() => …)`             | the same names — [Defaults computed in JS](./schema.md#defaults-computed-in-js)                                                                                               |
 | `.references(() => t.id, { onDelete })`                   | the same; actions are `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`, `'no_action'`                                                                                 |
 | `pgEnum('role', ['admin', 'member'])`                     | `pgEnum('role', 'admin', 'member')` from `@forinda/kickjs-db/pg` — values as arguments                                                                                        |
 | `customType<{ data: T }>({ … })`                          | `customType<T>({ dataType, toDriver, fromDriver })` ([Extensions](../db-extensions.md))                                                                                       |
@@ -195,23 +196,24 @@ const user = await db.query.users.findFirst({
 
 Drizzle's core API imports a column object and an operator for each condition; kick/db's builder names the column and the operator as strings, checked against the schema:
 
-| Drizzle                                           | kick/db                                                                                               |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `db.select().from(posts)`                         | `db.selectFrom('posts').selectAll()`                                                                  |
-| `db.select({ id: posts.id }).from(posts)`         | `db.selectFrom('posts').select(['id'])`                                                               |
-| `.where(eq(posts.id, id))`                        | the same, or `.where('id', '=', id)` — [Condition helpers](./queries.md#condition-helpers)            |
-| `and(…)`, `or(…)`, `inArray`, `isNull`, `like`    | the same names                                                                                        |
-| `.orderBy(desc(posts.createdAt))`                 | `.orderBy('createdAt', 'desc')`                                                                       |
-| `.innerJoin(users, eq(posts.authorId, users.id))` | `.innerJoin('users', 'users.id', 'posts.authorId')`, or `(j) => j.on(eq(…))`                          |
-| `alias(users, 'manager')`                         | `alias(users, 'manager')`, joined through `manager.$from`                                             |
-| `db.$with('sq').as(…)`, `db.with(sq)`             | `const sq = db.cte('sq', (q) => …)`, `db.with(...sq)` — [CTEs](./raw-sql.md#common-table-expressions) |
-| `db.insert(users).values({…}).returning()`        | `db.insertInto('users').values({…}).returningAll()`                                                   |
-| `db.update(users).set({…}).where(…)`              | `db.updateTable('users').set({…}).where(…)`                                                           |
-| `db.delete(users).where(…)`                       | `db.deleteFrom('users').where(…)`                                                                     |
-| `.onConflictDoUpdate({ target, set })`            | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control                 |
-| `db.$count(posts)`                                | `select((eb) => eb.fn.countAll().as('n'))`                                                            |
-| `db.execute(sql\`…\`)`                            | ``sql`…`.execute(db.qb)`` — `sql` comes from `@forinda/kickjs-db`                                     |
-| results run with `await`                          | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()`                |
+| Drizzle                                             | kick/db                                                                                                   |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `db.select().from(posts)`                           | `db.selectFrom('posts').selectAll()`                                                                      |
+| `db.select({ id: posts.id }).from(posts)`           | `db.selectFrom('posts').select(['id'])`                                                                   |
+| `.where(eq(posts.id, id))`                          | the same, or `.where('id', '=', id)` — [Condition helpers](./queries.md#condition-helpers)                |
+| `and(…)`, `or(…)`, `inArray`, `isNull`, `like`      | the same names                                                                                            |
+| `.orderBy(desc(posts.createdAt))`                   | `.orderBy('createdAt', 'desc')`                                                                           |
+| `.innerJoin(users, eq(posts.authorId, users.id))`   | `.innerJoin('users', 'users.id', 'posts.authorId')`, or `(j) => j.on(eq(…))`                              |
+| `alias(users, 'manager')`                           | `alias(users, 'manager')`, joined through `manager.$from`                                                 |
+| `db.$with('sq').as(…)`, `db.with(sq)`               | `const sq = db.cte('sq', (q) => …)`, `db.with(...sq)` — [CTEs](./raw-sql.md#common-table-expressions)     |
+| `db.insert(users).values({…}).returning()`          | `db.insertInto('users').values({…}).returningAll()`                                                       |
+| `db.update(users).set({…}).where(…)`                | `db.updateTable('users').set({…}).where(…)`                                                               |
+| `db.delete(users).where(…)`                         | `db.deleteFrom('users').where(…)`                                                                         |
+| `.onConflictDoUpdate({ target, set })`              | `db.upsert(table, { values, target, update })` — or `.onConflict(…)` for full control                     |
+| `.onConflictDoNothing({ target })` + `.returning()` | `db.upsert(table, { values, target, update: false })` — returns every row as stored, the skipped ones too |
+| `db.$count(posts)`                                  | `select((eb) => eb.fn.countAll().as('n'))`                                                                |
+| `db.execute(sql\`…\`)`                              | ``sql`…`.execute(db.qb)`` — `sql` comes from `@forinda/kickjs-db`                                         |
+| results run with `await`                            | end the chain with `.execute()`, `.executeTakeFirst()` or `.executeTakeFirstOrThrow()`                    |
 
 [Queries](./queries.md) and [Raw SQL & Recipes](./raw-sql.md) cover the rest.
 
