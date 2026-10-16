@@ -116,4 +116,14 @@ describe('M5.A.2 — AbortSignal short-circuits SQLite queries before compile', 
     const result = await db.query.users.findMany({ signal: ctrl.signal })
     expect(result.map((r) => r.email).toSorted()).toEqual(['c@d.com', 'e@f.com'])
   })
+
+  it('db.timeout() and timeoutMs run normally where there is nothing to cancel', async () => {
+    database.prepare(`INSERT INTO users (email) VALUES ('g@h.com')`).run()
+    expect(await db.selectFrom('users').select('email').execute(db.timeout(5_000))).toEqual([
+      { email: 'g@h.com' },
+    ])
+    expect((await db.query.users.findMany({ timeoutMs: 5_000 })).map((r) => r.email)).toEqual([
+      'g@h.com',
+    ])
+  })
 })

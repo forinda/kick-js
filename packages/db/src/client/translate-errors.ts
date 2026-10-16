@@ -14,7 +14,18 @@ import { translateDbError, type DbDialect } from '../db-errors'
 
 const PATCHED = Symbol('kick.db.translatesErrors')
 
-export function translatingDialect(dialect: Dialect, tag: DbDialect): Dialect {
+export function translatingDialect(
+  dialect: Dialect,
+  tag: DbDialect,
+  /** Sees (and may replace) each statement before it's sent: the `beforeQuery` event. */
+  beforeQuery?: (query: CompiledQuery) => CompiledQuery,
+): Dialect {
+  const prepare = (query: CompiledQuery): CompiledQuery => {
+    const q = beforeQuery ? beforeQuery(query) : query
+    // better-sqlite3 binds no Date — store it the way SQLite's own timestamps look.
+    return tag === 'sqlite' ? { ...q, parameters: encodeSqliteParameters(q.parameters) } : q
+  }
+
   const translate = (err: unknown): never => {
     throw translateDbError(err, tag)
   }
@@ -34,23 +45,17 @@ export function translatingDialect(dialect: Dialect, tag: DbDialect): Dialect {
     marked[PATCHED] = true
     const exec = conn.executeQuery.bind(conn)
     conn.executeQuery = guard((query: CompiledQuery, ...rest: unknown[]) =>
-      (exec as (...a: unknown[]) => Promise<unknown>)(
-        // better-sqlite3 binds no Date — store it the way SQLite's own timestamps look.
-        tag === 'sqlite'
-          ? { ...query, parameters: encodeSqliteParameters(query.parameters) }
-          : query,
-        ...rest,
-      ),
+      (exec as (...a: unknown[]) => Promise<unknown>)(prepare(query), ...rest),
     ) as DatabaseConnection['executeQuery']
+    // Every connection can be asked to cancel, so `'cancel query'` is safe on
+    // any dialect: where the driver can't (better-sqlite3 runs synchronously),
+    // there is nothing in flight to stop.
+    conn.cancelQuery ??= async () => {}
     const stream = conn.streamQuery.bind(conn)
     conn.streamQuery = async function* (...args: Parameters<DatabaseConnection['streamQuery']>) {
       const [query, ...rest] = args
-      const encoded =
-        tag === 'sqlite'
-          ? { ...query, parameters: encodeSqliteParameters(query.parameters) }
-          : query
       try {
-        yield* stream(encoded, ...rest)
+        yield* stream(prepare(query), ...rest)
       } catch (err) {
         translate(err)
       }

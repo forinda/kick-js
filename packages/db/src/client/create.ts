@@ -132,7 +132,22 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const makeKysely = (dialect: KyselyDialect) =>
     new Kysely<DB>({
       // Driver failures surface as typed errors (UniqueViolationError, …).
-      dialect: translatingDialect(tenantConnections(dialect, opts.tenancy), dialectTag),
+      dialect: translatingDialect(
+        tenantConnections(dialect, opts.tenancy),
+        dialectTag,
+        events
+          ? (query) => {
+              // Listeners run synchronously and may rewrite either field.
+              const e = { sql: query.sql, parameters: [...query.parameters] }
+              events.emit('beforeQuery', e)
+              return e.sql === query.sql &&
+                e.parameters.length === query.parameters.length &&
+                e.parameters.every((p, i) => p === query.parameters[i])
+                ? query
+                : { ...query, sql: e.sql, parameters: e.parameters }
+            }
+          : undefined,
+      ),
       plugins: plugins.length > 0 ? plugins : undefined,
       // Always installed: whether DevTools is listening is only known per query.
       log: (event) => {
