@@ -104,6 +104,7 @@ export {
   type LegacyHasher,
   type VerifyPasswordOptions,
 } from './core/password'
+export { matchesBearer } from './core/web-crypto'
 export {
   createSigner,
   type SignedCheck,

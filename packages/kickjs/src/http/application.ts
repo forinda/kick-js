@@ -1,7 +1,7 @@
 import http from 'node:http'
-import { timingSafeEqual } from 'node:crypto'
 import { HttpException } from '../core/errors'
 import { runCronJobs } from '../core/cron'
+import { matchesBearer } from '../core/web-crypto'
 import https from 'node:https'
 import http2 from 'node:http2'
 import tls from 'node:tls'
@@ -2381,12 +2381,4 @@ function observeErrors<H extends (err: any, req: any, res: any, next: any) => un
     })
     return handler(err, req, res, next)
   }) as H
-}
-
-/** Constant-time check of an `Authorization: Bearer <secret>` header. */
-function matchesBearer(header: unknown, secret: string): boolean {
-  if (typeof header !== 'string') return false
-  const given = Buffer.from(header)
-  const expected = Buffer.from(`Bearer ${secret}`)
-  return given.length === expected.length && timingSafeEqual(given, expected)
 }

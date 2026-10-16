@@ -23,3 +23,12 @@ export function safeEqual(a: string, b: string): boolean {
   for (let i = 0; i < length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return diff === 0
 }
+
+/**
+ * Constant-time check of an `Authorization: Bearer <secret>` header against a
+ * shared secret — a cron trigger, a metrics scrape, a webhook. `false` for a
+ * missing or non-string header. Pass `ctx.headers.authorization` as is.
+ */
+export function matchesBearer(header: unknown, secret: string): boolean {
+  return typeof header === 'string' && safeEqual(header, `Bearer ${secret}`)
+}

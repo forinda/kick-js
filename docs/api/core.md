@@ -1092,6 +1092,10 @@ interface Signer {
 
 A legacy hash that verifies returns `needsRehash: true`, so the account moves to scrypt at its next login. A `secret` list rotates keys: the first signs, every one verifies.
 
+```ts
+matchesBearer(header: unknown, secret: string): boolean // constant-time `Bearer <secret>` check; also in @forinda/kickjs/web
+```
+
 ## Cluster Mode
 
 Run multiple worker processes sharing the same port for multi-core utilization. The primary process forks workers and forwards SIGTERM/SIGINT signals. Dead workers are automatically restarted after a short delay.

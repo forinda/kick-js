@@ -7,7 +7,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { AppAdapter, AdapterContext } from '../core/adapter'
 import type { ResponseInfo } from '../core/observers'
-import { safeEqual } from '../core/web-crypto'
+import { matchesBearer } from '../core/web-crypto'
 import type { RequestContext } from './context'
 
 export interface MetricsOptions {
@@ -117,7 +117,6 @@ function gauge(name: string, help: string, value: number): string {
 export function metricsAdapter(options: MetricsOptions = {}): AppAdapter {
   const path = options.path ?? '/metrics'
   const histogram = new RequestHistogram(options.buckets ?? DEFAULT_BUCKETS)
-  const expected = options.token === undefined ? undefined : `Bearer ${options.token}`
   let loop: ReturnType<typeof monitorEventLoopDelay> | undefined
 
   const render = () => {
@@ -139,8 +138,8 @@ export function metricsAdapter(options: MetricsOptions = {}): AppAdapter {
       loop = monitorEventLoopDelay({ resolution: 20 })
       loop.enable()
       http.route('GET', path, (ctx: RequestContext) => {
-        const auth = ctx.headers.authorization
-        if (expected && (typeof auth !== 'string' || !safeEqual(auth, expected))) {
+        const { token } = options
+        if (token !== undefined && !matchesBearer(ctx.headers.authorization, token)) {
           ctx.setHeader('WWW-Authenticate', 'Bearer')
           ctx.json({ message: 'Unauthorized' }, 401)
           return
