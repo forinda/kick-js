@@ -146,7 +146,7 @@ The two patterns are not mutually exclusive within a project — you can have a 
 import { defineConfig } from '@forinda/kickjs-cli/config'
 
 export default defineConfig({
-  pattern: 'rest', // 'rest' | 'minimal'
+  pattern: 'rest', // 'rest' | 'minimal' — `kick new -t inertia` writes 'inertia', which generates rest modules
   modules: {
     dir: 'src/modules',
     repo: 'inmemory',

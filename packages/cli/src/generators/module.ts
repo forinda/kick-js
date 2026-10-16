@@ -128,6 +128,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
       await generateMinimalFiles(ctx)
       break
     case 'rest':
+    case 'inertia':
     default:
       await generateRestFiles(ctx)
       break

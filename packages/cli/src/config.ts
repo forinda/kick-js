@@ -24,8 +24,11 @@ export interface KickCommandDefinition {
   aliases?: string[]
 }
 
-/** Project pattern — controls what generators produce and which deps are installed */
-export type ProjectPattern = 'rest' | 'minimal'
+/**
+ * Project pattern — controls what generators produce and which deps are installed.
+ * `kick new` writes the template name here; an `inertia` app generates `rest` modules.
+ */
+export type ProjectPattern = 'rest' | 'minimal' | 'inertia'
 
 /** Package manager used for `kick add` and other dep-installing commands */
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
@@ -424,6 +427,7 @@ export interface KickConfig {
    * `--pattern` overrides it per call.
    * - 'rest' — flat module: controller, service, DTOs, repository (default)
    * - 'minimal' — controller + module only
+   * - 'inertia' — written by `kick new -t inertia`; modules generate as 'rest'
    */
   pattern?: ProjectPattern
   /**

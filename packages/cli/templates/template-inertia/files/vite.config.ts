@@ -13,8 +13,9 @@ export default defineConfig({
   oxc: { include: client },
   plugins: [
     // swc's own config hook switches oxc off for every file; drop it so
-    // the pages keep oxc.
-    { ...swc.vite({ exclude: [/node_modules/, client] }), config: undefined },
+    // the pages keep oxc. Globs, not the regex above: unplugin-swc's options
+    // type takes swc's `exclude` (strings) for its own filter.
+    { ...swc.vite({ exclude: ['**/node_modules/**', '**/src/client/**'] }), config: undefined },
     react(),
     kickjsVitePlugin({ entry: 'src/index.ts' }),
     // Watches .env files and triggers a full reload on change so the
