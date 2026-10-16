@@ -178,3 +178,36 @@ describe('startTransaction()', () => {
     await expect(db.transaction(() => db.startTransaction())).rejects.toThrow(/use savepoint/)
   })
 })
+
+describe('asyncStackTraces', () => {
+  const failing = (db: ReturnType<typeof createDbClient>) =>
+    function readFromAMissingTable() {
+      return db
+        .selectFrom('nope' as never)
+        .selectAll()
+        .execute()
+    }
+
+  it("adds the caller's frames to a failed query's stack", async () => {
+    const database = new Database(':memory:')
+    const db = createDbClient({
+      schema,
+      dialect: sqliteDialect({ database }),
+      asyncStackTraces: true,
+    })
+    const err = (await failing(db)().catch((e: unknown) => e)) as Error
+    const built = err.stack!.split('--- the query was built ---')[1]!
+    // The caller's own frames — this file — and none of Kysely's or kick/db's.
+    expect(built).toContain('expect-queries-sqlite.test.ts')
+    expect(built).not.toMatch(/[\\/]kysely[\\/]|packages[\\/]db[\\/]src/)
+  })
+
+  it('adds nothing without it', async () => {
+    const db = createDbClient({
+      schema,
+      dialect: sqliteDialect({ database: new Database(':memory:') }),
+    })
+    const err = (await failing(db)().catch((e: unknown) => e)) as Error
+    expect(err.stack).not.toContain('--- the query was built ---')
+  })
+})

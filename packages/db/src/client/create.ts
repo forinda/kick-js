@@ -1,6 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import {
   type CompiledQuery,
+  type PluginTransformQueryArgs,
+  type PluginTransformResultArgs,
+  type RootOperationNode,
   Kysely,
   ParseJSONResultsPlugin,
   type Dialect as KyselyDialect,
@@ -115,6 +118,18 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     const plugin = tenancyPlugin(opts.tenancy, opts.schema)
     if (plugin) plugins.push(plugin)
   }
+  // Where each query was built, by its id, for `asyncStackTraces`: recorded as
+  // the query is transformed — synchronously, inside the caller's execute().
+  const builtAt = opts.asyncStackTraces ? new WeakMap<object, string>() : undefined
+  if (builtAt) {
+    plugins.unshift({
+      transformQuery: (args: PluginTransformQueryArgs): RootOperationNode => {
+        builtAt.set(args.queryId, callerFrames(new Error().stack ?? ''))
+        return args.node
+      },
+      transformResult: async (args: PluginTransformResultArgs) => args.result,
+    })
+  }
   if (opts.casing === 'snake_case') {
     // Results are converted before anything reads them by key; queries after
     // everything else has written them by key.
@@ -162,6 +177,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
                 : { ...query, sql: e.sql, parameters: e.parameters }
             }
           : undefined,
+        builtAt && ((query) => (query.queryId ? builtAt.get(query.queryId) : undefined)),
       ),
       plugins: plugins.length > 0 ? plugins : undefined,
       // Always installed: whether DevTools is listening is only known per query.
@@ -309,4 +325,13 @@ function collectColumnNames(schema: unknown, casing: Casing | undefined): Column
     }
   }
   return out
+}
+
+/** A stack's frames outside Kysely and kick/db: where the caller built the query. */
+function callerFrames(stack: string): string {
+  return stack
+    .split('\n')
+    .slice(1)
+    .filter((line) => !/[\\/](kysely|kickjs-db)[\\/]|[\\/]packages[\\/]db[\\/]src[\\/]/.test(line))
+    .join('\n')
 }

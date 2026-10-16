@@ -403,6 +403,13 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    */
   slowQueryThresholdMs?: number | null
   /**
+   * Add where each query was built to its error's stack — the line that
+   * called `.execute()` or `findMany()`, which a driver error otherwise
+   * loses across the await. Records a stack per query, so it's for
+   * development. Default `false`.
+   */
+  asyncStackTraces?: boolean
+  /**
    * Optional KickEventBus instance the client republishes lifecycle
    * events to. When set, the bus receives:
    *
