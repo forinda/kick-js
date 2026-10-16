@@ -42,7 +42,7 @@ export function generateRepositoryFactory(ctx: TemplateContext): string {
       .filter(
         (row) =>
           parsed.filters.every((f) => matches(field(row, f.field), f)) &&
-          (!q || SEARCHABLE.some((name) => String(field(row, name) ?? '').toLowerCase().includes(q))),
+          (!q || SEARCHABLE.some((name) => asText(field(row, name)).toLowerCase().includes(q))),
       )
       .sort((a, b) => order(a, b, parsed.sort, byId))
   }
@@ -136,13 +136,24 @@ function field(row: object, name: string): unknown {
   return (row as Record<string, unknown>)[name]
 }
 
+/** A stored value as text — what search, filters and the text sort compare. */
+function asText(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value)
+  }
+  if (value instanceof Date) return value.toISOString()
+  return JSON.stringify(value)
+}
+
 /**
  * A stored number compares by value (the query's value is text); everything
  * else, ISO dates included, as text — so a string field keeps '001' ≠ '1'.
  */
 function compare(stored: unknown, other: unknown): number {
   if (typeof stored === 'number') return stored - Number(other)
-  return String(stored ?? '').localeCompare(String(other ?? ''))
+  return asText(stored).localeCompare(asText(other))
 }
 
 /**
@@ -161,7 +172,7 @@ function order(a: object, b: object, sort: readonly SortItem[], byId: boolean): 
 
 /** One \`?filter=field:op:value\` — \`in\` and \`between\` take comma-separated values. */
 function matches(value: unknown, { operator, value: raw }: FilterItem): boolean {
-  const text = String(value ?? '').toLowerCase()
+  const text = asText(value).toLowerCase()
   const list = raw.split(',')
   switch (operator) {
     case 'eq':
