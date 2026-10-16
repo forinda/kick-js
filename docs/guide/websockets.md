@@ -295,6 +295,7 @@ Things to know:
 - **A failed publish is logged, not thrown.** Local sockets still get the broadcast; the handler keeps running.
 - **One channel per app.** Instances share `kickjs:ws` by default. Give each app its own `channel` when several apps share a Redis.
 - **No sticky sessions needed** for WebSockets — the connection stays on the instance that accepted it. Your load balancer must allow the upgrade.
+- **The connections stay yours.** On shutdown the broker unsubscribes but quits neither client — close them in your own cleanup. Adapters shut down concurrently, so if your cleanup quits the subscriber first, the broker's unsubscribe is skipped rather than failing with `Connection is closed.`
 - **Other pub/sub.** `redisBroker` accepts any client with `publish`, `subscribe`, `unsubscribe` and `on('message')`. For NATS or anything else, implement `WsBroker` (`publish`, `subscribe`, optional `close`).
 
 See [Benchmarks → WebSockets](./benchmarks.md#websockets) for measured numbers with and without a broker.

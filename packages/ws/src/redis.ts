@@ -38,8 +38,9 @@ export interface RedisBrokerOptions {
 }
 
 /**
- * Both connections stay the caller's: `shutdown` unsubscribes but does not
- * quit them, since the publisher is often the app's shared client.
+ * Both connections stay the caller's: `close` unsubscribes but does not quit
+ * them, since the publisher is often the app's shared client. If the app has
+ * already quit the subscriber, `close` has nothing to do and doesn't throw.
  */
 export function redisBroker({
   publisher,
@@ -73,7 +74,12 @@ export function redisBroker({
 
     async close() {
       if (listener) subscriber.off?.('message', listener)
-      await subscriber.unsubscribe(channel)
+      try {
+        await subscriber.unsubscribe(channel)
+      } catch {
+        // The app quit the connection first — its own shutdown runs beside
+        // this one. A closed connection holds no subscription to remove.
+      }
     },
   }
 }

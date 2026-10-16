@@ -274,6 +274,14 @@ describe('redisBroker', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('close() tolerates a subscriber the app already quit', async () => {
+    // Adapters shut down concurrently, so the app's own Redis cleanup can win.
+    const subscriber = new Redis({ lazyConnect: true })
+    subscriber.disconnect()
+    const broker = redisBroker({ publisher: fakeRedis().publisher as any, subscriber })
+    await expect(broker.close!()).resolves.toBeUndefined()
+  })
+
   it('an adapter on redisBroker survives "null" and malformed JSON on the channel', async () => {
     const { publisher, subscriber } = fakeRedis()
     const broker = redisBroker({ publisher: publisher as any, subscriber: subscriber as any })
