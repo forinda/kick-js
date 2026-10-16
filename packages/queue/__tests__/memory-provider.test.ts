@@ -81,7 +81,7 @@ describe('MemoryQueueProvider', () => {
     }
     const provider = new MemoryQueueProvider()
     const dispatcher = await start(provider)
-    const job = (await dispatcher.dispatch('mem-delay', 'later', {}, { delay: 20 })) as MemoryJob
+    const job = (await dispatcher.dispatch('mem-delay', 'later', {}, { delay: 500 })) as MemoryJob
     expect(job.state).toBe('delayed')
     await new Promise((r) => setTimeout(r, 5))
     expect(job.state).toBe('delayed')
