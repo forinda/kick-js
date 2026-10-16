@@ -17,7 +17,7 @@ export function quoteLiteral(value: string): string {
  */
 export function allowsExpressionDefault(type: string): boolean {
   const base = type.endsWith('[]') ? type.slice(0, -2) : type
-  return /^(smallint|integer|int|int2|int4|int8|bigint|serial|bigserial|smallserial|real|float4|float8|double precision|numeric|decimal|money|bool|boolean|timestamp|timestamptz|date|time|timetz|interval|uuid)\b/i.test(
+  return /^(tinyint|smallint|mediumint|integer|int|int2|int4|int8|bigint|serial|bigserial|smallserial|real|float|float4|float8|double|double precision|numeric|decimal|money|bit|bool|boolean|timestamp|timestamptz|datetime|date|time|timetz|year|interval|uuid)\b/i.test(
     base,
   )
 }
@@ -29,6 +29,9 @@ export function allowsExpressionDefault(type: string): boolean {
  * inside quoted strings don't count.
  */
 export function isFunctionCall(str: string): boolean {
+  // A backslash escapes a quote in MySQL strings and Postgres E'' strings,
+  // which the scan below doesn't model: such a value is never a call.
+  if (str.includes('\\')) return false
   const open = /^[a-z_][a-z0-9_]*\s*\(/i.exec(str)
   if (!open) return false
   let depth = 0

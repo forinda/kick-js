@@ -519,6 +519,25 @@ function emitColumnDecl(c: ColumnSnapshot): string {
  * sharpest case — an enum label is *always* a literal, and one spelled `ACTIVE`
  * or `1` reads as a keyword or a number to any value-shaped heuristic.
  */
+/**
+ * A value with an explicit cast, passed through as SQL: a quoted literal, a
+ * function call or an array literal, then `::` and a type name —
+ * `'{}'::jsonb`, `now()::date`, `gen_random_uuid()::text`, `ARRAY[]::text[]`.
+ * Anything else holding `::` (`std::string`) is a string.
+ */
+function isCast(str: string): boolean {
+  const at = str.lastIndexOf('::')
+  if (at === -1 || !/^[\w".]+(\[\])?$/.test(str.slice(at + 2))) return false
+  const value = str.slice(0, at)
+  return (
+    /^'(?:[^'\\]|'')*'$/.test(value) ||
+    isFunctionCall(value) ||
+    /^ARRAY\[(?:\s*(?:'(?:[^'\\]|'')*'|-?\d+(?:\.\d+)?)\s*,?)*\]$/i.test(value) ||
+    // A cast of a cast: 'x'::text::citext.
+    isCast(value)
+  )
+}
+
 function formatDefault(value: unknown, type?: string): string {
   // Defensive: a snapshot authored before defaults were normalised to
   // strings (or hand-edited) may carry a raw boolean/number. Coerce so
@@ -526,11 +545,11 @@ function formatDefault(value: unknown, type?: string): string {
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value)
-  // A quoted literal with an explicit cast is SQL the caller composed —
+  // A value with an explicit cast is SQL the caller composed —
   // `'active'::"status"` from the enum recreate path, `'{}'::jsonb` from
-  // introspection — and is passed through whatever the column type is. Only
-  // that shape: any `::` let a text default like `std::string` out as SQL.
-  if (/^'(?:[^']|'')*'::[\w".[\] ]+$/.test(str)) return str
+  // introspection, `now()::date` — and is passed through whatever the column
+  // type is. Only those shapes: any `::` let `std::string` out as SQL.
+  if (isCast(str)) return str
   // Unknown type included: quoting a value that wanted to be an expression is
   // wrong but valid, while the reverse is a syntax error.
   if (type === undefined || !allowsExpressionDefault(type)) return quoteLiteral(str)

@@ -44,7 +44,19 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
   const droppedTables = new Set(
     ordered.filter((c) => c.kind === 'dropTable').map((c) => snapshotTableName(c.table)),
   )
-  return ordered.filter((c) => {
+  // A table the forward migration dropped comes back with CREATE TABLE, which
+  // carries no foreign keys on Postgres and MySQL (the forward create adds
+  // them as separate changes, after every table exists): add them back last.
+  const recreatedKeys: Change[] = ordered.flatMap((c) =>
+    c.kind === 'createTable'
+      ? c.table.foreignKeys.map((fk): Change => ({
+          kind: 'addForeignKey',
+          table: snapshotTableName(c.table),
+          fk,
+        }))
+      : [],
+  )
+  const kept = ordered.filter((c) => {
     if (
       c.kind === 'dropForeignKey' ||
       c.kind === 'dropIndex' ||
@@ -56,6 +68,7 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
     }
     return true
   })
+  return [...kept, ...recreatedKeys]
 }
 
 // `CreateSchema` is filtered out above rather than inverted, so excluding it

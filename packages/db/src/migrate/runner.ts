@@ -216,7 +216,8 @@ async function listPending(opts: RunnerOptions): Promise<PreparedEntry[]> {
   if (missing.length > 0) {
     throw new Error(
       `kickjs-db: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} applied but in no migrations folder — ` +
-        `restore the folder, or remove the row from the migrations table if it was deleted on purpose`,
+        `restore the folder, list every folder in migrationsDir (it takes an array), ` +
+        `or remove the row from the migrations table if it was deleted on purpose`,
     )
   }
   return entries

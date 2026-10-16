@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import {
   bigSerial,
+  date,
   diff,
+  invertChanges,
   emitMysql,
   emitPg,
   emitSqlite,
@@ -25,6 +27,7 @@ import {
   type AsyncSqliteDriver,
 } from '@forinda/kickjs-db/sqlite'
 import { isFunctionCall } from '../../src/emit/identifiers'
+import { tinyint } from '../../src/dsl/columns/mysql'
 
 const snap = (s: Record<string, unknown>, dialect: 'sqlite' | 'postgres' | 'mysql' = 'sqlite') =>
   extractSnapshot(s, dialect)
@@ -86,7 +89,7 @@ describe('a SQLite table rebuild keeps the rows of tables that reference it', ()
     const after = snap(usersAndPosts(text().notNull().default('x'), 'cascade'))
     const sql = emitSqlite(diff(before, after), { from: before, to: after })
     await expect(asyncSqliteAdapter({ driver }).applyMigrationInTx!(sql, null)).rejects.toThrow(
-      /rebuilds a table other tables reference \(posts → users\)/,
+      /rebuilds or drops a table other tables reference \(posts → users\)/,
     )
     expect(database.prepare('SELECT count(*) AS n FROM posts').get()).toEqual({ n: 1 })
   })
@@ -226,7 +229,9 @@ describe('a default that nests calls', () => {
     for (const yes of ['now()', 'floor(rand() * 10)', "nextval('a(b'::regclass)", "f('it''s )')"]) {
       expect(isFunctionCall(yes), yes).toBe(true)
     }
-    for (const no of ['a() + b()', 'floor(rand()', '0800', 'std::string', "f(')')x"]) {
+    // A backslash-escaped quote (MySQL, Postgres E'') would end the string early there.
+    const escaped = "f('\\', '); delete from users; -- ')"
+    for (const no of ['a() + b()', 'floor(rand()', '0800', 'std::string', "f(')')x", escaped]) {
       expect(isFunctionCall(no), no).toBe(false)
     }
   })
@@ -247,5 +252,143 @@ describe('a default that nests calls', () => {
     expect(database.prepare('SELECT n FROM t').get()).toEqual({ n: 0 })
     const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap(t, 'postgres')))
     expect(pg).toMatch(/"n" integer NOT NULL DEFAULT abs\(random\(\) % 1\)/)
+  })
+})
+
+describe('renames and foreign keys', () => {
+  const owners = table('owners', { id: serial().primaryKey() })
+  const docs = (col: 'ownerId' | 'authorId') =>
+    table('docs', {
+      id: serial().primaryKey(),
+      [col]: integer().references(() => owners.id, { name: 'docs_owner_fk' }),
+    })
+
+  it('a renamed column keeps its foreign key: no drop and re-add, and down renames back first', () => {
+    const a = snap({ owners, docs: docs('ownerId') }, 'postgres')
+    const b = snap({ owners, docs: docs('authorId') }, 'postgres')
+    const up = diff(a, b, { renames: { tables: {}, columns: { 'docs.ownerId': 'authorId' } } })
+    expect(up.map((c) => c.kind)).toEqual(['renameColumn'])
+    expect(invertChanges(up).map((c) => c.kind)).toEqual(['renameColumn'])
+  })
+
+  it("a renamed parent key column doesn't drop the child's foreign key", () => {
+    const parent = (key: 'id' | 'uid') => table('users', { [key]: serial().primaryKey() })
+    const child = (p: ReturnType<typeof parent>, key: 'id' | 'uid') =>
+      table('posts', {
+        id: serial().primaryKey(),
+        userId: integer().references(() => (p as any)[key]),
+      })
+    const pa = parent('id')
+    const pb = parent('uid')
+    const a = snap({ posts: child(pa, 'id'), users: pa }, 'postgres')
+    const b = snap({ posts: child(pb, 'uid'), users: pb }, 'postgres')
+    const kinds = diff(a, b, { renames: { tables: {}, columns: { 'users.id': 'uid' } } }).map(
+      (c) => c.kind,
+    )
+    expect(kinds).not.toContain('dropForeignKey')
+    expect(kinds).not.toContain('addForeignKey')
+  })
+
+  it('down re-creates a dropped table with its foreign keys, after both tables exist', () => {
+    const orgs = table('orgs', { id: serial().primaryKey() })
+    const teams = table('teams', {
+      id: serial().primaryKey(),
+      orgId: integer().references(() => orgs.id),
+    })
+    const a = snap({ orgs, teams }, 'postgres')
+    const b = snap({}, 'postgres')
+    const down = invertChanges(diff(a, b)).map((c) =>
+      c.kind === 'createTable' ? `create:${c.table.name}` : c.kind,
+    )
+    expect(down).toEqual(['create:orgs', 'create:teams', 'addForeignKey'])
+  })
+})
+
+describe('cast and numeric defaults', () => {
+  it('Postgres passes a cast of a call, literal or array through, and quotes anything else with ::', () => {
+    const t = table('t', {
+      id: text().notNull().default('gen_random_uuid()::text'),
+      day: date().notNull().default('now()::date'),
+      tags: text().notNull().default('ARRAY[]::text[]'),
+      meta: jsonb().notNull().default("'{}'::jsonb"),
+      lang: text().notNull().default('std::string'),
+      sneaky: text().notNull().default("'1'::int primary key"),
+    })
+    const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap({ t }, 'postgres')))
+    expect(pg).toContain('"id" text NOT NULL DEFAULT gen_random_uuid()::text')
+    expect(pg).toContain('"day" date NOT NULL DEFAULT now()::date')
+    expect(pg).toContain('"tags" text NOT NULL DEFAULT ARRAY[]::text[]')
+    expect(pg).toContain(`"meta" jsonb NOT NULL DEFAULT '{}'::jsonb`)
+    expect(pg).toContain(`"lang" text NOT NULL DEFAULT 'std::string'`)
+    expect(pg).toContain(`"sneaky" text NOT NULL DEFAULT '''1''::int primary key'`)
+  })
+
+  it('MySQL renders a boolean default on a tinyint as a number', () => {
+    const my = emitMysql(
+      diff(
+        { ...empty, dialect: 'mysql' },
+        snap(
+          {
+            t: table('t', {
+              id: serial().primaryKey(),
+              on: tinyint()
+                .notNull()
+                .default(true as never),
+            }),
+          },
+          'mysql',
+        ),
+      ),
+    )
+    expect(my).toMatch(/`on` TINYINT NOT NULL DEFAULT 1/)
+  })
+})
+
+describe('async SQLite: a drop or rebuild that would cascade', () => {
+  const driverFor = (database: Database.Database): AsyncSqliteDriver => ({
+    async query(sql, params = []) {
+      const stmt = database.prepare(sql)
+      return stmt.reader ? stmt.all(...params) : (stmt.run(...params), [])
+    },
+    async batch(statements) {
+      database.transaction(() => {
+        for (const s of statements) {
+          const stmt = database.prepare(s.sql)
+          if (stmt.reader) stmt.all(...(s.params ?? []))
+          else stmt.run(...(s.params ?? []))
+        }
+      })()
+    },
+  })
+  const setup = (before: Record<string, unknown>) => {
+    const database = new Database(':memory:')
+    database.pragma('foreign_keys = ON')
+    const a = snap(before)
+    database.exec(emitSqlite(diff(empty, a), { from: empty, to: a }))
+    return { database, a }
+  }
+
+  it('runs when the referencing table is dropped in the same migration', async () => {
+    const { database, a } = setup(usersAndPosts(text(), 'cascade'))
+    const b = snap({ users: usersAndPosts(text().notNull().default('x'), 'cascade').users })
+    const sql = emitSqlite(diff(a, b), { from: a, to: b })
+    await asyncSqliteAdapter({ driver: driverFor(database) }).applyMigrationInTx!(sql, null)
+  })
+
+  it('refuses dropping a table a kept table cascades from', async () => {
+    const orgs = table('orgs', { id: serial().primaryKey() })
+    const members = (withKey: boolean) =>
+      table('members', {
+        id: serial().primaryKey(),
+        ...(withKey ? { orgId: integer().references(() => orgs.id, { onDelete: 'cascade' }) } : {}),
+      })
+    const { database, a } = setup({ orgs, members: members(true) })
+    database.exec('INSERT INTO orgs DEFAULT VALUES; INSERT INTO members (orgId) VALUES (1);')
+    const b = snap({ members: members(false) })
+    const sql = emitSqlite(diff(a, b), { from: a, to: b })
+    await expect(
+      asyncSqliteAdapter({ driver: driverFor(database) }).applyMigrationInTx!(sql, null),
+    ).rejects.toThrow(/rebuilds or drops a table other tables reference \(members → orgs\)/)
+    expect(database.prepare('SELECT count(*) AS n FROM members').get()).toEqual({ n: 1 })
   })
 })

@@ -144,7 +144,7 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
 
     async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       const rebuilt = rebuiltTables(sql)
-      await refuseCascadingRebuild(driver, rebuilt)
+      await refuseCascadingRebuild(driver, sql, rebuilt)
       const batch = statements(sql)
       if (bookkeeping && 'record' in bookkeeping) batch.push(insertRow(bookkeeping.record))
       else if (bookkeeping) batch.push(deleteRow(bookkeeping.remove))
@@ -203,8 +203,17 @@ function rebuiltTables(sql: string): string[] {
  * them. A batch is one transaction, where foreign keys can't be switched off
  * (and D1 always has them on), so a rebuild of a referenced table stops here.
  */
-async function refuseCascadingRebuild(driver: AsyncSqliteDriver, rebuilt: string[]) {
-  if (rebuilt.length === 0) return
+async function refuseCascadingRebuild(driver: AsyncSqliteDriver, sql: string, rebuilt: string[]) {
+  // Tables the migration drops outright (a rebuild drops its old table too).
+  const dropped = new Set(
+    [...sql.matchAll(/DROP TABLE (?:IF EXISTS )?"((?:[^"]|"")+)"/g)]
+      .map((m) => m[1]!.replace(/""/g, '"'))
+      .filter((t) => !rebuilt.includes(t) && !t.startsWith('_kick_new_')),
+  )
+  // Rows are deleted from both kinds before they go; a table that goes too
+  // loses nothing it keeps.
+  const emptied = new Set([...rebuilt, ...dropped])
+  if (emptied.size === 0) return
   // D1 always has foreign keys on, and won't let the setting be read.
   let keysOn = true
   try {
@@ -220,14 +229,15 @@ async function refuseCascadingRebuild(driver: AsyncSqliteDriver, rebuilt: string
   )) as Array<{ name: string }>
   const pairs: string[] = []
   for (const { name } of tables) {
+    if (dropped.has(name)) continue
     const keys = (await driver.query(
       `PRAGMA foreign_key_list("${name.replace(/"/g, '""')}")`,
     )) as Array<{ table: string }>
-    for (const k of keys) if (rebuilt.includes(k.table)) pairs.push(`${name} → ${k.table}`)
+    for (const k of keys) if (emptied.has(k.table)) pairs.push(`${name} → ${k.table}`)
   }
   if (pairs.length === 0) return
   throw new Error(
-    `kickjs-db: this migration rebuilds a table other tables reference (${pairs.join(', ')}). SQLite deletes ` +
+    `kickjs-db: this migration rebuilds or drops a table other tables reference (${pairs.join(', ')}). SQLite deletes ` +
       `its rows before dropping it, and with foreign keys on that runs their ON DELETE — a cascade ` +
       `would empty them. Run it on a connection with foreign_keys off, or make the change in steps ` +
       `that don't rebuild the table.`,
