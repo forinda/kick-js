@@ -24,19 +24,28 @@ export interface InertiaAdapterOptions {
    * `createInertiaApp`. Served by Vite in dev, looked up in the build
    * manifest in production. Default: `'src/client/main.tsx'`.
    */
-  entry: string
-  /** Where `vite build` wrote the client, with `build.manifest: true`. Default: `'dist/client'`. */
-  clientDir: string
+  entry?: string
+  /**
+   * Where `vite build` wrote the client, with `build.manifest: true`. Default: `'dist/client'`.
+   * Outside production a missing build is not an error: pages render without
+   * asset tags (a warning says so), so tests run before the client is built.
+   */
+  clientDir?: string
   /**
    * Asset version. A client on another version reloads the page on its next
    * visit. Default: a hash of the build manifest in production, none in dev
-   * (Vite reloads changed modules itself).
+   * (Vite reloads changed modules itself) or without a build. A test that
+   * sends `X-Inertia` requests pins it (`version: 'test'`) and sends the same
+   * value as `X-Inertia-Version`, so a built client doesn't turn them into 409s.
    */
   version?: string | (() => string)
   /** Props every page gets — the current user, app name. */
   share?: (ctx: RequestContext) => Record<string, unknown> | Promise<Record<string, unknown>>
-  /** `<title>` of the default HTML shell. */
-  title: string
+  /**
+   * `<title>` of the default HTML shell, until a page sets its own with
+   * Inertia's `<Head>`. Default: `'KickJS'`.
+   */
+  title?: string
   /**
    * Tags added to every page's `<head>` — a favicon, meta tags, fonts. Per-page
    * titles and meta belong in the page, with Inertia's `<Head>` component.
@@ -69,6 +78,12 @@ export interface SsrResult {
 }
 
 type SsrRender = (page: Page) => Promise<SsrResult>
+
+/** The options with their defaults applied. */
+type ResolvedOptions = InertiaAdapterOptions &
+  Required<Pick<InertiaAdapterOptions, 'entry' | 'clientDir' | 'title'>>
+
+let warnedNoBuild = false
 
 const log = Logger.for('InertiaAdapter')
 
@@ -149,7 +164,7 @@ function safeDecode(path: string): string {
 
 type NodeMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void
 
-export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
+export const InertiaAdapter = defineAdapter<ResolvedOptions>({
   name: 'InertiaAdapter',
   defaults: {
     entry: 'src/client/main.tsx',
@@ -204,15 +219,23 @@ export const InertiaAdapter = defineAdapter<InertiaAdapterOptions>({
         const vite = viteServer()
         let head: (page: Page) => string
 
+        const manifest = join(clientDir, '.vite', 'manifest.json')
         if (vite) {
           head = () => devHead(config.entry)
+        } else if (process.env.NODE_ENV !== 'production' && !existsSync(manifest)) {
+          // Tests and a fresh clone: pages render (as JSON or a shell without
+          // scripts), there is no asset version, and nothing to serve.
+          head = () => ''
+          if (!warnedNoBuild) {
+            warnedNoBuild = true
+            log.warn(
+              `No client build at ${manifest} — pages render without their scripts. Build the client, or run kick dev.`,
+            )
+          }
         } else {
           const tags = manifestHead(clientDir, config.entry)
           head = () => tags
-          const hash = createHash('sha1')
-            .update(readFileSync(join(clientDir, '.vite', 'manifest.json')))
-            .digest('hex')
-            .slice(0, 12)
+          const hash = createHash('sha1').update(readFileSync(manifest)).digest('hex').slice(0, 12)
           version = () => hash
           // The whole build: hashed `assets/` plus what Vite copied from
           // `public/` — favicon, robots.txt, a static sitemap.

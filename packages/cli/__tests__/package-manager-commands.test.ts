@@ -138,6 +138,19 @@ describe('Yarn 2+ and older Bun', () => {
     expect(file).not.toContain('workspaces focus')
   })
 
+  it('copies the lockfile of the chosen package manager, for every project kind', () => {
+    for (const kind of ['api', 'inertia'] as const) {
+      expect(generateDockerfile(kind, 'pnpm', 'app')).toContain('COPY pnpm-lock.yaml ./')
+      expect(generateDockerfile(kind, 'pnpm', 'app')).not.toContain('package-lock.json')
+    }
+  })
+
+  it('gives a SQLite file a writable /app/data to mount a volume on', () => {
+    const file = generateDockerfile('inertia', 'npm', 'app')
+    expect(file).toContain('docker run -v app-data:/app/data')
+    expect(file).toMatch(/RUN mkdir -p data && chown node:node data\nUSER node/)
+  })
+
   it("copies the lockfile the project's Bun writes", () => {
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.1.38')).toContain('COPY bun.lockb ./')
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.2.5')).toContain('COPY bun.lock ./')

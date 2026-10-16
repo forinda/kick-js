@@ -25,6 +25,7 @@ const envSchema = fromYup(
     NODE_ENV: yup.string().oneOf(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: yup.string().default('info'),
     // DATABASE_URL: yup.string().required(),
+    // @kick:env
   }),
 )
 

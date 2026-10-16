@@ -1,2 +1,3 @@
-# Signs the session cookie — at least 32 random characters.
-SESSION_SECRET=
+# Signs the session cookie — at least 32 random characters. Required in
+# production; development falls back to a fixed dev-only value.
+# SESSION_SECRET=

@@ -16,7 +16,7 @@
     {
       "import": {
         "from": "@forinda/kickjs",
-        "names": ["bootstrap", "requestId", "session"]
+        "names": ["bootstrap", "getEnv", "requestId", "session"]
       }
     },
     {
@@ -24,6 +24,10 @@
         "from": "@forinda/kickjs-inertia",
         "names": ["InertiaAdapter", "inertiaErrorHandler", "inertiaNotFound"]
       }
+    },
+    {
+      "slot": "env",
+      "code": "// Signs the session cookie. Required in production; elsewhere a public dev-only\n// default, so `kick dev` and the tests run without one.\nSESSION_SECRET: z\n  .string()\n  .min(32)\n  .default('dev-only-session-secret-not-for-production')\n  // `: boolean` — inferring it would make this schema's type depend on\n  // process.env, whose type `kick typegen` derives from this schema.\n  .refine(\n    (s): boolean => process.env.NODE_ENV !== 'production' || !s.startsWith('dev-only-'),\n    { error: 'set it in production — the dev-only default is public' },\n  )"
     }
   ]
 }

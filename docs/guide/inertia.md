@@ -38,13 +38,14 @@ pnpm add -D @vitejs/plugin-react @types/react @types/react-dom
 
 ```ts
 // src/index.ts
-import { bootstrap, session } from '@forinda/kickjs'
+import './config' // the env schema, which declares SESSION_SECRET
+import { bootstrap, getEnv, session } from '@forinda/kickjs'
 import { InertiaAdapter, inertiaErrorHandler, inertiaNotFound } from '@forinda/kickjs-inertia'
 
 export const app = await bootstrap({
   modules,
   // Carries validation errors and flash messages to the next page.
-  middlewares: [session({ secret: process.env.SESSION_SECRET!, store: 'cookie' })],
+  middlewares: [session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' })],
   adapters: [
     InertiaAdapter({
       title: 'My App',
@@ -64,7 +65,7 @@ export const app = await bootstrap({
 | ----------- | ----------------------- | --------------------------------------------------------------------------------- |
 | `entry`     | `'src/client/main.tsx'` | The file that calls `createInertiaApp`                                            |
 | `clientDir` | `'dist/client'`         | Where `vite build` wrote the browser bundle, with `build.manifest: true`          |
-| `title`     | `'KickJS'`              | `<title>` of the HTML shell                                                       |
+| `title`     | `'KickJS'`              | `<title>` of the HTML shell, replaced by a page's `<Head>` title                  |
 | `head`      | —                       | Tags added to every page's `<head>` — favicon, meta, fonts                        |
 | `share`     | —                       | Props every page receives                                                         |
 | `errorPage` | —                       | Component rendered for unknown URLs and thrown errors, with `{ status, message }` |
@@ -367,7 +368,22 @@ export default defineConfig(({ isSsrBuild }) => ({
 }
 ```
 
-The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest.
+The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. In production a missing manifest stops the app at startup; anywhere else pages render without their scripts and a warning says so — which is what lets tests run before the client is built.
+
+## Testing
+
+`createTestApp` boots the pages without `kick dev` or a client build. Pin `version` so an `X-Inertia` request isn't answered 409 once a build exists, and send the same value:
+
+```ts
+const { app } = await createTestApp({
+  modules: [PagesModule()],
+  adapters: [InertiaAdapter({ version: 'test' })],
+})
+const res = await request(app.handle.bind(app))
+  .get('/posts')
+  .set({ 'X-Inertia': 'true', 'X-Inertia-Version': 'test' })
+expect(res.body.component).toBe('Posts/Index')
+```
 
 ## Deploying
 
@@ -379,10 +395,12 @@ An Inertia app deploys like any KickJS app — see [Deploying](./deployment.md):
 Validation errors, flash messages and the "back" URL travel in the session. With more than one instance — several containers, or functions — use the cookie store, as the template does, so the request after a redirect finds them wherever it lands:
 
 ```ts
-session({ secret: process.env.SESSION_SECRET!, store: 'cookie' })
+session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' })
 ```
 
-Set `SESSION_SECRET` to a long random string on every target; the app refuses to start without it.
+Set `SESSION_SECRET` to a long random string on every target. The template's env schema requires it in production and falls back to a fixed development-only value elsewhere.
+
+Netlify and Vercel functions have no persistent disk, and a container's filesystem is lost when it is replaced: keep a SQLite database file on a mounted volume (`docker run -v data:/app/data`, pointing the app at `/app/data/…`), or use a hosted database.
 
 ## What the adapter handles
 

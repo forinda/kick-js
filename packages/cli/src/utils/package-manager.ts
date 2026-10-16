@@ -52,7 +52,13 @@ function packageManagerFromPackageJson(fromDir: string): PackageManager | null {
   return null
 }
 
-export type PackageManagerSource = 'flag' | 'config' | 'package.json' | 'lockfile' | 'default'
+export type PackageManagerSource =
+  | 'flag'
+  | 'config'
+  | 'package.json'
+  | 'lockfile'
+  | 'user-agent'
+  | 'default'
 
 /**
  * Resolve which package manager to use, in priority order:
@@ -60,7 +66,8 @@ export type PackageManagerSource = 'flag' | 'config' | 'package.json' | 'lockfil
  * 2. `packageManager` in kick.config
  * 3. `packageManager` in nearest ancestor package.json (corepack)
  * 4. The nearest ancestor folder's lockfile
- * 5. `'npm'` fallback
+ * 5. The package manager that launched the CLI (`npm_config_user_agent`)
+ * 6. `'npm'` fallback
  *
  * Returns the chosen pm plus the source for callers that want to log
  * the resolution path.
@@ -83,6 +90,13 @@ export async function resolvePackageManagerWithSource(
 
   const fromLock = detectFromLockfile(fromDir)
   if (fromLock) return { pm: fromLock, source: 'lockfile' }
+
+  // Outside any project: the one that launched the CLI (`pnpm dlx`, `bunx`,
+  // `yarn dlx`, `npx`) — e.g. `pnpm dlx @forinda/kickjs-cli new app --yes`.
+  const fromAgent = process.env.npm_config_user_agent?.split('/')[0] as PackageManager | undefined
+  if (fromAgent && PACKAGE_MANAGERS.includes(fromAgent)) {
+    return { pm: fromAgent, source: 'user-agent' }
+  }
 
   return { pm: 'npm', source: 'default' }
 }

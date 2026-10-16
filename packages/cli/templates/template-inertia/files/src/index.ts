@@ -7,9 +7,6 @@ import './config'
 // @kick:imports
 import { modules } from './modules'
 
-const sessionSecret = process.env.SESSION_SECRET
-if (!sessionSecret) throw new Error('SESSION_SECRET is not set — see .env.example')
-
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
   modules,
@@ -20,7 +17,7 @@ export const app = await bootstrap({
     // Carries validation errors and flash messages to the next page. Kept in
     // an encrypted cookie, so it works on any number of instances — several
     // containers, or Netlify / Vercel functions — with nothing shared.
-    session({ secret: sessionSecret, store: 'cookie' }),
+    session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' }),
   ],
   adapters: [
     InertiaAdapter({

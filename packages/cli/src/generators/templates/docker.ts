@@ -187,6 +187,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 COPY --from=build /app/dist ./dist
+# The image's filesystem is replaced on every deploy. Keep a SQLite file (or
+# uploads) in /app/data and mount a volume there: docker run -v ${name}-data:/app/data
+RUN mkdir -p data && chown node:node data
 USER node
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

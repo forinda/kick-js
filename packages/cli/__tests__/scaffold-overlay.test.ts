@@ -309,6 +309,23 @@ describe('the shipped layers', () => {
       expect(project.scripts[script], script).toContain('--ssr src/client/ssr.tsx')
     }
     expect(project.files.get('.env')).toContain('SESSION_SECRET={{sessionSecret}}')
+    // SESSION_SECRET is in the env schema: required in production, a dev-only
+    // default elsewhere — the entry doesn't read process.env and throw.
+    const config = project.files.get('src/config/index.ts')!
+    expect(config).toMatch(
+      /SESSION_SECRET: z\n\s+\.string\(\)\n\s+\.min\(32\)\n\s+\.default\('dev-only-/,
+    )
+    expect(config).toContain(
+      "(s): boolean => process.env.NODE_ENV !== 'production' || !s.startsWith('dev-only-')",
+    )
+    expect(config).not.toContain('@kick:')
+    expect(entry).not.toContain('process.env.SESSION_SECRET')
+    expect(entry).toContain("import './config'")
+    expect(entry).toContain("session({ secret: getEnv('SESSION_SECRET')")
+    // A fresh project's tests run before the client is built.
+    expect(project.files.get('src/modules/pages/pages.test.ts')).toContain(
+      "InertiaAdapter({ version: 'test' })",
+    )
     expect(project.dependencies).toEqual(
       expect.arrayContaining(['@forinda/kickjs-inertia', '@inertiajs/react', 'react-dom']),
     )

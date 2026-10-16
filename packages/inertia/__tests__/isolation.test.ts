@@ -3,9 +3,9 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import request from 'supertest'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Application, Controller, Get } from '@forinda/kickjs'
-import { InertiaAdapter, inertia } from '@forinda/kickjs-inertia'
+import { InertiaAdapter, inertia, type InertiaAdapterOptions } from '@forinda/kickjs-inertia'
 
 /** Two apps in one process each render with their own adapter. */
 function clientBuild(file: string): string {
@@ -70,5 +70,12 @@ describe('two Inertia apps in one process', () => {
     expect(res.text).toContain(
       '<title>A &amp; B &lt;/title&gt;&lt;script&gt;x&lt;/script&gt;</title>',
     )
+  })
+})
+
+describe('InertiaAdapterOptions', () => {
+  it('leaves the defaulted options optional', () => {
+    // Checked by tsc -p tsconfig.test.json.
+    expectTypeOf<{ errorPage: 'Error' }>().toExtend<InertiaAdapterOptions>()
   })
 })
