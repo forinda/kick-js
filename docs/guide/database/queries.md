@@ -187,6 +187,26 @@ await this.db.query.users.findMany({
 
 The options, nesting, self-references, dialect notes and cancellation are on [Relational Queries](../db-relational-query).
 
+## Timeouts and cancellation
+
+`db.timeout(ms)` gives any query builder the execute options that cancel it on the server once it has run that long — `pg_cancel_backend` on Postgres, `KILL QUERY` on MySQL — instead of only giving up on the wait while it keeps running and holding its connection. It rejects with a `TimeoutError`. Pass a request's signal too, and whichever fires first cancels:
+
+```ts
+const rows = await this.db
+  .selectFrom('reports')
+  .selectAll()
+  .execute(this.db.timeout(5_000, { signal: ctx.signal }))
+```
+
+`db.query` reads take the same as options: `timeoutMs` and `signal` (on the top level; nested `with` levels run inside it).
+
+- A timeout rejects with a `DOMException` named `TimeoutError`, not an importable class — check `err.name`; an aborted `signal` rejects with its own reason, whichever fires first. From `db.query` it's `RelationalQueryCancelledError` with that as its `cause`.
+- Inside a transaction the query is abandoned, not cancelled: a server-side cancel would abort the whole transaction, and Postgres would turn its `COMMIT` into a `ROLLBACK`. The query finishes on the server and the transaction carries on after it.
+- A write may already have taken effect when it's cancelled — most databases can't stop one cleanly — so time out reads.
+- On SQLite there is nothing to cancel: better-sqlite3 runs each query synchronously, and on libsql or D1 a timeout only stops the wait while the query runs on.
+- The timer starts when `db.timeout()` is called, so call it per query.
+- Kysely logs one line to `console.error` for each query cancelled in flight (`failed in the background after abortion`).
+
 ## Pagination with `ctx.paginate`
 
 KickJS's HTTP layer already parses `page` / `limit` / filters / sort off the query string. `ctx.paginate()` wraps a fetcher that returns `{ data, total }` and emits a standardized paginated response. Use `parsed.pagination.limit` / `parsed.pagination.offset` to bound the query. `findManyAndCount` returns that shape, the page plus the total before paging:

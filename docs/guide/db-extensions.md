@@ -207,15 +207,15 @@ const rows = await dbX.selectFrom('posts').selectAll().execute()
 //    rows[0].excerpt: string  — typed, computed from body
 ```
 
-**`needs` injection** — the plugin only rewrites the **top-level** `SelectQueryNode`, and only when its `from` resolves to a single table with computeds. In that case it adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated. Joins, sub-selects, and multi-table `FROM` clauses are skipped entirely — as are nested `SelectQueryNode`s inside `WITH` / `UNION` / scalar sub-selects. The injected columns DO land on the runtime row object (they were fetched, after all) — the row's TypeScript shape only widens with the computed property itself, but a property-existence check at runtime would still find the needs columns. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present.
+**`needs` injection** — the plugin only rewrites the **top-level** `SelectQueryNode`, and only when its `from` resolves to a single table with computeds. In that case it adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated. A select with joins isn't given its needs columns (an unqualified one could name either table), and computes a field only when the row already has every column it needs. Sub-selects and multi-table `FROM` clauses are skipped entirely — as are nested `SelectQueryNode`s inside `WITH` / `UNION` / scalar sub-selects. The injected columns DO land on the runtime row object (they were fetched, after all) — the row's TypeScript shape only widens with the computed property itself, but a property-existence check at runtime would still find the needs columns. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present. Under `casing: 'snake_case'` or a `.colName()` column, injected columns use the database's names and come back under their keys.
 
 **`compute()` semantics**
 
 - Sync only in v1 — async opens up "runtime queries inside compute" footguns. Use a model method when you need to query.
 - Each row is computed independently; computeds on the same table all run per row.
 - A throwing `compute()` degrades to `undefined` on that row's property; sibling computeds and rows still complete cleanly.
-- `db.query` reads apply them at every level: related rows loaded through `with` get their own table's computeds. A nested row whose `columns` leave out what a computed `needs` is returned without that computed.
-- On the query builder, single-table selects only: joins, sub-selects and multi-table `FROM` clauses pass through untouched.
+- `db.query` reads apply them at every level: related rows loaded through `with` get their own table's computeds. A nested row whose `columns` leave out what a computed `needs` is returned without that computed. A `morphTo` row gets the computeds of the table its source row's type column names, so that column has to be selected.
+- On the query builder, single-table selects: a select with joins computes a field when the row already has every column it needs (needs aren't added, since an unqualified one could name either table); sub-selects and multi-table `FROM` clauses pass through untouched.
 
 **How the rebuild works** — `$extends({ result })` registers a query-pipeline plugin that owns the transform pair. The new client shares the original's event emitter, savepoint counter, and dialect tag, so `.transaction()` / `.on('slowQuery', …)` / per-call savepoints keep working transparently. `$extends({ model })` alone (no `result`) skips the rebuild — it stays a thin Proxy as before. Composing both in one call is the common path:
 

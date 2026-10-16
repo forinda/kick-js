@@ -1,0 +1,5 @@
+---
+'@forinda/kickjs-db': minor
+---
+
+Add `morphMany`, `morphOne` and `morphTo` to `relations()`: a polymorphic one-to-many over a type + id column pair (one `comments` table shared by posts and podcasts). `db.query.posts.findMany({ with: { comments: true } })` returns the rows whose type column holds the `as` value and whose id column holds the post's key — typed and queried like `many`, with `where`, `orderBy`, `limit`, `columns` and nested `with`. `references` defaults to the source's single-column primary key. `morphOne` takes the same options and loads one such row, typed like `one` (`Row | null`). `morphTo({ type, id, targets })` goes the other way, from the child to the row its pair points at, in whichever table `targets` maps the type value to — typed as a union of those tables' rows, or `null`, and loaded with `true` or `{ withDeleted }`. No foreign key is created. The relational-queries guide gains a "Polymorphic associations" section comparing exclusive arcs, junction tables and type + id columns.

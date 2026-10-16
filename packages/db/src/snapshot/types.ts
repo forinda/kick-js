@@ -125,6 +125,20 @@ export interface RelationSnapshot {
    * source's `sourceColumns` and the target's `targetColumns`.
    */
   through?: { table: string; sourceColumns: readonly string[]; targetColumns: readonly string[] }
+  /**
+   * For a `morphMany` / `morphOne`: the target's type column and the value it must hold
+   * (bound as a parameter). There's no foreign key behind the join.
+   */
+  morph?: { column: string; value: string }
+  /**
+   * For a `morphTo`: the source's type column, and per type value the table
+   * and key column the source's id column (`sourceColumns[0]`) points at.
+   * `target` holds the first of those tables.
+   */
+  morphTo?: {
+    column: string
+    targets: ReadonlyArray<{ value: string; table: string; key: string }>
+  }
 }
 
 /** A row-level security policy (Postgres). */

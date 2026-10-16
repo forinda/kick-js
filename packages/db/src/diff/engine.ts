@@ -51,11 +51,20 @@ export function diff(
   // table changes → dropEnum (appended at the end).
   diffEnumsCreatePhase(prev, next, changes)
 
-  // Drops first (so FKs that depend on dropped tables are handled before drops below)
+  // Drops first. A kept table's foreign key to a dropped one goes before it
+  // (Postgres won't drop a table something still references), and dropped
+  // tables go child before parent.
+  const dropped = new Set([...prevTables].filter((n) => !nextTables.has(n)))
   for (const name of prevTables) {
-    if (!nextTables.has(name)) {
-      changes.push({ kind: 'dropTable', table: prev.tables[name] })
+    if (dropped.has(name)) continue
+    for (const f of prev.tables[name].foreignKeys) {
+      if (dropped.has(f.refTable)) {
+        changes.push({ kind: 'dropForeignKey', table: snapshotTableName(prev.tables[name]), fk: f })
+      }
     }
+  }
+  for (const name of childrenFirst(dropped, prev)) {
+    changes.push({ kind: 'dropTable', table: prev.tables[name] })
   }
 
   // Creates — three passes so secondary objects only land after every new
@@ -82,9 +91,23 @@ export function diff(
   }
 
   // Common tables — column/index/fk diff comes in Tasks 10-12
+  // Every column rename first, so a foreign key into a renamed column of
+  // another table compares as the same key (the database follows a rename).
+  const renamed: Renames = {
+    tables: new Map(tableRenames),
+    columns: new Map(),
+  }
   for (const name of nextTables) {
     if (!prevTables.has(name)) continue
-    diffTable(prev.tables[name], next.tables[name], changes, next.dialect, options)
+    const tableRef = snapshotTableName(next.tables[name])
+    renamed.columns.set(
+      tableRef,
+      columnRenames(prev.tables[name], next.tables[name], tableRef, options),
+    )
+  }
+  for (const name of nextTables) {
+    if (!prevTables.has(name)) continue
+    diffTable(prev.tables[name], next.tables[name], changes, next.dialect, renamed, dropped)
   }
 
   // Drop enums after every dependent table change has been emitted.
@@ -467,7 +490,9 @@ function diffTable(
   next: TableSnapshot,
   changes: Change[],
   dialect: SchemaSnapshot['dialect'],
-  options: DiffOptions = {},
+  renamed: Renames,
+  /** Tables this diff drops: a foreign key to one was dropped before them. */
+  dropped: ReadonlySet<string> = new Set(),
 ) {
   // Every `table:` field on a Change carries the QUALIFIED name — that is what
   // the emitters quote and what `invertChanges` matches dropTable against.
@@ -478,39 +503,57 @@ function diffTable(
   const prevCols = new Map(Object.entries(prev.columns))
   const nextCols = new Map(Object.entries(next.columns))
 
-  const drops: string[] = []
-  const adds: string[] = []
-  for (const c of prevCols.keys()) if (!nextCols.has(c)) drops.push(c)
-  for (const c of nextCols.keys()) if (!prevCols.has(c)) adds.push(c)
-
-  // Renames someone named: the old column is compared as the new one, so a
-  // rename that also changes the type is a rename plus an alter.
-  for (const [key, to] of Object.entries(options.renames?.columns ?? {})) {
-    const dot = key.lastIndexOf('.')
-    if (key.slice(0, dot) !== tableRef) continue
-    const from = key.slice(dot + 1)
-    if (!drops.includes(from) || !adds.includes(to)) {
-      throw new Error(
-        `kickjs-db: cannot rename ${tableRef}.${from} to ${to} — ` +
-          `${tableRef} must have lost ${from} and gained ${to}`,
-      )
-    }
-    changes.push({ kind: 'renameColumn', table: tableRef, from, to })
+  const renames = renamed.columns.get(tableRef) ?? new Map<string, string>()
+  const drops = [...prevCols.keys()].filter((c) => !nextCols.has(c) && !renames.has(c))
+  const adds = [...nextCols.keys()].filter(
+    (c) => !prevCols.has(c) && ![...renames.values()].includes(c),
+  )
+  // The old column is compared as the new one, so a rename that also changes
+  // the type is a rename plus an alter.
+  for (const [from, to] of renames) {
     prevCols.set(to, { ...prevCols.get(from)!, name: to })
     prevCols.delete(from)
-    drops.splice(drops.indexOf(from), 1)
-    adds.splice(adds.indexOf(to), 1)
   }
 
-  // Rename heuristic — pair only if exactly one drop + one add with identical attrs.
-  if (!options.explicitRenames && drops.length === 1 && adds.length === 1) {
-    const before = prevCols.get(drops[0])!
-    const after = nextCols.get(adds[0])!
-    if (columnAttrsEqual(before, after)) {
-      changes.push({ kind: 'renameColumn', table: tableRef, from: drops[0], to: adds[0] })
-      drops.length = 0
-      adds.length = 0
+  // Foreign keys, indexes and checks that change or go are dropped before any
+  // column: a column can't be dropped while an index or key still uses it
+  // (SQLite refuses; Postgres and MySQL drop them along, so a later DROP
+  // would fail). Their replacements are added after the columns.
+  const prevFks = new Map(prev.foreignKeys.map((f) => [f.name, f]))
+  const nextFks = new Map(next.foreignKeys.map((f) => [f.name, f]))
+  for (const [n, f] of prevFks) {
+    const after = nextFks.get(n)
+    if (dropped.has(f.refTable)) continue
+    if (!after || fkDefinition(after) !== fkDefinition(renamedFk(f, tableRef, renamed))) {
+      changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f })
     }
+  }
+  const prevIndexes = new Map(prev.indexes.map((i) => [i.name, i]))
+  const nextIndexes = new Map(next.indexes.map((i) => [i.name, i]))
+  // An index whose definition changed is dropped and created again — there
+  // is no ALTER for its keys, predicate or method.
+  for (const [n, i] of prevIndexes) {
+    const after = nextIndexes.get(n)
+    const was = { ...i, columns: i.columns.map((c) => renames.get(c) ?? c) }
+    if (!after || indexDefinition(after) !== indexDefinition(was)) {
+      // A rebuild of a concurrently-built index drops it concurrently too.
+      const index = after?.concurrently && !i.concurrently ? { ...i, concurrently: true } : i
+      changes.push({ kind: 'dropIndex', table: tableRef, index })
+    }
+  }
+  // A CHECK whose expression changed is dropped and added again.
+  const prevChecks = new Map(prev.checks.map((c) => [c.name, c]))
+  const nextChecks = new Map(next.checks.map((c) => [c.name, c]))
+  for (const [n, c] of prevChecks) {
+    if (nextChecks.get(n)?.expression !== c.expression) {
+      changes.push({ kind: 'dropCheck', table: tableRef, check: c })
+    }
+  }
+
+  // Renames after those drops, so a down migration — the changes inverted, in
+  // reverse — renames back before re-adding a key or index on the old name.
+  for (const [from, to] of renames) {
+    changes.push({ kind: 'renameColumn', table: tableRef, from, to })
   }
 
   // The primary key is compared as a whole (columns in key order, and the
@@ -566,45 +609,24 @@ function diffTable(
     })
   }
 
-  // A CHECK whose expression changed is dropped and added again.
-  const prevChecks = new Map(prev.checks.map((c) => [c.name, c]))
-  const nextChecks = new Map(next.checks.map((c) => [c.name, c]))
-  for (const [n, c] of prevChecks) {
-    if (nextChecks.get(n)?.expression !== c.expression) {
-      changes.push({ kind: 'dropCheck', table: tableRef, check: c })
-    }
-  }
   for (const [n, c] of nextChecks) {
     if (prevChecks.get(n)?.expression !== c.expression) {
       changes.push({ kind: 'addCheck', table: tableRef, check: c })
     }
   }
-
-  // An index whose definition changed is dropped and created again — there
-  // is no ALTER for its keys, predicate or method.
-  const prevIndexes = new Map(prev.indexes.map((i) => [i.name, i]))
-  const nextIndexes = new Map(next.indexes.map((i) => [i.name, i]))
-  for (const [n, i] of prevIndexes) {
-    const after = nextIndexes.get(n)
-    if (!after || indexDefinition(after) !== indexDefinition(i)) {
-      // A rebuild of a concurrently-built index drops it concurrently too.
-      const index = after?.concurrently && !i.concurrently ? { ...i, concurrently: true } : i
-      changes.push({ kind: 'dropIndex', table: tableRef, index })
-    }
-  }
   for (const [n, i] of nextIndexes) {
     const before = prevIndexes.get(n)
-    if (!before || indexDefinition(before) !== indexDefinition(i)) {
+    const was = before && { ...before, columns: before.columns.map((c) => renames.get(c) ?? c) }
+    if (!was || indexDefinition(was) !== indexDefinition(i)) {
       changes.push({ kind: 'addIndex', table: tableRef, index: i })
     }
   }
-
-  diffByName(
-    prev.foreignKeys,
-    next.foreignKeys,
-    (f) => changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f }),
-    (f) => changes.push({ kind: 'addForeignKey', table: tableRef, fk: f }),
-  )
+  for (const [n, f] of nextFks) {
+    const before = prevFks.get(n)
+    if (!before || fkDefinition(renamedFk(before, tableRef, renamed)) !== fkDefinition(f)) {
+      changes.push({ kind: 'addForeignKey', table: tableRef, fk: f })
+    }
+  }
 
   if ((prev.comment ?? null) !== (next.comment ?? null)) {
     changes.push({
@@ -614,6 +636,93 @@ function diffTable(
       to: next.comment ?? null,
     })
   }
+}
+
+/** The renames one diff makes: tables (old → new) and, per table, columns. */
+interface Renames {
+  tables: Map<string, string>
+  columns: Map<string, Map<string, string>>
+}
+
+/**
+ * A table's column renames, old → new: those named in `renames`, else a
+ * single dropped column whose one replacement has the same attributes.
+ */
+function columnRenames(
+  prev: TableSnapshot,
+  next: TableSnapshot,
+  tableRef: string,
+  options: DiffOptions,
+): Map<string, string> {
+  const drops = Object.keys(prev.columns).filter((c) => !(c in next.columns))
+  const adds = Object.keys(next.columns).filter((c) => !(c in prev.columns))
+  const out = new Map<string, string>()
+  for (const [key, to] of Object.entries(options.renames?.columns ?? {})) {
+    const dot = key.lastIndexOf('.')
+    if (key.slice(0, dot) !== tableRef) continue
+    const from = key.slice(dot + 1)
+    if (!drops.includes(from) || !adds.includes(to)) {
+      throw new Error(
+        `kickjs-db: cannot rename ${tableRef}.${from} to ${to} — ` +
+          `${tableRef} must have lost ${from} and gained ${to}`,
+      )
+    }
+    out.set(from, to)
+  }
+  const leftDrops = drops.filter((c) => !out.has(c))
+  const leftAdds = adds.filter((c) => ![...out.values()].includes(c))
+  if (
+    !options.explicitRenames &&
+    out.size === 0 &&
+    leftDrops.length === 1 &&
+    leftAdds.length === 1
+  ) {
+    if (columnAttrsEqual(prev.columns[leftDrops[0]!]!, next.columns[leftAdds[0]!]!)) {
+      out.set(leftDrops[0]!, leftAdds[0]!)
+    }
+  }
+  return out
+}
+
+/** A foreign key as it reads after this diff's renames, of its table, target and target's columns. */
+function renamedFk(
+  f: import('../snapshot/types').ForeignKeySnapshot,
+  tableRef: string,
+  renamed: Renames,
+): import('../snapshot/types').ForeignKeySnapshot {
+  const own = renamed.columns.get(tableRef)
+  const refTable = renamed.tables.get(f.refTable) ?? f.refTable
+  const ref = renamed.columns.get(refTable)
+  return {
+    ...f,
+    columns: f.columns.map((c) => own?.get(c) ?? c),
+    refTable,
+    refColumns: f.refColumns.map((c) => ref?.get(c) ?? c),
+  }
+}
+
+/**
+ * Dropped tables ordered so a table goes before any table it references.
+ * ponytail: a reference cycle keeps declaration order for what's left.
+ */
+function childrenFirst(dropped: ReadonlySet<string>, prev: SchemaSnapshot): string[] {
+  const left = [...dropped]
+  const out: string[] = []
+  while (left.length > 0) {
+    // A table no other remaining table references can go now.
+    const i = left.findIndex(
+      (t) =>
+        !left.some((o) => o !== t && prev.tables[o]!.foreignKeys.some((f) => f.refTable === t)),
+    )
+    out.push(...left.splice(i === -1 ? 0 : i, 1))
+  }
+  return out
+}
+
+/** What makes two foreign keys the same key: a changed action or target is a new one. */
+function fkDefinition(f: import('../snapshot/types').ForeignKeySnapshot): string {
+  const { name: _name, ...rest } = f
+  return JSON.stringify(Object.entries(rest).toSorted(([a], [b]) => a.localeCompare(b)))
 }
 
 /** What makes two indexes the same index. `concurrently` is how it is built, not what it is. */
@@ -627,18 +736,6 @@ function indexDefinition(i: import('../snapshot/types').IndexSnapshot): string {
     i.include ?? [],
     Object.entries(i.opclasses ?? {}).toSorted(([a], [b]) => a.localeCompare(b)),
   ])
-}
-
-function diffByName<T extends { name: string }>(
-  prev: T[],
-  next: T[],
-  onDrop: (item: T) => void,
-  onAdd: (item: T) => void,
-) {
-  const prevByName = new Map(prev.map((p) => [p.name, p]))
-  const nextByName = new Map(next.map((n) => [n.name, n]))
-  for (const [n, p] of prevByName) if (!nextByName.has(n)) onDrop(p)
-  for (const [n, x] of nextByName) if (!prevByName.has(n)) onAdd(x)
 }
 
 function columnsEqual(

@@ -12,6 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
+  sql,
   expressionBuilder,
   type Kysely,
   type ExpressionBuilder,
@@ -55,7 +56,14 @@ const DEFAULT_MAX_DEPTH = 5
 export interface JsonHelpers {
   jsonArrayFrom: (expr: Expression<unknown>) => Expression<unknown>
   jsonObjectFrom: (expr: Expression<unknown>) => Expression<unknown>
+  dialect: 'postgres' | 'mysql' | 'sqlite'
 }
+
+/**
+ * The LIMIT that means none, for an OFFSET without a LIMIT: SQLite and MySQL
+ * have no OFFSET on its own (Postgres does).
+ */
+const NO_LIMIT = { postgres: undefined, sqlite: '-1', mysql: '18446744073709551615' } as const
 
 /**
  * Build a Proxy that maps property reads to Kysely column refs.
@@ -112,7 +120,13 @@ export function runCompile<DB>(
       (eb: ExpressionBuilder<any, any>) => eb.fn.countAll().as('total'),
     )
     const filtered = skipDeleted(count, outerAlias, tables[table], options)
-    return applyWhereOrderLimit(filtered, outerAlias, { where: options.where }, mode).compile()
+    return applyWhereOrderLimit(
+      filtered,
+      outerAlias,
+      { where: options.where },
+      mode,
+      helpers,
+    ).compile()
   }
   // Outer `.selectAll()` is fine — the helpers only restrict inner
   // subqueries passed to jsonArrayFrom / jsonObjectFrom.
@@ -136,7 +150,7 @@ export function runCompile<DB>(
   }
 
   query = skipDeleted(query, outerAlias, tables[table], options)
-  query = applyWhereOrderLimit(query, outerAlias, options, mode)
+  query = applyWhereOrderLimit(query, outerAlias, options, mode, helpers)
 
   return query.compile() as CompiledQuery
 }
@@ -159,12 +173,21 @@ function applyWithSelects(
   return query.select((eb: ExpressionBuilder<any, any>) => {
     const out: unknown[] = []
     for (const [key, value] of Object.entries(withClause)) {
-      const rel = relations[source]?.[key]
+      // Own keys only: `toString` or `constructor` isn't a relation.
+      const rel = Object.hasOwn(relations[source] ?? {}, key) ? relations[source]![key] : undefined
       if (!rel) {
         throw new RelationalQueryUnknownRelationError(source, key)
       }
 
       const subOptions: CompileOptions = value === true ? {} : value
+      if (rel.morphTo) {
+        out.push(
+          buildMorphTo(eb, sourceAlias, rel, key, subOptions, tables, trace.length, helpers).as(
+            key,
+          ),
+        )
+        continue
+      }
       const innerAlias = makeAlias(rel.target, trace.length)
       const inner = buildInnerSelect(
         eb,
@@ -207,9 +230,12 @@ function buildInnerSelect(
   // keeps a single dialect-agnostic code path here.
   const targetTable = tables[rel.target]
   const columns = targetTable
-    ? (pickColumns(rel.target, targetTable, subOptions) ?? Object.keys(targetTable.columns)).map(
-        (c) => `${innerAlias}.${c}`,
-      )
+    ? nestedColumns(
+        rel.target,
+        targetTable,
+        pickColumns(rel.target, targetTable, subOptions) ?? Object.keys(targetTable.columns),
+        helpers,
+      ).map((c) => `${innerAlias}.${c}`)
     : null
 
   let sub: any = eb.selectFrom(`${rel.target} as ${innerAlias}` as any) as any
@@ -224,27 +250,32 @@ function buildInnerSelect(
   }
 
   if (rel.through) {
-    // Many-to-many: target rows joined to the junction rows that point at the source.
+    // Many-to-many: target rows with a junction row that points at the source.
+    // EXISTS rather than a join keeps the junction out of the level's scope, so
+    // its `where` on a column both tables have isn't ambiguous; a soft-deleted
+    // junction row links nothing (unless the level asks for deleted rows).
     const through = rel.through
     const junctionAlias = `${innerAlias}_j`
-    sub = sub.innerJoin(`${through.table} as ${junctionAlias}`, (join: any) => {
-      let on = join
+    sub = sub.where((w: ExpressionBuilder<any, any>) => {
+      let link: any = w
+        .selectFrom(`${through.table} as ${junctionAlias}` as any)
+        .select(sql.lit(1).as('linked'))
       for (let i = 0; i < through.targetColumns.length; i++) {
-        on = on.onRef(
+        link = link.whereRef(
           `${junctionAlias}.${through.targetColumns[i]}`,
           '=',
           `${innerAlias}.${rel.targetColumns[i]}`,
         )
       }
-      return on
+      for (let i = 0; i < through.sourceColumns.length; i++) {
+        link = link.whereRef(
+          `${junctionAlias}.${through.sourceColumns[i]}`,
+          '=',
+          `${sourceAlias}.${rel.sourceColumns[i]}`,
+        )
+      }
+      return w.exists(skipDeleted(link, junctionAlias, tables[through.table], subOptions))
     })
-    for (let i = 0; i < through.sourceColumns.length; i++) {
-      sub = sub.whereRef(
-        `${junctionAlias}.${through.sourceColumns[i]}`,
-        '=',
-        `${sourceAlias}.${rel.sourceColumns[i]}`,
-      )
-    }
   } else {
     for (let i = 0; i < rel.sourceColumns.length; i++) {
       sub = sub.whereRef(
@@ -253,6 +284,7 @@ function buildInnerSelect(
         `${sourceAlias}.${rel.sourceColumns[i]}`,
       )
     }
+    if (rel.morph) sub = sub.where(`${innerAlias}.${rel.morph.column}`, '=', rel.morph.value)
   }
 
   sub = applyExtras(sub, innerAlias, subOptions)
@@ -274,13 +306,79 @@ function buildInnerSelect(
   }
 
   sub = skipDeleted(sub, innerAlias, targetTable, subOptions)
-  sub = applyWhereOrderLimit(sub, innerAlias, subOptions, 'many')
+  sub = applyWhereOrderLimit(sub, innerAlias, subOptions, 'many', helpers)
 
   if (rel.kind === 'one') {
     sub = sub.limit(1)
   }
 
   return sub
+}
+
+/**
+ * `morphTo`: one single-row subquery per target table, each guarded by the
+ * source's type column holding that target's value (bound as a parameter), so
+ * at most one is non-null — `coalesce` keeps it. The targets have different
+ * columns, so only `withDeleted` applies.
+ */
+function buildMorphTo(
+  eb: ExpressionBuilder<any, any>,
+  sourceAlias: string,
+  rel: ResolvedRelation,
+  key: string,
+  options: CompileOptions,
+  tables: Record<string, CompileTable>,
+  depth: number,
+  helpers: JsonHelpers,
+): any {
+  const other = Object.entries(options).filter(([k, v]) => k !== 'withDeleted' && v !== undefined)
+  if (other.length > 0) {
+    throw new Error(
+      `kickjs-db: morphTo '${key}' takes \`true\` or \`{ withDeleted }\` — its rows come from several tables (got ${other.map(([k]) => k).join(', ')})`,
+    )
+  }
+  const morphTo = rel.morphTo!
+  const subs = morphTo.targets.map((t) => {
+    const alias = makeAlias(t.table, depth)
+    const table = tables[t.table]
+    let sub: any = eb.selectFrom(`${t.table} as ${alias}` as any)
+    sub = table
+      ? sub.select(
+          nestedColumns(t.table, table, Object.keys(table.columns), helpers, 'skip').map(
+            (c) => `${alias}.${c}`,
+          ),
+        )
+      : sub.selectAll()
+    sub = sub
+      .whereRef(`${alias}.${t.key}`, '=', `${sourceAlias}.${rel.sourceColumns[0]}`)
+      .where(`${sourceAlias}.${morphTo.column}`, '=', t.value)
+    return helpers.jsonObjectFrom(skipDeleted(sub, alias, table, options).limit(1))
+  })
+  return subs.length === 1 ? subs[0] : (eb.fn.coalesce as any)(...subs)
+}
+
+/**
+ * A nested level's columns. SQLite's JSON can't hold a blob, so a `bytea`
+ * column there is refused by name instead of failing inside the query.
+ */
+function nestedColumns(
+  name: string,
+  table: CompileTable,
+  columns: string[],
+  helpers: JsonHelpers,
+  /** `'skip'` for a morphTo target, which can't take `columns` to leave one out. */
+  blobs: 'refuse' | 'skip' = 'refuse',
+): string[] {
+  if (helpers.dialect !== 'sqlite') return columns
+  const isBlob = (c: string) => /^(bytea|blob)/i.test(table.columns[c]?.type ?? '')
+  if (blobs === 'skip') return columns.filter((c) => !isBlob(c))
+  const blob = columns.find(isBlob)
+  if (blob) {
+    throw new Error(
+      `kickjs-db: ${name}.${blob} is a bytea column, which SQLite can't put in a related row's JSON — leave it out with columns: { ${blob}: false }`,
+    )
+  }
+  return columns
 }
 
 /**
@@ -296,7 +394,7 @@ function pickColumns(
   const spec = Object.entries(options.columns ?? {}).filter(([, v]) => v !== undefined)
   if (spec.length === 0 || !table) return null
   for (const [c] of spec) {
-    if (!(c in table.columns)) {
+    if (!Object.hasOwn(table.columns, c)) {
       throw new Error(`kickjs-db: columns names '${c}', which table '${name}' doesn't have`)
     }
   }
@@ -342,6 +440,7 @@ function applyWhereOrderLimit(
   alias: string,
   options: CompileOptions,
   mode: CompileMode,
+  helpers: JsonHelpers,
 ): any {
   let q = query
 
@@ -365,6 +464,9 @@ function applyWhereOrderLimit(
   }
 
   if (typeof options.offset === 'number') {
+    const none = NO_LIMIT[helpers.dialect]
+    // A fixed constant, never input: raw is safe, and MySQL needs it unquoted.
+    if (none !== undefined && !q.toOperationNode().limit) q = q.limit(sql.raw(none))
     q = q.offset(options.offset)
   }
 

@@ -85,6 +85,8 @@ export interface InternalContext {
    * present after `createDbClient` runs — the compiler may be a
    * throw-stub for unsupported dialects (MySQL until M4.A.3).
    */
+  /** Database names ↔ schema keys, under `casing` or `.colName()`. */
+  naming?: import('../extend/result-plugin').Naming
   query: {
     relations: ResolvedRelations
     tables: Record<string, TableSnapshot>
@@ -126,6 +128,17 @@ export function retryDelay(plan: ReturnType<typeof retryPlan>, failedAttempt: nu
 
 const withPlugins = <DB>(qb: Kysely<any>, plugins: KyselyPlugin[]): Kysely<DB> =>
   plugins.reduce((q, p) => q.withPlugin(p), qb) as Kysely<DB>
+
+/**
+ * How an aborted query stops. Outside a transaction it's cancelled on the
+ * server (every client connection can cancel; a no-op where the driver
+ * can't). Inside one, a cancel would abort the whole transaction — Postgres
+ * then turns its COMMIT into a ROLLBACK — so the query is only abandoned: it
+ * finishes on the server, and the transaction carries on after it.
+ */
+export function abortStrategy(qb: Kysely<any>): 'cancel query' | 'ignore query' {
+  return qb.isTransaction ? 'ignore query' : 'cancel query'
+}
 
 export function wrap<DB>(
   qb: Kysely<DB>,
@@ -400,6 +413,14 @@ export function wrap<DB>(
       }
       return startTransaction(opts, fn)
     }) as KickDbClient<DB>['transaction'],
+
+    timeout: (ms: number, opts?: { signal?: AbortSignal }) => {
+      const timer = AbortSignal.timeout(ms)
+      return {
+        signal: opts?.signal ? AbortSignal.any([opts.signal, timer]) : timer,
+        inflightQueryAbortStrategy: abortStrategy(qb),
+      }
+    },
 
     upsert: (async (table: string, opts: UpsertOptions<DB, any>) => {
       const rows = await upsert(client, table as never, opts)

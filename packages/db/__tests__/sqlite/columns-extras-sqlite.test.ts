@@ -124,5 +124,13 @@ describe('result extensions on db.query', () => {
     const users = await db.query.users.findMany({ with: { posts: true } })
     expect(users[0].handle).toBe('ada')
     expect(users[0].posts.map((p) => p.slug)).toEqual(['one', 'two'])
+    // The outer table needs no computeds of its own.
+    const plain = (await make()).$extends({
+      result: {
+        users: { handle: { needs: { email: true }, compute: (u) => u.email.split('@')[0] } },
+      },
+    })
+    const [first] = await plain.query.posts.findMany({ with: { author: true } })
+    expect(first!.author).toMatchObject({ handle: 'ada' })
   })
 })

@@ -23,6 +23,7 @@ import {
 } from 'kysely'
 
 import { createDbClient, table, serial, varchar } from '../../src/index'
+import { pgSchema } from '../../src/dsl/pg-schema'
 import { ResultExtensionPlugin } from '../../src/extend/result-plugin'
 
 // ── Fixture schema ─────────────────────────────────────────────
@@ -349,5 +350,27 @@ describe('createDbClient + $extends({ result }) — end-to-end', () => {
     }
     expect(row.tag2).toBe('c:9')
     await dbX.destroy()
+  })
+})
+
+describe('a table in a named schema', () => {
+  it('gets its computeds, found by its qualified name', async () => {
+    const invoices = pgSchema('billing').table('invoices', {
+      id: serial().primaryKey(),
+      code: varchar(20).notNull(),
+    })
+    const db = createDbClient({
+      schema: { invoices },
+      dialect: dialectReturning([{ id: 1, code: 'a1' }]),
+    }).$extends({
+      result: {
+        'billing.invoices': { tag: { needs: { code: true }, compute: (r: any) => `#${r.code}` } },
+      } as never,
+    })
+    const rows = await db
+      .selectFrom('billing.invoices' as never)
+      .selectAll()
+      .execute()
+    expect(rows).toEqual([{ id: 1, code: 'a1', tag: '#a1' }])
   })
 })

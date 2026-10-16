@@ -51,6 +51,20 @@ class TenantConnection implements DatabaseConnection {
     private readonly tenant: string,
   ) {}
 
+  // Kysely's cancellation hooks reach the real connection: it learns its
+  // backend pid in collectSessionInfo, which cancelQuery / killSession use.
+  collectSessionInfo(): Promise<void> {
+    return this.inner.collectSessionInfo?.() ?? Promise.resolve()
+  }
+
+  cancelQuery(...args: Parameters<NonNullable<DatabaseConnection['cancelQuery']>>): Promise<void> {
+    return this.inner.cancelQuery?.(...args) ?? Promise.resolve()
+  }
+
+  killSession(...args: Parameters<NonNullable<DatabaseConnection['killSession']>>): Promise<void> {
+    return this.inner.killSession?.(...args) ?? Promise.resolve()
+  }
+
   /** Set the tenant for the transaction just begun. */
   bind(): Promise<QueryResult<unknown>> {
     return this.inner.executeQuery(
@@ -61,10 +75,11 @@ class TenantConnection implements DatabaseConnection {
   /**
    * `begin` and the tenant in one round trip: a parameterless query goes out
    * as a simple query, which may hold several statements. The values are
-   * quoted as SQL literals (standard strings, `'` doubled).
+   * quoted as escape-string literals (`\\` and `'` escaped), which read the
+   * same whatever `standard_conforming_strings` is set to.
    */
   private beginBound(): Promise<QueryResult<unknown>> {
-    const literal = (v: string) => `'${v.replace(/'/g, "''")}'`
+    const literal = (v: string) => `E'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
     return this.inner.executeQuery(
       raw(`begin; select set_config(${literal(this.setting)}, ${literal(this.tenant)}, true)`),
     )
@@ -73,8 +88,10 @@ class TenantConnection implements DatabaseConnection {
   async executeQuery<R>(query: CompiledQuery): Promise<QueryResult<R>> {
     if (this.inTransaction) return this.inner.executeQuery<R>(query)
     // A query on its own: wrap it, so the local setting has a transaction to live in.
-    await this.beginBound()
+    // The setup is inside the rollback too: if it fails after BEGIN ran (an
+    // error, a cancel), the connection mustn't go back with a transaction open.
     try {
+      await this.beginBound()
       const result = await this.inner.executeQuery<R>(query)
       await this.inner.executeQuery(raw('commit'))
       return result
@@ -92,9 +109,9 @@ class TenantConnection implements DatabaseConnection {
       yield* this.inner.streamQuery<R>(query, chunkSize)
       return
     }
-    await this.beginBound()
     let committed = false
     try {
+      await this.beginBound()
       yield* this.inner.streamQuery<R>(query, chunkSize)
       await this.inner.executeQuery(raw('commit'))
       committed = true

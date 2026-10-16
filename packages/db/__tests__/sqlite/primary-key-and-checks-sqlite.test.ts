@@ -81,9 +81,13 @@ describe('primary-key and CHECK migrations (sqlite)', () => {
       /foreign key points at a missing row \(kids → parents\)/,
     )
 
-    // With enforcement on, SQLite refuses the row copy itself — rolled back too.
+    // With enforcement on, the rebuild runs with it off (so the parent's rows
+    // don't cascade away) and the same check rolls it back.
     database.pragma('foreign_keys = ON')
-    await expect(adapter.applySqlInTx(migrate(before, after))).rejects.toThrow(/FOREIGN KEY/)
+    await expect(adapter.applySqlInTx(migrate(before, after))).rejects.toThrow(
+      /foreign key points at a missing row \(kids → parents\)/,
+    )
+    expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
     // Rolled back: still the old table, without the CHECK.
     const ddl = (
       database.prepare("SELECT sql FROM sqlite_master WHERE name = 'kids'").get() as { sql: string }

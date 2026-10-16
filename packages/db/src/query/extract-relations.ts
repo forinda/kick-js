@@ -13,7 +13,14 @@
  *    §7 R-5.
  */
 
-import type { Relation, RelationOne, RelationsDecl, ThroughSpec } from '../dsl/relations'
+import type {
+  MorphSpec,
+  MorphToSpec,
+  Relation,
+  RelationOne,
+  RelationsDecl,
+  ThroughSpec,
+} from '../dsl/relations'
 import type { ColumnRef } from '../dsl/table'
 import type { TableSnapshot } from '../snapshot/types'
 import type { ResolvedRelation, ResolvedRelations } from './relations'
@@ -72,8 +79,30 @@ export function extractRelations(
     out[sourceTable] = {}
 
     for (const [relationName, rel] of Object.entries(relations)) {
-      if (relationName in tableSnapshot.columns) {
+      if (Object.hasOwn(tableSnapshot.columns, relationName)) {
         throw new RelationalQueryAliasCollisionError(sourceTable, relationName)
+      }
+
+      if ('morphTo' in rel && rel.morphTo) {
+        out[sourceTable][relationName] = resolveMorphTo(
+          sourceTable,
+          relationName,
+          rel.morphTo,
+          tables,
+        )
+        continue
+      }
+
+      if (rel.morph) {
+        out[sourceTable][relationName] = resolveMorph(
+          sourceTable,
+          relationName,
+          rel.kind,
+          rel.target.__name,
+          rel.morph,
+          tables,
+        )
+        continue
       }
 
       if (rel.kind === 'one') {
@@ -182,6 +211,11 @@ export function extractRelations(
   return out
 }
 
+/** A `one` declared with `fields` / `references` — not a morph relation. */
+function isPlainOne(rel: Relation): rel is RelationOne {
+  return rel.kind === 'one' && 'fields' in rel
+}
+
 /**
  * Step-1 helper — find inverse `one` declarations on the target
  * table whose `relationName` matches the requested tag AND whose
@@ -196,11 +230,7 @@ function findInversesByRelationName(
 ): Array<{ relationKey: string; relation: RelationOne }> {
   const matches: Array<{ relationKey: string; relation: RelationOne }> = []
   for (const [key, rel] of Object.entries(targetRelations)) {
-    if (
-      rel.kind === 'one' &&
-      rel.target.__name === sourceTable &&
-      rel.relationName === relationName
-    ) {
+    if (isPlainOne(rel) && rel.target.__name === sourceTable && rel.relationName === relationName) {
       matches.push({ relationKey: key, relation: rel })
     }
   }
@@ -221,7 +251,7 @@ function findUniqueUntaggedInverse(
 ): RelationOne | null {
   let unique: RelationOne | null = null
   for (const rel of Object.values(targetRelations)) {
-    if (rel.kind === 'one' && rel.target.__name === sourceTable && rel.relationName === undefined) {
+    if (isPlainOne(rel) && rel.target.__name === sourceTable && rel.relationName === undefined) {
       if (unique) return null // ambiguous — caller falls through
       unique = rel
     }
@@ -289,5 +319,90 @@ function resolveThrough(
     sourceColumns: toSource.refColumns,
     targetColumns: toTarget.refColumns,
     through: { table: junction, sourceColumns: toSource.columns, targetColumns: toTarget.columns },
+  }
+}
+
+/**
+ * A polymorphic relation (`morphMany`, or `morphOne` for a single row): target
+ * rows whose `type` column holds `as` and whose `id` column holds the source's
+ * key. No foreign key backs it.
+ */
+function resolveMorph(
+  sourceTable: string,
+  relationName: string,
+  kind: 'one' | 'many',
+  target: string,
+  morph: MorphSpec,
+  tables: Record<string, TableSnapshot>,
+): ResolvedRelation {
+  const helper = kind === 'one' ? 'morphOne' : 'morphMany'
+  const fail = (problem: string) =>
+    new Error(`kickjs-db: ${helper} \`${sourceTable}.${relationName}\`: ${problem}`)
+  const targetSnap = tables[target]
+  if (!targetSnap) throw fail(`the target table '${target}' is not in the schema`)
+  for (const c of [morph.type, morph.id]) {
+    if (!Object.hasOwn(targetSnap.columns, c.__name)) {
+      throw fail(`'${c.__name}' is not a column of the target table '${target}'`)
+    }
+  }
+  if (typeof morph.as !== 'string' || morph.as === '') throw fail('`as` must be a non-empty string')
+  let key = morph.references?.__name
+  if (key === undefined) {
+    const pk = singleKey(tables[sourceTable]!)
+    if (typeof pk !== 'string') {
+      throw fail(`'${sourceTable}' has ${pk.problem} — name the key column with \`references\``)
+    }
+    key = pk
+  } else if (!Object.hasOwn(tables[sourceTable]!.columns, key)) {
+    throw fail(`'${key}' is not a column of '${sourceTable}'`)
+  }
+  return {
+    kind,
+    target,
+    sourceColumns: [key],
+    targetColumns: [morph.id.__name],
+    morph: { column: morph.type.__name, value: morph.as },
+  }
+}
+
+/** The single-column primary key of `table`, or a description of why there isn't one. */
+function singleKey(snap: TableSnapshot): string | { problem: string } {
+  const pk = Object.values(snap.columns).filter((c) => c.primaryKey)
+  if (pk.length === 1) return pk[0]!.name
+  return { problem: pk.length === 0 ? 'no primary key' : 'a composite primary key' }
+}
+
+/**
+ * The row a `(type, id)` pair on the source points at: per type value, a
+ * table and its primary key. No foreign key backs it.
+ */
+function resolveMorphTo(
+  sourceTable: string,
+  relationName: string,
+  spec: MorphToSpec,
+  tables: Record<string, TableSnapshot>,
+): ResolvedRelation {
+  const fail = (problem: string) =>
+    new Error(`kickjs-db: morphTo \`${sourceTable}.${relationName}\`: ${problem}`)
+  for (const c of [spec.type, spec.id]) {
+    if (!Object.hasOwn(tables[sourceTable]!.columns, c.__name)) {
+      throw fail(`'${c.__name}' is not a column of '${sourceTable}'`)
+    }
+  }
+  const targets = Object.entries(spec.targets).map(([value, decl]) => {
+    if (value === '') throw fail('a type value in `targets` is an empty string')
+    const snap = tables[decl.__name]
+    if (!snap) throw fail(`the target table '${decl.__name}' is not in the schema`)
+    const key = singleKey(snap)
+    if (typeof key !== 'string') throw fail(`'${decl.__name}' has ${key.problem}`)
+    return { value, table: decl.__name, key }
+  })
+  if (targets.length === 0) throw fail('`targets` is empty')
+  return {
+    kind: 'one',
+    target: targets[0]!.table,
+    sourceColumns: [spec.id.__name],
+    targetColumns: [],
+    morphTo: { column: spec.type.__name, targets },
   }
 }

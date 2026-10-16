@@ -44,7 +44,7 @@ export const toKeyName = (name: string): string => conversions.toKey(name)
  */
 export function applyCasing(
   snapshot: SchemaSnapshot,
-  casing: Casing | undefined = 'snake_case',
+  casing: Casing | undefined,
   /** `.colName()` overrides: table key → column key → name. Taken as written. */
   colNames: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map(),
 ): SchemaSnapshot {

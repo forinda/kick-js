@@ -28,6 +28,7 @@ import type { TableSnapshot } from '../snapshot/types'
 const SQLITE_HELPERS: JsonHelpers = {
   jsonArrayFrom: jsonArrayFrom as unknown as JsonHelpers['jsonArrayFrom'],
   jsonObjectFrom: jsonObjectFrom as unknown as JsonHelpers['jsonObjectFrom'],
+  dialect: 'sqlite',
 }
 
 export function compileSqlite<DB>(

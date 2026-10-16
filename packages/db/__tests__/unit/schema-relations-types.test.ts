@@ -78,6 +78,36 @@ describe('SchemaToRelationsRegister<S>', () => {
     expectTypeOf<R['comments']['post']['target']>().toEqualTypeOf<'posts'>()
   })
 
+  it('morphMany is a `many` and morphOne a `one`', () => {
+    const notes = table('notes', {
+      id: serial().primaryKey(),
+      subjectType: varchar(32).notNull(),
+      subjectId: integer().notNull(),
+    })
+    const morphs = relations(posts, (h) => ({
+      notes: h.morphMany(notes, { type: notes.subjectType, id: notes.subjectId, as: 'post' }),
+      pinned: h.morphOne(notes, { type: notes.subjectType, id: notes.subjectId, as: 'post' }),
+    }))
+    type R = SchemaToRelationsRegister<{
+      posts: typeof posts
+      notes: typeof notes
+      morphs: typeof morphs
+    }>
+    expectTypeOf<R['posts']['notes']>().toEqualTypeOf<{ kind: 'many'; target: 'notes' }>()
+    expectTypeOf<R['posts']['pinned']>().toEqualTypeOf<{ kind: 'one'; target: 'notes' }>()
+    const back = relations(notes, (h) => ({
+      subject: h.morphTo({
+        type: notes.subjectType,
+        id: notes.subjectId,
+        targets: { post: posts, user: users },
+      }),
+    }))
+    type B = SchemaToRelationsRegister<{ back: typeof back }>
+    expectTypeOf<B['notes']['subject']['target']>().toEqualTypeOf<'posts' | 'users'>()
+    expectTypeOf<B['notes']['subject']['morphTo']>().toEqualTypeOf<true>()
+    expectTypeOf<R['posts']['pinned']>().not.toHaveProperty('morphTo')
+  })
+
   it('schema without any relations() resolves to an empty record', () => {
     const flatSchema = { users, posts }
     type R = SchemaToRelationsRegister<typeof flatSchema>

@@ -47,6 +47,22 @@ await tenancy.run(job.data.tenantId, () => reports.build())
 
 With no tenant in effect, queries on tenanted data fail rather than return everyone's rows (under `'rls'`, the database returns nothing).
 
+## The tenant column
+
+Name it anything: `tenantKey()` marks the column, not its name. `workspaceId`, `organization_id`, a camelCase key under [`casing: 'snake_case'`](./schema.md#column-names-casing) (stored as `organization_id`), or a key renamed with [`.colName()`](./schema.md#column-col-name) all work: in queries, on insert and in the `'rls'` policy.
+
+```ts
+workspaceId: tenantKey(tenancy, uuid()),
+```
+
+**Tenant id type.** The column is `text` by default, which fits slugs and ULIDs (kick/db has no `ulid()` builder; `varchar(26)` works too). Pass another column to change it:
+
+- `tenantKey(tenancy, uuid())` for UUID tenant ids.
+- `tenantKey(tenancy, integer())` or `bigint()` for numeric ids. The tenant id stays a string (`run('42', fn)`, or a request's `tenant` of `'42'` or `{ id: 42 }`) and the database converts it. Rows read back as the column's type — the number `42` for `integer()`, and for `bigint()` whatever its `mode` gives (`42n` with `mode: 'bigint'`). An insert that gives the tenant as that number (`42` or `42n`) is accepted, while any other value is refused.
+- Not `serial()`: the tenant column holds another table's id. The serial belongs on the `tenants` table.
+
+Under `'rls'` the generated policy casts the setting to the column's type (`::uuid`, `::integer`).
+
 ## Choosing a strategy
 
 | Strategy     | Isolation enforced by                  | Cost per tenant                | Dialects | Use it for                                                           |
@@ -58,7 +74,11 @@ With no tenant in effect, queries on tenanted data fail rather than return every
 
 ### `'column'`
 
-Every `select`, `update` and `delete` on a tenanted table gets `tenantId = <current>`, joined tables included (in the join's `ON`, so a left join stays a left join), at every level of `db.query`. Inserts get the tenant filled in, and a row for another tenant is refused. Raw `sql` isn't rewritten.
+Every `select`, `update` and `delete` on a tenanted table gets `tenantId = <current>`, joined tables included (in the join's `ON`, so a left join stays a left join), at every level of `db.query`. Inserts get the tenant filled in, and a row for another tenant is refused. So is an update or upsert that sets the tenant column to another tenant, or to an expression.
+
+The table is recognised however a query spells it: `main.tasks`, `public.tasks`, `TASKS` and `sql.table('tasks')` are all filtered. What can't be filtered is refused: a tenanted table inside a larger piece of raw SQL, and `mergeInto`. Raw `sql` on its own (``sql`select * from tasks`.execute(db)``) isn't rewritten — use it only for what isn't tenant data, or inside `bypass`.
+
+With an `integer()` or `bigint()` tenant column, the tenant id has to be an integer as the database would print it: `'01'`, `'1.0'` or `' 1'` is refused rather than read as tenant 1. `db.upsert()` that collides with another tenant's row throws instead of returning nothing.
 
 ### `'rls'`
 

@@ -57,7 +57,7 @@ type ResolveRelations<R extends Record<string, Relation>> = {
         ? N
         : string
       : string
-  }
+  } & (R[K] extends { morphTo: object } ? { morphTo: true } : unknown)
 }
 
 /**

@@ -5,7 +5,7 @@ import type {
   IndexSnapshot,
   TableSnapshot,
 } from '../snapshot/types'
-import { quoteLiteral } from './identifiers'
+import { allowsExpressionDefault, isFunctionCall } from './identifiers'
 import { primaryKeyOf } from '../snapshot/name'
 
 /** MySQL quotes identifiers with backticks, not double quotes. */
@@ -83,8 +83,9 @@ function emitChange(change: Change): string {
       // MySQL 8.0+ supports RENAME COLUMN.
       return `ALTER TABLE ${ident(change.table)} RENAME COLUMN ${ident(change.from)} TO ${ident(change.to)};`
     case 'alterColumn':
-      // MySQL restates the full column definition in one MODIFY clause.
-      return `ALTER TABLE ${ident(change.table)} MODIFY COLUMN ${emitColumnDecl(change.after)};`
+      // MySQL restates the full column definition in one MODIFY clause; a
+      // serial key keeps its AUTO_INCREMENT, which MODIFY would otherwise drop.
+      return `ALTER TABLE ${ident(change.table)} MODIFY COLUMN ${emitColumnDecl(change.after, false, /serial/i.test(change.after.type))};`
     case 'addIndex':
       return emitAddIndex(change.table, change.index)
     case 'dropIndex':
@@ -159,7 +160,7 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false, autoIncrement = fal
     s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
   }
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default)}`
+  if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default, c.type)}`
   if (inlinePk) s += ' AUTO_INCREMENT PRIMARY KEY'
   else if (autoIncrement) s += ' AUTO_INCREMENT'
   // Always restated: MODIFY COLUMN replaces the whole definition, comment included.
@@ -232,11 +233,22 @@ export function mysqlType(pgType: string): string {
 /**
  * Map a Postgres default expression to its MySQL equivalent.
  */
-function mysqlDefault(value: unknown): string {
+function mysqlDefault(value: unknown, type?: string): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value).trim()
+  // MySQL escapes with backslashes too; and a TEXT, JSON or BLOB column takes a
+  // default only as an expression: DEFAULT ('{}').
+  const literal = (v: string) =>
+    type !== undefined && /^(TEXT|JSON|BLOB)$/.test(mysqlType(type))
+      ? `(${mysqlString(v)})`
+      : mysqlString(v)
 
+  // On a text-like column every default is a literal: '0800' and 'true' stay as written.
+  const literalOnly = type !== undefined && !allowsExpressionDefault(type)
+  if (literalOnly && !isFunctionCall(str) && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
+    return literal(str)
+  }
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
 
@@ -246,7 +258,7 @@ function mysqlDefault(value: unknown): string {
   if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
 
-  // Other bare function calls pass through; everything else is a literal.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
-  return quoteLiteral(str)
+  // Other function calls are expressions, which MySQL takes only in parentheses.
+  if (isFunctionCall(str)) return `(${str})`
+  return literal(str)
 }

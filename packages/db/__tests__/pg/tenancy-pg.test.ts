@@ -7,6 +7,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  RelationalQueryCancelledError,
   createDbClient,
   defineTenancy,
   diff,
@@ -14,6 +15,7 @@ import {
   extractSnapshot,
   generate,
   migrateTenants,
+  relations,
   serial,
   table,
   tenantKey,
@@ -89,8 +91,8 @@ describe.each(['transaction', 'connection'] as const)("'rls' tenancy, %s binding
     expect(await bodies('acme')).toEqual([{ body: 'a1' }])
     expect(await bodies('globex')).toEqual([{ body: 'g1' }])
     expect(await bodies('acme')).toEqual([{ body: 'a1' }]) // same connection, switched back
-    // A tenant id with a quote: quoted as a literal, never spliced as SQL.
-    const odd = "o'brien'); drop table notes; --"
+    // A tenant id with a quote and a backslash: quoted as a literal, never spliced as SQL.
+    const odd = "o'brien\\'); drop table notes; --"
     await tenancy.run(odd, () => db.insertInto(t).values({ body: 'odd' }).execute())
     expect(await bodies(odd)).toEqual([{ body: 'odd' }])
     // No tenant: the policy matches nothing.
@@ -145,6 +147,52 @@ describe.each(['transaction', 'connection'] as const)("'rls' tenancy, %s binding
     )
     expect(tagged.rows[0]!.name).toBe('kick-bypass')
   })
+
+  it('cancels an aborted db.query on the server, through the tenant-bound connection', async () => {
+    const name = `notes_${binding}`
+    const db = createDbClient({
+      schema: { notes, rel: relations(notes, () => ({})) },
+      tenancy,
+      dialect: pgDialect({ pool }),
+    })
+    await tenancy.run('acme', () =>
+      db
+        .insertInto(name as never)
+        .values({ body: 'slow' } as never)
+        .execute(),
+    )
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort('test'), 100)
+    await expect(
+      tenancy.run('acme', () =>
+        (db.query as any)[name].findMany({
+          where: () => sql<boolean>`pg_sleep(10)::text IS NOT NULL`,
+          signal: ctrl.signal,
+        }),
+      ),
+    ).rejects.toThrow(RelationalQueryCancelledError)
+    // Nothing left sleeping on the server…
+    const sleeping = async () =>
+      Number(
+        (
+          await adminPool.query(
+            `SELECT count(*) AS n FROM pg_stat_activity
+              WHERE state = 'active' AND query LIKE '%pg_sleep(10)::text%' AND pid <> pg_backend_pid()`,
+          )
+        ).rows[0].n,
+      )
+    const until = Date.now() + 2_000
+    while ((await sleeping()) > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
+    expect(await sleeping()).toBe(0)
+    // …and the pool's one connection is free again, still bound to the tenant.
+    const rows = await tenancy.run('acme', () =>
+      db
+        .selectFrom(name as never)
+        .select('body' as never)
+        .execute(),
+    )
+    expect(rows).toContainEqual({ body: 'slow' })
+  }, 30_000)
 })
 
 describe("'rls' tenancy guardrails", () => {
@@ -281,4 +329,16 @@ export const orders = table('orders', { id: serial().primaryKey(), ref: text().n
       await rm(dir, { recursive: true, force: true })
     }
   })
+})
+
+describe("'rls' tenant setup that fails", () => {
+  it('rolls back the transaction it began, so the pooled connection comes back clean', async () => {
+    // A setting name Postgres refuses: BEGIN runs, then set_config fails.
+    const broken = defineTenancy({ strategy: 'rls', setting: 'nodot', roleCheck: 'off' })
+    const db = createDbClient({ schema: {}, tenancy: broken, dialect: pgDialect({ pool }) })
+    await expect(broken.run('acme', () => sql`select 1`.execute(db.qb))).rejects.toThrow()
+    // The pool's one connection: still usable, not stuck in an aborted transaction.
+    const { rows } = await pool.query('select 1 as ok')
+    expect(rows).toEqual([{ ok: 1 }])
+  }, 30_000)
 })

@@ -158,6 +158,20 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
     },
 
     async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
+      // The tables this migration rebuilt, read from the rebuild's final rename.
+      const rebuilt = new Set(
+        [...sql.matchAll(/ALTER TABLE "_kick_new_((?:[^"]|"")+)" RENAME TO/g)].map((m) =>
+          m[1]!.replace(/""/g, '"'),
+        ),
+      )
+      // A rebuild's DROP TABLE deletes the old rows first, and with foreign
+      // keys on that runs the children's ON DELETE: a cascade empties them, a
+      // restrict fails the migration. The switch only works outside a
+      // transaction; foreign_key_check below still catches real breakage.
+      const keysOn =
+        rebuilt.size > 0 &&
+        Number(Object.values(database.prepare('PRAGMA foreign_keys').get() ?? {})[0]) === 1
+      if (keysOn) runBatch('PRAGMA foreign_keys = OFF')
       // BEGIN / COMMIT around a multi-statement batch gives us
       // atomicity. SQLite rolls back to pre-BEGIN on any error
       // inside the block.
@@ -177,12 +191,6 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
         }
         // A table rebuild copies rows into a fresh table; check no row now
         // points at a parent that isn't there before committing it.
-        // The tables this migration rebuilt, read from the rebuild's final rename.
-        const rebuilt = new Set(
-          [...sql.matchAll(/ALTER TABLE "_kick_new_((?:[^"]|"")+)" RENAME TO/g)].map((m) =>
-            m[1]!.replace(/""/g, '"'),
-          ),
-        )
         if (rebuilt.size > 0) {
           // A rebuilt table can be the child or the parent of a broken key;
           // orphans elsewhere predate this migration and aren't its to fail on.
@@ -208,6 +216,8 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
           // Swallow rollback errors; we're already throwing the original.
         }
         throw err
+      } finally {
+        if (keysOn) runBatch('PRAGMA foreign_keys = ON')
       }
     },
 

@@ -266,6 +266,8 @@ A CHECK that's added, removed or whose expression changed becomes `ADD CONSTRAIN
 
 A SQLite rebuild copies every row into a new table. Before committing, the migration runs `PRAGMA foreign_key_check` and rolls back if any row now points at a parent that isn't there — fix the data and migrate again.
 
+Swapping the new table in removes the old one, and SQLite deletes its rows first. With foreign keys on, that would run the `ON DELETE` of every table referencing it, so a cascade would empty them. On better-sqlite3 the migration switches foreign keys off around the rebuild and back on after, and the check above still guards the result. libsql and Cloudflare D1 run a migration as one batch, where the switch can't be made (D1 always has foreign keys on). There, a rebuild of a table other tables reference is refused before anything runs: use a connection with `foreign_keys` off, or make the change in steps that don't rebuild it.
+
 Drift detection compares a key's columns, not its name, and doesn't compare CHECK constraints.
 
 ## Introspection
