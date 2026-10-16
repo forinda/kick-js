@@ -13,14 +13,9 @@ function fetchGreeting() {
 
 export function App() {
   const [greeting, setGreeting] = useState<Greeting | null>(null)
-  const [health, setHealth] = useState<string>('checking…')
 
   useEffect(() => {
     fetchGreeting().then(setGreeting).catch(console.error)
-    api
-      .get('/hello/health')
-      .then((h) => setHealth(h.status))
-      .catch(() => setHealth('down'))
   }, [])
 
   return (
@@ -32,8 +27,7 @@ export function App() {
         <strong>{greeting?.message ?? 'loading…'}</strong>
       </p>
       <p>
-        Server said hello at <code>{greeting?.timestamp ?? '…'}</code> — health:{' '}
-        <code>{health}</code>
+        Server said hello at <code>{greeting?.timestamp ?? '…'}</code>
       </p>
       <p style={{ color: '#666' }}>
         This call is typed end to end: <code>api.get('/hello')</code> returns the exact shape
