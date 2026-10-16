@@ -248,6 +248,36 @@ describe('kick add queue', () => {
   })
 })
 
+describe('kick add queue — which schema gets the keys', () => {
+  it('writes into the object passed to the wrapper the default export names', async () => {
+    tmp()
+    mkdirSync(join(dir, 'src/config'), { recursive: true })
+    writeFileSync(
+      join(dir, 'src/config/index.ts'),
+      [
+        "import { loadEnvFromSchema } from '@forinda/kickjs/config'",
+        "import { fromValibot as wrap } from '@forinda/kickjs-schema/valibot'",
+        "import { z } from 'zod'",
+        "import * as v from 'valibot'",
+        '',
+        'export const userSchema = z.object({\n  name: z.string(),\n})',
+        'const other = wrap(v.object({\n  A: v.string(),\n}))',
+        'const envSchema = wrap(\n  v.object({\n    PORT: p,\n  }),\n)',
+        '',
+        'loadEnvFromSchema(envSchema)',
+        'export default envSchema',
+        '',
+      ].join('\n'),
+    )
+    const env = await wireEnv(dir, 'src/config/index.ts', planWiring(['queue'])!.integrations)
+    expect(env.added).toEqual(['REDIS_HOST', 'REDIS_PORT', 'REDIS_PASSWORD'])
+    const schema = readFileSync(join(dir, 'src/config/index.ts'), 'utf-8')
+    expect(schema).toContain("    PORT: p,\n    REDIS_HOST: v.optional(v.string(), '127.0.0.1'),")
+    expect(schema).toContain('export const userSchema = z.object({\n  name: z.string(),\n})')
+    expect(schema).toContain('const other = wrap(v.object({\n  A: v.string(),\n}))')
+  })
+})
+
 describe('kick add --entry', () => {
   it('stops before installing when the entry file does not exist', async () => {
     tmp()

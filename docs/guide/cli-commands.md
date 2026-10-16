@@ -520,7 +520,7 @@ kick add --list --all     # full optional catalog
 `swagger`, `devtools`, `ws`, `queue` (BullMQ; also `queue:bullmq`) and `storage` are wired as well as installed — the same way `kick new --packages` wires them:
 
 - the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), with its import. An `adapters` list is created if the call has none;
-- `queue` writes `src/adapters/queue.ts` and declares `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` in the env schema (`src/config/index.ts`, else `src/env.ts`) — in the schema library the file imports (Zod, Valibot or Yup), skipping keys it already declares. Host and port default to `127.0.0.1:6379`; the password has no default. `storage` writes `src/adapters/storage.ts`;
+- `queue` writes `src/adapters/queue.ts` and declares `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` in the env schema (`src/config/index.ts`, else `src/env.ts`) — into the object passed to `fromZod` / `fromValibot` / `fromYup` (the one the default export names), in that library's syntax, skipping keys it already declares. Host and port default to `127.0.0.1:6379`; the password has no default. `storage` writes `src/adapters/storage.ts`;
 - the package goes into `dependencies` (the entry file imports it) along with the peers the adapter uses — except `devtools`, which is only imported under `kick dev`: it stays in `devDependencies`, and its entry is the flag-gated dynamic import above, plus `src/devtools.d.ts` for the flag's type.
 
 ```text
