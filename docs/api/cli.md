@@ -71,7 +71,8 @@ interface KickConfig {
     /** @deprecated Only the stub's TODO text changes — see below. */
     repo?: 'inmemory' | { name: string } // default: 'inmemory'
     schemaDir?: string // e.g. 'src/db/schema'
-    pluralize?: boolean // default: false
+    pluralize?: boolean // default: false — folder and file names
+    pluralizeRoutes?: boolean // default: true — route path (/users for user)
     style?: 'define' | 'class' // module declaration style (default: 'define')
   }
 
@@ -271,6 +272,7 @@ function generateModule(options: {
   pattern?: 'rest' | 'minimal'
   dryRun?: boolean
   pluralize?: boolean
+  pluralizeRoutes?: boolean // default: true
   tokenScope?: string // default: 'app'
   swagger?: boolean
   schemaLib?: 'zod' | 'valibot' | 'yup'

@@ -105,7 +105,7 @@ describe('kick g scaffold', () => {
     // is `{ path, controller }` — the framework derives the Express
     // Router from the controller via `buildRoutes()` internally so
     // the redundant `router:` field is no longer emitted.
-    expect(moduleIndex).toContain("path: '/widget'")
+    expect(moduleIndex).toContain("path: '/widgets'")
     expect(moduleIndex).toContain('controller: WidgetController')
     // The legacy shape must NOT appear
     expect(moduleIndex).not.toContain('prefix:')

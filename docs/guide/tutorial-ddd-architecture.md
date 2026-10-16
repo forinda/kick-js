@@ -69,8 +69,8 @@ This writes the module under `src/modules/tasks/` and auto-registers it in
 
 ::: tip Always pass the singular name
 `kick g scaffold task --pluralize` creates `src/modules/tasks/`: the flag pluralizes the folder
-and route prefix for you. Without it (or `modules: { pluralize: true }` in `kick.config.ts`), the
-name is used as typed — `src/modules/task/`. Pass the singular noun either way.
+for you. Without it (or `modules: { pluralize: true }` in `kick.config.ts`), the folder uses the
+name as typed — `src/modules/task/`. The route is `/tasks` either way. Pass the singular noun.
 :::
 
 Supported field types include `string`, `text`, `number`, `int`, `float`, `boolean`, `date`,

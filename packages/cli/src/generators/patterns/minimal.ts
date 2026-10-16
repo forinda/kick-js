@@ -2,10 +2,13 @@ import type { ModuleContext } from './types'
 import { generateMinimalModuleIndex } from '../templates'
 
 export async function generateMinimalFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, style, write } = ctx
+  const { pascal, kebab, plural, routePath, style, write } = ctx
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
-  await write(`${kebab}.module.ts`, generateMinimalModuleIndex({ pascal, kebab, plural, style }))
+  await write(
+    `${kebab}.module.ts`,
+    generateMinimalModuleIndex({ pascal, kebab, plural, routePath, style }),
+  )
 
   await write(
     `${kebab}.controller.ts`,

@@ -138,6 +138,8 @@ interface ScaffoldOptions {
   noTests?: boolean
   repo?: 'inmemory'
   pluralize?: boolean
+  /** When false, mount at the name as typed instead of its plural. Default true. */
+  pluralizeRoutes?: boolean
   /**
    * DI-token scope prefix (e.g. `'mycorp'`, `'app'`). Substituted into
    * every emitted `createToken<T>('<scope>/<area>/<key>')`. Caller
@@ -170,6 +172,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   const pascal = toPascalCase(name)
   const plural = shouldPluralize ? pluralize(kebab) : kebab
   const pluralPascal = shouldPluralize ? pluralizePascal(pascal) : pascal
+  const routePath = options.pluralizeRoutes === false ? kebab : pluralize(kebab)
   const moduleDir = join(modulesDir, plural)
 
   const files: string[] = []
@@ -187,7 +190,10 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   // so the field-aware DTOs slot in by their conventional export names.
 
   // Module file (named `<kebab>.module.ts` so Vite's discovery picks it up)
-  await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo, style }))
+  await write(
+    `${kebab}.module.ts`,
+    generateRestModuleIndex({ pascal, kebab, plural, routePath, repo, style }),
+  )
 
   // Constants (query config)
   await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab }))

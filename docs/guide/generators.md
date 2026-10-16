@@ -63,34 +63,53 @@ product/
 
 ### Module Flags
 
-| Flag                  | Description                                                       | Default                      |
-| --------------------- | ----------------------------------------------------------------- | ---------------------------- |
-| `--pattern <type>`    | Override project pattern: `rest`, `minimal`                       | from config or `rest`        |
-| `--no-tests`          | Skip test file generation                                         | false                        |
-| `--repo <name>`       | Repository name (see [Repository Variants](#repository-variants)) | from config or `inmemory`    |
-| `--pluralize`         | Pluralize folders and routes (`users/` for `user`)                | from config or off           |
-| `--no-pluralize`      | Use the name as typed, even if the config pluralizes              | —                            |
-| `--minimal`           | Shorthand for `--pattern minimal`                                 | false                        |
-| `--modules-dir <dir>` | Modules directory                                                 | from config or `src/modules` |
-| `-f, --force`         | Overwrite existing files without prompting                        | false                        |
+| Flag                    | Description                                                       | Default                      |
+| ----------------------- | ----------------------------------------------------------------- | ---------------------------- |
+| `--pattern <type>`      | Override project pattern: `rest`, `minimal`                       | from config or `rest`        |
+| `--no-tests`            | Skip test file generation                                         | false                        |
+| `--repo <name>`         | Repository name (see [Repository Variants](#repository-variants)) | from config or `inmemory`    |
+| `--pluralize`           | Pluralize folder and file names (`users/` for `user`)             | from config or off           |
+| `--no-pluralize`        | Folder and file names as typed, even if the config pluralizes     | —                            |
+| `--no-pluralize-routes` | Mount at the name as typed (`/user`) instead of its plural        | from config or plural        |
+| `--minimal`             | Shorthand for `--pattern minimal`                                 | false                        |
+| `--modules-dir <dir>`   | Modules directory                                                 | from config or `src/modules` |
+| `-f, --force`           | Overwrite existing files without prompting                        | false                        |
 
 ### Pluralization
 
-By default, module names are used as typed: `kick g module user` creates `src/modules/user/` with route `/user`.
+Folders and routes are decided separately. The folder, file names and class names use the name as typed; the route the module mounts at is the plural, because a route names a collection:
 
-Turn pluralization on per command or for the project:
+| Command                      | Folder                      | Classes                 | Route            |
+| ---------------------------- | --------------------------- | ----------------------- | ---------------- |
+| `kick g module task`         | `src/modules/task/`         | `TaskController`        | `/tasks`         |
+| `kick g module user-profile` | `src/modules/user-profile/` | `UserProfileController` | `/user-profiles` |
+| `kick g module auth`         | `src/modules/auth/`         | `AuthController`        | `/auth`          |
+
+A countable noun pluralizes as English does (`user` → `users`, `person` → `people`), while names of a concern rather than a resource stay as typed — `auth`, `health`, `news`, `metadata`.
+
+Pluralize the folder and file names too, per command or for the project:
 
 ```bash
-# Per command
 kick g module user --pluralize    # → src/modules/users/, route /users
+```
 
-# For the project (applies to all generators)
+Or keep the route as typed:
+
+```bash
+kick g module user --no-pluralize-routes    # → src/modules/user/, route /user
+```
+
+```ts
+// kick.config.ts — for the project (applies to `g module` and `g scaffold`)
 export default defineConfig({
-  modules: { pluralize: true },
+  modules: {
+    pluralize: true, // folders: users/ (default false)
+    pluralizeRoutes: false, // routes: /user (default true)
+  },
 })
 ```
 
-With it on, a countable noun pluralizes as English does (`user` → `users/`, `cron` → `crons/`), while names of a concern rather than a resource stay as typed — `auth`, `health`, `news`, `metadata`. A flag (`--pluralize` or `--no-pluralize`) always wins over the config value.
+A flag (`--pluralize` / `--no-pluralize`, `--pluralize-routes` / `--no-pluralize-routes`) always wins over the config value.
 
 ### Config-Aware Defaults
 
@@ -106,6 +125,7 @@ export default defineConfig({
     // the TODO text in the stub body
     repo: { name: 'postgres' },
     pluralize: false, // the default; true → users/ for `kick g module user`
+    pluralizeRoutes: true, // the default; false → mounts at /user instead of /users
     schemaDir: 'src/db/schema',
     style: 'define', // 'define' (default) or 'class' — see below
   },
@@ -289,7 +309,7 @@ kick g scaffold Post title:string "body?:text" "published?:boolean"
 
 ### Generated Structure
 
-Scaffold emits the same flat REST module layout as `kick g module`, but with field-aware DTOs and a working repository instead of empty stubs. Inside `posts/`:
+Scaffold emits the same flat REST module layout as `kick g module`, but with field-aware DTOs and a working repository instead of empty stubs. `kick g scaffold Post …` writes `src/modules/post/` and mounts it at `/posts` (see [Pluralization](#pluralization)):
 
 | File                        | Description                                             |
 | --------------------------- | ------------------------------------------------------- |
@@ -307,13 +327,14 @@ Scaffold emits the same flat REST module layout as `kick g module`, but with fie
 
 ### Scaffold Flags
 
-| Flag                  | Description                           | Default                      |
-| --------------------- | ------------------------------------- | ---------------------------- |
-| `--no-entity`         | Skip entity + value object generation | `false`                      |
-| `--no-tests`          | Skip test file generation             | `false`                      |
-| `--pluralize`         | Pluralize names                       | from config or off           |
-| `--no-pluralize`      | Use names as typed                    | —                            |
-| `--modules-dir <dir>` | Modules directory                     | from config or `src/modules` |
+| Flag                    | Description                                | Default                      |
+| ----------------------- | ------------------------------------------ | ---------------------------- |
+| `--no-entity`           | Skip entity + value object generation      | `false`                      |
+| `--no-tests`            | Skip test file generation                  | `false`                      |
+| `--pluralize`           | Pluralize folder and file names            | from config or off           |
+| `--no-pluralize`        | Folder and file names as typed             | —                            |
+| `--no-pluralize-routes` | Mount at the name as typed, not its plural | from config or plural        |
+| `--modules-dir <dir>`   | Modules directory                          | from config or `src/modules` |
 
 ### Example
 
@@ -540,4 +561,4 @@ All standalone generators accept:
 | `-o, --out <dir>`     | Output directory             | Varies by type |
 | `-m, --module <name>` | Place inside a module folder | -              |
 
-Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. The directory uses the name as typed (`user-profile/`); with `--pluralize` or `modules: { pluralize: true }` it is pluralized (`user-profiles/`).
+Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. The directory uses the name as typed (`user-profile/`); with `--pluralize` or `modules: { pluralize: true }` it is pluralized (`user-profiles/`). The route is plural either way (`/user-profiles`) unless `--no-pluralize-routes` or `modules: { pluralizeRoutes: false }`.

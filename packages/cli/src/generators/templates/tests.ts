@@ -15,6 +15,7 @@ import type { TemplateContext } from './types'
  */
 export function generateControllerTest(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', style = 'define', testHarness = false } = ctx
+  const route = ctx.routePath ?? plural
   // `define` modules are factories; `class` modules are passed as the class.
   // Getting this wrong yields `TypeError: entry is not a constructor`.
   const moduleEntry = style === 'define' ? `${pascal}Module()` : `${pascal}Module`
@@ -39,10 +40,10 @@ import { ${pascal}Module } from '../${kebab}.module'
  * pass the same values in \`boot()\` below and update this to match, so the test
  * exercises the paths production actually serves:
  *
- *   defaultVersion: false  →  '/api/${plural}'
- *   apiPrefix: '/v1'       →  '/v1/v1/${plural}'
+ *   defaultVersion: false  →  '/api/${route}'
+ *   apiPrefix: '/v1'       →  '/v1/v1/${route}'
  */
-const BASE = '/api/v1/${plural}'
+const BASE = '/api/v1/${route}'
 `
     : `import { describe, it, beforeEach } from 'vitest'
 import { Container } from '@forinda/kickjs'
@@ -71,7 +72,7 @@ import { Container } from '@forinda/kickjs'
     return { app, container, agent: request(app.handle.bind(app)) }
   }
 
-  describe('GET /${plural}', () => {
+  describe('GET /${route}', () => {
     it('returns an empty page before anything is created', async () => {
       const { agent } = await boot()
       const res = await agent.get(BASE)
@@ -82,7 +83,7 @@ import { Container } from '@forinda/kickjs'
 
     it.todo('returns created ${plural}, paginated')
   })`
-    : `  describe('GET /${plural}', () => {
+    : `  describe('GET /${route}', () => {
     // Boot the module with createTestApp and assert { data, meta }.
     it.todo('returns an empty page before anything is created')
     it.todo('returns created ${plural}, paginated')
@@ -100,26 +101,26 @@ ${listBlock}
   // reporter lists it as outstanding instead of counting it as a pass. Replace
   // the todo with a real test as you implement each endpoint.
 
-  describe('POST /${plural}', () => {
+  describe('POST /${route}', () => {
     // Post a valid body, assert 201 and the created ${kebab} in the response.
     it.todo('creates a ${kebab}')
     // Post an invalid body, assert 422 and the validation detail.
     it.todo('rejects an invalid body')
   })
 
-  describe('GET /${plural}/:id', () => {
+  describe('GET /${route}/:id', () => {
     // Create one, fetch it by id, assert the payload matches.
     it.todo('returns a ${kebab} by id')
     // Fetch an id that does not exist, assert 404.
     it.todo('returns 404 for an unknown id')
   })
 
-  describe('PUT /${plural}/:id', () => {
+  describe('PUT /${route}/:id', () => {
     // Create, update, assert the change is reflected on a subsequent read.
     it.todo('updates an existing ${kebab}')
   })
 
-  describe('DELETE /${plural}/:id', () => {
+  describe('DELETE /${route}/:id', () => {
     // Create, delete, assert a subsequent read is 404.
     it.todo('deletes a ${kebab}')
   })

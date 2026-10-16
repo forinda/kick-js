@@ -28,6 +28,11 @@ export interface TemplateContext {
   plural?: string
   /** Pluralized PascalCase (e.g. 'Users', 'TaskAssignees') */
   pluralPascal?: string
+  /**
+   * Route path segment the module mounts at, without the slash (e.g. 'users').
+   * Plural by default whatever the folder is called; falls back to `plural`.
+   */
+  routePath?: string
   /** Repository interface import prefix (default: '../../domain/repositories') */
   repoPrefix?: string
   /** DTO import prefix (default: '../../application/dtos') */

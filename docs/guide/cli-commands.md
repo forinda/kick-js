@@ -658,13 +658,14 @@ kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
 
 #### Scaffold Flags
 
-| Flag                  | Description                           | Default       |
-| --------------------- | ------------------------------------- | ------------- |
-| `--no-entity`         | Skip entity + value object generation | `false`       |
-| `--no-tests`          | Skip test file generation             | `false`       |
-| `--pluralize`         | Pluralize names                       | from config   |
-| `--no-pluralize`      | Use names as typed                    | from config   |
-| `--modules-dir <dir>` | Modules directory                     | `src/modules` |
+| Flag                    | Description                                                     | Default       |
+| ----------------------- | --------------------------------------------------------------- | ------------- |
+| `--no-entity`           | Skip entity + value object generation                           | `false`       |
+| `--no-tests`            | Skip test file generation                                       | `false`       |
+| `--pluralize`           | Pluralize folder and file names                                 | from config   |
+| `--no-pluralize`        | Folder and file names as typed                                  | from config   |
+| `--no-pluralize-routes` | Mount at the name as typed (`/post`), not its plural (`/posts`) | from config   |
+| `--modules-dir <dir>`   | Modules directory                                               | `src/modules` |
 
 ::: tip Shell-safe optional syntax
 Use `name:type:optional` instead of `"name:type?"` — the `?` character is a shell glob in bash/zsh and needs quoting.
@@ -846,12 +847,13 @@ If a source directory does not exist, the CLI logs a warning and skips it.
 
 Module generation settings — controls how `kick g module` produces code.
 
-| Option              | Type                         | Default         | Description                                                                                                                                               |
-| ------------------- | ---------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modules.dir`       | `string`                     | `'src/modules'` | Where generators place module files                                                                                                                       |
-| `modules.repo`      | `string \| { name: string }` | `'inmemory'`    | Repository name. Built-in: `'inmemory'` (working in-memory impl). Any other name (e.g. `{ name: 'postgres' }`) scaffolds a generic custom-repository stub |
-| `modules.pluralize` | `boolean`                    | `false`         | Whether to pluralize module folder and route names                                                                                                        |
-| `modules.schemaDir` | `string`                     | `undefined`     | Schema output directory (e.g. `'src/db/schema'`)                                                                                                          |
+| Option                    | Type                         | Default         | Description                                                                                                                                               |
+| ------------------------- | ---------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modules.dir`             | `string`                     | `'src/modules'` | Where generators place module files                                                                                                                       |
+| `modules.repo`            | `string \| { name: string }` | `'inmemory'`    | Repository name. Built-in: `'inmemory'` (working in-memory impl). Any other name (e.g. `{ name: 'postgres' }`) scaffolds a generic custom-repository stub |
+| `modules.pluralize`       | `boolean`                    | `false`         | Whether to pluralize module folder and file names (`users/` for `user`)                                                                                   |
+| `modules.pluralizeRoutes` | `boolean`                    | `true`          | Whether the generated route path is the plural (`/users` for `user`). `false` mounts at the name as typed                                                 |
+| `modules.schemaDir`       | `string`                     | `undefined`     | Schema output directory (e.g. `'src/db/schema'`)                                                                                                          |
 
 ### Other Options
 
