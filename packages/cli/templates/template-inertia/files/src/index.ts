@@ -23,8 +23,17 @@ export const app = await bootstrap({
     InertiaAdapter({
       title: '{{name}}',
       entry: 'src/client/main.tsx',
-      // On every page. Per-page titles and meta: Inertia's <Head> component.
       head: '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />',
+      // Canonical URLs and absolute image URLs start here — not at the Host header.
+      baseUrl: getEnv('APP_URL'),
+      // Every page's meta starts from these; a controller adds its own with
+      // inertia(component, props, { meta }), and src/client/Seo.tsx keeps the
+      // browser's <head> in sync on client-side visits.
+      meta: {
+        titleTemplate: '%s · {{name}}',
+        description: '{{name}}, built with KickJS and Inertia.',
+        og: { site_name: '{{name}}', type: 'website' },
+      },
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),
       ssr: { entry: 'src/client/ssr.tsx' },

@@ -296,8 +296,9 @@ describe('the shipped layers', () => {
       'src/client/ssr.tsx',
       'vite.client.config.ts',
       'public/favicon.svg',
-      'public/robots.txt',
       'src/client/pages/Error.tsx',
+      'src/client/Seo.tsx',
+      'src/modules/seo/seo.controller.ts',
     ]) {
       expect(project.files.has(path), path).toBe(true)
     }
@@ -319,6 +320,25 @@ describe('the shipped layers', () => {
       "['development', 'test'].includes(process.env.NODE_ENV ?? '') || !s.startsWith('dev-only-')",
     )
     expect(config).not.toContain('@kick:')
+    // SEO: APP_URL fails closed like SESSION_SECRET, and is the adapter's baseUrl.
+    expect(config).toMatch(/APP_URL: z\n\s+\.url\(\)\n\s+\.default\('http:\/\/localhost:3000'\)/)
+    expect(config).toContain('process.env.APP_URL !== undefined')
+    expect(project.files.get('.env')).toContain('APP_URL=http://localhost:3000')
+    expect(entry).toContain("baseUrl: getEnv('APP_URL')")
+    expect(entry).toMatch(/meta: \{\n\s+titleTemplate: '%s · \{\{name\}\}'/)
+    // The client keeps <head> in sync from the page's meta; robots.txt is a route.
+    expect(project.files.get('src/client/Layout.tsx')).toContain(
+      "import { Seo } from '@/client/Seo'",
+    )
+    expect(project.files.get('src/client/Seo.tsx')).toContain('<Head title={meta.title}>')
+    expect(project.files.has('public/robots.txt')).toBe(false)
+    const seo = project.files.get('src/modules/seo/seo.controller.ts')!
+    expect(seo).toContain("@Get('/sitemap.xml')")
+    expect(seo).toContain("@Get('/robots.txt')")
+    expect(project.files.get('src/modules/index.ts')).toContain('.mount(SeoModule())')
+    expect(project.files.get('src/modules/pages/pages.controller.ts')).toContain(
+      "{ meta: { title: 'Home'",
+    )
     expect(entry).not.toContain('process.env.SESSION_SECRET')
     expect(entry).toContain("import './config'")
     expect(entry).toContain("session({ secret: getEnv('SESSION_SECRET')")

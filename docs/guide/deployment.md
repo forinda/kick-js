@@ -36,6 +36,7 @@ What the server reads from the environment:
 | `PORT`           | every app       | default `3000`                                                 |
 | `NODE_ENV`       | every app       | `production`: secure cookies, generic 5xx messages             |
 | `SESSION_SECRET` | Inertia apps    | the app refuses to start without it; a long random string      |
+| `APP_URL`        | Inertia apps    | the site's public URL — canonical links, sitemap; required     |
 | your own keys    | your env schema | validated at startup — see [Configuration](./configuration.md) |
 
 `.env` files are for development; on a host, set the variables in its dashboard or service file.
@@ -46,7 +47,7 @@ The `Dockerfile` `kick new` writes matches the project's template and package ma
 
 ```bash
 docker build -t my-app .
-docker run -p 3000:3000 -e SESSION_SECRET=… my-app
+docker run -p 3000:3000 -e SESSION_SECRET=… -e APP_URL=https://… my-app
 ```
 
 It builds in three stages:

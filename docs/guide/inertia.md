@@ -66,14 +66,16 @@ export const app = await bootstrap({
 | `entry`     | `'src/client/main.tsx'` | The file that calls `createInertiaApp`                                            |
 | `clientDir` | `'dist/client'`         | Where `vite build` wrote the browser bundle, with `build.manifest: true`          |
 | `title`     | `'KickJS'`              | `<title>` of the HTML shell, replaced by a page's `<Head>` title                  |
-| `head`      | —                       | Tags added to every page's `<head>` — favicon, meta, fonts                        |
+| `head`      | —                       | Tags added to every page's `<head>` — favicon, fonts                              |
+| `meta`      | —                       | Meta every page starts from, with a `titleTemplate` ([SEO](#seo))                 |
+| `baseUrl`   | —                       | The site's public URL, for canonical and absolute URLs ([SEO](#seo))              |
 | `share`     | —                       | Props every page receives                                                         |
 | `errorPage` | —                       | Component rendered for unknown URLs and thrown errors, with `{ status, message }` |
 | `ssr`       | —                       | `{ entry, bundle? }` — render pages on the server (below)                         |
 | `version`   | manifest hash           | Asset version; a client on another version reloads on its next visit              |
 | `template`  | built-in shell          | Replace the HTML shell entirely                                                   |
 
-Per-page titles and meta tags belong in the page, with Inertia's `<Head>` component.
+Per-page titles and meta tags: pass `meta` to `inertia()`, or use Inertia's `<Head>` in the page — see [SEO](#seo).
 
 ### Mount the pages at the root
 
@@ -311,6 +313,97 @@ The fragment of the page the form sits on is not used; a form on `/posts/1#comme
 
 With `errorPage: 'Error'`, `inertiaErrorHandler()` renders thrown errors and `inertiaNotFound()` renders unknown URLs through `src/client/pages/Error.tsx`, which receives `{ status, message }`. In production a 5xx message is replaced with a generic one. API and asset requests keep their JSON answers.
 
+## SEO
+
+Search engines and link previews read the HTML of the first visit. With [server-side rendering](#server-side-rendering) that HTML holds the page's content; without it, only the shell — so a site that needs to be found should render on the server, as the template does.
+
+### Meta from the controller
+
+Pass `meta` to `inertia()`. It is rendered into the first-visit HTML `<head>` and sent as the page's `meta` on every visit:
+
+```ts
+@Get('/notes/:id')
+async show(ctx: RequestContext) {
+  const note = await this.notes.find(ctx.params.id)
+  return inertia('Notes/Show', { note }, {
+    meta: {
+      title: note.title,
+      description: note.summary,
+      og: { type: 'article', image: note.coverPath }, // og:type, og:image
+      twitter: { card: 'summary_large_image' },
+      jsonLd: { '@context': 'https://schema.org', '@type': 'Article', headline: note.title },
+    },
+  })
+}
+```
+
+Every value is escaped; JSON-LD is written into `<script type="application/ld+json">` with `<` escaped, so a value can't close the tag. `og:title`, `og:description` and `og:url` default to the title, description and canonical URL.
+
+On a client-side visit nothing re-renders the `<head>` by itself. The template's `src/client/Seo.tsx`, rendered by `Layout`, reads `usePage().meta` and renders Inertia's `<Head>` with `head-key`s that match the tags the adapter wrote, so the browser's title and tags follow the page instead of piling up.
+
+### Server meta and `<Head>`
+
+A page can still use `<Head>` itself. When a server-rendered `<Head>` sets a tag — the `<title>`, a `<meta>` with the same `name` or `property`, the canonical `<link>`, JSON-LD — the adapter leaves out its own copy, so the first HTML never has two. Pick one source per tag for client-side visits too.
+
+### Defaults and the title template
+
+```ts
+InertiaAdapter({
+  baseUrl: getEnv('APP_URL'),
+  meta: {
+    title: 'My App', // pages without a title
+    titleTemplate: '%s · My App', // wraps a page's title
+    description: 'Notes for teams.',
+    og: { site_name: 'My App', image: '/og.png' },
+  },
+})
+```
+
+A page's `meta` is merged over the defaults (`og` and `twitter` key by key; `jsonLd` replaces). The template applies to a page's title, not to the default `title`.
+
+### Canonical URLs come from `baseUrl`
+
+`baseUrl` makes a path absolute: `canonical`, `og:image`, `og:url`, `twitter:image`. A successful page without a `canonical` gets `baseUrl` plus its path, without the query string. The request's `Host` header is never used — the client sends it, and a spoofed one would otherwise end up in your canonical links. The template reads `baseUrl` from `APP_URL`, which must be set outside `development` and `test`.
+
+### Keep indexable content in plain props
+
+[Deferred](#when-a-prop-is-sent) and optional props are not in the first response, so a crawler doesn't see them. Put what should be indexed in plain props; defer only what search engines don't need (counts, recommendations, the sidebar).
+
+### Status codes
+
+A missing record should answer 404, not a 200 page that says "not found" — throw `HttpException` (or return `errorPage('Error', 404)`) and the [error page](#errors-and-unknown-urls) renders with the right status. Error pages are sent with `robots: noindex` and no canonical link.
+
+### Sitemap and robots.txt
+
+Answer both from an ordinary controller, on any runtime:
+
+```ts
+import { Controller, Get, getEnv } from '@forinda/kickjs'
+import { robots, sitemap } from '@forinda/kickjs-inertia'
+
+@Controller()
+export class SeoController {
+  @Get('/sitemap.xml')
+  async sitemap() {
+    const posts = await this.posts.list()
+    return sitemap(
+      [
+        { loc: '/', priority: 1 },
+        ...posts.map((p) => ({ loc: `/posts/${p.id}`, lastmod: p.updatedAt })),
+      ],
+      { baseUrl: getEnv('APP_URL') },
+    )
+  }
+
+  @Get('/robots.txt')
+  robots() {
+    return robots({ disallow: ['/admin'], sitemap: '/sitemap.xml', baseUrl: getEnv('APP_URL') })
+  }
+}
+```
+
+`sitemap()` sends `application/xml` with every `loc` made absolute and XML-escaped; `lastmod` takes a `Date` or a date string, plus optional `changefreq` and `priority`. Mount the module at the root (`prefix: false, version: false`), and don't also keep a `public/robots.txt` — the template answers both from `src/modules/seo`.
+
 ## Server-side rendering
 
 Pass `ssr: { entry }` and give that file a default export that renders a page:
@@ -398,7 +491,7 @@ Validation errors, flash messages and the "back" URL travel in the session. With
 session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' })
 ```
 
-Set `SESSION_SECRET` to a long random string on every target. The template's env schema accepts its fixed development-only value only when `NODE_ENV` is `development` (`kick dev`) or `test` (Vitest). Anywhere else, including a deploy that leaves `NODE_ENV` unset, the app refuses to boot until a real secret is set.
+Set `SESSION_SECRET` to a long random string on every target. The template's env schema accepts its fixed development-only value only when `NODE_ENV` is `development` (`kick dev`) or `test` (Vitest). Anywhere else, including a deploy that leaves `NODE_ENV` unset, the app refuses to boot until a real secret is set. `APP_URL` works the same way: set it to the site's public URL (canonical links and the sitemap are built from it); the `http://localhost:3000` default is only accepted under `development` or `test`.
 
 Netlify and Vercel functions have no persistent disk, and a container's filesystem is lost when it is replaced: keep a SQLite database file on a mounted volume (`docker run -v data:/app/data`, pointing the app at `/app/data/…`), or use a hosted database.
 

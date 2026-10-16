@@ -77,7 +77,8 @@ const YARN_BERRY: PmCommands = {
 
 const RUN_HINT: Record<DockerProjectKind, string> = {
   api: 'docker run -p 3000:3000 <name>',
-  inertia: 'docker run -p 3000:3000 -e SESSION_SECRET=<a long random string> <name>',
+  inertia:
+    'docker run -p 3000:3000 -e SESSION_SECRET=<a long random string> -e APP_URL=<https://your.site> <name>',
   fullstack: 'docker run -p 3000:3000 <name>',
 }
 
