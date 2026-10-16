@@ -27,7 +27,7 @@ export interface InertiaAdapterOptions {
   entry?: string
   /**
    * Where `vite build` wrote the client, with `build.manifest: true`. Default: `'dist/client'`.
-   * Outside production a missing build is not an error: pages render without
+   * Under NODE_ENV development or test a missing build is not an error: pages render without
    * asset tags (a warning says so), so tests run before the client is built.
    */
   clientDir?: string
@@ -222,7 +222,13 @@ export const InertiaAdapter = defineAdapter<ResolvedOptions>({
         const manifest = join(clientDir, '.vite', 'manifest.json')
         if (vite) {
           head = () => devHead(config.entry)
-        } else if (process.env.NODE_ENV !== 'production' && !existsSync(manifest)) {
+        } else if (
+          // Only where a missing build is expected. Production and an unset
+          // NODE_ENV (a deploy that forgot it) fail at startup instead of
+          // serving pages without their scripts.
+          ['development', 'test'].includes(process.env.NODE_ENV ?? '') &&
+          !existsSync(manifest)
+        ) {
           // Tests and a fresh clone: pages render (as JSON or a shell without
           // scripts), there is no asset version, and nothing to serve.
           head = () => ''

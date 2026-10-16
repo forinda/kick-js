@@ -466,6 +466,17 @@ for (const rt of RUNTIMES)
       }
     })
 
+    it('refuses to render without a client build when NODE_ENV is unset', async () => {
+      const empty = mkdtempSync(join(tmpdir(), 'kick-inertia-none-'))
+      const env = process.env.NODE_ENV
+      delete process.env.NODE_ENV
+      try {
+        await expect(makeApp({ clientDir: empty })).rejects.toThrow(/manifest\.json/)
+      } finally {
+        process.env.NODE_ENV = env
+      }
+    })
+
     it('adds the head option to every page', async () => {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).get('/users').expect(200)

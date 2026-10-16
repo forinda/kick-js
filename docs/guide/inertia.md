@@ -368,7 +368,7 @@ export default defineConfig(({ isSsrBuild }) => ({
 }
 ```
 
-The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. In production a missing manifest stops the app at startup; anywhere else pages render without their scripts and a warning says so — which is what lets tests run before the client is built.
+The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. Under `NODE_ENV` development or test a missing manifest is tolerated — pages render without their scripts and a warning says so, which is what lets tests run before the client is built. Anywhere else, including an unset `NODE_ENV`, it stops the app at startup.
 
 ## Testing
 
