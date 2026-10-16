@@ -53,7 +53,8 @@ export function resolveMeta(
   const { baseUrl, path, status = 200 } = options
   const title =
     meta.title !== undefined && titleTemplate
-      ? titleTemplate.replace('%s', meta.title)
+      ? // A function, so `$&` / `$'` in a title aren't replacement patterns.
+        titleTemplate.replace('%s', () => meta.title!)
       : (meta.title ?? base.title)
   const description = meta.description ?? base.description
   let canonical = meta.canonical ?? base.canonical

@@ -235,3 +235,11 @@ describe('InertiaAdapter baseUrl', () => {
     expect(() => InertiaAdapter({ baseUrl: 'example.com' })).toThrow(/baseUrl must be an absolute/)
   })
 })
+
+describe('resolveMeta', () => {
+  it("treats `$&` and `$'` in a title as text, not replacement patterns", async () => {
+    const { resolveMeta } = await import('../src/seo')
+    const meta = resolveMeta({ titleTemplate: '%s · App' }, { title: "Save $& 50% $'" })
+    expect(meta!.title).toBe("Save $& 50% $' · App")
+  })
+})
