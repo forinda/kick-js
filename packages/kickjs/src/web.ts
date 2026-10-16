@@ -43,6 +43,7 @@ import { WebRequestShim, WebResponseDriver } from './http/web/driver'
 import { notFoundHandler, type MountedRoute } from './http/middleware/error-handler'
 import type { ValidationErrorFactory } from './http/middleware/validate'
 import { buildMountPath } from './core/path'
+import { moduleName } from './core/define-module'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
 export { compileWebRoute } from './http/web/handler'
@@ -205,11 +206,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   const mounted: MountedRoute[] = []
 
   for (const mod of modules) {
-    const declaredName = (mod as { name?: unknown }).name
-    const moduleLabel =
-      typeof declaredName === 'string' && declaredName.length > 0
-        ? declaredName
-        : (mod.constructor?.name ?? 'module')
+    const moduleLabel = moduleName(mod)
     const moduleSources: SourcedRegistration[] = (mod.contributors?.() ?? []).map(
       (registration): SourcedRegistration => ({
         source: 'module',

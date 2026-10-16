@@ -2,6 +2,7 @@ import http from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import { HttpException } from '../core/errors'
 import { isProduction } from '../core/is-production'
+import { moduleName } from '../core/define-module'
 import { runCronJobs } from '../core/cron'
 import https from 'node:https'
 import http2 from 'node:http2'
@@ -1127,11 +1128,7 @@ export class Application {
     for (const adapter of this.adapters) add(`adapter ${adapter.name}`, adapter.settings?.())
     for (const entry of this.collectModules().entries) {
       const mod = toAppModule(entry)
-      const name = (mod as { name?: unknown }).name
-      add(
-        `module ${typeof name === 'string' && name ? name : (mod.constructor?.name ?? 'module')}`,
-        mod.settings?.(),
-      )
+      add(`module ${moduleName(mod)}`, mod.settings?.())
     }
     return { env: describeEnvSchema(), sections }
   }
@@ -1448,18 +1445,7 @@ export class Application {
     this.mountedRouteInfo = []
 
     for (const mod of modules) {
-      // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
-      // over `constructor.name`. Factory-built modules are plain objects whose
-      // constructor is `Object` — falling straight to `constructor.name` would
-      // degrade every label in the DevTools Contributors table to "Object".
-      const declaredName = (mod as { name?: unknown }).name
-      const ctorName = mod.constructor?.name
-      const moduleLabel =
-        typeof declaredName === 'string' && declaredName.length > 0
-          ? declaredName
-          : ctorName && ctorName !== 'Object'
-            ? ctorName
-            : 'module'
+      const moduleLabel = moduleName(mod)
       const moduleSources: SourcedRegistration[] = (mod.contributors?.() ?? []).map(
         (registration): SourcedRegistration => ({
           source: 'module',
