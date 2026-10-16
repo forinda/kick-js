@@ -749,6 +749,7 @@ function columnsEqual(
     a.type === b.type &&
     a.nullable === b.nullable &&
     a.default === b.default &&
+    !a.defaultSql === !b.defaultSql &&
     a.identity === b.identity &&
     a.generated?.expression === b.generated?.expression &&
     a.generated?.stored === b.generated?.stored
@@ -782,6 +783,7 @@ function columnAttrsEqual(
     a.type === b.type &&
     a.nullable === b.nullable &&
     a.default === b.default &&
+    !a.defaultSql === !b.defaultSql &&
     a.primaryKey === b.primaryKey
   )
 }

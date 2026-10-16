@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import {
   bigSerial,
+  checkDrift,
   date,
   diff,
   invertChanges,
@@ -396,5 +397,55 @@ describe('async SQLite: a drop or rebuild that would cascade', () => {
       asyncSqliteAdapter({ driver: driverFor(database) }).applyMigrationInTx!(sql, null),
     ).rejects.toThrow(/rebuilds or drops a table other tables reference \(members → orgs\)/)
     expect(database.prepare('SELECT count(*) AS n FROM members').get()).toEqual({ n: 1 })
+  })
+})
+
+describe('.default() is a value, .defaultSql() is SQL', () => {
+  const t = table('t', {
+    id: serial().primaryKey(),
+    word: text().notNull().default('now()'),
+    token: text().notNull().defaultSql('lower(hex(randomblob(4)))'),
+    both: text().notNull().defaultSql("'a' || 'b'"),
+  })
+
+  it('on SQLite: a call-shaped value is stored as written; SQL is evaluated', () => {
+    const s = snap({ t })
+    const database = new Database(':memory:')
+    database.exec(emitSqlite(diff(empty, s), { from: empty, to: s }))
+    database.exec('INSERT INTO t DEFAULT VALUES')
+    const row = database.prepare('SELECT word, token, both FROM t').get() as Record<string, string>
+    expect(row.word).toBe('now()')
+    expect(row.token).toMatch(/^[0-9a-f]{8}$/)
+    expect(row.both).toBe('ab')
+  })
+
+  it('on Postgres and MySQL alike', () => {
+    const cols = {
+      t: table('t', {
+        id: serial().primaryKey(),
+        word: text().notNull().default('now()'),
+        token: text().notNull().defaultSql('gen_random_uuid()::text'),
+      }),
+    }
+    const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap(cols, 'postgres')))
+    expect(pg).toContain(`"word" text NOT NULL DEFAULT 'now()'`)
+    expect(pg).toContain('"token" text NOT NULL DEFAULT gen_random_uuid()::text')
+    const my = emitMysql(diff({ ...empty, dialect: 'mysql' }, snap(cols, 'mysql')))
+    expect(my).toContain("`word` TEXT NOT NULL DEFAULT ('now()')")
+    expect(my).toContain('`token` TEXT NOT NULL DEFAULT (gen_random_uuid()::text)')
+  })
+
+  it('switching between them is a change, and drift compares only the default', async () => {
+    const as = (sql: boolean) => ({
+      t: table('t', {
+        id: serial().primaryKey(),
+        n: integer().notNull()[sql ? 'defaultSql' : 'default']('1'),
+      }),
+    })
+    const value = snap(as(false), 'postgres')
+    const sql = snap(as(true), 'postgres')
+    expect(diff(value, sql).map((c) => c.kind)).toEqual(['alterColumn'])
+    // What introspection reads back has no flag: not drift.
+    await expect(checkDrift(value, sql, 'error')).resolves.toBeUndefined()
   })
 })

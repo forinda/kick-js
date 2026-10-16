@@ -67,6 +67,8 @@ export interface ColumnState {
   type: string
   nullable: boolean
   default: string | null
+  /** `default` is SQL to evaluate (`.defaultSql()`), not a value. */
+  defaultSql?: boolean
   primaryKey: boolean
   unique: boolean
   references: FkSpec | null
@@ -226,6 +228,20 @@ export class ColumnBuilder<T = unknown> {
    */
   default(value: string | number | boolean): this & GeneratedBrand {
     this.state.default = typeof value === 'string' ? value : String(value)
+    this.state.defaultSql = false
+    return this as this & GeneratedBrand
+  }
+
+  /**
+   * A default that is SQL, evaluated by the database for each new row —
+   * `id: text().primaryKey().defaultSql('gen_random_uuid()::text')`,
+   * `slug: text().defaultSql("lower(hex(randomblob(8)))")`. `.default()` is a
+   * value: on a text column `.default('now()')` stores the string `now()`.
+   * Written as given, so it's your dialect's SQL.
+   */
+  defaultSql(expression: string): this & GeneratedBrand {
+    this.state.default = expression
+    this.state.defaultSql = true
     return this as this & GeneratedBrand
   }
 
@@ -331,6 +347,7 @@ export class ColumnBuilder<T = unknown> {
       type: this.state.type,
       nullable: this.state.nullable,
       default: this.state.default,
+      ...(this.state.defaultSql ? { defaultSql: true as const } : {}),
       primaryKey: this.state.primaryKey,
       // Only when set, so other columns serialize as they always have.
       ...(this.state.generated ? { generated: { ...this.state.generated } } : {}),

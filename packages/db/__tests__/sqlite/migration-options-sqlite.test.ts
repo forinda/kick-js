@@ -241,3 +241,28 @@ describe('applied migrations no folder holds', () => {
     ).rejects.toThrow(/is applied but in no migrations folder/)
   })
 })
+
+describe('a call-shaped .default() on a text column', () => {
+  it('is reported, so a default that used to be evaluated can move to .defaultSql()', async () => {
+    const file = path.join(dir, `schema-${(fileCount += 1)}-calls.ts`)
+    await writeFile(
+      file,
+      `import { serial, table, text } from '@forinda/kickjs-db'
+export const t = table('t', {
+  id: serial().primaryKey(),
+  token: text().default('uuid()'),
+  sql: text().defaultSql("lower(hex(randomblob(4)))"),
+  plain: text().default('hello'),
+})`,
+    )
+    const seen: string[] = []
+    await generate({
+      name: 'calls',
+      config: { schemaPath: file, migrationsDir: path.join(dir, 'm'), dialect: 'sqlite' },
+      cwd: dir,
+      now,
+      onCallShapedDefault: (d) => seen.push(`${d.table}.${d.column}=${d.value}`),
+    })
+    expect(seen).toEqual(['t.token=uuid()'])
+  })
+})

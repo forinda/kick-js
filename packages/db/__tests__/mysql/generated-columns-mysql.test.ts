@@ -68,7 +68,7 @@ describe('defaults and serial keys on MySQL', () => {
   it('runs expression, TEXT/JSON and escaped defaults, and keeps AUTO_INCREMENT through MODIFY', async () => {
     const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
     const columns = {
-      token: varchar(36).default('uuid()'),
+      token: varchar(36).defaultSql('uuid()'),
       n: integer().notNull().default('floor(rand() * 0)'),
       doc: jsonb().notNull().default('{}'),
       body: text().notNull().default('0800'),

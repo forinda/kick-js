@@ -160,7 +160,7 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false, autoIncrement = fal
     s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
   }
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default, c.type)}`
+  if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default, c.type, c.defaultSql)}`
   if (inlinePk) s += ' AUTO_INCREMENT PRIMARY KEY'
   else if (autoIncrement) s += ' AUTO_INCREMENT'
   // Always restated: MODIFY COLUMN replaces the whole definition, comment included.
@@ -233,7 +233,7 @@ export function mysqlType(pgType: string): string {
 /**
  * Map a Postgres default expression to its MySQL equivalent.
  */
-function mysqlDefault(value: unknown, type?: string): string {
+function mysqlDefault(value: unknown, type?: string, sql?: boolean): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value).trim()
@@ -245,8 +245,10 @@ function mysqlDefault(value: unknown, type?: string): string {
       : mysqlString(v)
 
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
-  const literalOnly = type !== undefined && !allowsExpressionDefault(type)
-  if (literalOnly && !isFunctionCall(str) && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
+  // `.default()` on a text-like column is a value, whatever it looks like
+  // (`'now()'` is the string now()); `.defaultSql()` is SQL on any column.
+  const literalOnly = !sql && type !== undefined && !allowsExpressionDefault(type)
+  if (literalOnly && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
     return literal(str)
   }
   if (/^true$/i.test(str)) return '1'
@@ -260,5 +262,6 @@ function mysqlDefault(value: unknown, type?: string): string {
 
   // Other function calls are expressions, which MySQL takes only in parentheses.
   if (isFunctionCall(str)) return `(${str})`
-  return literal(str)
+  // SQL that isn't a single call (`a || b`): an expression, in parentheses.
+  return sql ? `(${str})` : literal(str)
 }

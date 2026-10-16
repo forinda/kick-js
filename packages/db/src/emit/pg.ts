@@ -399,7 +399,7 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
     stmts.push(
       after.default === null
         ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default, after.type)};`,
+        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default, after.type, after.defaultSql)};`,
     )
   }
   const emitNullable = () => {
@@ -486,7 +486,7 @@ function emitColumnDecl(c: ColumnSnapshot): string {
   }
   if (c.identity) s += ` GENERATED ${c.identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'} AS IDENTITY`
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type)}`
+  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type, c.defaultSql)}`
   return s
 }
 
@@ -541,7 +541,9 @@ function isCast(str: string): boolean {
   )
 }
 
-function formatDefault(value: unknown, type?: string): string {
+function formatDefault(value: unknown, type?: string, sql?: boolean): string {
+  // `.defaultSql()`: SQL to evaluate, as written.
+  if (sql) return String(value)
   // Defensive: a snapshot authored before defaults were normalised to
   // strings (or hand-edited) may carry a raw boolean/number. Coerce so
   // `quoteLiteral` (String.prototype.replace) never sees a non-string.

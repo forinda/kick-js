@@ -34,18 +34,28 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
   snap = {
     ...withoutRoles,
     tables: Object.fromEntries(
-      Object.entries(snap.tables).map(([n, t]) => [
-        n,
-        t.policies
-          ? {
-              ...t,
-              policies: t.policies.map(({ using: _u, withCheck: _w, ...p }) => ({
-                ...p,
-                to: [...p.to].toSorted(),
-              })),
-            }
-          : t,
-      ]),
+      Object.entries(snap.tables).map(([n, table]) => {
+        // Introspection can't tell a `.defaultSql()` from a `.default()`: the
+        // database holds only the expression. Compare the defaults themselves.
+        const t: TableSnapshot = {
+          ...table,
+          columns: Object.fromEntries(
+            Object.entries(table.columns).map(([cn, { defaultSql: _sql, ...c }]) => [cn, c]),
+          ),
+        }
+        return [
+          n,
+          t.policies
+            ? {
+                ...t,
+                policies: t.policies.map(({ using: _u, withCheck: _w, ...p }) => ({
+                  ...p,
+                  to: [...p.to].toSorted(),
+                })),
+              }
+            : t,
+        ]
+      }),
     ),
   }
   // A view's SQL comes back rewritten by the database (Postgres reformats it,
