@@ -63,6 +63,13 @@ export function buildQueryNamespace<DB>(
   })
 }
 
+/** The read's signal: its own, its `timeoutMs`, or whichever fires first. */
+function signalOf(opts: FindManyOptions | undefined): AbortSignal | undefined {
+  if (opts?.timeoutMs === undefined) return opts?.signal
+  const timer = AbortSignal.timeout(opts.timeoutMs)
+  return opts.signal ? AbortSignal.any([opts.signal, timer]) : timer
+}
+
 function makeTableNamespace<DB, Table extends keyof DB & string>(
   qb: Kysely<DB>,
   table: Table,
@@ -73,7 +80,8 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
   return {
     async findMany(options?: unknown) {
       const opts = (options ?? {}) as FindManyOptions
-      assertNotAlreadyAborted(opts.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compiled = compile(
         qb as Kysely<any>,
         table,
@@ -82,13 +90,14 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         tables,
         'many',
       )
-      const rows = await execute(qb, compiled, opts.signal)
+      const rows = await execute(qb, compiled, signal)
       return rows as never
     },
 
     async findFirst(options?: unknown) {
       const opts = (options ?? {}) as FindManyOptions
-      assertNotAlreadyAborted(opts.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compiled = compile(
         qb as Kysely<any>,
         table,
@@ -97,18 +106,19 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         tables,
         'first',
       )
-      const rows = await execute(qb, compiled, opts.signal)
+      const rows = await execute(qb, compiled, signal)
       return (rows[0] ?? null) as never
     },
 
     async findManyAndCount(options?: unknown) {
       const opts = (options ?? {}) as FindManyOptions
-      assertNotAlreadyAborted(opts.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compileAs = (mode: CompileMode) =>
         compile(qb as Kysely<any>, table, opts as CompilePgOptions, relations, tables, mode)
       const [rows, counted] = await Promise.all([
-        execute(qb, compileAs('many'), opts.signal),
-        execute(qb, compileAs('count'), opts.signal),
+        execute(qb, compileAs('many'), signal),
+        execute(qb, compileAs('count'), signal),
       ])
       // pg returns count(*) as a bigint string; SQLite and MySQL as a number.
       const total = Number((counted[0] as { total: number | string | bigint }).total)
@@ -117,7 +127,8 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
 
     async findUnique(options: unknown) {
       const opts = options as FindManyOptions
-      assertNotAlreadyAborted(opts?.signal)
+      const signal = signalOf(opts)
+      assertNotAlreadyAborted(signal)
       const compiled = compile(
         qb as Kysely<any>,
         table,
@@ -126,7 +137,7 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         tables,
         'unique',
       )
-      const rows = await execute(qb, compiled, opts?.signal)
+      const rows = await execute(qb, compiled, signal)
       return (rows[0] ?? null) as never
     },
   } as unknown as TableQueryNamespace<DB, Table>

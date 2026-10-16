@@ -175,6 +175,12 @@ export interface FindManyOptions<
    * nested LATERAL/correlated subqueries inherit the parent signal.
    */
   signal?: AbortSignal
+  /**
+   * Cancel the read on the server once it has run this long, and reject with
+   * `RelationalQueryCancelledError` (whose `cause` is a `TimeoutError`).
+   * Combines with `signal`: whichever fires first.
+   */
+  timeoutMs?: number
 }
 
 /**

@@ -401,6 +401,15 @@ export function wrap<DB>(
       return startTransaction(opts, fn)
     }) as KickDbClient<DB>['transaction'],
 
+    timeout: (ms: number, opts?: { signal?: AbortSignal }) => {
+      const timer = AbortSignal.timeout(ms)
+      return {
+        signal: opts?.signal ? AbortSignal.any([opts.signal, timer]) : timer,
+        // Every client connection can cancel (a no-op where the driver can't).
+        inflightQueryAbortStrategy: 'cancel query' as const,
+      }
+    },
+
     upsert: (async (table: string, opts: UpsertOptions<DB, any>) => {
       const rows = await upsert(client, table as never, opts)
       return Array.isArray(opts.values) ? rows : rows[0]
