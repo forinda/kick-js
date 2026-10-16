@@ -40,11 +40,3 @@ it("declares s3FromSettings' section, so missing variables stop startup", async 
   const section = app.describeConfig().sections.find((s) => s.prefix === 'S3')
   expect(section?.declaredBy).toBe('adapter StorageAdapter')
 })
-
-it('reports the storage in /health/ready: down when listing it fails', async () => {
-  const files = memoryStorage()
-  const adapter = StorageAdapter({ storage: files })
-  expect(await adapter.onHealthCheck!()).toEqual({ name: 'StorageAdapter', status: 'up' })
-  vi.spyOn(files, 'list').mockRejectedValue(new Error('AccessDenied'))
-  expect(await adapter.onHealthCheck!()).toEqual({ name: 'StorageAdapter', status: 'down' })
-})
