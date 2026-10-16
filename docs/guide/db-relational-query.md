@@ -184,11 +184,11 @@ export const userRelations = relations(users, ({ many }) => ({
 
 One kind of child row belonging to several kinds of parent — comments on posts, publications and podcasts — can be modelled three ways. Pick by how much the database should guarantee.
 
-| Pattern                   | Schema                                          | Database integrity                     | Read with                |
-| ------------------------- | ----------------------------------------------- | -------------------------------------- | ------------------------ |
-| Exclusive arc             | A nullable foreign key per parent, plus a CHECK | Full: FKs, cascades, exactly-one check | `one` / `many`           |
-| Junction table per parent | `post_comments`, `podcast_comments`, …          | Full: FKs, cascades                    | `many(…, { through })`   |
-| Type + id columns         | `subjectType` + `subjectId` on the child        | None — no foreign key is possible      | `morphMany` / `morphOne` |
+| Pattern                   | Schema                                          | Database integrity                     | Read with                            |
+| ------------------------- | ----------------------------------------------- | -------------------------------------- | ------------------------------------ |
+| Exclusive arc             | A nullable foreign key per parent, plus a CHECK | Full: FKs, cascades, exactly-one check | `one` / `many`                       |
+| Junction table per parent | `post_comments`, `podcast_comments`, …          | Full: FKs, cascades                    | `many(…, { through })`               |
+| Type + id columns         | `subjectType` + `subjectId` on the child        | None — no foreign key is possible      | `morphMany` / `morphOne` / `morphTo` |
 
 ### Exclusive arc
 
@@ -220,7 +220,7 @@ On SQLite and MySQL, where `num_nonnulls` doesn't exist, add up the set keys ins
 
 Keep `comments` free of parent columns and join each parent through its own table — `post_comments (post_id, comment_id)` and so on, read with [`many(comments, { through: postComments })`](#many-to-many). Integrity holds on both sides; the price is a table per parent kind, and a unique key on `comment_id` if a comment may only have one parent.
 
-### Type and id columns: `morphMany`
+### Type and id columns: `morphMany`, `morphOne`, `morphTo`
 
 The Laravel `morphMany` / Django `GenericRelation` shape: the child stores which kind of parent it has and that parent's key. A new parent kind needs no migration. The database can't check the pair, though — there's no foreign key, so no cascade, and nothing stops a `subjectId` that points nowhere.
 
@@ -300,14 +300,24 @@ const rows = await db.query.posts.findMany({
 // rows[0].latestComment: Comment | null
 ```
 
-There's no relation from a comment back to its subject (Laravel's `morphTo`) yet. Load the subject by switching on `subjectType`:
+`morphTo` goes the other way — Laravel's `morphTo`, Django's `GenericForeignKey`: from a comment to its subject, in whichever table `subjectType` names. Declare it on the child, mapping each type value to its table:
 
 ```ts
-const subject =
-  comment.subjectType === 'post'
-    ? await db.query.posts.findFirst({ where: (_p, eb) => eb('id', '=', comment.subjectId) })
-    : await db.query.podcasts.findFirst({ where: (_p, eb) => eb('id', '=', comment.subjectId) })
+export const commentRelations = relations(comments, ({ morphTo }) => ({
+  subject: morphTo({
+    type: comments.subjectType,
+    id: comments.subjectId,
+    targets: { post: posts, podcast: podcasts },
+  }),
+}))
+
+const rows = await db.query.comments.findMany({ with: { subject: true } })
+// rows[0].subject: Post | Podcast | null
 ```
+
+Each target's primary key is matched against `id`, only for rows whose `type` holds that target's value (bound as a parameter). The subject is `null` when the type has no entry in `targets`, the row is gone, or it's soft-deleted. The subject comes back as its table's row, without the type, so switch on the comment's `subjectType` to narrow it.
+
+Since the subject can come from any of the tables, `with: { subject: … }` takes `true` or `{ withDeleted: true }` only — no `where`, `columns` or nested `with`. Every target's key has to have the same type as the `id` column; Postgres refuses to compare an `integer` column with a `uuid` key even for rows of another type.
 
 ## Self-references and cycles
 

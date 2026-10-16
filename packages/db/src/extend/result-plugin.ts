@@ -77,12 +77,13 @@ export class ResultExtensionPlugin implements KyselyPlugin {
     const tableName = singleTableTarget(node)
     if (!tableName) return node
     const bag = this.byTable.get(tableName)
-    if (!bag) return node
+    // A table with no computeds of its own may still nest rows that have some.
+    if (!bag && !this.relations[tableName]) return node
 
     // Tag the query so transformResult knows to apply computeds.
     this.pending.set(queryId, tableName)
 
-    return injectNeeds(node, bag)
+    return bag ? injectNeeds(node, bag) : node
   }
 
   async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
@@ -126,13 +127,18 @@ export class ResultExtensionPlugin implements KyselyPlugin {
 
     for (const [key, rel] of Object.entries(this.relations[table] ?? {})) {
       const value = base[key]
+      // A morphTo row's table follows the source row's type column.
+      const target = rel.morphTo
+        ? rel.morphTo.targets.find((t) => t.value === base[rel.morphTo!.column])?.table
+        : rel.target
+      if (target === undefined) continue
       if (Array.isArray(value)) {
         set(
           key,
-          value.map((v) => this.computeRow(v as UnknownRow, rel.target, depth + 1)),
+          value.map((v) => this.computeRow(v as UnknownRow, target, depth + 1)),
         )
       } else if (value && typeof value === 'object' && !(value instanceof Date)) {
-        set(key, this.computeRow(value as UnknownRow, rel.target, depth + 1))
+        set(key, this.computeRow(value as UnknownRow, target, depth + 1))
       }
     }
     return (next ?? base) as UnknownRow

@@ -1,4 +1,4 @@
-/** Polymorphic one-to-many (`morphMany`, `morphOne`) on MySQL. */
+/** Polymorphic one-to-many (`morphMany`, `morphOne`, `morphTo`) on MySQL. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { createPool, type Pool } from 'mysql2/promise'
@@ -46,7 +46,14 @@ const podcastRelations = relations(podcasts, ({ morphMany }) => ({
     as: "pod'cast",
   }),
 }))
-const schema = { posts, podcasts, comments, postRelations, podcastRelations }
+const commentRelations = relations(comments, ({ morphTo }) => ({
+  subject: morphTo({
+    type: comments.subjectType,
+    id: comments.subjectId,
+    targets: { post: posts, "pod'cast": podcasts },
+  }),
+}))
+const schema = { posts, podcasts, comments, postRelations, podcastRelations, commentRelations }
 
 let container: StartedMySqlContainer
 let pool: Pool
@@ -100,6 +107,19 @@ describe('morphMany on MySQL', () => {
     expect(rows.map((p) => [p.title, p.latestComment?.body ?? null])).toEqual([
       ['Hello', 'nice post'],
       ['Quiet', null],
+    ])
+  }, 30_000)
+
+  it("morphTo loads each row's subject from the table its type names", async () => {
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+    const rows = await db.query.comments.findMany({
+      orderBy: (_c, eb) => eb.ref('id'),
+      with: { subject: true },
+    })
+    expect(rows.map((c) => c.subject)).toEqual([
+      { id: 1, title: 'Hello' },
+      { id: 1, title: 'Hello' },
+      { id: 1, title: 'Episode 1' },
     ])
   }, 30_000)
 })

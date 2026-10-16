@@ -165,6 +165,14 @@ function applyWithSelects(
       }
 
       const subOptions: CompileOptions = value === true ? {} : value
+      if (rel.morphTo) {
+        out.push(
+          buildMorphTo(eb, sourceAlias, rel, key, subOptions, tables, trace.length, helpers).as(
+            key,
+          ),
+        )
+        continue
+      }
       const innerAlias = makeAlias(rel.target, trace.length)
       const inner = buildInnerSelect(
         eb,
@@ -282,6 +290,44 @@ function buildInnerSelect(
   }
 
   return sub
+}
+
+/**
+ * `morphTo`: one single-row subquery per target table, each guarded by the
+ * source's type column holding that target's value (bound as a parameter), so
+ * at most one is non-null — `coalesce` keeps it. The targets have different
+ * columns, so only `withDeleted` applies.
+ */
+function buildMorphTo(
+  eb: ExpressionBuilder<any, any>,
+  sourceAlias: string,
+  rel: ResolvedRelation,
+  key: string,
+  options: CompileOptions,
+  tables: Record<string, CompileTable>,
+  depth: number,
+  helpers: JsonHelpers,
+): any {
+  const other = Object.entries(options).filter(([k, v]) => k !== 'withDeleted' && v !== undefined)
+  if (other.length > 0) {
+    throw new Error(
+      `kickjs-db: morphTo '${key}' takes \`true\` or \`{ withDeleted }\` — its rows come from several tables (got ${other.map(([k]) => k).join(', ')})`,
+    )
+  }
+  const morphTo = rel.morphTo!
+  const subs = morphTo.targets.map((t) => {
+    const alias = makeAlias(t.table, depth)
+    const table = tables[t.table]
+    let sub: any = eb.selectFrom(`${t.table} as ${alias}` as any)
+    sub = table
+      ? sub.select(Object.keys(table.columns).map((c) => `${alias}.${c}`))
+      : sub.selectAll()
+    sub = sub
+      .whereRef(`${alias}.${t.key}`, '=', `${sourceAlias}.${rel.sourceColumns[0]}`)
+      .where(`${sourceAlias}.${morphTo.column}`, '=', t.value)
+    return helpers.jsonObjectFrom(skipDeleted(sub, alias, table, options).limit(1))
+  })
+  return subs.length === 1 ? subs[0] : (eb.fn.coalesce as any)(...subs)
 }
 
 /**

@@ -57,6 +57,8 @@ declare module '../../src/query/types' {
       }
       comments: {
         post: { kind: 'one'; target: 'posts' }
+        // morphTo: the target is the union of its tables.
+        subject: { kind: 'one'; target: 'users' | 'posts' }
       }
       categories: {
         parent: { kind: 'one'; target: 'categories' }
@@ -82,6 +84,18 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
   it('T-1-deep-one — comments.findMany({ with: { post: true } }) → post is nullable', () => {
     type R = Row<'comments', { with: { post: true } }>
     expectTypeOf<R>().toMatchTypeOf<FixtureDB['comments'] & { post: FixtureDB['posts'] | null }>()
+  })
+
+  it('T-morph-to — comments.findMany({ with: { subject: true } }) → either table, or null', () => {
+    type Subject = FixtureDB['users'] | FixtureDB['posts'] | null
+    expectTypeOf<Row<'comments', { with: { subject: true } }>['subject']>().toEqualTypeOf<Subject>()
+    const withDeleted = { with: { subject: { withDeleted: true } } } satisfies FindManyOptions<
+      FixtureDB,
+      'comments'
+    >
+    expectTypeOf<Row<'comments', typeof withDeleted>['subject']>().toMatchTypeOf<
+      FixtureDB['users'] | FixtureDB['posts'] | null
+    >()
   })
 
   it('T-2-many-many — users.findMany({ with: { posts: { with: { comments: true } } } })', () => {

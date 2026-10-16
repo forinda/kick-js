@@ -130,6 +130,15 @@ export interface RelationSnapshot {
    * (bound as a parameter). There's no foreign key behind the join.
    */
   morph?: { column: string; value: string }
+  /**
+   * For a `morphTo`: the source's type column, and per type value the table
+   * and key column the source's id column (`sourceColumns[0]`) points at.
+   * `target` holds the first of those tables.
+   */
+  morphTo?: {
+    column: string
+    targets: ReadonlyArray<{ value: string; table: string; key: string }>
+  }
 }
 
 /** A row-level security policy (Postgres). */

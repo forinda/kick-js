@@ -13,7 +13,14 @@
  *    §7 R-5.
  */
 
-import type { MorphSpec, Relation, RelationOne, RelationsDecl, ThroughSpec } from '../dsl/relations'
+import type {
+  MorphSpec,
+  MorphToSpec,
+  Relation,
+  RelationOne,
+  RelationsDecl,
+  ThroughSpec,
+} from '../dsl/relations'
 import type { ColumnRef } from '../dsl/table'
 import type { TableSnapshot } from '../snapshot/types'
 import type { ResolvedRelation, ResolvedRelations } from './relations'
@@ -74,6 +81,16 @@ export function extractRelations(
     for (const [relationName, rel] of Object.entries(relations)) {
       if (relationName in tableSnapshot.columns) {
         throw new RelationalQueryAliasCollisionError(sourceTable, relationName)
+      }
+
+      if ('morphTo' in rel && rel.morphTo) {
+        out[sourceTable][relationName] = resolveMorphTo(
+          sourceTable,
+          relationName,
+          rel.morphTo,
+          tables,
+        )
+        continue
       }
 
       if (rel.morph) {
@@ -194,6 +211,11 @@ export function extractRelations(
   return out
 }
 
+/** A `one` declared with `fields` / `references` — not a morph relation. */
+function isPlainOne(rel: Relation): rel is RelationOne {
+  return rel.kind === 'one' && 'fields' in rel
+}
+
 /**
  * Step-1 helper — find inverse `one` declarations on the target
  * table whose `relationName` matches the requested tag AND whose
@@ -208,12 +230,7 @@ function findInversesByRelationName(
 ): Array<{ relationKey: string; relation: RelationOne }> {
   const matches: Array<{ relationKey: string; relation: RelationOne }> = []
   for (const [key, rel] of Object.entries(targetRelations)) {
-    if (
-      rel.kind === 'one' &&
-      !rel.morph &&
-      rel.target.__name === sourceTable &&
-      rel.relationName === relationName
-    ) {
+    if (isPlainOne(rel) && rel.target.__name === sourceTable && rel.relationName === relationName) {
       matches.push({ relationKey: key, relation: rel })
     }
   }
@@ -234,12 +251,7 @@ function findUniqueUntaggedInverse(
 ): RelationOne | null {
   let unique: RelationOne | null = null
   for (const rel of Object.values(targetRelations)) {
-    if (
-      rel.kind === 'one' &&
-      !rel.morph &&
-      rel.target.__name === sourceTable &&
-      rel.relationName === undefined
-    ) {
+    if (isPlainOne(rel) && rel.target.__name === sourceTable && rel.relationName === undefined) {
       if (unique) return null // ambiguous — caller falls through
       unique = rel
     }
@@ -336,13 +348,11 @@ function resolveMorph(
   if (typeof morph.as !== 'string' || morph.as === '') throw fail('`as` must be a non-empty string')
   let key = morph.references?.__name
   if (key === undefined) {
-    const pk = Object.values(tables[sourceTable]!.columns).filter((c) => c.primaryKey)
-    if (pk.length !== 1) {
-      throw fail(
-        `'${sourceTable}' has ${pk.length === 0 ? 'no primary key' : 'a composite primary key'} — name the key column with \`references\``,
-      )
+    const pk = singleKey(tables[sourceTable]!)
+    if (typeof pk !== 'string') {
+      throw fail(`'${sourceTable}' has ${pk.problem} — name the key column with \`references\``)
     }
-    key = pk[0]!.name
+    key = pk
   } else if (!(key in tables[sourceTable]!.columns)) {
     throw fail(`'${key}' is not a column of '${sourceTable}'`)
   }
@@ -352,5 +362,47 @@ function resolveMorph(
     sourceColumns: [key],
     targetColumns: [morph.id.__name],
     morph: { column: morph.type.__name, value: morph.as },
+  }
+}
+
+/** The single-column primary key of `table`, or a description of why there isn't one. */
+function singleKey(snap: TableSnapshot): string | { problem: string } {
+  const pk = Object.values(snap.columns).filter((c) => c.primaryKey)
+  if (pk.length === 1) return pk[0]!.name
+  return { problem: pk.length === 0 ? 'no primary key' : 'a composite primary key' }
+}
+
+/**
+ * The row a `(type, id)` pair on the source points at: per type value, a
+ * table and its primary key. No foreign key backs it.
+ */
+function resolveMorphTo(
+  sourceTable: string,
+  relationName: string,
+  spec: MorphToSpec,
+  tables: Record<string, TableSnapshot>,
+): ResolvedRelation {
+  const fail = (problem: string) =>
+    new Error(`kickjs-db: morphTo \`${sourceTable}.${relationName}\`: ${problem}`)
+  for (const c of [spec.type, spec.id]) {
+    if (!(c.__name in tables[sourceTable]!.columns)) {
+      throw fail(`'${c.__name}' is not a column of '${sourceTable}'`)
+    }
+  }
+  const targets = Object.entries(spec.targets).map(([value, decl]) => {
+    if (value === '') throw fail('a type value in `targets` is an empty string')
+    const snap = tables[decl.__name]
+    if (!snap) throw fail(`the target table '${decl.__name}' is not in the schema`)
+    const key = singleKey(snap)
+    if (typeof key !== 'string') throw fail(`'${decl.__name}' has ${key.problem}`)
+    return { value, table: decl.__name, key }
+  })
+  if (targets.length === 0) throw fail('`targets` is empty')
+  return {
+    kind: 'one',
+    target: targets[0]!.table,
+    sourceColumns: [spec.id.__name],
+    targetColumns: [],
+    morphTo: { column: spec.type.__name, targets },
   }
 }
