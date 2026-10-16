@@ -140,6 +140,9 @@ export class MemoryQueueProvider implements QueueProvider {
   private async run(job: MemoryJob) {
     const processor = this.processors.get(job.queue)
     if (this.closed) return
+    // A job can be scheduled twice — dispatched, then a worker attached before
+    // its first timer fired. Only one of those timers may run it.
+    if (job.state !== 'waiting' && job.state !== 'delayed') return
     // No worker yet (or an API-only app): it waits for createWorker().
     if (!processor) return void (job.state = 'waiting')
     job.state = 'active'

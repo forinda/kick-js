@@ -257,11 +257,14 @@ The app's configuration. Variables matching `configPrefixes` show their value; t
     "APP_NAME": "my-api",
     "APP_PORT": "3000",
     "NODE_ENV": "development",
-    "DATABASE_URL": "[REDACTED]",
+    "DATABASE_URL": "postgres://db.example/my-api",
     "JWT_SECRET": "[REDACTED]"
   },
   "origins": {
-    "env": [{ "name": "PORT", "origin": "default" }],
+    "env": [
+      { "name": "PORT", "origin": "default" },
+      { "name": "JWT_SECRET", "origin": "env" }
+    ],
     "sections": [
       {
         "prefix": "DB",

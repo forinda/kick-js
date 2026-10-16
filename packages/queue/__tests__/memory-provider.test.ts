@@ -15,6 +15,18 @@ async function start(provider: MemoryQueueProvider, workers?: boolean) {
 }
 
 describe('MemoryQueueProvider', () => {
+  it('runs a job once when a worker attaches before its first timer fires', async () => {
+    const provider = new MemoryQueueProvider()
+    let calls = 0
+    await provider.addJob('mem-once', 'run', {})
+    provider.createWorker('mem-once', async () => {
+      calls++
+    })
+    await provider.drain()
+    expect(calls).toBe(1)
+    expect(provider.jobs()[0]).toMatchObject({ state: 'completed', attemptsMade: 1 })
+  })
+
   it('runs @Process handlers and keeps the return value and progress', async () => {
     @Job('mem-email')
     class _Email {

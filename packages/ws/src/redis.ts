@@ -23,6 +23,8 @@ export interface RedisPubSubClient {
   unsubscribe(channel: string): unknown
   on(event: 'message', listener: (channel: string, message: string) => void): unknown
   off?(event: 'message', listener: (channel: string, message: string) => void): unknown
+  /** ioredis connection status — `'end'` once the client has quit. */
+  status?: string
 }
 
 export interface RedisBrokerOptions {
@@ -76,9 +78,15 @@ export function redisBroker({
       if (listener) subscriber.off?.('message', listener)
       try {
         await subscriber.unsubscribe(channel)
-      } catch {
+      } catch (err) {
         // The app quit the connection first — its own shutdown runs beside
-        // this one. A closed connection holds no subscription to remove.
+        // this one. A closed connection holds no subscription to remove. Any
+        // other failure on a live connection leaves the subscription behind,
+        // so it is not swallowed.
+        const closed =
+          subscriber.status === 'end' ||
+          /Connection is closed/i.test(String((err as Error)?.message))
+        if (!closed) throw err
       }
     },
   }

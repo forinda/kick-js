@@ -137,7 +137,7 @@ rebuild(ctx: RequestContext) {
 }
 ```
 
-It returns `false` for a missing or non-string header, and neither the secret's contents nor its length shows in the timing. It uses no `node:crypto`, so it is also exported from `@forinda/kickjs/web`. The framework's own cron trigger and `metricsAdapter({ token })` use it.
+It returns `false` for a missing or non-string header, and for an empty secret, so an unset env var doesn't let `Bearer ` through. The comparison doesn't stop at the first wrong character, so a guess's contents don't show in the timing; the secret's length can, so use a long random one. It uses no `node:crypto`, so it is also exported from `@forinda/kickjs/web`. The framework's own cron trigger and `metricsAdapter({ token })` use it.
 
 ## See also
 

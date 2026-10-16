@@ -13,8 +13,9 @@ export function randomHex(bytes: number): string {
 /**
  * Constant-time string comparison for secrets and tokens — the portable
  * counterpart of `timingSafeEqual`. Walks the longer input and folds the
- * length difference in, so neither the contents nor the length of the
- * expected value shows in the timing.
+ * length difference in, so it doesn't stop at the first wrong character and
+ * a guess's contents don't show in the timing. The loop runs over the longer
+ * input, so the time can still reveal the expected value's length.
  */
 export function safeEqual(a: string, b: string): boolean {
   const length = Math.max(a.length, b.length)
