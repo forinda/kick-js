@@ -22,7 +22,7 @@ import {
   collectRelationKeys,
 } from './codec-plugin'
 import { wrap, type InternalContext, transactionIds } from './wrap'
-import { tenancyPlugin } from './tenancy-plugin'
+import { collectTenantColumns, tenancyPlugin } from './tenancy-plugin'
 import { tenantConnections } from './tenancy-connections'
 import { translatingDialect } from './translate-errors'
 import { extractRelations } from '../query/extract-relations'
@@ -239,6 +239,14 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     transactions: new AsyncLocalStorage(),
     ...(opts.casing === 'snake_case' || columnNames.size > 0
       ? { naming: namingOf(opts.schema, opts.casing, columnNames) }
+      : {}),
+    ...(opts.tenancy?.strategy === 'column' || opts.tenancy?.strategy === 'rls'
+      ? {
+          tenancy: {
+            columns: collectTenantColumns(opts.schema),
+            current: opts.tenancy.current,
+          },
+        }
       : {}),
     query: {
       relations,

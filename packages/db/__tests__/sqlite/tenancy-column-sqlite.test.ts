@@ -15,6 +15,7 @@ import {
   serial,
   table,
   tenantKey,
+  unique,
   text,
 } from '@forinda/kickjs-db'
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
@@ -217,6 +218,36 @@ describe("'column' tenancy: writes that could cross tenants", () => {
   it('insertSchema leaves the tenant column optional', async () => {
     const { insertSchema } = await import('@forinda/kickjs-db/schema')
     expect(insertSchema(projects).safeParse({ name: 'x' }).success).toBe(true)
+  })
+
+  it('upsert({ update: false }) on a per-tenant key reads rows back by the current tenant', async () => {
+    const tags = table(
+      'tags',
+      { id: serial().primaryKey(), tenantId: tenantKey(tenancy), name: text().notNull() },
+      (t) => ({ name: unique('tags_tenant_name').on(t.tenantId, t.name) }),
+    )
+    const database = new Database(':memory:')
+    const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
+    const target = extractSnapshot({ tags }, 'sqlite')
+    database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
+    database.exec(`INSERT INTO tags (tenantId, name) VALUES ('acme', 'red'), ('globex', 'blue')`)
+    const db = createDbClient({ schema: { tags }, tenancy, dialect: sqliteDialect({ database }) })
+    const add = (names: string[]) =>
+      db.upsert('tags', {
+        values: names.map((name) => ({ name })),
+        target: ['tenantId', 'name'],
+        update: false,
+      })
+    const rows = await tenancy.run('acme', () => add(['red', 'blue']))
+    // acme's red is left as it was; blue is acme's own, beside globex's.
+    expect(rows).toMatchObject([
+      { id: 1, tenantId: 'acme', name: 'red' },
+      { tenantId: 'acme', name: 'blue' },
+    ])
+    // Without a tenant there's nothing to read back by.
+    await expect(tenancy.bypass(() => add(['red']), { reason: 'test' })).rejects.toThrow(
+      /has no tenantId/,
+    )
   })
 })
 

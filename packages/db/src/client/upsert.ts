@@ -64,14 +64,22 @@ export type FindOrCreateOptions<
     { create?: CreateRest<DB, T, W> }
   : { create: CreateRest<DB, T, W> })
 
-/** Insert `values`, or update the rows whose `target` already exists. Returns the rows as stored. */
+/**
+ * Insert `values`, or update the rows whose `target` already exists. Returns
+ * the rows as stored. `tenant` is the table's tenant column and the current
+ * tenant: tenancy fills that column on insert, so a row that leaves it out is
+ * read back by the current tenant.
+ */
 export async function upsert<DB, T extends keyof DB & string>(
   db: KickDbClient<DB>,
   table: T,
   opts: UpsertOptions<DB, T>,
+  tenant?: { column: string; id: string },
 ): Promise<Selectable<DB[T]>[]> {
   const rows = (Array.isArray(opts.values) ? opts.values : [opts.values]) as Row[]
   if (rows.length === 0) return []
+  /** A row's value for a target column, the tenant's when tenancy fills it. */
+  const key = (r: Row, c: string) => (c === tenant?.column ? (r[c] ?? tenant.id) : r[c])
   const statement = (chunk: Row[]) => upsertStatement(db, table, opts, chunk)
   const chunks = chunksFor(rows, opts.maxParams ?? MAX_PARAMS[db.dialect], statement)
   // Every row is inserted, updated or (with `update: false`) left as it is, so
@@ -93,7 +101,7 @@ export async function upsert<DB, T extends keyof DB & string>(
     let q = (db.primary.selectFrom as (t: string) => any)(table)
       .selectAll()
       .where((eb: ExpressionBuilder<any, any>) =>
-        eb.or(chunk.map((r) => eb.and(opts.target.map((c: string) => eb(c, '=', r[c]))))),
+        eb.or(chunk.map((r) => eb.and(opts.target.map((c: string) => eb(c, '=', key(r, c)))))),
       )
     if (opts.where) q = q.where(opts.where)
     return q.execute()
@@ -102,7 +110,7 @@ export async function upsert<DB, T extends keyof DB & string>(
     // Each row is read back by its target, so every row needs one — a key
     // the database generates can't be the target here.
     for (const row of rows) {
-      const missing = opts.target.find((c) => row[c] === undefined || row[c] === null)
+      const missing = opts.target.find((c) => key(row, c) === undefined || key(row, c) === null)
       if (missing) {
         throw new Error(
           `kickjs-db: upsert({ update: false }) reads each row back by its target, and a row has no ${missing}`,
@@ -118,7 +126,9 @@ export async function upsert<DB, T extends keyof DB & string>(
   /** How many different targets a chunk names (a row may repeat one). */
   const distinctTargets = (chunk: Row[]) =>
     new Set(
-      chunk.map((r) => opts.target.map((c) => `${typeof r[c]}:${String(r[c])}`).join('\u0000')),
+      chunk.map((r) =>
+        opts.target.map((c) => `${typeof key(r, c)}:${String(key(r, c))}`).join('\u0000'),
+      ),
     ).size
   return inChunks(db, chunks, opts.atomic ?? true, async (chunk) => {
     if (opts.update === false) {
