@@ -209,6 +209,16 @@ async function listPending(opts: RunnerOptions): Promise<PreparedEntry[]> {
   const entries = await readJournals(opts.migrationsDir, opts.adapter.dialect)
   const applied = await opts.adapter.listApplied()
   const appliedIds = new Set(applied.map((r) => r.id))
+  // A migration the database has applied but no folder holds anymore: the
+  // folders and the database disagree, so stop before building on that.
+  const known = new Set(entries.map((e) => e.id))
+  const missing = [...appliedIds].filter((id) => !known.has(id))
+  if (missing.length > 0) {
+    throw new Error(
+      `kickjs-db: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} applied but in no migrations folder — ` +
+        `restore the folder, or remove the row from the migrations table if it was deleted on purpose`,
+    )
+  }
   return entries
     .filter((e) => !appliedIds.has(e.id))
     .map((e) => ({ id: e.id, tag: e.tag, hash: e.hash, folder: e.folder }))
@@ -330,7 +340,10 @@ export async function migrateDown(opts: RunnerOptions & { to?: string }): Promis
     // Sort by batch then appliedAt so 'most recent' is unambiguous even if
     // two migrations share a batch number (same `migrate latest` run).
     const sorted = [...applied].toSorted((a, b) =>
-      a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+      a.batch !== b.batch
+        ? a.batch - b.batch
+        : // Applied in the same second (SQLite's resolution): the id says which ran first.
+          a.appliedAt.localeCompare(b.appliedAt) || a.id.localeCompare(b.id),
     )
     let targets = sorted.slice(-1)
     if (opts.to !== undefined) {
@@ -410,7 +423,10 @@ export async function migrateRollback(
     const targets = applied
       .filter((r) => opts.all || r.batch === lastBatch)
       .toSorted((a, b) =>
-        a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+        a.batch !== b.batch
+          ? a.batch - b.batch
+          : // Applied in the same second (SQLite's resolution): the id says which ran first.
+            a.appliedAt.localeCompare(b.appliedAt) || a.id.localeCompare(b.id),
       )
       .toReversed()
 

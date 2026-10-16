@@ -143,10 +143,12 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
     },
 
     async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
+      const rebuilt = rebuiltTables(sql)
+      await refuseCascadingRebuild(driver, rebuilt)
       const batch = statements(sql)
       if (bookkeeping && 'record' in bookkeeping) batch.push(insertRow(bookkeeping.record))
       else if (bookkeeping) batch.push(deleteRow(bookkeeping.remove))
-      const guard = foreignKeyGuard(sql)
+      const guard = foreignKeyGuard(rebuilt)
       if (guard) batch.push(guard)
       if (batch.length === 0) return
       try {
@@ -184,6 +186,54 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
   }
 }
 
+/** The tables a migration rebuilds, read from each rebuild's final rename. */
+function rebuiltTables(sql: string): string[] {
+  return [
+    ...new Set(
+      [...sql.matchAll(/ALTER TABLE "_kick_new_((?:[^"]|"")+)" RENAME TO/g)].map((m) =>
+        m[1]!.replace(/""/g, '"'),
+      ),
+    ),
+  ]
+}
+
+/**
+ * A rebuild's DROP TABLE deletes the old rows first, and with foreign keys
+ * on that runs ON DELETE in every table referencing it: a cascade empties
+ * them. A batch is one transaction, where foreign keys can't be switched off
+ * (and D1 always has them on), so a rebuild of a referenced table stops here.
+ */
+async function refuseCascadingRebuild(driver: AsyncSqliteDriver, rebuilt: string[]) {
+  if (rebuilt.length === 0) return
+  // D1 always has foreign keys on, and won't let the setting be read.
+  let keysOn = true
+  try {
+    const [pragma] = await driver.query('PRAGMA foreign_keys')
+    keysOn = Number(Object.values((pragma ?? {}) as object)[0]) === 1
+  } catch {
+    // Unreadable: assume on.
+  }
+  if (!keysOn) return
+  // Only the statements introspection uses, which D1 allows.
+  const tables = (await driver.query(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\'`,
+  )) as Array<{ name: string }>
+  const pairs: string[] = []
+  for (const { name } of tables) {
+    const keys = (await driver.query(
+      `PRAGMA foreign_key_list("${name.replace(/"/g, '""')}")`,
+    )) as Array<{ table: string }>
+    for (const k of keys) if (rebuilt.includes(k.table)) pairs.push(`${name} → ${k.table}`)
+  }
+  if (pairs.length === 0) return
+  throw new Error(
+    `kickjs-db: this migration rebuilds a table other tables reference (${pairs.join(', ')}). SQLite deletes ` +
+      `its rows before dropping it, and with foreign keys on that runs their ON DELETE — a cascade ` +
+      `would empty them. Run it on a connection with foreign_keys off, or make the change in steps ` +
+      `that don't rebuild the table.`,
+  )
+}
+
 /**
  * After a table rebuild (rows copied into a fresh table), a statement that
  * fails when a rebuilt table is the child or the parent of a broken foreign
@@ -191,14 +241,7 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
  * migration back. `json()` on a non-JSON string is the error (SQLite has no
  * `raise()` outside triggers); the adapter rewords it.
  */
-function foreignKeyGuard(sql: string): SqliteStatementInput | undefined {
-  const rebuilt = [
-    ...new Set(
-      [...sql.matchAll(/ALTER TABLE "_kick_new_((?:[^"]|"")+)" RENAME TO/g)].map((m) =>
-        m[1]!.replace(/""/g, '"'),
-      ),
-    ),
-  ]
+function foreignKeyGuard(rebuilt: string[]): SqliteStatementInput | undefined {
   if (rebuilt.length === 0) return undefined
   const marks = rebuilt.map(() => '?').join(', ')
   return {

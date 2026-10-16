@@ -225,3 +225,19 @@ describe('kick.config.ts db block', () => {
     ).toMatchObject({ casing: 'snake_case', migrationsTable: 'h', migrationsDirs: ['x'] })
   })
 })
+
+describe('applied migrations no folder holds', () => {
+  it('stop the run instead of reading as nothing pending', async () => {
+    const folder = path.join(dir, 'migrations')
+    await history(folder, [v.a])
+    const database = new Database(':memory:')
+    const adapter = sqliteAdapter({ database })
+    await migrateLatest({ adapter, migrationsDir: folder, requireReviewed: false })
+    // A misconfigured migrationsDir, or a folder deleted by hand.
+    const other = path.join(dir, 'elsewhere')
+    await mkdir(other, { recursive: true })
+    await expect(
+      migrateLatest({ adapter, migrationsDir: other, requireReviewed: false }),
+    ).rejects.toThrow(/is applied but in no migrations folder/)
+  })
+})

@@ -8,10 +8,14 @@ import {
   diff,
   emitMysql,
   extractSnapshot,
+  bigSerial,
   integer,
   introspectMysql,
+  jsonb,
   serial,
   table,
+  text,
+  varchar,
 } from '@forinda/kickjs-db'
 import { mysqlDialect } from '@forinda/kickjs-db/mysql'
 import { sql } from 'kysely'
@@ -57,6 +61,43 @@ describe('generated columns on MySQL', () => {
       /generated column/,
     )
     await expect(checkDrift(await introspectMysql(pool), target, 'error')).resolves.toBeUndefined()
+  }, 60_000)
+})
+
+describe('defaults and serial keys on MySQL', () => {
+  it('runs expression, TEXT/JSON and escaped defaults, and keeps AUTO_INCREMENT through MODIFY', async () => {
+    const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
+    const columns = {
+      token: varchar(36).default('uuid()'),
+      n: integer().notNull().default('floor(rand() * 0)'),
+      doc: jsonb().notNull().default('{}'),
+      body: text().notNull().default('0800'),
+      path: varchar(20).notNull().default('C:\\temp'),
+    }
+    const before = extractSnapshot(
+      { d: table('d', { id: serial().primaryKey(), ...columns }) },
+      'mysql',
+    )
+    await pool.query(emitMysql(diff(empty, before)))
+    await pool.query('INSERT INTO d () VALUES ()')
+    const [rows] = (await pool.query('SELECT token, n, doc, body, path FROM d')) as [any[], unknown]
+    expect(rows[0].token).toMatch(/^[0-9a-f-]{36}$/)
+    expect({ ...rows[0], token: undefined }).toEqual({
+      token: undefined,
+      n: 0,
+      doc: {},
+      body: '0800',
+      path: 'C:\\temp',
+    })
+    // serial → bigSerial is a MODIFY; inserts still get an id.
+    const after = extractSnapshot(
+      { d: table('d', { id: bigSerial().primaryKey(), ...columns }) },
+      'mysql',
+    )
+    await pool.query(emitMysql(diff(before, after)))
+    await pool.query('INSERT INTO d () VALUES ()')
+    const [ids] = await pool.query('SELECT id FROM d ORDER BY id')
+    expect((ids as Array<{ id: number }>).map((r) => Number(r.id))).toEqual([1, 2])
   }, 60_000)
 })
 

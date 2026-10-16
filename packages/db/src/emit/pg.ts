@@ -1,7 +1,7 @@
 import type { Change, ChangeSet } from '../diff/types'
 import type { ColumnSnapshot, PolicySnapshot, RoleSnapshot, TableSnapshot } from '../snapshot/types'
 import { primaryKeyOf, snapshotTableName } from '../snapshot/name'
-import { quoteIdent, quoteLiteral } from './identifiers'
+import { quoteIdent, quoteLiteral, allowsExpressionDefault, isFunctionCall } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
 
 export function emitPg(changes: ChangeSet): string {
@@ -503,12 +503,6 @@ function emitColumnDecl(c: ColumnSnapshot): string {
  * Arrays are decided by their element type, so `integer[]` keeps the integer
  * rule and `text[]` keeps the text one.
  */
-function allowsExpressionDefault(type: string): boolean {
-  const base = type.endsWith('[]') ? type.slice(0, -2) : type
-  return /^(smallint|integer|int|int2|int4|int8|bigint|serial|bigserial|smallserial|real|float4|float8|double precision|numeric|decimal|money|bool|boolean|timestamp|timestamptz|date|time|timetz|interval|uuid)\b/i.test(
-    base,
-  )
-}
 
 /**
  * Render a column default as SQL.
@@ -532,17 +526,18 @@ function formatDefault(value: unknown, type?: string): string {
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value)
-  // A value already carrying an explicit cast is SQL the caller composed —
-  // `'active'::"status"` from the enum recreate path — and is passed through
-  // whatever the column type is.
-  if (/::/.test(str)) return str
+  // A quoted literal with an explicit cast is SQL the caller composed —
+  // `'active'::"status"` from the enum recreate path, `'{}'::jsonb` from
+  // introspection — and is passed through whatever the column type is. Only
+  // that shape: any `::` let a text default like `std::string` out as SQL.
+  if (/^'(?:[^']|'')*'::[\w".[\] ]+$/.test(str)) return str
   // Unknown type included: quoting a value that wanted to be an expression is
   // wrong but valid, while the reverse is a syntax error.
   if (type === undefined || !allowsExpressionDefault(type)) return quoteLiteral(str)
   // SQL keywords pass through bare.
   if (/^[A-Z_]+$/.test(str)) return str // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
   // SQL function calls pass through bare: NOW(), gen_random_uuid(), etc.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
+  if (isFunctionCall(str)) return str
   if (/^-?\d+(\.\d+)?$/.test(str)) return str // numeric
   if (str === 'true' || str === 'false') return str // boolean literal
   return quoteLiteral(str)
