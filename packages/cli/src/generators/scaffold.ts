@@ -196,7 +196,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   )
 
   // Constants (query config)
-  await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab }))
+  await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab, fields }))
 
   // Controller + service (generic CRUD boilerplate)
   await write(

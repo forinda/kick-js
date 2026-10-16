@@ -96,6 +96,29 @@ describe('kick g scaffold', () => {
     expect(repoInterface).not.toContain("Symbol('WidgetRepository')")
   })
 
+  it('builds the query config from the scaffold fields', () => {
+    const result = runCli(fixture, [
+      'g',
+      'scaffold',
+      'invoice',
+      'amount:number',
+      'dueDate:string',
+      'note:text',
+      'paid:boolean',
+      'meta:json',
+    ])
+    assertCliOk(result, 'kick g scaffold invoice')
+
+    const constants = readFileSync(
+      join(fixture, 'src/modules/invoice/invoice.constants.ts'),
+      'utf-8',
+    )
+    expect(constants).toContain("filterable: ['amount', 'dueDate', 'note', 'paid']")
+    expect(constants).toContain("sortable: ['amount', 'dueDate', 'note', 'paid', 'createdAt']")
+    expect(constants).toContain("searchable: ['dueDate', 'note']")
+    expect(constants).not.toContain("'name'")
+  })
+
   it('emits a module index with the correct ModuleRoutes shape', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
 

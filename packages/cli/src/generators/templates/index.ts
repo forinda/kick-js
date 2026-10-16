@@ -1,7 +1,6 @@
 export type { TemplateContext } from './types'
 export { generateRestModuleIndex, generateMinimalModuleIndex } from './module-index'
 export { generateRestController } from './controller'
-export { generateConstants } from './constants'
 export { generateCreateDTO, generateUpdateDTO, generateResponseDTO } from './dtos'
 export { generateRepositoryFactory } from './repository'
 export { generateControllerTest, generateRepositoryTest } from './tests'
