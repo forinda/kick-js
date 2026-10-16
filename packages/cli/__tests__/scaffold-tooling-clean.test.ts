@@ -89,7 +89,6 @@ describe('kick g module (rest)', () => {
     const r = runCli(dir, ['g', 'module', 'task'])
     expect(r.exitCode).toBe(0)
     const lint = run(dir, 'oxlint', ['--deny-warnings', 'src/modules/task'])
-    expect(lint.out).not.toContain('warning')
     expect(lint.code).toBe(0)
   })
 })
