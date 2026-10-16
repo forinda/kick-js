@@ -33,6 +33,7 @@ export type { CompileMode, CompileOptions as CompilePgOptions }
 const PG_HELPERS: JsonHelpers = {
   jsonArrayFrom: jsonArrayFrom as unknown as JsonHelpers['jsonArrayFrom'],
   jsonObjectFrom: jsonObjectFrom as unknown as JsonHelpers['jsonObjectFrom'],
+  dialect: 'postgres',
 }
 
 export function compilePg<DB>(

@@ -83,7 +83,8 @@ export class ResultExtensionPlugin implements KyselyPlugin {
     // Tag the query so transformResult knows to apply computeds.
     this.pending.set(queryId, tableName)
 
-    return bag ? injectNeeds(node, bag) : node
+    // With a join, an unqualified needs column could name either table: not injected.
+    return bag && !node.joins?.length ? injectNeeds(node, bag) : node
   }
 
   async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
@@ -110,9 +111,10 @@ export class ResultExtensionPlugin implements KyselyPlugin {
 
     const bag = this.byTable.get(table)
     for (const [key, ext] of Object.entries(bag ?? {})) {
-      // A nested row holds only the columns `db.query` selected for it; a
-      // computed whose columns aren't all there is left off, not guessed.
-      if (depth > 0 && !Object.keys(ext.needs).every((c) => c in base)) continue
+      // A row holds only the columns selected for it (a nested row, or a join
+      // where needs aren't injected); a computed whose columns aren't all
+      // there is left off, not guessed.
+      if (!Object.keys(ext.needs).every((c) => c in base)) continue
       // Pass `base` (the pristine row) into compute so computeds can't read
       // each other's outputs — order independence keeps the contract simple.
       let value: unknown

@@ -1,0 +1,13 @@
+---
+'@forinda/kickjs-db': patch
+---
+
+Relational reads and query plugins that returned wrong rows or failed:
+
+- A soft-deleted junction row no longer links a many-to-many pair (`withDeleted` on the level includes it).
+- A many-to-many level's `where` on a column the junction also has (`id`) is no longer ambiguous: the junction is matched with `EXISTS`, out of the level's scope.
+- `offset` without `limit` works on SQLite and MySQL, at the top and nested (they have no OFFSET on its own).
+- A nested `bytea` column on SQLite, which its JSON can't hold, is refused by name with how to leave it out, instead of `JSON cannot hold BLOB values`.
+- A relation named like an `Object.prototype` member (`constructor`) no longer reads as a column collision, and `with: { toString: true }` is an unknown relation, not a `TypeError`.
+- Managed columns (`onUpdateNow()`, `version()`, `$onUpdate`, insert defaults) are set on an insert or update inside a `WITH` too.
+- `$extends({ result })` on a select with joins no longer adds its `needs` columns (an unqualified one was ambiguous), and computes a field only when the row has every column it needs.

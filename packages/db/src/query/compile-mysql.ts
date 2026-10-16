@@ -35,6 +35,7 @@ import type { TableSnapshot } from '../snapshot/types'
 const MYSQL_HELPERS: JsonHelpers = {
   jsonArrayFrom: jsonArrayFrom as unknown as JsonHelpers['jsonArrayFrom'],
   jsonObjectFrom: jsonObjectFrom as unknown as JsonHelpers['jsonObjectFrom'],
+  dialect: 'mysql',
 }
 
 export function compileMysql<DB>(
