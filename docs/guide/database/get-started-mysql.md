@@ -165,13 +165,14 @@ To recover, undo by hand what did apply (drop the column), fix the schema, delet
 ```ts
 // src/db/client.ts
 import { createPool } from 'mysql2/promise'
+import { getEnv } from '@forinda/kickjs'
 import { createDbClient } from '@forinda/kickjs-db'
 import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db/mysql'
-import { env } from '../config'
+import '../config' // registers the env schema before getEnv reads it
 import * as schema from './schema'
 
 // timezone 'Z': read and write DATETIME / TIMESTAMP as UTC, not the host's zone.
-const pool = createPool({ uri: env.DATABASE_URL, timezone: 'Z' })
+const pool = createPool({ uri: getEnv('DATABASE_URL'), timezone: 'Z' })
 
 // One pool for queries and migrations.
 export const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })

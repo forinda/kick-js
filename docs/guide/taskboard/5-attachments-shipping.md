@@ -135,7 +135,7 @@ register(container) {
   container.registerFactory(ATTACHMENT_REPOSITORY, () =>
     createAttachmentRepository(container.resolve(APP_DB)),
   )
-  container.registerFactory(FILE_STORAGE, () => diskStorage(env.UPLOAD_DIR))
+  container.registerFactory(FILE_STORAGE, () => diskStorage(getEnv('UPLOAD_DIR')))
 },
 ```
 

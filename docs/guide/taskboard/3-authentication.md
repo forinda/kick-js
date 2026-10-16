@@ -174,9 +174,8 @@ The middleware list has grown, so move it out of `src/index.ts` into `src/middle
 
 ```ts
 // src/middleware/index.ts
-import { cors, helmet, requestId, requestLogger, session } from '@forinda/kickjs'
+import { cors, getEnv, helmet, requestId, requestLogger, session } from '@forinda/kickjs'
 import express from 'express'
-import { env } from '@/config'
 
 export const middlewares = [
   helmet(),
@@ -186,7 +185,7 @@ export const middlewares = [
   // Express needs a body parser; Fastify and h3 parse bodies natively.
   express.json(),
   // A signed cookie holding the session id; the data lives server-side.
-  session({ secret: env.SESSION_SECRET }),
+  session({ secret: getEnv('SESSION_SECRET') }),
 ]
 ```
 
@@ -319,7 +318,6 @@ import {
   reply,
   type Ctx,
 } from '@forinda/kickjs'
-import { env } from '@/config'
 import { Public } from '@/auth/current-user'
 import { AuthService } from './auth.service'
 import { loginSchema, registerSchema } from './dtos/auth.dto'
@@ -328,7 +326,7 @@ import { loginSchema, registerSchema } from './dtos/auth.dto'
  * One limiter for both public routes: each attempt runs scrypt on purpose,
  * so unthrottled it is a cheap way to burn CPU, and a password-guessing aid.
  */
-const authAttempts = rateLimitGuard({ max: env.AUTH_RATE_LIMIT, windowMs: 15 * 60_000 })
+const authAttempts = rateLimitGuard({ max: getEnv('AUTH_RATE_LIMIT'), windowMs: 15 * 60_000 })
 
 @Controller()
 export class AuthController {

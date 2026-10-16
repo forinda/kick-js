@@ -217,7 +217,7 @@ const envSchema = fromZod(
 )
 
 // Side effect: registers the schema with the env cache at module-load time.
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema; read values with getEnv('KEY')
 
 // Default export: the contract `kick typegen` reads to populate `KickEnv`.
 export default envSchema

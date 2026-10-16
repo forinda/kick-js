@@ -1272,10 +1272,11 @@ export async function detectEnvFile(cwd: string, envFile: string): Promise<Disco
     // generator emits `import type schema from '...'` and runs it
     // through schema-to-type inference. `loadEnvFromSchema(...)` is
     // deliberately NOT in the accept list because its return value is
-    // the parsed env object, not the schema. Adopters routinely write
+    // the parsed env object, not the schema. The scaffold writes
+    //   loadEnvFromSchema(envSchema)   // side effect only
     //   export default envSchema
-    //   export const env = loadEnvFromSchema(envSchema)
-    // where only `envSchema` is the schema; detecting on
+    // (older projects also `export const env = loadEnvFromSchema(...)`;
+    // only the default export is read either way). Detecting on
     // `loadEnvFromSchema` would also accept the anti-pattern
     //   export default loadEnvFromSchema(schema)
     // which would push the parsed *env value* into `InferSchemaOutput`

@@ -156,12 +156,13 @@ Postgres runs DDL inside transactions, so each migration applies completely or n
 ```ts
 // src/db/client.ts
 import { Pool } from 'pg'
+import { getEnv } from '@forinda/kickjs'
 import { createDbClient } from '@forinda/kickjs-db'
 import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
-import { env } from '../config'
+import '../config' // registers the env schema before getEnv reads it
 import * as schema from './schema'
 
-const pool = new Pool({ connectionString: env.DATABASE_URL })
+const pool = new Pool({ connectionString: getEnv('DATABASE_URL') })
 
 export const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
 
