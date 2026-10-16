@@ -28,13 +28,15 @@ describe('remoteHost — what kick db push asks about', () => {
 describe('kick db push against a remote database', () => {
   it('refuses without --yes when it cannot ask (no terminal)', async () => {
     const { Command } = await import('commander')
-    const { registerDbCommands } = await import('../src/cli')
+    const { registerDbCommands, resolveKickDbConfig } = await import('../src/cli')
     const program = new Command().exitOverride()
     const db = program.command('db')
-    registerDbCommands(db, async () => ({
-      connectionString: 'postgres://u:p@db.example.com:5432/app',
-      schemaPath: 'does-not-exist.ts',
-    }))
+    registerDbCommands(db, async () =>
+      resolveKickDbConfig({
+        connectionString: 'postgres://u:p@db.example.com:5432/app',
+        schemaPath: 'does-not-exist.ts',
+      }),
+    )
     await expect(program.parseAsync(['node', 'kick', 'db', 'push'])).rejects.toThrow(
       /refusing to push to db\.example\.com/,
     )
