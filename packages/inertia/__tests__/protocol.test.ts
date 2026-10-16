@@ -532,6 +532,10 @@ for (const rt of RUNTIMES)
         try {
           const prod = await request(app.handle.bind(app)).get('/boom').set(X).expect(500)
           expect(prod.body.props).toMatchObject({ status: 500, message: 'Server Error' })
+          // A deploy that forgot NODE_ENV is production too.
+          delete process.env.NODE_ENV
+          const unset = await request(app.handle.bind(app)).get('/boom').set(X).expect(500)
+          expect(unset.body.props).toMatchObject({ status: 500, message: 'Server Error' })
         } finally {
           process.env.NODE_ENV = env
         }

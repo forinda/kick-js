@@ -385,13 +385,15 @@ const STATUS_TEXT: Record<number, string> = {
 
 /**
  * The configured error page as a response, with `{ status, message }` as its
- * props. A 5xx message is replaced in production — an exception's text is
- * for the log, not the visitor.
+ * props. A 5xx message is replaced unless NODE_ENV is development or test —
+ * an exception's text is for the log, not the visitor, and a deploy that
+ * forgot NODE_ENV must not show it.
  */
 export function errorPage(component: string, status: number, error?: unknown): Respondable {
   const fallback = STATUS_TEXT[status] ?? (status >= 500 ? 'Server Error' : 'Error')
   const raw = error instanceof Error && error.message ? error.message : fallback
-  const message = status >= 500 && process.env.NODE_ENV === 'production' ? fallback : raw
+  const dev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
+  const message = status >= 500 && !dev ? fallback : raw
   // Not for search results: no canonical, and `noindex`.
   return inertia(
     component,

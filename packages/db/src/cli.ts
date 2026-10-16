@@ -25,6 +25,7 @@ import { checkMigrations } from './cli/check'
 import { runSeeds } from './cli/seed'
 import { removeCasing } from './snapshot/casing'
 import { askRenamesInTerminal, confirmInTerminal, parseRenameFlags } from './cli/renames'
+import { remoteHost } from './cli/push-target'
 import { loadModule } from './cli/load-module'
 
 /** Every folder the runner reads: `migrationsDir`, then `migrationsDirs`. */
@@ -346,39 +347,59 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
     )
     .option('--no-interactive', "Don't ask about renames or data loss, even in a terminal")
     .option('--accept-data-loss', 'Apply changes that drop tables, columns or enum values')
-    .action(async (opts: Omit<GenerateFlags, 'empty' | 'ts'> & { acceptDataLoss?: boolean }) => {
-      const config = await getConfig()
-      const interactive = opts.interactive !== false && process.stdin.isTTY
-      const schema = await loadModule(path.resolve(process.cwd(), config.schemaPath), {
-        fresh: true,
-      })
-      const { adapter, cleanup } = await resolveAdapter(config)
-      try {
-        const r = await pushSchema({
-          adapter,
-          schema,
-          casing: config.casing,
-          renames: parseRenameFlags(opts.renameTable, opts.renameColumn),
-          askRenames: interactive ? askRenamesInTerminal : undefined,
-          confirmDataLoss: opts.acceptDataLoss
-            ? async () => true
-            : interactive
-              ? (losses) =>
-                  confirmInTerminal(
-                    `This loses data:\n${losses.map((l) => `  - ${l}`).join('\n')}\nApply it?`,
-                  )
-              : undefined,
+    .option('-y, --yes', 'Push to a remote database without asking')
+    .action(
+      async (
+        opts: Omit<GenerateFlags, 'empty' | 'ts'> & { acceptDataLoss?: boolean; yes?: boolean },
+      ) => {
+        const config = await getConfig()
+        const interactive = opts.interactive !== false && process.stdin.isTTY
+        // Push is for a prototyping database. A remote host is a hint it isn't one
+        // (NODE_ENV is often unset in a shell, so it can't be the only guard).
+        const remote = remoteHost(config.connectionString)
+        if (remote && !opts.yes) {
+          const ok = interactive
+            ? await confirmInTerminal(
+                `Push changes the database at ${remote} without a migration file. Continue?`,
+              )
+            : false
+          if (!ok) {
+            throw new Error(
+              `kickjs-db: refusing to push to ${remote} — push is for a local prototyping database. Pass --yes if this is one.`,
+            )
+          }
+        }
+        const schema = await loadModule(path.resolve(process.cwd(), config.schemaPath), {
+          fresh: true,
         })
-        const plural = r.changeCount === 1 ? '' : 's'
-        console.log(
-          r.status === 'no-changes'
-            ? 'The database already matches the schema.'
-            : `Pushed ${r.changeCount} change${plural}.`,
-        )
-      } finally {
-        await cleanup()
-      }
-    })
+        const { adapter, cleanup } = await resolveAdapter(config)
+        try {
+          const r = await pushSchema({
+            adapter,
+            schema,
+            casing: config.casing,
+            renames: parseRenameFlags(opts.renameTable, opts.renameColumn),
+            askRenames: interactive ? askRenamesInTerminal : undefined,
+            confirmDataLoss: opts.acceptDataLoss
+              ? async () => true
+              : interactive
+                ? (losses) =>
+                    confirmInTerminal(
+                      `This loses data:\n${losses.map((l) => `  - ${l}`).join('\n')}\nApply it?`,
+                    )
+                : undefined,
+          })
+          const plural = r.changeCount === 1 ? '' : 's'
+          console.log(
+            r.status === 'no-changes'
+              ? 'The database already matches the schema.'
+              : `Pushed ${r.changeCount} change${plural}.`,
+          )
+        } finally {
+          await cleanup()
+        }
+      },
+    )
 
   parent
     .command('seed [names...]')

@@ -4,8 +4,10 @@
  * saves an avatar doesn't change when the app moves from one to another:
  *
  * ```ts
- * const files = process.env.NODE_ENV === 'production'
- *   ? s3Storage({ bucket: 'avatars', region: 'eu-west-1', accessKeyId, secretAccessKey })
+ * // Pick the driver from an explicit setting, not NODE_ENV: a deploy that
+ * // forgot NODE_ENV would otherwise write uploads to the container's disk.
+ * const files = getEnv('S3_BUCKET')
+ *   ? s3Storage({ bucket: getEnv('S3_BUCKET'), region: 'eu-west-1', accessKeyId, secretAccessKey })
  *   : diskStorage({ root: './uploads', baseUrl: '/uploads' }) // from '@forinda/kickjs-storage/disk'
  *
  * await files.put(`avatars/${user.id}.png`, ctx.file!.buffer, { contentType: 'image/png' })

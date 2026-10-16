@@ -175,7 +175,7 @@ Exit code `1` when anything is listed. The same check is exported as `checkMigra
 ## push
 
 ```text
-kick db push [--rename-table old=new] [--rename-column table.old=new] [--accept-data-loss] [--no-interactive]
+kick db push [--rename-table old=new] [--rename-column table.old=new] [--accept-data-loss] [--no-interactive] [-y, --yes]
 ```
 
 Makes the database match the schema straight away, with no migration file — for trying out a schema before committing to it. Run it again after each edit:
@@ -189,6 +189,7 @@ The database already matches the schema.
 - **It remembers what it pushed.** The schema it pushed is kept in a `kick_migrations_push` table (named after your migrations table) and the next push diffs against it. If the database no longer matches it, push stops: `the database differs from what was last pushed`. That's a change made some other way, or a MySQL push that failed partway — MySQL commits each DDL statement on its own, so a failure can leave earlier ones applied. Make the database match the schema you last pushed, or start from an empty one.
 - **It starts from an empty database.** On one with tables push didn't create, it stops.
 - **It's refused where migrations run:** on a database with any migration applied, and whenever `NODE_ENV=production` — either one is enough.
+- **A remote database is asked about.** When the connection string points at a host that isn't this machine or a neighbouring container (`localhost`, `127.*`, `::1`, `*.local`, `*.localhost`, a compose service name such as `db`), push names the host and asks in a terminal, and refuses otherwise. `--yes` agrees in advance. `NODE_ENV` is often unset in a shell, so it can't be the only guard. A `db.adapter()` factory with no connection string gives push nothing to check, so only the other guards apply.
 
 When the schema settles, write it down as a migration: `kick db generate init`, then apply it to a fresh database (or drop the prototyping one) — the pushed tables already exist, so `migrate latest` on the same database would fail. The same function is exported as `pushSchema({ adapter, schema })`.
 

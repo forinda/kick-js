@@ -315,7 +315,7 @@ The fragment of the page the form sits on is not used; a form on `/posts/1#comme
 
 ## Errors and unknown URLs
 
-With `errorPage: 'Error'`, `inertiaErrorHandler()` renders thrown errors and `inertiaNotFound()` renders unknown URLs through `src/client/pages/Error.tsx`, which receives `{ status, message }`. In production a 5xx message is replaced with a generic one. API and asset requests keep their JSON answers.
+With `errorPage: 'Error'`, `inertiaErrorHandler()` renders thrown errors and `inertiaNotFound()` renders unknown URLs through `src/client/pages/Error.tsx`, which receives `{ status, message }`. Unless `NODE_ENV` is `development` or `test` (so also when it is unset), a 5xx message is replaced with a generic one. API and asset requests keep their JSON answers.
 
 ## SEO
 
