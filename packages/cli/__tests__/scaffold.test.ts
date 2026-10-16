@@ -54,15 +54,31 @@ describe('kick g scaffold', () => {
   })
 
   it('propagates all field definitions through the create + response DTOs', () => {
-    runCli(fixture, ['g', 'scaffold', 'widget', 'title:string', 'count:int', 'tags:json'])
+    runCli(fixture, [
+      'g',
+      'scaffold',
+      'widget',
+      'title:string',
+      'body:text',
+      'count:int',
+      'tags:json',
+    ])
 
     const createDto = readFileSync(
       join(fixture, 'src/modules/widget/dtos/create-widget.dto.ts'),
       'utf-8',
     )
-    expect(createDto).toContain('title: z.string()')
+    // Strings are non-empty, as in `kick g module`; text has no upper bound.
+    expect(createDto).toContain('title: z.string().min(1).max(200),')
+    expect(createDto).toContain('body: z.string().min(1),')
     expect(createDto).toContain('count: z.number().int()')
     expect(createDto).toContain('tags: z.any()')
+
+    const updateDto = readFileSync(
+      join(fixture, 'src/modules/widget/dtos/update-widget.dto.ts'),
+      'utf-8',
+    )
+    expect(updateDto).toContain('title: z.string().min(1).max(200).optional(),')
 
     const responseDto = readFileSync(
       join(fixture, 'src/modules/widget/dtos/widget-response.dto.ts'),

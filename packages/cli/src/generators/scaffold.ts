@@ -22,8 +22,8 @@ export interface FieldDef {
 
 /**
  * Supported field types and their mappings:
- *   string    → z.string()
- *   text      → z.string()        (alias, hints at longer content)
+ *   string    → z.string().min(1).max(200)   (same bounds as `kick g module`'s name)
+ *   text      → z.string().min(1)            (longer content, no upper bound)
  *   number    → z.number()
  *   int       → z.number().int()
  *   float     → z.number()
@@ -41,8 +41,10 @@ export interface FieldDef {
  *   body:text?          ← needs quoting in bash/zsh ("body:text?")
  */
 const TYPE_MAP: Record<string, { ts: string; zod: string }> = {
-  string: { ts: 'string', zod: 'z.string()' },
-  text: { ts: 'string', zod: 'z.string()' },
+  // Non-empty, like `kick g module`'s `name` — a required string that accepts
+  // '' is rarely what a create body means.
+  string: { ts: 'string', zod: 'z.string().min(1).max(200)' },
+  text: { ts: 'string', zod: 'z.string().min(1)' },
   number: { ts: 'number', zod: 'z.number()' },
   int: { ts: 'number', zod: 'z.number().int()' },
   float: { ts: 'number', zod: 'z.number()' },

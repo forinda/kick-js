@@ -274,20 +274,20 @@ Generate a full CRUD module from field definitions. Unlike `kick g module`, whic
 
 Each field uses the format `name:type` or `name:type:optional`:
 
-| Type         | TypeScript          | Zod                     | Example                       |
-| ------------ | ------------------- | ----------------------- | ----------------------------- |
-| `string`     | `string`            | `z.string()`            | `title:string`                |
-| `text`       | `string`            | `z.string()`            | `body:text`                   |
-| `number`     | `number`            | `z.number()`            | `price:number`                |
-| `int`        | `number`            | `z.number().int()`      | `age:int`                     |
-| `float`      | `number`            | `z.number()`            | `rating:float`                |
-| `boolean`    | `boolean`           | `z.boolean()`           | `active:boolean`              |
-| `date`       | `string`            | `z.iso.datetime()`      | `createdAt:date`              |
-| `email`      | `string`            | `z.email()`             | `email:email`                 |
-| `url`        | `string`            | `z.url()`               | `website:url`                 |
-| `uuid`       | `string`            | `z.uuid()`              | `externalId:uuid`             |
-| `json`       | `any`               | `z.any()`               | `metadata:json`               |
-| `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])` | `status:enum:draft,published` |
+| Type         | TypeScript          | Zod                          | Example                       |
+| ------------ | ------------------- | ---------------------------- | ----------------------------- |
+| `string`     | `string`            | `z.string().min(1).max(200)` | `title:string`                |
+| `text`       | `string`            | `z.string().min(1)`          | `body:text`                   |
+| `number`     | `number`            | `z.number()`                 | `price:number`                |
+| `int`        | `number`            | `z.number().int()`           | `age:int`                     |
+| `float`      | `number`            | `z.number()`                 | `rating:float`                |
+| `boolean`    | `boolean`           | `z.boolean()`                | `active:boolean`              |
+| `date`       | `string`            | `z.iso.datetime()`           | `createdAt:date`              |
+| `email`      | `string`            | `z.email()`                  | `email:email`                 |
+| `url`        | `string`            | `z.url()`                    | `website:url`                 |
+| `uuid`       | `string`            | `z.uuid()`                   | `externalId:uuid`             |
+| `json`       | `any`               | `z.any()`                    | `metadata:json`               |
+| `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])`      | `status:enum:draft,published` |
 
 ### Optional Fields
 
@@ -349,7 +349,7 @@ Generates DTOs like:
 import { z } from 'zod'
 
 export const createUserSchema = z.object({
-  name: z.string(),
+  name: z.string().min(1).max(200),
   email: z.email().optional(),
   age: z.number().int(),
   role: z.enum(['admin', 'user', 'guest']),
