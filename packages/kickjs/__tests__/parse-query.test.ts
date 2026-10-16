@@ -140,3 +140,32 @@ describe('setQueryParsingDefaults', () => {
     })
   })
 })
+
+describe('parseSort — formats', () => {
+  it('reads -field as descending and field / +field as ascending', () => {
+    expect(parseSort('-createdAt')).toEqual([{ field: 'createdAt', direction: 'desc' }])
+    expect(parseSort('price')).toEqual([{ field: 'price', direction: 'asc' }])
+    // `+` in a query string arrives as a space
+    expect(parseSort(' price')).toEqual([{ field: 'price', direction: 'asc' }])
+    expect(parseSort('+price')).toEqual([{ field: 'price', direction: 'asc' }])
+  })
+
+  it('reads a comma-separated list in order, mixing both forms', () => {
+    expect(parseSort('-featured,price,createdAt:desc')).toEqual([
+      { field: 'featured', direction: 'desc' },
+      { field: 'price', direction: 'asc' },
+      { field: 'createdAt', direction: 'desc' },
+    ])
+  })
+
+  it('keeps field:dir, the allowlist and dropping bad items', () => {
+    expect(parseSort(['name:DESC', 'x:sideways', '-', ','], ['name'])).toEqual([
+      { field: 'name', direction: 'desc' },
+    ])
+    const onReject = vi.fn()
+    expect(parseSort('-secret', ['name'], { onReject })).toEqual([])
+    expect(onReject).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'sort', field: 'secret', reason: 'field-not-allowed' }),
+    )
+  })
+})

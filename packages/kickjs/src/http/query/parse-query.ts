@@ -126,7 +126,11 @@ export function parseFilters(
   return results
 }
 
-/** Parse sort strings like "firstName:asc" into structured objects */
+/**
+ * Parse sort into structured items. Accepts `field:asc|desc`, `-field`
+ * (descending), and `field` / `+field` (ascending), repeated or
+ * comma-separated: `?sort=-featured,price` = `?sort=featured:desc&sort=price:asc`.
+ */
 export function parseSort(
   sortParam: string | string[] | undefined,
   allowedFields?: string[],
@@ -134,18 +138,29 @@ export function parseSort(
 ): SortItem[] {
   if (!sortParam) return []
 
-  const items = Array.isArray(sortParam) ? sortParam : [sortParam]
+  const items = (Array.isArray(sortParam) ? sortParam : [sortParam]).flatMap((s) => s.split(','))
   const results: SortItem[] = []
   const allowed = allowedFields ? new Set(allowedFields) : null
   const onReject = options?.onReject
 
-  for (const item of items) {
-    // Split on last colon so field names with colons work
+  for (const raw of items) {
+    // `+` in a query string arrives as a space; trim covers `+field` too.
+    const item = raw.trim()
+    if (!item) continue
+    let field: string
+    let dir: string
     const lastColon = item.lastIndexOf(':')
-    if (lastColon === -1) continue
-
-    const field = item.slice(0, lastColon)
-    const dir = item.slice(lastColon + 1).toLowerCase()
+    if (lastColon !== -1) {
+      // Split on the last colon so field names with colons work.
+      field = item.slice(0, lastColon)
+      dir = item.slice(lastColon + 1).toLowerCase()
+    } else if (item.startsWith('-')) {
+      field = item.slice(1)
+      dir = 'desc'
+    } else {
+      field = item.startsWith('+') ? item.slice(1) : item
+      dir = 'asc'
+    }
 
     if (!field) continue
     if (dir !== 'asc' && dir !== 'desc') continue
@@ -250,7 +265,7 @@ function normalizeFieldConfig(config?: QueryFieldConfig): StringQueryFieldConfig
  *
  * Query string format:
  * - Filters: `?filter=field:operator:value` (repeatable)
- * - Sort: `?sort=field:asc|desc` (repeatable)
+ * - Sort: `?sort=field:asc|desc`, `-field` / `field`, repeatable or comma-separated
  * - Pagination: `?page=1&limit=20`
  * - Search: `?q=search+term`
  *

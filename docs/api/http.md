@@ -663,7 +663,7 @@ interface ParseQueryOptions {
 }
 ```
 
-Query syntax: `?filter=status:eq:active&sort=createdAt:desc&page=2&limit=20&q=term`. `ctx.qs()` logs rejections with `console.warn` unless you pass `onReject`. See the [query parsing guide](../guide/query-parsing.md).
+Query syntax: `?filter=status:eq:active&sort=createdAt:desc&page=2&limit=20&q=term` (sort also takes `-createdAt,title`). `ctx.qs()` logs rejections with `console.warn` unless you pass `onReject`. See the [query parsing guide](../guide/query-parsing.md).
 
 ### Query Types
 

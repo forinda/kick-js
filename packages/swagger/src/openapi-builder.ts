@@ -650,7 +650,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
             name: 'sort',
             in: 'query',
             required: false,
-            description: `Sort fields: ${queryParamsConfig.sortable.join(', ')}. Format: \`field:asc\` or \`field:desc\``,
+            description: `Sort fields: ${queryParamsConfig.sortable.join(', ')}. Format: \`field:asc\`, \`field:desc\`, or \`-field\` / \`field\`, comma-separated or repeated`,
             schema: { type: 'array', items: { type: 'string' } },
             style: 'form',
             explode: true,
