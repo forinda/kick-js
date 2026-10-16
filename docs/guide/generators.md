@@ -325,6 +325,8 @@ Scaffold emits the same flat REST module layout as `kick g module`, but with fie
 
 `post.constants.ts` is built from the fields: string fields (`string`, `text`, `email`, `url`) are filterable, sortable and searchable; every other scalar (`number`, `int`, `float`, `boolean`, `date`, `uuid`, `enum`) is filterable and sortable; `json` fields are neither; `createdAt` is always sortable. `kick g scaffold invoice amount:number dueDate:string` gives `filterable: ['amount', 'dueDate']`, `sortable: ['amount', 'dueDate', 'createdAt']`, `searchable: ['dueDate']`.
 
+The Map-backed repository applies that config: `?filter=amount:gte:50` (every operator, `in` / `between` take comma-separated values), `?q=` across the searchable fields (case-insensitive), and `?sort=amount:desc` (several `sort` keys in order), before counting `total` and slicing the page.
+
 `post.repository.ts` is always the Map-backed factory — `kick g scaffold` takes no `--repo` flag, so it can't name a store in the generated prose the way `kick g module --repo postgres` does. Replace the factory body with your own queries; the contract is `ReturnType<typeof createPostRepository>`, so nothing else changes.
 
 ### Scaffold Flags

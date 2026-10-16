@@ -43,9 +43,22 @@ export function generateRepositoryFactory(ctx: TemplateContext): string {
     async findPaginated(
       parsed: ParsedQuery,
     ): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
-      const all = [...store.values()]
+      // The parser already limited fields to ${pascal.toUpperCase()}_QUERY_CONFIG.
+      const q = parsed.search.toLowerCase()
+      const rows = [...store.values()].filter(
+        (row) =>
+          parsed.filters.every((f) => matches(field(row, f.field), f)) &&
+          (!q || SEARCHABLE.some((name) => String(field(row, name) ?? '').toLowerCase().includes(q))),
+      )
+      rows.sort((a, b) => {
+        for (const { field: name, direction } of parsed.sort) {
+          const order = compare(field(a, name), field(b, name))
+          if (order) return direction === 'desc' ? -order : order
+        }
+        return 0
+      })
       const { offset, limit } = parsed.pagination
-      return { data: all.slice(offset, offset + limit), total: all.length }
+      return { data: rows.slice(offset, offset + limit), total: rows.length }
     },
 
     async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
@@ -89,10 +102,56 @@ import { createToken, HttpException } from '@forinda/kickjs'`
  * in the module — nothing else has to change.
  */
 ${imports}
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { FilterItem, ParsedQuery } from '@forinda/kickjs'
+import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
+
+const SEARCHABLE = (${pascal.toUpperCase()}_QUERY_CONFIG.searchable ?? []) as string[]
+
+function field(row: object, name: string): unknown {
+  return (row as Record<string, unknown>)[name]
+}
+
+/** Numbers compare by value; everything else (ISO dates included) as text. */
+function compare(a: unknown, b: unknown): number {
+  const [x, y] = [Number(a), Number(b)]
+  if (a != null && b != null && a !== '' && b !== '' && !Number.isNaN(x) && !Number.isNaN(y)) {
+    return x - y
+  }
+  return String(a ?? '').localeCompare(String(b ?? ''))
+}
+
+/** One \`?filter=field:op:value\` — \`in\` and \`between\` take comma-separated values. */
+function matches(value: unknown, { operator, value: raw }: FilterItem): boolean {
+  const text = String(value ?? '').toLowerCase()
+  const list = raw.split(',')
+  switch (operator) {
+    case 'eq':
+      return compare(value, raw) === 0
+    case 'neq':
+      return compare(value, raw) !== 0
+    case 'gt':
+      return compare(value, raw) > 0
+    case 'gte':
+      return compare(value, raw) >= 0
+    case 'lt':
+      return compare(value, raw) < 0
+    case 'lte':
+      return compare(value, raw) <= 0
+    case 'between':
+      return compare(value, list[0]) >= 0 && compare(value, list[1]) <= 0
+    case 'in':
+      return list.some((v) => compare(value, v) === 0)
+    case 'contains':
+      return text.includes(raw.toLowerCase())
+    case 'starts':
+      return text.startsWith(raw.toLowerCase())
+    case 'ends':
+      return text.endsWith(raw.toLowerCase())
+  }
+}
 
 export function ${factory}() {
 ${body}

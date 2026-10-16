@@ -13,7 +13,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { assertCliOk, cleanupFixture, createFixtureProject, runCli, runTsc } from './helpers'
+import { spawnSync } from 'node:child_process'
+import {
+  WORKSPACE_ROOT,
+  assertCliOk,
+  cleanupFixture,
+  createFixtureProject,
+  runCli,
+  runTsc,
+} from './helpers'
 
 describe('kick g scaffold', () => {
   let fixture: string
@@ -133,6 +141,25 @@ describe('kick g scaffold', () => {
     expect(constants).toContain("sortable: ['amount', 'dueDate', 'note', 'paid', 'createdAt']")
     expect(constants).toContain("searchable: ['dueDate', 'note']")
     expect(constants).not.toContain("'name'")
+  })
+
+  it('the in-memory repository honours filters, search and sort', () => {
+    assertCliOk(runCli(fixture, ['g', 'module', 'widget']), 'kick g module widget')
+    // Run the generated repository test itself — it exercises findPaginated.
+    const vitest = spawnSync(
+      'node',
+      [
+        join(WORKSPACE_ROOT, 'node_modules/vitest/vitest.mjs'),
+        'run',
+        '--reporter=verbose',
+        'src/modules/widget/__tests__/widget.repository.test.ts',
+      ],
+      { cwd: fixture, encoding: 'utf-8', env: { ...process.env, NO_COLOR: '1' } },
+    )
+    expect(vitest.stdout + vitest.stderr).toContain(
+      'should filter, search and sort before paginating',
+    )
+    expect(vitest.status, vitest.stdout + vitest.stderr).toBe(0)
   })
 
   it('emits a module index with the correct ModuleRoutes shape', () => {

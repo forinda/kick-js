@@ -81,6 +81,16 @@ import { Container } from '@forinda/kickjs'
       expect(res.body).toMatchObject({ data: [], meta: { page: 1 } })
     })
 
+    it('filters and sorts through the query string', async () => {
+      const { agent } = await boot()
+      for (const name of ['Alpha', 'Beta', 'Gamma']) await agent.post(BASE).send({ name })
+      const res = await agent.get(\`\${BASE}?filter=name:neq:Beta&sort=name:desc\`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.map((row: { name: string }) => row.name)).toEqual(['Gamma', 'Alpha'])
+      expect(res.body.meta.total).toBe(2)
+    })
+
     it.todo('returns created ${plural}, paginated')
   })`
     : `  describe('GET /${route}', () => {
@@ -190,6 +200,33 @@ describe('${pascal} repository', () => {
 
     expect(result.data).toHaveLength(2)
     expect(result.total).toBe(3)
+  })
+
+  it('should filter, search and sort before paginating', async () => {
+    await repo.create({ name: 'Banana' })
+    await repo.create({ name: 'apple' })
+    await repo.create({ name: 'Cherry' })
+    const pagination = { page: 1, limit: 10, offset: 0 }
+
+    const sorted = await repo.findPaginated({
+      filters: [],
+      sort: [{ field: 'name', direction: 'desc' }],
+      search: '',
+      pagination,
+    })
+    expect(sorted.data.map((row) => row.name)).toEqual(['Cherry', 'Banana', 'apple'])
+
+    const filtered = await repo.findPaginated({
+      filters: [{ field: 'name', operator: 'neq', value: 'apple' }],
+      sort: [],
+      search: '',
+      pagination: { page: 1, limit: 1, offset: 0 },
+    })
+    expect(filtered.data).toHaveLength(1)
+    expect(filtered.total).toBe(2)
+
+    const searched = await repo.findPaginated({ filters: [], sort: [], search: 'AN', pagination })
+    expect(searched.data.map((row) => row.name)).toEqual(['Banana'])
   })
 
   it('should update a ${kebab}', async () => {
