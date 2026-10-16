@@ -7,6 +7,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  RelationalQueryCancelledError,
   createDbClient,
   defineTenancy,
   diff,
@@ -14,6 +15,7 @@ import {
   extractSnapshot,
   generate,
   migrateTenants,
+  relations,
   serial,
   table,
   tenantKey,
@@ -145,6 +147,52 @@ describe.each(['transaction', 'connection'] as const)("'rls' tenancy, %s binding
     )
     expect(tagged.rows[0]!.name).toBe('kick-bypass')
   })
+
+  it('cancels an aborted db.query on the server, through the tenant-bound connection', async () => {
+    const name = `notes_${binding}`
+    const db = createDbClient({
+      schema: { notes, rel: relations(notes, () => ({})) },
+      tenancy,
+      dialect: pgDialect({ pool }),
+    })
+    await tenancy.run('acme', () =>
+      db
+        .insertInto(name as never)
+        .values({ body: 'slow' } as never)
+        .execute(),
+    )
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort('test'), 100)
+    await expect(
+      tenancy.run('acme', () =>
+        (db.query as any)[name].findMany({
+          where: () => sql<boolean>`pg_sleep(10)::text IS NOT NULL`,
+          signal: ctrl.signal,
+        }),
+      ),
+    ).rejects.toThrow(RelationalQueryCancelledError)
+    // Nothing left sleeping on the server…
+    const sleeping = async () =>
+      Number(
+        (
+          await adminPool.query(
+            `SELECT count(*) AS n FROM pg_stat_activity
+              WHERE state = 'active' AND query LIKE '%pg_sleep(10)::text%' AND pid <> pg_backend_pid()`,
+          )
+        ).rows[0].n,
+      )
+    const until = Date.now() + 2_000
+    while ((await sleeping()) > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
+    expect(await sleeping()).toBe(0)
+    // …and the pool's one connection is free again, still bound to the tenant.
+    const rows = await tenancy.run('acme', () =>
+      db
+        .selectFrom(name as never)
+        .select('body' as never)
+        .execute(),
+    )
+    expect(rows).toContainEqual({ body: 'slow' })
+  }, 30_000)
 })
 
 describe("'rls' tenancy guardrails", () => {
