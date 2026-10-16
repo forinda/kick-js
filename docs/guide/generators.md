@@ -75,7 +75,7 @@ products/
 
 ### Pluralization
 
-By default, module names are pluralized: `kick g module user` creates `src/modules/users/` with route `/users`.
+By default, module names are pluralized: `kick g module user` creates `src/modules/users/` with route `/users`. Names of a concern rather than a resource stay as typed — `auth`, `health`, `news`, `metadata` — while a countable noun pluralizes as English does (`cron` → `crons/`); pass `--no-pluralize` for any other name you want singular.
 
 Disable pluralization per-command or globally:
 
