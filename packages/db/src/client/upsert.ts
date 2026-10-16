@@ -72,11 +72,23 @@ export async function upsert<DB, T extends keyof DB & string>(
   if (rows.length === 0) return []
   const statement = (chunk: Row[]) => upsertStatement(db, table, opts, chunk)
   const chunks = chunksFor(rows, opts.maxParams ?? MAX_PARAMS[db.dialect], statement)
+  // Every row is inserted or updated, so RETURNING gives each back — unless its
+  // target matched a row the update may not touch (another tenant's). Checked
+  // per chunk, so an atomic upsert of several chunks rolls back.
+  const written = (stored: Row[], chunk: Row[]) => {
+    if (stored.length < chunk.length) {
+      throw new Error(
+        `kickjs-db: upsert into ${table} wrote ${stored.length} of ${chunk.length} rows — the rest matched rows it may not update, such as another tenant's`,
+      )
+    }
+    return stored
+  }
   return inChunks(db, chunks, opts.atomic ?? true, async (chunk) => {
-    if (db.dialect !== 'mysql') return statement(chunk).execute()
+    if (db.dialect !== 'mysql') return written(await statement(chunk).execute(), chunk)
     await statement(chunk).execute()
     // No RETURNING on MySQL: read the rows back by their target values — from
     // the primary, which has them; a replica may not yet.
+    // (Its tenancy refuses ON DUPLICATE KEY, so the count needs no check.)
     return (db.primary.selectFrom as (t: string) => any)(table)
       .selectAll()
       .where((eb: ExpressionBuilder<any, any>) =>

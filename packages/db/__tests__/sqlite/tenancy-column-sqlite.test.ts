@@ -219,3 +219,158 @@ describe("'column' tenancy: writes that could cross tenants", () => {
     expect(insertSchema(projects).safeParse({ name: 'x' }).success).toBe(true)
   })
 })
+
+describe("'column' tenancy: ways around the filter", () => {
+  const slugs = table('slugs', {
+    id: serial().primaryKey(),
+    tenantId: tenantKey(tenancy),
+    slug: text().notNull().unique(),
+  })
+  const setup = () => {
+    const database = new Database(':memory:')
+    const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
+    const target = extractSnapshot({ ...schema, slugs }, 'sqlite')
+    database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
+    database.exec(`
+      INSERT INTO tasks (id, tenantId, projectId, title) VALUES (1, 'acme', 1, 'fuel'), (2, 'globex', 2, 'aim');
+      INSERT INTO slugs (tenantId, slug) VALUES ('acme', 'home'), ('globex', 'away');
+    `)
+    return createDbClient({
+      schema: { ...schema, slugs },
+      tenancy,
+      dialect: sqliteDialect({ database }),
+    })
+  }
+  const owners = (db: ReturnType<typeof setup>) =>
+    tenancy.bypass(
+      () => db.selectFrom('tasks').select(['id', 'tenantId']).orderBy('id').execute(),
+      { reason: 'test' },
+    )
+
+  it("can't hand a row to another tenant through an update or an upsert", async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      await expect(
+        db.updateTable('tasks').set({ tenantId: 'globex' }).where('id', '=', 1).execute(),
+      ).rejects.toThrow(/can't write tasks.tenantId = globex as tenant acme/)
+      await expect(
+        db
+          .updateTable('tasks')
+          .set({ tenantId: sql`'globex'` as never })
+          .execute(),
+      ).rejects.toThrow(/to an expression/)
+      await expect(
+        db
+          .insertInto('slugs')
+          .values({ slug: 'home' })
+          .onConflict((oc) => oc.column('slug').doUpdateSet({ tenantId: 'globex' }))
+          .execute(),
+      ).rejects.toThrow(/can't write slugs.tenantId = globex/)
+      // SQLite matches column names in any case.
+      await expect(
+        db
+          .updateTable('tasks')
+          .set({ TENANTID: 'globex' } as never)
+          .where('id', '=', 1)
+          .execute(),
+      ).rejects.toThrow(/can't write tasks.tenantId = globex/)
+      await expect(
+        db
+          .insertInto('tasks')
+          .values({ TENANTID: 'globex', projectId: 1, title: 'x' } as never)
+          .execute(),
+      ).rejects.toThrow(/can't write tasks.tenantId = globex/)
+      // upsert() colliding with another tenant's row fails instead of returning nothing.
+      await expect(
+        db.upsert('slugs', { values: { slug: 'away' }, target: ['slug'] }),
+      ).rejects.toThrow(/upsert into slugs wrote 0 of 1 rows/)
+      expect(
+        await db.upsert('slugs', { values: { slug: 'home' }, target: ['slug'] }),
+      ).toMatchObject({
+        tenantId: 'acme',
+        slug: 'home',
+      })
+      // Setting it to the tenant it already is stays allowed.
+      await db.updateTable('tasks').set({ tenantId: 'acme', title: 'refuel' }).execute()
+    })
+    expect(await owners(db)).toEqual([
+      { id: 1, tenantId: 'acme' },
+      { id: 2, tenantId: 'globex' },
+    ])
+  })
+
+  it('filters a table however the query spells it', async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      for (const name of ['main.tasks', 'TASKS', 'Tasks']) {
+        const rows = await db
+          .selectFrom(name as 'tasks')
+          .select('id')
+          .execute()
+        expect(rows, name).toEqual([{ id: 1 }])
+      }
+      await db
+        .deleteFrom('main.tasks' as 'tasks')
+        .where('id', '=', 2)
+        .execute()
+      // sql.table() is a table too.
+      const raw = await db
+        .selectFrom(sql.table('tasks').as('t') as never)
+        .select('id' as never)
+        .execute()
+      expect(raw).toEqual([{ id: 1 }])
+    })
+    expect((await owners(db)).map((r) => r.id)).toEqual([1, 2])
+  })
+
+  it("refuses what it can't filter: a tenanted table inside raw SQL, MERGE, and checks every table of a multi-table update", async () => {
+    const db = setup()
+    await tenancy.run('acme', async () => {
+      await expect(
+        db
+          .selectFrom(sql`(select * from ${sql.table('tasks')})`.as('t') as never)
+          .selectAll()
+          .execute(),
+      ).rejects.toThrow(/tasks is tenanted, and inside raw SQL/)
+      expect(() =>
+        db.qb
+          .mergeInto('tasks')
+          .using('projects', 'projects.id', 'tasks.projectId')
+          .whenMatched()
+          .thenDelete()
+          .compile(),
+      ).toThrow(/MERGE can't be limited to tenanted tasks/)
+      // MySQL's UPDATE a, b: both tables get the tenant.
+      const multi = (db.qb as any).updateTable(['tasks', 'projects']).set({ title: 'x' }).compile()
+      expect(multi.sql).toMatch(/"tasks"\."tenantId" = \?.*"projects"\."tenantId" = \?/)
+    })
+  })
+
+  it("refuses a tenant id an integer column wouldn't store as written", async () => {
+    const numeric = defineTenancy({ strategy: 'column', current: () => undefined })
+    const accounts = table('accounts', {
+      id: serial().primaryKey(),
+      orgId: tenantKey(numeric, integer()),
+      name: text().notNull(),
+    })
+    const database = new Database(':memory:')
+    const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
+    const target = extractSnapshot({ accounts }, 'sqlite')
+    database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
+    database.exec(`INSERT INTO accounts (orgId, name) VALUES (1, 'one'), (2, 'two');`)
+    const db = createDbClient({
+      schema: { accounts },
+      tenancy: numeric,
+      dialect: sqliteDialect({ database }),
+    })
+    for (const id of ['01', '1.0', ' 1', '1abc']) {
+      await expect(
+        numeric.run(id, () => db.selectFrom('accounts').select('name').execute()),
+        id,
+      ).rejects.toThrow(/isn't an integer/)
+    }
+    expect(
+      await numeric.run('1', () => db.selectFrom('accounts').select('name').execute()),
+    ).toEqual([{ name: 'one' }])
+  })
+})
