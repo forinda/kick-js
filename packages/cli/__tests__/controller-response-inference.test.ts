@@ -105,6 +105,10 @@ describe('generated controllers infer a real response type', () => {
     expect(controller).not.toContain('ctx.json(')
     expect(controller).toContain('ctx.problem.notFound(')
     expect(controller).toContain('return reply.created(')
+    // 201 + Location built from the mounted getById route, not a hard-coded prefix.
+    expect(controller).toContain(
+      "location: ctx.urlFor('WidgetController.getById', { id: created.id })",
+    )
     expect(controller).toContain('return reply.noContent()')
   })
 
@@ -122,6 +126,29 @@ describe('generated controllers infer a real response type', () => {
       expect(src, `${path} still writes responses imperatively`).not.toContain('ctx.json(')
       expect(src, `${path} still writes responses imperatively`).not.toContain('ctx.created(')
       expect(src, `${path} still writes responses imperatively`).not.toContain('ctx.noContent()')
+    }
+  })
+
+  it('generates the partial update as PATCH, never PUT', () => {
+    // The update schema is all-optional, so the route is a partial update.
+    assertCliOk(runCli(fixture, ['g', 'module', 'alpha', '--pattern', 'minimal']), 'minimal')
+    assertCliOk(runCli(fixture, ['g', 'controller', 'beta']), 'controller')
+    assertCliOk(runCli(fixture, ['g', 'scaffold', 'gamma', 'title:string']), 'scaffold')
+    assertCliOk(runCli(fixture, ['g', 'module', 'delta']), 'module')
+
+    for (const path of [
+      'src/modules/alpha/alpha.controller.ts',
+      'src/controllers/beta.controller.ts',
+      'src/modules/gamma/gamma.controller.ts',
+      'src/modules/delta/delta.controller.ts',
+    ]) {
+      const src = codeOnly(readFileSync(join(fixture, path), 'utf-8'))
+      expect(src, path).toMatch(/@Patch\('\/:id'/)
+      expect(src, path).not.toMatch(/\bPut\b/)
+      // One line pointing at the auth guide, right above the class.
+      expect(readFileSync(join(fixture, path), 'utf-8'), path).toMatch(
+        /\/\/ .*https:\/\/kickjs\.app\/guide\/authentication\n@Controller\(\)/,
+      )
     }
   })
 
@@ -160,7 +187,7 @@ describe('generated controllers infer a real response type', () => {
     for (const method of ['list(', 'getById(', 'create(', 'update(', 'remove(']) {
       expect(controller, `minimal controller is missing ${method}`).toContain(method)
     }
-    for (const decorator of ["@Get('/')", "@Get('/:id')", "@Post('/')", "@Put('/:id')"]) {
+    for (const decorator of ["@Get('/')", "@Get('/:id')", "@Post('/')", "@Patch('/:id')"]) {
       expect(controller).toContain(decorator)
     }
     expect(controller).toContain("@Delete('/:id')")

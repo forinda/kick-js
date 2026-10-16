@@ -333,11 +333,19 @@ export interface ModuleConfig {
   /** Schema output directory (e.g. 'src/db/schema') */
   schemaDir?: string
   /**
-   * Whether to pluralize module names in generated code.
+   * Whether to pluralize module folder and file names.
    * When false (default), `kick g module user` creates `src/modules/user/` and
    * uses the name as typed throughout. When true, it creates `src/modules/users/`.
+   * The route path is controlled separately by {@link ModuleConfig.pluralizeRoutes}.
    */
   pluralize?: boolean
+  /**
+   * Whether the generated route path is the plural of the name. Default `true`:
+   * `kick g module task` mounts at `/tasks`, `user-profile` at `/user-profiles`;
+   * uncountables stay (`auth` → `/auth`). Set `false` to mount at the name as
+   * typed (`/task`). `--pluralize-routes` / `--no-pluralize-routes` override it.
+   */
+  pluralizeRoutes?: boolean
   /**
    * Module declaration style emitted by `kick g module` and the
    * project scaffold.
@@ -782,6 +790,14 @@ export function resolvePluralize(flag: boolean | undefined, mc?: ModuleConfig): 
   return flag ?? mc?.pluralize ?? PLURALIZE_DEFAULT
 }
 
+/**
+ * `--pluralize-routes` / `--no-pluralize-routes`, else `modules.pluralizeRoutes`,
+ * else `true` — routes name a collection (`/tasks`) whatever the folder is called.
+ */
+export function resolvePluralizeRoutes(flag: boolean | undefined, mc?: ModuleConfig): boolean {
+  return flag ?? mc?.pluralizeRoutes ?? true
+}
+
 export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
   if (!config) return {}
   const mc: ModuleConfig = {
@@ -789,6 +805,7 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
     repo: config.modules?.repo,
     schemaDir: config.modules?.schemaDir,
     pluralize: config.modules?.pluralize,
+    pluralizeRoutes: config.modules?.pluralizeRoutes,
     style: config.modules?.style,
   }
   // Validate `style` — silently coerce unknown values to the default.

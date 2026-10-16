@@ -307,8 +307,7 @@ Build a route's URL from its name instead of writing the path where you link to 
 @Post('/')
 async create(ctx: RequestContext) {
   const user = await this.users.create(ctx.body)
-  ctx.setHeader('Location', ctx.urlFor('UsersController.show', { id: user.id }))
-  ctx.created(user)
+  return reply.created(user, { location: ctx.urlFor('UsersController.show', { id: user.id }) })
 }
 ```
 
@@ -372,6 +371,27 @@ async remove(ctx: RequestContext) {
 }
 ```
 
+Headers ride along in a third argument, and `reply.created` takes the new
+resource's `location` — build it with [`ctx.urlFor()`](#linking-to-routes) so it follows the
+route wherever the module is mounted:
+
+```ts
+@Post('/')
+async create(ctx: RequestContext) {
+  const user = await this.users.create(ctx.body)
+  // → 201 json, Location: /api/v1/users/<id>
+  return reply.created(user, { location: ctx.urlFor('UsersController.show', { id: user.id }) })
+}
+
+@Post('/import')
+async import(ctx: RequestContext) {
+  return reply(202, await this.jobs.enqueue(ctx.body), { headers: { 'Retry-After': 5 } })
+}
+```
+
+The headers do not change the inferred type: `reply.created(user, { location })`
+is still `Reply<201, User>`, and the typed client still sees `User`.
+
 Rules of precedence:
 
 - A `ctx.*` response (e.g. `ctx.json`) always wins. It **terminates** the
@@ -384,7 +404,7 @@ Rules of precedence:
   client gets no payload type. Return the value (`return user`) or wrap it
   (`return reply(201, user)`) to keep inference exact.
 - Returning `undefined`/`void` changes nothing — pure imperative handlers behave exactly as before.
-- Sugars: `reply.ok(body)` (200), `reply.created(body)` (201), `reply.accepted(body)` (202), `reply.noContent()` (204). `reply.ok(body)` is the explicit form of a bare `return body` for any defined
+- Sugars: `reply.ok(body)` (200), `reply.created(body, { location? })` (201), `reply.accepted(body)` (202), `reply.noContent()` (204). `reply.ok(body)` is the explicit form of a bare `return body` for any defined
   body — useful when a handler mixes statuses and you want every branch to read
   alike. The two differ for `undefined`: a bare `return undefined` sends nothing
   (the imperative path stays in charge), while `reply.ok(undefined)` is an

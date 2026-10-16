@@ -171,6 +171,25 @@ describe('kick new --yes (non-interactive)', () => {
     expect(workspace).toContain('msgpackr-extract: false')
   })
 
+  it('the starter module serves no health route of its own', () => {
+    // The framework already answers /health/live and /health/ready.
+    const result = runNew(cwd, [
+      'my-app',
+      '--yes',
+      '--template',
+      'fullstack',
+      '--no-install',
+      '--no-git',
+    ])
+    expect(result.exitCode).toBe(0)
+    const hello = join(cwd, 'my-app/server/src/modules/hello')
+    expect(readFileSync(join(hello, 'hello.controller.ts'), 'utf-8')).not.toContain("'/health'")
+    expect(readFileSync(join(hello, 'hello.service.ts'), 'utf-8')).not.toContain('healthCheck')
+    expect(readFileSync(join(cwd, 'my-app/web/src/App.tsx'), 'utf-8')).not.toContain(
+      '/hello/health',
+    )
+  })
+
   it('aborts cleanly when target dir is non-empty and --force is missing', () => {
     const target = join(cwd, 'my-api')
     mkdirSync(target, { recursive: true })

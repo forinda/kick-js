@@ -30,8 +30,10 @@ interface GenerateModuleOptions {
   force?: boolean
   pattern?: ProjectPattern
   dryRun?: boolean
-  /** When false, skip pluralization — use singular names for folders, routes, and classes */
+  /** When true, pluralize the folder, file and class names (`users/`). Default false. */
   pluralize?: boolean
+  /** When false, mount at the name as typed (`/user`) instead of its plural. Default true. */
+  pluralizeRoutes?: boolean
   /**
    * DI-token scope prefix substituted into emitted `createToken<T>()`
    * literals. Resolved by the orchestrating command from
@@ -76,6 +78,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
   const pascal = toPascalCase(name)
   const plural = shouldPluralize ? pluralize(kebab) : kebab
   const pluralPascal = shouldPluralize ? pluralizePascal(pascal) : pascal
+  const routePath = options.pluralizeRoutes === false ? kebab : pluralize(kebab)
   const moduleDir = join(modulesDir, plural)
 
   const files: string[] = []
@@ -106,6 +109,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     pascal,
     plural,
     pluralPascal,
+    routePath,
     moduleDir,
     repo,
     noEntity: noEntity ?? false,

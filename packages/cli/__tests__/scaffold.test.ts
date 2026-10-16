@@ -13,7 +13,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { assertCliOk, cleanupFixture, createFixtureProject, runCli, runTsc } from './helpers'
+import { spawnSync } from 'node:child_process'
+import {
+  WORKSPACE_ROOT,
+  assertCliOk,
+  cleanupFixture,
+  createFixtureProject,
+  runCli,
+  runTsc,
+} from './helpers'
 
 describe('kick g scaffold', () => {
   let fixture: string
@@ -54,15 +62,31 @@ describe('kick g scaffold', () => {
   })
 
   it('propagates all field definitions through the create + response DTOs', () => {
-    runCli(fixture, ['g', 'scaffold', 'widget', 'title:string', 'count:int', 'tags:json'])
+    runCli(fixture, [
+      'g',
+      'scaffold',
+      'widget',
+      'title:string',
+      'body:text',
+      'count:int',
+      'tags:json',
+    ])
 
     const createDto = readFileSync(
       join(fixture, 'src/modules/widget/dtos/create-widget.dto.ts'),
       'utf-8',
     )
-    expect(createDto).toContain('title: z.string()')
+    // Strings are non-empty, as in `kick g module`; text has no upper bound.
+    expect(createDto).toContain('title: z.string().min(1).max(200),')
+    expect(createDto).toContain('body: z.string().min(1),')
     expect(createDto).toContain('count: z.number().int()')
     expect(createDto).toContain('tags: z.any()')
+
+    const updateDto = readFileSync(
+      join(fixture, 'src/modules/widget/dtos/update-widget.dto.ts'),
+      'utf-8',
+    )
+    expect(updateDto).toContain('title: z.string().min(1).max(200).optional(),')
 
     const responseDto = readFileSync(
       join(fixture, 'src/modules/widget/dtos/widget-response.dto.ts'),
@@ -96,6 +120,48 @@ describe('kick g scaffold', () => {
     expect(repoInterface).not.toContain("Symbol('WidgetRepository')")
   })
 
+  it('builds the query config from the scaffold fields', () => {
+    const result = runCli(fixture, [
+      'g',
+      'scaffold',
+      'invoice',
+      'amount:number',
+      'dueDate:string',
+      'note:text',
+      'paid:boolean',
+      'meta:json',
+    ])
+    assertCliOk(result, 'kick g scaffold invoice')
+
+    const constants = readFileSync(
+      join(fixture, 'src/modules/invoice/invoice.constants.ts'),
+      'utf-8',
+    )
+    expect(constants).toContain("filterable: ['amount', 'dueDate', 'note', 'paid']")
+    expect(constants).toContain("sortable: ['amount', 'dueDate', 'note', 'paid', 'createdAt']")
+    expect(constants).toContain("searchable: ['dueDate', 'note']")
+    expect(constants).not.toContain("'name'")
+  })
+
+  it('the in-memory repository honours filters, search and sort', () => {
+    assertCliOk(runCli(fixture, ['g', 'module', 'widget']), 'kick g module widget')
+    // Run the generated repository test itself — it exercises findPaginated.
+    const vitest = spawnSync(
+      'node',
+      [
+        join(WORKSPACE_ROOT, 'node_modules/vitest/vitest.mjs'),
+        'run',
+        '--reporter=verbose',
+        'src/modules/widget/__tests__/widget.repository.test.ts',
+      ],
+      { cwd: fixture, encoding: 'utf-8', env: { ...process.env, NO_COLOR: '1' } },
+    )
+    expect(vitest.stdout + vitest.stderr).toContain(
+      'should filter, search and sort before paginating',
+    )
+    expect(vitest.status, vitest.stdout + vitest.stderr).toBe(0)
+  })
+
   it('emits a module index with the correct ModuleRoutes shape', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
 
@@ -105,7 +171,7 @@ describe('kick g scaffold', () => {
     // is `{ path, controller }` — the framework derives the Express
     // Router from the controller via `buildRoutes()` internally so
     // the redundant `router:` field is no longer emitted.
-    expect(moduleIndex).toContain("path: '/widget'")
+    expect(moduleIndex).toContain("path: '/widgets'")
     expect(moduleIndex).toContain('controller: WidgetController')
     // The legacy shape must NOT appear
     expect(moduleIndex).not.toContain('prefix:')

@@ -18,6 +18,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
     kebab,
     plural,
     pluralPascal,
+    routePath,
     repo,
     noTests,
     tokenScope,
@@ -29,7 +30,10 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   const schemaLib = ctx.schemaLib ?? 'zod'
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
-  await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo, style }))
+  await write(
+    `${kebab}.module.ts`,
+    generateRestModuleIndex({ pascal, kebab, plural, routePath, repo, style }),
+  )
 
   // Constants
   await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab }))
@@ -60,7 +64,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   if (!noTests) {
     await write(
       `__tests__/${kebab}.controller.test.ts`,
-      generateControllerTest({ pascal, kebab, plural, style, testHarness }),
+      generateControllerTest({ pascal, kebab, plural, routePath, style, testHarness }),
     )
     await write(
       `__tests__/${kebab}.repository.test.ts`,

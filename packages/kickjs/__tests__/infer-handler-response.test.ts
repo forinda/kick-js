@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest'
 
-import type { InferHandlerResponse, Reply } from '../src/http/reply'
+import { reply, type InferHandlerResponse, type Reply } from '../src/http/reply'
 import type { RequestContext } from '../src/http/context'
 import type { PaginatedResponse } from '../src/http/query'
 
@@ -26,6 +26,14 @@ describe('InferHandlerResponse (type-level)', () => {
     expectTypeOf<
       InferHandlerResponse<(ctx: RequestContext) => Promise<Reply<201, User>>>
     >().toEqualTypeOf<User>()
+  })
+
+  it('headers and location keep Reply<S, T> exact', () => {
+    const created = (user: User) => reply.created(user, { location: `/users/${user.id}` })
+    expectTypeOf(created).returns.toEqualTypeOf<Reply<201, User>>()
+    expectTypeOf<InferHandlerResponse<typeof created>>().toEqualTypeOf<User>()
+    const queued = (user: User) => reply(202, user, { headers: { 'Retry-After': 5 } })
+    expectTypeOf(queued).returns.toEqualTypeOf<Reply<202, User>>()
   })
 
   it('imperative void handlers stay unknown', () => {

@@ -18,9 +18,4 @@ export class HelloController {
   index(_ctx: Ctx<KickRoutes.HelloController['index']>) {
     return this.helloService.greet('World')
   }
-
-  @Get('/health')
-  health(_ctx: Ctx<KickRoutes.HelloController['health']>) {
-    return this.helloService.healthCheck()
-  }
 }

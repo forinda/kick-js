@@ -29,6 +29,7 @@ import {
   loadKickConfig,
   resolveModuleConfig,
   resolvePluralize,
+  resolvePluralizeRoutes,
   resolveTokenScope,
   warnIfDeprecatedRepo,
   type ProjectPattern,
@@ -45,6 +46,7 @@ interface ModuleGenOpts {
   minimal?: boolean
   modulesDir?: string
   pluralize?: boolean
+  pluralizeRoutes?: boolean
   force?: boolean
 }
 
@@ -69,6 +71,7 @@ interface ScaffoldOpts {
   entity?: boolean
   tests?: boolean
   pluralize?: boolean
+  pluralizeRoutes?: boolean
   modulesDir?: string
 }
 
@@ -237,8 +240,8 @@ function mergeGenOpts<T extends object>(cmd: Command, opts: T): T {
   }
   // Both --pluralize and --no-pluralize are defined, so it is undefined unless
   // passed; whichever side set it wins.
-  if (merged.pluralize === undefined && parent.pluralize !== undefined) {
-    merged.pluralize = parent.pluralize
+  for (const key of ['pluralize', 'pluralizeRoutes']) {
+    if (merged[key] === undefined && parent[key] !== undefined) merged[key] = parent[key]
   }
   return merged as T
 }
@@ -256,6 +259,7 @@ async function runModuleGeneration(
   if (opts.repo) warnIfDeprecatedRepo(opts.repo)
   const pattern = opts.pattern ?? config?.pattern ?? 'rest'
   const shouldPluralize = resolvePluralize(opts.pluralize, mc)
+  const pluralizeRoutes = resolvePluralizeRoutes(opts.pluralizeRoutes, mc)
   const tokenScope = resolveTokenScope(config, process.cwd())
   // findProjectRoot, not cwd: `kick g` is routinely run from inside a module
   // directory, and reading package.json relative to cwd there finds nothing —
@@ -329,6 +333,7 @@ async function runModuleGeneration(
       testHarness,
       dryRun,
       pluralize: shouldPluralize,
+      pluralizeRoutes,
       tokenScope,
       swagger,
       schemaLib,
@@ -357,6 +362,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--modules-dir <dir>', 'Modules directory')
     .option('--pluralize', 'Pluralize module folders and names (users/ for user)')
     .option('--no-pluralize', 'Use names as typed (the default)')
+    .option('--pluralize-routes', 'Mount at the plural of the name (/users for user, the default)')
+    .option('--no-pluralize-routes', 'Mount at the name as typed (/user)')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (names: string[], opts: GenerateRootOpts, cmd: Command) => {
       if (opts.list) {
@@ -441,6 +448,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--modules-dir <dir>', 'Modules directory')
     .option('--pluralize', 'Pluralize module folders and names (users/ for user)')
     .option('--no-pluralize', 'Use names as typed (the default)')
+    .option('--pluralize-routes', 'Mount at the plural of the name (/users for user, the default)')
+    .option('--no-pluralize-routes', 'Mount at the name as typed (/user)')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (names: string[], opts: ModuleGenOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
@@ -691,6 +700,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--no-tests', 'Skip test file generation')
     .option('--pluralize', 'Pluralize module folders and names (users/ for user)')
     .option('--no-pluralize', 'Use names as typed (the default)')
+    .option('--pluralize-routes', 'Mount at the plural of the name (/users for user, the default)')
+    .option('--no-pluralize-routes', 'Mount at the name as typed (/user)')
     .option('--modules-dir <dir>', 'Modules directory')
     .action(async (name: string, rawFields: string[], scaffoldOpts: ScaffoldOpts, cmd: Command) => {
       const opts = mergeGenOpts(cmd, scaffoldOpts)
@@ -725,6 +736,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         noEntity: opts.entity === false,
         noTests: opts.tests === false,
         pluralize: resolvePluralize(opts.pluralize, mc),
+        pluralizeRoutes: resolvePluralizeRoutes(opts.pluralizeRoutes, mc),
         tokenScope,
         swagger,
         style: mc.style,

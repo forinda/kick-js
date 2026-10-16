@@ -25,6 +25,17 @@ export interface Reply<S extends number = number, T = unknown> {
   readonly [REPLY_BRAND]: true
   readonly status: S
   readonly body: T
+  /** Response headers set before the body is sent. */
+  readonly headers?: ReplyHeaders
+}
+
+/** Header name → value, as `ctx.setHeader` takes them. */
+export type ReplyHeaders = Readonly<Record<string, string | number | readonly string[]>>
+
+/** Options for {@link reply}. */
+export interface ReplyOptions {
+  /** Response headers set before the body is sent. */
+  headers?: ReplyHeaders
 }
 
 /**
@@ -36,15 +47,39 @@ export interface Reply<S extends number = number, T = unknown> {
  *   return reply(201, await this.tasks.create(ctx.body))
  * }
  * ```
+ *
+ * `options.headers` are set on the response before it is sent:
+ * `reply(202, job, { headers: { 'Retry-After': 5 } })`.
  */
-export function reply<S extends number, T>(status: S, body: T): Reply<S, T> {
-  return { [REPLY_BRAND]: true, status, body }
+export function reply<S extends number, T>(
+  status: S,
+  body: T,
+  options?: ReplyOptions,
+): Reply<S, T> {
+  return options?.headers
+    ? { [REPLY_BRAND]: true, status, body, headers: options.headers }
+    : { [REPLY_BRAND]: true, status, body }
 }
 
 /** `reply(200, body)` — explicit form of a bare `return body`. */
 reply.ok = <T>(body: T): Reply<200, T> => reply(200, body)
-/** `reply(201, body)` */
-reply.created = <T>(body: T): Reply<201, T> => reply(201, body)
+/**
+ * `reply(201, body)`. `location` sets the `Location` header — where the new
+ * resource lives, usually built with `ctx.urlFor()`:
+ *
+ * ```ts
+ * const task = await this.tasks.create(ctx.body)
+ * return reply.created(task, { location: ctx.urlFor('TaskController.getById', { id: task.id }) })
+ * ```
+ */
+reply.created = <T>(body: T, options?: ReplyOptions & { location?: string }): Reply<201, T> =>
+  reply(
+    201,
+    body,
+    options?.location === undefined
+      ? options
+      : { headers: { ...options.headers, Location: options.location } },
+  )
 /** `reply(202, body)` */
 reply.accepted = <T>(body: T): Reply<202, T> => reply(202, body)
 /** Empty 204 — maps to `ctx.noContent()`. */
@@ -143,6 +178,9 @@ export function applyHandlerResult(
       : true
   }
   if (isReply(result)) {
+    if (result.headers) {
+      for (const [name, value] of Object.entries(result.headers)) ctx.setHeader(name, value)
+    }
     // Only 204 maps to noContent — an undefined body must NOT coerce the
     // declared status (reply(304, undefined) keeps its 304; the json body
     // is simply empty).

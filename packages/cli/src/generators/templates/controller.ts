@@ -17,7 +17,7 @@ export function generateRestController(ctx: TemplateContext): string {
   Controller,
   Get,
   Post,
-  Put,
+  Patch,
   Delete,
   Autowired,
   ApiQueryParams,
@@ -43,6 +43,7 @@ import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
 // \`ctx.problem.*\` for error branches — those send immediately and return
 // nothing, so they stay out of the success type.
 
+// Require a signed-in user for these routes: https://kickjs.app/guide/authentication
 @Controller()
 export class ${pascal}Controller {
   @Autowired() private readonly ${camel}Service!: ${pascal}Service
@@ -70,10 +71,14 @@ ${apiTags}  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
 
   @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
 ${apiTags}  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
-    return reply.created(await this.${camel}Service.create(ctx.body))
+    const created = await this.${camel}Service.create(ctx.body)
+    // 201 + Location: where the new ${kebab} lives, built from the getById route.
+    return reply.created(created, {
+      location: ctx.urlFor('${pascal}Controller.getById', { id: created.id }),
+    })
   }
 
-  @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
+  @Patch('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
 ${apiTags}  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
     return this.${camel}Service.update(ctx.params.id, ctx.body)
   }

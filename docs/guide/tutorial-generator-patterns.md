@@ -257,7 +257,7 @@ kick g scaffold Post "body:text?"            # needs quoting
 kick g scaffold Post "body?:text"            # needs quoting
 ```
 
-Useful flags: `--no-tests` (skip the `__tests__/`), `--pluralize` (pluralize folder and route names), and `--modules-dir <dir>` (override the target directory).
+Useful flags: `--no-tests` (skip the `__tests__/`), `--pluralize` (pluralize folder and file names — the route is plural by default), `--no-pluralize-routes` (mount at the name as typed), and `--modules-dir <dir>` (override the target directory).
 
 ::: tip
 `kick g scaffold` always emits the REST layout — it is the field-aware front door to the same structure `kick g module --pattern rest` produces. (The DDD layout this command used to generate was removed alongside the `ddd`/`cqrs` patterns.)

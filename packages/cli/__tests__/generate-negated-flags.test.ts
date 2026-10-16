@@ -62,4 +62,37 @@ describe('kick g — negated flags after the subcommand', () => {
     expect(existsSync(join(dir, 'src/modules/auth'))).toBe(true)
     expect(existsSync(join(dir, 'src/modules/auths'))).toBe(false)
   })
+
+  const mount = (folder: string, file: string) =>
+    /path: '([^']+)'/.exec(
+      readFileSync(join(dir, 'src/modules', folder, `${file}.module.ts`), 'utf8'),
+    )?.[1]
+
+  it('module mounts at the plural of the name, folder as typed', async () => {
+    await run('module', 'task', 'user-profile', 'auth', '--no-tests')
+    expect(mount('task', 'task')).toBe('/tasks')
+    expect(mount('user-profile', 'user-profile')).toBe('/user-profiles')
+    expect(mount('auth', 'auth')).toBe('/auth')
+  })
+
+  it('module --no-pluralize-routes mounts at the name as typed', async () => {
+    await run('module', 'task', '--no-pluralize-routes', '--no-tests')
+    expect(mount('task', 'task')).toBe('/task')
+  })
+
+  it('modules.pluralizeRoutes: false in kick.config keeps the route as typed', async () => {
+    writeFileSync(
+      join(dir, 'kick.config.json'),
+      JSON.stringify({ modules: { pluralizeRoutes: false } }),
+    )
+    await run('scaffold', 'task', 'title:string', '--no-tests')
+    expect(mount('task', 'task')).toBe('/task')
+    await run('module', 'note', '--pluralize-routes', '--no-tests')
+    expect(mount('note', 'note')).toBe('/notes')
+  })
+
+  it('scaffold mounts at the plural, --pluralize also pluralizes the folder', async () => {
+    await run('scaffold', 'invoice', 'amount:number', '--pluralize')
+    expect(mount('invoices', 'invoice')).toBe('/invoices')
+  })
 })

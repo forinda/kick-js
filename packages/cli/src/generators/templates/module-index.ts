@@ -43,6 +43,7 @@ function resolveStyle(style?: ModuleStyle): ModuleStyle {
 /** REST module index — flat folder, service + controller, no use-cases */
 export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
   const { pascal, kebab, plural = '', repo, style } = ctx
+  const route = ctx.routePath ?? plural
   const factory = repoFactory(pascal)
   const resolvedStyle = resolveStyle(style)
 
@@ -86,8 +87,8 @@ import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true
      * surfaces, side-by-side v1 + v2 controllers, etc:
      *
      *   return [
-     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
-     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
+     *     { path: '/${route}', version: 1, controller: ${pascal}V1Controller },
+     *     { path: '/${route}', version: 2, controller: ${pascal}V2Controller },
      *   ]
      */`
 
@@ -104,7 +105,7 @@ export class ${pascal}Module implements AppModule {
 ${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
   routes(): ModuleRoutes {
     return {
-      path: '/${plural}',
+      path: '/${route}',
       controller: ${pascal}Controller,
     }
   }
@@ -128,7 +129,7 @@ export const ${pascal}Module = defineModule({
 ${routesDoc}
     routes() {
       return {
-        path: '/${plural}',
+        path: '/${route}',
         controller: ${pascal}Controller,
       }
     },
@@ -140,6 +141,7 @@ ${routesDoc}
 /** Minimal module index — just controller, no service/repo */
 export function generateMinimalModuleIndex(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', style } = ctx
+  const route = ctx.routePath ?? plural
   const resolvedStyle = resolveStyle(style)
 
   const routesDoc = `    /**
@@ -152,8 +154,8 @@ export function generateMinimalModuleIndex(ctx: TemplateContext): string {
      * Return an array to mount multiple route sets:
      *
      *   return [
-     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
-     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
+     *     { path: '/${route}', version: 1, controller: ${pascal}V1Controller },
+     *     { path: '/${route}', version: 2, controller: ${pascal}V2Controller },
      *   ]
      */`
 
@@ -165,7 +167,7 @@ export class ${pascal}Module implements AppModule {
 ${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
   routes(): ModuleRoutes {
     return {
-      path: '/${plural}',
+      path: '/${route}',
       controller: ${pascal}Controller,
     }
   }
@@ -182,7 +184,7 @@ export const ${pascal}Module = defineModule({
 ${routesDoc}
     routes() {
       return {
-        path: '/${plural}',
+        path: '/${route}',
         controller: ${pascal}Controller,
       }
     },

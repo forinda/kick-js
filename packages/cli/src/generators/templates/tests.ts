@@ -15,6 +15,7 @@ import type { TemplateContext } from './types'
  */
 export function generateControllerTest(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', style = 'define', testHarness = false } = ctx
+  const route = ctx.routePath ?? plural
   // `define` modules are factories; `class` modules are passed as the class.
   // Getting this wrong yields `TypeError: entry is not a constructor`.
   const moduleEntry = style === 'define' ? `${pascal}Module()` : `${pascal}Module`
@@ -39,10 +40,10 @@ import { ${pascal}Module } from '../${kebab}.module'
  * pass the same values in \`boot()\` below and update this to match, so the test
  * exercises the paths production actually serves:
  *
- *   defaultVersion: false  →  '/api/${plural}'
- *   apiPrefix: '/v1'       →  '/v1/v1/${plural}'
+ *   defaultVersion: false  →  '/api/${route}'
+ *   apiPrefix: '/v1'       →  '/v1/v1/${route}'
  */
-const BASE = '/api/v1/${plural}'
+const BASE = '/api/v1/${route}'
 `
     : `import { describe, it, beforeEach } from 'vitest'
 import { Container } from '@forinda/kickjs'
@@ -71,7 +72,7 @@ import { Container } from '@forinda/kickjs'
     return { app, container, agent: request(app.handle.bind(app)) }
   }
 
-  describe('GET /${plural}', () => {
+  describe('GET /${route}', () => {
     it('returns an empty page before anything is created', async () => {
       const { agent } = await boot()
       const res = await agent.get(BASE)
@@ -80,9 +81,19 @@ import { Container } from '@forinda/kickjs'
       expect(res.body).toMatchObject({ data: [], meta: { page: 1 } })
     })
 
+    it('filters and sorts through the query string', async () => {
+      const { agent } = await boot()
+      for (const name of ['Alpha', 'Beta', 'Gamma']) await agent.post(BASE).send({ name })
+      const res = await agent.get(\`\${BASE}?filter=name:neq:Beta&sort=name:desc\`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.data.map((row: { name: string }) => row.name)).toEqual(['Gamma', 'Alpha'])
+      expect(res.body.meta.total).toBe(2)
+    })
+
     it.todo('returns created ${plural}, paginated')
   })`
-    : `  describe('GET /${plural}', () => {
+    : `  describe('GET /${route}', () => {
     // Boot the module with createTestApp and assert { data, meta }.
     it.todo('returns an empty page before anything is created')
     it.todo('returns created ${plural}, paginated')
@@ -100,26 +111,37 @@ ${listBlock}
   // reporter lists it as outstanding instead of counting it as a pass. Replace
   // the todo with a real test as you implement each endpoint.
 
-  describe('POST /${plural}', () => {
-    // Post a valid body, assert 201 and the created ${kebab} in the response.
-    it.todo('creates a ${kebab}')
+  describe('POST /${route}', () => {
+${
+  testHarness
+    ? `    it('creates a ${kebab} and points Location at it', async () => {
+      const { agent } = await boot()
+      const res = await agent.post(BASE).send({ name: 'Test ${pascal}' })
+
+      expect(res.status).toBe(201)
+      expect(res.body).toMatchObject({ name: 'Test ${pascal}' })
+      expect(res.headers.location).toBe(\`\${BASE}/\${res.body.id}\`)
+    })`
+    : `    // Post a valid body, assert 201, the created ${kebab}, and its Location header.
+    it.todo('creates a ${kebab}')`
+}
     // Post an invalid body, assert 422 and the validation detail.
     it.todo('rejects an invalid body')
   })
 
-  describe('GET /${plural}/:id', () => {
+  describe('GET /${route}/:id', () => {
     // Create one, fetch it by id, assert the payload matches.
     it.todo('returns a ${kebab} by id')
     // Fetch an id that does not exist, assert 404.
     it.todo('returns 404 for an unknown id')
   })
 
-  describe('PUT /${plural}/:id', () => {
+  describe('PATCH /${route}/:id', () => {
     // Create, update, assert the change is reflected on a subsequent read.
     it.todo('updates an existing ${kebab}')
   })
 
-  describe('DELETE /${plural}/:id', () => {
+  describe('DELETE /${route}/:id', () => {
     // Create, delete, assert a subsequent read is 404.
     it.todo('deletes a ${kebab}')
   })
@@ -178,6 +200,56 @@ describe('${pascal} repository', () => {
 
     expect(result.data).toHaveLength(2)
     expect(result.total).toBe(3)
+  })
+
+  it('should filter, search and sort before paginating', async () => {
+    await repo.create({ name: 'Banana' })
+    await repo.create({ name: 'apple' })
+    await repo.create({ name: 'Cherry' })
+    const pagination = { page: 1, limit: 10, offset: 0 }
+
+    const sorted = await repo.findPaginated({
+      filters: [],
+      sort: [{ field: 'name', direction: 'desc' }],
+      search: '',
+      pagination,
+    })
+    expect(sorted.data.map((row) => row.name)).toEqual(['Cherry', 'Banana', 'apple'])
+
+    const filtered = await repo.findPaginated({
+      filters: [{ field: 'name', operator: 'neq', value: 'apple' }],
+      sort: [],
+      search: '',
+      pagination: { page: 1, limit: 1, offset: 0 },
+    })
+    expect(filtered.data).toHaveLength(1)
+    expect(filtered.total).toBe(2)
+
+    const searched = await repo.findPaginated({ filters: [], sort: [], search: 'AN', pagination })
+    expect(searched.data.map((row) => row.name)).toEqual(['Banana'])
+  })
+
+  it('compares a text field as text, not as a number', async () => {
+    await repo.create({ name: '001' })
+    await repo.create({ name: '10' })
+    await repo.create({ name: '9' })
+    const pagination = { page: 1, limit: 10, offset: 0 }
+
+    const exact = await repo.findPaginated({
+      filters: [{ field: 'name', operator: 'eq', value: '1' }],
+      sort: [],
+      search: '',
+      pagination,
+    })
+    expect(exact.total).toBe(0)
+
+    const sorted = await repo.findPaginated({
+      filters: [],
+      sort: [{ field: 'name', direction: 'asc' }],
+      search: '',
+      pagination,
+    })
+    expect(sorted.data.map((row) => row.name)).toEqual(['001', '10', '9'])
   })
 
   it('should update a ${kebab}', async () => {

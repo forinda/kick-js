@@ -7,6 +7,8 @@ export interface ModuleContext {
   pascal: string
   plural: string
   pluralPascal: string
+  /** Route path segment, without the slash — see `TemplateContext.routePath`. */
+  routePath: string
   moduleDir: string
   repo: RepoType
   noEntity: boolean
