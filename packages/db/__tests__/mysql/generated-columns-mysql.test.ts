@@ -15,6 +15,7 @@ import {
   serial,
   table,
   text,
+  timestamp,
   varchar,
 } from '@forinda/kickjs-db'
 import { mysqlDialect } from '@forinda/kickjs-db/mysql'
@@ -68,7 +69,7 @@ describe('defaults and serial keys on MySQL', () => {
   it('runs expression, TEXT/JSON and escaped defaults, and keeps AUTO_INCREMENT through MODIFY', async () => {
     const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
     const columns = {
-      token: varchar(36).default('uuid()'),
+      token: varchar(36).defaultSql('uuid()'),
       n: integer().notNull().default('floor(rand() * 0)'),
       doc: jsonb().notNull().default('{}'),
       body: text().notNull().default('0800'),
@@ -120,4 +121,27 @@ describe('db.timeout() on MySQL', () => {
     while ((await running()) > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
     expect(await running()).toBe(0)
   }, 30_000)
+})
+
+describe('timestamp precision on MySQL', () => {
+  it('stores milliseconds in a timestamp({ precision: 3 }) defaulting to now', async () => {
+    const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
+    const target = extractSnapshot(
+      {
+        ms: table('ms', {
+          id: serial().primaryKey(),
+          at: timestamp({ precision: 3 }).notNull().defaultNow(),
+        }),
+      },
+      'mysql',
+    )
+    await pool.query(emitMysql(diff(empty, target)))
+    await pool.query('INSERT INTO ms () VALUES ()')
+    const [rows] = (await pool.query("SELECT DATE_FORMAT(at, '%f') AS f FROM ms")) as [
+      Array<{ f: string }>,
+      unknown,
+    ]
+    // Six digits of fraction, the first three kept, the rest zero.
+    expect(rows[0]!.f).toMatch(/^\d{3}000$/)
+  }, 60_000)
 })

@@ -282,6 +282,11 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
                   `Warning: ${drop.what} will be dropped. If it was renamed, generate again with ` +
                     `${drop.flag} — the data goes with a drop.`,
                 ),
+          onCallShapedDefault: (d) =>
+            console.warn(
+              `Warning: ${d.table}.${d.column} has .default('${d.value}'), which is the text ` +
+                `${d.value}, not a call — for SQL the database evaluates, use .defaultSql('${d.value}').`,
+            ),
         })
         if (result.status === 'no-changes') {
           console.log('No schema changes detected.')

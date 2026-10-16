@@ -8,13 +8,17 @@ import pg from 'pg'
 import { sql } from 'kysely'
 import {
   boolean,
+  checkDrift,
   createDbClient,
   diff,
   emitPg,
   extractSnapshot,
+  introspectPg,
   serial,
   table,
   text,
+  timestamp,
+  timestamptz,
   varchar,
 } from '@forinda/kickjs-db'
 import { pgDialect } from '@forinda/kickjs-db/pg'
@@ -56,6 +60,45 @@ beforeEach(async () => {
 const db = () => createDbClient({ schema, dialect: pgDialect({ pool }) })
 
 describe('upsert on Postgres', () => {
+  it('startTransaction() with an isolation level: rolled back leaves nothing, committed stays', async () => {
+    const client = db()
+    const gone = await client.startTransaction({ isolation: 'serializable' })
+    const level = await sql<{
+      l: string
+    }>`select current_setting('transaction_isolation') as l`.execute(gone.qb)
+    expect(level.rows[0]!.l).toBe('serializable')
+    await gone.insertInto('users').values({ email: 'manual-gone@x.com', name: 'G' }).execute()
+    await gone.rollback()
+    const kept = await client.startTransaction()
+    await kept.insertInto('users').values({ email: 'manual-kept@x.com', name: 'K' }).execute()
+    await kept.commit()
+    const emails = (await client.selectFrom('users').select('email').execute()).map((r) => r.email)
+    expect(emails).toContain('manual-kept@x.com')
+    expect(emails).not.toContain('manual-gone@x.com')
+  }, 60_000)
+
+  it('update: false leaves a conflicting row as it is and returns it as stored', async () => {
+    const client = db()
+    const kept = await client.upsert('users', {
+      values: { email: 'keep@x.com', name: 'Kept' },
+      target: ['email'],
+    })
+    const rows = await client.upsert('users', {
+      values: [
+        { email: 'keep@x.com', name: 'Overwritten?' },
+        { email: 'new@x.com', name: 'New' },
+        { email: 'new@x.com', name: 'New again' },
+      ],
+      target: ['email'],
+      update: false,
+    })
+    expect(rows.map((r) => [r.email, r.name]).toSorted()).toEqual([
+      ['keep@x.com', 'Kept'],
+      ['new@x.com', 'New'],
+    ])
+    expect(rows.find((r) => r.email === 'keep@x.com')!.id).toBe(kept.id)
+  }, 60_000)
+
   it('inserts, updates, and takes many rows', async () => {
     const client = db()
     await client.upsert('users', { values: { email: 'a@x.com', name: 'Ada' }, target: ['email'] })
@@ -122,4 +165,31 @@ describe('findOrCreate on Postgres', () => {
     ])
     await pool.query('DROP INDEX users_email_ci')
   }, 30_000)
+})
+
+describe('timestamp precision on Postgres', () => {
+  it('round-trips through introspection without drift', async () => {
+    const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }
+    const target = extractSnapshot(
+      {
+        stamps: table('stamps', {
+          id: serial().primaryKey(),
+          at: timestamp({ precision: 3 }),
+          plain: timestamp(),
+          zoned: timestamptz({ precision: 0 }),
+          six: timestamp({ precision: 6 }),
+        }),
+      },
+      'postgres',
+    )
+    await pool.query(emitPg(diff(empty, target)))
+    const live = await introspectPg(pool)
+    const t = { ...live, tables: { stamps: live.tables.stamps! } }
+    expect(t.tables.stamps.columns.at!.type).toBe('timestamp(3)')
+    expect(t.tables.stamps.columns.plain!.type).toBe('timestamp')
+    expect(t.tables.stamps.columns.zoned!.type).toBe('timestamptz(0)')
+    // Declared 6 — Postgres's default, told apart by format_type.
+    expect(t.tables.stamps.columns.six!.type).toBe('timestamp(6)')
+    await expect(checkDrift(t, target, 'error')).resolves.toBeUndefined()
+  }, 60_000)
 })

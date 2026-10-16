@@ -38,6 +38,28 @@ import type { ResolvedRelations } from '../query/relations'
 import type { TableSnapshot } from '../snapshot/types'
 
 /** The transaction open on a call chain, and what waits for its commit. */
+/** Run a committed transaction's `afterCommit` hooks: a failing one is reported, not thrown. */
+async function runAfterCommit(frame: TxFrame): Promise<void> {
+  for (const hook of frame.afterCommit) {
+    try {
+      await hook()
+    } catch (err) {
+      // Committed is committed: report the hook's failure, don't fail the transaction.
+      const report = (kick as { reportError?: (e: unknown, info: object) => void }).reportError
+      if (report) report(err, { source: 'db', context: { phase: 'afterCommit' } })
+      else console.error('[kick/db] afterCommit hook failed', err)
+    }
+  }
+}
+
+let nextTransactionId = 0
+
+/**
+ * The open transaction's id, for query events — around the whole of it, so
+ * BEGIN and COMMIT carry it too; a savepoint runs inside and keeps it.
+ */
+export const transactionIds = new AsyncLocalStorage<string>()
+
 export interface TxFrame {
   trx: Kysely<any>
   afterCommit: Array<() => unknown>
@@ -143,7 +165,13 @@ export function abortStrategy(qb: Kysely<any>): 'cancel query' | 'ignore query' 
 export function wrap<DB>(
   qb: Kysely<DB>,
   ctx: InternalContext,
-  shape: { root?: boolean; plugins?: KyselyPlugin[]; readPrimary?: boolean } = {},
+  shape: {
+    root?: boolean
+    plugins?: KyselyPlugin[]
+    readPrimary?: boolean
+    /** A `startTransaction()` client's own transaction, open outside any callback. */
+    frame?: TxFrame
+  } = {},
 ): KickDbClient<DB> {
   const root = shape.root ?? false
   const plugins = shape.plugins ?? []
@@ -184,11 +212,12 @@ export function wrap<DB>(
     const frame = ctx.transactions.getStore()
     return frame && !frame.done ? frame : undefined
   }
-  const childFor = (trx: Kysely<any>): KickDbClient<DB> =>
-    wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins })
+  /** A client for an open transaction, holding its frame so it's found outside the callback too. */
+  const childFor = (trx: Kysely<any>, frame?: TxFrame): KickDbClient<DB> =>
+    wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins, frame })
   /** The frame to run in — a transaction client used outside the callback still has its own. */
   const currentFrame = (): TxFrame | undefined =>
-    openFrame() ?? (root ? undefined : { trx: qb, afterCommit: [] })
+    shape.frame ?? openFrame() ?? (root ? undefined : { trx: qb, afterCommit: [] })
 
   const ownQuery = buildQueryNamespace<DB>(
     qb,
@@ -203,7 +232,7 @@ export function wrap<DB>(
     // Hooks registered behind the savepoint wait on it: dropped if it rolls back.
     const inner: TxFrame = { trx: frame.trx, afterCommit: [], readOnly: frame.readOnly }
     try {
-      const result = await ctx.transactions.run(inner, () => fn(childFor(frame.trx)))
+      const result = await ctx.transactions.run(inner, () => fn(childFor(frame.trx, inner)))
       await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(frame.trx)
       frame.afterCommit.push(...inner.afterCommit)
       return result
@@ -223,6 +252,7 @@ export function wrap<DB>(
     const plan = retryPlan(opts.retry)
     for (let attempt = 1; ; attempt++) {
       const frame: TxFrame = { trx: ctx.root, afterCommit: [], readOnly: opts.readOnly }
+      const txId = `tx${++nextTransactionId}`
       ctx.events?.emit('transactionStart', { isolation })
       let result: T
       try {
@@ -232,19 +262,23 @@ export function wrap<DB>(
         let builder = ctx.root.transaction()
         if (isolation && ctx.dialect !== 'sqlite') builder = builder.setIsolationLevel(isolation)
         if (opts.readOnly) builder = builder.setAccessMode('read only')
-        result = await builder.execute(async (trx) => {
-          if (isolation && ctx.dialect === 'sqlite') {
-            // Kept as before: SQLite has no isolation levels, and says so.
-            await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`).execute(trx)
-          }
-          // For row-level security: who the policies see, for this transaction only.
-          if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
-          for (const [key, value] of Object.entries(opts.settings ?? {})) {
-            await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
-          }
-          frame.trx = trx
-          return ctx.transactions.run(frame, () => fn(childFor(trx)))
-        })
+        result = await transactionIds.run(txId, () =>
+          builder.execute(async (trx) => {
+            if (isolation && ctx.dialect === 'sqlite') {
+              // Kept as before: SQLite has no isolation levels, and says so.
+              await sql
+                .raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`)
+                .execute(trx)
+            }
+            // For row-level security: who the policies see, for this transaction only.
+            if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
+            for (const [key, value] of Object.entries(opts.settings ?? {})) {
+              await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
+            }
+            frame.trx = trx
+            return ctx.transactions.run(frame, () => fn(childFor(trx, frame)))
+          }),
+        )
         frame.done = true
       } catch (err) {
         frame.done = true
@@ -263,16 +297,7 @@ export function wrap<DB>(
         throw err
       }
       ctx.events?.emit('transactionCommit', { isolation })
-      for (const hook of frame.afterCommit) {
-        try {
-          await hook()
-        } catch (err) {
-          // Committed is committed: report the hook's failure, don't fail the transaction.
-          const report = (kick as { reportError?: (e: unknown, info: object) => void }).reportError
-          if (report) report(err, { source: 'db', context: { phase: 'afterCommit' } })
-          else console.error('[kick/db] afterCommit hook failed', err)
-        }
-      }
+      await runAfterCommit(frame)
       return result
     }
   }
@@ -356,6 +381,68 @@ export function wrap<DB>(
       return client
     },
 
+    startTransaction: (async (opts: Omit<TransactionOptions, 'retry'> = {}) => {
+      if (!root || openFrame()) {
+        throw new Error(
+          'kickjs-db: startTransaction() opens a transaction of its own — inside one, use savepoint()',
+        )
+      }
+      const { isolation, readOnly } = opts
+      if (readOnly && ctx.dialect === 'sqlite') {
+        throw new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly')
+      }
+      if ((opts.role !== undefined || opts.settings !== undefined) && ctx.dialect !== 'postgres') {
+        throw new Error('kickjs-db: transaction role and settings are Postgres-only')
+      }
+      let builder = ctx.root.startTransaction()
+      if (isolation && ctx.dialect !== 'sqlite') builder = builder.setIsolationLevel(isolation)
+      if (readOnly) builder = builder.setAccessMode('read only')
+      ctx.events?.emit('transactionStart', { isolation })
+      const trx = await builder.execute()
+      try {
+        if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
+        for (const [key, value] of Object.entries(opts.settings ?? {})) {
+          await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
+        }
+      } catch (err) {
+        // Not handed out, so nothing else would close it. A failing rollback
+        // mustn't hide why the setup failed.
+        await trx
+          .rollback()
+          .execute()
+          .catch(() => {})
+        ctx.events?.emit('transactionRollback', { isolation, error: err })
+        throw err
+      }
+      const frame: TxFrame = { trx, afterCommit: [], readOnly }
+      const tx = wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins, frame })
+      const finish = (commit: boolean) => async (): Promise<void> => {
+        if (frame.done) throw new TransactionFinishedError()
+        if (!commit) {
+          // Done only once it's rolled back: a failed rollback can be tried again.
+          try {
+            await trx.rollback().execute()
+          } catch (err) {
+            ctx.events?.emit('transactionRollback', { isolation, error: err })
+            throw err
+          }
+          frame.done = true
+          ctx.events?.emit('transactionRollback', { isolation, error: undefined })
+          return
+        }
+        frame.done = true
+        try {
+          await trx.commit().execute()
+        } catch (err) {
+          ctx.events?.emit('transactionRollback', { isolation, error: err })
+          throw err
+        }
+        ctx.events?.emit('transactionCommit', { isolation })
+        await runAfterCommit(frame)
+      }
+      return Object.assign(tx, { commit: finish(true), rollback: finish(false) })
+    }) as KickDbClient<DB>['startTransaction'],
+
     transaction: ((
       a: TransactionOptions | ((tx: KickDbClient<DB>) => Promise<unknown>),
       b?: (tx: KickDbClient<DB>) => Promise<unknown>,
@@ -401,7 +488,7 @@ export function wrap<DB>(
           ),
         )
       }
-      if (frame && nested === 'reuse') return fn(childFor(frame.trx))
+      if (frame && nested === 'reuse') return fn(childFor(frame.trx, frame))
       if (frame && nested === 'savepoint') return savepointIn(frame, fn)
       if (frame && ctx.dialect === 'sqlite') {
         // One connection: a second transaction would wait for the first forever.
@@ -430,7 +517,7 @@ export function wrap<DB>(
     insertMany: ((
       table: string,
       rows: readonly unknown[],
-      opts?: InsertManyOptions & { returning?: boolean },
+      opts?: InsertManyOptions & { returning?: boolean; readBack?: readonly string[] },
     ) => insertMany(client, table as never, rows as never, opts)) as KickDbClient<DB>['insertMany'],
 
     findOrCreate: ((table: string, opts: FindOrCreateOptions<DB, any>) =>
@@ -456,8 +543,16 @@ export function wrap<DB>(
     },
 
     async afterCommit(fn) {
-      const frame = currentFrame()
-      if (frame && openFrame()) frame.afterCommit.push(fn)
+      // Queued on the open transaction: this client's own (a startTransaction(),
+      // or a child of a callback held past it), else the call chain's.
+      // The active frame when it's this client's transaction (a savepoint
+      // inside it, whose rollback drops the hook); else this client's own.
+      const active = openFrame()
+      const sameTx = active && shape.frame && active.trx === shape.frame.trx
+      const frame = (sameTx ? [active, shape.frame] : [shape.frame, active]).find(
+        (f) => f && !f.done,
+      )
+      if (frame) frame.afterCommit.push(fn)
       else await fn()
     },
 

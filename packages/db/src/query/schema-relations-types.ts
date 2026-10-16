@@ -57,7 +57,16 @@ type ResolveRelations<R extends Record<string, Relation>> = {
         ? N
         : string
       : string
-  } & (R[K] extends { morphTo: object } ? { morphTo: true } : unknown)
+  } & (R[K] extends { morphTo: { targets: infer M } } ? { morphTo: MorphTargets<M> } : unknown)
+}
+
+/** A morphTo's `targets`, type value → table name. */
+type MorphTargets<M> = {
+  [V in keyof M & string]: M[V] extends TableDecl<infer N, Record<string, ColumnBuilder>>
+    ? N extends string
+      ? N
+      : string
+    : string
 }
 
 /**

@@ -58,7 +58,13 @@ declare module '../../src/query/types' {
       comments: {
         post: { kind: 'one'; target: 'posts' }
         // morphTo: the target is the union of its tables.
-        subject: { kind: 'one'; target: 'users' | 'posts'; morphTo: true }
+        subject: {
+          kind: 'one'
+          target: 'users' | 'posts'
+          morphTo: { user: 'users'; post: 'posts' }
+        }
+        // A hand-written registry entry without the value → table map.
+        loose: { kind: 'one'; target: 'users' | 'posts'; morphTo: true }
       }
       categories: {
         parent: { kind: 'one'; target: 'categories' }
@@ -87,7 +93,11 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
   })
 
   it('T-morph-to — comments.findMany({ with: { subject: true } }) → either table, or null', () => {
-    type Subject = FixtureDB['users'] | FixtureDB['posts'] | null
+    // Tagged with the type value it was found by.
+    type Subject =
+      | (FixtureDB['users'] & { __type: 'user' })
+      | (FixtureDB['posts'] & { __type: 'post' })
+      | null
     expectTypeOf<Row<'comments', { with: { subject: true } }>['subject']>().toEqualTypeOf<Subject>()
     const withDeleted = { with: { subject: { withDeleted: true } } } satisfies FindManyOptions<
       FixtureDB,
@@ -102,6 +112,35 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
       with: { subject: { limit: 1 } },
     }
     void _bad
+  })
+
+  it('T-morph-to-targets — each target shaped by its own options', () => {
+    const opts = {
+      with: { subject: { targets: { post: { columns: { title: true } } } } },
+    } satisfies FindManyOptions<FixtureDB, 'comments'>
+    type Subject = NonNullable<Row<'comments', typeof opts>['subject']>
+    // Narrowed by __type: the post is shaped by its columns, the user is the whole row.
+    expectTypeOf<keyof Extract<Subject, { __type: 'post' }>>().toEqualTypeOf<'title' | '__type'>()
+    expectTypeOf<Extract<Subject, { __type: 'user' }>>().toEqualTypeOf<
+      FixtureDB['users'] & { __type: 'user' }
+    >()
+    const _unknown: FindManyOptions<FixtureDB, 'comments'> = {
+      // @ts-expect-error — no target 'video'
+      with: { subject: { targets: { video: true } } },
+    }
+    const _oneRow: FindManyOptions<FixtureDB, 'comments'> = {
+      // @ts-expect-error — a target is one row: no limit
+      with: { subject: { targets: { post: { limit: 1 } } } },
+    }
+    void _unknown
+    void _oneRow
+  })
+
+  it('T-morph-to-loose — a hand-written morphTo: true types __type as string', () => {
+    type Loose = Row<'comments', { with: { loose: true } }>['loose']
+    expectTypeOf<Loose>().toEqualTypeOf<
+      ((FixtureDB['users'] | FixtureDB['posts']) & { __type: string }) | null
+    >()
   })
 
   it('T-2-many-many — users.findMany({ with: { posts: { with: { comments: true } } } })', () => {
@@ -206,6 +245,11 @@ describe('FindManyOptions — compile-time guards', () => {
       with: { comments: { timeoutMs: 100 } },
     }
     void _bad
+    const _depth: FindManyOptions<FixtureDB, 'posts'> = {
+      // @ts-expect-error — the depth limit is the top level's
+      with: { comments: { maxDepth: 2 } },
+    }
+    void _depth
   })
 
   it('T-known-key — declared `with` keys compile fine', () => {

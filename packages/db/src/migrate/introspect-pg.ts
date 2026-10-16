@@ -29,6 +29,10 @@ interface ColumnRow {
   character_maximum_length: number | null
   numeric_precision: number | null
   numeric_scale: number | null
+  /** Fractional-second digits of a time type; 6 when none was declared. */
+  datetime_precision: number | null
+  /** `format_type()`: carries `(p)` only when a precision was declared. */
+  formatted_type: string | null
   /**
    * The sequence this column OWNS, or null. `pg_get_serial_sequence` answers
    * only for an owned sequence — the thing `serial` creates.
@@ -253,7 +257,10 @@ async function readColumns(
 ): Promise<TableSnapshot['columns']> {
   const cols = await client.query<ColumnRow>(
     `SELECT column_name, data_type, udt_name, is_nullable, column_default,
-            character_maximum_length, numeric_precision, numeric_scale,
+            character_maximum_length, numeric_precision, numeric_scale, datetime_precision,
+            (SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a
+              WHERE a.attrelid = format('%I.%I', table_schema, table_name)::regclass
+                AND a.attname = column_name) AS formatted_type,
             pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name)
               ::regclass::text AS owned_sequence,
             to_regclass(
@@ -366,9 +373,12 @@ function normalizeType(r: ColumnRow): string {
     if (r.numeric_precision !== null) return `numeric(${r.numeric_precision})`
     return 'numeric'
   }
-  if (r.data_type === 'timestamp with time zone') return 'timestamptz'
-  if (r.data_type === 'timestamp without time zone') return 'timestamp'
-  if (r.data_type === 'time without time zone') return 'time'
+  // datetime_precision reads 6 declared or not; format_type shows it only when declared.
+  const declared = r.formatted_type !== null && /\(\d+\)/.test(r.formatted_type)
+  const p = declared && r.datetime_precision !== null ? `(${r.datetime_precision})` : ''
+  if (r.data_type === 'timestamp with time zone') return `timestamptz${p}`
+  if (r.data_type === 'timestamp without time zone') return `timestamp${p}`
+  if (r.data_type === 'time without time zone') return `time${p}`
   if (r.data_type === 'double precision') return 'double precision'
   if (r.data_type === 'USER-DEFINED') return r.udt_name
   if (r.data_type === 'ARRAY') {

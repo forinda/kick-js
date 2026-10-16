@@ -7,6 +7,8 @@ export interface ColumnSnapshot {
   type: string
   nullable: boolean
   default: string | null
+  /** `default` is SQL to evaluate (`.defaultSql()`), not a value. Absent means a value. */
+  defaultSql?: true
   primaryKey: boolean
   /** A column the database computes from others: `GENERATED ALWAYS AS (expression)`. */
   generated?: { expression: string; stored: boolean }

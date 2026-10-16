@@ -2,6 +2,7 @@
  * `db.upsert()` and `db.findOrCreate()` on MySQL — `ON DUPLICATE KEY
  * UPDATE`, with the rows read back (no RETURNING).
  */
+import { sql } from 'kysely'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { createPool, type Pool } from 'mysql2/promise'
@@ -56,6 +57,37 @@ afterAll(async () => {
 }, 60_000)
 
 describe('upsert and findOrCreate on MySQL', () => {
+  it('update: false leaves a conflicting row as it is and returns it as stored', async () => {
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+    const kept = await db.upsert('users', {
+      values: { email: 'keep@x.com', name: 'Kept' },
+      target: ['email'],
+    })
+    const rows = await db.upsert('users', {
+      values: [
+        { email: 'keep@x.com', name: 'Overwritten?' },
+        { email: 'new@x.com', name: 'New' },
+        { email: 'new@x.com', name: 'New again' },
+      ],
+      target: ['email'],
+      update: false,
+    })
+    // A partial index can't be targeted on MySQL, skipping or not.
+    await expect(
+      createDbClient({ schema, dialect: mysqlDialect({ pool }) }).upsert('users', {
+        values: { email: 'keep@x.com', name: 'K' },
+        target: ['email'],
+        where: () => sql<boolean>`1 = 1`,
+        update: false,
+      }),
+    ).rejects.toThrow(/partial unique index, which MySQL has no syntax for/)
+    expect(rows.map((r) => [r.email, r.name]).toSorted()).toEqual([
+      ['keep@x.com', 'Kept'],
+      ['new@x.com', 'New'],
+    ])
+    expect(rows.find((r) => r.email === 'keep@x.com')!.id).toBe(kept.id)
+  }, 60_000)
+
   it('upserts one and many, returning the stored rows', async () => {
     const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
     const first = await db.upsert('users', {

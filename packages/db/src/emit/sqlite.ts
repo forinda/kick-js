@@ -268,7 +268,7 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
     if (/serial/i.test(c.type)) s += ' AUTOINCREMENT'
   }
   if (!c.nullable && !inlinePk) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${sqliteDefault(c.default, c.type)}`
+  if (c.default !== null) s += ` DEFAULT ${sqliteDefault(c.default, c.type, c.defaultSql)}`
   return s
 }
 
@@ -326,16 +326,18 @@ const SQLITE_UUID_V4 =
 const SQLITE_NOW = "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 
 /** Map a Postgres default expression to its SQLite equivalent. */
-function sqliteDefault(value: unknown, type?: string): string {
+function sqliteDefault(value: unknown, type?: string, sql?: boolean): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value).trim()
 
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
-  const literalOnly = type !== undefined && !allowsExpressionDefault(type)
-  if (literalOnly && !isFunctionCall(str) && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
-    return quoteLiteral(str)
-  }
+  // `.default()` on a text-like column is a value, whatever it looks like
+  // (`'now()'` is the string now()); `.defaultSql()` is SQL on any column.
+  // `.defaultSql()` is the caller's SQLite SQL, as written.
+  if (sql) return /^[A-Za-z_]+$/.test(str) || /^-?\d+(\.\d+)?$/.test(str) ? str : `(${str})`
+  // A value on a text-like column, even `NULL` or `CURRENT_TIMESTAMP`.
+  if (type !== undefined && !allowsExpressionDefault(type)) return quoteLiteral(str)
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
   if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return SQLITE_UUID_V4

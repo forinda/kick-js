@@ -137,12 +137,12 @@ const user = await this.db.upsert('users', {
 // → the row as stored, inserted or updated
 ```
 
-| Option   | What it does                                                                                                           |
-| -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `values` | a row, or an array of rows — an array returns an array                                                                 |
-| `target` | the unique (or primary) key columns whose conflict means "update instead"                                              |
-| `update` | column names that take the incoming value (default: every inserted column outside `target`), or fixed `{ col: value }` |
-| `where`  | the predicate of a partial unique index `target` refers to — Postgres and SQLite                                       |
+| Option   | What it does                                                                                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `values` | a row, or an array of rows — an array returns an array                                                                                                            |
+| `target` | the unique (or primary) key columns whose conflict means "update instead"                                                                                         |
+| `update` | column names that take the incoming value (default: every inserted column outside `target`), or fixed `{ col: value }`; `false` leaves a conflicting row as it is |
+| `where`  | the predicate of a partial unique index `target` refers to — Postgres and SQLite                                                                                  |
 
 ```ts
 // Count a visit: insert with 1, or add to what's there.
@@ -152,6 +152,8 @@ await this.db.upsert('page_views', {
   update: { views: sql`page_views.views + 1` },
 })
 ```
+
+With `update: false` a row whose key exists is skipped (`ON CONFLICT DO NOTHING`; on MySQL a no-op update rather than `INSERT IGNORE`, which would hide other errors), and every row comes back as stored — the new ones and the ones that were already there, read back by `target`, so every row has to give its `target` values. On MySQL the no-op update still runs the table's `UPDATE` triggers for a skipped row.
 
 `findOrCreate` returns the row matching `where`, creating it from `where` + `create` when there's none:
 
@@ -206,6 +208,18 @@ const rows = await this.db
 - On SQLite there is nothing to cancel: better-sqlite3 runs each query synchronously, and on libsql or D1 a timeout only stops the wait while the query runs on.
 - The timer starts when `db.timeout()` is called, so call it per query.
 - Kysely logs one line to `console.error` for each query cancelled in flight (`failed in the background after abortion`).
+
+## Streaming large results
+
+`.stream()` reads a select row by row instead of loading them all — Kysely's, through the same plugins, tenancy and error translation as `.execute()`:
+
+```ts
+for await (const row of this.db.selectFrom('events').selectAll().orderBy('id').stream(500)) {
+  await exporter.write(row)
+}
+```
+
+On Postgres, give the dialect a cursor class — `pgDialect({ pool, cursor: Cursor })` with `pg-cursor` — or streaming throws. Breaking out of the loop closes the stream. A stream holds its connection until it ends, so keep the loop body short or copy rows out first.
 
 ## Pagination with `ctx.paginate`
 

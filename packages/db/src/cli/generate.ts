@@ -1,3 +1,4 @@
+import { allowsExpressionDefault, isFunctionCall } from '../emit/identifiers'
 import path from 'node:path'
 import { loadModule } from './load-module'
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
@@ -92,6 +93,12 @@ export interface GenerateOptions {
    * still warn. `flag` is the `--rename-…` that would keep it.
    */
   onPossibleRename?: (drop: { what: string; flag: string }) => void
+  /**
+   * Told about each text-like column whose `.default()` looks like a function
+   * call (`text().default('uuid()')`). On SQLite and MySQL it used to be
+   * evaluated; it's a value now, as on Postgres, and `.defaultSql()` is SQL.
+   */
+  onCallShapedDefault?: (column: { table: string; column: string; value: string }) => void
 }
 
 export interface GenerateResult {
@@ -133,6 +140,20 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const changes = diff(prev, target, renames)
   if (!opts.askRenames && opts.onPossibleRename)
     warnPossibleRenames(prev, target, changes, renames, opts.onPossibleRename)
+  if (opts.onCallShapedDefault && target.dialect !== 'postgres') {
+    for (const [table, t] of Object.entries(target.tables)) {
+      for (const [column, c] of Object.entries(t.columns)) {
+        if (
+          c.default !== null &&
+          !c.defaultSql &&
+          !allowsExpressionDefault(c.type) &&
+          (isFunctionCall(c.default) || /^(CURRENT_\w+|NULL)$/i.test(c.default))
+        ) {
+          opts.onCallShapedDefault({ table, column, value: c.default })
+        }
+      }
+    }
+  }
 
   if (changes.length === 0) {
     return { status: 'no-changes', changeCount: 0 }

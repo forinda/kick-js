@@ -108,6 +108,8 @@ Every database caps the parameters one statement can carry: 65,535 on Postgres a
 ```ts
 const count = await db.insertMany('events', rows) // number of rows inserted
 const stored = await db.insertMany('events', rows, { returning: true }) // Postgres, SQLite
+// MySQL has no RETURNING: name a unique key every row gives, to read them back by.
+const mine = await db.insertMany('events', rows, { returning: true, readBack: ['code'] })
 
 // Cloudflare D1: a lower limit and no BEGIN.
 await db.insertMany('events', rows, { maxParams: 100, atomic: false })

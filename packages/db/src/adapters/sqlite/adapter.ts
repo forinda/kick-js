@@ -1,3 +1,4 @@
+import { checkTriggers, triggersQuery, type TriggerRow } from './triggers'
 import { Kysely } from 'kysely'
 import { sqliteDialect } from './dialect'
 import {
@@ -177,7 +178,15 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
       // inside the block.
       runBatch('BEGIN')
       try {
+        // A rebuild drops the table's triggers with it: read them first, check
+        // they still fit the rebuilt table, and create them again after.
+        const triggers =
+          rebuilt.size > 0
+            ? (database.prepare(triggersQuery([...rebuilt])).all(...rebuilt) as TriggerRow[])
+            : []
+        checkTriggers(triggers, sql)
         runBatch(sql)
+        for (const t of triggers) runBatch(t.sql)
         if (bookkeeping && 'record' in bookkeeping) {
           const r = bookkeeping.record
           database

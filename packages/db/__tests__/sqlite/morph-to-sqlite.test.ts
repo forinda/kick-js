@@ -23,6 +23,7 @@ import {
   timestamp,
 } from '@forinda/kickjs-db'
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import { unsigned } from '../../src/dsl/columns/mysql'
 import { compileSqlite } from '../../src/query/compile-sqlite'
 import { extractRelations } from '../../src/query/extract-relations'
 
@@ -79,8 +80,8 @@ describe('morphTo on SQLite', () => {
       with: { subject: true },
     })
     expect(rows.map((c) => [c.body, c.subject])).toEqual([
-      ['on a post', { id: 1, title: 'Hello', deletedAt: null }],
-      ['on a podcast', { id: 1, name: 'Episode 1' }],
+      ['on a post', { id: 1, title: 'Hello', deletedAt: null, __type: 'post' }],
+      ['on a podcast', { id: 1, name: 'Episode 1', __type: 'podcast' }],
       ['on a deleted post', null], // soft-deleted
       ['on an unknown type', null], // no target for 'video'
     ])
@@ -95,7 +96,9 @@ describe('morphTo on SQLite', () => {
     expect(rows[0]!.subject).toMatchObject({ id: 2, title: 'Gone' })
     await expect(
       db.query.comments.findMany({ with: { subject: { limit: 1 } as never } }),
-    ).rejects.toThrow(/morphTo 'subject' takes `true` or `\{ withDeleted \}`.*\(got limit\)/)
+    ).rejects.toThrow(
+      /morphTo 'subject' takes `true` or `\{ withDeleted, targets \}`.*so limit go under targets/,
+    )
   })
 
   it('binds the type values as parameters, never as SQL', async () => {
@@ -160,6 +163,7 @@ describe('morphTo on SQLite', () => {
   })
 
   it('checks the columns, the targets and their keys', () => {
+    const tokens = table('tokens', { id: text().primaryKey() })
     const pairs = table('pairs', { a: integer().notNull(), b: integer().notNull() }, (t) => ({
       pk: primaryKey().on(t.a, t.b),
     }))
@@ -170,6 +174,7 @@ describe('morphTo on SQLite', () => {
           schema: {
             posts,
             pairs,
+            tokens,
             comments,
             rel: relations(comments, ({ morphTo }) => ({
               subject: morphTo({ type, id: comments.subjectId, targets }),
@@ -183,6 +188,28 @@ describe('morphTo on SQLite', () => {
     expect(build({ pair: pairs as never })).toThrow(/'pairs' has a composite primary key/)
     expect(build({ '': posts as never })).toThrow(/a type value in `targets` is an empty string/)
     expect(build({})).toThrow(/`targets` is empty/)
+    // MySQL's int unsigned is an integer too.
+    const counters = table('counters', { id: unsigned(integer()).primaryKey() })
+    expect(() =>
+      createDbClient({
+        schema: {
+          counters,
+          comments,
+          rel: relations(comments, ({ morphTo }) => ({
+            subject: morphTo({
+              type: comments.subjectType,
+              id: comments.subjectId,
+              targets: { c: counters },
+            }),
+          })),
+        },
+        dialect: sqliteDialect({ database: new Database(':memory:') }),
+      }),
+    ).not.toThrow()
+    // A target whose key can't be compared with the id column, on any dialect.
+    expect(build({ token: tokens as never })).toThrow(
+      /'subjectId' is integer, but tokens.id is text — every target's key has to compare with it/,
+    )
   })
 
   it('maps snake_case and .colName() columns', async () => {
@@ -211,7 +238,7 @@ describe('morphTo on SQLite', () => {
       casing: 'snake_case',
     })
     const rows = await db.query.notes.findMany({ with: { subject: true } })
-    expect(rows[0]!.subject).toEqual({ id: 1, title: 'A' })
+    expect(rows[0]!.subject).toEqual({ id: 1, title: 'A', __type: 'blogPost' })
   })
 
   it("keeps 'column' tenancy on the subject", async () => {
@@ -272,6 +299,57 @@ describe('morphTo on SQLite', () => {
       result: { files: { upper: { needs: { name: true }, compute: (f) => f.name.toUpperCase() } } },
     })
     const rows = await db.query.notes.findMany({ with: { subject: true } })
-    expect(rows[0]!.subject).toEqual({ id: 1, name: 'a.txt', upper: 'A.TXT' })
+    expect(rows[0]!.subject).toEqual({ id: 1, name: 'a.txt', upper: 'A.TXT', __type: '1' })
+  })
+
+  it('tags the subject with __type, which finds its computeds even when columns leave out the type', async () => {
+    const { db } = await make()
+    const dbX = db.$extends({
+      result: { posts: { url: { needs: { id: true }, compute: (row) => `/posts/${row.id}` } } },
+    })
+    const rows = await dbX.query.comments.findMany({
+      where: (_c, eb) => eb('id', '=', 1),
+      columns: { subjectType: false },
+      with: { subject: true },
+    })
+    expect(rows[0]!.subject).toMatchObject({ __type: 'post', url: '/posts/1' })
+  })
+
+  it('takes options per target: columns, extras, where and withDeleted', async () => {
+    const { db } = await make()
+    const rows = await db.query.comments.findMany({
+      orderBy: (_c, eb) => eb.ref('id'),
+      with: {
+        subject: {
+          targets: {
+            post: {
+              columns: { title: true },
+              extras: { shout: (_p, eb) => eb.fn('upper', [eb.ref('title')]) },
+              withDeleted: true,
+            },
+            // A podcast only when its name matches.
+            podcast: { where: (_p, eb) => eb('name', '=', 'nope') },
+          },
+        },
+      },
+    })
+    expect(rows.map((c) => c.subject)).toEqual([
+      { title: 'Hello', shout: 'HELLO', __type: 'post' },
+      null, // the podcast's where matched nothing
+      { title: 'Gone', shout: 'GONE', __type: 'post' }, // soft-deleted, kept by its withDeleted
+      null,
+    ])
+  })
+
+  it('refuses a target it does not have, and order or paging on one', async () => {
+    const { db } = await make()
+    await expect(
+      db.query.comments.findMany({ with: { subject: { targets: { video: true } } } as never }),
+    ).rejects.toThrow(/morphTo 'subject' has no target 'video' — its targets are 'post', 'podcast'/)
+    await expect(
+      db.query.comments.findMany({
+        with: { subject: { targets: { post: { limit: 1 } } } } as never,
+      }),
+    ).rejects.toThrow(/target 'post' is one row — it takes no limit/)
   })
 })

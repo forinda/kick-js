@@ -38,6 +38,8 @@ export interface CompileOptions {
   with?: Record<string, true | CompileOptions>
   /** Include soft-deleted rows — on this level only. */
   withDeleted?: boolean
+  /** A `morphTo` level: options for each target, by type value. */
+  targets?: Record<string, true | CompileOptions>
   columns?: Record<string, boolean | undefined>
   extras?: Record<string, (table: any, ops: ExpressionBuilder<any, any>) => Expression<unknown>>
 }
@@ -182,9 +184,13 @@ function applyWithSelects(
       const subOptions: CompileOptions = value === true ? {} : value
       if (rel.morphTo) {
         out.push(
-          buildMorphTo(eb, sourceAlias, rel, key, subOptions, tables, trace.length, helpers).as(
-            key,
-          ),
+          buildMorphTo(eb, sourceAlias, rel, key, subOptions, {
+            relations,
+            tables,
+            maxDepth,
+            trace,
+            helpers,
+          }).as(key),
         )
         continue
       }
@@ -327,32 +333,85 @@ function buildMorphTo(
   rel: ResolvedRelation,
   key: string,
   options: CompileOptions,
-  tables: Record<string, CompileTable>,
-  depth: number,
-  helpers: JsonHelpers,
+  ctx: {
+    relations: ResolvedRelations
+    tables: Record<string, CompileTable>
+    maxDepth: number
+    trace: readonly string[]
+    helpers: JsonHelpers
+  },
 ): any {
-  const other = Object.entries(options).filter(([k, v]) => k !== 'withDeleted' && v !== undefined)
+  const { tables, helpers } = ctx
+  // Options that need one table go per target, under `targets`.
+  const other = Object.entries(options).filter(
+    ([k, v]) => k !== 'withDeleted' && k !== 'targets' && v !== undefined,
+  )
   if (other.length > 0) {
     throw new Error(
-      `kickjs-db: morphTo '${key}' takes \`true\` or \`{ withDeleted }\` — its rows come from several tables (got ${other.map(([k]) => k).join(', ')})`,
+      `kickjs-db: morphTo '${key}' takes \`true\` or \`{ withDeleted, targets }\` — its rows come from several tables, so ${other.map(([k]) => k).join(', ')} go under targets: { <type>: { … } }`,
     )
   }
   const morphTo = rel.morphTo!
+  const known = new Set(morphTo.targets.map((t) => t.value))
+  const unknown = Object.keys(options.targets ?? {}).filter((v) => !known.has(v))
+  if (unknown.length > 0) {
+    throw new Error(
+      `kickjs-db: morphTo '${key}' has no target ${unknown.map((v) => `'${v}'`).join(', ')} — its targets are ${[...known].map((v) => `'${v}'`).join(', ')}`,
+    )
+  }
+  const depth = ctx.trace.length
   const subs = morphTo.targets.map((t) => {
+    const own = options.targets?.[t.value]
+    const opts: CompileOptions = {
+      ...(own === undefined || own === true ? {} : own),
+      // A target's own withDeleted wins over the level's.
+      withDeleted:
+        (own !== undefined && own !== true ? own.withDeleted : undefined) ?? options.withDeleted,
+    }
+    for (const k of ['limit', 'offset', 'orderBy'] as const) {
+      if (opts[k] !== undefined) {
+        throw new Error(
+          `kickjs-db: morphTo '${key}' target '${t.value}' is one row — it takes no ${k}`,
+        )
+      }
+    }
     const alias = makeAlias(t.table, depth)
     const table = tables[t.table]
     let sub: any = eb.selectFrom(`${t.table} as ${alias}` as any)
+    const picked = table ? pickColumns(t.table, table, opts) : null
     sub = table
       ? sub.select(
-          nestedColumns(t.table, table, Object.keys(table.columns), helpers, 'skip').map(
-            (c) => `${alias}.${c}`,
-          ),
+          // Named columns are checked (a blob is refused by name); all of them skip a blob.
+          (picked
+            ? nestedColumns(t.table, table, picked, helpers)
+            : nestedColumns(t.table, table, Object.keys(table.columns), helpers, 'skip')
+          ).map((c) => `${alias}.${c}`),
         )
       : sub.selectAll()
+    // The type value it was found by, so the subject says which table it is
+    // (a parameter; Postgres needs its type to put it in JSON).
+    const typeValue = helpers.dialect === 'postgres' ? sql`${t.value}::text` : sql`${t.value}`
     sub = sub
+      .select(typeValue.as('__type'))
       .whereRef(`${alias}.${t.key}`, '=', `${sourceAlias}.${rel.sourceColumns[0]}`)
       .where(`${sourceAlias}.${morphTo.column}`, '=', t.value)
-    return helpers.jsonObjectFrom(skipDeleted(sub, alias, table, options).limit(1))
+    sub = applyExtras(sub, alias, opts)
+    if (opts.with) {
+      sub = applyWithSelects(
+        sub,
+        t.table,
+        alias,
+        opts.with,
+        ctx.relations,
+        tables,
+        ctx.maxDepth,
+        [...ctx.trace, alias],
+        helpers,
+      )
+    }
+    sub = skipDeleted(sub, alias, table, opts)
+    sub = applyWhereOrderLimit(sub, alias, { where: opts.where }, 'many', helpers)
+    return helpers.jsonObjectFrom(sub.limit(1))
   })
   return subs.length === 1 ? subs[0] : (eb.fn.coalesce as any)(...subs)
 }

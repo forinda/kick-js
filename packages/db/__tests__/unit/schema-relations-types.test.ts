@@ -104,7 +104,10 @@ describe('SchemaToRelationsRegister<S>', () => {
     }))
     type B = SchemaToRelationsRegister<{ back: typeof back }>
     expectTypeOf<B['notes']['subject']['target']>().toEqualTypeOf<'posts' | 'users'>()
-    expectTypeOf<B['notes']['subject']['morphTo']>().toEqualTypeOf<true>()
+    expectTypeOf<B['notes']['subject']['morphTo']>().toEqualTypeOf<{
+      post: 'posts'
+      user: 'users'
+    }>()
     expectTypeOf<R['posts']['pinned']>().not.toHaveProperty('morphTo')
   })
 

@@ -88,3 +88,157 @@ describe('beforeQuery', () => {
     expect(seen).toEqual(['select "email" from "users" where "email" = ?'])
   })
 })
+
+describe('query event correlation', () => {
+  it('pairs beforeQuery, query and queryError by queryId, and tags a transaction’s queries with txId', async () => {
+    const db = await seeded()
+    const before: Array<string | undefined> = []
+    const done: Array<{ queryId?: string; txId?: string }> = []
+    const failed: Array<{ queryId?: string; txId?: string }> = []
+    db.on('beforeQuery', (e) => {
+      before.push(e.queryId)
+    })
+    db.on('query', (e) => {
+      done.push({ queryId: e.queryId, txId: e.txId })
+    })
+    db.on('queryError', (e) => {
+      failed.push({ queryId: e.queryId, txId: e.txId })
+    })
+    await db.selectFrom('users').select('id').execute()
+    expect(done.at(-1)!.txId).toBeUndefined()
+    expect(before).toContain(done.at(-1)!.queryId)
+
+    await db.transaction(async (tx) => {
+      await tx.selectFrom('users').select('id').execute()
+      await tx.selectFrom('posts').select('id').execute()
+    })
+    // begin, the two selects, commit: one transaction id, a query id each.
+    const inTx = done.filter((e) => e.txId)
+    expect(inTx).toHaveLength(4)
+    expect(inTx[0]!.txId).toMatch(/^tx\d+$/)
+    expect(new Set(inTx.map((e) => e.txId)).size).toBe(1)
+    expect(new Set(inTx.map((e) => e.queryId)).size).toBe(4)
+
+    await expect(
+      db
+        .selectFrom('nope' as 'users')
+        .selectAll()
+        .execute(),
+    ).rejects.toThrow()
+    expect(failed).toHaveLength(1)
+    expect(before).toContain(failed[0]!.queryId)
+  })
+})
+
+describe('startTransaction()', () => {
+  it('commits or rolls back when told, runs afterCommit, and refuses a second finish', async () => {
+    const db = await seeded()
+    const events: string[] = []
+    db.on('transactionStart', () => {
+      events.push('start')
+    })
+    db.on('transactionCommit', () => {
+      events.push('commit')
+    })
+    db.on('transactionRollback', () => {
+      events.push('rollback')
+    })
+    const count = async () =>
+      Number(
+        (
+          await db
+            .selectFrom('users')
+            .select((eb) => eb.fn.countAll().as('n'))
+            .executeTakeFirstOrThrow()
+        ).n,
+      )
+
+    const kept = await db.startTransaction()
+    let ran = false
+    await kept.insertInto('users').values({ email: 'kept@x.com' }).execute()
+    await kept.afterCommit(() => {
+      ran = true
+    })
+    expect(ran).toBe(false)
+    await kept.commit()
+    expect(ran).toBe(true)
+    expect(await count()).toBe(4)
+    await expect(kept.commit()).rejects.toThrow()
+
+    const dropped = await db.startTransaction()
+    await dropped.insertInto('users').values({ email: 'gone@x.com' }).execute()
+    // Its own savepoint works too.
+    await dropped.savepoint(async (sp) => {
+      await sp.insertInto('users').values({ email: 'sp@x.com' }).execute()
+    })
+    await dropped.rollback()
+    expect(await count()).toBe(4)
+    expect(events).toEqual(['start', 'commit', 'start', 'rollback'])
+
+    await expect(db.transaction(() => db.startTransaction())).rejects.toThrow(/use savepoint/)
+    // transaction()'s guards hold here too.
+    await expect(db.startTransaction({ readOnly: true })).rejects.toThrow(/read-only/)
+    await expect(db.startTransaction({ role: 'app' })).rejects.toThrow(/Postgres-only/)
+  })
+
+  it('queues afterCommit from its savepoints and nested transactions until it commits', async () => {
+    const db = await seeded()
+    const ran: string[] = []
+    const tx = await db.startTransaction()
+    await tx.savepoint(async (sp) => {
+      await sp.afterCommit(() => {
+        ran.push('savepoint')
+      })
+    })
+    await tx.transaction(async (inner) => {
+      await inner.afterCommit(() => {
+        ran.push('nested')
+      })
+    })
+    // A hook queued inside a savepoint that rolls back is dropped with it.
+    await tx
+      .transaction({ nested: 'savepoint' }, async () => {
+        await tx.afterCommit(() => {
+          ran.push('rolled back')
+        })
+        throw new Error('undo')
+      })
+      .catch(() => {})
+    expect(ran).toEqual([])
+    await tx.commit()
+    expect(ran).toEqual(['savepoint', 'nested'])
+  })
+})
+
+describe('asyncStackTraces', () => {
+  const failing = (db: ReturnType<typeof createDbClient>) =>
+    function readFromAMissingTable() {
+      return db
+        .selectFrom('nope' as never)
+        .selectAll()
+        .execute()
+    }
+
+  it("adds the caller's frames to a failed query's stack", async () => {
+    const database = new Database(':memory:')
+    const db = createDbClient({
+      schema,
+      dialect: sqliteDialect({ database }),
+      asyncStackTraces: true,
+    })
+    const err = (await failing(db)().catch((e: unknown) => e)) as Error
+    const built = err.stack!.split('--- the query was built ---')[1]!
+    // The caller's own frames — this file — and none of Kysely's or kick/db's.
+    expect(built).toContain('expect-queries-sqlite.test.ts')
+    expect(built).not.toMatch(/[\\/]kysely[\\/]|packages[\\/]db[\\/]src/)
+  })
+
+  it('adds nothing without it', async () => {
+    const db = createDbClient({
+      schema,
+      dialect: sqliteDialect({ database: new Database(':memory:') }),
+    })
+    const err = (await failing(db)().catch((e: unknown) => e)) as Error
+    expect(err.stack).not.toContain('--- the query was built ---')
+  })
+})

@@ -373,7 +373,9 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
 
   const typeChanged = before.type !== after.type
   const nullChanged = before.nullable !== after.nullable
-  const defaultChanged = before.default !== after.default
+  // A value becoming SQL (or back) is a change even with the same text.
+  const defaultChanged =
+    before.default !== after.default || !before.defaultSql !== !after.defaultSql
   const losingNotNull = !before.nullable && after.nullable
 
   if (typeChanged) {
@@ -399,7 +401,7 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
     stmts.push(
       after.default === null
         ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default, after.type)};`,
+        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default, after.type, after.defaultSql)};`,
     )
   }
   const emitNullable = () => {
@@ -486,7 +488,7 @@ function emitColumnDecl(c: ColumnSnapshot): string {
   }
   if (c.identity) s += ` GENERATED ${c.identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'} AS IDENTITY`
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type)}`
+  if (c.default !== null) s += ` DEFAULT ${formatDefault(c.default, c.type, c.defaultSql)}`
   return s
 }
 
@@ -541,7 +543,9 @@ function isCast(str: string): boolean {
   )
 }
 
-function formatDefault(value: unknown, type?: string): string {
+function formatDefault(value: unknown, type?: string, sql?: boolean): string {
+  // `.defaultSql()`: SQL to evaluate, as written.
+  if (sql) return String(value)
   // Defensive: a snapshot authored before defaults were normalised to
   // strings (or hand-edited) may carry a raw boolean/number. Coerce so
   // `quoteLiteral` (String.prototype.replace) never sees a non-string.
@@ -552,6 +556,10 @@ function formatDefault(value: unknown, type?: string): string {
   // `'active'::"status"` from the enum recreate path, `'{}'::jsonb` from
   // introspection, `now()::date` — and is passed through whatever the column
   // type is. Only those shapes: any `::` let `std::string` out as SQL.
+  // A text column's `.default()` is a value even when it looks like a cast.
+  if (type !== undefined && /^(text|varchar|char|character|citext)\b/i.test(type)) {
+    return quoteLiteral(str)
+  }
   if (isCast(str)) return str
   // Unknown type included: quoting a value that wanted to be an expression is
   // wrong but valid, while the reverse is a syntax error.

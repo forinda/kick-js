@@ -14,18 +14,28 @@ export interface QueryEvent {
   sql: string
   parameters: readonly unknown[]
   durationMs: number
+  /** Kysely's id for this query: pairs `beforeQuery`, `query` and `queryError`. */
+  queryId?: string
+  /** The transaction it ran in, when it ran in one (a savepoint shares its transaction's). */
+  txId?: string
 }
 
 export interface QueryErrorEvent {
   sql: string
   parameters: readonly unknown[]
   error: unknown
+  /** Kysely's id for this query: pairs `beforeQuery`, `query` and `queryError`. */
+  queryId?: string
+  /** The transaction it ran in, when it ran in one (a savepoint shares its transaction's). */
+  txId?: string
 }
 
 export interface BeforeQueryEvent {
   /** Mutable — listeners may rewrite sql / parameters before execution. */
   sql: string
   parameters: unknown[]
+  /** Kysely's id for this query, as `query` / `queryError` report it. Absent for statements kick/db sends itself. */
+  readonly queryId?: string
 }
 
 export interface TransactionEvent {
@@ -46,6 +56,13 @@ export interface TransactionRetryEvent extends TransactionEvent {
 }
 
 /** Options for `transaction(opts, fn)`. */
+/** A transaction from `startTransaction()`: a client, and the way to finish it. */
+export type ManualTransaction<DB> = KickDbClient<DB> & {
+  /** Commit, then run its `afterCommit` hooks. */
+  commit(): Promise<void>
+  rollback(): Promise<void>
+}
+
 export interface TransactionOptions extends TransactionEvent {
   /**
    * What to do when a transaction is already open on this call chain:
@@ -243,7 +260,14 @@ export interface KickDbClient<DB = RegisteredDB> {
   insertMany<T extends keyof DB & string>(
     table: T,
     rows: ReadonlyArray<Insertable<DB[T]>>,
-    options: import('./insert-many').InsertManyOptions & { returning: true },
+    options: import('./insert-many').InsertManyOptions & {
+      returning: true
+      /**
+       * MySQL, which has no RETURNING: a unique key every row gives, to read
+       * the inserted rows back by. Required there; ignored elsewhere.
+       */
+      readBack?: ReadonlyArray<keyof DB[T] & string>
+    },
   ): Promise<Selectable<DB[T]>[]>
 
   /**
@@ -281,6 +305,19 @@ export interface KickDbClient<DB = RegisteredDB> {
    * stays committed.
    */
   afterCommit(fn: () => unknown): Promise<void>
+
+  /**
+   * Open a transaction you finish yourself — for a test that rolls back what
+   * it wrote, or a transaction handed across layers:
+   *
+   *   const tx = await db.startTransaction()
+   *   try { await tx.insertInto('orders').values(o).execute(); await tx.commit() }
+   *   catch (err) { await tx.rollback(); throw err }
+   *
+   * Prefer `transaction(fn)`, which can't leave one open. Takes its options
+   * but `retry`; its query events carry no `txId`.
+   */
+  startTransaction(opts?: Omit<TransactionOptions, 'retry'>): Promise<ManualTransaction<DB>>
 
   /** Whether this call chain is inside a transaction. */
   readonly inTransaction: boolean
@@ -372,6 +409,13 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * surface is attached.
    */
   slowQueryThresholdMs?: number | null
+  /**
+   * Add where each query was built to its error's stack — the line that
+   * called `.execute()` or `findMany()`, which a driver error otherwise
+   * loses across the await. Records a stack per query, so it's for
+   * development. Default `false`.
+   */
+  asyncStackTraces?: boolean
   /**
    * Optional KickEventBus instance the client republishes lifecycle
    * events to. When set, the bus receives:

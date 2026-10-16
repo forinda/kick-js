@@ -131,6 +131,7 @@ const db = createDbClient({
 | `casing`               | `'snake_case'`                      | —       | camelCase keys in TS, snake_case names in the database (set the same in `kick.config.ts`)                                           |
 | `events`               | `boolean`                           | `false` | Enable lifecycle events. Zero overhead when off                                                                                     |
 | `slowQueryThresholdMs` | `number \| null`                    | `null`  | Fire `slowQuery` above this duration; implies `events: true`                                                                        |
+| `asyncStackTraces`     | `boolean`                           | `false` | Append where each query was built to its error's stack (records a stack per query — for development)                                |
 | `bus`                  | `KickEventBus`                      | —       | Republish `db:slow-query` / `db:query-error` to DevTools; implies `events: true`                                                    |
 | `plugins`              | `KyselyPlugin[]`                    | —       | Extra query-builder plugins, run after the built-ins (see [`safeNullComparison()`](#safenullcomparison))                            |
 
@@ -148,11 +149,12 @@ interface KickDbClient<DB = RegisteredDB> {
 
   readonly query: QueryNamespace<DB> // relational layer
 
-  upsert(table, { values, target, update?, where?, maxParams?, atomic? }): Promise<Row | Row[]>
-  insertMany(table, rows, { returning?, maxParams?, atomic? }?): Promise<number | Row[]>
+  upsert(table, { values, target, update? /* or false */, where?, maxParams?, atomic? }): Promise<Row | Row[]>
+  insertMany(table, rows, { returning?, readBack?, maxParams?, atomic? }?): Promise<number | Row[]>
   findOrCreate(table, { where, create? }): Promise<{ row: Row; created: boolean }>
   refreshMaterializedView(name, { concurrently? }?): Promise<void>
   timeout(ms, { signal? }?): { signal; inflightQueryAbortStrategy } // .execute(db.timeout(5_000)) — cancels on the server
+  startTransaction(opts?): Promise<KickDbClient & { commit(); rollback() }> // a transaction you finish yourself
 
   transaction<T>(fn): Promise<T>
   transaction<T>(opts: TransactionOptions, fn): Promise<T>
@@ -185,14 +187,15 @@ await db.upsert('pageViews', {
 const { row, created } = await db.findOrCreate('tags', { where: { slug }, create: { label } })
 ```
 
-| Option      | Applies to             | Default              | Description                                                                                       |
-| ----------- | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
-| `maxParams` | `insertMany`, `upsert` | dialect limit        | Bind parameters per statement (65,535 Postgres/MySQL, 32,766 SQLite); `100` for Cloudflare D1     |
-| `atomic`    | `insertMany`, `upsert` | `true`               | All statements in one transaction (joining an open one); `false` for drivers without transactions |
-| `returning` | `insertMany`           | `false`              | `true` returns the inserted rows instead of the count                                             |
-| `target`    | `upsert`               | required             | Unique / primary key columns whose conflict turns the insert into an update                       |
-| `update`    | `upsert`               | every non-key column | Column names to take from the incoming row, or an object of values / expressions                  |
-| `where`     | `upsert`               | —                    | Predicate of a partial unique index `target` refers to (Postgres, SQLite)                         |
+| Option      | Applies to             | Default              | Description                                                                                           |
+| ----------- | ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `maxParams` | `insertMany`, `upsert` | dialect limit        | Bind parameters per statement (65,535 Postgres/MySQL, 32,766 SQLite); `100` for Cloudflare D1         |
+| `atomic`    | `insertMany`, `upsert` | `true`               | All statements in one transaction (joining an open one); `false` for drivers without transactions     |
+| `returning` | `insertMany`           | `false`              | `true` returns the inserted rows instead of the count                                                 |
+| `readBack`  | `insertMany`           | —                    | MySQL, with `returning`: a unique key every row gives, to read the rows back by (it has no RETURNING) |
+| `target`    | `upsert`               | required             | Unique / primary key columns whose conflict turns the insert into an update                           |
+| `update`    | `upsert`               | every non-key column | Column names to take from the incoming row, or an object of values / expressions                      |
+| `where`     | `upsert`               | —                    | Predicate of a partial unique index `target` refers to (Postgres, SQLite)                             |
 
 Guide: [Queries → Upsert and find-or-create](../guide/database/queries.md#upsert-and-find-or-create), [Performance → Insert many rows](../guide/database/performance.md#insert-many-rows-in-one-statement).
 
@@ -210,6 +213,8 @@ Subscribe via `db.on(event, listener)`. Events fire when `events: true` (or `slo
 | `transactionCommit`   | `{ isolation? }`                               | Transaction commits                                                       |
 | `transactionRollback` | `{ isolation?, error }`                        | Transaction rolls back                                                    |
 | `transactionRetry`    | `{ isolation?, attempt, error, delayMs }`      | A `retry` transaction is about to run again                               |
+
+`beforeQuery`, `query`, `slowQuery` and `queryError` also carry `queryId`, and `txId` inside a `transaction()`.
 
 ```ts
 db.on('slowQuery', ({ sql, durationMs }) => logger.warn({ sql, durationMs }, 'slow query'))
@@ -304,7 +309,7 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
 }))
 ```
 
-`morphMany(target, { type, id, as, references? })` is a polymorphic `many`: the target rows whose `type` column holds `as` and whose `id` column holds the source's key (`references`, default the source's single-column primary key). No foreign key is involved; it's typed and queried like `many`. `morphOne` takes the same options and reads one such row, typed and queried like `one`. `morphTo({ type, id, targets })`, declared on the child, reads the row its pair points at: `targets` maps each type value to a table, whose primary key is matched against `id`. It's typed as a `one` whose target is any of those tables, and takes `true` or `{ withDeleted }`.
+`morphMany(target, { type, id, as, references? })` is a polymorphic `many`: the target rows whose `type` column holds `as` and whose `id` column holds the source's key (`references`, default the source's single-column primary key). No foreign key is involved; it's typed and queried like `many`. `morphOne` takes the same options and reads one such row, typed and queried like `one`. `morphTo({ type, id, targets })`, declared on the child, reads the row its pair points at: `targets` maps each type value to a table, whose primary key is matched against `id`. The subject carries `__type`, its type value, and is typed as a union narrowed by it. `with` takes `true` or `{ withDeleted?, targets?: { <type>: true | { columns, extras, where, with, withDeleted } } }`.
 
 ```ts
 export const postsRelations = relations(posts, ({ morphMany }) => ({

@@ -103,7 +103,7 @@ export class ResultExtensionPlugin implements KyselyPlugin {
     const tableName = this.naming.tableKey(dbTable)
     const bag = this.byTable.get(tableName)
     // A table with no computeds of its own may still nest rows that have some.
-    if (!bag && !this.relations[tableName]) return node
+    if (!bag && !this.reachesComputeds(tableName)) return node
 
     // Tag the query so transformResult knows to apply computeds.
     this.pending.set(queryId, tableName)
@@ -115,6 +115,27 @@ export class ResultExtensionPlugin implements KyselyPlugin {
           as: this.naming.resultName(key),
         }))
       : node
+  }
+
+  /** Whether a table's related rows, at any depth, can have computeds. Cached per table. */
+  private reach = new Map<string, boolean>()
+  private reachesComputeds(table: string, seen = new Set<string>()): boolean {
+    const known = this.reach.get(table)
+    if (known !== undefined) return known
+    seen.add(table)
+    let found = false
+    for (const rel of Object.values(this.relations[table] ?? {})) {
+      const targets = rel.morphTo ? rel.morphTo.targets.map((t) => t.table) : [rel.target]
+      if (
+        targets.some((t) => this.byTable.has(t) || (!seen.has(t) && this.reachesComputeds(t, seen)))
+      ) {
+        found = true
+        break
+      }
+    }
+    // Only a finished answer is cached: one cut short by a cycle may be partial.
+    if (found || seen.size === 1) this.reach.set(table, found)
+    return found
   }
 
   async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
@@ -159,10 +180,13 @@ export class ResultExtensionPlugin implements KyselyPlugin {
 
     for (const [key, rel] of Object.entries(this.relations[table] ?? {})) {
       const value = base[key]
-      // A morphTo row's table follows the source row's type column.
+      // A morphTo subject says which table it came from in `__type` (the
+      // source's type column too, unless `columns` left it out).
+      const tagged =
+        (value as { __type?: unknown } | null)?.__type ?? base[rel.morphTo?.column ?? '']
       const target = rel.morphTo
         ? // The type value is a string in the snapshot; the column may hold a number.
-          rel.morphTo.targets.find((t) => t.value === String(base[rel.morphTo!.column]))?.table
+          rel.morphTo.targets.find((t) => t.value === String(tagged))?.table
         : rel.target
       if (target === undefined) continue
       if (Array.isArray(value)) {

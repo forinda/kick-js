@@ -19,6 +19,8 @@ export function translatingDialect(
   tag: DbDialect,
   /** Sees (and may replace) each statement before it's sent: the `beforeQuery` event. */
   beforeQuery?: (query: CompiledQuery) => CompiledQuery,
+  /** Where a query was built (`asyncStackTraces`), added to its error's stack. */
+  builtAt?: (query: CompiledQuery) => string | undefined,
 ): Dialect {
   const prepare = (query: CompiledQuery): CompiledQuery => {
     const q = beforeQuery ? beforeQuery(query) : query
@@ -44,9 +46,17 @@ export function translatingDialect(
     if (marked[PATCHED]) return conn
     marked[PATCHED] = true
     const exec = conn.executeQuery.bind(conn)
-    conn.executeQuery = guard((query: CompiledQuery, ...rest: unknown[]) =>
-      (exec as (...a: unknown[]) => Promise<unknown>)(prepare(query), ...rest),
-    ) as DatabaseConnection['executeQuery']
+    conn.executeQuery = (async (query: CompiledQuery, ...rest: unknown[]) => {
+      try {
+        return await (exec as (...a: unknown[]) => Promise<unknown>)(prepare(query), ...rest)
+      } catch (err) {
+        const error = translateDbError(err, tag)
+        const at = builtAt?.(query)
+        if (at && error instanceof Error)
+          error.stack = `${error.stack}\n    --- the query was built ---\n${at}`
+        throw error
+      }
+    }) as DatabaseConnection['executeQuery']
     // Every connection can be asked to cancel, so `'cancel query'` is safe on
     // any dialect: where the driver can't (better-sqlite3 runs synchronously),
     // there is nothing in flight to stop.

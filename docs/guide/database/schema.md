@@ -106,13 +106,16 @@ Every builder supports a chainable set of modifiers:
 varchar(255).notNull() // drop `| null` from the TS type
 uuid().primaryKey() // PRIMARY KEY (implies NOT NULL)
 varchar(255).unique() // UNIQUE
-integer().default('0') // DEFAULT 0 (marks column generated)
+integer().default(0) // DEFAULT 0 (marks column generated)
+text().defaultSql('gen_random_uuid()::text') // a default the database evaluates
 text().array() // text[]  → TS type becomes T[]
 ```
 
 - `.notNull()` / `.primaryKey()` stamp the column NOT NULL and remove `| null` from its inferred type.
-- `.default(value)` sets a SQL default and marks the column generated, so you can omit it on insert. Pass the SQL literal as a string: `.default('true')`, `.default('0')`, `.default("'pending'")`.
+- `.default(value)` sets a default **value** and marks the column generated, so you can omit it on insert: `.default(true)`, `.default(0)`, `.default('pending')` — the bare value, quoted for you. On a text column it's always the text you wrote: `.default('now()')` stores the string `now()`. A number, boolean or time column also takes an expression that fits it (`timestamp().default('now()')`).
+- `.defaultSql(expression)` sets a default the database **evaluates** for each new row, on any column, written in your dialect's SQL: `text().defaultSql('gen_random_uuid()::text')`, `text().defaultSql("lower(hex(randomblob(8)))")`. `kick db generate` warns about a `.default()` on a text column that looks like a call — on SQLite and MySQL earlier versions evaluated it.
 - `.array()` wraps the SQL type in `[]` and the TS type in `T[]`.
+- `timestamp({ precision: 3 })`, `timestamptz(…)` and `time(…)` keep that many fractional-second digits (0–6) — `3` for milliseconds. Without it each database uses its own default: microseconds on Postgres, whole seconds on MySQL. On MySQL a `defaultNow()` column gets `CURRENT_TIMESTAMP(3)` to match.
 - `.comment(text)` stores a comment with the column ([Comments](#comments)).
 
 ### Defaults computed in JS

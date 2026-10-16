@@ -160,7 +160,7 @@ function emitColumnDecl(c: ColumnSnapshot, inlinePk = false, autoIncrement = fal
     s += ` GENERATED ALWAYS AS (${c.generated.expression}) ${c.generated.stored ? 'STORED' : 'VIRTUAL'}`
   }
   if (!c.nullable) s += ' NOT NULL'
-  if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default, c.type)}`
+  if (c.default !== null) s += ` DEFAULT ${mysqlDefault(c.default, c.type, c.defaultSql)}`
   if (inlinePk) s += ' AUTO_INCREMENT PRIMARY KEY'
   else if (autoIncrement) s += ' AUTO_INCREMENT'
   // Always restated: MODIFY COLUMN replaces the whole definition, comment included.
@@ -222,9 +222,9 @@ export function mysqlType(pgType: string): string {
   if (base === 'char' || base === 'character' || base === 'bpchar') return `CHAR${len || '(1)'}`
   if (base === 'text' || base === 'citext') return 'TEXT'
   if (base === 'json' || base === 'jsonb') return 'JSON'
-  if (base === 'timestamp' || base === 'timestamptz') return 'TIMESTAMP'
+  if (base === 'timestamp' || base === 'timestamptz') return `TIMESTAMP${len}`
   if (base === 'date') return 'DATE'
-  if (base === 'time' || base === 'timetz') return 'TIME'
+  if (base === 'time' || base === 'timetz') return `TIME${len}`
   if (base === 'bytea' || base === 'blob') return 'BLOB'
   // Pass anything else through uppercased with its length (best effort).
   return base.toUpperCase() + len
@@ -233,7 +233,7 @@ export function mysqlType(pgType: string): string {
 /**
  * Map a Postgres default expression to its MySQL equivalent.
  */
-function mysqlDefault(value: unknown, type?: string): string {
+function mysqlDefault(value: unknown, type?: string, sql?: boolean): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value).trim()
@@ -245,17 +245,26 @@ function mysqlDefault(value: unknown, type?: string): string {
       : mysqlString(v)
 
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
-  const literalOnly = type !== undefined && !allowsExpressionDefault(type)
-  if (literalOnly && !isFunctionCall(str) && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
-    return literal(str)
+  // `.default()` on a text-like column is a value, whatever it looks like
+  // (`'now()'` is the string now()); `.defaultSql()` is SQL on any column.
+  // `.defaultSql()` is the caller's MySQL SQL, as written.
+  // (TEXT, JSON and BLOB take any default only as an expression: DEFAULT (NULL).)
+  if (sql) {
+    const exprOnly = type !== undefined && /^(TEXT|JSON|BLOB)$/.test(mysqlType(type))
+    return !exprOnly && (/^[A-Za-z_]+$/.test(str) || /^-?\d+(\.\d+)?$/.test(str)) ? str : `(${str})`
   }
+  // A value on a text-like column, even `NULL` or `CURRENT_TIMESTAMP`.
+  if (type !== undefined && !allowsExpressionDefault(type)) return literal(str)
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
 
   // Postgres UUID/`now()` generators → MySQL equivalents.
   if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return '(UUID())'
-  if (/^now\(\)$/i.test(str)) return 'CURRENT_TIMESTAMP'
-  if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
+  // A fractional-second column needs the same precision on its CURRENT_TIMESTAMP.
+  const fsp = type === undefined ? '' : (/\((\d)\)\s*$/.exec(type)?.[1] ?? '')
+  if (/^(now\(\)|CURRENT_TIMESTAMP)$/i.test(str))
+    return fsp ? `CURRENT_TIMESTAMP(${fsp})` : 'CURRENT_TIMESTAMP'
+  if (/^(CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
 
   // Other function calls are expressions, which MySQL takes only in parentheses.

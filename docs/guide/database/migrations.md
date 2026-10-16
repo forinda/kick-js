@@ -70,7 +70,7 @@ Outside a terminal (CI, scripts) nothing is asked. Name renames with flags inste
 
 <PmCommand exec="kick db generate rename_users --rename-table users=people --rename-column people.fullName=name" />
 
-Without a flag, a single dropped column whose replacement has the same type, nullability and default is still taken as a rename. Any other drop that could be a rename prints a warning with the flag that would keep it, and the drop goes into the migration. `--no-interactive` skips the questions in a terminal too.
+Without a flag, a single dropped column whose replacement has the same type, nullability and default is still taken as a rename, and so is a column that went from its snake_case name to its key with nothing else changed (`project_id` → `projectId`, as after turning `casing` off). Any other drop that could be a rename prints a warning with the flag that would keep it, and the drop goes into the migration. `--no-interactive` skips the questions in a terminal too.
 
 ### Empty migrations
 
@@ -265,6 +265,8 @@ Changing a table's primary key — other columns, another order, a new name — 
 A CHECK that's added, removed or whose expression changed becomes `ADD CONSTRAINT … CHECK` / `DROP CONSTRAINT` (MySQL: `DROP CHECK`); on SQLite, a table rebuild. Down migrations reverse both.
 
 A SQLite rebuild copies every row into a new table. Before committing, the migration runs `PRAGMA foreign_key_check` and rolls back if any row now points at a parent that isn't there — fix the data and migrate again.
+
+Triggers written by hand on a rebuilt table are kept: the migration reads them first and creates them again after the rebuild. One that uses `new.x` or `old.x` for a column the rebuild drops would fail on every write, so the migration refuses before it runs — drop or rewrite the trigger first.
 
 Swapping the new table in removes the old one, and SQLite deletes its rows first. With foreign keys on, that would run the `ON DELETE` of every table referencing it, so a cascade would empty them. On better-sqlite3 the migration switches foreign keys off around the rebuild and back on after, and the check above still guards the result. libsql and Cloudflare D1 run a migration as one batch, where the switch can't be made (D1 always has foreign keys on). There, a rebuild of a table other tables reference is refused before anything runs: use a connection with `foreign_keys` off, or make the change in steps that don't rebuild it.
 

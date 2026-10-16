@@ -42,6 +42,19 @@ Not every database says everything:
 
 Errors that don't come from the database — a `TypeError` in your own code — pass through untouched.
 
+### Where the query was built
+
+A driver error's stack ends in the driver and the pool: the `await` loses the line that built the query. `createDbClient({ asyncStackTraces: true })` records the caller's frames as each query is built and appends them to its error:
+
+```text
+DatabaseError: no such table: nope
+    at …the driver…
+    --- the query was built ---
+    at OrdersRepository.list (src/modules/orders/orders.repository.ts:14:8)
+```
+
+It records a stack per query, so turn it on in development.
+
 ### Handling them
 
 Catch the kind you can do something about and rethrow the rest:
