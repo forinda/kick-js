@@ -212,8 +212,9 @@ export function wrap<DB>(
     const frame = ctx.transactions.getStore()
     return frame && !frame.done ? frame : undefined
   }
-  const childFor = (trx: Kysely<any>): KickDbClient<DB> =>
-    wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins })
+  /** A client for an open transaction, holding its frame so it's found outside the callback too. */
+  const childFor = (trx: Kysely<any>, frame?: TxFrame): KickDbClient<DB> =>
+    wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins, frame })
   /** The frame to run in — a transaction client used outside the callback still has its own. */
   const currentFrame = (): TxFrame | undefined =>
     shape.frame ?? openFrame() ?? (root ? undefined : { trx: qb, afterCommit: [] })
@@ -231,7 +232,7 @@ export function wrap<DB>(
     // Hooks registered behind the savepoint wait on it: dropped if it rolls back.
     const inner: TxFrame = { trx: frame.trx, afterCommit: [], readOnly: frame.readOnly }
     try {
-      const result = await ctx.transactions.run(inner, () => fn(childFor(frame.trx)))
+      const result = await ctx.transactions.run(inner, () => fn(childFor(frame.trx, inner)))
       await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(frame.trx)
       frame.afterCommit.push(...inner.afterCommit)
       return result
@@ -275,7 +276,7 @@ export function wrap<DB>(
               await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
             }
             frame.trx = trx
-            return ctx.transactions.run(frame, () => fn(childFor(trx)))
+            return ctx.transactions.run(frame, () => fn(childFor(trx, frame)))
           }),
         )
         frame.done = true
@@ -387,14 +388,27 @@ export function wrap<DB>(
         )
       }
       const { isolation, readOnly } = opts
+      if (readOnly && ctx.dialect === 'sqlite') {
+        throw new Error('kickjs-db: SQLite has no read-only transactions — leave out readOnly')
+      }
+      if ((opts.role !== undefined || opts.settings !== undefined) && ctx.dialect !== 'postgres') {
+        throw new Error('kickjs-db: transaction role and settings are Postgres-only')
+      }
       let builder = ctx.root.startTransaction()
       if (isolation && ctx.dialect !== 'sqlite') builder = builder.setIsolationLevel(isolation)
       if (readOnly) builder = builder.setAccessMode('read only')
       ctx.events?.emit('transactionStart', { isolation })
       const trx = await builder.execute()
-      if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
-      for (const [key, value] of Object.entries(opts.settings ?? {})) {
-        await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
+      try {
+        if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
+        for (const [key, value] of Object.entries(opts.settings ?? {})) {
+          await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
+        }
+      } catch (err) {
+        // Not handed out, so nothing else would close it.
+        await trx.rollback().execute()
+        ctx.events?.emit('transactionRollback', { isolation, error: err })
+        throw err
       }
       const frame: TxFrame = { trx, afterCommit: [], readOnly }
       const tx = wrap<DB>(withPlugins<DB>(trx, plugins), ctx, { plugins, frame })
@@ -463,7 +477,7 @@ export function wrap<DB>(
           ),
         )
       }
-      if (frame && nested === 'reuse') return fn(childFor(frame.trx))
+      if (frame && nested === 'reuse') return fn(childFor(frame.trx, frame))
       if (frame && nested === 'savepoint') return savepointIn(frame, fn)
       if (frame && ctx.dialect === 'sqlite') {
         // One connection: a second transaction would wait for the first forever.
@@ -518,10 +532,10 @@ export function wrap<DB>(
     },
 
     async afterCommit(fn) {
-      const frame = currentFrame()
-      // Queued while a transaction is open: a callback's, or a startTransaction()'s own.
-      const open = shape.frame ? !shape.frame.done : openFrame() !== undefined
-      if (frame && open) frame.afterCommit.push(fn)
+      // Queued on the open transaction: this client's own (a startTransaction(),
+      // or a child of a callback held past it), else the call chain's.
+      const frame = [shape.frame, openFrame()].find((f) => f && !f.done)
+      if (frame) frame.afterCommit.push(fn)
       else await fn()
     },
 

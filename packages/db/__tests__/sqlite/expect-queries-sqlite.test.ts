@@ -176,6 +176,28 @@ describe('startTransaction()', () => {
     expect(events).toEqual(['start', 'commit', 'start', 'rollback'])
 
     await expect(db.transaction(() => db.startTransaction())).rejects.toThrow(/use savepoint/)
+    // transaction()'s guards hold here too.
+    await expect(db.startTransaction({ readOnly: true })).rejects.toThrow(/read-only/)
+    await expect(db.startTransaction({ role: 'app' })).rejects.toThrow(/Postgres-only/)
+  })
+
+  it('queues afterCommit from its savepoints and nested transactions until it commits', async () => {
+    const db = await seeded()
+    const ran: string[] = []
+    const tx = await db.startTransaction()
+    await tx.savepoint(async (sp) => {
+      await sp.afterCommit(() => {
+        ran.push('savepoint')
+      })
+    })
+    await tx.transaction(async (inner) => {
+      await inner.afterCommit(() => {
+        ran.push('nested')
+      })
+    })
+    expect(ran).toEqual([])
+    await tx.commit()
+    expect(ran).toEqual(['savepoint', 'nested'])
   })
 })
 
