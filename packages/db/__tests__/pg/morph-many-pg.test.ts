@@ -115,4 +115,23 @@ describe('morphMany on Postgres', () => {
       { id: 1, title: 'Episode 1', __type: "pod'cast" },
     ])
   }, 30_000)
+
+  it('morphTo takes per-target options, nested with included', async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    const rows = await db.query.comments.findMany({
+      orderBy: (_c, eb) => eb.ref('id'),
+      with: {
+        subject: {
+          targets: {
+            post: { columns: { title: true }, with: { comments: { columns: { body: true } } } },
+          },
+        },
+      },
+    })
+    const post = rows[0]!.subject as { title: string; __type: string; comments: { body: string }[] }
+    expect(post.title).toBe('Hello')
+    expect(post.__type).toBe('post')
+    expect(post.comments.map((c) => c.body).toSorted()).toEqual(['first!', 'nice post'])
+    expect(rows[2]!.subject).toMatchObject({ title: 'Episode 1', __type: "pod'cast" })
+  }, 30_000)
 })

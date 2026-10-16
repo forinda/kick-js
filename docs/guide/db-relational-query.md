@@ -317,7 +317,24 @@ const rows = await db.query.comments.findMany({ with: { subject: true } })
 
 Each target's primary key is matched against `id`, only for rows whose `type` holds that target's value (bound as a parameter). The subject is `null` when the type has no entry in `targets`, the row is gone, or it's soft-deleted. The subject comes back as its table's row plus `__type`, the type value it was found by, so `if (subject?.__type === 'post')` narrows it to a post — even when `columns` leaves the comment's `subjectType` out.
 
-Since the subject can come from any of the tables, `with: { subject: … }` takes `true` or `{ withDeleted: true }` only — no `where`, `columns` or nested `with`. [Computed fields](./db-extensions.md) on the subject run when the comment's type column is selected, since that is what says which table the subject came from — so don't leave `subjectType` out with `columns`. Every target's key has to compare with the `id` column — integers with integers, strings with strings, a `uuid` with a `uuid` — since Postgres refuses to compare an `integer` column with a `uuid` key even for rows of another type. A target that doesn't is refused when the client is created.
+The subject comes from one of several tables, so options that need a table go per target, under its type value. `withDeleted` beside `targets` applies to all of them:
+
+```ts
+await db.query.comments.findMany({
+  with: {
+    subject: {
+      withDeleted: true,
+      targets: {
+        post: { columns: { title: true }, with: { author: true } },
+        podcast: { where: (_p, eb) => eb('published', '=', true) },
+      },
+    },
+  },
+})
+// subject: ({ title; author } & { __type: 'post' }) | (Podcast & { __type: 'podcast' }) | null
+```
+
+A target takes `columns`, `extras`, `where`, nested `with` and its own `withDeleted` — not `orderBy`, `limit` or `offset`, since it is one row; a target's `where` that doesn't match gives `null`. A target without options loads its whole row. On SQLite a `bytea` column is left out of a target unless `columns` names it, which is refused (SQLite's JSON can't hold one). [Computed fields](./db-extensions.md) on the subject find its table by `__type`. Every target's key has to compare with the `id` column — integers with integers, strings with strings, a `uuid` with a `uuid` — since Postgres refuses to compare an `integer` column with a `uuid` key even for rows of another type. A target that doesn't is refused when the client is created.
 
 ## Self-references and cycles
 
