@@ -709,6 +709,17 @@ export function hasDependency(
 }
 
 /**
+ * Where generated tests import `describe`/`it`/`expect` from. `vp migrate`
+ * (Vite+) drops the `vitest` dependency and serves the same API from
+ * `vite-plus/test`, so an app on vite-plus without vitest gets that.
+ */
+export function testImportSource(cwd: string): 'vitest' | 'vite-plus/test' {
+  return hasDependency(cwd, 'vite-plus', 'any') && !hasDependency(cwd, 'vitest', 'any')
+    ? 'vite-plus/test'
+    : 'vitest'
+}
+
+/**
  * Whether the project declares the swagger package `@ApiTags` comes from.
  *
  * Runtime scope: the decorator is evaluated when the controller class is

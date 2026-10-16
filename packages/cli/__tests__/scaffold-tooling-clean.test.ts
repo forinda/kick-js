@@ -110,3 +110,45 @@ describe('kick g in a project without oxfmt installed', () => {
     expect(r.code).toBe(0)
   })
 })
+
+describe('generated test imports', () => {
+  const imports = (dir: string, file: string) =>
+    readFileSync(join(dir, file), 'utf-8').split('\n')[0]
+
+  function project(deps: Record<string, string>) {
+    const dir = mkdtempSync(join(root, 'proj-'))
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: 'p', type: 'module', devDependencies: deps }),
+    )
+    for (const args of [
+      ['g', 'module', 'task'],
+      ['g', 'test', 'thing'],
+    ]) {
+      const r = runCli(dir, args)
+      if (r.exitCode !== 0) throw new Error(`kick ${args.join(' ')}:\n${r.stdout}${r.stderr}`)
+    }
+    return dir
+  }
+
+  const files = [
+    'src/modules/task/__tests__/task.controller.test.ts',
+    'src/modules/task/__tests__/task.repository.test.ts',
+    'src/__tests__/thing.test.ts',
+  ]
+
+  it("import from 'vitest' in a vitest project", () => {
+    const dir = project({ vitest: '^4.0.0' })
+    for (const f of files) expect(imports(dir, f)).toMatch(/from 'vitest'$/)
+  })
+
+  it("import from 'vite-plus/test' once vp migrate has replaced vitest", () => {
+    const dir = project({ 'vite-plus': '^1.3.0' })
+    for (const f of files) expect(imports(dir, f)).toMatch(/from 'vite-plus\/test'$/)
+  })
+
+  it("keep 'vitest' when both are installed", () => {
+    const dir = project({ 'vite-plus': '^1.3.0', vitest: '^4.0.0' })
+    for (const f of files) expect(imports(dir, f)).toMatch(/from 'vitest'$/)
+  })
+})

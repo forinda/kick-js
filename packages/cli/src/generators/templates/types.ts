@@ -65,6 +65,8 @@ export interface TemplateContext {
    * test with every case as `it.todo` and no extra imports.
    */
   testHarness?: boolean
+  /** Module generated tests import from — `'vitest'` (default) or `'vite-plus/test'`. */
+  testImport?: string
   /**
    * Validation library the emitted DTO schemas are written against.
    * Defaults to `'zod'`. Resolved from the project's dependencies by the

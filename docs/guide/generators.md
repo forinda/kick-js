@@ -537,6 +537,8 @@ kick g test user-service -m users         # → src/modules/users/__tests__/user
 
 Generates a Vitest test scaffold with `Container.reset()` setup. Default output: `src/__tests__/`.
 
+Generated tests — these and the ones `kick g module` writes — import from `vitest`, or from `vite-plus/test` when the project depends on `vite-plus` and not `vitest` (what `vp migrate` leaves; see [Using Vite+](./vite-plus.md)).
+
 ### kick g contributor
 
 Generate a [Context Contributor](./context-decorators.md) — the typed alternative to `@Middleware()` when the job is to compute a value other code reads off `ctx`.

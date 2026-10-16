@@ -8,10 +8,12 @@ interface GenerateTestOptions {
   moduleName?: string
   modulesDir?: string
   pluralize?: boolean
+  /** Where `describe`/`it` come from — see `testImportSource`. Default `'vitest'`. */
+  testImport?: string
 }
 
 export async function generateTest(options: GenerateTestOptions): Promise<string[]> {
-  const { name, moduleName, modulesDir } = options
+  const { name, moduleName, modulesDir, testImport = 'vitest' } = options
   const shouldPluralize = options.pluralize ?? false
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
@@ -33,7 +35,7 @@ export async function generateTest(options: GenerateTestOptions): Promise<string
   const filePath = join(outDir, `${kebab}.test.ts`)
   await writeFileSafe(
     filePath,
-    `import { describe, it, expect, beforeEach } from 'vitest'
+    `import { describe, it, expect, beforeEach } from '${testImport}'
 import { Container } from '@forinda/kickjs'
 
 describe('${pascal}', () => {

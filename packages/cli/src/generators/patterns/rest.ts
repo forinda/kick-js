@@ -24,6 +24,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
     tokenScope,
     style,
     testHarness,
+    testImport,
     write,
   } = ctx
   const swagger = ctx.swagger ?? false
@@ -64,7 +65,15 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   if (!noTests) {
     await write(
       `__tests__/${kebab}.controller.test.ts`,
-      generateControllerTest({ pascal, kebab, plural, routePath, style, testHarness }),
+      generateControllerTest({
+        pascal,
+        kebab,
+        plural,
+        routePath,
+        style,
+        testHarness,
+        testImport,
+      }),
     )
     await write(
       `__tests__/${kebab}.repository.test.ts`,
@@ -73,6 +82,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
         kebab,
         plural,
         repoPrefix: `../${kebab}.repository`,
+        testImport,
       }),
     )
   }
