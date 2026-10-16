@@ -180,6 +180,117 @@ export const userRelations = relations(users, ({ many }) => ({
 
 `from` holds the source's key, `to` the target's. Reading a junction's own columns (a `role` on a membership, a `createdAt` on a follow) needs the junction as a table in between: `with: { memberships: { with: { project: true } } }`.
 
+## Polymorphic associations
+
+One kind of child row belonging to several kinds of parent — comments on posts, publications and podcasts — can be modelled three ways. Pick by how much the database should guarantee.
+
+| Pattern                   | Schema                                          | Database integrity                     | Read with              |
+| ------------------------- | ----------------------------------------------- | -------------------------------------- | ---------------------- |
+| Exclusive arc             | A nullable foreign key per parent, plus a CHECK | Full: FKs, cascades, exactly-one check | `one` / `many`         |
+| Junction table per parent | `post_comments`, `podcast_comments`, …          | Full: FKs, cascades                    | `many(…, { through })` |
+| Type + id columns         | `subjectType` + `subjectId` on the child        | None — no foreign key is possible      | `morphMany`            |
+
+### Exclusive arc
+
+Give the child one nullable foreign key per parent, and a [`check()`](./database/constraints.md) that exactly one is set. Every key is a real foreign key, so deletes cascade and a dangling reference is impossible; adding a parent kind is a migration that adds a column.
+
+```ts
+export const comments = table(
+  'comments',
+  {
+    id: serial().primaryKey(),
+    postId: integer().references(() => posts.id, { onDelete: 'cascade' }),
+    podcastId: integer().references(() => podcasts.id, { onDelete: 'cascade' }),
+    body: text().notNull(),
+  },
+  // SQL as written, for your dialect and casing — here Postgres with casing: 'snake_case'.
+  () => ({ oneSubject: check('comments_one_subject', 'num_nonnulls(post_id, podcast_id) = 1') }),
+)
+
+export const postRelations = relations(posts, ({ many }) => ({ comments: many(comments) }))
+export const commentRelations = relations(comments, ({ one }) => ({
+  post: one(posts, { fields: [comments.postId], references: [posts.id] }),
+  podcast: one(podcasts, { fields: [comments.podcastId], references: [podcasts.id] }),
+}))
+```
+
+On SQLite and MySQL, where `num_nonnulls` doesn't exist, add up the set keys instead: `(post_id IS NOT NULL) + (podcast_id IS NOT NULL) = 1`.
+
+### A junction table per parent
+
+Keep `comments` free of parent columns and join each parent through its own table — `post_comments (post_id, comment_id)` and so on, read with [`many(comments, { through: postComments })`](#many-to-many). Integrity holds on both sides; the price is a table per parent kind, and a unique key on `comment_id` if a comment may only have one parent.
+
+### Type and id columns: `morphMany`
+
+The Laravel `morphMany` / Django `GenericRelation` shape: the child stores which kind of parent it has and that parent's key. A new parent kind needs no migration. The database can't check the pair, though — there's no foreign key, so no cascade, and nothing stops a `subjectId` that points nowhere.
+
+```ts
+import { index, integer, relations, serial, table, text, varchar } from '@forinda/kickjs-db'
+
+export const comments = table(
+  'comments',
+  {
+    id: serial().primaryKey(),
+    subjectType: varchar(50).notNull(), // MySQL can't index a text() column without a length
+    subjectId: integer().notNull(),
+    body: text().notNull(),
+  },
+  // The lookup every morphMany read does — add it.
+  (t) => ({ subject: index('comments_subject_idx').on(t.subjectType, t.subjectId) }),
+)
+
+export const postRelations = relations(posts, ({ morphMany }) => ({
+  comments: morphMany(comments, { type: comments.subjectType, id: comments.subjectId, as: 'post' }),
+}))
+export const podcastRelations = relations(podcasts, ({ morphMany }) => ({
+  comments: morphMany(comments, {
+    type: comments.subjectType,
+    id: comments.subjectId,
+    as: 'podcast',
+  }),
+}))
+```
+
+`morphMany(target, { type, id, as, references? })` reads the target rows whose `type` column holds `as` and whose `id` column holds the source row's key. `references` names that key; it defaults to the source's primary key, and a table with a composite primary key has to name one. `as` is a value, bound as a query parameter. Casing, `.colName()`, tenancy and soft-delete apply as on any relation.
+
+It reads like any `many` — typed as an array of target rows, with `where`, `orderBy`, `limit`, `columns` and nested `with`:
+
+```ts
+const post = await db.query.posts.findFirst({
+  where: (_p, eb) => eb('id', '=', id),
+  with: { comments: { orderBy: (_c, eb) => eb.ref('id'), limit: 20 } },
+})
+// post.comments: Comment[] — only rows with subjectType 'post' and subjectId = post.id
+```
+
+The relational layer is read-only, so a comment is written with the pair set by hand:
+
+```ts
+await db.insertInto('comments').values({ subjectType: 'post', subjectId: post.id, body }).execute()
+```
+
+With no foreign key, deleting a post leaves its comments behind. Delete them in the same transaction:
+
+```ts
+await db.transaction(async (tx) => {
+  await tx
+    .deleteFrom('comments')
+    .where('subjectType', '=', 'post')
+    .where('subjectId', '=', id)
+    .execute()
+  await tx.deleteFrom('posts').where('id', '=', id).execute()
+})
+```
+
+There's no `morphOne` yet — no relation from a comment back to its subject. Load the subject by switching on `subjectType`:
+
+```ts
+const subject =
+  comment.subjectType === 'post'
+    ? await db.query.posts.findFirst({ where: (_p, eb) => eb('id', '=', comment.subjectId) })
+    : await db.query.podcasts.findFirst({ where: (_p, eb) => eb('id', '=', comment.subjectId) })
+```
+
 ## Self-references and cycles
 
 Aliases are depth-suffixed under the hood (`tasks_0`, `tasks_1`, `tasks_2`…) so self-referencing relations don't collide:

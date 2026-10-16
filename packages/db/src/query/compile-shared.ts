@@ -253,6 +253,7 @@ function buildInnerSelect(
         `${sourceAlias}.${rel.sourceColumns[i]}`,
       )
     }
+    if (rel.morph) sub = sub.where(`${innerAlias}.${rel.morph.column}`, '=', rel.morph.value)
   }
 
   sub = applyExtras(sub, innerAlias, subOptions)

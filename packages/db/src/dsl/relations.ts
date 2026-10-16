@@ -47,6 +47,20 @@ export interface RelationMany<
    * `RelationalQueryMissingInverseError` otherwise.
    */
   relationName?: string
+  /** Set by `morphMany`: a polymorphic one-to-many over a `(type, id)` column pair. */
+  morph?: MorphSpec
+}
+
+/**
+ * `morphMany(target, { type, id, as })`: the target rows whose `type` column
+ * holds `as` and whose `id` column holds the source's key (`references`, by
+ * default the source's single-column primary key).
+ */
+export interface MorphSpec {
+  type: ColumnRef
+  id: ColumnRef
+  as: string
+  references?: ColumnRef
 }
 
 export type ThroughSpec =
@@ -79,6 +93,10 @@ interface Helpers {
     target: T,
     opts?: { relationName?: string; through?: ThroughSpec },
   ) => RelationMany<T>
+  morphMany: <T extends TableDecl<string, Record<string, ColumnBuilder>>>(
+    target: T,
+    opts: MorphSpec,
+  ) => RelationMany<T>
 }
 
 /**
@@ -106,6 +124,8 @@ export function relations<
       ...(opts?.relationName !== undefined ? { relationName: opts.relationName } : {}),
       ...(opts?.through !== undefined ? { through: opts.through } : {}),
     }),
+    // A `many` with an extra predicate: typed, resolved and compiled on the same path.
+    morphMany: (target, opts) => ({ kind: 'many', target, morph: opts }),
   }
   return {
     __isRelations: true,

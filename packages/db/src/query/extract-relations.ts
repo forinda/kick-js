@@ -13,7 +13,7 @@
  *    §7 R-5.
  */
 
-import type { Relation, RelationOne, RelationsDecl, ThroughSpec } from '../dsl/relations'
+import type { MorphSpec, Relation, RelationOne, RelationsDecl, ThroughSpec } from '../dsl/relations'
 import type { ColumnRef } from '../dsl/table'
 import type { TableSnapshot } from '../snapshot/types'
 import type { ResolvedRelation, ResolvedRelations } from './relations'
@@ -84,6 +84,17 @@ export function extractRelations(
           targetColumns: rel.references.map((r) => r.__name),
           ...(rel.relationName !== undefined ? { relationName: rel.relationName } : {}),
         }
+        continue
+      }
+
+      if (rel.morph) {
+        out[sourceTable][relationName] = resolveMorph(
+          sourceTable,
+          relationName,
+          rel.target.__name,
+          rel.morph,
+          tables,
+        )
         continue
       }
 
@@ -289,5 +300,47 @@ function resolveThrough(
     sourceColumns: toSource.refColumns,
     targetColumns: toTarget.refColumns,
     through: { table: junction, sourceColumns: toSource.columns, targetColumns: toTarget.columns },
+  }
+}
+
+/**
+ * A polymorphic one-to-many: target rows whose `type` column holds `as` and
+ * whose `id` column holds the source's key. No foreign key backs it.
+ */
+function resolveMorph(
+  sourceTable: string,
+  relationName: string,
+  target: string,
+  morph: MorphSpec,
+  tables: Record<string, TableSnapshot>,
+): ResolvedRelation {
+  const fail = (problem: string) =>
+    new Error(`kickjs-db: morphMany \`${sourceTable}.${relationName}\`: ${problem}`)
+  const targetSnap = tables[target]
+  if (!targetSnap) throw fail(`the target table '${target}' is not in the schema`)
+  for (const c of [morph.type, morph.id]) {
+    if (!(c.__name in targetSnap.columns)) {
+      throw fail(`'${c.__name}' is not a column of the target table '${target}'`)
+    }
+  }
+  if (typeof morph.as !== 'string' || morph.as === '') throw fail('`as` must be a non-empty string')
+  let key = morph.references?.__name
+  if (key === undefined) {
+    const pk = Object.values(tables[sourceTable]!.columns).filter((c) => c.primaryKey)
+    if (pk.length !== 1) {
+      throw fail(
+        `'${sourceTable}' has ${pk.length === 0 ? 'no primary key' : 'a composite primary key'} — name the key column with \`references\``,
+      )
+    }
+    key = pk[0]!.name
+  } else if (!(key in tables[sourceTable]!.columns)) {
+    throw fail(`'${key}' is not a column of '${sourceTable}'`)
+  }
+  return {
+    kind: 'many',
+    target,
+    sourceColumns: [key],
+    targetColumns: [morph.id.__name],
+    morph: { column: morph.type.__name, value: morph.as },
   }
 }

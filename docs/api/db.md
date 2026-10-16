@@ -303,6 +303,16 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
 }))
 ```
 
+`morphMany(target, { type, id, as, references? })` is a polymorphic `many`: the target rows whose `type` column holds `as` and whose `id` column holds the source's key (`references`, default the source's single-column primary key). No foreign key is involved; it's typed and queried like `many`.
+
+```ts
+export const postsRelations = relations(posts, ({ morphMany }) => ({
+  comments: morphMany(comments, { type: comments.subjectType, id: comments.subjectId, as: 'post' }),
+}))
+```
+
+See [Relational Queries → Polymorphic associations](../guide/db-relational-query.md#polymorphic-associations).
+
 For multi-FK schemas, tag with `relationName: 'foo'` on both sides to disambiguate. See [Schema → Relations](../guide/database/schema.md#relations-for-db-query).
 
 ### `customType<T>()`
