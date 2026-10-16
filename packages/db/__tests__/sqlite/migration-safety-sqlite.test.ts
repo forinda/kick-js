@@ -313,6 +313,9 @@ describe('cast and numeric defaults', () => {
       meta: jsonb().notNull().default("'{}'::jsonb"),
       lang: text().notNull().default('std::string'),
       sneaky: text().notNull().default("'1'::int primary key"),
+      code: varchar(10).notNull().default("'x'::varchar(10)"),
+      amount: text().notNull().default("'1.50'::numeric(10, 2)"),
+      odd: text().notNull().default(`'a'::"my-type"`),
     })
     const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap({ t }, 'postgres')))
     expect(pg).toContain('"id" text NOT NULL DEFAULT gen_random_uuid()::text')
@@ -321,6 +324,9 @@ describe('cast and numeric defaults', () => {
     expect(pg).toContain(`"meta" jsonb NOT NULL DEFAULT '{}'::jsonb`)
     expect(pg).toContain(`"lang" text NOT NULL DEFAULT 'std::string'`)
     expect(pg).toContain(`"sneaky" text NOT NULL DEFAULT '''1''::int primary key'`)
+    expect(pg).toContain(`"code" varchar(10) NOT NULL DEFAULT 'x'::varchar(10)`)
+    expect(pg).toContain(`"amount" text NOT NULL DEFAULT '1.50'::numeric(10, 2)`)
+    expect(pg).toContain(`"odd" text NOT NULL DEFAULT 'a'::"my-type"`)
   })
 
   it('MySQL renders a boolean default on a tinyint as a number', () => {

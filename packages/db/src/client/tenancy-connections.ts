@@ -88,8 +88,10 @@ class TenantConnection implements DatabaseConnection {
   async executeQuery<R>(query: CompiledQuery): Promise<QueryResult<R>> {
     if (this.inTransaction) return this.inner.executeQuery<R>(query)
     // A query on its own: wrap it, so the local setting has a transaction to live in.
-    await this.beginBound()
+    // The setup is inside the rollback too: if it fails after BEGIN ran (an
+    // error, a cancel), the connection mustn't go back with a transaction open.
     try {
+      await this.beginBound()
       const result = await this.inner.executeQuery<R>(query)
       await this.inner.executeQuery(raw('commit'))
       return result
@@ -107,9 +109,9 @@ class TenantConnection implements DatabaseConnection {
       yield* this.inner.streamQuery<R>(query, chunkSize)
       return
     }
-    await this.beginBound()
     let committed = false
     try {
+      await this.beginBound()
       yield* this.inner.streamQuery<R>(query, chunkSize)
       await this.inner.executeQuery(raw('commit'))
       committed = true

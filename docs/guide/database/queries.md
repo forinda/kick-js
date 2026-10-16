@@ -200,7 +200,7 @@ const rows = await this.db
 
 `db.query` reads take the same as options: `timeoutMs` and `signal` (on the top level; nested `with` levels run inside it).
 
-- The rejection is a `DOMException` named `TimeoutError` (or the signal's reason), not an importable class — check `err.name`. From `db.query` it's `RelationalQueryCancelledError` with that as its `cause`.
+- A timeout rejects with a `DOMException` named `TimeoutError`, not an importable class — check `err.name`; an aborted `signal` rejects with its own reason, whichever fires first. From `db.query` it's `RelationalQueryCancelledError` with that as its `cause`.
 - Inside a transaction the query is abandoned, not cancelled: a server-side cancel would abort the whole transaction, and Postgres would turn its `COMMIT` into a `ROLLBACK`. The query finishes on the server and the transaction carries on after it.
 - A write may already have taken effect when it's cancelled — most databases can't stop one cleanly — so time out reads.
 - On SQLite there is nothing to cancel: better-sqlite3 runs each query synchronously, and on libsql or D1 a timeout only stops the wait while the query runs on.

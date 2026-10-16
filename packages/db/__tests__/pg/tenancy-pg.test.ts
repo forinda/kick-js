@@ -330,3 +330,15 @@ export const orders = table('orders', { id: serial().primaryKey(), ref: text().n
     }
   })
 })
+
+describe("'rls' tenant setup that fails", () => {
+  it('rolls back the transaction it began, so the pooled connection comes back clean', async () => {
+    // A setting name Postgres refuses: BEGIN runs, then set_config fails.
+    const broken = defineTenancy({ strategy: 'rls', setting: 'nodot', roleCheck: 'off' })
+    const db = createDbClient({ schema: {}, tenancy: broken, dialect: pgDialect({ pool }) })
+    await expect(broken.run('acme', () => sql`select 1`.execute(db.qb))).rejects.toThrow()
+    // The pool's one connection: still usable, not stuck in an aborted transaction.
+    const { rows } = await pool.query('select 1 as ok')
+    expect(rows).toEqual([{ ok: 1 }])
+  }, 30_000)
+})

@@ -527,7 +527,10 @@ function emitColumnDecl(c: ColumnSnapshot): string {
  */
 function isCast(str: string): boolean {
   const at = str.lastIndexOf('::')
-  if (at === -1 || !/^[\w".]+(\[\])?$/.test(str.slice(at + 2))) return false
+  // A type name: plain or quoted parts, an optional (n) or (p, s), array brackets.
+  const type =
+    /^(?:"(?:[^"]|"")+"|[A-Za-z_][\w$]*)(?:\.(?:"(?:[^"]|"")+"|[A-Za-z_][\w$]*))?(?:\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\))?(?:\[\])*$/
+  if (at === -1 || !type.test(str.slice(at + 2).trim())) return false
   const value = str.slice(0, at)
   return (
     /^'(?:[^'\\]|'')*'$/.test(value) ||
