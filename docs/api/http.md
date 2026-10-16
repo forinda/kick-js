@@ -232,7 +232,13 @@ class RequestContext<TBody = any, TParams = any, TQuery = any, TKeys = ContextMe
   paginate<T, TConfig extends QueryFieldConfig | undefined = undefined>(
     fetcher: (parsed: TypedParsedQuery<TConfig>) => Promise<{ data: T[]; total: number }>,
     fieldConfig?: TConfig,
-  ): Promise<PaginatedResponse<T>>
+  ): Promise<PaginatedResponse<T>> // { data, meta, links: { self, next, prev } }
+
+  paginateCursor<T, TConfig extends QueryFieldConfig | undefined = undefined>(
+    fetcher: (query: CursorQuery<TConfig>) => Promise<T[]>, // return up to limit + 1 rows
+    fieldConfig?: TConfig,
+    options?: CursorPaginateOptions<T>, // { idField?: string; cursorKey?: (row) => Record<string, CursorValue> }
+  ): Promise<CursorPaginatedResponse<T>> // { data, meta: { limit, hasNext, nextCursor }, links: { self, next } }
 
   waitUntil(promise: Promise<unknown>): void // keep work running after the response
   sse<T = unknown>(): SseHandler<T>
@@ -717,6 +723,25 @@ type QueryFieldConfig =
 interface PaginatedResponse<T = any> {
   data: T[]
   meta: { page; limit; total; totalPages; hasNext; hasPrev }
+  links: { self: string; next: string | null; prev: string | null } // path + query, no host
+}
+
+type CursorValue = string | number | boolean | null
+/** Decoded `?cursor=`: the last row's sort-field values + id. Unsigned — untrusted input. */
+type CursorPosition = Readonly<Record<string, CursorValue>>
+interface CursorQuery<TConfig extends QueryFieldConfig | undefined = undefined>
+  extends Omit<TypedParsedQuery<TConfig>, 'pagination'> {
+  cursor: CursorPosition | null // null on the first page
+  limit: number // page size — fetch limit + 1
+}
+interface CursorPaginateOptions<T = any> {
+  idField?: string // tie-breaker, default 'id'
+  cursorKey?: (row: T) => Record<string, CursorValue>
+}
+interface CursorPaginatedResponse<T = any> {
+  data: T[]
+  meta: { limit: number; hasNext: boolean; nextCursor: string | null }
+  links: { self: string; next: string | null }
 }
 
 interface QueryBuilderAdapter<TResult = any, TConfig = any> {

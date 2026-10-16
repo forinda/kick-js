@@ -195,7 +195,7 @@ export function createCatRepository() {
     async findById(id: string) {
       return store.get(id) ?? null
     },
-    // ...findAll, findPaginated, create, update, delete
+    // ...findAll, findPaginated, findAfter (cursor pages), create, update, delete
   }
 }
 

@@ -318,6 +318,20 @@ await api.get('/tasks', { query: { sort: 'created' } }) // ✗ compile error
 
 Routes without one accept a loose `Record<string, string | number | boolean | array>`.
 
+The `@ApiQueryParams` shape includes `cursor`, for routes that answer with
+`ctx.paginateCursor()`. Page through them by sending `meta.nextCursor` back as
+`query.cursor` rather than fetching `links.next` — the links carry the full
+path (`/api/v1/...`), while the client's keys are mount-relative:
+
+```ts
+let cursor: string | undefined
+do {
+  const page = await api.get('/posts', { query: { sort: '-createdAt', cursor } })
+  render(page.data) // CursorPaginatedResponse<Post> — typed
+  cursor = page.meta.nextCursor ?? undefined
+} while (cursor)
+```
+
 ## Network-free testing
 
 `createTestClient` wraps any web-standard app (a
