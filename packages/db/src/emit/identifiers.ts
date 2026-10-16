@@ -21,3 +21,31 @@ export function allowsExpressionDefault(type: string): boolean {
     base,
   )
 }
+
+/**
+ * Whether a default is one function call, arguments and all: `now()`,
+ * `floor(rand() * 10)`, `nextval('a(b'::regclass)`. The call's closing
+ * parenthesis has to end the string, so `a() + b()` isn't one; parentheses
+ * inside quoted strings don't count.
+ */
+export function isFunctionCall(str: string): boolean {
+  const open = /^[a-z_][a-z0-9_]*\s*\(/i.exec(str)
+  if (!open) return false
+  let depth = 0
+  let quoted = false
+  for (let i = open[0].length - 1; i < str.length; i++) {
+    const ch = str[i]
+    if (quoted) {
+      // '' inside a string is a quote, not its end.
+      if (ch === "'") {
+        if (str[i + 1] === "'") i++
+        else quoted = false
+      }
+      continue
+    }
+    if (ch === "'") quoted = true
+    else if (ch === '(') depth++
+    else if (ch === ')' && --depth === 0) return i === str.length - 1
+  }
+  return false
+}

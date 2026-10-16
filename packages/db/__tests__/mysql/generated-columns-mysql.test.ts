@@ -66,6 +66,7 @@ describe('defaults and serial keys on MySQL', () => {
     const empty = { version: 1 as const, dialect: 'mysql' as const, tables: {} }
     const columns = {
       token: varchar(36).default('uuid()'),
+      n: integer().notNull().default('floor(rand() * 0)'),
       doc: jsonb().notNull().default('{}'),
       body: text().notNull().default('0800'),
       path: varchar(20).notNull().default('C:\\temp'),
@@ -76,10 +77,11 @@ describe('defaults and serial keys on MySQL', () => {
     )
     await pool.query(emitMysql(diff(empty, before)))
     await pool.query('INSERT INTO d () VALUES ()')
-    const [rows] = (await pool.query('SELECT token, doc, body, path FROM d')) as [any[], unknown]
+    const [rows] = (await pool.query('SELECT token, n, doc, body, path FROM d')) as [any[], unknown]
     expect(rows[0].token).toMatch(/^[0-9a-f-]{36}$/)
     expect({ ...rows[0], token: undefined }).toEqual({
       token: undefined,
+      n: 0,
       doc: {},
       body: '0800',
       path: 'C:\\temp',

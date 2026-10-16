@@ -6,7 +6,7 @@ import type {
   SchemaSnapshot,
   TableSnapshot,
 } from '../snapshot/types'
-import { quoteIdent, quoteLiteral, allowsExpressionDefault } from './identifiers'
+import { quoteIdent, quoteLiteral, allowsExpressionDefault, isFunctionCall } from './identifiers'
 import { primaryKeyOf } from '../snapshot/name'
 
 /**
@@ -333,11 +333,7 @@ function sqliteDefault(value: unknown, type?: string): string {
 
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
   const literalOnly = type !== undefined && !allowsExpressionDefault(type)
-  if (
-    literalOnly &&
-    !/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str) &&
-    !/^(CURRENT_\w+|NULL)$/i.test(str)
-  ) {
+  if (literalOnly && !isFunctionCall(str) && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
     return quoteLiteral(str)
   }
   if (/^true$/i.test(str)) return '1'
@@ -347,6 +343,6 @@ function sqliteDefault(value: unknown, type?: string): string {
   if (/^(CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
   // A function call is an expression, which SQLite takes only in parentheses.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return `(${str})`
+  if (isFunctionCall(str)) return `(${str})`
   return quoteLiteral(str)
 }

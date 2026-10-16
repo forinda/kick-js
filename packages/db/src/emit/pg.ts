@@ -1,7 +1,7 @@
 import type { Change, ChangeSet } from '../diff/types'
 import type { ColumnSnapshot, PolicySnapshot, RoleSnapshot, TableSnapshot } from '../snapshot/types'
 import { primaryKeyOf, snapshotTableName } from '../snapshot/name'
-import { quoteIdent, quoteLiteral, allowsExpressionDefault } from './identifiers'
+import { quoteIdent, quoteLiteral, allowsExpressionDefault, isFunctionCall } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
 
 export function emitPg(changes: ChangeSet): string {
@@ -537,7 +537,7 @@ function formatDefault(value: unknown, type?: string): string {
   // SQL keywords pass through bare.
   if (/^[A-Z_]+$/.test(str)) return str // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
   // SQL function calls pass through bare: NOW(), gen_random_uuid(), etc.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
+  if (isFunctionCall(str)) return str
   if (/^-?\d+(\.\d+)?$/.test(str)) return str // numeric
   if (str === 'true' || str === 'false') return str // boolean literal
   return quoteLiteral(str)

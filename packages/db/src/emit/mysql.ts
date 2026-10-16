@@ -5,7 +5,7 @@ import type {
   IndexSnapshot,
   TableSnapshot,
 } from '../snapshot/types'
-import { allowsExpressionDefault } from './identifiers'
+import { allowsExpressionDefault, isFunctionCall } from './identifiers'
 import { primaryKeyOf } from '../snapshot/name'
 
 /** MySQL quotes identifiers with backticks, not double quotes. */
@@ -246,11 +246,7 @@ function mysqlDefault(value: unknown, type?: string): string {
 
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
   const literalOnly = type !== undefined && !allowsExpressionDefault(type)
-  if (
-    literalOnly &&
-    !/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str) &&
-    !/^(CURRENT_\w+|NULL)$/i.test(str)
-  ) {
+  if (literalOnly && !isFunctionCall(str) && !/^(CURRENT_\w+|NULL)$/i.test(str)) {
     return literal(str)
   }
   if (/^true$/i.test(str)) return '1'
@@ -263,6 +259,6 @@ function mysqlDefault(value: unknown, type?: string): string {
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
 
   // Other function calls are expressions, which MySQL takes only in parentheses.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return `(${str})`
+  if (isFunctionCall(str)) return `(${str})`
   return literal(str)
 }

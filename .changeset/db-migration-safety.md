@@ -12,5 +12,5 @@ Migrations that lost data or failed:
 - MySQL's `MODIFY COLUMN` on a serial key keeps `AUTO_INCREMENT`.
 - Rolling back migrations applied in the same second reverses them by id.
 - A kept table's foreign key to a table being dropped is dropped first, and dropped tables go child before parent; Postgres refused to drop a table still referenced.
-- A function default is parenthesised (`DEFAULT (random())`) on SQLite and MySQL, which take no bare call; MySQL's TEXT and JSON columns take a literal default as `DEFAULT ('{}')`; MySQL defaults escape backslashes.
+- A function default, nested calls included (`floor(rand() * 10)`), is recognised as an expression and parenthesised (`DEFAULT (random())`) on SQLite and MySQL, which take no bare call; MySQL's TEXT and JSON columns take a literal default as `DEFAULT ('{}')`; MySQL defaults escape backslashes.
 - `migrate` stops when the database has applied a migration no folder holds (a wrong `migrationsDir`, a deleted folder) instead of treating the rest as pending.

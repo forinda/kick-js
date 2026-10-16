@@ -24,6 +24,7 @@ import {
   sqliteAdapter,
   type AsyncSqliteDriver,
 } from '@forinda/kickjs-db/sqlite'
+import { isFunctionCall } from '../../src/emit/identifiers'
 
 const snap = (s: Record<string, unknown>, dialect: 'sqlite' | 'postgres' | 'mysql' = 'sqlite') =>
   extractSnapshot(s, dialect)
@@ -217,5 +218,34 @@ describe('expression defaults', () => {
     expect(my).toMatch(/`doc` JSON NOT NULL DEFAULT \('\{\}'\)/)
     expect(my).toMatch(/`body` TEXT NOT NULL DEFAULT \('hi'\)/)
     expect(my).toContain("`path` VARCHAR(20) NOT NULL DEFAULT 'C:\\\\temp'")
+  })
+})
+
+describe('a default that nests calls', () => {
+  it('is one function call when its parentheses balance to the end', () => {
+    for (const yes of ['now()', 'floor(rand() * 10)', "nextval('a(b'::regclass)", "f('it''s )')"]) {
+      expect(isFunctionCall(yes), yes).toBe(true)
+    }
+    for (const no of ['a() + b()', 'floor(rand()', '0800', 'std::string', "f(')')x"]) {
+      expect(isFunctionCall(no), no).toBe(false)
+    }
+  })
+
+  it('runs as an expression on SQLite, and Postgres emits it bare', () => {
+    const t = {
+      t: table('t', {
+        id: serial().primaryKey(),
+        n: integer().notNull().default('abs(random() % 1)'),
+      }),
+    }
+    const s = snap(t)
+    const sql = emitSqlite(diff(empty, s), { from: empty, to: s })
+    expect(sql).toMatch(/DEFAULT \(abs\(random\(\) % 1\)\)/)
+    const database = new Database(':memory:')
+    database.exec(sql)
+    database.exec('INSERT INTO t DEFAULT VALUES')
+    expect(database.prepare('SELECT n FROM t').get()).toEqual({ n: 0 })
+    const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap(t, 'postgres')))
+    expect(pg).toMatch(/"n" integer NOT NULL DEFAULT abs\(random\(\) % 1\)/)
   })
 })
