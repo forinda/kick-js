@@ -114,13 +114,13 @@ function field(row: object, name: string): unknown {
   return (row as Record<string, unknown>)[name]
 }
 
-/** Numbers compare by value; everything else (ISO dates included) as text. */
-function compare(a: unknown, b: unknown): number {
-  const [x, y] = [Number(a), Number(b)]
-  if (a != null && b != null && a !== '' && b !== '' && !Number.isNaN(x) && !Number.isNaN(y)) {
-    return x - y
-  }
-  return String(a ?? '').localeCompare(String(b ?? ''))
+/**
+ * A stored number compares by value (the query's value is text); everything
+ * else, ISO dates included, as text — so a string field keeps '001' ≠ '1'.
+ */
+function compare(stored: unknown, other: unknown): number {
+  if (typeof stored === 'number') return stored - Number(other)
+  return String(stored ?? '').localeCompare(String(other ?? ''))
 }
 
 /** One \`?filter=field:op:value\` — \`in\` and \`between\` take comma-separated values. */

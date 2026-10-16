@@ -229,6 +229,29 @@ describe('${pascal} repository', () => {
     expect(searched.data.map((row) => row.name)).toEqual(['Banana'])
   })
 
+  it('compares a text field as text, not as a number', async () => {
+    await repo.create({ name: '001' })
+    await repo.create({ name: '10' })
+    await repo.create({ name: '9' })
+    const pagination = { page: 1, limit: 10, offset: 0 }
+
+    const exact = await repo.findPaginated({
+      filters: [{ field: 'name', operator: 'eq', value: '1' }],
+      sort: [],
+      search: '',
+      pagination,
+    })
+    expect(exact.total).toBe(0)
+
+    const sorted = await repo.findPaginated({
+      filters: [],
+      sort: [{ field: 'name', direction: 'asc' }],
+      search: '',
+      pagination,
+    })
+    expect(sorted.data.map((row) => row.name)).toEqual(['001', '10', '9'])
+  })
+
   it('should update a ${kebab}', async () => {
     const created = await repo.create({ name: 'Original' })
     const updated = await repo.update(created.id, { name: 'Updated' })
