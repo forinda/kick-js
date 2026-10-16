@@ -44,6 +44,16 @@ function makeControllers() {
       return reply(201, { id: 'x1' })
     }
 
+    @Post('/located')
+    located(ctx: RequestContext) {
+      return reply.created({ id: 'x2' }, { location: ctx.urlFor('ReturnsController.plain') })
+    }
+
+    @Get('/with-headers')
+    withHeaders(_ctx: RequestContext) {
+      return reply(202, { queued: true }, { headers: { 'Retry-After': 5, 'X-Job': 'j1' } })
+    }
+
     @Get('/gone')
     gone(_ctx: RequestContext) {
       return reply.noContent()
@@ -175,6 +185,21 @@ for (const rt of RUNTIMES) {
       expect(res.body).toEqual({ id: 'x1' })
     })
 
+    it('reply.created(body, { location }) sets the Location header', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).post('/api/v1/r/located').expect(201)
+      expect(res.body).toEqual({ id: 'x2' })
+      expect(res.headers.location).toBe('/api/v1/r/plain')
+    })
+
+    it('reply(status, body, { headers }) sets the headers', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).get('/api/v1/r/with-headers').expect(202)
+      expect(res.body).toEqual({ queued: true })
+      expect(res.headers['retry-after']).toBe('5')
+      expect(res.headers['x-job']).toBe('j1')
+    })
+
     it('reply.ok() sends 200 with the body', async () => {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).get('/api/v1/r/ok').expect(200)
@@ -273,6 +298,15 @@ describe('return-value handlers — web entry (fetch)', () => {
     const created = await app.fetch(new Request('http://x/api/v1/r/created', { method: 'POST' }))
     expect(created.status).toBe(201)
     expect(await created.json()).toEqual({ id: 'x1' })
+
+    const located = await app.fetch(new Request('http://x/api/v1/r/located', { method: 'POST' }))
+    expect(located.status).toBe(201)
+    expect(located.headers.get('location')).toBe('/api/v1/r/plain')
+    expect(await located.json()).toEqual({ id: 'x2' })
+
+    const withHeaders = await app.fetch(new Request('http://x/api/v1/r/with-headers'))
+    expect(withHeaders.status).toBe(202)
+    expect(withHeaders.headers.get('retry-after')).toBe('5')
 
     const gone = await app.fetch(new Request('http://x/api/v1/r/gone'))
     expect(gone.status).toBe(204)

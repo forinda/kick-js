@@ -102,8 +102,19 @@ ${listBlock}
   // the todo with a real test as you implement each endpoint.
 
   describe('POST /${route}', () => {
-    // Post a valid body, assert 201 and the created ${kebab} in the response.
-    it.todo('creates a ${kebab}')
+${
+  testHarness
+    ? `    it('creates a ${kebab} and points Location at it', async () => {
+      const { agent } = await boot()
+      const res = await agent.post(BASE).send({ name: 'Test ${pascal}' })
+
+      expect(res.status).toBe(201)
+      expect(res.body).toMatchObject({ name: 'Test ${pascal}' })
+      expect(res.headers.location).toBe(\`\${BASE}/\${res.body.id}\`)
+    })`
+    : `    // Post a valid body, assert 201, the created ${kebab}, and its Location header.
+    it.todo('creates a ${kebab}')`
+}
     // Post an invalid body, assert 422 and the validation detail.
     it.todo('rejects an invalid body')
   })

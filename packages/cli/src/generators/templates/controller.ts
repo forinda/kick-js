@@ -70,7 +70,11 @@ ${apiTags}  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
 
   @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
 ${apiTags}  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
-    return reply.created(await this.${camel}Service.create(ctx.body))
+    const created = await this.${camel}Service.create(ctx.body)
+    // 201 + Location: where the new ${kebab} lives, built from the getById route.
+    return reply.created(created, {
+      location: ctx.urlFor('${pascal}Controller.getById', { id: created.id }),
+    })
   }
 
   @Patch('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })

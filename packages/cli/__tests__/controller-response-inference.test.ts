@@ -105,6 +105,10 @@ describe('generated controllers infer a real response type', () => {
     expect(controller).not.toContain('ctx.json(')
     expect(controller).toContain('ctx.problem.notFound(')
     expect(controller).toContain('return reply.created(')
+    // 201 + Location built from the mounted getById route, not a hard-coded prefix.
+    expect(controller).toContain(
+      "location: ctx.urlFor('WidgetController.getById', { id: created.id })",
+    )
     expect(controller).toContain('return reply.noContent()')
   })
 

@@ -48,7 +48,14 @@ import { moduleName } from './core/define-module'
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
 export { compileWebRoute } from './http/web/handler'
 // Return-value handler helpers — edge consumers can't import the main barrel.
-export { reply, isReply, type Reply, type InferHandlerResponse } from './http/reply'
+export {
+  reply,
+  isReply,
+  type Reply,
+  type ReplyHeaders,
+  type ReplyOptions,
+  type InferHandlerResponse,
+} from './http/reply'
 export type { SseHandler } from './http/context'
 export { waitUntil, type PlatformContext } from './http/background'
 export { runCronJobs, type CronRun } from './core/cron'

@@ -138,6 +138,8 @@ export {
   RESPOND,
   isRespondable,
   type Reply,
+  type ReplyHeaders,
+  type ReplyOptions,
   type Respondable,
   type InferHandlerResponse,
 } from './http/reply'

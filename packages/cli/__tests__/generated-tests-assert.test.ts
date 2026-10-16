@@ -52,6 +52,9 @@ describe('generated controller test', () => {
     const plainIts = source.match(/^\s+it\('/gm) ?? []
     expect(plainIts.length).toBeGreaterThan(0)
     expect(source).toContain('expect(res.status).toBe(200)')
+    // The create case is real: 201 and a Location pointing at the new record.
+    expect(source).toContain('expect(res.status).toBe(201)')
+    expect(source).toContain('expect(res.headers.location).toBe(`${BASE}/${res.body.id}`)')
   })
 
   it('exercises the module through the real pipeline', () => {

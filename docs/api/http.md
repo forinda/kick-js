@@ -257,15 +257,17 @@ ctx.problem.notFound({ detail: `User ${ctx.params.id} not found` })
 ## Returning a response
 
 ```typescript
-function reply<S extends number, T>(status: S, body: T): Reply<S, T>
+function reply<S extends number, T>(status: S, body: T, options?: ReplyOptions): Reply<S, T>
 reply.ok(body) // 200
-reply.created(body) // 201
+reply.created(body, { location?, headers? }) // 201, Location header when given
 reply.accepted(body) // 202
 reply.noContent() // 204
 
 function isReply(value: unknown): value is Reply
 function applyHandlerResult(ctx: RequestContext, result: unknown): boolean | Promise<boolean>
 ```
+
+`ReplyOptions` is `{ headers?: Record<string, string | number | readonly string[]> }`; the runtime sets them before sending, on every engine and the web entry. `reply.created(user, { location: ctx.urlFor('UsersController.get', { id: user.id }) })` answers 201 with a `Location` header.
 
 `return reply(201, body)` from a handler carries the status without touching the engine-native response; a plain `return value` sends it as 200 JSON. Prefer either to `ctx.res.status(...)` — `ctx.res` is a `FastifyReply` under Fastify, which has no `.json()`. An object implementing `[RESPOND](ctx)` (see `isRespondable`) writes its own response. `InferHandlerResponse<H>` is the type `kick typegen` infers from a handler's return.
 
