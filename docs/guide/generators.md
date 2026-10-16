@@ -198,20 +198,24 @@ The only built-in repository is `inmemory`. For persistence, scaffold a generic 
 When you generate a module, the generator automatically updates `src/modules/index.ts`. `defineModule` factories are called at the registration site — the generator emits `Module()` so bootstrap receives the module instance. If the file does not exist, it creates one:
 
 ```ts
-import type { AppModuleEntry } from '@forinda/kickjs'
-import { ProductModule } from './products'
+import { defineModules } from '@forinda/kickjs'
+import { ProductModule } from './products/product.module'
 
-export const modules: AppModuleEntry[] = [ProductModule()]
+export const modules = defineModules().mount(ProductModule())
 ```
 
-If `index.ts` already exists, it appends the import and adds the module factory call to the array:
+If `index.ts` already exists, it adds the import and a `.mount(...)` call. The file is then formatted with the project's oxfmt, as every generated file is — two mounts stay on one line, three or more go one per line:
 
 ```ts
-import type { AppModuleEntry } from '@forinda/kickjs'
-import { UserModule } from './users'
-import { ProductModule } from './products'
+import { defineModules } from '@forinda/kickjs'
+import { HelloModule } from './hello/hello.module'
+import { UserModule } from './users/user.module'
+import { ProductModule } from './products/product.module'
 
-export const modules: AppModuleEntry[] = [UserModule(), ProductModule()]
+export const modules = defineModules()
+  .mount(HelloModule())
+  .mount(UserModule())
+  .mount(ProductModule())
 ```
 
 ### Generated Module Declaration
