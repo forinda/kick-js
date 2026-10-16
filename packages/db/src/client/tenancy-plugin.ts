@@ -177,7 +177,9 @@ class TenantColumnFilter extends OperationNodeTransformer {
     }
     const at = columns.findIndex((c) => c.column.name === column)
     const check = (value: unknown) => {
-      if (value !== tenant) {
+      // The tenant id is a string; an integer / bigint tenant column's row holds a number.
+      const id = typeof value === 'number' || typeof value === 'bigint' ? String(value) : value
+      if (id !== tenant) {
         throw new Error(
           `kickjs-db: can't write ${t.table}.${column} = ${String(value)} as tenant ${tenant}`,
         )

@@ -47,6 +47,22 @@ await tenancy.run(job.data.tenantId, () => reports.build())
 
 With no tenant in effect, queries on tenanted data fail rather than return everyone's rows (under `'rls'`, the database returns nothing).
 
+## The tenant column
+
+Name it anything: `tenantKey()` marks the column, not its name. `workspaceId`, `organization_id`, a camelCase key under [`casing: 'snake_case'`](./schema.md#column-names-casing) (stored as `organization_id`), or a key renamed with [`.colName()`](./schema.md#column-col-name) all work: in queries, on insert and in the `'rls'` policy.
+
+```ts
+workspaceId: tenantKey(tenancy, uuid()),
+```
+
+**Tenant id type.** The column is `text` by default, which fits slugs and ULIDs (kick/db has no `ulid()` builder; `varchar(26)` works too). Pass another column to change it:
+
+- `tenantKey(tenancy, uuid())` for UUID tenant ids.
+- `tenantKey(tenancy, integer())` or `bigint()` for numeric ids. The tenant id stays a string (`run('42', fn)`, or a request's `tenant` of `'42'` or `{ id: 42 }`) and the database converts it. Rows read back with the number `42`, and an insert that gives the tenant as the number `42` is accepted, while any other value is refused.
+- Not `serial()`: the tenant column holds another table's id. The serial belongs on the `tenants` table.
+
+Under `'rls'` the generated policy casts the setting to the column's type (`::uuid`, `::integer`).
+
 ## Choosing a strategy
 
 | Strategy     | Isolation enforced by                  | Cost per tenant                | Dialects | Use it for                                                           |
