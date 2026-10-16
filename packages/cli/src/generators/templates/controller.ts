@@ -17,7 +17,7 @@ export function generateRestController(ctx: TemplateContext): string {
   Controller,
   Get,
   Post,
-  Put,
+  Patch,
   Delete,
   Autowired,
   ApiQueryParams,
@@ -73,7 +73,7 @@ ${apiTags}  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
     return reply.created(await this.${camel}Service.create(ctx.body))
   }
 
-  @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
+  @Patch('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
 ${apiTags}  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
     return this.${camel}Service.update(ctx.params.id, ctx.body)
   }

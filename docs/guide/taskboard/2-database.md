@@ -372,7 +372,7 @@ export const updateProjectSchema = updateSchema(Project.table, {
 export type UpdateProjectDTO = InferSchemaOutput<typeof updateProjectSchema>
 ```
 
-The controller passes them to `@Post` and `@Put` exactly as before. The decimal column brings its precision with it — `decimal(12, 2)` takes at most ten digits before the point and two after:
+The controller passes them to `@Post` and `@Patch` exactly as before. The decimal column brings its precision with it — `decimal(12, 2)` takes at most ten digits before the point and two after:
 
 ```bash
 curl -s -X POST localhost:3000/api/v1/projects \

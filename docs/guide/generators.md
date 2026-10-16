@@ -40,7 +40,7 @@ product/
   product.repository.ts             # Factory + contract (ReturnType) + DI token, one file
   dtos/
     create-product.dto.ts           # Zod schema for POST
-    update-product.dto.ts           # Zod schema for PUT
+    update-product.dto.ts           # Zod schema for PATCH
     product-response.dto.ts         # Response interface
   __tests__/
     product.controller.test.ts

@@ -125,6 +125,25 @@ describe('generated controllers infer a real response type', () => {
     }
   })
 
+  it('generates the partial update as PATCH, never PUT', () => {
+    // The update schema is all-optional, so the route is a partial update.
+    assertCliOk(runCli(fixture, ['g', 'module', 'alpha', '--pattern', 'minimal']), 'minimal')
+    assertCliOk(runCli(fixture, ['g', 'controller', 'beta']), 'controller')
+    assertCliOk(runCli(fixture, ['g', 'scaffold', 'gamma', 'title:string']), 'scaffold')
+    assertCliOk(runCli(fixture, ['g', 'module', 'delta']), 'module')
+
+    for (const path of [
+      'src/modules/alpha/alpha.controller.ts',
+      'src/controllers/beta.controller.ts',
+      'src/modules/gamma/gamma.controller.ts',
+      'src/modules/delta/delta.controller.ts',
+    ]) {
+      const src = codeOnly(readFileSync(join(fixture, path), 'utf-8'))
+      expect(src, path).toMatch(/@Patch\('\/:id'/)
+      expect(src, path).not.toMatch(/\bPut\b/)
+    }
+  })
+
   it('keeps generated controllers within the scaffold print width', () => {
     // Scaffolded projects ship a .prettierrc with printWidth: 100, so an
     // over-long line means the adopter's first `pnpm format` rewrites a file
@@ -160,7 +179,7 @@ describe('generated controllers infer a real response type', () => {
     for (const method of ['list(', 'getById(', 'create(', 'update(', 'remove(']) {
       expect(controller, `minimal controller is missing ${method}`).toContain(method)
     }
-    for (const decorator of ["@Get('/')", "@Get('/:id')", "@Post('/')", "@Put('/:id')"]) {
+    for (const decorator of ["@Get('/')", "@Get('/:id')", "@Post('/')", "@Patch('/:id')"]) {
       expect(controller).toContain(decorator)
     }
     expect(controller).toContain("@Delete('/:id')")

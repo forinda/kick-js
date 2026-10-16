@@ -130,7 +130,7 @@ export class ProjectController {
     return reply.created(await this.projectService.create(ctx.body))
   }
 
-  // update (PUT /:id) and remove (DELETE /:id) follow the same shape
+  // update (PATCH /:id) and remove (DELETE /:id) follow the same shape
 }
 ```
 

@@ -136,7 +136,7 @@ import {
   Controller,
   Get,
   Post,
-  Put,
+  Patch,
   Delete,
   Autowired,
   ApiQueryParams,
@@ -174,7 +174,7 @@ export class TaskController {
     ctx.created(result)
   }
 
-  @Put('/:id', { body: updateTaskSchema, name: 'UpdateTask' })
+  @Patch('/:id', { body: updateTaskSchema, name: 'UpdateTask' })
   @ApiTags('Task')
   async update(ctx: Ctx<KickRoutes.TaskController['update']>) {
     const result = await this.taskService.update(ctx.params.id, ctx.body)

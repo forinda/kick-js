@@ -296,7 +296,7 @@ import {
   Controller,
   Get,
   Post,
-  Put,
+  Patch,
   Delete,
   Autowired,
   ApiQueryParams,
@@ -337,7 +337,7 @@ export class ProjectController {
   }
 
   @LoadMembership
-  @Put('/:id', { body: updateProjectSchema, name: 'UpdateProject' })
+  @Patch('/:id', { body: updateProjectSchema, name: 'UpdateProject' })
   async update(ctx: Ctx<KickRoutes.ProjectController['update']>) {
     return this.projectService.update(ctx.params.id, ctx.body)
   }
@@ -556,12 +556,12 @@ describe('who can see and change a project', () => {
   it('hides a project from outsiders with a 404', async () => {
     const { outsider, url } = await scene()
     await outsider.get(url).expect(404)
-    await outsider.put(url).send({ name: 'Mine now' }).expect(404)
+    await outsider.patch(url).send({ name: 'Mine now' }).expect(404)
   })
 
   it('lets members work but only the owner delete or invite', async () => {
     const { member, owner, url } = await scene()
-    await member.put(url).send({ name: 'Launch v2' }).expect(200)
+    await member.patch(url).send({ name: 'Launch v2' }).expect(200)
     await member.delete(url).expect(403)
     await member.post(`${url}/members`).send({ email: 'outsider@example.com' }).expect(403)
     await owner.delete(url).expect(204)

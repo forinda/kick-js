@@ -115,7 +115,7 @@ ${listBlock}
     it.todo('returns 404 for an unknown id')
   })
 
-  describe('PUT /${route}/:id', () => {
+  describe('PATCH /${route}/:id', () => {
     // Create, update, assert the change is reflected on a subsequent read.
     it.todo('updates an existing ${kebab}')
   })
