@@ -80,8 +80,8 @@ describe('morphTo on SQLite', () => {
       with: { subject: true },
     })
     expect(rows.map((c) => [c.body, c.subject])).toEqual([
-      ['on a post', { id: 1, title: 'Hello', deletedAt: null }],
-      ['on a podcast', { id: 1, name: 'Episode 1' }],
+      ['on a post', { id: 1, title: 'Hello', deletedAt: null, __type: 'post' }],
+      ['on a podcast', { id: 1, name: 'Episode 1', __type: 'podcast' }],
       ['on a deleted post', null], // soft-deleted
       ['on an unknown type', null], // no target for 'video'
     ])
@@ -236,7 +236,7 @@ describe('morphTo on SQLite', () => {
       casing: 'snake_case',
     })
     const rows = await db.query.notes.findMany({ with: { subject: true } })
-    expect(rows[0]!.subject).toEqual({ id: 1, title: 'A' })
+    expect(rows[0]!.subject).toEqual({ id: 1, title: 'A', __type: 'blogPost' })
   })
 
   it("keeps 'column' tenancy on the subject", async () => {
@@ -297,6 +297,19 @@ describe('morphTo on SQLite', () => {
       result: { files: { upper: { needs: { name: true }, compute: (f) => f.name.toUpperCase() } } },
     })
     const rows = await db.query.notes.findMany({ with: { subject: true } })
-    expect(rows[0]!.subject).toEqual({ id: 1, name: 'a.txt', upper: 'A.TXT' })
+    expect(rows[0]!.subject).toEqual({ id: 1, name: 'a.txt', upper: 'A.TXT', __type: '1' })
+  })
+
+  it('tags the subject with __type, which finds its computeds even when columns leave out the type', async () => {
+    const { db } = await make()
+    const dbX = db.$extends({
+      result: { posts: { url: { needs: { id: true }, compute: (row) => `/posts/${row.id}` } } },
+    })
+    const rows = await dbX.query.comments.findMany({
+      where: (_c, eb) => eb('id', '=', 1),
+      columns: { subjectType: false },
+      with: { subject: true },
+    })
+    expect(rows[0]!.subject).toMatchObject({ __type: 'post', url: '/posts/1' })
   })
 })

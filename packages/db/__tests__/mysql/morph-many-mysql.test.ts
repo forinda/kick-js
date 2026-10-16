@@ -117,9 +117,9 @@ describe('morphMany on MySQL', () => {
       with: { subject: true },
     })
     expect(rows.map((c) => c.subject)).toEqual([
-      { id: 1, title: 'Hello' },
-      { id: 1, title: 'Hello' },
-      { id: 1, title: 'Episode 1' },
+      { id: 1, title: 'Hello', __type: 'post' },
+      { id: 1, title: 'Hello', __type: 'post' },
+      { id: 1, title: 'Episode 1', __type: "pod'cast" },
     ])
   }, 30_000)
 })

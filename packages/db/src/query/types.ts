@@ -68,8 +68,12 @@ export interface RelationMapEntry {
   kind: 'one' | 'many'
   target: string
   relationName?: string
-  /** A `morphTo`: `target` is the union of its tables. */
-  morphTo?: true
+  /**
+   * A `morphTo`: `target` is the union of its tables. The typegen records each
+   * type value's table (`{ post: 'posts', podcast: 'podcasts' }`), which types
+   * the subject's `__type`; a hand-written `true` types it as `string`.
+   */
+  morphTo?: true | Record<string, string>
 }
 
 /**
@@ -202,7 +206,7 @@ export type WithClause<DB, Rels extends Record<string, RelationMapEntry>> = {
  */
 type WithOptions<DB, E, Target extends keyof DB & string> = [E] extends [never]
   ? NestedOptions<DB, Target>
-  : E extends { morphTo: true }
+  : E extends { morphTo: true | Record<string, string> }
     ? { withDeleted?: boolean }
     : NestedOptions<DB, Target>
 
@@ -294,16 +298,31 @@ type WithSlots<DB, Table extends keyof DB & string, W> =
  * `Related[]`. Nested options recurse through `FindManyRow`.
  */
 type ResolveRelationSlot<DB, R extends RelationMapEntry, V> = R['target'] extends keyof DB & string
-  ? V extends true
-    ? R['kind'] extends 'one'
-      ? DB[R['target']] | null
-      : DB[R['target']][]
-    : V extends FindManyOptions<DB, R['target']>
+  ? R extends { morphTo: infer M }
+    ? M extends Record<string, string>
+      ? MorphToSubject<DB, M> | null
+      : (DB[R['target']] & { __type: string }) | null
+    : V extends true
       ? R['kind'] extends 'one'
-        ? FindManyRow<DB, R['target'], V> | null
-        : FindManyRow<DB, R['target'], V>[]
-      : never
+        ? DB[R['target']] | null
+        : DB[R['target']][]
+      : V extends FindManyOptions<DB, R['target']>
+        ? R['kind'] extends 'one'
+          ? FindManyRow<DB, R['target'], V> | null
+          : FindManyRow<DB, R['target'], V>[]
+        : never
   : never
+
+/**
+ * A `morphTo` subject: its table's row, tagged with the type value it was
+ * found by — `subject.__type === 'post'` narrows it to a post.
+ */
+type MorphToSubject<DB, M> =
+  M extends Record<string, string>
+    ? {
+        [V in keyof M & string]: M[V] extends keyof DB ? DB[M[V]] & { __type: V } : never
+      }[keyof M & string]
+    : never
 
 /**
  * Per-table query namespace exposed as `db.query.X`. v1 ships read

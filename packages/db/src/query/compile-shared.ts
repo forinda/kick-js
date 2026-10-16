@@ -349,7 +349,11 @@ function buildMorphTo(
           ),
         )
       : sub.selectAll()
+    // The type value it was found by, so the subject says which table it is
+    // (a parameter; Postgres needs its type to put it in JSON).
+    const typeValue = helpers.dialect === 'postgres' ? sql`${t.value}::text` : sql`${t.value}`
     sub = sub
+      .select(typeValue.as('__type'))
       .whereRef(`${alias}.${t.key}`, '=', `${sourceAlias}.${rel.sourceColumns[0]}`)
       .where(`${sourceAlias}.${morphTo.column}`, '=', t.value)
     return helpers.jsonObjectFrom(skipDeleted(sub, alias, table, options).limit(1))
