@@ -79,7 +79,7 @@ export function extractRelations(
     out[sourceTable] = {}
 
     for (const [relationName, rel] of Object.entries(relations)) {
-      if (relationName in tableSnapshot.columns) {
+      if (Object.hasOwn(tableSnapshot.columns, relationName)) {
         throw new RelationalQueryAliasCollisionError(sourceTable, relationName)
       }
 
@@ -341,7 +341,7 @@ function resolveMorph(
   const targetSnap = tables[target]
   if (!targetSnap) throw fail(`the target table '${target}' is not in the schema`)
   for (const c of [morph.type, morph.id]) {
-    if (!(c.__name in targetSnap.columns)) {
+    if (!Object.hasOwn(targetSnap.columns, c.__name)) {
       throw fail(`'${c.__name}' is not a column of the target table '${target}'`)
     }
   }
@@ -353,7 +353,7 @@ function resolveMorph(
       throw fail(`'${sourceTable}' has ${pk.problem} — name the key column with \`references\``)
     }
     key = pk
-  } else if (!(key in tables[sourceTable]!.columns)) {
+  } else if (!Object.hasOwn(tables[sourceTable]!.columns, key)) {
     throw fail(`'${key}' is not a column of '${sourceTable}'`)
   }
   return {
@@ -385,7 +385,7 @@ function resolveMorphTo(
   const fail = (problem: string) =>
     new Error(`kickjs-db: morphTo \`${sourceTable}.${relationName}\`: ${problem}`)
   for (const c of [spec.type, spec.id]) {
-    if (!(c.__name in tables[sourceTable]!.columns)) {
+    if (!Object.hasOwn(tables[sourceTable]!.columns, c.__name)) {
       throw fail(`'${c.__name}' is not a column of '${sourceTable}'`)
     }
   }

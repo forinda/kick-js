@@ -277,3 +277,14 @@ describe('compileMysql — error paths', () => {
     ).toThrow(RelationalQueryDepthError)
   })
 })
+
+describe('compileMysql — offset', () => {
+  it('an offset without a limit gets the largest LIMIT, since MySQL has no OFFSET alone', () => {
+    const { sql } = compileMysql(makeDb(), 'users', { offset: 5 }, RELATIONS, TABLES)
+    expect(sql).toMatch(/limit 18446744073709551615 offset \?$/)
+    // A limit of its own is kept.
+    expect(compileMysql(makeDb(), 'users', { offset: 5, limit: 2 }, RELATIONS, TABLES).sql).toMatch(
+      /limit \? offset \?$/,
+    )
+  })
+})

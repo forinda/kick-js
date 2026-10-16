@@ -15,6 +15,7 @@ import {
   ColumnUpdateNode,
   IdentifierNode,
   InsertQueryNode,
+  OperationNodeTransformer,
   OperatorNode,
   ReferenceNode,
   TableNode,
@@ -164,19 +165,32 @@ function withInsertDefaults(node: InsertQueryNode, m: ManagedColumns): InsertQue
 export class ManagedColumnsPlugin implements KyselyPlugin {
   constructor(private readonly managed: Map<string, ManagedColumns>) {}
 
+  /** Every update and insert in the query, including those inside a WITH. */
   transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
-    const node = args.node
-    if (UpdateQueryNode.is(node) && node.updates?.length) {
-      const m = this.managed.get(tableName(node.table) ?? '')
-      if (m) return { ...node, updates: withManaged(node.updates, m, qualifier(node.table)!) }
-      return node
-    }
-    if (InsertQueryNode.is(node)) {
-      const m = this.managed.get(tableName(node.into) ?? '')
-      if (!m) return node
-      return this.withUpsertUpdates(withInsertDefaults(node, m), m)
-    }
-    return node
+    return new ManagedColumnsTransformer(this.managed).transformNode(args.node)
+  }
+
+  async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
+    return args.result
+  }
+}
+
+class ManagedColumnsTransformer extends OperationNodeTransformer {
+  constructor(private readonly managed: Map<string, ManagedColumns>) {
+    super()
+  }
+
+  protected override transformUpdateQuery(node: UpdateQueryNode): UpdateQueryNode {
+    const out = super.transformUpdateQuery(node)
+    if (!out.updates?.length) return out
+    const m = this.managed.get(tableName(out.table) ?? '')
+    return m ? { ...out, updates: withManaged(out.updates, m, qualifier(out.table)!) } : out
+  }
+
+  protected override transformInsertQuery(node: InsertQueryNode): InsertQueryNode {
+    const out = super.transformInsertQuery(node)
+    const m = this.managed.get(tableName(out.into) ?? '')
+    return m ? this.withUpsertUpdates(withInsertDefaults(out, m), m) : out
   }
 
   /** An upsert's update branch is an update too. */
@@ -200,9 +214,5 @@ export class ManagedColumnsPlugin implements KyselyPlugin {
       }
     }
     return node
-  }
-
-  async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
-    return args.result
   }
 }

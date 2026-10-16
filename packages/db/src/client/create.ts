@@ -25,6 +25,7 @@ import { extractRelations } from '../query/extract-relations'
 import { casingPlugins, toDbName, type Casing } from '../snapshot/casing'
 import { columnNamePlugins, type ColumnNameMap } from './column-names'
 import { qualifiedTableName, unwrapTable } from '../dsl/table'
+import type { Naming } from '../extend/result-plugin'
 import { ManagedColumnsPlugin, collectManaged } from './managed'
 import type { CompileTable } from '../query/compile-shared'
 import {
@@ -200,6 +201,9 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     nextReplica: 0,
     route: opts.route,
     transactions: new AsyncLocalStorage(),
+    ...(opts.casing === 'snake_case' || columnNames.size > 0
+      ? { naming: namingOf(opts.schema, opts.casing, columnNames) }
+      : {}),
     query: {
       relations,
       tables,
@@ -246,6 +250,30 @@ function detectDialect(dialect: KyselyDialect, override?: DialectTag): KickDbCli
  * `.colName()` columns by table and column, as queries name them when this
  * plugin sees them — after `casing` has converted the rest.
  */
+/** Database names ↔ schema keys: casing, then each `.colName()`. */
+function namingOf(schema: unknown, casing: Casing | undefined, columnNames: ColumnNameMap): Naming {
+  const name = casing === 'snake_case' ? toDbName : (n: string) => n
+  const keyOf = new Map<string, string>()
+  const dbOf = new Map<string, string>()
+  for (const exported of Object.values((schema ?? {}) as Record<string, unknown>)) {
+    const t = unwrapTable(exported)
+    if (!t) continue
+    const key = qualifiedTableName(t)
+    const db = key.split('.').map(name).join('.')
+    keyOf.set(db, key)
+    dbOf.set(key, db)
+  }
+  return {
+    tableKey: (db) => keyOf.get(db) ?? db,
+    // The casing plugin turns a row's snake_case names back into keys.
+    resultName: name,
+    columnDb: (table, key) => {
+      const cased = name(key)
+      return columnNames.get(dbOf.get(table) ?? table)?.get(cased) ?? cased
+    },
+  }
+}
+
 function collectColumnNames(schema: unknown, casing: Casing | undefined): ColumnNameMap {
   const out = new Map<string, Map<string, string>>()
   const name = casing === 'snake_case' ? toDbName : (n: string) => n
