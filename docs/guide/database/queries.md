@@ -198,7 +198,14 @@ const rows = await this.db
   .execute(this.db.timeout(5_000, { signal: ctx.signal }))
 ```
 
-`db.query` reads take the same as options: `timeoutMs` and `signal`. A write may already have taken effect when it's cancelled — most databases can't stop one cleanly — so time out reads. better-sqlite3 runs each query synchronously, so there it has nothing to cancel.
+`db.query` reads take the same as options: `timeoutMs` and `signal` (on the top level; nested `with` levels run inside it).
+
+- The rejection is a `DOMException` named `TimeoutError` (or the signal's reason), not an importable class — check `err.name`. From `db.query` it's `RelationalQueryCancelledError` with that as its `cause`.
+- Inside a transaction the query is abandoned, not cancelled: a server-side cancel would abort the whole transaction, and Postgres would turn its `COMMIT` into a `ROLLBACK`. The query finishes on the server and the transaction carries on after it.
+- A write may already have taken effect when it's cancelled — most databases can't stop one cleanly — so time out reads.
+- On SQLite there is nothing to cancel: better-sqlite3 runs each query synchronously, and on libsql or D1 a timeout only stops the wait while the query runs on.
+- The timer starts when `db.timeout()` is called, so call it per query.
+- Kysely logs one line to `console.error` for each query cancelled in flight (`failed in the background after abortion`).
 
 ## Pagination with `ctx.paginate`
 

@@ -225,7 +225,7 @@ Keep `comments` free of parent columns and join each parent through its own tabl
 The Laravel `morphMany` / Django `GenericRelation` shape: the child stores which kind of parent it has and that parent's key. A new parent kind needs no migration. The database can't check the pair, though — there's no foreign key, so no cascade, and nothing stops a `subjectId` that points nowhere.
 
 ```ts
-import { index, integer, relations, serial, table, text, varchar } from '@forinda/kickjs-db'
+import { desc, index, integer, relations, serial, table, text, varchar } from '@forinda/kickjs-db'
 
 export const comments = table(
   'comments',
@@ -266,7 +266,7 @@ const post = await db.query.posts.findFirst({
 The relational layer is read-only, so a comment is written with the pair set by hand:
 
 ```ts
-await db.insertInto('comments').values({ subjectType: 'post', subjectId: post.id, body }).execute()
+await db.insertInto('comments').values({ subjectType: 'post', subjectId: postId, body }).execute()
 ```
 
 With no foreign key, deleting a post leaves its comments behind. Delete them in the same transaction:

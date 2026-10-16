@@ -152,6 +152,7 @@ interface KickDbClient<DB = RegisteredDB> {
   insertMany(table, rows, { returning?, maxParams?, atomic? }?): Promise<number | Row[]>
   findOrCreate(table, { where, create? }): Promise<{ row: Row; created: boolean }>
   refreshMaterializedView(name, { concurrently? }?): Promise<void>
+  timeout(ms, { signal? }?): { signal; inflightQueryAbortStrategy } // .execute(db.timeout(5_000)) — cancels on the server
 
   transaction<T>(fn): Promise<T>
   transaction<T>(opts: TransactionOptions, fn): Promise<T>
@@ -399,10 +400,11 @@ await db.query.users.findMany({
 | `withDeleted` | `boolean`                                | Include rows a `softDelete()` column marks deleted (this level only)         |
 | `maxDepth`    | `number`                                 | Max relational-nesting depth (default 5); `RelationalQueryDepthError` beyond |
 | `signal`      | `AbortSignal`                            | Request-scoped cancellation                                                  |
+| `timeoutMs`   | `number`                                 | Cancel once the read has run this long; with `signal`, whichever fires first |
 
 Single round trip, JSON aggregation per dialect. See [Relational Queries](../guide/db-relational-query.md).
 
-When `signal` fires, the promise rejects with `RelationalQueryCancelledError`; an already-aborted signal rejects before any round trip. Cancellation is JS-side: a query already sent keeps running on the database until it finishes. For server-side cancellation of a long PostgreSQL or MySQL query, run it through `db.qb` with Kysely's `inflightQueryAbortStrategy: 'cancel query'`.
+When `signal` fires or `timeoutMs` passes, the promise rejects with `RelationalQueryCancelledError` (its `cause` is the abort reason); an already-aborted signal rejects before any round trip. The query is cancelled on the server (Postgres `pg_cancel_backend`, MySQL `KILL QUERY`), except inside a transaction, where cancelling would abort the transaction, so it's abandoned and finishes there. `signal` and `timeoutMs` belong to the top level only. For the query builders, `db.timeout(ms, { signal? })` gives the same — see [Queries → Timeouts and cancellation](../guide/database/queries.md#timeouts-and-cancellation).
 
 ## Plugins
 
