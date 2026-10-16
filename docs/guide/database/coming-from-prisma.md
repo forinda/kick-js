@@ -65,8 +65,8 @@ export const posts = table(
       .references(() => users.id, { onDelete: 'cascade' }),
     title: varchar(200).notNull(),
     slug: varchar(200).notNull(),
-    published: boolean().notNull().default('false'),
-    views: integer().notNull().default('0'),
+    published: boolean().notNull().default(false),
+    views: integer().notNull().default(0),
     createdAt: timestamp().notNull().defaultNow(),
   },
   (t) => ({
@@ -90,6 +90,8 @@ export const postsRelations = relations(posts, ({ one }) => ({
 | `@id @default(uuid())`                    | `uuid().primaryKey().defaultRandom()`                                                                                                                    |
 | `@id @default(autoincrement())`           | `serial().primaryKey()` (`bigSerial()` for `BigInt`)                                                                                                     |
 | `@default(now())`                         | `.defaultNow()`                                                                                                                                          |
+| `@default(dbgenerated("…"))`              | `.defaultSql('…')` — SQL the database evaluates; `.default(x)` is a value                                                                                |
+| `@db.Timestamp(3)`, `@db.Time(3)`         | `timestamp({ precision: 3 })`, `time({ precision: 3 })`                                                                                                  |
 | `@updatedAt`                              | `.onUpdateNow()` — [maintained columns](./schema.md#columns-kick-db-maintains)                                                                           |
 | `@unique`, `@@unique([a, b])`             | `.unique()`, `unique(name).on(t.a, t.b)` in the third argument                                                                                           |
 | `@@index([a])`                            | `index(name).on(t.a)`                                                                                                                                    |
@@ -143,10 +145,12 @@ Two things Prisma doesn't do: the runner refuses a migration nobody marked revie
 | `delete`, `deleteMany`                          | `deleteFrom(t).where(…)`                                                                                                  |
 | `increment: 1`                                  | `.set((eb) => ({ views: eb('views', '+', 1) }))`                                                                          |
 | `upsert`                                        | `db.upsert(table, { values, target })` ([Upsert](./queries.md#upsert-and-find-or-create))                                 |
+| `createMany({ skipDuplicates: true })`          | `db.upsert(table, { values, target, update: false })` — skips rows whose key exists, returns every row as stored          |
 | `count`, `aggregate`, `groupBy`                 | `eb.fn.countAll()`, `eb.fn.sum(…)`, `.groupBy(…)`                                                                         |
 | `$queryRaw\`…\``                                | ``sql`…`.execute(db.qb)`` — values become parameters                                                                      |
 | `$transaction(async (tx) => …)`                 | `db.transaction(async (tx) => …)`                                                                                         |
 | `$transaction([a, b])`                          | the same callback form                                                                                                    |
+| `prisma.$on('query', e => …)`                   | `db.on('query', e => …)` — with `queryId`, and `txId` inside a transaction ([Events](./events-plugins.md))                |
 
 [Queries](./queries.md) and [Relational Queries](../db-relational-query.md) have the full surface.
 
