@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import {
+  type CompiledQuery,
   Kysely,
   ParseJSONResultsPlugin,
   type Dialect as KyselyDialect,
@@ -17,7 +18,7 @@ import {
   buildNestedDecoderMap,
   collectRelationKeys,
 } from './codec-plugin'
-import { wrap, type InternalContext } from './wrap'
+import { wrap, type InternalContext, transactionIds } from './wrap'
 import { tenancyPlugin } from './tenancy-plugin'
 import { tenantConnections } from './tenancy-connections'
 import { translatingDialect } from './translate-errors'
@@ -130,6 +131,15 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     plugins.push(named.last)
   }
 
+  // The query's id, and the transaction it ran in (read when the event fires,
+  // inside the query's own async context).
+  const correlation = (query: CompiledQuery): { queryId?: string; txId?: string } => {
+    const txId = transactionIds.getStore()
+    return {
+      ...(query.queryId ? { queryId: query.queryId.queryId } : {}),
+      ...(txId ? { txId } : {}),
+    }
+  }
   const makeKysely = (dialect: KyselyDialect) =>
     new Kysely<DB>({
       // Driver failures surface as typed errors (UniqueViolationError, …).
@@ -139,7 +149,11 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
         events
           ? (query) => {
               // Listeners run synchronously and may rewrite either field.
-              const e = { sql: query.sql, parameters: [...query.parameters] }
+              const e = {
+                sql: query.sql,
+                parameters: [...query.parameters],
+                queryId: query.queryId?.queryId,
+              }
               events.emit('beforeQuery', e)
               return e.sql === query.sql &&
                 e.parameters.length === query.parameters.length &&
@@ -156,7 +170,12 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
         if (!events && !bus) return
         if (event.level === 'query') {
           const durationMs = event.queryDurationMillis
-          const payload = { sql: event.query.sql, parameters: event.query.parameters, durationMs }
+          const payload = {
+            sql: event.query.sql,
+            parameters: event.query.parameters,
+            durationMs,
+            ...correlation(event.query),
+          }
           const slow = slowThreshold != null && durationMs >= slowThreshold
           events?.emit('query', payload)
           if (slow) events?.emit('slowQuery', { ...payload, thresholdMs: slowThreshold })
@@ -168,6 +187,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
             sql: event.query.sql,
             parameters: event.query.parameters,
             error: event.error,
+            ...correlation(event.query),
           }
           events?.emit('queryError', payload)
           bus?.emit('db:query-error', payload)

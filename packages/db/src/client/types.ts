@@ -14,18 +14,28 @@ export interface QueryEvent {
   sql: string
   parameters: readonly unknown[]
   durationMs: number
+  /** Kysely's id for this query: pairs `beforeQuery`, `query` and `queryError`. */
+  queryId?: string
+  /** The transaction it ran in, when it ran in one (a savepoint shares its transaction's). */
+  txId?: string
 }
 
 export interface QueryErrorEvent {
   sql: string
   parameters: readonly unknown[]
   error: unknown
+  /** Kysely's id for this query: pairs `beforeQuery`, `query` and `queryError`. */
+  queryId?: string
+  /** The transaction it ran in, when it ran in one (a savepoint shares its transaction's). */
+  txId?: string
 }
 
 export interface BeforeQueryEvent {
   /** Mutable — listeners may rewrite sql / parameters before execution. */
   sql: string
   parameters: unknown[]
+  /** Kysely's id for this query, as `query` / `queryError` report it. Absent for statements kick/db sends itself. */
+  readonly queryId?: string
 }
 
 export interface TransactionEvent {

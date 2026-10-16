@@ -88,3 +88,44 @@ describe('beforeQuery', () => {
     expect(seen).toEqual(['select "email" from "users" where "email" = ?'])
   })
 })
+
+describe('query event correlation', () => {
+  it('pairs beforeQuery, query and queryError by queryId, and tags a transaction’s queries with txId', async () => {
+    const db = await seeded()
+    const before: Array<string | undefined> = []
+    const done: Array<{ queryId?: string; txId?: string }> = []
+    const failed: Array<{ queryId?: string; txId?: string }> = []
+    db.on('beforeQuery', (e) => {
+      before.push(e.queryId)
+    })
+    db.on('query', (e) => {
+      done.push({ queryId: e.queryId, txId: e.txId })
+    })
+    db.on('queryError', (e) => {
+      failed.push({ queryId: e.queryId, txId: e.txId })
+    })
+    await db.selectFrom('users').select('id').execute()
+    expect(done.at(-1)!.txId).toBeUndefined()
+    expect(before).toContain(done.at(-1)!.queryId)
+
+    await db.transaction(async (tx) => {
+      await tx.selectFrom('users').select('id').execute()
+      await tx.selectFrom('posts').select('id').execute()
+    })
+    // begin, the two selects, commit: one transaction id, a query id each.
+    const inTx = done.filter((e) => e.txId)
+    expect(inTx).toHaveLength(4)
+    expect(inTx[0]!.txId).toMatch(/^tx\d+$/)
+    expect(new Set(inTx.map((e) => e.txId)).size).toBe(1)
+    expect(new Set(inTx.map((e) => e.queryId)).size).toBe(4)
+
+    await expect(
+      db
+        .selectFrom('nope' as 'users')
+        .selectAll()
+        .execute(),
+    ).rejects.toThrow()
+    expect(failed).toHaveLength(1)
+    expect(before).toContain(failed[0]!.queryId)
+  })
+})

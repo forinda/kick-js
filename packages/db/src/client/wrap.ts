@@ -38,6 +38,14 @@ import type { ResolvedRelations } from '../query/relations'
 import type { TableSnapshot } from '../snapshot/types'
 
 /** The transaction open on a call chain, and what waits for its commit. */
+let nextTransactionId = 0
+
+/**
+ * The open transaction's id, for query events — around the whole of it, so
+ * BEGIN and COMMIT carry it too; a savepoint runs inside and keeps it.
+ */
+export const transactionIds = new AsyncLocalStorage<string>()
+
 export interface TxFrame {
   trx: Kysely<any>
   afterCommit: Array<() => unknown>
@@ -223,6 +231,7 @@ export function wrap<DB>(
     const plan = retryPlan(opts.retry)
     for (let attempt = 1; ; attempt++) {
       const frame: TxFrame = { trx: ctx.root, afterCommit: [], readOnly: opts.readOnly }
+      const txId = `tx${++nextTransactionId}`
       ctx.events?.emit('transactionStart', { isolation })
       let result: T
       try {
@@ -232,19 +241,23 @@ export function wrap<DB>(
         let builder = ctx.root.transaction()
         if (isolation && ctx.dialect !== 'sqlite') builder = builder.setIsolationLevel(isolation)
         if (opts.readOnly) builder = builder.setAccessMode('read only')
-        result = await builder.execute(async (trx) => {
-          if (isolation && ctx.dialect === 'sqlite') {
-            // Kept as before: SQLite has no isolation levels, and says so.
-            await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`).execute(trx)
-          }
-          // For row-level security: who the policies see, for this transaction only.
-          if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
-          for (const [key, value] of Object.entries(opts.settings ?? {})) {
-            await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
-          }
-          frame.trx = trx
-          return ctx.transactions.run(frame, () => fn(childFor(trx)))
-        })
+        result = await transactionIds.run(txId, () =>
+          builder.execute(async (trx) => {
+            if (isolation && ctx.dialect === 'sqlite') {
+              // Kept as before: SQLite has no isolation levels, and says so.
+              await sql
+                .raw(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`)
+                .execute(trx)
+            }
+            // For row-level security: who the policies see, for this transaction only.
+            if (opts.role) await sql`SET LOCAL ROLE ${sql.id(opts.role)}`.execute(trx)
+            for (const [key, value] of Object.entries(opts.settings ?? {})) {
+              await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
+            }
+            frame.trx = trx
+            return ctx.transactions.run(frame, () => fn(childFor(trx)))
+          }),
+        )
         frame.done = true
       } catch (err) {
         frame.done = true
