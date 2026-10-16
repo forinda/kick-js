@@ -1,5 +1,20 @@
 # @forinda/kickjs-cli
 
+## 8.12.0
+
+### Minor Changes
+
+- [#936](https://github.com/forinda/kick-js/pull/936) [`cac8562`](https://github.com/forinda/kick-js/commit/cac85626463897b3b44e7dc6e48230aae394ad92) Thanks [@forinda](https://github.com/forinda)! - Tests written by `kick g module` and `kick g test` import from `vite-plus/test` when the project depends on `vite-plus` and not `vitest` — what `vp migrate` leaves — and from `vitest` otherwise. New guide: Using Vite+.
+
+### Patch Changes
+
+- [#936](https://github.com/forinda/kick-js/pull/936) [`5158c5c`](https://github.com/forinda/kick-js/commit/5158c5c468b9ef017f7aa91c2843735b0749d8d9) Thanks [@forinda](https://github.com/forinda)! - Generated code passes the scaffold's own oxlint and oxfmt: the `kick g module` service no longer imports `HttpException` it never uses, the Inertia template's `src/config/index.ts` no longer has a line past 100 columns, and `kick g` formats what it writes with the CLI's own oxfmt when the project has none installed (as after `vp migrate`), instead of leaving it unformatted.
+
+- [#936](https://github.com/forinda/kick-js/pull/936) [`8ddf27e`](https://github.com/forinda/kick-js/commit/8ddf27e7b1dc22538b70c8f9a0ba17510e15fcc7) Thanks [@forinda](https://github.com/forinda)! - Scaffolded apps type-check their root config files: `tsconfig.json` now includes `*.config.ts` (with `noEmit` and `allowImportingTsExtensions`, which `vitest.config.ts`'s `./vite.config.ts` import needs), so `kick typecheck` and `tsc` cover `kick.config.ts` and `vite.config.ts`. That surfaced two errors every Inertia app shipped with: `pattern: 'inertia'` was not a `ProjectPattern` (it is now, and generates `rest` modules), and the Inertia `vite.config.ts` passed RegExps to `swc.vite({ exclude })`, whose type takes strings — it now uses the equivalent globs.
+- Updated dependencies [[`7e10d99`](https://github.com/forinda/kick-js/commit/7e10d990ee620c370a29bcf0e98b44cbf37687f2), [`132febf`](https://github.com/forinda/kick-js/commit/132febf0f5409d55357b36651bf2f4fe24312477), [`58f3d0d`](https://github.com/forinda/kick-js/commit/58f3d0d691035859ffaea2591ee71e1caf23c088), [`bafd1cd`](https://github.com/forinda/kick-js/commit/bafd1cd0e32d217e1be1756d697db0aeb76d09ee), [`9739d3d`](https://github.com/forinda/kick-js/commit/9739d3d1bdab4f02c814d1190b0e33836bb42a66), [`d5b42b8`](https://github.com/forinda/kick-js/commit/d5b42b8e1bd7e48226836349292be336b1649129), [`b6522c7`](https://github.com/forinda/kick-js/commit/b6522c790d2da6fcc969de8d741be4771ea661ca), [`5dbd09f`](https://github.com/forinda/kick-js/commit/5dbd09fa018e2e3fb65322aa8af88477f669c838), [`12363f8`](https://github.com/forinda/kick-js/commit/12363f86c9e58a6016266db0793b52beab1b8030)]:
+  - @forinda/kickjs-db@8.8.0
+  - @forinda/kickjs@10.5.0
+
 ## 8.11.0
 
 ### Minor Changes
