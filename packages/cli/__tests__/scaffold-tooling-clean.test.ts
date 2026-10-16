@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-import { CLI_BIN, WORKSPACE_ROOT } from './helpers'
+import { CLI_BIN, WORKSPACE_ROOT, runCli } from './helpers'
 
 const BIN = resolve(WORKSPACE_ROOT, 'node_modules', '.bin')
 const TEMPLATES = ['rest', 'minimal', 'inertia'] as const
@@ -42,6 +42,12 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 describe.each(TEMPLATES)('kick new -t %s', (t) => {
+  it('passes oxfmt --check on src and the config files', () => {
+    const r = run(app(t), 'oxfmt', ['--check', 'src', 'kick.config.ts', 'vite.config.ts'])
+    expect(r.out).not.toContain('Format issues')
+    expect(r.code).toBe(0)
+  })
+
   it('writes a kick.config.ts whose pattern type-checks', () => {
     // Only kick.config.ts: the rest needs an install. Linking the CLI package
     // is enough to resolve defineConfig's types.
@@ -74,5 +80,33 @@ describe.each(TEMPLATES)('kick new -t %s', (t) => {
   it('type-checks the root config files with the project (tsconfig include)', () => {
     const tsconfig = JSON.parse(readFileSync(join(app(t), 'tsconfig.json'), 'utf-8'))
     expect(tsconfig.include).toContain('*.config.ts')
+  })
+})
+
+describe('kick g module (rest)', () => {
+  it('generates files oxlint passes with no warnings', () => {
+    const dir = app('rest')
+    const r = runCli(dir, ['g', 'module', 'task'])
+    expect(r.exitCode).toBe(0)
+    const lint = run(dir, 'oxlint', ['--deny-warnings', 'src/modules/task'])
+    expect(lint.out).not.toContain('warning')
+    expect(lint.code).toBe(0)
+  })
+})
+
+describe('kick g in a project without oxfmt installed', () => {
+  it("formats with the CLI's own oxfmt, as vp migrate leaves it", () => {
+    const dir = mkdtempSync(join(root, 'no-oxfmt-'))
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'p', type: 'module' }))
+    writeFileSync(
+      join(dir, '.oxfmtrc.json'),
+      readFileSync(resolve(CLI_BIN, '../../templates/base/files/_dot_oxfmtrc.json')),
+    )
+    // The second module wraps the modules-index chain past 100 columns
+    // unless a formatter runs.
+    for (const name of ['task', 'note']) expect(runCli(dir, ['g', 'module', name]).exitCode).toBe(0)
+    const r = run(dir, 'oxfmt', ['--check', 'src'])
+    expect(r.out).not.toContain('Format issues')
+    expect(r.code).toBe(0)
   })
 })

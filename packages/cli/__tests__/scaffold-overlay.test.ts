@@ -347,8 +347,8 @@ describe('the shipped layers', () => {
     expect(config).toMatch(
       /SESSION_SECRET: z\n\s+\.string\(\)\n\s+\.min\(32\)\n\s+\.default\('dev-only-/,
     )
-    expect(config).toContain(
-      "['development', 'test'].includes(process.env.NODE_ENV ?? '') || !s.startsWith('dev-only-')",
+    expect(config).toMatch(
+      /\['development', 'test'\]\.includes\(process\.env\.NODE_ENV \?\? ''\) \|\|\n\s+!s\.startsWith\('dev-only-'\)/,
     )
     expect(config).not.toContain('@kick:')
     // SEO: APP_URL fails closed like SESSION_SECRET, and is the adapter's baseUrl.

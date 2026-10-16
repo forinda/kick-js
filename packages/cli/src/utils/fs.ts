@@ -65,7 +65,7 @@ interface OxfmtModule {
 
 let _oxfmt: OxfmtModule | null | undefined = undefined
 
-/** Resolve oxfmt from the user's project; cache the result (or null) for the process. */
+/** Resolve oxfmt from the user's project, else the CLI's own; cache the result (or null) for the process. */
 async function resolveOxfmt(cwd: string): Promise<OxfmtModule | null> {
   if (_oxfmt !== undefined) return _oxfmt
   try {
@@ -73,7 +73,9 @@ async function resolveOxfmt(cwd: string): Promise<OxfmtModule | null> {
     const oxfmtPath = req.resolve('oxfmt')
     _oxfmt = (await import(oxfmtPath)) as OxfmtModule
   } catch {
-    _oxfmt = null
+    // Not installed in the project — `vp migrate` removes it, Vite+ bundles
+    // its own. Fall back to the copy the CLI depends on.
+    _oxfmt = (await import('oxfmt').catch(() => null)) as OxfmtModule | null
   }
   return _oxfmt
 }
