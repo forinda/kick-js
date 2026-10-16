@@ -195,6 +195,15 @@ describe('startTransaction()', () => {
         ran.push('nested')
       })
     })
+    // A hook queued inside a savepoint that rolls back is dropped with it.
+    await tx
+      .transaction({ nested: 'savepoint' }, async () => {
+        await tx.afterCommit(() => {
+          ran.push('rolled back')
+        })
+        throw new Error('undo')
+      })
+      .catch(() => {})
     expect(ran).toEqual([])
     await tx.commit()
     expect(ran).toEqual(['savepoint', 'nested'])

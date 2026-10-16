@@ -177,6 +177,7 @@ describe('timestamp precision on Postgres', () => {
           at: timestamp({ precision: 3 }),
           plain: timestamp(),
           zoned: timestamptz({ precision: 0 }),
+          six: timestamp({ precision: 6 }),
         }),
       },
       'postgres',
@@ -187,6 +188,8 @@ describe('timestamp precision on Postgres', () => {
     expect(t.tables.stamps.columns.at!.type).toBe('timestamp(3)')
     expect(t.tables.stamps.columns.plain!.type).toBe('timestamp')
     expect(t.tables.stamps.columns.zoned!.type).toBe('timestamptz(0)')
+    // Declared 6 — Postgres's default, told apart by format_type.
+    expect(t.tables.stamps.columns.six!.type).toBe('timestamp(6)')
     await expect(checkDrift(t, target, 'error')).resolves.toBeUndefined()
   }, 60_000)
 })

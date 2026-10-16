@@ -309,15 +309,16 @@ describe('renames and foreign keys', () => {
 describe('cast and numeric defaults', () => {
   it('Postgres passes a cast of a call, literal or array through, and quotes anything else with ::', () => {
     const t = table('t', {
-      id: text().notNull().default('gen_random_uuid()::text'),
+      id: text().notNull().defaultSql('gen_random_uuid()::text'),
       day: date().notNull().default('now()::date'),
-      tags: text().notNull().default('ARRAY[]::text[]'),
+      tags: text().notNull().defaultSql('ARRAY[]::text[]'),
       meta: jsonb().notNull().default("'{}'::jsonb"),
       lang: text().notNull().default('std::string'),
       sneaky: text().notNull().default("'1'::int primary key"),
-      code: varchar(10).notNull().default("'x'::varchar(10)"),
-      amount: text().notNull().default("'1.50'::numeric(10, 2)"),
-      odd: text().notNull().default(`'a'::"my-type"`),
+      code: varchar(10).notNull().defaultSql("'x'::varchar(10)"),
+      amount: text().notNull().defaultSql("'1.50'::numeric(10, 2)"),
+      odd: text().notNull().defaultSql(`'a'::"my-type"`),
+      looksCast: text().notNull().default("'active'::text"),
     })
     const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap({ t }, 'postgres')))
     expect(pg).toContain('"id" text NOT NULL DEFAULT gen_random_uuid()::text')
@@ -329,6 +330,8 @@ describe('cast and numeric defaults', () => {
     expect(pg).toContain(`"code" varchar(10) NOT NULL DEFAULT 'x'::varchar(10)`)
     expect(pg).toContain(`"amount" text NOT NULL DEFAULT '1.50'::numeric(10, 2)`)
     expect(pg).toContain(`"odd" text NOT NULL DEFAULT 'a'::"my-type"`)
+    // A text column's .default() is a value, even shaped like a cast.
+    expect(pg).toContain(`"looksCast" text NOT NULL DEFAULT '''active''::text'`)
   })
 
   it('MySQL renders a boolean default on a tinyint as a number', () => {
@@ -543,6 +546,20 @@ describe('triggers through a SQLite rebuild', () => {
     },
   })
 
+  it("ignores new.x in a trigger's strings and comments, and matches columns in any case", async () => {
+    const { database, a } = setup()
+    database.exec(`CREATE TRIGGER t_note AFTER UPDATE ON t BEGIN
+      -- old.gone would be a column, here it's a comment
+      INSERT INTO log VALUES ('new.gone: ' || NEW.A);
+    END;`)
+    const b = snap({
+      t: table('t', { id: serial().primaryKey(), a: text().notNull().default('x'), b: text() }),
+    })
+    const sql = emitSqlite(diff(a, b), { from: a, to: b })
+    await sqliteAdapter({ database }).applyMigrationInTx!(sql, null)
+    database.exec(`UPDATE t SET b = 'y'`)
+  })
+
   for (const kind of ['sync', 'async'] as const) {
     it(`keeps a table's trigger (${kind})`, async () => {
       const { database, a } = setup()
@@ -580,4 +597,17 @@ describe('triggers through a SQLite rebuild', () => {
       })
     })
   }
+})
+
+it('MySQL parenthesises a .defaultSql() keyword on a TEXT column', () => {
+  const my = emitMysql(
+    diff(
+      { ...empty, dialect: 'mysql' },
+      snap(
+        { t: table('t', { id: serial().primaryKey(), note: text().defaultSql('NULL') }) },
+        'mysql',
+      ),
+    ),
+  )
+  expect(my).toContain('`note` TEXT DEFAULT (NULL)')
 })

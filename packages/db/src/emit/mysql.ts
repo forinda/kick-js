@@ -248,7 +248,11 @@ function mysqlDefault(value: unknown, type?: string, sql?: boolean): string {
   // `.default()` on a text-like column is a value, whatever it looks like
   // (`'now()'` is the string now()); `.defaultSql()` is SQL on any column.
   // `.defaultSql()` is the caller's MySQL SQL, as written.
-  if (sql) return /^[A-Za-z_]+$/.test(str) || /^-?\d+(\.\d+)?$/.test(str) ? str : `(${str})`
+  // (TEXT, JSON and BLOB take any default only as an expression: DEFAULT (NULL).)
+  if (sql) {
+    const exprOnly = type !== undefined && /^(TEXT|JSON|BLOB)$/.test(mysqlType(type))
+    return !exprOnly && (/^[A-Za-z_]+$/.test(str) || /^-?\d+(\.\d+)?$/.test(str)) ? str : `(${str})`
+  }
   // A value on a text-like column, even `NULL` or `CURRENT_TIMESTAMP`.
   if (type !== undefined && !allowsExpressionDefault(type)) return literal(str)
   if (/^true$/i.test(str)) return '1'

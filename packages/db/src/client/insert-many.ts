@@ -146,7 +146,8 @@ async function readBackOnMysql<DB>(
       )
     }
   }
-  const idOf = (row: Row) => key.map((c) => `${typeof row[c]}:${String(row[c])}`).join('\u0000')
+  // By text: an input '5' for an INT key comes back as the number 5.
+  const idOf = (row: Row) => key.map((c) => String(row[c])).join('\u0000')
   const run = async () => {
     const out: Row[] = []
     for (const chunk of chunks) {
@@ -164,7 +165,16 @@ async function readBackOnMysql<DB>(
         )
       }
       const byId = new Map(stored.map((r) => [idOf(r), r]))
-      for (const r of chunk) out.push(byId.get(idOf(r)) ?? r)
+      for (const r of chunk) {
+        const row = byId.get(idOf(r))
+        // Never the input in its place: the caller asked for the rows as stored.
+        if (!row) {
+          throw new Error(
+            `kickjs-db: insertMany couldn't match an inserted row back by [${key.join(', ')}] (${idOf(r)}) — the database stored the key differently (padding, a decimal's scale); read it back yourself`,
+          )
+        }
+        out.push(row)
+      }
     }
     return out
   }

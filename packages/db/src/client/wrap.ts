@@ -405,8 +405,12 @@ export function wrap<DB>(
           await sql`SELECT set_config(${key}, ${String(value)}, true)`.execute(trx)
         }
       } catch (err) {
-        // Not handed out, so nothing else would close it.
-        await trx.rollback().execute()
+        // Not handed out, so nothing else would close it. A failing rollback
+        // mustn't hide why the setup failed.
+        await trx
+          .rollback()
+          .execute()
+          .catch(() => {})
         ctx.events?.emit('transactionRollback', { isolation, error: err })
         throw err
       }
@@ -541,7 +545,13 @@ export function wrap<DB>(
     async afterCommit(fn) {
       // Queued on the open transaction: this client's own (a startTransaction(),
       // or a child of a callback held past it), else the call chain's.
-      const frame = [shape.frame, openFrame()].find((f) => f && !f.done)
+      // The active frame when it's this client's transaction (a savepoint
+      // inside it, whose rollback drops the hook); else this client's own.
+      const active = openFrame()
+      const sameTx = active && shape.frame && active.trx === shape.frame.trx
+      const frame = (sameTx ? [active, shape.frame] : [shape.frame, active]).find(
+        (f) => f && !f.done,
+      )
       if (frame) frame.afterCommit.push(fn)
       else await fn()
     },

@@ -556,6 +556,10 @@ function formatDefault(value: unknown, type?: string, sql?: boolean): string {
   // `'active'::"status"` from the enum recreate path, `'{}'::jsonb` from
   // introspection, `now()::date` — and is passed through whatever the column
   // type is. Only those shapes: any `::` let `std::string` out as SQL.
+  // A text column's `.default()` is a value even when it looks like a cast.
+  if (type !== undefined && /^(text|varchar|char|character|citext)\b/i.test(type)) {
+    return quoteLiteral(str)
+  }
   if (isCast(str)) return str
   // Unknown type included: quoting a value that wanted to be an expression is
   // wrong but valid, while the reverse is a syntax error.
