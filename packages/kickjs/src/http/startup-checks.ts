@@ -32,7 +32,7 @@ export interface CheckContext {
 export interface StartupCheck {
   /** Names the check in logs; its messages carry their own IDs. */
   name: string
-  /** Run only when `NODE_ENV=production` — for deployment-only advice. */
+  /** Run only in production (`NODE_ENV` unset or not development/test) — deployment advice. */
   deploy?: boolean
   run(ctx: CheckContext): CheckMessage | CheckMessage[] | undefined | void
 }

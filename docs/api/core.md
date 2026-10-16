@@ -262,8 +262,8 @@ interface AdapterContext {
   fetch(request: Request): Promise<Response> // dispatch a web Request through the app
   container: Container
   server?: KickServer // http/https/http2 server (only available in afterStart)
-  env: string // NODE_ENV (default: 'development')
-  isProduction: boolean // true when NODE_ENV === 'production'
+  env: string // NODE_ENV (default: 'production')
+  isProduction: boolean // true unless NODE_ENV is 'development' or 'test' (unset = production)
 }
 
 interface AdapterHttp {
@@ -1261,7 +1261,7 @@ bootstrap({
 })
 ```
 
-A check's `run(ctx)` receives `{ options, routes, production }` — the app's options, every mounted route as `{ method, path }`, and whether `NODE_ENV` is `production` — and returns a message, a list, or nothing. Checks run in `start()` and in serverless handlers, not in `createTestApp()`.
+A check's `run(ctx)` receives `{ options, routes, production }` — the app's options, every mounted route as `{ method, path }`, and whether the app runs as production (`NODE_ENV` unset or anything but `development` / `test`) — and returns a message, a list, or nothing. Checks run in `start()` and in serverless handlers, not in `createTestApp()`.
 
 ## Graceful Shutdown
 

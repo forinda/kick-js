@@ -65,9 +65,11 @@ Any error with `name === 'ZodError'` is caught and returned as a **422** respons
 { "message": "Expected string, received number", "errors": [ ... ] }
 ```
 
+In production `errors` keeps only each issue's `field` (the dotted path) and `message`.
+
 ### 2. HttpException Instances
 
-The handler reads `err.status` and returns the appropriate status code. If validation `details` are present, they are included as `errors`. Server errors (status >= 500) are logged at the `error` level via the framework `Logger`.
+The handler reads `err.status` and returns the appropriate status code. If `details` are present, they are included as `errors` — outside production. In production they are withheld, except a 422's per-field `[{ field, message }]` list, which is kept with every other member dropped. Production means any `NODE_ENV` but `development` or `test`, unset included. Server errors (status >= 500) are logged at the `error` level via the framework `Logger`.
 
 ### 3. Unexpected Errors
 

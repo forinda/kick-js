@@ -88,8 +88,8 @@ interface AdapterContext {
   fetch(request: Request): Promise<Response> // run a Request through this app, no server needed
   container: Container // DI container
   server?: http.Server // populated only inside afterStart
-  env: string // NODE_ENV (default 'development')
-  isProduction: boolean // true when NODE_ENV === 'production'
+  env: string // NODE_ENV (default: 'production')
+  isProduction: boolean // true unless NODE_ENV is 'development' or 'test' (unset = production)
 }
 ```
 

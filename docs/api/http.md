@@ -414,6 +414,8 @@ DELETE /api/v1/things/1     405   Allow: GET, PATCH
 
 Both responses are RFC 9457 problem details (`application/problem+json`). `bootstrap({ onNotFound })` still wins over the whole thing.
 
+`errorHandler()` treats any `NODE_ENV` but `development` or `test` as production — an unset one included. Production responses carry no stack, no error summary and no `details`, except a 422's per-field `[{ field, message }]` list, which is kept with every other member dropped.
+
 ### csrf / csrfGuard
 
 Double-submit cookie CSRF protection. `csrf()` runs before routing; `csrfGuard()` is the route-scoped `(ctx, next)` form that can exempt routes by [route flag](../guide/route-flags.md).
@@ -433,7 +435,7 @@ interface CsrfOptions {
   cookieOptions?: {
     httpOnly?: boolean // default: false — the page must read the token to echo it
     sameSite?: 'strict' | 'lax' | 'none' // default: 'strict'
-    secure?: boolean // default: true in production
+    secure?: boolean // default: false only under NODE_ENV development/test
     path?: string // default: '/'
   }
 }

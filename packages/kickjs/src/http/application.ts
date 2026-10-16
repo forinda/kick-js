@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import { HttpException } from '../core/errors'
+import { isProduction } from '../core/is-production'
 import { runCronJobs } from '../core/cron'
 import https from 'node:https'
 import http2 from 'node:http2'
@@ -982,7 +983,7 @@ export class Application {
    */
   /** Build the adapter context object (shared across all hooks) */
   private adapterCtx(server?: any): AdapterContext {
-    const env = process.env.NODE_ENV ?? 'development'
+    const env = process.env.NODE_ENV ?? 'production'
     return {
       http: this.adapterHttp(),
       app: this.app,
@@ -990,7 +991,7 @@ export class Application {
       container: this.container,
       server,
       env,
-      isProduction: env === 'production',
+      isProduction: isProduction(),
     }
   }
 
