@@ -11,7 +11,7 @@ cover_image: ''
 
 Every project accumulates scripts. First it is `npm run seed`. Then `npm run db:reset`. Then `npm run seed:staging`, `npm run test:integration`, `npm run format:check`, and before you know it, your `package.json` has 18 scripts and nobody remembers what half of them do.
 
-For Vibed, our task management backend built on KickJS, I moved all operational commands into the framework's `kick.config.ts` file. The result: `kick seed`, `kick db:reset`, `kick check` -- discoverable, documented, and composable. No extra CLI framework, no commander.js, no yargs. Just a config file and the `kick` binary you already have.
+For Vibed, our task management backend built on KickJS, I moved all operational commands into the framework's `kick.config.ts` file. The result: `kick seed`, `kick db:reset`, `kick verify` -- discoverable, documented, and composable. No extra CLI framework, no commander.js, no yargs. Just a config file and the `kick` binary you already have.
 
 Here is how it works, what the seed and reset scripts look like, and why CLI-level commands beat npm scripts for developer experience.
 
@@ -61,7 +61,7 @@ export default defineConfig({
       steps: 'npx prettier --check src/',
     },
     {
-      name: 'check',
+      name: 'ci:check',
       description: 'Run typecheck + format check',
       steps: ['npx tsc --noEmit', 'npx prettier --check src/'],
       aliases: ['verify', 'ci'],
@@ -70,7 +70,7 @@ export default defineConfig({
 })
 ```
 
-Each command has a `name`, a `description` (shown when you run `kick --help`), and `steps` which can be a single string or an array of strings. Arrays execute sequentially -- if any step fails, the chain stops. The optional `aliases` field lets you run the same command under different names.
+Each command has a `name`, a `description` (shown when you run `kick --help`), and `steps` which can be a single string or an array of strings. Arrays execute sequentially -- if any step fails, the chain stops. The optional `aliases` field lets you run the same command under different names. A custom command whose name matches a built-in one (`check`, `typecheck`, `dev`, `build`, …) is skipped with a warning, which is why the last one is `ci:check` rather than `check`.
 
 After this config, your terminal gets:
 
@@ -80,9 +80,9 @@ kick db:reset      # Drop everything and reseed
 kick test          # Run Vitest
 kick format        # Format with Prettier
 kick format:check  # Check formatting
-kick check         # Typecheck + format check
-kick verify        # Same as check (alias)
-kick ci            # Same as check (alias)
+kick ci:check      # Typecheck + format check
+kick verify        # Same as ci:check (alias)
+kick ci            # Same as ci:check (alias)
 ```
 
 All discoverable with `kick --help`.
@@ -397,27 +397,25 @@ Run `kick db:reset` and 10 seconds later you have a fresh database with all the 
 
 Notice that the seed script imports from `@/modules/users/infrastructure/schemas/user.schema`. That `@/` prefix is a path alias configured in `tsconfig.json` that maps to `src/`. Standard `node` does not resolve these aliases.
 
-The solution is `tsx`, which runs TypeScript directly with ESM support. For path alias resolution, pair it with `tsconfig-paths`:
+The solution is `tsx`, which runs TypeScript directly with ESM support and resolves the `paths` aliases in `tsconfig.json` on its own:
 
 ```bash
 npx tsx src/db/seed.ts
 ```
 
-This runs the TypeScript file directly with ESM module resolution and access to environment variables from `.env`. No compilation step, no intermediate JavaScript files.
-
-For `@/` alias support, add `tsconfig-paths`:
+No compilation step, no intermediate JavaScript files, no extra alias loader. `tsx` does not read `.env` by itself, though — pass Node's `--env-file` flag when the script needs it:
 
 ```bash
-npx tsx --import tsconfig-paths/register src/db/seed.ts
+npx tsx --env-file=.env src/db/seed.ts
 ```
 
 ## The Check Command: Pre-Push Validation
 
-The `check` command runs typecheck and format check in sequence:
+The `ci:check` command runs typecheck and format check in sequence:
 
 ```typescript
 {
-  name: 'check',
+  name: 'ci:check',
   description: 'Run typecheck + format check',
   steps: ['npx tsc --noEmit', 'npx prettier --check src/'],
   aliases: ['verify', 'ci'],
@@ -463,7 +461,7 @@ No shell operator gymnastics. If a step fails, it stops.
 
 ### Coexistence with npm scripts
 
-kick commands do not replace npm scripts. The standard lifecycle scripts (`dev`, `build`, `start`, `test`) still live in `package.json` because that is where CI tools, IDEs, and other developers expect them. But operational commands (`seed`, `db:reset`, `check`) work better in kick.config.ts.
+kick commands do not replace npm scripts. The standard lifecycle scripts (`dev`, `build`, `start`, `test`) still live in `package.json` because that is where CI tools, IDEs, and other developers expect them. But operational commands (`seed`, `db:reset`, `ci:check`) work better in kick.config.ts.
 
 In Vibed, the package.json scripts are thin wrappers:
 
@@ -516,10 +514,10 @@ kick seed
 kick db:reset
 
 # Before pushing
-kick check
+kick verify
 
 # Before opening a PR
-kick test && kick check
+kick test && kick verify
 
 # After pulling changes that modified schemas
 kick db:reset

@@ -38,7 +38,7 @@ The entries in `filterable` and `sortable` are the query parameter names clients
 3. **Easy refactors** — change the allowed fields in one place
 
 ::: tip Column-object configs
-If your data layer exposes column metadata (for example a SQL query builder), you can pass an object-based `ColumnQueryFieldConfig` instead — `ctx.qs()` and `ctx.paginate()` read the allowed field names from `Object.keys()`. See [Query Parsing](/guide/query-parsing#object-based-column-metadata).
+If your data layer exposes column metadata (for example a SQL query builder), you can pass an object-based `ColumnQueryFieldConfig` instead — `ctx.qs()` and `ctx.paginate()` read the allowed field names from `Object.keys()`. See [Query Parsing](./query-parsing.md#object-based-column-metadata).
 :::
 
 ## Using the Config
@@ -93,7 +93,7 @@ async findPaginated(parsed: ParsedQuery, projectId?: string) {
 }
 ```
 
-`queryAdapter.build()` converts the parsed query into whatever shape your store understands:
+`queryAdapter` is the app's own [`QueryBuilderAdapter`](./query-parsing.md#querybuilderadapter-interface) implementation (see [below](#the-shared-queryadapter)). Its `build()` converts the parsed query into whatever shape your store understands:
 
 - `query.where` — a combined condition (filters + search + baseCondition)
 - `query.orderBy` — the resolved sort directives
@@ -125,7 +125,7 @@ This composability is why keeping the adapter at the repository layer matters �
 
 ## The Pagination Response
 
-`ctx.paginate()` wraps your fetcher's `{ data, total }` into a standardized response:
+`ctx.paginate()` wraps your fetcher's `{ data, total }` into a standardized response, sends it, and returns it:
 
 ```json
 {
@@ -137,11 +137,18 @@ This composability is why keeping the adapter at the repository layer matters �
     "totalPages": 3,
     "hasNext": true,
     "hasPrev": false
+  },
+  "links": {
+    "self": "/api/v1/tasks?page=1&limit=20",
+    "next": "/api/v1/tasks?limit=20&page=2",
+    "prev": null
   }
 }
 ```
 
-The count query runs in parallel with the data query via `Promise.all` — no wasted round trips.
+`links` repeat the current request with only `page` replaced, and are `null` at the ends. The count query runs in parallel with the data query via `Promise.all` — no wasted round trips.
+
+For feeds and infinite scroll, `ctx.paginateCursor()` serves keyset pages (`?cursor=&limit=`) with the same config — see [Cursor pagination](./query-parsing.md#cursor-pagination).
 
 ## Evolution Across Framework Versions
 
@@ -171,19 +178,26 @@ But `@ApiQueryParams` and `ctx.paginate` still only accepted ad-hoc configs. We 
 
 ## The Shared QueryAdapter
 
-Every repository uses the same query adapter instance. We extracted it to avoid duplication across modules:
+KickJS ships the parser and the `QueryBuilderAdapter` interface, not a store-specific adapter, so the app implements one and every repository shares it:
 
 ```typescript
-// src/shared/infrastructure/query-adapter.ts
-import { createQueryAdapter } from '@forinda/kickjs'
+// src/db/query-adapter.ts
+import type { ParsedQuery, QueryBuilderAdapter } from '@forinda/kickjs'
+import type { StoreQuery, StoreQueryConfig } from './store' // your store's types
 
-export const queryAdapter = createQueryAdapter()
+export const queryAdapter: QueryBuilderAdapter<StoreQuery, StoreQueryConfig> = {
+  name: 'store',
+  build(parsed: ParsedQuery, config: StoreQueryConfig): StoreQuery {
+    // filters + search + config.baseCondition → where, sort → orderBy,
+    // pagination → limit / offset
+  },
+}
 ```
 
 Repositories import the shared adapter and only add the store-specific helpers they use directly in their methods:
 
 ```typescript
-import { queryAdapter } from '@/shared/infrastructure/query-adapter'
+import { queryAdapter } from '@/db/query-adapter'
 ```
 
 ## Endpoints That Don't Need Pagination
@@ -195,13 +209,12 @@ Not every list endpoint is paginated. Workspaces and projects return small sets 
 @Get('/')
 async list(ctx: RequestContext) {
   const user = getUser(ctx)
-  const workspaces = await this.listWorkspacesUseCase.executeForUser(user.id)
-  ctx.json(successResponse(workspaces))
+  return this.listWorkspacesUseCase.executeForUser(user.id)
 }
 ```
 
-Use `ctx.paginate()` when the result set can grow unbounded (tasks, comments, notifications, activities). Use direct JSON responses for inherently small collections.
+Use `ctx.paginate()` when the result set can grow unbounded (tasks, comments, notifications, activities). Return the array directly for inherently small collections.
 
 ## Next Up
 
-In [Part 4](/guide/tutorial-realtime), we'll cover real-time features — SSE streams for live dashboards and WebSocket chat with rooms, typing indicators, and presence tracking.
+In [Part 4](./tutorial-realtime.md), we'll cover real-time features — SSE streams for live dashboards and WebSocket chat with rooms, typing indicators, and presence tracking.

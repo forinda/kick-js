@@ -4,8 +4,8 @@ _Part 5 of "Building a Task Management App with KickJS"_
 
 ---
 
-::: warning Tutorial uses dropped-in-v5 packages
-This tutorial uses `@forinda/kickjs-mailer` and `@forinda/kickjs-cron`, which are deprecated in v4 and dropped in v5. The job queue and dispatch patterns shown still apply unchanged. Replace the mailer/cron pieces with the BYO recipes in [Mailers with KickJS](./mailer.md) and [Scheduled tasks with KickJS](./cron.md) — the queue producer/consumer code reads identically against the BYO factories.
+::: info Updated for current packages
+The original build used `@forinda/kickjs-mailer` and `@forinda/kickjs-cron`, both removed since. The samples below use their replacements: `@Cron` and `KickCronAdapter()` from `@forinda/kickjs` ([Scheduled Tasks](./cron.md)), and a `MailerService` you register yourself ([Mailers](./mailer.md)). Queue handlers and dispatch are covered in full in [Background Jobs](./jobs.md).
 :::
 
 Vibed sends emails, creates notification records, logs activity, and runs scheduled cleanup — all outside the HTTP request cycle. This article covers how we structured background jobs with BullMQ and scheduled tasks with cron, and the patterns that keep them maintainable.
@@ -32,26 +32,24 @@ HTTP Request → Use Case → Queue (Redis/BullMQ) → Processor → Side Effect
 
 Three queue processors handle different concerns:
 
-| Queue           | Processor             | Jobs                                                                                                              |
-| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `email`         | EmailProcessor        | send-welcome, send-task-assigned, send-mentioned, send-overdue-reminder, send-workspace-invite, send-daily-digest |
-| `notifications` | NotificationProcessor | create-notification                                                                                               |
-| `activity`      | ActivityProcessor     | log-activity                                                                                                      |
+| Queue           | Processor             | Jobs                                                                                                                    |
+| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `email`         | EmailProcessor        | send-welcome-email, send-task-assigned, send-mentioned, send-overdue-reminder, send-workspace-invite, send-daily-digest |
+| `notifications` | NotificationProcessor | create-notification                                                                                                     |
+| `activity`      | ActivityProcessor     | log-activity                                                                                                            |
 
 ## Queue Processor Pattern
 
-Each processor is a `@Service()` class decorated with `@Job(queueName)`. Individual methods are decorated with `@Process(jobName)`:
+Each processor is a class decorated with `@Job(queueName)` — which also registers it as a DI singleton, so no `@Service()` is needed. Individual methods are decorated with `@Process(jobName)`:
 
 ```typescript
-import { Service, Logger, Autowired } from '@forinda/kickjs'
-import { Job, Process } from '@forinda/kickjs-queue'
+import { Autowired, Job, Process } from '@forinda/kickjs'
 import type { Job as BullMQJob } from 'bullmq'
-import { MAILER, type MailerService } from '@forinda/kickjs-mailer'
+import { MailerService } from '@/services/mailer.service'
 
-@Service()
 @Job('email')
 export class EmailProcessor {
-  @Autowired(MAILER) private mailer!: MailerService
+  @Autowired() private mailer!: MailerService
 
   @Process('send-welcome-email')
   async sendWelcome(job: BullMQJob<{ email: string; firstName: string }>) {
@@ -75,23 +73,25 @@ export class EmailProcessor {
 }
 ```
 
-The `@Autowired(MAILER)` injects the mailer service — which is either `ResendMailProvider` in production or `ConsoleProvider` in development (logs emails to stdout instead of sending them).
+`@Autowired()` injects the mailer service — a real provider in production, or a console mailer in development that logs emails to stdout instead of sending them (see [Email Provider Strategy](#email-provider-strategy)).
 
 ## Dispatching Jobs
 
-Use cases dispatch jobs via the `QueueService`:
+Use cases dispatch jobs through the `JOB_DISPATCHER` token, which `QueueAdapter` binds — the code never names BullMQ:
 
 ```typescript
+import { Inject, JOB_DISPATCHER, type JobDispatcher } from '@forinda/kickjs'
+
 // In a use case constructor
-@Inject(QUEUE_MANAGER) private queueService: QueueService
+@Inject(JOB_DISPATCHER) private jobs: JobDispatcher
 
 // Dispatching
-await this.queueService.add('email', 'send-welcome-email', {
+await this.jobs.dispatch('email', 'send-welcome-email', {
   email: user.email,
   firstName: user.firstName,
 })
 
-await this.queueService.add('notifications', 'create-notification', {
+await this.jobs.dispatch('notifications', 'create-notification', {
   recipientId: mentionedUserId,
   type: 'mentioned',
   title: `You were mentioned in ${task.key}`,
@@ -104,32 +104,35 @@ Jobs are typed via the `BullMQJob<T>` generic on the processor method — but th
 
 ## Queue Module: The No-Routes Module
 
-The queue module has no HTTP endpoints. It exists only to register processor classes in the DI container:
+The queue module has no HTTP endpoints. It exists only to load the processor and cron classes:
 
 ```typescript
-export class QueueModule implements AppModule {
-  register(_container: Container): void {
-    // No manual registration — QueueAdapter auto-registers @Job classes
-  }
+import { defineModule } from '@forinda/kickjs'
 
-  routes(): ModuleRoutes | null {
-    return null // No HTTP routes
-  }
-}
+// Eagerly load every file so @Job / @Process / @Cron classes register
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })
+
+export const QueueModule = defineModule({
+  name: 'QueueModule',
+  build: () => ({
+    routes: () => null, // No HTTP routes — and no register(): @Job classes register themselves
+  }),
+})
 ```
 
-The `import.meta.glob` in the module index eagerly loads processor files so `@Job()` and `@Process()` decorators register before the queue adapter starts consuming.
+The `import.meta.glob` eagerly loads processor files so `@Job()` and `@Process()` decorators register before the queue adapter starts consuming.
 
 ## Cron Jobs
 
-Scheduled tasks use `@forinda/kickjs-cron`. Unlike queue processors, cron jobs are NOT registered via a module — they're passed directly to the `CronAdapter`:
+Scheduled tasks use `@Cron` from `@forinda/kickjs`. Like queue processors, the cron classes are `@Service()`s loaded by a module (the queue module's glob picks them up); one `KickCronAdapter()` schedules every `@Cron` method it finds:
+
+<PmCommand add="croner" />
 
 ```typescript
-// config/adapters.ts
-CronAdapter({
-  services: [TaskCronJobs, CleanupCronJobs, HealthCheckCronJobs, DigestCronJobs, PresenceCronJobs],
-  enabled: true,
-})
+// src/config/adapters.ts
+import { KickCronAdapter } from '@forinda/kickjs'
+
+KickCronAdapter()
 ```
 
 ### Overdue Task Reminders (Daily at 9am)
@@ -141,7 +144,7 @@ The most complex cron job queries for overdue tasks, looks up each task's assign
 export class TaskCronJobs {
   constructor(
     @Inject(TASK_REPOSITORY) private taskRepo: TaskRepository,
-    @Inject(QUEUE_MANAGER) private queueService: QueueService,
+    @Inject(JOB_DISPATCHER) private jobs: JobDispatcher,
   ) {}
 
   @Cron('0 9 * * *', { description: 'Send overdue task reminders', timezone: 'UTC' })
@@ -154,7 +157,7 @@ export class TaskCronJobs {
       const assignees = await this.taskRepo.findAssignees(task.id)
 
       for (const assignee of assignees) {
-        await this.queueService.add('email', 'send-overdue-reminder', {
+        await this.jobs.dispatch('email', 'send-overdue-reminder', {
           email: assignee.email,
           taskKey: task.key,
           taskTitle: task.title,
@@ -206,48 +209,57 @@ async healthCheck() {
 }
 ```
 
-The health check delegates the connectivity probe to a repository `ping()` — a lightweight round-trip (e.g. `SELECT 1` on SQL, a `ping` command on the driver) that confirms the database is reachable.
+The health check delegates the connectivity probe to a repository `ping()` — a lightweight round-trip (e.g. `SELECT 1` on SQL, a `ping` command on the driver) that confirms the database is reachable. (`queueService` here is `QueueService`, injected with `@Inject(QUEUE_MANAGER)` from `@forinda/kickjs-queue`.)
+
+::: tip Prefer readiness checks to a health cron
+`QueueAdapter` already reports to `/health/ready` (it PINGs Redis), and any adapter can add its own probe with `onHealthCheck` — see [Adapters → Health check](./adapters.md#health-check-adapter). A cron that only logs is useful for a trend; a load balancer reads `/health/ready`.
+:::
 
 ## Adapter Ordering Matters
 
-The adapter array in `config/adapters.ts` runs `beforeStart()` in order. Dependencies must come first:
+The adapter array in `src/config/adapters.ts` runs `beforeStart()` in order (unless an adapter declares `dependsOn`). Dependencies must come first:
 
 ```typescript
 export const adapters = [
-  dbAdapter,                // 1. Database — everything depends on this
-  wsAdapter,                // 2. WebSocket — before DevTools
-  MailerAdapter({...}), // 3. Email — before queue (processors need MAILER)
-  queueAdapter,             // 4. Queues — after Redis, Mailer
-  CronAdapter({...}),   // 5. Cron — after queue (cron jobs dispatch to queues)
-  DevToolsAdapter({     // 6. DevTools — after ws, queue (monitors them)
+  dbAdapter, // 1. Database — everything depends on this
+  wsAdapter, // 2. WebSocket — before DevTools
+  queueAdapter, // 3. Queues — binds JOB_DISPATCHER / QUEUE_MANAGER
+  KickCronAdapter(), // 4. Cron — starts in afterStart, once every adapter is ready
+  DevToolsAdapter({ // 5. DevTools — after ws, queue (monitors them)
     adapters: [wsAdapter, queueAdapter],
   }),
-  SwaggerAdapter({...}),// 7. Swagger — last (reads all routes)
+  SwaggerAdapter({...}), // 6. Swagger — last (reads all routes)
 ]
 ```
 
-If you put `CronAdapter` before `QueueAdapter`, the overdue reminders cron will fail because `QUEUE_MANAGER` isn't registered yet. The database adapter comes first because the cron jobs' repositories depend on it.
+The mailer is no longer an adapter — it's a plugin (`bootstrap({ plugins })`), registered before any adapter starts. `KickCronAdapter` schedules jobs in `afterStart`, after every adapter's `beforeStart` has run, so the first tick always finds `JOB_DISPATCHER` bound. The database adapter comes first because the cron jobs' repositories depend on it.
 
 ## Email Provider Strategy
 
-Development uses `ConsoleProvider` which logs emails to stdout:
+The mailer is a plugin that binds `MailerService` in the container ([Mailers](./mailer.md) has the full recipe). It picks the provider by environment — a console mailer in development, a real one in production:
 
 ```typescript
-MailerAdapter({
-  provider: new ConsoleProvider(),
-  defaultFrom: { name: getEnv('MAIL_FROM_NAME'), address: getEnv('MAIL_FROM_EMAIL') },
-})
-```
+// src/plugins/mailer.plugin.ts
+import { definePlugin, getEnv } from '@forinda/kickjs'
+// Your app's own factories: an SMTP mailer, and one that logs emails to stdout.
+import { MailerService, buildMailer, buildConsoleMailer } from '@/services/mailer.service'
 
-For production, swap to Resend:
+const isDev = ['development', 'test'].includes(getEnv('NODE_ENV'))
 
-```typescript
-MailerAdapter({
-  provider:
-    getEnv('NODE_ENV') === 'production'
-      ? new ResendMailProvider(getEnv('RESEND_API_KEY'))
-      : new ConsoleProvider(),
-  defaultFrom: { name: getEnv('MAIL_FROM_NAME'), address: getEnv('MAIL_FROM_EMAIL') },
+export const MailerPlugin = definePlugin({
+  name: 'MailerPlugin',
+  build: () => ({
+    register(container) {
+      container.registerInstance(
+        MailerService,
+        // Only development and test log; anything else, including an unset
+        // NODE_ENV, sends for real.
+        isDev
+          ? buildConsoleMailer()
+          : buildMailer({ smtpUrl: getEnv('SMTP_URL'), defaultFrom: getEnv('MAIL_FROM_EMAIL') }),
+      )
+    },
+  }),
 })
 ```
 

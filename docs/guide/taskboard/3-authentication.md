@@ -112,6 +112,8 @@ export const LoadUser = defineHttpContextDecorator({
   key: 'user',
   deps: { db: APP_DB },
   skipWhen: 'auth.public',
+  // Reject signed-out requests before body validation, so they get 401, not 422.
+  beforeValidation: true,
   resolve: async (ctx, { db }) => {
     const userId = ctx.session?.data.userId as string | undefined
     const user = userId
@@ -129,7 +131,7 @@ export const LoadUser = defineHttpContextDecorator({
 
 - **`ContextMeta`** declares what `ctx.get('user')` holds, once, for the whole app.
 - **`Public`** is a fact about a route — "no sign-in needed". It does nothing by itself.
-- **`LoadUser`** is a contributor: it runs before the handler, reads the user id from the session, loads the user and puts it on the context — or answers `401`. `skipWhen: 'auth.public'` connects it to the flag: routes marked `@Public` never reach `resolve`.
+- **`LoadUser`** is a contributor: it runs before the handler, reads the user id from the session, loads the user and puts it on the context — or answers `401`. `skipWhen: 'auth.public'` connects it to the flag: routes marked `@Public` never reach `resolve`. `beforeValidation: true` runs it as soon as the route matches, ahead of body validation — it reads only the session, never the payload ([Running before validation](../context-decorators.md#running-before-validation-beforevalidation)).
 
 The user is loaded from the database on every request rather than copied into the session. A deleted account stops working at once, and a renamed one shows its new name.
 
@@ -198,7 +200,6 @@ Register `LoadUser` for every route in `src/index.ts`, which now takes the list 
 import 'reflect-metadata'
 import './config'
 import { bootstrap, expressRuntime } from '@forinda/kickjs'
-import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { kickDbAdapter } from '@forinda/kickjs-db'
 import { migrationAdapter } from './db/client'
 import { modules } from './modules'
@@ -209,7 +210,7 @@ export const app = await bootstrap({
   modules,
   runtime: expressRuntime(),
   adapters: [
-    DevToolsAdapter(),
+    ...(__KICKJS_DEVTOOLS__ ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()] : []),
     kickDbAdapter({
       migrationAdapter,
       migrationsDir: 'db/migrations',
@@ -312,6 +313,7 @@ import {
   Autowired,
   Controller,
   Get,
+  getEnv,
   Middleware,
   Post,
   rateLimitGuard,
@@ -420,9 +422,7 @@ curl -s -b jar localhost:3000/api/v1/auth/me
 # {"status":401,"detail":"Sign in first","type":"about:blank","title":"Unauthorized"}
 ```
 
-::: warning Validation runs before the user is loaded
-Body validation runs before contributors ([Authorization → ordering](../authorization.md#when-to-use-what)), so a signed-out request with an invalid body gets `422`, not `401`. Don't rely on the status code alone to tell "signed out" from "bad input" in a client — a request with a valid body still gets the `401`.
-:::
+Because `LoadUser` runs before validation, a signed-out request gets `401` even when its body is invalid — an anonymous caller never learns what the schema expects.
 
 ## Testing signed in
 
@@ -452,7 +452,7 @@ export async function testApp() {
     modules: [AuthModule(), ProjectModule(), TaskModule()],
     middlewares,
     contributors: [LoadUser.registration],
-    overrides: [[APP_DB, createTestDb()]],
+    overrides: [[APP_DB, await createTestDb()]],
   })
   const handler = app.handle.bind(app)
   const agent = () => request.agent(handler)

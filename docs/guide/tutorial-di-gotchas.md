@@ -12,6 +12,10 @@ I spent two days debugging a problem that boiled down to this: decorating a clas
 
 This article covers what I learned building queue processors for Vibed, a task management backend built with KickJS. The lessons apply to any decorator-based DI system in TypeScript -- NestJS, InversifyJS, tsyringe, or custom implementations.
 
+::: info Written against KickJS 1.2.x
+This is a debugging story from KickJS 1.2.x. Today `@Service()`, `@Repository()`, `@Controller()` and the other class decorators queue a container registration when the class is defined and replay it after every `Container.reset()`, and an HMR reload shuts the previous app's adapters down and starts fresh ones. The failure below no longer happens; the lessons about registration paths still apply. For current behavior see [Dependency Injection](./dependency-injection.md) and [HMR](./hmr.md).
+:::
+
 ## The Setup: Queue Processors That Worked on Restart but Broke on Cold Boot
 
 Vibed uses BullMQ for background job processing. Email notifications, activity logging, and push notifications each have a dedicated processor class decorated with `@Job()` and `@Service()`:
@@ -81,7 +85,7 @@ Jobs started piling up in the queue. Nothing was processing them.
 
 ## The Root Cause: Decorators Set Metadata, They Don't Register
 
-`@Service()` marks a class as injectable — it does not register it in the container by itself. Registration happens later when another component (like `buildRoutes()` or an adapter) discovers the class and registers it. This is a common pattern in decorator-based DI systems.
+In KickJS 1.2.x, `@Service()` marked a class as injectable — it did not register it in the container by itself. Registration happened later when another component (like `buildRoutes()` or an adapter) discovers the class and registers it. This is a common pattern in decorator-based DI systems.
 
 For controllers, `buildRoutes(TasksController)` discovers and registers the class. For repositories, the module's `register()` method explicitly binds the token:
 
@@ -159,7 +163,7 @@ export class QueueModule implements AppModule {
 The cold boot problem was solved, but HMR still broke processors. KickJS v1.2.7 addressed this by making the container and adapters HMR-aware:
 
 - **String-keyed registration persistence** — registered classes survive container resets using name-based keys instead of object identity, so classes re-created by HMR are matched to their previous bindings.
-- **Adapter reset hooks** — adapters like `QueueAdapter` are notified after a container reset and re-register their managed classes with the fresh class identities.
+- **Adapter reset hooks** — adapters like `QueueAdapter` were notified after a container reset and re-registered their managed classes with the fresh class identities. (Current releases go further: every reload runs the previous app's `shutdown()` and mounts the adapters again, so workers are recreated against the new classes.)
 
 The result: HMR re-evaluates your processor file, the adapter picks up the new class, and workers continue processing without interruption.
 
@@ -213,13 +217,13 @@ When decorators fail, when timing is wrong, when framework magic does not fire -
 
 For every new module in Vibed, I follow this checklist:
 
-1. **Controllers and services with `@Autowired()`**: These resolve by class type. `buildRoutes()` handles registration. No manual step needed.
+1. **Controllers and services with `@Autowired()`**: These resolve by class type. The `@Service()` / `@Controller()` decorators register them. No manual step needed.
 
 2. **Repositories with `@Inject(TOKEN)` in use case constructors**: Register the factory in the module's `register()` method. Always.
 
 3. **Queue processors with `@Job()`**: Side-effect import in the module file, let `QueueAdapter` auto-register. Comment why the import exists.
 
-4. **Framework services (mailer, queue manager)**: Use constructor `@Inject(SYMBOL)` or `@Autowired(SYMBOL)`. These are registered by the adapter, not by my code.
+4. **Framework services (mailer, queue manager)**: Use constructor `@Inject(TOKEN)` or `@Autowired(TOKEN)` with the token the adapter exports (`QUEUE_MANAGER`, your own `createToken` constant). These are registered by the adapter, not by my code.
 
 5. **Test from cold boot**: After adding any new DI binding, restart the server and verify.
 

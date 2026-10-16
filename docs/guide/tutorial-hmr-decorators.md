@@ -20,10 +20,14 @@ When you run `kick dev` (or any Vite-based dev server), Vite watches your source
 
 1. The changed file is re-executed. All top-level code runs again.
 2. Decorator functions execute again on the new class objects.
-3. `Container.reset()` is called to clear all DI bindings.
-4. `app.rebuild()` re-mounts routes and re-initializes adapters.
+3. The previous app is shut down — every adapter's `shutdown()` runs — and `Container.reset()` clears all DI bindings.
+4. A fresh application is built from the `bootstrap()` options, re-mounting routes and starting the adapters again.
 
 Steps 1 and 2 sound harmless. Steps 3 and 4 are where things break.
+
+::: info Written against KickJS 1.2.x
+The problems below are from KickJS 1.2.x, when a reload re-mounted the app with `app.rebuild()` and kept the old adapter instances running. Current releases replay decorated classes after `Container.reset()` and tear the previous app's adapters down on every reload, so most of the breakage described here no longer happens. See the [HMR guide](./hmr.md) for the current lifecycle.
+:::
 
 ## Problem 1: Class Identity
 
@@ -48,7 +52,7 @@ export class TasksController {
   async create(ctx: RequestContext) {
     const user = ctx.get('user')
     const result = await this.createTaskUseCase.execute(ctx.params.projectId, user.id, ctx.body)
-    ctx.created(successResponse(result, 'Task created'))
+    return reply.created(result)
   }
 }
 ```
@@ -164,7 +168,9 @@ No binding found for: EmailProcessor
 
 The good news: workers from the initial cold boot continue running. BullMQ workers are standalone processes that hold references to the processor instances created at startup. They do not go through the DI container on every job. So jobs keep processing even though the container is confused.
 
-The bad news: if you restart the QueueAdapter (which `app.rebuild()` sometimes does), it tries to create new workers with the new class, fails to resolve them, and now nothing processes jobs until a full restart.
+The bad news: if you restart the QueueAdapter (which `app.rebuild()` sometimes did), it tries to create new workers with the new class, fails to resolve them, and now nothing processes jobs until a full restart.
+
+Current releases close the old workers in the adapter's `shutdown()` on every reload and create new ones against the reloaded classes, so neither the leftover cold-boot workers nor the error remain.
 
 ## The allRegistrations Map Solution (v1.2.7)
 
@@ -200,11 +206,11 @@ This means controllers, services, and repositories survive HMR seamlessly. Queue
 
 ## What Still Needs a Full Restart
 
-Not everything survives HMR, even with the allRegistrations fix. Here is the practical list from Vibed:
+Not everything survives HMR, even with the allRegistrations fix. Here is the practical list from Vibed on 1.2.x. Current releases rebuild the app and its adapters from the re-run `bootstrap()` on each reload, so these changes usually apply on save now — restart if one does not:
 
 ### Adapter configuration changes
 
-The adapters are created once in `config/adapters.ts` and `app.rebuild()` reuses the old adapter instances. If you change the Redis connection URL, the JWT secret, or the queue concurrency setting, the old values persist until a full restart.
+In 1.2.x the adapters were created once in `config/adapters.ts` and `app.rebuild()` reused the old adapter instances. If you change the Redis connection URL, the JWT secret, or the queue concurrency setting, the old values persist until a full restart.
 
 ```typescript
 // src/config/adapters.ts — changes here need a restart
@@ -274,7 +280,7 @@ When something breaks after a save, ask: "Did I change module code or adapter co
 
 ### 3. Use @Autowired() for property injection instead of constructor @Inject()
 
-`@Autowired()` resolves by class type, which survives HMR better because the framework can match by class name as a fallback. `@Inject(TOKEN)` resolves by Symbol identity, which is more precise but more fragile during HMR -- the token object might be the same (Symbols are file-scoped singletons), but the factory it points to might reference old class identities.
+`@Autowired()` resolves by class type, which survives HMR better because the framework can match by class name as a fallback. `@Inject(TOKEN)` resolves by token identity, which is more precise but more fragile during HMR -- the token object might be the same (tokens are module-scoped constants), but the factory it points to might reference old class identities.
 
 In controllers, always use `@Autowired()`:
 
@@ -331,9 +337,9 @@ No binding found for: EmailProcessor
 No binding found for: NotificationProcessor
 ```
 
-These are cosmetic. The workers from cold boot are still running. Jobs are still processing. The error means the _new_ class object could not be resolved, but the _old_ instance is still alive in the BullMQ worker closure.
+On 1.2.x these were cosmetic. The workers from cold boot were still running and jobs were still processing. The error meant the _new_ class object could not be resolved, but the _old_ instance was still alive in the BullMQ worker closure.
 
-Do not chase these errors during active development. They resolve on the next full restart.
+On current releases the old workers are closed on every reload, so this error is no longer cosmetic: if you see it, the processor really is not registered — check that its file is imported and restart.
 
 ### 6. Structure modules so most edits stay within HMR-safe boundaries
 
@@ -365,8 +371,8 @@ Frontend HMR is a solved problem. Vite, webpack, Turbopack -- they all handle co
 
 Backend HMR is harder because backends are stateful. Database connections persist. Queue workers hold references. DI containers maintain object graphs. Auth middleware caches strategies. Every piece of long-lived state is a potential HMR landmine.
 
-The decorator-heavy approach amplifies this because decorators create implicit registration paths. When a controller decorator says `@Middleware(authBridgeMiddleware)`, it stores a reference to a function object. When a service decorator says `@Inject(TOKENS.TASK_REPOSITORY)`, it stores a reference to a Symbol. These references form an invisible web of dependencies that HMR can partially break.
+The decorator-heavy approach amplifies this because decorators create implicit registration paths. When a controller decorator says `@Middleware(authBridgeMiddleware)`, it stores a reference to a function object. When a service decorator says `@Inject(TOKENS.TASK_REPOSITORY)`, it stores a reference to a token object. These references form an invisible web of dependencies that HMR can partially break.
 
-The pragmatic approach is to embrace HMR for what it is good at (rapid iteration on business logic) and accept full restarts for what it is not (structural changes). With the right patterns -- Mongoose guards, centralized tokens, `@Autowired()` for properties, and a clear mental model of what survives -- you get 90% of the HMR benefit with 10% of the pain.
+The pragmatic approach is to embrace HMR for what it is good at (rapid iteration on business logic) and accept full restarts for what it is not (structural changes). With the right patterns -- Mongoose guards, `createToken` tokens, `@Autowired()` for properties, and a clear mental model of what survives -- you get 90% of the HMR benefit with 10% of the pain.
 
 That is a trade I will take every time.

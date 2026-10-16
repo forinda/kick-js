@@ -21,40 +21,40 @@ All directory layouts below reflect the **default** that `kick g module` writes.
 ## Pattern 1: rest (the default)
 
 ```bash
-kick g module cats                  # rest is the default
-kick g module cats --pattern rest  # same thing, explicit
+kick g module cat                  # rest is the default
+kick g module cat --pattern rest  # same thing, explicit
 ```
 
-This is the workhorse pattern. It covers the full CRUD lifecycle in a flat folder under `src/modules/<name>/` — no subdirectories to navigate, everything for the module in one place:
+This is the workhorse pattern. It covers the full CRUD lifecycle in a flat folder under `src/modules/<name>/` — no subdirectories to navigate, everything for the module in one place. Pass the singular name: the folder uses it as typed (unless you pass `--pluralize` or set `modules.pluralize: true`), and the route is pluralized to `/cats`:
 
 ```
-cats/
-├── cats.module.ts
-├── cats.controller.ts
-├── cats.service.ts
-├── cats.constants.ts              # query config
-├── cats.repository.ts             # factory + contract + DI token, one file
+cat/
+├── cat.module.ts
+├── cat.controller.ts
+├── cat.service.ts
+├── cat.constants.ts               # query config
+├── cat.repository.ts              # factory + contract + DI token, one file
 ├── dtos/
 │   ├── create-cat.dto.ts
 │   ├── update-cat.dto.ts
 │   └── cat-response.dto.ts
 └── __tests__/
-    ├── cats.controller.test.ts
-    └── cats.repository.test.ts
+    ├── cat.controller.test.ts
+    └── cat.repository.test.ts
 ```
 
-The service wraps the repository, the controller delegates to the service, and the DTOs handle validation. The module file (`cats.module.ts`) wires it all together with `defineModule` and eagerly loads the decorated classes:
+The service wraps the repository, the controller delegates to the service, and the DTOs handle validation. The module file (`cat.module.ts`) wires it all together with `defineModule` and eagerly loads the decorated classes:
 
 ```ts
 import { defineModule } from '@forinda/kickjs'
-import { CAT_REPOSITORY, createCatRepository } from './cats.repository'
-import { CatsController } from './cats.controller'
+import { CAT_REPOSITORY, createCatRepository } from './cat.repository'
+import { CatController } from './cat.controller'
 
-// Eagerly load decorated classes so @Service()/@Repository() register in the DI container
-import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })
+// Eagerly load every module file so decorated classes register in the DI container
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })
 
-export const CatsModule = defineModule({
-  name: 'CatsModule',
+export const CatModule = defineModule({
+  name: 'CatModule',
   build: () => ({
     register(container) {
       container.registerFactory(CAT_REPOSITORY, () => createCatRepository())
@@ -62,7 +62,7 @@ export const CatsModule = defineModule({
     routes() {
       return {
         path: '/cats',
-        controller: CatsController,
+        controller: CatController,
       }
     },
   }),
@@ -107,7 +107,7 @@ export const HealthModule = defineModule({
 })
 ```
 
-The controller is equally lean. No service, no repository, no DTOs — just decorated route handlers:
+The controller is equally lean. No service, no repository, no DTOs — just decorated route handlers that return their payload (the generated one stubs five CRUD handlers; trimmed to one here):
 
 ```ts
 import { Controller, Get, type Ctx } from '@forinda/kickjs'
@@ -116,7 +116,7 @@ import { Controller, Get, type Ctx } from '@forinda/kickjs'
 export class HealthController {
   @Get('/')
   async list(ctx: Ctx<KickRoutes.HealthController['list']>) {
-    ctx.json({ status: 'ok', timestamp: new Date().toISOString() })
+    return { status: 'ok', timestamp: new Date().toISOString() }
   }
 }
 ```
@@ -143,14 +143,13 @@ The two patterns are not mutually exclusive within a project — you can have a 
 `kick g module <name>` defaults to `rest`. To change the project-wide default, set `pattern` in `kick.config.ts`:
 
 ```ts
-import { defineConfig } from '@forinda/kickjs-cli/config'
+import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: 'rest', // 'rest' | 'minimal'
   modules: {
     dir: 'src/modules',
-    repo: 'inmemory',
-    pluralize: false,
+    pluralize: false, // the default: folders use the name as typed, routes are pluralized
   },
 })
 ```
@@ -159,27 +158,27 @@ The `--pattern` flag on any individual `kick g module` call overrides the config
 
 ## Repositories: one file, whatever the name
 
-The `rest` pattern generates **one** repository file, `cats.repository.ts`, holding the factory, the contract and the DI token. `--repo` (or `modules.repo` in config) no longer changes the file name, the identifiers, or the shape:
+The `rest` pattern generates **one** repository file, `cat.repository.ts`, holding the factory, the contract and the DI token. `--repo` (or `modules.repo` in config) no longer changes the file name, the identifiers, or the shape:
 
 ```bash
-kick g module cats                    # cats.repository.ts — working Map body
-kick g module cats --repo postgres    # cats.repository.ts — unimplemented, "write the postgres query"
+kick g module cat                    # cat.repository.ts — working Map body
+kick g module cat --repo postgres    # cat.repository.ts — same Map body, plus "replace with your postgres queries"
 ```
 
 ::: warning `modules.repo` is deprecated
-The name no longer changes the generated code. It survives only as **prose** — the store appears in the stub's comments and in its "not implemented" errors, as a note to whoever writes the query. Set it for that hint, or leave it unset and get the in-memory implementation. It keeps working, and will not be removed without a replacement.
+The name no longer changes the generated code. It survives only as **prose** — the store appears in the file's header comment, as a note to whoever writes the query. Set it for that hint, or leave it unset and get the in-memory implementation. It keeps working, and will not be removed without a replacement.
 :::
 
 There are two outcomes, and the difference is the body, not the name:
 
 - **unset / `inmemory`** — a zero-dependency, fully working `Map`-backed factory. Run and test the module immediately.
-- **any other name** — the same file with an unimplemented body and TODOs where you wire your client.
+- **any other name** — the same working `Map` body, with a header naming the store whose queries replace it.
 
-**The store name is deliberately absent from the identifiers.** The generator used to emit `postgres-cats.repository.ts` exporting `PostgresCatsRepository` — whose every method read and wrote a `Map`. An app could be wired, booted and manually tested against a class asserting Postgres while every write went to a store that empties on restart, with nothing in the types or the logs to say so. The name was the lie, not the Map.
+**The store name is deliberately absent from the identifiers.** The generator used to emit `postgres-cat.repository.ts` exporting `PostgresCatRepository` — whose every method read and wrote a `Map`. An app could be wired, booted and manually tested against a class asserting Postgres while every write went to a store that empties on restart, with nothing in the types or the logs to say so. The name was the lie, not the Map.
 
 ### How the factory, contract and token fit together
 
-All three live in one file, `cats.repository.ts`. The factory is the implementation; the contract is **derived from it** rather than declared beside it, so the two cannot drift:
+All three live in one file, `cat.repository.ts`. The factory is the implementation; the contract is **derived from it** rather than declared beside it, so the two cannot drift:
 
 ```ts
 import { createToken, HttpException } from '@forinda/kickjs'
@@ -221,7 +220,7 @@ container.registerFactory(CAT_REPOSITORY, () => createCatRepository())
 Swapping in a real database later means changing that one line — the controller, service and DTOs never change. (The `'app/'` token prefix tracks your project's `tokenScope`, so `kick-lint`'s reserved-prefix rule never fires.)
 
 ::: tip One file, whatever the repo name
-`--repo postgres` no longer changes the generated code or the file name. You get the same `cats.repository.ts` with an in-memory body and a TODO — which runs, so the generated `__tests__` have something real to exercise while you fill in the driver.
+`--repo postgres` no longer changes the generated code or the file name. You get the same `cat.repository.ts` with an in-memory body and a TODO — which runs, so the generated `__tests__` have something real to exercise while you fill in the driver.
 :::
 
 ## Wiring a real database
@@ -231,8 +230,7 @@ The generator produces one repository shape regardless of `--repo`: a factory wi
 When you're ready for a real database, the first-party option is `@forinda/kickjs-db` — the PostgreSQL, SQLite and MySQL dialects ship as subpaths of it (`@forinda/kickjs-db/pg`, `/sqlite`, `/mysql`):
 
 ```bash
-kick add db
-pnpm add pg # or better-sqlite3 / mysql2
+kick add pg # kick/db + the pg driver — or `kick add sqlite` / `kick add mysql`
 ```
 
 Replace the factory body with calls against your client — the exported `<Name>Repository` type follows automatically, since it is the factory's return type. The generator hands you the boundary; you decide what runs behind it.
@@ -243,7 +241,7 @@ When you already know the shape of a resource, `kick g scaffold` emits the **fla
 
 <PmCommand exec="kick g scaffold Post title:string body:text:optional published:boolean:optional" />
 
-This produces the same flat `rest` tree (module, controller, service, constants, repository interface + token, in-memory repository, `dtos/`, `__tests__/`), but the DTOs and types are generated from your fields. Supported field types include:
+This produces the same flat `rest` tree (module, controller, service, constants, repository factory + contract + token, `dtos/`, `__tests__/`), but the DTOs and types are generated from your fields. Supported field types include:
 
 ```
 string, text, number, int, float, boolean, date, email, url, uuid, json, enum:a,b,c
@@ -257,7 +255,7 @@ kick g scaffold Post "body:text?"            # needs quoting
 kick g scaffold Post "body?:text"            # needs quoting
 ```
 
-Useful flags: `--no-tests` (skip the `__tests__/`), `--pluralize` (pluralize folder and file names — the route is plural by default), `--no-pluralize-routes` (mount at the name as typed), and `--modules-dir <dir>` (override the target directory).
+Useful flags: `--no-tests` (skip the `__tests__/`), `--pluralize` (pluralize the folder name — the route is plural by default), `--no-pluralize-routes` (mount at the name as typed), and `--modules-dir <dir>` (override the target directory).
 
 ::: tip
 `kick g scaffold` always emits the REST layout — it is the field-aware front door to the same structure `kick g module --pattern rest` produces. (The DDD layout this command used to generate was removed alongside the `ddd`/`cqrs` patterns.)
@@ -276,11 +274,11 @@ The `kick g module` command is a small decision framework. Two patterns, one que
 - Reach for **`rest`** (the default) for real resources with persistence — you get the full CRUD scaffold and a clean repository interface boundary.
 - Reach for **`minimal`** for tiny endpoints, prototypes, or when you want to grow your own structure.
 
-Pick your persistence by **name**: `inmemory` for a working impl out of the box, or any DB name for a stub you wire to your own client (reach for `@forinda/kickjs-db` when you want the first-party database layer).
+Pick your persistence by **name**: `inmemory` for a working impl out of the box, or any DB name for the same working body with a note on which client to wire in (reach for `@forinda/kickjs-db` when you want the first-party database layer).
 
 ```bash
 # Standard CRUD resource (default)
-kick g module cats
+kick g module cat
 
 # A bare endpoint
 kick g module health --pattern minimal
@@ -289,7 +287,7 @@ kick g module health --pattern minimal
 kick g scaffold post title:string body:text:optional published:boolean:optional
 
 # A resource backed by your own Postgres client
-kick g module orders --repo postgres
+kick g module order --repo postgres
 ```
 
 Two patterns, one framework, the right amount of ceremony for each module. That is the kind of flexibility I want in a backend toolkit.

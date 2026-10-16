@@ -333,7 +333,10 @@ export class ProjectController {
 
   @Post('/', { body: createProjectSchema, name: 'CreateProject' })
   async create(ctx: Ctx<KickRoutes.ProjectController['create']>) {
-    return reply.created(await this.projectService.create(ctx.body, ctx.require('user').id))
+    const created = await this.projectService.create(ctx.body, ctx.require('user').id)
+    return reply.created(created, {
+      location: ctx.urlFor('ProjectController.getById', { id: created.id }),
+    })
   }
 
   @LoadMembership
@@ -499,7 +502,7 @@ export async function testApp() {
     modules: [AuthModule(), ProjectModule(), TaskModule()],
     middlewares,
     contributors: [LoadUser.registration],
-    overrides: [[APP_DB, createTestDb()]],
+    overrides: [[APP_DB, await createTestDb()]],
   })
   const handler = app.handle.bind(app)
   const agent = () => request.agent(handler)

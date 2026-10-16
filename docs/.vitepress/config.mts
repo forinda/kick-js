@@ -223,7 +223,7 @@ const guideSidebar = [
     ],
   },
   {
-    text: 'Tutorials: Building a Jira Clone',
+    text: 'Tutorials: Building a Shared Task App',
     collapsed: false,
     items: [
       { text: 'REST Module Architecture', link: '/guide/tutorial-ddd-architecture' },

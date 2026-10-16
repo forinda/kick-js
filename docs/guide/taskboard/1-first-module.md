@@ -54,13 +54,15 @@ import 'reflect-metadata'
 import './config'
 import { bootstrap, cors, expressRuntime, helmet, requestId, requestLogger } from '@forinda/kickjs'
 import express from 'express'
-import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { modules } from './modules'
 
 export const app = await bootstrap({
   modules,
   runtime: expressRuntime(),
-  adapters: [DevToolsAdapter()],
+  adapters: [
+    // DevTools under `kick dev` only — `kick build` compiles this branch out.
+    ...(__KICKJS_DEVTOOLS__ ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()] : []),
+  ],
   middlewares: [
     helmet(),
     cors({ origin: '*' }),
@@ -246,7 +248,7 @@ curl -X POST localhost:3000/api/v1/projects \
 # 201 {"id":"…","name":"Launch","createdAt":"…","updatedAt":"…"}
 
 curl localhost:3000/api/v1/projects
-# 200 {"data":[{"id":"…","name":"Launch",…}],"meta":{"page":1,"limit":…,"total":1,…}}
+# 200 {"data":[{"id":"…","name":"Launch",…}],"meta":{"page":1,"limit":…,"total":1,…},"links":{"self":"…","next":null,"prev":null}}
 
 curl -X POST localhost:3000/api/v1/projects \
   -H 'content-type: application/json' \
