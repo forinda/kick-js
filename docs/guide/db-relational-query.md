@@ -317,7 +317,7 @@ const rows = await db.query.comments.findMany({ with: { subject: true } })
 
 Each target's primary key is matched against `id`, only for rows whose `type` holds that target's value (bound as a parameter). The subject is `null` when the type has no entry in `targets`, the row is gone, or it's soft-deleted. The subject comes back as its table's row, without the type, so switch on the comment's `subjectType` to narrow it.
 
-Since the subject can come from any of the tables, `with: { subject: … }` takes `true` or `{ withDeleted: true }` only — no `where`, `columns` or nested `with`. Every target's key has to have the same type as the `id` column; Postgres refuses to compare an `integer` column with a `uuid` key even for rows of another type.
+Since the subject can come from any of the tables, `with: { subject: … }` takes `true` or `{ withDeleted: true }` only — no `where`, `columns` or nested `with`. [Computed fields](./db-extensions.md) on the subject run when the comment's type column is selected, since that is what says which table the subject came from — so don't leave `subjectType` out with `columns`. Every target's key has to have the same type as the `id` column; Postgres refuses to compare an `integer` column with a `uuid` key even for rows of another type.
 
 ## Self-references and cycles
 

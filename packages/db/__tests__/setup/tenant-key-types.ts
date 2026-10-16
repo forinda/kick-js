@@ -1,11 +1,12 @@
 /**
  * The same tenancy round trip for a tenant column of another type — uuid, a
- * ULID in varchar(26), integer — on any dialect, 'column' or 'rls'. The
+ * ULID in varchar(26), integer, bigint — on any dialect, 'column' or 'rls'. The
  * tenant id is always a string (`run('1', …)`); the row holds the column's
  * own type.
  */
 import { expect } from 'vitest'
 import {
+  bigint,
   integer,
   relations,
   serial,
@@ -48,6 +49,14 @@ export const tenantKeyCases: TenantKeyCase[] = [
     nativeB: '01HZX3J8K9M2N4P6Q8R0S2T4V7',
   },
   { name: 'integer()', column: integer, a: '1', b: '2', nativeA: 1, nativeB: 2 },
+  {
+    name: "bigint({ mode: 'bigint' })",
+    column: () => bigint({ mode: 'bigint' }),
+    a: '1',
+    b: '2',
+    nativeA: 1n,
+    nativeB: 2n,
+  },
 ]
 
 /** How the tenant column is named: its key, and the database's name for it. */

@@ -58,7 +58,7 @@ declare module '../../src/query/types' {
       comments: {
         post: { kind: 'one'; target: 'posts' }
         // morphTo: the target is the union of its tables.
-        subject: { kind: 'one'; target: 'users' | 'posts' }
+        subject: { kind: 'one'; target: 'users' | 'posts'; morphTo: true }
       }
       categories: {
         parent: { kind: 'one'; target: 'categories' }
@@ -96,6 +96,12 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
     expectTypeOf<Row<'comments', typeof withDeleted>['subject']>().toMatchTypeOf<
       FixtureDB['users'] | FixtureDB['posts'] | null
     >()
+    // Its rows come from several tables: nothing that needs one table's columns.
+    const _bad: FindManyOptions<FixtureDB, 'comments'> = {
+      // @ts-expect-error — morphTo takes `true` or `{ withDeleted }` only
+      with: { subject: { limit: 1 } },
+    }
+    void _bad
   })
 
   it('T-2-many-many — users.findMany({ with: { posts: { with: { comments: true } } } })', () => {

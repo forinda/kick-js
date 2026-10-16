@@ -103,10 +103,9 @@ describe('SchemaToRelationsRegister<S>', () => {
       }),
     }))
     type B = SchemaToRelationsRegister<{ back: typeof back }>
-    expectTypeOf<B['notes']['subject']>().toEqualTypeOf<{
-      kind: 'one'
-      target: 'posts' | 'users'
-    }>()
+    expectTypeOf<B['notes']['subject']['target']>().toEqualTypeOf<'posts' | 'users'>()
+    expectTypeOf<B['notes']['subject']['morphTo']>().toEqualTypeOf<true>()
+    expectTypeOf<R['posts']['pinned']>().not.toHaveProperty('morphTo')
   })
 
   it('schema without any relations() resolves to an empty record', () => {

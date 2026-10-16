@@ -58,7 +58,7 @@ workspaceId: tenantKey(tenancy, uuid()),
 **Tenant id type.** The column is `text` by default, which fits slugs and ULIDs (kick/db has no `ulid()` builder; `varchar(26)` works too). Pass another column to change it:
 
 - `tenantKey(tenancy, uuid())` for UUID tenant ids.
-- `tenantKey(tenancy, integer())` or `bigint()` for numeric ids. The tenant id stays a string (`run('42', fn)`, or a request's `tenant` of `'42'` or `{ id: 42 }`) and the database converts it. Rows read back with the number `42`, and an insert that gives the tenant as the number `42` is accepted, while any other value is refused.
+- `tenantKey(tenancy, integer())` or `bigint()` for numeric ids. The tenant id stays a string (`run('42', fn)`, or a request's `tenant` of `'42'` or `{ id: 42 }`) and the database converts it. Rows read back as the column's type — the number `42` for `integer()`, and for `bigint()` whatever its `mode` gives (`42n` with `mode: 'bigint'`). An insert that gives the tenant as that number (`42` or `42n`) is accepted, while any other value is refused.
 - Not `serial()`: the tenant column holds another table's id. The serial belongs on the `tenants` table.
 
 Under `'rls'` the generated policy casts the setting to the column's type (`::uuid`, `::integer`).

@@ -68,6 +68,8 @@ export interface RelationMapEntry {
   kind: 'one' | 'many'
   target: string
   relationName?: string
+  /** A `morphTo`: `target` is the union of its tables. */
+  morphTo?: true
 }
 
 /**
@@ -182,9 +184,20 @@ export interface FindManyOptions<
  */
 export type WithClause<DB, Rels extends Record<string, RelationMapEntry>> = {
   [K in keyof Rels]?: Rels[K]['target'] extends keyof DB & string
-    ? true | FindManyOptions<DB, Rels[K]['target']>
+    ? true | WithOptions<DB, Rels[K], Rels[K]['target']>
     : never
 }
+
+/**
+ * A `morphTo`'s rows come from several tables, so only `withDeleted`
+ * applies. `never` (an untyped client) would match the check, so it keeps
+ * the full options.
+ */
+type WithOptions<DB, E, Target extends keyof DB & string> = [E] extends [never]
+  ? FindManyOptions<DB, Target>
+  : E extends { morphTo: true }
+    ? { withDeleted?: boolean }
+    : FindManyOptions<DB, Target>
 
 /**
  * Resolved row shape returned by `findMany`. Base table columns
