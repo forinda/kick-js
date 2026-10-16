@@ -82,8 +82,13 @@ describe('buildGeneratorContext', () => {
     expect(ctx.snake).toBe('user_post')
   })
 
-  it('emits plural variants when pluralize is enabled (default)', () => {
+  it('omits plural variants by default', () => {
     const ctx = buildGeneratorContext({ name: 'task' })
+    expect(ctx.pluralKebab).toBeUndefined()
+  })
+
+  it('emits plural variants when pluralize is enabled', () => {
+    const ctx = buildGeneratorContext({ name: 'task', pluralize: true })
     expect(ctx.pluralKebab).toBe('tasks')
     expect(ctx.pluralPascal).toBe('Tasks')
     expect(ctx.pluralCamel).toBe('tasks')

@@ -30,7 +30,7 @@ export async function generateDto(options: GenerateDtoOptions): Promise<string[]
     modulesDir,
     defaultDir: 'src/dtos',
     pattern,
-    shouldPluralize: options.pluralize ?? true,
+    shouldPluralize: options.pluralize ?? false,
   })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)

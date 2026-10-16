@@ -22,7 +22,7 @@ export async function generateService(options: GenerateServiceOptions): Promise<
     modulesDir,
     defaultDir: 'src/services',
     pattern,
-    shouldPluralize: options.pluralize ?? true,
+    shouldPluralize: options.pluralize ?? false,
   })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)

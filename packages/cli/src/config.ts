@@ -334,8 +334,8 @@ export interface ModuleConfig {
   schemaDir?: string
   /**
    * Whether to pluralize module names in generated code.
-   * When true (default), `kick g module user` creates `src/modules/users/`.
-   * When false, it creates `src/modules/user/` and uses singular names throughout.
+   * When false (default), `kick g module user` creates `src/modules/user/` and
+   * uses the name as typed throughout. When true, it creates `src/modules/users/`.
    */
   pluralize?: boolean
   /**
@@ -772,6 +772,14 @@ function sanitizeScope(raw: string): string {
     .replace(/[^a-z0-9-]/g, '-') // collapse anything weird to a hyphen
     .replace(/^-+|-+$/g, '') // trim leading/trailing hyphens
     .replace(/-{2,}/g, '-') // collapse runs of hyphens
+}
+
+/** Module names are used as typed unless a project or a flag asks for plurals. */
+export const PLURALIZE_DEFAULT = false
+
+/** `--pluralize` / `--no-pluralize`, else `modules.pluralize` in kick.config.ts, else `false`. */
+export function resolvePluralize(flag: boolean | undefined, mc?: ModuleConfig): boolean {
+  return flag ?? mc?.pluralize ?? PLURALIZE_DEFAULT
 }
 
 export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {

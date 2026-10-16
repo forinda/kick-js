@@ -67,7 +67,7 @@ interface GenerateModuleOptions {
  */
 export async function generateModule(options: GenerateModuleOptions): Promise<string[]> {
   const { name, modulesDir, noEntity, noTests, repo = 'inmemory', force, dryRun } = options
-  const shouldPluralize = options.pluralize !== false
+  const shouldPluralize = options.pluralize === true
 
   let pattern = options.pattern ?? 'rest'
   if (options.minimal) pattern = 'minimal'

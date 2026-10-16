@@ -32,7 +32,7 @@ export function buildGeneratorContext(input: {
 }): GeneratorContext {
   const cwd = input.cwd ?? process.cwd()
   const projectRoot = input.projectRoot ?? findProjectRoot(cwd)
-  const usePlural = input.pluralize ?? true
+  const usePlural = input.pluralize ?? false
 
   const pascal = toPascalCase(input.name)
   const camel = toCamelCase(input.name)

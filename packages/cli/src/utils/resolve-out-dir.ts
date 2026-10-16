@@ -28,7 +28,7 @@ export interface ResolveOutDirOptions {
   defaultDir: string
   /** Project pattern — determines folder structure inside modules */
   pattern?: ProjectPattern
-  /** Whether to pluralize the module folder name (default: true) */
+  /** Whether to pluralize the module folder name (default: false) */
   shouldPluralize?: boolean
 }
 
@@ -47,7 +47,7 @@ export function resolveOutDir(options: ResolveOutDirOptions): string {
     moduleName,
     modulesDir = 'src/modules',
     defaultDir,
-    shouldPluralize = true,
+    shouldPluralize = false,
   } = options
 
   // Explicit --out always wins

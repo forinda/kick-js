@@ -662,7 +662,8 @@ kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
 | --------------------- | ------------------------------------- | ------------- |
 | `--no-entity`         | Skip entity + value object generation | `false`       |
 | `--no-tests`          | Skip test file generation             | `false`       |
-| `--no-pluralize`      | Use singular names                    | from config   |
+| `--pluralize`         | Pluralize names                       | from config   |
+| `--no-pluralize`      | Use names as typed                    | from config   |
 | `--modules-dir <dir>` | Modules directory                     | `src/modules` |
 
 ::: tip Shell-safe optional syntax
@@ -797,7 +798,7 @@ export default defineConfig({
     dir: 'src/modules',
     // repo is deprecated — the name no longer changes the generated code
     repo: { name: 'postgres' },
-    pluralize: true,
+    pluralize: false,
     schemaDir: 'src/db/schema',
   },
   copyDirs: ['src/views', 'src/emails'],

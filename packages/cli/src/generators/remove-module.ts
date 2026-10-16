@@ -152,7 +152,7 @@ interface RemoveModuleOptions {
  */
 export async function removeModule(options: RemoveModuleOptions): Promise<void> {
   const { name, modulesDir, force } = options
-  const shouldPluralize = options.pluralize !== false
+  const shouldPluralize = options.pluralize === true
 
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)

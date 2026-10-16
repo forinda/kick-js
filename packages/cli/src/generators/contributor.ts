@@ -82,7 +82,7 @@ export async function generateContributor(options: GenerateContributorOptions): 
     modulesDir,
     defaultDir: 'src/contributors',
     pattern,
-    shouldPluralize: options.pluralize ?? true,
+    shouldPluralize: options.pluralize ?? false,
   })
 
   const factory = type === 'http' ? 'defineHttpContextDecorator' : 'defineContextDecorator'

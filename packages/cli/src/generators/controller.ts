@@ -22,7 +22,7 @@ export async function generateController(options: GenerateControllerOptions): Pr
     modulesDir,
     defaultDir: 'src/controllers',
     pattern,
-    shouldPluralize: options.pluralize ?? true,
+    shouldPluralize: options.pluralize ?? false,
   })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
