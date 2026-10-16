@@ -266,6 +266,20 @@ describe("'column' tenancy: ways around the filter", () => {
           .onConflict((oc) => oc.column('slug').doUpdateSet({ tenantId: 'globex' }))
           .execute(),
       ).rejects.toThrow(/can't write slugs.tenantId = globex/)
+      // SQLite matches column names in any case.
+      await expect(
+        db
+          .updateTable('tasks')
+          .set({ TENANTID: 'globex' } as never)
+          .where('id', '=', 1)
+          .execute(),
+      ).rejects.toThrow(/can't write tasks.tenantId = globex/)
+      await expect(
+        db
+          .insertInto('tasks')
+          .values({ TENANTID: 'globex', projectId: 1, title: 'x' } as never)
+          .execute(),
+      ).rejects.toThrow(/can't write tasks.tenantId = globex/)
       // upsert() colliding with another tenant's row fails instead of returning nothing.
       await expect(
         db.upsert('slugs', { values: { slug: 'away' }, target: ['slug'] }),

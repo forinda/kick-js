@@ -111,6 +111,14 @@ function updatedColumn(update: ColumnUpdateNode): string | undefined {
   return undefined
 }
 
+/**
+ * The same column name: SQLite and MySQL match names case-insensitively, so
+ * `TENANTID` is the tenant column too.
+ */
+function sameColumn(a: string | undefined, b: string): boolean {
+  return a !== undefined && a.toLowerCase() === b.toLowerCase()
+}
+
 /** An integer tenant column's id: digits only, as the database would store them. */
 const CANONICAL_INTEGER = /^-?(0|[1-9][0-9]*)$/
 
@@ -235,7 +243,12 @@ class TenantColumnFilter extends OperationNodeTransformer {
       const column = t && this.columnOf(t.table)
       if (!t || !column) continue
       for (const u of updates) {
-        if (updatedColumn(u) !== column.name) continue
+        const name = updatedColumn(u)
+        // A SET whose column isn't a plain name can't be told apart from the tenant's.
+        if (name === undefined && this.filter) {
+          throw new Error(`kickjs-db: can't tell which column of tenanted ${t.table} a SET writes`)
+        }
+        if (!sameColumn(name, column.name)) continue
         if (ValueNode.is(u.value)) this.check(t.table, column, u.value.value)
         else if (this.filter) {
           throw new Error(
@@ -318,7 +331,7 @@ class TenantColumnFilter extends OperationNodeTransformer {
       out = { ...out, onConflict: { ...out.onConflict, updateWhere } }
     }
     this.checkUpdates(out.onConflict?.updates, [out.into!])
-    const at = columns.findIndex((c) => c.column.name === column)
+    const at = columns.findIndex((c) => sameColumn(c.column.name, column))
     const check = (value: unknown) => this.check(t.table, tenantColumn, value)
     const rows = source.values.map((row) => {
       if (PrimitiveValueListNode.is(row)) {
