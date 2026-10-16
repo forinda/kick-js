@@ -26,12 +26,12 @@ describe('misc commands', () => {
   describe('kick rm module', () => {
     it('removes a previously generated module and updates the index', () => {
       runCli(fixture, ['g', 'module', 'task'])
-      expect(existsSync(join(fixture, 'src/modules/tasks'))).toBe(true)
+      expect(existsSync(join(fixture, 'src/modules/task'))).toBe(true)
 
       const result = runCli(fixture, ['rm', 'module', 'task', '--force'])
       assertCliOk(result, 'kick rm module task')
 
-      expect(existsSync(join(fixture, 'src/modules/tasks'))).toBe(false)
+      expect(existsSync(join(fixture, 'src/modules/task'))).toBe(false)
 
       // index.ts should no longer reference TaskModule
       const indexPath = join(fixture, 'src/modules/index.ts')

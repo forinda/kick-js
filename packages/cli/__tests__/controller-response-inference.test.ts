@@ -99,7 +99,7 @@ describe('generated controllers infer a real response type', () => {
     assertCliOk(runCli(fixture, ['g', 'scaffold', 'widget', 'title:string']), 'g scaffold')
 
     const controller = codeOnly(
-      readFileSync(join(fixture, 'src/modules/widgets/widget.controller.ts'), 'utf-8'),
+      readFileSync(join(fixture, 'src/modules/widget/widget.controller.ts'), 'utf-8'),
     )
     expect(controller).not.toContain('return ctx.notFound(')
     expect(controller).not.toContain('ctx.json(')
@@ -114,9 +114,9 @@ describe('generated controllers infer a real response type', () => {
     assertCliOk(runCli(fixture, ['g', 'scaffold', 'gamma', 'title:string']), 'scaffold')
 
     for (const path of [
-      'src/modules/alphas/alpha.controller.ts',
+      'src/modules/alpha/alpha.controller.ts',
       'src/controllers/beta.controller.ts',
-      'src/modules/gammas/gamma.controller.ts',
+      'src/modules/gamma/gamma.controller.ts',
     ]) {
       const src = codeOnly(readFileSync(join(fixture, path), 'utf-8'))
       expect(src, `${path} still writes responses imperatively`).not.toContain('ctx.json(')
@@ -134,9 +134,9 @@ describe('generated controllers infer a real response type', () => {
     assertCliOk(runCli(fixture, ['g', 'scaffold', 'gamma', 'title:string']), 'scaffold')
 
     for (const path of [
-      'src/modules/alphas/alpha.controller.ts',
+      'src/modules/alpha/alpha.controller.ts',
       'src/controllers/beta.controller.ts',
-      'src/modules/gammas/gamma.controller.ts',
+      'src/modules/gamma/gamma.controller.ts',
     ]) {
       const lines = readFileSync(join(fixture, path), 'utf-8').split('\n')
       const tooLong = lines
@@ -154,7 +154,7 @@ describe('generated controllers infer a real response type', () => {
     assertCliOk(runCli(fixture, ['g', 'module', 'widget', '--pattern', 'minimal']), 'g module')
 
     const controller = readFileSync(
-      join(fixture, 'src/modules/widgets/widget.controller.ts'),
+      join(fixture, 'src/modules/widget/widget.controller.ts'),
       'utf-8',
     )
     for (const method of ['list(', 'getById(', 'create(', 'update(', 'remove(']) {

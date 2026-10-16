@@ -26,14 +26,14 @@ describe('kick g module', () => {
     assertCliOk(result, 'kick g module task')
 
     const expectedFiles = [
-      'src/modules/tasks/task.module.ts',
-      'src/modules/tasks/task.constants.ts',
-      'src/modules/tasks/task.controller.ts',
-      'src/modules/tasks/task.service.ts',
-      'src/modules/tasks/dtos/create-task.dto.ts',
-      'src/modules/tasks/dtos/update-task.dto.ts',
-      'src/modules/tasks/dtos/task-response.dto.ts',
-      'src/modules/tasks/task.repository.ts',
+      'src/modules/task/task.module.ts',
+      'src/modules/task/task.constants.ts',
+      'src/modules/task/task.controller.ts',
+      'src/modules/task/task.service.ts',
+      'src/modules/task/dtos/create-task.dto.ts',
+      'src/modules/task/dtos/update-task.dto.ts',
+      'src/modules/task/dtos/task-response.dto.ts',
+      'src/modules/task/task.repository.ts',
     ]
     for (const f of expectedFiles) {
       expect(existsSync(join(fixture, f)), `expected ${f} to exist`).toBe(true)
@@ -46,14 +46,14 @@ describe('kick g module', () => {
     expect(existsSync(indexPath)).toBe(true)
     const content = readFileSync(indexPath, 'utf-8')
     expect(content).toContain('TaskModule')
-    expect(content).toContain("from './tasks/task.module'")
+    expect(content).toContain("from './task/task.module'")
   })
 
   it('emits a collision-safe createToken for the repository token', () => {
     runCli(fixture, ['g', 'module', 'task'])
 
     const repoInterface = readFileSync(
-      join(fixture, 'src/modules/tasks/task.repository.ts'),
+      join(fixture, 'src/modules/task/task.repository.ts'),
       'utf-8',
     )
     // `HttpException` rides along now that the working body lives in this file.
@@ -75,8 +75,8 @@ describe('kick g module', () => {
     const result = runCli(fixture, ['g', 'module', 'user', 'post'])
     assertCliOk(result, 'kick g module user post')
 
-    expect(existsSync(join(fixture, 'src/modules/users/user.module.ts'))).toBe(true)
-    expect(existsSync(join(fixture, 'src/modules/posts/post.module.ts'))).toBe(true)
+    expect(existsSync(join(fixture, 'src/modules/user/user.module.ts'))).toBe(true)
+    expect(existsSync(join(fixture, 'src/modules/post/post.module.ts'))).toBe(true)
 
     const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
     expect(indexContent).toContain('UserModule')
@@ -85,7 +85,7 @@ describe('kick g module', () => {
 
   it('emits the defineModule factory by default', () => {
     runCli(fixture, ['g', 'module', 'task'])
-    const moduleFile = readFileSync(join(fixture, 'src/modules/tasks/task.module.ts'), 'utf-8')
+    const moduleFile = readFileSync(join(fixture, 'src/modules/task/task.module.ts'), 'utf-8')
     expect(moduleFile).toContain("import { defineModule } from '@forinda/kickjs'")
     expect(moduleFile).toContain('export const TaskModule = defineModule({')
     expect(moduleFile).toContain("name: 'TaskModule'")
@@ -193,7 +193,7 @@ describe('kick g module', () => {
 
     runCli(fixture, ['g', 'module', 'task'])
     const updated = readFileSync(indexPath, 'utf-8')
-    expect(updated).toContain("import { TaskModule } from './tasks/task.module'")
+    expect(updated).toContain("import { TaskModule } from './task/task.module'")
     expect(updated).toContain('.mount(TaskModule())')
   })
 
@@ -283,7 +283,7 @@ export class UserModule implements AppModule {
 
     const result = runCli(fixture, ['g', 'module', 'task'])
     assertCliOk(result, 'kick g module task (style: class with legacy)')
-    expect(existsSync(join(fixture, 'src/modules/tasks/task.module.ts'))).toBe(true)
+    expect(existsSync(join(fixture, 'src/modules/task/task.module.ts'))).toBe(true)
   })
 })
 
@@ -308,7 +308,7 @@ describe("kick g module — modules.style: 'class' opt-out", () => {
 
   it('emits class FooModule implements AppModule when style is "class"', () => {
     runCli(fixture, ['g', 'module', 'task'])
-    const moduleFile = readFileSync(join(fixture, 'src/modules/tasks/task.module.ts'), 'utf-8')
+    const moduleFile = readFileSync(join(fixture, 'src/modules/task/task.module.ts'), 'utf-8')
     expect(moduleFile).toContain('export class TaskModule implements AppModule {')
     expect(moduleFile).toContain('register(container: Container): void {')
     expect(moduleFile).toContain('routes(): ModuleRoutes {')
