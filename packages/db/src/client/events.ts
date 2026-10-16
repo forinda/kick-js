@@ -9,12 +9,9 @@ type Listener<E extends keyof KickDbClientEvents> = (
  * Per-client typed event emitter. Wraps a Node EventEmitter to keep the
  * surface narrow (no `addListener`, no `removeAllListeners`, no `setMaxListeners`).
  *
- * The Kysely query interceptor surface is intentionally minimal in M1:
- * transactionStart/Commit/Rollback fire from createDbClient's transaction()
- * wrapper. The full beforeQuery / query / queryError emit pipeline lands in
- * M2 alongside `$extends` since it requires a proper Kysely query plugin
- * with access to the compiled SQL string + parameters. The types are stable
- * now so adopter code can wire listeners; only the runtime emit is deferred.
+ * `beforeQuery` fires from the dialect wrapper as each statement is sent;
+ * `query` / `slowQuery` / `queryError` from Kysely's log hook; the
+ * transaction events from createDbClient's transaction() wrapper.
  */
 export class KickDbEventEmitter {
   private readonly emitter = new EventEmitter()

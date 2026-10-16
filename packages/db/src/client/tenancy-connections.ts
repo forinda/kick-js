@@ -51,6 +51,11 @@ class TenantConnection implements DatabaseConnection {
     private readonly tenant: string,
   ) {}
 
+  /** Cancelling reaches the real connection: `pg_cancel_backend` on its process. */
+  cancelQuery(...args: Parameters<NonNullable<DatabaseConnection['cancelQuery']>>): Promise<void> {
+    return this.inner.cancelQuery?.(...args) ?? Promise.resolve()
+  }
+
   /** Set the tenant for the transaction just begun. */
   bind(): Promise<QueryResult<unknown>> {
     return this.inner.executeQuery(

@@ -117,6 +117,21 @@ describe('M5.A.2 — AbortSignal cancels in-flight PG queries', () => {
     // Should abort well before the 10s sleep finishes — give a
     // generous 3s budget for slow CI runners.
     expect(elapsed).toBeLessThan(3_000)
+    // And it's cancelled on the server too, not left sleeping on its connection.
+    const sleeping = async () =>
+      Number(
+        (
+          await pool.query(
+            `SELECT count(*) AS n FROM pg_stat_activity
+              WHERE state = 'active' AND pid <> pg_backend_pid() AND query LIKE '%pg_sleep(10)::text%'`,
+          )
+        ).rows[0].n,
+      )
+    const until = Date.now() + 2_000
+    while ((await sleeping()) > 0 && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    expect(await sleeping()).toBe(0)
   }, 30_000)
 
   it('rejects immediately when the signal is already aborted at call time', async () => {

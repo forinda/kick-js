@@ -147,12 +147,13 @@ function assertNotAlreadyAborted(signal: AbortSignal | undefined): void {
  * the same path Kysely's `.execute()` would — events, plugins, and
  * connection pooling all keep working without bypassing the wrapper.
  *
- * When `signal` is supplied, threads it into Kysely 0.29's
- * `executeQuery(q, { signal })` second arg. Kysely + the dialect
- * driver handle the actual cancellation (PG `pg_cancel_backend`,
- * SQLite synchronous abort, MySQL `KILL QUERY`). On abort, Kysely
- * rejects with an AbortError-shaped error which we map to the
- * adopter-facing `RelationalQueryCancelledError`.
+ * When `signal` is supplied, threads it into Kysely's
+ * `executeQuery(q, { signal, inflightQueryAbortStrategy: 'cancel query' })`:
+ * on abort the query is cancelled on the server (Postgres
+ * `pg_cancel_backend`, MySQL `KILL QUERY`) and Kysely rejects with an
+ * AbortError-shaped error, mapped to `RelationalQueryCancelledError`.
+ * Every client connection has a `cancelQuery` (a no-op on better-sqlite3,
+ * which runs synchronously), so the strategy works on every dialect.
  */
 async function execute<DB>(
   qb: Kysely<DB>,
@@ -160,29 +161,17 @@ async function execute<DB>(
   signal?: AbortSignal,
 ): Promise<unknown[]> {
   try {
-    // Kysely 0.29's default `inflightQueryAbortStrategy` is
-    // `'ignore query'` — it stops waiting for results on abort but
-    // lets the in-flight query finish on the DB side. The stricter
-    // `'cancel query'` strategy throws on dialects without
-    // `cancelQuery` support (better-sqlite3 has no such hook), so we
-    // can't safely default it across all dialects.
-    //
-    // Adopters who need `pg_cancel_backend` / `KILL QUERY` semantics
-    // for long-running PG/MySQL queries can wrap a Kysely call site
-    // directly (`db.qb.selectFrom(...).$call(qb => qb.executeQuery(c, { signal, inflightQueryAbortStrategy: 'cancel query' }))`)
-    // until a future release exposes a per-call override on
-    // FindManyOptions. The signal STILL fires correctly here — the
-    // promise rejects with RelationalQueryCancelledError as soon as
-    // the abort fires; only the DB-side resource cleanup is
-    // best-effort under the default strategy.
     const result = await (
       qb as unknown as {
         executeQuery: (
           q: CompiledQuery,
-          opts?: { signal?: AbortSignal },
+          opts?: { signal?: AbortSignal; inflightQueryAbortStrategy?: 'cancel query' },
         ) => Promise<{ rows: unknown[] }>
       }
-    ).executeQuery(compiled, signal ? { signal } : undefined)
+    ).executeQuery(
+      compiled,
+      signal ? { signal, inflightQueryAbortStrategy: 'cancel query' } : undefined,
+    )
     return result.rows
   } catch (err) {
     // Two paths to a cancellation diagnosis:

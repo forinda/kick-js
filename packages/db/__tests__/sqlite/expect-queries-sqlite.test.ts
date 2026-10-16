@@ -68,3 +68,23 @@ describe('expectQueries', () => {
     await expect(captureQueries(db, async () => {})).rejects.toThrow(/events: true/)
   })
 })
+
+describe('beforeQuery', () => {
+  it('sees each statement before it runs, and may rewrite it', async () => {
+    const db = await seeded()
+    const seen: string[] = []
+    db.on('beforeQuery', (e) => {
+      seen.push(e.sql)
+      // Tag every statement, and swap a bound value.
+      e.sql = `/* app */ ${e.sql}`
+      e.parameters = e.parameters.map((p) => (p === 'a@x.com' ? 'b@x.com' : p))
+    })
+    const rows = await db
+      .selectFrom('users')
+      .select('email')
+      .where('email', '=', 'a@x.com')
+      .execute()
+    expect(rows).toEqual([{ email: 'b@x.com' }])
+    expect(seen).toEqual(['select "email" from "users" where "email" = ?'])
+  })
+})
