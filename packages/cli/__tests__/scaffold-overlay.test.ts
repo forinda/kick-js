@@ -309,14 +309,14 @@ describe('the shipped layers', () => {
       expect(project.scripts[script], script).toContain('--ssr src/client/ssr.tsx')
     }
     expect(project.files.get('.env')).toContain('SESSION_SECRET={{sessionSecret}}')
-    // SESSION_SECRET is in the env schema: required in production, a dev-only
-    // default elsewhere — the entry doesn't read process.env and throw.
+    // SESSION_SECRET is in the env schema. The dev-only default is accepted only
+    // under NODE_ENV 'development' or 'test' — an unset NODE_ENV fails closed.
     const config = project.files.get('src/config/index.ts')!
     expect(config).toMatch(
       /SESSION_SECRET: z\n\s+\.string\(\)\n\s+\.min\(32\)\n\s+\.default\('dev-only-/,
     )
     expect(config).toContain(
-      "(s): boolean => process.env.NODE_ENV !== 'production' || !s.startsWith('dev-only-')",
+      "['development', 'test'].includes(process.env.NODE_ENV ?? '') || !s.startsWith('dev-only-')",
     )
     expect(config).not.toContain('@kick:')
     expect(entry).not.toContain('process.env.SESSION_SECRET')

@@ -398,7 +398,7 @@ Validation errors, flash messages and the "back" URL travel in the session. With
 session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' })
 ```
 
-Set `SESSION_SECRET` to a long random string on every target. The template's env schema requires it in production and falls back to a fixed development-only value elsewhere.
+Set `SESSION_SECRET` to a long random string on every target. The template's env schema accepts its fixed development-only value only when `NODE_ENV` is `development` (`kick dev`) or `test` (Vitest). Anywhere else, including a deploy that leaves `NODE_ENV` unset, the app refuses to boot until a real secret is set.
 
 Netlify and Vercel functions have no persistent disk, and a container's filesystem is lost when it is replaced: keep a SQLite database file on a mounted volume (`docker run -v data:/app/data`, pointing the app at `/app/data/…`), or use a hosted database.
 
