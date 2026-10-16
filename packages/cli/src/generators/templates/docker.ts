@@ -103,7 +103,19 @@ export function generateDockerfile(
       : pm === 'bun' && spec && (major < 1 || (major === 1 && minor < 2))
         ? { ...PM.bun, lockfile: 'bun.lockb' }
         : PM[pm]
-  const setup = p.setup ? `\n${p.setup}` : ''
+  // Native addons (better-sqlite3 from `kick add sqlite`, bcrypt, …) compile
+  // when no prebuilt binary fits, and the slim images have no toolchain. Only
+  // the install stages get it; the runtime image stays slim.
+  const toolchain =
+    '\n# Compilers for native addons (better-sqlite3, …) that have no prebuilt binary.\n' +
+    'RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \\\n' +
+    '  && rm -rf /var/lib/apt/lists/*'
+  const setup = `${p.setup ? `\n${p.setup}` : ''}${toolchain}`
+  // A production install has no Prisma CLI (a dev dependency), so
+  // @prisma/client's postinstall `prisma generate` would fail it. The build
+  // stage generates the client; the runtime copies it from there.
+  const prismaSkip =
+    '# The build stage generates the Prisma client, if any.\nENV PRISMA_SKIP_POSTINSTALL_GENERATE=1'
   const manifests =
     kind === 'fullstack'
       ? // A workspace installs from every member's manifest.
@@ -134,6 +146,7 @@ WORKDIR /app${setup}
 
 # Production dependencies of every workspace member.
 FROM base AS deps
+${prismaSkip}
 ${copyManifests}
 RUN ${p.installProd}
 # Hoisting may leave a member without its own node_modules; the runtime copies both.
@@ -145,12 +158,14 @@ ${copyManifests}
 RUN ${p.install}
 COPY . .
 RUN ${p.run('build')}
+RUN mkdir -p node_modules/.prisma
 
 FROM ${NODE_IMAGE}
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/server/node_modules ./server/node_modules
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/package.json ./
 COPY --from=build /app/server/package.json ./server/
 COPY --from=build /app/server/dist ./server/dist
@@ -172,6 +187,7 @@ FROM ${p.image} AS base
 WORKDIR /app${setup}
 
 FROM base AS deps
+${prismaSkip}
 ${copyManifests}
 RUN ${p.installProd}
 
@@ -181,11 +197,14 @@ ${copyManifests}
 RUN ${p.install}
 COPY . .
 RUN ${p.run('build')}
+RUN mkdir -p node_modules/.prisma
 
 FROM ${NODE_IMAGE}
 ENV NODE_ENV=production PORT=3000
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+# A Prisma client generated into node_modules (empty otherwise).
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/package.json ./
 COPY --from=build /app/dist ./dist
 # The image's filesystem is replaced on every deploy. Keep a SQLite file (or
