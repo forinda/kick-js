@@ -23,7 +23,7 @@ const envSchema = fromValibot(
     NODE_ENV: v.optional(v.picklist(['development', 'production', 'test']), 'development'),
     LOG_LEVEL: v.optional(v.string(), 'info'),
     // DATABASE_URL: v.pipe(v.string(), v.url()),
-    // @kick:env
+    // @kick:env-valibot
   }),
 )
 

@@ -41,10 +41,10 @@ Three drivers implement it:
 
 ## Setting it up
 
-`kick add storage`, or `kick new --packages storage`, installs the package and writes `src/storage.ts`:
+`kick add storage`, or `kick new --packages storage`, installs the package and writes `src/adapters/storage.ts`:
 
 ```ts
-// src/storage.ts
+// src/adapters/storage.ts
 import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
 import { diskStorage } from '@forinda/kickjs-storage/disk'
 import { s3FromSettings } from '@forinda/kickjs-storage/settings'
@@ -60,7 +60,7 @@ export const storageAdapter = () =>
 
 It also adds `storageAdapter()` to `bootstrap({ adapters })`, the `S3_*` variables to `.env.example`, and `uploads/` and `.tus/` to `.gitignore`. Files go to the `uploads/` folder until `S3_BUCKET` is set, then to that bucket. Change the file to pick drivers differently.
 
-`StorageAdapter({ storage })` binds the storage to the `STORAGE` token, so it can be injected anywhere. A storage from `s3FromSettings()` also brings its settings section, so a missing `S3_BUCKET` stops startup. A second storage binds its own token:
+`StorageAdapter({ storage })` binds the storage to the `STORAGE` token, so it can be injected anywhere. A storage from `s3FromSettings()` also brings its settings section, so a missing `S3_BUCKET` stops startup. The adapter reports to `/health/ready`: it lists one file, and a storage that can't be listed (an unreachable bucket, rejected credentials) reports `down`. A second storage binds its own token:
 
 ```ts
 const BACKUPS = createToken<Storage>('app/storage/backups')

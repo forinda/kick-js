@@ -23,7 +23,7 @@ const envSchema = fromZod(
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.string().default('info'),
     // DATABASE_URL: z.url(),
-    // @kick:env
+    // @kick:env-zod
   }),
 )
 

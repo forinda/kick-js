@@ -262,7 +262,10 @@ describe('the shipped layers', () => {
       /^\/\/\/ <reference types="@forinda\/kickjs-vite\/globals" \/>$/m,
     )
     expect(entry).toContain("WsAdapter({ path: '/ws' }),")
-    expect(entry).toContain('QueueAdapter({')
+    expect(entry).toContain('queueAdapter(),')
+    expect(project.files.get('src/config/index.ts')).toContain(
+      "REDIS_HOST: z.string().default('127.0.0.1'),",
+    )
     expect(project.dependencies).toEqual(
       expect.arrayContaining([
         '@forinda/kickjs-ws',
@@ -272,8 +275,7 @@ describe('the shipped layers', () => {
         'ioredis',
       ]),
     )
-    expect(project.files.get('.env')).toContain('REDIS_HOST=127.0.0.1')
-    expect(project.files.get('.env.example')).toContain('REDIS_PORT=6379')
+    expect(project.files.get('.env.example')).toContain('# REDIS_PORT=6379')
   })
 
   it('never import an env object or read env.KEY in any template', () => {

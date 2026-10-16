@@ -45,6 +45,8 @@ export function wireIntegrations(
   const result: WireResult = { source, added: [], present: [], manual: [] }
   for (const integration of integrations) {
     if (!integration.slot || !integration.code) continue
+    // The env schema's entries, wired by wireEnvSchema.
+    if (integration.slot.startsWith('env-')) continue
     const property = SLOT_PROPERTY[integration.slot]
     const code = fill(integration.code)
     const call = callName(code)
@@ -75,7 +77,7 @@ export function wireIntegrations(
     }
 
     result.source = prop
-      ? appendToArray(result.source, prop.value, code)
+      ? appendEntry(result.source, prop.value, prop.value.elements, code)
       : addProperty(result.source, options, property!, code)
     if (integration.import) result.source = addImport(result.source, integration.import, file)
     result.added.push(call ?? firstLine(code))
@@ -150,12 +152,14 @@ const indentBlock = (code: string, indent: string) =>
     .map((line) => (line ? indent + line : line))
     .join('\n')
 
-function appendToArray(source: string, array: Node, code: string): string {
-  const elements = (array.elements as Array<Node | null>).filter(Boolean) as Node[]
+/** Append `code` to an array literal's elements or an object literal's properties. */
+function appendEntry(source: string, array: Node, items: Array<Node | null>, code: string): string {
+  const elements = items.filter(Boolean) as Node[]
   const arrayIndent = lineIndent(source, array.start)
   if (elements.length === 0) {
     const inner = indentBlock(`${code},`, `${arrayIndent}  `)
-    return `${source.slice(0, array.start)}[\n${inner}\n${arrayIndent}]${source.slice(array.end)}`
+    const [open, close] = array.type === 'ObjectExpression' ? ['{', '}'] : ['[', ']']
+    return `${source.slice(0, array.start)}${open}\n${inner}\n${arrayIndent}${close}${source.slice(array.end)}`
   }
   const last = elements.at(-1)!
   const indent = lineIndent(source, last.start)
@@ -167,6 +171,74 @@ function appendToArray(source: string, array: Node, code: string): string {
   return comma
     ? source.slice(0, at) + entry + source.slice(at)
     : `${source.slice(0, at)},${entry.replace(/,$/, '')}${source.slice(at)}`
+}
+
+const SCHEMA_LIBS = ['zod', 'valibot', 'yup'] as const
+
+/**
+ * Add a layer's env keys to an existing env schema — the first
+ * `<lib>.object({ ... })` in `src/config/index.ts`. The schema library is
+ * the one the file imports (`zod`, `valibot` or `yup`), and the entries are
+ * the integrations for its slot (`env-zod`, …). A key the schema already
+ * declares is left as it is. When the file has no such call, or imports
+ * none of the three, the entries come back as `manual` (zod's, the default
+ * library, when the library is unknown).
+ */
+export function wireEnvSchema(
+  source: string,
+  integrations: readonly Integration[],
+  file = 'src/config/index.ts',
+): WireResult {
+  const result: WireResult = { source, added: [], present: [], manual: [] }
+  const program = parseSync(file, source).program as unknown as Node
+  const lib = SCHEMA_LIBS.find((name) =>
+    (program.body as Node[]).some((n) => n.type === 'ImportDeclaration' && n.source.value === name),
+  )
+  const entries = integrations.filter((i) => i.slot === `env-${lib ?? 'zod'}` && i.code)
+  if (entries.length === 0) return result
+  if (!lib || !findSchemaObject(program)) {
+    result.manual.push(...entries)
+    return result
+  }
+  for (const entry of entries) {
+    const key = envKeyOf(entry.code!)
+    const object = findSchemaObject(parseSync(file, result.source).program as unknown as Node)!
+    const declared = (object.properties as Node[]).some(
+      (p) => p.type === 'Property' && (p.key?.name ?? p.key?.value) === key,
+    )
+    if (declared) {
+      result.present.push(key)
+      continue
+    }
+    result.source = appendEntry(result.source, object, object.properties, entry.code!)
+    result.added.push(key)
+  }
+  return result
+}
+
+/** `REDIS_HOST` for `// comment\nREDIS_HOST: z.string()`. */
+const envKeyOf = (code: string) => /^\s*['"]?(\w+)['"]?\s*:/m.exec(code)?.[1] ?? firstLine(code)
+
+/** The object literal of the first `x.object({ ... })` call. */
+function findSchemaObject(program: Node): Node | undefined {
+  let found: Node | undefined
+  const visit = (node: unknown): void => {
+    if (found || !node || typeof node !== 'object') return
+    if (Array.isArray(node)) return node.forEach(visit)
+    const n = node as Node
+    if (
+      n.type === 'CallExpression' &&
+      n.callee?.type === 'MemberExpression' &&
+      n.callee.property?.name === 'object' &&
+      n.arguments?.[0]?.type === 'ObjectExpression'
+    ) {
+      found = n.arguments[0]
+      return
+    }
+    for (const key in n) visit(n[key])
+  }
+  visit(program)
+  return found
 }
 
 function addProperty(source: string, object: Node, property: string, code: string): string {

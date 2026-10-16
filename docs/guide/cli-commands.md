@@ -145,7 +145,7 @@ Each one is installed with the packages it needs and wired into `src/index.ts`:
 
 `devtools` is imported behind the `__KICKJS_DEVTOOLS__` build flag (`...(__KICKJS_DEVTOOLS__ ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()] : [])`, typed by `src/devtools.d.ts`), so `kick build` leaves the package out of `dist/` — see [Stripping DevTools from production bundles](./devtools.md#stripping-devtools-from-production-bundles).
 
-`queue` reads `REDIS_HOST` / `REDIS_PORT` (added to `.env`). Nothing connects until a `@Job` class or a queue is used, so the app boots without Redis. An unknown name is skipped with a warning.
+`queue` writes `src/adapters/queue.ts`, which reads `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` with `getEnv`; the keys are declared in the env schema (`src/config/index.ts`) with local defaults for host and port and none for the password. Nothing connects until a `@Job` class or a queue is used, so the app boots without Redis. An unknown name is skipped with a warning.
 
 `fullstack` scaffolds a pnpm workspace — `server/` (KickJS API) + `web/`
 (Vite + React typed against the API via the
@@ -520,7 +520,7 @@ kick add --list --all     # full optional catalog
 `swagger`, `devtools`, `ws`, `queue` (BullMQ; also `queue:bullmq`) and `storage` are wired as well as installed — the same way `kick new --packages` wires them:
 
 - the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), with its import. An `adapters` list is created if the call has none;
-- `queue` adds `REDIS_HOST` / `REDIS_PORT` to `.env` and `.env.example` — only the keys that aren't there, so existing values stay;
+- `queue` writes `src/adapters/queue.ts` and declares `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` in the env schema (`src/config/index.ts`, else `src/env.ts`) — in the schema library the file imports (Zod, Valibot or Yup), skipping keys it already declares. Host and port default to `127.0.0.1:6379`; the password has no default. `storage` writes `src/adapters/storage.ts`;
 - the package goes into `dependencies` (the entry file imports it) along with the peers the adapter uses — except `devtools`, which is only imported under `kick dev`: it stays in `devDependencies`, and its entry is the flag-gated dynamic import above, plus `src/devtools.d.ts` for the flag's type.
 
 ```text
@@ -530,7 +530,7 @@ kick add --list --all     # full optional catalog
 
 Only the call's position changes — the rest of the file is left as it was, and running `kick add` again for the same package doesn't add a second copy. When the file doesn't have that shape (no `bootstrap({ ... })`, or `adapters` is a variable rather than a list), `kick add` prints the import and the call to paste yourself.
 
-`kick add` won't edit a file with uncommitted changes, so the wiring lands as its own diff: commit or stash first, or pass `--force`. `--no-wire` installs without touching any file.
+`kick add` won't edit a tracked file with unstaged changes, so the wiring lands as its own diff: commit, stage (`git add`) or stash first, or pass `--force`. Files git doesn't track yet — a fresh `kick new` before its first commit, or one inside a parent repository — don't block it. `--no-wire` installs without touching any file.
 
 `auth`, `drizzle` and `prisma` were **removed from the catalog in v8** along with their packages — `kick add auth` now reports an unknown package. Replacements: [BYO auth](./byo-recipes.md#auth) composed from context decorators, and `@forinda/kickjs-db` (`kick add db` / `pg` / `sqlite` / `mysql`) for the ORM adapters.
 

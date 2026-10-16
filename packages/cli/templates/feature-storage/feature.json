@@ -3,7 +3,7 @@
   "integrations": [
     {
       "import": {
-        "from": "./storage",
+        "from": "./adapters/storage",
         "names": ["storageAdapter"]
       },
       "slot": "adapter",

@@ -16,6 +16,9 @@
  * missing `S3_BUCKET` stops startup. A second storage binds its own token:
  * `StorageAdapter.scoped('backups', { storage, token: BACKUPS })`.
  *
+ * `/health/ready` lists one page of at most one file from the storage: a
+ * bucket that's unreachable or refuses the credentials reports `down`.
+ *
  * @module @forinda/kickjs-storage/adapter
  */
 import { createToken, defineAdapter, type InjectionToken } from '@forinda/kickjs'
@@ -35,13 +38,21 @@ export interface StorageAdapterOptions {
 
 export const StorageAdapter = defineAdapter<StorageAdapterOptions>({
   name: 'StorageAdapter',
-  build: (config) => ({
+  build: (config, { name }) => ({
     settings: () => {
       const section = (config.storage as unknown as Record<symbol, unknown>)[SETTINGS]
       return section ? [section as never] : []
     },
     beforeStart({ container }) {
       container.registerInstance(config.token ?? STORAGE, config.storage)
+    },
+    async onHealthCheck() {
+      try {
+        await config.storage.list({ limit: 1 })
+        return { name, status: 'up' as const }
+      } catch {
+        return { name, status: 'down' as const }
+      }
     },
   }),
 })
