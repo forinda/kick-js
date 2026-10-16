@@ -1,5 +1,13 @@
 # @forinda/kickjs-devtools
 
+## 7.12.1
+
+### Patch Changes
+
+- [#933](https://github.com/forinda/kick-js/pull/933) [`12363f8`](https://github.com/forinda/kick-js/commit/12363f86c9e58a6016266db0793b52beab1b8030) Thanks [@forinda](https://github.com/forinda)! - `container.registerFallback(token, factory, scope?)` — a default binding used only while nothing else binds the token, whatever the registration order. An adapter can register one in `beforeMount` (before modules register) and a module's `register()` binding still wins. `has(token)` stays `false` for a fallback-only token, and `getRegistrations()` marks a token its fallback serves with `fallback: true`; DevTools shows a _fallback_ badge on it. Binding the token normally after its singleton fallback was resolved throws the new `KICK010`, since code already holding the fallback would disagree with the new binding.
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.12.0
 
 ### Minor Changes

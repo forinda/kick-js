@@ -1,5 +1,82 @@
 # @forinda/kickjs-db
 
+## 8.8.0
+
+### Minor Changes
+
+- [#939](https://github.com/forinda/kick-js/pull/939) [`132febf`](https://github.com/forinda/kick-js/commit/132febf0f5409d55357b36651bf2f4fe24312477) Thanks [@forinda](https://github.com/forinda)! - Add `morphMany`, `morphOne` and `morphTo` to `relations()`: a polymorphic one-to-many over a type + id column pair (one `comments` table shared by posts and podcasts). `db.query.posts.findMany({ with: { comments: true } })` returns the rows whose type column holds the `as` value and whose id column holds the post's key — typed and queried like `many`, with `where`, `orderBy`, `limit`, `columns` and nested `with`. `references` defaults to the source's single-column primary key. `morphOne` takes the same options and loads one such row, typed like `one` (`Row | null`). `morphTo({ type, id, targets })` goes the other way, from the child to the row its pair points at, in whichever table `targets` maps the type value to — typed as a union of those tables' rows, or `null`, and loaded with `true` or `{ withDeleted }`. No foreign key is created. The relational-queries guide gains a "Polymorphic associations" section comparing exclusive arcs, junction tables and type + id columns.
+
+- [#944](https://github.com/forinda/kick-js/pull/944) [`d5b42b8`](https://github.com/forinda/kick-js/commit/d5b42b8e1bd7e48226836349292be336b1649129) Thanks [@forinda](https://github.com/forinda)! - Query timeouts that cancel on the server. `db.timeout(ms, { signal? })` returns the execute options for any query builder — `.execute(db.timeout(5_000))` — that cancel the query once it has run `ms` (Postgres `pg_cancel_backend`, MySQL `KILL QUERY`), or when `signal` aborts first, and reject with the reason of whichever fired first — a `TimeoutError` when it's the timeout. `db.query` reads take `timeoutMs` alongside `signal`, rejecting with `RelationalQueryCancelledError` whose `cause` is the `TimeoutError`.
+  
+  Inside a transaction a timed-out or aborted query is abandoned rather than cancelled: cancelling would abort the transaction, and Postgres would turn its `COMMIT` into a `ROLLBACK`. A timeout's rejection is a `DOMException` named `TimeoutError`; an aborted `signal` rejects with its own reason. `signal` and `timeoutMs` apply to the top level of a `db.query` read; nested `with` levels no longer accept them.
+
+### Patch Changes
+
+- [#941](https://github.com/forinda/kick-js/pull/941) [`7e10d99`](https://github.com/forinda/kick-js/commit/7e10d990ee620c370a29bcf0e98b44cbf37687f2) Thanks [@forinda](https://github.com/forinda)! - Migrations that lost data or failed:
+  
+  - A SQLite table rebuild no longer empties the tables that reference it. Swapping the new table in deleted the old rows first, which ran their `ON DELETE` — a cascade emptied the children, a restrict failed the migration. better-sqlite3 now switches foreign keys off around the rebuild (the foreign-key check still guards the result); libsql and D1, where a batch can't switch them, refuse such a rebuild instead.
+  - Dropping a column that an index, unique or foreign key uses now drops those first; the migration failed on every dialect.
+  - A foreign key whose `onDelete`, `onUpdate`, columns or target changed is now dropped and added again; the diff ignored it.
+  - On SQLite and MySQL a text default that looks like a number or a boolean (`'0800'`, `'true'`) stays a string; it was emitted unquoted and stored as `800` / `1`.
+  - On Postgres, only a quoted literal with a cast (`'{}'::jsonb`) passes through as SQL; any default containing `::` (`'std::string'`) did, giving invalid SQL.
+  - MySQL's `MODIFY COLUMN` on a serial key keeps `AUTO_INCREMENT`.
+  - Rolling back migrations applied in the same second reverses them by id.
+  - A kept table's foreign key to a table being dropped is dropped first, and dropped tables go child before parent; Postgres refused to drop a table still referenced.
+  - A function default, nested calls included (`floor(rand() * 10)`), is recognised as an expression and parenthesised (`DEFAULT (random())`) on SQLite and MySQL, which take no bare call; MySQL's TEXT and JSON columns take a literal default as `DEFAULT ('{}')`; MySQL defaults escape backslashes.
+  - `migrate` stops when the database has applied a migration no folder holds (a wrong `migrationsDir`, a deleted folder) instead of treating the rest as pending.
+  
+  Also fixed after review: a column or table rename no longer drops and re-adds the foreign keys and indexes that use it (Postgres follows a rename; the re-add ran before the rename and failed), and FK/index/check drops come before renames so a down migration renames back first; a down migration re-creates a dropped table's foreign keys; Postgres passes a cast of a call or array through again (`gen_random_uuid()::text`, `now()::date`, `ARRAY[]::text[]`); MySQL `tinyint`, `datetime` and other numeric and time types take numeric and boolean defaults; a default holding a backslash is never treated as a function call.
+  
+  Behaviour changes:
+  
+  - On libsql and Cloudflare D1, a migration that rebuilds or drops a table another kept table references is refused before it runs (it used to empty the referencing table through its `ON DELETE CASCADE`, or fail). Run it on a connection with `foreign_keys` off, or split the change so the referenced table isn't rebuilt — see the migrations guide.
+  - `migrate` (and `kickDbAdapter` with `migrationsOnBoot: 'apply'`) stops when the database has applied a migration no folder holds. Restore the folder, list every folder in `migrationsDir` (it takes an array), or remove the row from the migrations table if the migration was deleted on purpose.
+
+- [#939](https://github.com/forinda/kick-js/pull/939) [`58f3d0d`](https://github.com/forinda/kick-js/commit/58f3d0d691035859ffaea2591ee71e1caf23c088) Thanks [@forinda](https://github.com/forinda)! - `$extends({ result })` computed fields now run on related rows even when the queried table has no computed fields of its own. Before, `db.query.posts.findMany({ with: { author: true } })` left out `users` computeds on `author` unless `posts` declared one too.
+
+- [#943](https://github.com/forinda/kick-js/pull/943) [`bafd1cd`](https://github.com/forinda/kick-js/commit/bafd1cd0e32d217e1be1756d697db0aeb76d09ee) Thanks [@forinda](https://github.com/forinda)! - - The `beforeQuery` event fires. It was declared and documented but never emitted, so its listeners never ran. It now runs synchronously as each statement is sent, and a listener may rewrite `sql` or `parameters`.
+  - `db.query` with a `signal` cancels the query on the server (Postgres `pg_cancel_backend`, MySQL `KILL QUERY`), as documented. It only stopped waiting before, leaving the query running and holding its pool connection. better-sqlite3 runs synchronously, so there is nothing in flight to stop there.
+
+- [#942](https://github.com/forinda/kick-js/pull/942) [`9739d3d`](https://github.com/forinda/kick-js/commit/9739d3d1bdab4f02c814d1190b0e33836bb42a66) Thanks [@forinda](https://github.com/forinda)! - Relational reads and query plugins that returned wrong rows or failed:
+  
+  - A soft-deleted junction row no longer links a many-to-many pair (`withDeleted` on the level includes it).
+  - A many-to-many level's `where` on a column the junction also has (`id`) is no longer ambiguous: the junction is matched with `EXISTS`, out of the level's scope.
+  - `offset` without `limit` works on SQLite and MySQL, at the top and nested (they have no OFFSET on its own).
+  - A nested `bytea` column on SQLite, which its JSON can't hold, is refused by name with how to leave it out, instead of `JSON cannot hold BLOB values`.
+  - A relation named like an `Object.prototype` member (`constructor`) no longer reads as a column collision, and `with: { toString: true }` is an unknown relation, not a `TypeError`.
+  - Managed columns (`onUpdateNow()`, `version()`, `$onUpdate`, insert defaults) are set on an insert or update inside a `WITH` too.
+  - `$extends({ result })` on a select with joins no longer adds its `needs` columns (an unqualified one was ambiguous), and computes a field only when the row has every column it needs.
+  - `$extends({ result })` works under `casing: 'snake_case'` and with `.colName()` columns: a table named in camelCase (`blogPosts`) got no computed fields, and a needed column was added by its key (`no such column: "passwordHash"`). It's now found by its key and added by its database name.
+  
+  - A `morphTo` subject gets its table's computed fields when the type column holds numbers, and on SQLite leaves its `bytea` columns out instead of failing; computed fields apply to a table in a named schema (`billing.invoices`).
+  
+  Behaviour changes: a many-to-many level now returns each related row once even if the junction links the pair twice (the junction is matched with `EXISTS`); a computed field on a select with joins is left off a row that lacks the columns it needs, instead of computing from `undefined`.
+
+- [#940](https://github.com/forinda/kick-js/pull/940) [`b6522c7`](https://github.com/forinda/kick-js/commit/b6522c790d2da6fcc969de8d741be4771ea661ca) Thanks [@forinda](https://github.com/forinda)! - Close ways around `'column'` tenancy:
+  
+  - An update or upsert can no longer set the tenant column to another tenant (or to an expression), which handed the row to that tenant.
+  - A table is filtered however the query spells it — `main.tasks`, `public.tasks`, `TASKS`, `sql.table('tasks')` — and every table of MySQL's multi-table `UPDATE a, b`.
+  - A tenanted table inside a larger piece of raw SQL in a FROM, and `mergeInto` on a tenanted table, are refused instead of running unfiltered.
+  - With an integer tenant column, a tenant id the database would read as another number (`'01'`, `'1.0'`, `' 1'`) is refused.
+  
+  Also: `db.upsert()` throws when a row collides with one it may not update (another tenant's) instead of returning `undefined`; the `'rls'` transaction start quotes the tenant as an escape-string literal, so it reads the same whatever `standard_conforming_strings` is; and a query's abort signal now reaches the driver when a connection is acquired.
+  
+  Also closed after review: a right, full, inner or cross join on a tenanted table now filters the joined table in WHERE (a right or full join kept every row, whatever its ON said); `sql.id('tasks')` is read as the table it names and filtered, and a tenanted table named in other raw SQL in a FROM, JOIN or target (`` sql`tasks` ``, `sql.raw('tasks')`, `sql.ref('tasks')`) is refused; `INSERT OR REPLACE` / `REPLACE INTO` on a tenanted table are refused; `'-0'` is not an integer tenant id.
+  
+  Behaviour changes under `'column'` tenancy — each was a way to reach another tenant's rows, and each throws now. Run the statement inside `tenancy.bypass(fn, { reason })` if it really is cross-tenant:
+  
+  - `mergeInto` on a tenanted table, raw SQL naming a tenanted table in a FROM/JOIN/target, and `INSERT OR REPLACE` / `REPLACE INTO`.
+  - An update or upsert that sets the tenant column to another tenant, or to an expression.
+  - A non-canonical tenant id for an integer tenant column (`'01'`, `' 1'`, `'-0'`).
+  - `db.upsert()` throws (a plain `Error`) when a row collides with one it may not update, instead of returning `undefined`.
+
+- [#939](https://github.com/forinda/kick-js/pull/939) [`5dbd09f`](https://github.com/forinda/kick-js/commit/5dbd09fa018e2e3fb65322aa8af88477f669c838) Thanks [@forinda](https://github.com/forinda)! - Tenancy with an `integer()` or `bigint()` tenant column: an insert that gives the tenant column as a number (`{ tenantId: 42 }` while running as tenant `'42'`) is no longer refused as another tenant's row. Migrations for a schema that uses `.colName()` without `casing` no longer snake_case every other column (`projectId` was emitted as `project_id`, while queries still used `projectId`).
+  
+  If you generated migrations with that behaviour, your database has snake_case columns (`project_id`) that the schema now names by their keys (`projectId`). Pick one before the next `kick db generate`:
+  
+  - Keep the snake_case columns: set `casing: 'snake_case'`. Nothing changes in the database.
+  - Rename them to their keys: run `kick db generate` in a terminal and answer each "Was it renamed?" question with the new name. In CI, pass every column instead: `--rename-column tasks.project_id=projectId`. Without that, a dropped column is only taken as a rename when it is the table's only one, so the others would be dropped and re-added empty.
+
 ## 8.7.1
 
 ### Patch Changes
