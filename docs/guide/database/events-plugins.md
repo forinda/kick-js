@@ -38,6 +38,8 @@ db.on('queryError', ({ sql, error }) => {
 | `transactionRollback` | `{ isolation?, error }`                        | it rolls back                                  |
 | `transactionRetry`    | `{ isolation?, attempt, error, delayMs }`      | a `retry` transaction is about to run again    |
 
+`beforeQuery`, `query`, `slowQuery` and `queryError` carry `queryId` (Kysely's id for the query, so a query pairs with its error) and, inside a `transaction()`, `txId` — the same for its `BEGIN`, its statements, its savepoints and its `COMMIT`. A `startTransaction()` client's events carry no `txId`.
+
 `beforeQuery` runs synchronously, as each statement goes to the driver, and a listener may rewrite `sql` or `parameters` — to add a trace comment, say. It sees every statement the client sends, transaction control included, but not the `begin` / `set_config` the `'rls'` tenancy binding sends for itself on the connection. `query` and `queryError` report the statement as built, before any rewrite.
 
 While the [DevTools](../devtools.md) adapter runs, every client reports its queries to it as `db:query`, `db:query-error` and `db:slow-query` — what the **Database** tab shows. Nothing to wire: it works for a client created at import time too. To send them to a bus of your own instead, pass it as `createDbClient({ bus })`. A `bus` or `slowQueryThresholdMs` turns events on by itself.

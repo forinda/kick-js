@@ -70,7 +70,7 @@ Outside a terminal (CI, scripts) nothing is asked. Name renames with flags inste
 
 <PmCommand exec="kick db generate rename_users --rename-table users=people --rename-column people.fullName=name" />
 
-Without a flag, a single dropped column whose replacement has the same type, nullability and default is still taken as a rename. Any other drop that could be a rename prints a warning with the flag that would keep it, and the drop goes into the migration. `--no-interactive` skips the questions in a terminal too.
+Without a flag, a single dropped column whose replacement has the same type, nullability and default is still taken as a rename, and so is a column that went from its snake_case name to its key with nothing else changed (`project_id` → `projectId`, as after turning `casing` off). Any other drop that could be a rename prints a warning with the flag that would keep it, and the drop goes into the migration. `--no-interactive` skips the questions in a terminal too.
 
 ### Empty migrations
 

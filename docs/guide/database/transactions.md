@@ -93,6 +93,24 @@ async recordPayment(payment: NewPayment) {
 
 Called from inside another transaction, `recordPayment` fails straight away instead of quietly joining it, which would hide the bug until a rollback lost a payment. A durable transaction can still open savepoints and nested transactions of its own. On Postgres, `{ durable: true, nested: 'separate' }` runs on its own connection and commits independently, even inside another transaction.
 
+## A transaction you finish yourself
+
+`transaction(fn)` can't leave a transaction open, so prefer it. When one has to outlive a callback — a test that rolls back everything it wrote, a transaction handed across layers — `startTransaction()` returns a client for it, with `commit()` and `rollback()`:
+
+```ts
+const tx = await this.db.startTransaction({ isolation: 'serializable' })
+try {
+  await tx.insertInto('orders').values(order).execute()
+  await tx.afterCommit(() => this.mailer.sendReceipt(order))
+  await tx.commit()
+} catch (err) {
+  await tx.rollback()
+  throw err
+}
+```
+
+It takes `transaction()`'s options except `retry`, fires the same events, runs its `afterCommit` hooks on commit, and takes `savepoint()` and nested `transaction()` calls. Inside a callback transaction it's refused — nest with `savepoint()` there. A second `commit()` or `rollback()` throws.
+
 ## After commit
 
 `afterCommit(fn)` runs `fn` once the transaction commits — send the email, publish the event — and drops it if the transaction (or the savepoint it was registered in) rolls back. Outside a transaction it runs right away. A hook that throws is reported to the error observers; the transaction stays committed.
