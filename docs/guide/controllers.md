@@ -340,6 +340,8 @@ export class Mailer {
 
 Holding the `Application` itself — the value `bootstrap()` returns — `app.urlFor(...)` works too. `urlFor` returns a path; prefix your public origin for an absolute link (from config, or `ctx.headers.host` when [`allowedHosts`](./security-headers.md#allowed-hosts) guarantees it is one you serve).
 
+> **Two apps in one process:** the container is process-wide, so the `ROUTE_URLS` and `APPLICATION` tokens point at the app booted last. Inside a request use `ctx.urlFor()` — it always uses the app serving the request; outside one, call `urlFor` on the `Application` you mean.
+
 ## Return-Value Handlers
 
 **The default way to write a handler.** Return the response payload and the

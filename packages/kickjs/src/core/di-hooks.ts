@@ -11,6 +11,7 @@ import { resolveAssetViaSlot } from './asset-resolver-slot'
 import { METADATA } from './interfaces'
 import {
   envValueMissingError,
+  fallbackAlreadyResolvedError,
   noProviderError,
   requestScopeMiddlewareMissingError,
   requestScopeOutsideRequestError,
@@ -22,6 +23,7 @@ const CATALOGUE: Record<DiErrorCode, (subject: string) => Error> = {
   KICK002: requestScopeMiddlewareMissingError,
   KICK003: requestScopeOutsideRequestError,
   KICK004: envValueMissingError,
+  KICK010: fallbackAlreadyResolvedError,
 }
 
 Container._error = (code, subject) => CATALOGUE[code](subject)

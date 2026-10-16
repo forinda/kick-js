@@ -74,6 +74,8 @@ export interface ContainerRegistration {
   resolveDurationMs?: number
   postConstructStatus?: 'done' | 'failed' | 'none'
   dependencies?: string[]
+  /** Served by a `registerFallback()` default — the app binds nothing of its own. */
+  fallback?: boolean
 }
 
 export interface QueueStats {

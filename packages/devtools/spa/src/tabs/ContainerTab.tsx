@@ -210,6 +210,14 @@ export const ContainerTab: Component = () => {
                 <Show when={(r.scope ?? 'singleton') !== 'singleton'}>
                   <span class="dt-tone dt-tone-gray">{r.scope}</span>
                 </Show>
+                <Show when={r.fallback}>
+                  <span
+                    class="dt-tone dt-tone-gray"
+                    title="Served by its registerFallback() default"
+                  >
+                    fallback
+                  </span>
+                </Show>
                 <span class="w-10 shrink-0 text-right text-[0.7rem] text-text-muted tabular-nums">
                   {r.resolveCount ?? 0}×
                 </span>

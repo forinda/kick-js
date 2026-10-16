@@ -119,6 +119,29 @@ SINGLETON scope, or inject a factory instead of the instance directly.`,
   })
 }
 
+/**
+ * KICK010 — A token was bound normally after its `registerFallback()`
+ * singleton had already been resolved.
+ *
+ * Whatever resolved the fallback still holds that instance; letting the new
+ * binding take over would leave two instances that disagree.
+ */
+export function fallbackAlreadyResolvedError(tokenName: string): KickError {
+  return new KickError({
+    code: 'KICK010',
+    summary: `Cannot bind ${tokenName}: its fallback was already resolved`,
+    cause: `\`${tokenName}\` has a default from \`container.registerFallback()\`, and something
+resolved that default before the app bound its own. Code that resolved it holds
+the fallback instance; the new binding would hand everyone else a different one.`,
+    fix: `Bind \`${tokenName}\` before anything resolves it — in a module's
+\`register(container)\` or a plugin's \`register()\`, not later in a request or
+an \`afterStart\` hook. If an adapter resolves the token while booting (in
+\`beforeMount\`), resolve it lazily instead (in \`beforeStart\` or on first use).`,
+    docsUrl: `${DOCS_BASE}/guide/dependency-injection#fallback-bindings`,
+    context: { token: tokenName },
+  })
+}
+
 // ── Config / env wiring ───────────────────────────────────────────────
 
 /**

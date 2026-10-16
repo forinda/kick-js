@@ -527,6 +527,28 @@ export const RedisAdapter = defineAdapter({
 })
 ```
 
+### Provide a default unless the app binds its own
+
+`beforeMount` runs before modules register, so `if (!container.has(TOKEN)) container.register(…)` there sees nothing yet — and a module that binds the token later replaces the adapter's binding without it knowing. Register a [fallback](./dependency-injection.md#fallback-bindings) instead; the module's binding wins whenever it is made:
+
+```ts
+import { createToken, defineAdapter } from '@forinda/kickjs'
+
+export const CACHE = createToken<Cache>('kick/cache')
+
+export const CacheAdapter = defineAdapter({
+  name: 'CacheAdapter',
+  build: () => ({
+    beforeMount({ container }) {
+      // Used only when no module binds CACHE.
+      container.registerFallback(CACHE, () => new MemoryCache())
+    },
+  }),
+})
+```
+
+Don't resolve the token in the same boot hook: a module binding it afterwards would then throw `KICK010`, since the adapter already holds the fallback. Resolve it in `beforeStart` or on first use.
+
 ## The AdapterFactory Surface
 
 The value returned by `defineAdapter()` is an `AdapterFactory<TConfig, TExtra>`. The bare call produces a singleton; two helpers cover the multi-instance and async-config cases — identical shape to [`PluginFactory`](./plugins.md#the-pluginfactory-surface) so the mental model is shared.
