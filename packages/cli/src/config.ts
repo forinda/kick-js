@@ -900,6 +900,11 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
           interopDefault: true,
           fsCache: false,
           alias: selfAlias(root),
+          // The project's tsconfig `paths` (`@/*` → `src/*`), for what the
+          // config imports — eagerly or lazily, like a `db.adapter()` that
+          // loads `src/db/client.ts`, which imports `@/config`. Outside Vite
+          // nothing else resolves the alias.
+          tsconfigPaths: true,
         })
         const config = (await jiti.import(filepath, { default: true })) as KickConfig
         const warnings = validateAssetMap(config, root)

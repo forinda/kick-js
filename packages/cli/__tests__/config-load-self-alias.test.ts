@@ -34,3 +34,35 @@ describe('loadKickConfig without @forinda/kickjs-cli installed', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 })
+
+describe('loadKickConfig resolves the project tsconfig paths', () => {
+  let root: string
+  afterEach(() => rmSync(root, { recursive: true, force: true }))
+
+  it("a lazy import in the config can reach a file that imports '@/config'", async () => {
+    root = mkdtempSync(join(tmpdir(), 'kick-config-paths-'))
+    const { mkdirSync } = await import('node:fs')
+    mkdirSync(join(root, 'src/config'), { recursive: true })
+    mkdirSync(join(root, 'src/db'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{ "name": "app", "type": "module" }')
+    writeFileSync(
+      join(root, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: { paths: { '@/*': ['./src/*'] } } }),
+    )
+    writeFileSync(join(root, 'src/config/index.ts'), "export const url = 'postgres://x'\n")
+    writeFileSync(
+      join(root, 'src/db/client.ts'),
+      "import { url } from '@/config'\nexport const client = { url }\n",
+    )
+    // What `kick db migrate` does: call a factory that imports the app's client.
+    writeFileSync(
+      join(root, 'kick.config.ts'),
+      "export default { db: { adapter: async () => (await import('./src/db/client')).client } }\n",
+    )
+
+    const config = (await loadKickConfig(root)) as unknown as {
+      db: { adapter: () => Promise<{ url: string }> }
+    }
+    await expect(config.db.adapter()).resolves.toEqual({ url: 'postgres://x' })
+  })
+})
