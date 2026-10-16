@@ -31,17 +31,27 @@ export interface StorageAdapterOptions {
   storage: Storage
   /** The token to bind. Default {@link STORAGE}. */
   token?: InjectionToken<Storage>
+  /**
+   * `false` reports `up` to `/health/ready` without checking. Default `true`: the
+   * check lists one key, which on S3 needs list permission on the bucket.
+   */
+  healthCheck?: boolean
 }
 
 export const StorageAdapter = defineAdapter<StorageAdapterOptions>({
   name: 'StorageAdapter',
-  build: (config) => ({
+  build: (config, { name }) => ({
     settings: () => {
       const section = (config.storage as unknown as Record<symbol, unknown>)[SETTINGS]
       return section ? [section as never] : []
     },
     beforeStart({ container }) {
       container.registerInstance(config.token ?? STORAGE, config.storage)
+    },
+    /** `/health/ready`: list one key — a round trip to the bucket or directory. */
+    async onHealthCheck() {
+      if (config.healthCheck !== false) await config.storage.list({ limit: 1 })
+      return { name, status: 'up' as const }
     },
   }),
 })

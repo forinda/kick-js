@@ -59,7 +59,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
     queues: [],
     concurrency: 1,
   },
-  build: (options) => {
+  build: (options, { name: adapterName }) => {
     const workers: Worker[] = []
     const queueService = new QueueService(options.provider)
     let jobClassCount = 0
@@ -206,7 +206,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
           const queues = queueService.getQueueNames().map((n) => queueService.getQueue(n)!)
           await Promise.all(queues.map(pingQueue))
         }
-        return { name: 'QueueAdapter', status: 'up' as const }
+        return { name: adapterName, status: 'up' as const }
       },
 
       async shutdown() {
