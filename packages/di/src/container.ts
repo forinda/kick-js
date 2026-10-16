@@ -406,7 +406,8 @@ export class Container {
    * `resolve()` prefers a `register` / `registerFactory` / `registerInstance`
    * binding whenever it was made — before or after this call — and falls back
    * to this factory otherwise. `has()` stays `false` for a token that only has
-   * a fallback. A second fallback for the same token replaces the first.
+   * a fallback. A second fallback for the same token replaces the first, while
+   * the first has not been resolved.
    *
    * Binding the token normally once its SINGLETON fallback has been resolved
    * throws KICK010: whoever resolved it holds the fallback instance, and would

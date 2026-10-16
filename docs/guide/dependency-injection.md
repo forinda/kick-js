@@ -198,7 +198,7 @@ container.registerFactory(MAILER, () => new SmtpMailer(config))
 
 - The factory is typed by the token, like `registerFactory`. `scope` defaults to `Scope.SINGLETON`.
 - `has(token)` stays `false` while only a fallback exists — it still answers "did the app bind its own?". `getRegistrations()` lists a token served by its fallback with `fallback: true` (DevTools shows a _fallback_ badge); a fallback that a normal binding overrides is not listed.
-- A second `registerFallback` for the same token replaces the first.
+- A second `registerFallback` for the same token replaces the first — until the first singleton has been resolved; after that, any new binding for the token, fallback or not, throws KICK010.
 - Fallbacks are not kept across `Container.reset()` (HMR rebuilds call it), and `Container.create()` starts without any. Register them from a hook that runs on every boot.
 - Binding the token normally **after** its singleton fallback was resolved throws `KICK010`: whatever resolved it holds the fallback instance and would disagree with everything resolving the new binding. Bind your own in a module's `register()` — before anything resolves the token — and keep adapters from resolving the token during boot.
 
