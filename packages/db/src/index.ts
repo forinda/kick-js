@@ -110,6 +110,7 @@ export type {
   BeforeQueryEvent,
   TransactionEvent,
   TransactionOptions,
+  ManualTransaction,
   TransactionRetryEvent,
   TransactionRollbackEvent,
   CreateDbClientOptions,

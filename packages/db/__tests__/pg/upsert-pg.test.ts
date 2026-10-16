@@ -56,6 +56,23 @@ beforeEach(async () => {
 const db = () => createDbClient({ schema, dialect: pgDialect({ pool }) })
 
 describe('upsert on Postgres', () => {
+  it('startTransaction() with an isolation level: rolled back leaves nothing, committed stays', async () => {
+    const client = db()
+    const gone = await client.startTransaction({ isolation: 'serializable' })
+    const level = await sql<{
+      l: string
+    }>`select current_setting('transaction_isolation') as l`.execute(gone.qb)
+    expect(level.rows[0]!.l).toBe('serializable')
+    await gone.insertInto('users').values({ email: 'manual-gone@x.com', name: 'G' }).execute()
+    await gone.rollback()
+    const kept = await client.startTransaction()
+    await kept.insertInto('users').values({ email: 'manual-kept@x.com', name: 'K' }).execute()
+    await kept.commit()
+    const emails = (await client.selectFrom('users').select('email').execute()).map((r) => r.email)
+    expect(emails).toContain('manual-kept@x.com')
+    expect(emails).not.toContain('manual-gone@x.com')
+  }, 60_000)
+
   it('update: false leaves a conflicting row as it is and returns it as stored', async () => {
     const client = db()
     const kept = await client.upsert('users', {

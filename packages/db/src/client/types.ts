@@ -56,6 +56,13 @@ export interface TransactionRetryEvent extends TransactionEvent {
 }
 
 /** Options for `transaction(opts, fn)`. */
+/** A transaction from `startTransaction()`: a client, and the way to finish it. */
+export type ManualTransaction<DB> = KickDbClient<DB> & {
+  /** Commit, then run its `afterCommit` hooks. */
+  commit(): Promise<void>
+  rollback(): Promise<void>
+}
+
 export interface TransactionOptions extends TransactionEvent {
   /**
    * What to do when a transaction is already open on this call chain:
@@ -291,6 +298,19 @@ export interface KickDbClient<DB = RegisteredDB> {
    * stays committed.
    */
   afterCommit(fn: () => unknown): Promise<void>
+
+  /**
+   * Open a transaction you finish yourself — for a test that rolls back what
+   * it wrote, or a transaction handed across layers:
+   *
+   *   const tx = await db.startTransaction()
+   *   try { await tx.insertInto('orders').values(o).execute(); await tx.commit() }
+   *   catch (err) { await tx.rollback(); throw err }
+   *
+   * Prefer `transaction(fn)`, which can't leave one open. Takes its options
+   * but `retry`; its query events carry no `txId`.
+   */
+  startTransaction(opts?: Omit<TransactionOptions, 'retry'>): Promise<ManualTransaction<DB>>
 
   /** Whether this call chain is inside a transaction. */
   readonly inTransaction: boolean

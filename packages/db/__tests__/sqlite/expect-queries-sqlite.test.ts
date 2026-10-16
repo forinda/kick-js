@@ -129,3 +129,52 @@ describe('query event correlation', () => {
     expect(before).toContain(failed[0]!.queryId)
   })
 })
+
+describe('startTransaction()', () => {
+  it('commits or rolls back when told, runs afterCommit, and refuses a second finish', async () => {
+    const db = await seeded()
+    const events: string[] = []
+    db.on('transactionStart', () => {
+      events.push('start')
+    })
+    db.on('transactionCommit', () => {
+      events.push('commit')
+    })
+    db.on('transactionRollback', () => {
+      events.push('rollback')
+    })
+    const count = async () =>
+      Number(
+        (
+          await db
+            .selectFrom('users')
+            .select((eb) => eb.fn.countAll().as('n'))
+            .executeTakeFirstOrThrow()
+        ).n,
+      )
+
+    const kept = await db.startTransaction()
+    let ran = false
+    await kept.insertInto('users').values({ email: 'kept@x.com' }).execute()
+    await kept.afterCommit(() => {
+      ran = true
+    })
+    expect(ran).toBe(false)
+    await kept.commit()
+    expect(ran).toBe(true)
+    expect(await count()).toBe(4)
+    await expect(kept.commit()).rejects.toThrow()
+
+    const dropped = await db.startTransaction()
+    await dropped.insertInto('users').values({ email: 'gone@x.com' }).execute()
+    // Its own savepoint works too.
+    await dropped.savepoint(async (sp) => {
+      await sp.insertInto('users').values({ email: 'sp@x.com' }).execute()
+    })
+    await dropped.rollback()
+    expect(await count()).toBe(4)
+    expect(events).toEqual(['start', 'commit', 'start', 'rollback'])
+
+    await expect(db.transaction(() => db.startTransaction())).rejects.toThrow(/use savepoint/)
+  })
+})
