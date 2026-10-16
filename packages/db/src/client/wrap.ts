@@ -513,7 +513,7 @@ export function wrap<DB>(
     insertMany: ((
       table: string,
       rows: readonly unknown[],
-      opts?: InsertManyOptions & { returning?: boolean },
+      opts?: InsertManyOptions & { returning?: boolean; readBack?: readonly string[] },
     ) => insertMany(client, table as never, rows as never, opts)) as KickDbClient<DB>['insertMany'],
 
     findOrCreate: ((table: string, opts: FindOrCreateOptions<DB, any>) =>

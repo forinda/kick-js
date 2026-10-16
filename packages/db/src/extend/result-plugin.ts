@@ -180,10 +180,13 @@ export class ResultExtensionPlugin implements KyselyPlugin {
 
     for (const [key, rel] of Object.entries(this.relations[table] ?? {})) {
       const value = base[key]
-      // A morphTo row's table follows the source row's type column.
+      // A morphTo subject says which table it came from in `__type` (the
+      // source's type column too, unless `columns` left it out).
+      const tagged =
+        (value as { __type?: unknown } | null)?.__type ?? base[rel.morphTo?.column ?? '']
       const target = rel.morphTo
         ? // The type value is a string in the snapshot; the column may hold a number.
-          rel.morphTo.targets.find((t) => t.value === String(base[rel.morphTo!.column]))?.table
+          rel.morphTo.targets.find((t) => t.value === String(tagged))?.table
         : rel.target
       if (target === undefined) continue
       if (Array.isArray(value)) {

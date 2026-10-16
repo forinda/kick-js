@@ -58,7 +58,13 @@ declare module '../../src/query/types' {
       comments: {
         post: { kind: 'one'; target: 'posts' }
         // morphTo: the target is the union of its tables.
-        subject: { kind: 'one'; target: 'users' | 'posts'; morphTo: true }
+        subject: {
+          kind: 'one'
+          target: 'users' | 'posts'
+          morphTo: { user: 'users'; post: 'posts' }
+        }
+        // A hand-written registry entry without the value → table map.
+        loose: { kind: 'one'; target: 'users' | 'posts'; morphTo: true }
       }
       categories: {
         parent: { kind: 'one'; target: 'categories' }
@@ -87,7 +93,11 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
   })
 
   it('T-morph-to — comments.findMany({ with: { subject: true } }) → either table, or null', () => {
-    type Subject = FixtureDB['users'] | FixtureDB['posts'] | null
+    // Tagged with the type value it was found by.
+    type Subject =
+      | (FixtureDB['users'] & { __type: 'user' })
+      | (FixtureDB['posts'] & { __type: 'post' })
+      | null
     expectTypeOf<Row<'comments', { with: { subject: true } }>['subject']>().toEqualTypeOf<Subject>()
     const withDeleted = { with: { subject: { withDeleted: true } } } satisfies FindManyOptions<
       FixtureDB,
@@ -102,6 +112,13 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
       with: { subject: { limit: 1 } },
     }
     void _bad
+  })
+
+  it('T-morph-to-loose — a hand-written morphTo: true types __type as string', () => {
+    type Loose = Row<'comments', { with: { loose: true } }>['loose']
+    expectTypeOf<Loose>().toEqualTypeOf<
+      ((FixtureDB['users'] | FixtureDB['posts']) & { __type: string }) | null
+    >()
   })
 
   it('T-2-many-many — users.findMany({ with: { posts: { with: { comments: true } } } })', () => {
