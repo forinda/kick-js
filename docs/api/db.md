@@ -303,7 +303,7 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
 }))
 ```
 
-`morphMany(target, { type, id, as, references? })` is a polymorphic `many`: the target rows whose `type` column holds `as` and whose `id` column holds the source's key (`references`, default the source's single-column primary key). No foreign key is involved; it's typed and queried like `many`.
+`morphMany(target, { type, id, as, references? })` is a polymorphic `many`: the target rows whose `type` column holds `as` and whose `id` column holds the source's key (`references`, default the source's single-column primary key). No foreign key is involved; it's typed and queried like `many`. `morphOne` takes the same options and reads one such row, typed and queried like `one`.
 
 ```ts
 export const postsRelations = relations(posts, ({ morphMany }) => ({

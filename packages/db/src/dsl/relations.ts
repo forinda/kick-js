@@ -23,6 +23,19 @@ export interface RelationOne<
    * matching `relationName` on the inverse `many` side.
    */
   relationName?: string
+  morph?: never
+}
+
+/** Set by `morphOne`: the single target row over a `(type, id)` column pair. */
+export interface RelationMorphOne<
+  TTarget extends TableDecl<string, Record<string, ColumnBuilder>> = TableDecl<
+    string,
+    Record<string, ColumnBuilder>
+  >,
+> {
+  kind: 'one'
+  target: TTarget
+  morph: MorphSpec
 }
 
 export interface RelationMany<
@@ -52,7 +65,7 @@ export interface RelationMany<
 }
 
 /**
- * `morphMany(target, { type, id, as })`: the target rows whose `type` column
+ * `morphMany(target, { type, id, as })` / `morphOne(...)`: the target rows whose `type` column
  * holds `as` and whose `id` column holds the source's key (`references`, by
  * default the source's single-column primary key).
  */
@@ -67,7 +80,7 @@ export type ThroughSpec =
   | TableDecl<string, Record<string, ColumnBuilder>>
   | { table: TableDecl<string, Record<string, ColumnBuilder>>; from: ColumnRef[]; to: ColumnRef[] }
 
-export type Relation = RelationOne | RelationMany
+export type Relation = RelationOne | RelationMorphOne | RelationMany
 
 /**
  * Generic so the typegen plugin can read the source table name and
@@ -97,6 +110,10 @@ interface Helpers {
     target: T,
     opts: MorphSpec,
   ) => RelationMany<T>
+  morphOne: <T extends TableDecl<string, Record<string, ColumnBuilder>>>(
+    target: T,
+    opts: MorphSpec,
+  ) => RelationMorphOne<T>
 }
 
 /**
@@ -126,6 +143,7 @@ export function relations<
     }),
     // A `many` with an extra predicate: typed, resolved and compiled on the same path.
     morphMany: (target, opts) => ({ kind: 'many', target, morph: opts }),
+    morphOne: (target, opts) => ({ kind: 'one', target, morph: opts }),
   }
   return {
     __isRelations: true,

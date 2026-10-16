@@ -126,7 +126,7 @@ export interface RelationSnapshot {
    */
   through?: { table: string; sourceColumns: readonly string[]; targetColumns: readonly string[] }
   /**
-   * For a `morphMany`: the target's type column and the value it must hold
+   * For a `morphMany` / `morphOne`: the target's type column and the value it must hold
    * (bound as a parameter). There's no foreign key behind the join.
    */
   morph?: { column: string; value: string }

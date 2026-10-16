@@ -1,4 +1,4 @@
-/** Polymorphic one-to-many (`morphMany`) on MySQL. */
+/** Polymorphic one-to-many (`morphMany`, `morphOne`) on MySQL. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { createPool, type Pool } from 'mysql2/promise'
@@ -30,8 +30,13 @@ const comments = table(
   },
   (t) => ({ subject: index('comments_subject_idx').on(t.subjectType, t.subjectId) }),
 )
-const postRelations = relations(posts, ({ morphMany }) => ({
+const postRelations = relations(posts, ({ morphMany, morphOne }) => ({
   comments: morphMany(comments, { type: comments.subjectType, id: comments.subjectId, as: 'post' }),
+  latestComment: morphOne(comments, {
+    type: comments.subjectType,
+    id: comments.subjectId,
+    as: 'post',
+  }),
 }))
 const podcastRelations = relations(podcasts, ({ morphMany }) => ({
   // A quote in the value: it's bound, so it can't break out of the SQL.
@@ -84,5 +89,17 @@ describe('morphMany on MySQL', () => {
     ])
     const pods = await db.query.podcasts.findMany({ with: { comments: true } })
     expect(pods[0]!.comments.map((c) => c.body)).toEqual(['great episode'])
+  }, 30_000)
+
+  it('morphOne loads one row by type and id, or null', async () => {
+    const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+    const rows = await db.query.posts.findMany({
+      orderBy: (_p, eb) => eb.ref('id'),
+      with: { latestComment: { orderBy: (_c, eb) => desc(eb.ref('id')) } },
+    })
+    expect(rows.map((p) => [p.title, p.latestComment?.body ?? null])).toEqual([
+      ['Hello', 'nice post'],
+      ['Quiet', null],
+    ])
   }, 30_000)
 })

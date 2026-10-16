@@ -184,11 +184,11 @@ export const userRelations = relations(users, ({ many }) => ({
 
 One kind of child row belonging to several kinds of parent — comments on posts, publications and podcasts — can be modelled three ways. Pick by how much the database should guarantee.
 
-| Pattern                   | Schema                                          | Database integrity                     | Read with              |
-| ------------------------- | ----------------------------------------------- | -------------------------------------- | ---------------------- |
-| Exclusive arc             | A nullable foreign key per parent, plus a CHECK | Full: FKs, cascades, exactly-one check | `one` / `many`         |
-| Junction table per parent | `post_comments`, `podcast_comments`, …          | Full: FKs, cascades                    | `many(…, { through })` |
-| Type + id columns         | `subjectType` + `subjectId` on the child        | None — no foreign key is possible      | `morphMany`            |
+| Pattern                   | Schema                                          | Database integrity                     | Read with                |
+| ------------------------- | ----------------------------------------------- | -------------------------------------- | ------------------------ |
+| Exclusive arc             | A nullable foreign key per parent, plus a CHECK | Full: FKs, cascades, exactly-one check | `one` / `many`           |
+| Junction table per parent | `post_comments`, `podcast_comments`, …          | Full: FKs, cascades                    | `many(…, { through })`   |
+| Type + id columns         | `subjectType` + `subjectId` on the child        | None — no foreign key is possible      | `morphMany` / `morphOne` |
 
 ### Exclusive arc
 
@@ -282,7 +282,25 @@ await db.transaction(async (tx) => {
 })
 ```
 
-There's no `morphOne` yet — no relation from a comment back to its subject. Load the subject by switching on `subjectType`:
+`morphOne` is the same pair read as a single row — Laravel's `morphOne`, for a parent with at most one child of the shared table, like a post's cover image. It's typed like `one` (the row, or `null`); give it an `orderBy` when there can be several and you want a particular one:
+
+```ts
+export const postRelations = relations(posts, ({ morphMany, morphOne }) => ({
+  comments: morphMany(comments, { type: comments.subjectType, id: comments.subjectId, as: 'post' }),
+  latestComment: morphOne(comments, {
+    type: comments.subjectType,
+    id: comments.subjectId,
+    as: 'post',
+  }),
+}))
+
+const rows = await db.query.posts.findMany({
+  with: { latestComment: { orderBy: (_c, eb) => desc(eb.ref('id')) } },
+})
+// rows[0].latestComment: Comment | null
+```
+
+There's no relation from a comment back to its subject (Laravel's `morphTo`) yet. Load the subject by switching on `subjectType`:
 
 ```ts
 const subject =

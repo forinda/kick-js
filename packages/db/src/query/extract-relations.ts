@@ -76,6 +76,18 @@ export function extractRelations(
         throw new RelationalQueryAliasCollisionError(sourceTable, relationName)
       }
 
+      if (rel.morph) {
+        out[sourceTable][relationName] = resolveMorph(
+          sourceTable,
+          relationName,
+          rel.kind,
+          rel.target.__name,
+          rel.morph,
+          tables,
+        )
+        continue
+      }
+
       if (rel.kind === 'one') {
         out[sourceTable][relationName] = {
           kind: 'one',
@@ -84,17 +96,6 @@ export function extractRelations(
           targetColumns: rel.references.map((r) => r.__name),
           ...(rel.relationName !== undefined ? { relationName: rel.relationName } : {}),
         }
-        continue
-      }
-
-      if (rel.morph) {
-        out[sourceTable][relationName] = resolveMorph(
-          sourceTable,
-          relationName,
-          rel.target.__name,
-          rel.morph,
-          tables,
-        )
         continue
       }
 
@@ -209,6 +210,7 @@ function findInversesByRelationName(
   for (const [key, rel] of Object.entries(targetRelations)) {
     if (
       rel.kind === 'one' &&
+      !rel.morph &&
       rel.target.__name === sourceTable &&
       rel.relationName === relationName
     ) {
@@ -232,7 +234,12 @@ function findUniqueUntaggedInverse(
 ): RelationOne | null {
   let unique: RelationOne | null = null
   for (const rel of Object.values(targetRelations)) {
-    if (rel.kind === 'one' && rel.target.__name === sourceTable && rel.relationName === undefined) {
+    if (
+      rel.kind === 'one' &&
+      !rel.morph &&
+      rel.target.__name === sourceTable &&
+      rel.relationName === undefined
+    ) {
       if (unique) return null // ambiguous — caller falls through
       unique = rel
     }
@@ -304,18 +311,21 @@ function resolveThrough(
 }
 
 /**
- * A polymorphic one-to-many: target rows whose `type` column holds `as` and
- * whose `id` column holds the source's key. No foreign key backs it.
+ * A polymorphic relation (`morphMany`, or `morphOne` for a single row): target
+ * rows whose `type` column holds `as` and whose `id` column holds the source's
+ * key. No foreign key backs it.
  */
 function resolveMorph(
   sourceTable: string,
   relationName: string,
+  kind: 'one' | 'many',
   target: string,
   morph: MorphSpec,
   tables: Record<string, TableSnapshot>,
 ): ResolvedRelation {
+  const helper = kind === 'one' ? 'morphOne' : 'morphMany'
   const fail = (problem: string) =>
-    new Error(`kickjs-db: morphMany \`${sourceTable}.${relationName}\`: ${problem}`)
+    new Error(`kickjs-db: ${helper} \`${sourceTable}.${relationName}\`: ${problem}`)
   const targetSnap = tables[target]
   if (!targetSnap) throw fail(`the target table '${target}' is not in the schema`)
   for (const c of [morph.type, morph.id]) {
@@ -337,7 +347,7 @@ function resolveMorph(
     throw fail(`'${key}' is not a column of '${sourceTable}'`)
   }
   return {
-    kind: 'many',
+    kind,
     target,
     sourceColumns: [key],
     targetColumns: [morph.id.__name],

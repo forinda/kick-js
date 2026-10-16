@@ -1,6 +1,7 @@
 /**
  * Polymorphic one-to-many: `morphMany(target, { type, id, as })` — one
  * `comments` table shared by posts and podcasts through a `(type, id)` pair.
+ * `morphOne` is the same join, one row.
  */
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
@@ -47,8 +48,13 @@ const reactions = table('reactions', {
     .references(() => comments.id),
   emoji: text().notNull(),
 })
-const postRelations = relations(posts, ({ morphMany }) => ({
+const postRelations = relations(posts, ({ morphMany, morphOne }) => ({
   comments: morphMany(comments, { type: comments.subjectType, id: comments.subjectId, as: 'post' }),
+  latestComment: morphOne(comments, {
+    type: comments.subjectType,
+    id: comments.subjectId,
+    as: 'post',
+  }),
 }))
 const podcastRelations = relations(podcasts, ({ morphMany }) => ({
   comments: morphMany(comments, {
@@ -279,5 +285,39 @@ describe('morphMany with casing, .colName() and tenancy', () => {
       db.query.articles.findMany({ with: { notes: true } }),
     )
     expect(rows[0]!.notes.map((n) => n.body)).toEqual(['ours'])
+  })
+})
+
+describe('morphOne on SQLite', () => {
+  it('loads one row by type and id, or null', async () => {
+    const { db } = await make()
+    const rows = await db.query.posts.findMany({
+      orderBy: (_p, eb) => eb.ref('id'),
+      with: { latestComment: { orderBy: (_c, eb) => desc(eb.ref('id')) } },
+    })
+    // 'spam' (id 3) is soft-deleted; the podcast's comment has subjectId 1 too.
+    expect(rows.map((p) => [p.title, p.latestComment?.body ?? null])).toEqual([
+      ['Hello', 'nice post'],
+      ['Quiet', null],
+    ])
+  })
+
+  it('names morphOne in its errors', () => {
+    expect(() =>
+      createDbClient({
+        schema: {
+          posts,
+          comments,
+          rel: relations(posts, ({ morphOne }) => ({
+            note: morphOne(comments, {
+              type: comments.subjectType,
+              id: comments.subjectId,
+              as: '',
+            }),
+          })),
+        },
+        dialect: sqliteDialect({ database: new Database(':memory:') }),
+      }),
+    ).toThrow(/morphOne `posts.note`: `as` must be a non-empty string/)
   })
 })
