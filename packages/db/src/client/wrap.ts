@@ -109,6 +109,11 @@ export interface InternalContext {
    */
   /** Database names ↔ schema keys, under `casing` or `.colName()`. */
   naming?: import('../extend/result-plugin').Naming
+  /** `'column'` / `'rls'` tenancy: each tenanted table's tenant column, and the current tenant. */
+  tenancy?: {
+    columns: Map<string, import('./tenancy-plugin').TenantColumn>
+    current: () => string | null | undefined
+  }
   query: {
     relations: ResolvedRelations
     tables: Record<string, TableSnapshot>
@@ -510,7 +515,14 @@ export function wrap<DB>(
     },
 
     upsert: (async (table: string, opts: UpsertOptions<DB, any>) => {
-      const rows = await upsert(client, table as never, opts)
+      const column = ctx.tenancy?.columns.get(table)?.name
+      const tenantId = column ? ctx.tenancy!.current() : undefined
+      const rows = await upsert(
+        client,
+        table as never,
+        opts,
+        column && typeof tenantId === 'string' ? { column, id: tenantId } : undefined,
+      )
       return Array.isArray(opts.values) ? rows : rows[0]
     }) as KickDbClient<DB>['upsert'],
 
