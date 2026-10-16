@@ -124,6 +124,7 @@ const guideSidebar = [
       { text: 'Code Generators', link: '/guide/generators' },
       { text: 'Plugin Generators', link: '/guide/plugin-generators' },
       { text: 'Custom Commands', link: '/guide/custom-commands' },
+      { text: 'Using Vite+', link: '/guide/vite-plus' },
     ],
   },
   {

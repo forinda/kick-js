@@ -34,4 +34,6 @@ export interface ModuleContext {
   schemaLib?: SchemaLib
   /** Project has kickjs-testing + supertest — gates the real controller test. */
   testHarness?: boolean
+  /** Module generated tests import from — see `testImportSource`. */
+  testImport?: string
 }

@@ -3,7 +3,7 @@ import type { TemplateContext } from './types'
 /** REST service — wraps the repository with CRUD methods */
 export function generateRestService(ctx: TemplateContext): string {
   const { pascal, kebab } = ctx
-  return `import { Service, Inject, HttpException } from '@forinda/kickjs'
+  return `import { Service, Inject } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
 import { ${pascal.toUpperCase()}_REPOSITORY, type ${pascal}Repository } from './${kebab}.repository'
 import type { ${pascal}ResponseDTO } from './dtos/${kebab}-response.dto'

@@ -14,7 +14,14 @@ import type { TemplateContext } from './types'
  * never be mistaken for coverage.
  */
 export function generateControllerTest(ctx: TemplateContext): string {
-  const { pascal, kebab, plural = '', style = 'define', testHarness = false } = ctx
+  const {
+    pascal,
+    kebab,
+    plural = '',
+    style = 'define',
+    testHarness = false,
+    testImport = 'vitest',
+  } = ctx
   const route = ctx.routePath ?? plural
   // `define` modules are factories; `class` modules are passed as the class.
   // Getting this wrong yields `TypeError: entry is not a constructor`.
@@ -24,7 +31,7 @@ export function generateControllerTest(ctx: TemplateContext): string {
   // compile — the same rule that gates `@ApiTags` on `swagger`. Those projects
   // get the identical scaffold with every case as a todo and no extra imports.
   const header = testHarness
-    ? `import { describe, it, expect, beforeEach } from 'vitest'
+    ? `import { describe, it, expect, beforeEach } from '${testImport}'
 import request from 'supertest'
 import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
@@ -45,7 +52,7 @@ import { ${pascal}Module } from '../${kebab}.module'
  */
 const BASE = '/api/v1/${route}'
 `
-    : `import { describe, it, beforeEach } from 'vitest'
+    : `import { describe, it, beforeEach } from '${testImport}'
 import { Container } from '@forinda/kickjs'
 
 // Install \`@forinda/kickjs-testing\` and \`supertest\` to boot this module in a
@@ -150,10 +157,16 @@ ${
 }
 
 export function generateRepositoryTest(ctx: TemplateContext): string {
-  const { pascal, kebab, plural = '', repoPrefix = `../${kebab}.repository` } = ctx
+  const {
+    pascal,
+    kebab,
+    plural = '',
+    repoPrefix = `../${kebab}.repository`,
+    testImport = 'vitest',
+  } = ctx
   const factory = `create${pascal}Repository`
 
-  return `import { describe, it, expect, beforeEach } from 'vitest'
+  return `import { describe, it, expect, beforeEach } from '${testImport}'
 import { ${factory}, type ${pascal}Repository } from '${repoPrefix}'
 
 describe('${pascal} repository', () => {

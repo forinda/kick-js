@@ -17,7 +17,7 @@ import { generateContributor, type ContributorType } from '../generators/contrib
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
-import { hasDependency, hasSwagger, resolveSchemaLib } from '../config'
+import { hasDependency, hasSwagger, resolveSchemaLib, testImportSource } from '../config'
 import { findProjectRoot } from '../utils/project-root'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
@@ -331,6 +331,7 @@ async function runModuleGeneration(
       force: opts.force,
       pattern,
       testHarness,
+      testImport: testImportSource(projectRoot),
       dryRun,
       pluralize: shouldPluralize,
       pluralizeRoutes,
@@ -682,6 +683,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pluralize: resolvePluralize(undefined, mc),
+        testImport: testImportSource(findProjectRoot()),
       })
       printGenerated(files, dryRun)
     })

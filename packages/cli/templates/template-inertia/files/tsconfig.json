@@ -10,6 +10,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "sourceMap": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "outDir": "dist",
@@ -18,5 +20,5 @@
       "~/*": ["./src/client/*"]
     }
   },
-  "include": ["src", "db", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"]
+  "include": ["src", "db", "*.config.ts", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"]
 }

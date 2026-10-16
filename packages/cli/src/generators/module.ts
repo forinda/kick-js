@@ -52,6 +52,8 @@ interface GenerateModuleOptions {
    * imports would not resolve and the generated file could not compile.
    */
   testHarness?: boolean
+  /** Module generated tests import from — see `testImportSource`. */
+  testImport?: string
   /**
    * Module declaration style — `'define'` (factory, default) or
    * `'class'` (legacy). Resolved by the orchestrating command from
@@ -118,6 +120,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     swagger: options.swagger ?? false,
     schemaLib: options.schemaLib ?? 'zod',
     testHarness: options.testHarness ?? false,
+    testImport: options.testImport,
     style: options.style ?? 'define',
     write,
     files,
@@ -128,6 +131,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
       await generateMinimalFiles(ctx)
       break
     case 'rest':
+    case 'inertia':
     default:
       await generateRestFiles(ctx)
       break

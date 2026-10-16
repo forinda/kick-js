@@ -24,8 +24,11 @@ export interface KickCommandDefinition {
   aliases?: string[]
 }
 
-/** Project pattern — controls what generators produce and which deps are installed */
-export type ProjectPattern = 'rest' | 'minimal'
+/**
+ * Project pattern — controls what generators produce and which deps are installed.
+ * `kick new` writes the template name here; an `inertia` app generates `rest` modules.
+ */
+export type ProjectPattern = 'rest' | 'minimal' | 'inertia'
 
 /** Package manager used for `kick add` and other dep-installing commands */
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
@@ -424,6 +427,7 @@ export interface KickConfig {
    * `--pattern` overrides it per call.
    * - 'rest' — flat module: controller, service, DTOs, repository (default)
    * - 'minimal' — controller + module only
+   * - 'inertia' — written by `kick new -t inertia`; modules generate as 'rest'
    */
   pattern?: ProjectPattern
   /**
@@ -702,6 +706,17 @@ export function hasDependency(
     // and emitting an import we cannot justify is the failure being fixed.
     return false
   }
+}
+
+/**
+ * Where generated tests import `describe`/`it`/`expect` from. `vp migrate`
+ * (Vite+) drops the `vitest` dependency and serves the same API from
+ * `vite-plus/test`, so an app on vite-plus without vitest gets that.
+ */
+export function testImportSource(cwd: string): 'vitest' | 'vite-plus/test' {
+  return hasDependency(cwd, 'vite-plus', 'any') && !hasDependency(cwd, 'vitest', 'any')
+    ? 'vite-plus/test'
+    : 'vitest'
 }
 
 /**
