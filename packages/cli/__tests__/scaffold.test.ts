@@ -145,7 +145,7 @@ describe('kick g scaffold', () => {
 
   it('the in-memory repository honours filters, search and sort', () => {
     assertCliOk(runCli(fixture, ['g', 'module', 'widget']), 'kick g module widget')
-    // Run the generated repository test itself — it exercises findPaginated.
+    // Run the generated repository test itself — it exercises findPaginated and findAfter.
     const vitest = spawnSync(
       'node',
       [
@@ -158,6 +158,9 @@ describe('kick g scaffold', () => {
     )
     expect(vitest.stdout + vitest.stderr).toContain(
       'should filter, search and sort before paginating',
+    )
+    expect(vitest.stdout + vitest.stderr).toContain(
+      'pages through rows with findAfter, stable when sort keys tie',
     )
     expect(vitest.status, vitest.stdout + vitest.stderr).toBe(0)
   })

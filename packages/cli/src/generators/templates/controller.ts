@@ -48,6 +48,13 @@ import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
 export class ${pascal}Controller {
   @Autowired() private readonly ${camel}Service!: ${pascal}Service
 
+  // Offset pages (?page=&limit=). For keyset pages (?cursor=&limit=) — stable
+  // under concurrent inserts, no deep OFFSET scans — swap the body for:
+  //   return ctx.paginateCursor(
+  //     (q) => this.${camel}Service.findAfter({ ...q, limit: q.limit + 1 }),
+  //     ${pascal.toUpperCase()}_QUERY_CONFIG,
+  //   )
+  // https://kickjs.app/guide/query-parsing#cursor-pagination
   @Get('/')
 ${apiTags}  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
   async list(ctx: Ctx<KickRoutes.${pascal}Controller['list']>) {

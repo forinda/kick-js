@@ -28,6 +28,10 @@ export class ${pascal}Service {
     return this.repo.findPaginated(parsed)
   }
 
+  async findAfter(query: Parameters<${pascal}Repository['findAfter']>[0]) {
+    return this.repo.findAfter(query)
+  }
+
   async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
     return this.repo.create(dto)
   }
