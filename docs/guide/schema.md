@@ -27,7 +27,7 @@ const envSchema = fromZod(
   }),
 )
 
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema; read values with getEnv('KEY')
 export default envSchema
 ```
 
@@ -271,7 +271,7 @@ const envSchema = detectSchema(
   }).unknown(true), // ← required, see below
 )
 
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema; read values with getEnv('KEY')
 export default envSchema
 ```
 

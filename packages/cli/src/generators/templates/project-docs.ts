@@ -680,7 +680,7 @@ export const RedisAdapter = defineAdapter<RedisConfig>({
 })
 
 // In src/adapters/index.ts:
-export const adapters = [RedisAdapter({ url: env.REDIS_URL })] // <-- note parens
+export const adapters = [RedisAdapter({ url: getEnv('REDIS_URL') })] // <-- note parens
 \`\`\`
 
 **Lifecycle hook decision tree**:
@@ -738,7 +738,7 @@ export const AuthPlugin = definePlugin({
 })
 
 // In bootstrap:
-bootstrap({ plugins: [AuthPlugin({ tokenTtl: env.TOKEN_TTL })] }) // <-- parens
+bootstrap({ plugins: [AuthPlugin({ tokenTtl: getEnv('TOKEN_TTL') })] }) // <-- parens
 \`\`\`
 
 **Inline plugin literal** — the canonical answer for one-off DI bindings. There's no top-level \`register:\` on \`bootstrap\` itself:
@@ -856,8 +856,10 @@ people lose time on. The manual checks below are the same reasoning.
    import { loadEnvFromSchema } from '@forinda/kickjs/config'
    import { fromZod } from '@forinda/kickjs-schema/zod'
    const envSchema = fromZod(z.object({ DATABASE_URL: z.url() }))
-   export const env = loadEnvFromSchema(envSchema)
+   loadEnvFromSchema(envSchema) // side effect: registers the schema
+   export default envSchema
    \`\`\`
+   App code reads values with \`getEnv('DATABASE_URL')\` (from \`@forinda/kickjs\`), an injected \`ConfigService\`, or \`@Value()\` — the config file exports no env object.
 3. The new key MUST be declared in the schema. \`@Value('NEW_KEY')\` accepts any string at the type level and **falls back to raw \`process.env\`** when the schema doesn't know the key — silently skipping its parsing and defaults.
 4. After adding a key, re-run \`kick typegen\` (or restart \`kick dev\` if the typegen watcher missed it) so the global \`KickEnv\` augmentation picks it up.
 
@@ -924,7 +926,7 @@ export const modules = defineModules().mount(HelloModule()).mount(UsersModule())
 export const middleware = [requestId(), express.json(), helmet(), cors(), traceContext()]
 
 // src/plugins/index.ts
-export const plugins = [MetricsPlugin(), AuthPlugin({ tokenTtl: env.TOKEN_TTL })]
+export const plugins = [MetricsPlugin(), AuthPlugin({ tokenTtl: getEnv('TOKEN_TTL') })]
 
 // src/adapters/index.ts
 export const adapters = [SwaggerAdapter({ ... }), DevToolsAdapter()]

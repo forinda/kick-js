@@ -23,7 +23,7 @@ KickJS provides an `AuthAdapter` that runs during the `beforeRoutes` lifecycle p
 AuthAdapter({
   strategies: [
     JwtStrategy({
-      secret: env.JWT_SECRET,
+      secret: getEnv('JWT_SECRET'),
       mapPayload: (payload: any) => ({
         id: payload.sub,
         email: payload.email,
@@ -51,12 +51,12 @@ I set `defaultPolicy: 'protected'` and configured it in our adapters:
 
 ```typescript
 export const adapters = [
-  MongooseAdapter(env.MONGODB_URI),
-  RedisAdapter(env.REDIS_URL),
+  MongooseAdapter(getEnv('MONGODB_URI')),
+  RedisAdapter(getEnv('REDIS_URL')),
   AuthAdapter({
     strategies: [
       JwtStrategy({
-        secret: env.JWT_SECRET,
+        secret: getEnv('JWT_SECRET'),
         mapPayload: (payload: any) => ({
           id: payload.sub,
           email: payload.email,
@@ -217,8 +217,8 @@ export class RegisterUseCase {
   private generateAccessToken(user: any): string {
     return jwt.sign(
       { sub: user._id.toString(), email: user.email, globalRole: user.globalRole },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
+      getEnv('JWT_SECRET'),
+      { expiresIn: getEnv('JWT_ACCESS_EXPIRES_IN') as any },
     )
   }
 }
@@ -257,8 +257,8 @@ export class LoginUseCase {
 
     const accessToken = jwt.sign(
       { sub: user._id.toString(), email: user.email, globalRole: user.globalRole },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
+      getEnv('JWT_SECRET'),
+      { expiresIn: getEnv('JWT_ACCESS_EXPIRES_IN') as any },
     )
 
     const refreshToken = uuidv4()
@@ -333,8 +333,8 @@ export class RefreshTokenUseCase {
 
     const accessToken = jwt.sign(
       { sub: user._id.toString(), email: user.email, globalRole: user.globalRole },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
+      getEnv('JWT_SECRET'),
+      { expiresIn: getEnv('JWT_ACCESS_EXPIRES_IN') as any },
     )
 
     return { accessToken, refreshToken: newRefreshToken }

@@ -528,7 +528,7 @@ export function resetEnvCache(): void {
  *   NODE_ENV: v.picklist(['development', 'production', 'test']),
  * }))
  *
- * export const env = loadEnvFromSchema(envSchema)
+ * loadEnvFromSchema(envSchema) // registers the schema; read values with getEnv('PORT')
  * ```
  */
 /**

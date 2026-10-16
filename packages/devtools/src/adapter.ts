@@ -216,7 +216,10 @@ let snapshotInProgress = false
 export interface DevToolsOptions {
   /** Base path for debug endpoints (default: '/_debug') */
   basePath?: string
-  /** Only enable when this is true (default: process.env.NODE_ENV !== 'production') */
+  /**
+   * Mount the dashboard. Default: only when `NODE_ENV` is `'development'` or
+   * `'test'` — an unset or unrecognised `NODE_ENV` keeps `/_debug` off.
+   */
   enabled?: boolean
   /**
    * Include environment variables (sanitized) at /_debug/config, with where
@@ -327,7 +330,7 @@ export interface DevToolsAdapterExtensions {
  *   modules: [UserModule],
  *   adapters: [
  *     DevToolsAdapter({
- *       enabled: process.env.NODE_ENV !== 'production',
+ *       // Default: on only under NODE_ENV=development or test.
  *       exposeConfig: true,
  *       configPrefixes: ['APP_', 'DATABASE_'],
  *     }),
@@ -345,7 +348,9 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
   },
   build: (options) => {
     const basePath = options.basePath!
-    const enabled = options.enabled ?? process.env.NODE_ENV !== 'production'
+    // Fail closed: an unset NODE_ENV is how many production deploys run.
+    const enabled =
+      options.enabled ?? (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
     const exposeConfig = options.exposeConfig!
     const configPrefixes = options.configPrefixes!
     const errorRateThreshold = options.errorRateThreshold!

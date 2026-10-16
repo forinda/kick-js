@@ -34,7 +34,7 @@ What the server reads from the environment:
 | Variable         | Needed by       | Notes                                                          |
 | ---------------- | --------------- | -------------------------------------------------------------- |
 | `PORT`           | every app       | default `3000`                                                 |
-| `NODE_ENV`       | every app       | `production`: secure cookies, generic 5xx messages             |
+| `NODE_ENV`       | every app       | unset counts as `production`: secure cookies, opaque 5xx       |
 | `SESSION_SECRET` | Inertia apps    | the app refuses to start without it; a long random string      |
 | `APP_URL`        | Inertia apps    | the site's public URL — canonical links, sitemap; required     |
 | your own keys    | your env schema | validated at startup — see [Configuration](./configuration.md) |

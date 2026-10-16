@@ -175,6 +175,6 @@ A cookie made with an older secret is re-issued with the first one on the next r
 
 - Session cookies are signed with **HMAC-SHA256** using timing-safe comparison; with `store: 'cookie'` the whole value is encrypted and authenticated with AES-256-GCM
 - Always use a strong, random `secret` — at least 32 characters
-- Set `cookie.secure: true` in production (done automatically when `NODE_ENV === 'production'`)
+- Set `cookie.secure: true` in production (done automatically unless `NODE_ENV` is `development` or `test` — an unset `NODE_ENV` counts as production)
 - Call `session.regenerate()` after login to prevent session fixation
 - `session()` parses cookies internally — `cookie-parser` is optional, not required

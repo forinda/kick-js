@@ -70,7 +70,7 @@ by the server, or fetched from an endpoint of your own.
 | `checkOrigin`    | `boolean`  | `true`                               |
 | `cookieOptions`  | object     | See above                            |
 
-The `secure` cookie flag defaults to `true` when `NODE_ENV` is `'production'` and `false` otherwise.
+The `secure` cookie flag defaults to `false` only when `NODE_ENV` is `'development'` or `'test'`, and `true` otherwise — an unset `NODE_ENV` counts as production.
 
 ### Frontend on another origin
 

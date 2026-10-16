@@ -10,6 +10,7 @@ export * from './core'
 
 // ── HTTP ────────────────────────────────────────────────────────────────
 export {
+  APPLICATION,
   Application,
   type ApplicationOptions,
   type MiddlewareEntry,

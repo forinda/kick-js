@@ -37,8 +37,10 @@ const envSchema = fromYup(
  *
  * As long as `src/index.ts` imports this file (`import './config'`) at
  * the top — before `bootstrap()` runs — every controller and service
- * in the app sees the typed extended values.
+ * in the app sees the typed extended values. Read them with
+ * `getEnv('KEY')` from `@forinda/kickjs`, `ConfigService`, or `@Value()`;
+ * this file exports no parsed env object.
  */
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema)
 
 export default envSchema

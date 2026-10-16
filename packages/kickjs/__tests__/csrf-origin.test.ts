@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import express from 'express'
+import request from 'supertest'
 import { csrf, isAllowedOrigin } from '../src/http/middleware/csrf'
 
 const none = new Set<string>()
@@ -109,5 +111,31 @@ describe('csrf() origin check', () => {
   it('rejects a trustedOrigins entry that is not an origin', () => {
     expect(() => csrf({ trustedOrigins: ['https://a.test/path'] })).toThrow(/origin/)
     expect(() => csrf({ trustedOrigins: ['app.a.test'] })).toThrow(/not an http\(s\) origin/)
+  })
+})
+
+describe('csrf cookie Secure flag', () => {
+  const original = process.env.NODE_ENV
+  afterEach(() => {
+    if (original === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = original
+  })
+
+  const setCookie = async (nodeEnv: string | undefined) => {
+    if (nodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = nodeEnv
+    const app = express()
+    app.use(csrf())
+    app.get('/', (_req, res) => res.send('ok'))
+    const res = await request(app).get('/')
+    return String(res.headers['set-cookie'])
+  }
+
+  // Fails closed: an unset NODE_ENV must not hand out an insecure cookie.
+  it('is Secure unless NODE_ENV is development or test', async () => {
+    expect(await setCookie(undefined)).toMatch(/;\s*Secure/i)
+    expect(await setCookie('production')).toMatch(/;\s*Secure/i)
+    expect(await setCookie('development')).not.toMatch(/;\s*Secure/i)
+    expect(await setCookie('test')).not.toMatch(/;\s*Secure/i)
   })
 })

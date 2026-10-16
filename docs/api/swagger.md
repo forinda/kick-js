@@ -29,7 +29,7 @@ interface SwaggerAdapterOptions extends SwaggerOptions {
   redocPath?: string // default: '/redoc'
   specPath?: string // default: '/openapi.json'
   adapters?: any[] // peer adapters to discover (e.g. WsAdapter)
-  disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
+  disableInProd?: boolean // skip mounting unless NODE_ENV is 'development' or 'test'
   renderSwaggerUI?: UIRenderer // swap the Swagger UI shell
   renderReDoc?: UIRenderer // swap the ReDoc shell
 }

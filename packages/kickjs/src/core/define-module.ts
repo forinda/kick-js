@@ -178,3 +178,18 @@ export function defineModule<TConfig = Record<string, unknown>, TExtra = unknown
 
   return factory
 }
+
+/**
+ * The name a module is labelled with in diagnostics — `describeConfig()`,
+ * `.env.example`'s "declared by", the contributors table. `defineModule`
+ * stamps it as `__moduleName`; a hand-written module may carry `name`; a
+ * class module falls back to its class name. Plain objects say `module`, not
+ * `Object`.
+ */
+export function moduleName(mod: AppModule): string {
+  const { __moduleName, name } = mod as { __moduleName?: unknown; name?: unknown }
+  if (typeof __moduleName === 'string' && __moduleName) return __moduleName
+  if (typeof name === 'string' && name) return name
+  const ctorName = mod.constructor?.name
+  return ctorName && ctorName !== 'Object' ? ctorName : 'module'
+}

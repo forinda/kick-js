@@ -97,6 +97,12 @@ describe('resolveDevtoolsFlag', () => {
     process.env.NODE_ENV = 'development'
     expect(resolveDevtoolsFlag()).toBe(true)
   })
+
+  it('fails closed on an unset NODE_ENV when no env arg is given', () => {
+    delete process.env.KICKJS_DEVTOOLS
+    delete process.env.NODE_ENV
+    expect(resolveDevtoolsFlag()).toBe(false)
+  })
 })
 
 // ── devtoolsFlagPlugin direct ─────────────────────────────────────────

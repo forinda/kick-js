@@ -156,7 +156,7 @@ const envSchema = fromValibot(
   }),
 )
 
-export const env = loadEnvFromSchema(envSchema)
+loadEnvFromSchema(envSchema) // side effect: registers the schema; read values with getEnv('KEY')
 export default envSchema
 ```
 

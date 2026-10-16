@@ -176,7 +176,7 @@ function isPlainObjectOrArray(v: unknown): v is object {
  * (`ctx.body.user.name = 'x'`, `ctx.files[0].fieldname = 'y'`,
  * `ctx.body.tags.push(...)`) all surface a warning — matching the
  * prior `DeepReadonly<T>` contract at runtime instead of at the type
- * level. In production (`process.env.NODE_ENV === 'production'`) the
+ * level. In production (any `NODE_ENV` but `development` / `test`) the
  * proxy is bypassed entirely and `target` is returned as-is so the
  * hot path stays zero-cost.
  *

@@ -10,15 +10,21 @@ import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 
 bootstrap({
   modules: [UserModule, ProductModule],
-  adapters: [
-    DevToolsAdapter({
-      enabled: process.env.NODE_ENV !== 'production',
-    }),
-  ],
+  adapters: [DevToolsAdapter()],
 })
 ```
 
-DevTools endpoints are now available at `/_debug/*`.
+DevTools endpoints are now available at `/_debug/*` — when `NODE_ENV` is `development` or `test`. Under any other value, **including an unset `NODE_ENV`**, the adapter stays off; pass `enabled: true` to mount it anyway (a staging box, say).
+
+`kick add devtools` (and `kick new` with DevTools selected) writes the dev-only form below instead, so the package never reaches the production bundle — as a spread in the `adapters` list, with the flag's type referenced from `src/devtools.d.ts`:
+
+```ts
+adapters: [
+  ...(__KICKJS_DEVTOOLS__
+    ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()]
+    : []),
+],
+```
 
 ### Stripping DevTools from production bundles
 
@@ -285,8 +291,8 @@ DevToolsAdapter({
   // Base path for debug endpoints (default: '/_debug')
   basePath: '/_debug',
 
-  // Only enable when true (default: process.env.NODE_ENV !== 'production')
-  enabled: process.env.NODE_ENV !== 'production',
+  // Mount the dashboard (default: only when NODE_ENV is 'development' or 'test')
+  enabled: true,
 
   // Expose sanitized env vars at /_debug/config (default: false)
   exposeConfig: true,
@@ -562,7 +568,7 @@ The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension]
 
 ## Security
 
-- DevTools is **disabled by default in production** (`NODE_ENV === 'production'`)
+- DevTools is **off by default** unless `NODE_ENV` is `development` or `test` — an unset `NODE_ENV` keeps it off
 - Config endpoint is **opt-in** and redacts all variables not matching your prefix list
 - Consider adding authentication middleware if exposing in staging environments
 - The browser dashboard's auth gate (above) is the front door for `requireToken: true` mounts; the token is sent as `x-devtools-token` header on every request

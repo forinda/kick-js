@@ -235,7 +235,7 @@ Development uses `ConsoleProvider` which logs emails to stdout:
 ```typescript
 MailerAdapter({
   provider: new ConsoleProvider(),
-  defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
+  defaultFrom: { name: getEnv('MAIL_FROM_NAME'), address: getEnv('MAIL_FROM_EMAIL') },
 })
 ```
 
@@ -244,10 +244,10 @@ For production, swap to Resend:
 ```typescript
 MailerAdapter({
   provider:
-    env.NODE_ENV === 'production'
-      ? new ResendMailProvider(env.RESEND_API_KEY)
+    getEnv('NODE_ENV') === 'production'
+      ? new ResendMailProvider(getEnv('RESEND_API_KEY'))
       : new ConsoleProvider(),
-  defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
+  defaultFrom: { name: getEnv('MAIL_FROM_NAME'), address: getEnv('MAIL_FROM_EMAIL') },
 })
 ```
 

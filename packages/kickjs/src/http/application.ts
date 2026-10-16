@@ -1,5 +1,8 @@
 import http from 'node:http'
 import { HttpException } from '../core/errors'
+import { isProduction } from '../core/is-production'
+import { moduleName } from '../core/define-module'
+import { createToken } from '../core/token'
 import { runCronJobs } from '../core/cron'
 import { matchesBearer } from '../core/web-crypto'
 import https from 'node:https'
@@ -730,6 +733,18 @@ function isConstructible(fn: unknown): boolean {
   }
 }
 
+/**
+ * The running {@link Application} — for a service that needs the app itself,
+ * e.g. to call `describeConfig()` or `urlFor()`. Bound when the app is
+ * constructed and again on each `setup()` (an HMR rebuild resets the
+ * container). One per process, like every DI binding.
+ *
+ * ```ts
+ * constructor(@Inject(APPLICATION) private readonly app: Application) {}
+ * ```
+ */
+export const APPLICATION = createToken<Application>('kick/Http/Application')
+
 export class Application {
   private app: Express
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
@@ -800,6 +815,7 @@ export class Application {
     // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
     this.app = this.createEngineApp()
     this.container = Container.getInstance()
+    this.container.registerInstance(APPLICATION, this)
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
     // Plugins without `dependsOn` keep their declaration order — this is a
@@ -982,7 +998,7 @@ export class Application {
    */
   /** Build the adapter context object (shared across all hooks) */
   private adapterCtx(server?: any): AdapterContext {
-    const env = process.env.NODE_ENV ?? 'development'
+    const env = process.env.NODE_ENV ?? 'production'
     return {
       http: this.adapterHttp(),
       app: this.app,
@@ -990,7 +1006,7 @@ export class Application {
       container: this.container,
       server,
       env,
-      isProduction: env === 'production',
+      isProduction: isProduction(),
     }
   }
 
@@ -1126,11 +1142,7 @@ export class Application {
     for (const adapter of this.adapters) add(`adapter ${adapter.name}`, adapter.settings?.())
     for (const entry of this.collectModules().entries) {
       const mod = toAppModule(entry)
-      const name = (mod as { name?: unknown }).name
-      add(
-        `module ${typeof name === 'string' && name ? name : (mod.constructor?.name ?? 'module')}`,
-        mod.settings?.(),
-      )
+      add(`module ${moduleName(mod)}`, mod.settings?.())
     }
     return { env: describeEnvSchema(), sections }
   }
@@ -1193,6 +1205,7 @@ export class Application {
     // routes fill it in as they mount.
     this.routeUrls = new RouteUrls()
     this.container.registerInstance(ROUTE_URLS, this.routeUrls)
+    this.container.registerInstance(APPLICATION, this)
     this.settingsPrefixes = new Map()
     this.settingsProvided = new Map()
     // Settings sections declared by bootstrap, plugins and enabled adapters:
@@ -1447,18 +1460,7 @@ export class Application {
     this.mountedRouteInfo = []
 
     for (const mod of modules) {
-      // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
-      // over `constructor.name`. Factory-built modules are plain objects whose
-      // constructor is `Object` — falling straight to `constructor.name` would
-      // degrade every label in the DevTools Contributors table to "Object".
-      const declaredName = (mod as { name?: unknown }).name
-      const ctorName = mod.constructor?.name
-      const moduleLabel =
-        typeof declaredName === 'string' && declaredName.length > 0
-          ? declaredName
-          : ctorName && ctorName !== 'Object'
-            ? ctorName
-            : 'module'
+      const moduleLabel = moduleName(mod)
       const moduleSources: SourcedRegistration[] = (mod.contributors?.() ?? []).map(
         (registration): SourcedRegistration => ({
           source: 'module',

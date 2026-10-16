@@ -28,6 +28,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { createServer } from 'node:net'
@@ -61,11 +62,11 @@ const SCENARIOS = {
   },
   'kick-add-wiring': {
     args: ['--runtime', 'fastify'],
-    add: ['swagger', 'ws', 'queue'],
+    add: ['swagger', 'ws', 'queue', 'devtools'],
     get: ['/api/v1/hello', '/openapi.json'],
   },
   inertia: {
-    args: ['--template', 'inertia'],
+    args: ['--template', 'inertia', '--packages', 'devtools'],
     buildScript: true,
     get: ['/api/v1/hello', '/', '/posts', '/sitemap.xml', '/robots.txt'],
     // Rendered on the server, not the client-side fallback; meta in the head.
@@ -79,7 +80,7 @@ const SCENARIOS = {
     docker: true,
   },
   fullstack: {
-    args: ['--template', 'fullstack', '--packages', 'swagger'],
+    args: ['--template', 'fullstack', '--packages', 'swagger,devtools'],
     fullstack: true,
     get: ['/api/v1/hello', '/openapi.json'],
     deploy: true,
@@ -321,6 +322,23 @@ async function dockerImage(name, root, paths, contains) {
   }
 }
 
+const usesDevtools = (scenario) =>
+  [...scenario.args, ...(scenario.add ?? [])].some((arg) => /(^|,)devtools(,|$)/.test(arg))
+
+/** The production build leaves DevTools out: no file but sourcemaps names the package. */
+function noDevtoolsIn(dist) {
+  const hits = readdirSync(dist, { recursive: true, encoding: 'utf-8' }).filter((rel) => {
+    const abs = join(dist, rel)
+    return (
+      !rel.endsWith('.map') &&
+      statSync(abs).isFile() &&
+      readFileSync(abs, 'utf-8').includes('kickjs-devtools')
+    )
+  })
+  if (hits.length > 0) throw new Error(`dist/ references kickjs-devtools: ${hits.join(', ')}`)
+  console.log('  · no kickjs-devtools in dist/ … ok')
+}
+
 async function runScenario(name, scenario, tarballs) {
   console.log(`\n▶ ${name}`)
   const work = mkdtempSync(join(tmpdir(), `kick-matrix-${name}-`))
@@ -365,6 +383,7 @@ async function runScenario(name, scenario, tarballs) {
     // The inertia template's build script also builds the pages and the SSR bundle.
     if (scenario.buildScript) run('build', 'pnpm', ['run', 'build'], server)
     else run('kick build', 'pnpm', ['exec', 'kick', 'build'], server)
+    if (usesDevtools(scenario)) noDevtoolsIn(join(server, 'dist'))
     await boot(server, scenario.get)
     if (scenario.deploy) await deployBuilds(root, scenario.get, scenario.contains)
     if (scenario.docker) await dockerImage(name, root, scenario.get, scenario.contains)

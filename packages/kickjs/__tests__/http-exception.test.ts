@@ -157,7 +157,7 @@ describe('HttpException', () => {
       expect(res.body).not.toHaveProperty('errors')
     })
 
-    it('hides validation details too in production (strict policy)', async () => {
+    it('keeps a 422 per-field { field, message } in production, nothing more', async () => {
       process.env.NODE_ENV = 'production'
       const err = HttpException.unprocessable('bad', [
         { field: 'email', message: 'invalid', code: 'invalid_string' },
@@ -165,7 +165,26 @@ describe('HttpException', () => {
       const res = await request(appThrowing(err)).get('/boom')
       expect(res.status).toBe(422)
       expect(res.body.detail).toBe('bad')
+      expect(res.body.errors).toEqual([{ field: 'email', message: 'invalid' }])
+    })
+
+    it('hides a 422 whose details are not field errors in production', async () => {
+      process.env.NODE_ENV = 'production'
+      const err = new HttpException(422, 'bad', { sql: 'select * from users' })
+      const res = await request(appThrowing(err)).get('/boom')
       expect(res.body).not.toHaveProperty('errors')
+    })
+
+    it("hides a raw ZodError's field paths in production — it may be the app parsing internal data", async () => {
+      process.env.NODE_ENV = 'production'
+      const zodError = Object.assign(new Error('bad'), {
+        name: 'ZodError',
+        issues: [{ path: ['dbRow', 'secret_column'], message: 'Required', code: 'invalid_type' }],
+      })
+      const res = await request(appThrowing(zodError)).get('/boom')
+      expect(res.status).toBe(422)
+      expect(res.body).not.toHaveProperty('errors')
+      expect(JSON.stringify(res.body)).not.toContain('secret_column')
     })
 
     it('keeps headers in production even when details are hidden', async () => {
@@ -185,11 +204,11 @@ describe('HttpException', () => {
       expect(res.body.errors).toHaveLength(1)
     })
 
-    it('shows details when NODE_ENV is unset (treated as non-prod)', async () => {
+    it('hides details when NODE_ENV is unset (fails closed, treated as production)', async () => {
       delete process.env.NODE_ENV
       const err = new HttpException(400, 'bad', { reason: 'test' })
       const res = await request(appThrowing(err)).get('/boom')
-      expect(res.body.errors).toEqual({ reason: 'test' })
+      expect(res.body).not.toHaveProperty('errors')
     })
   })
 })

@@ -126,9 +126,9 @@ export interface AdapterContext {
    * for HTTP/1.1 clients, which is what WebSocket libraries attach to.
    */
   server?: KickServer
-  /** Current NODE_ENV value (default: 'development') */
+  /** Current NODE_ENV value (default: 'production' — unset fails closed) */
   env: string
-  /** true when NODE_ENV === 'production' */
+  /** true unless NODE_ENV is exactly 'development' or 'test' */
   isProduction: boolean
 }
 

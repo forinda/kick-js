@@ -78,7 +78,7 @@ const user = await api.users.create({ email: 'a@b.com' })
 bootstrap({
   modules,
   observability: {
-    tracer: new SentryTracerProvider({ dsn: env.SENTRY_DSN }),
+    tracer: new SentryTracerProvider({ dsn: getEnv('SENTRY_DSN') }),
     metrics: new PrometheusMetricsProvider({ endpoint: '/metrics' }),
   },
 })

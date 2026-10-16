@@ -21,8 +21,8 @@ export const app = await bootstrap({
   modules,
   adapters: [
     DevToolsAdapter({
-      // secret: env.DEVTOOLS_SECRET,  // require the token (x-devtools-token header or ?token=) on /_debug/*
-      // enabled: env.NODE_ENV !== 'production',  // or gate the adapter off entirely outside dev
+      // secret: getEnv('DEVTOOLS_SECRET'),  // require the token (x-devtools-token header or ?token=) on /_debug/*
+      // enabled: true,  // mount even when NODE_ENV isn't development or test (the default gate)
     }),
   ],
 })
