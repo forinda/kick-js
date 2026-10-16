@@ -103,7 +103,7 @@ export class ResultExtensionPlugin implements KyselyPlugin {
     const tableName = this.naming.tableKey(dbTable)
     const bag = this.byTable.get(tableName)
     // A table with no computeds of its own may still nest rows that have some.
-    if (!bag && !this.relations[tableName]) return node
+    if (!bag && !this.reachesComputeds(tableName)) return node
 
     // Tag the query so transformResult knows to apply computeds.
     this.pending.set(queryId, tableName)
@@ -115,6 +115,27 @@ export class ResultExtensionPlugin implements KyselyPlugin {
           as: this.naming.resultName(key),
         }))
       : node
+  }
+
+  /** Whether a table's related rows, at any depth, can have computeds. Cached per table. */
+  private reach = new Map<string, boolean>()
+  private reachesComputeds(table: string, seen = new Set<string>()): boolean {
+    const known = this.reach.get(table)
+    if (known !== undefined) return known
+    seen.add(table)
+    let found = false
+    for (const rel of Object.values(this.relations[table] ?? {})) {
+      const targets = rel.morphTo ? rel.morphTo.targets.map((t) => t.table) : [rel.target]
+      if (
+        targets.some((t) => this.byTable.has(t) || (!seen.has(t) && this.reachesComputeds(t, seen)))
+      ) {
+        found = true
+        break
+      }
+    }
+    // Only a finished answer is cached: one cut short by a cycle may be partial.
+    if (found || seen.size === 1) this.reach.set(table, found)
+    return found
   }
 
   async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {

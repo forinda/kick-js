@@ -1,5 +1,6 @@
 import { RemovedValueAsDefaultError } from '../errors'
 import { pgPrimaryKeyName, primaryKeyOf, snapshotTableName } from '../snapshot/name'
+import { toDbName } from '../snapshot/casing'
 import type { PolicySnapshot, SchemaSnapshot, TableSnapshot, ViewSnapshot } from '../snapshot/types'
 import type { Change, ChangeSet, PrimaryKeyShape } from './types'
 
@@ -668,6 +669,22 @@ function columnRenames(
       )
     }
     out.set(from, to)
+  }
+  // A column that went from its snake_case name to its key (`project_id` →
+  // `projectId`, as when `casing` is dropped or an older version snake_cased
+  // it) with nothing else changed is that column renamed, not a new one.
+  if (!options.explicitRenames) {
+    for (const from of drops) {
+      if (out.has(from)) continue
+      const to = adds.find(
+        (a) =>
+          ![...out.values()].includes(a) &&
+          a !== from &&
+          (toDbName(a) === from || toDbName(from) === a) &&
+          columnAttrsEqual(prev.columns[from]!, next.columns[a]!),
+      )
+      if (to) out.set(from, to)
+    }
   }
   const leftDrops = drops.filter((c) => !out.has(c))
   const leftAdds = adds.filter((c) => ![...out.values()].includes(c))

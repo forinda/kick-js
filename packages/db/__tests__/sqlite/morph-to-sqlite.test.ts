@@ -160,6 +160,7 @@ describe('morphTo on SQLite', () => {
   })
 
   it('checks the columns, the targets and their keys', () => {
+    const tokens = table('tokens', { id: text().primaryKey() })
     const pairs = table('pairs', { a: integer().notNull(), b: integer().notNull() }, (t) => ({
       pk: primaryKey().on(t.a, t.b),
     }))
@@ -170,6 +171,7 @@ describe('morphTo on SQLite', () => {
           schema: {
             posts,
             pairs,
+            tokens,
             comments,
             rel: relations(comments, ({ morphTo }) => ({
               subject: morphTo({ type, id: comments.subjectId, targets }),
@@ -183,6 +185,10 @@ describe('morphTo on SQLite', () => {
     expect(build({ pair: pairs as never })).toThrow(/'pairs' has a composite primary key/)
     expect(build({ '': posts as never })).toThrow(/a type value in `targets` is an empty string/)
     expect(build({})).toThrow(/`targets` is empty/)
+    // A target whose key can't be compared with the id column, on any dialect.
+    expect(build({ token: tokens as never })).toThrow(
+      /'subjectId' is integer, but tokens.id is text — every target's key has to compare with it/,
+    )
   })
 
   it('maps snake_case and .colName() columns', async () => {

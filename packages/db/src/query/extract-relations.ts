@@ -365,6 +365,14 @@ function resolveMorph(
   }
 }
 
+/** Which keys compare with which: integers with integers, strings with strings, else the type itself. */
+function keyFamily(type: string): string {
+  const t = type.toLowerCase().replace(/\(.*$/, '').trim()
+  if (/^(tiny|small|medium|big)?(int|integer|serial)[248]?$/.test(t)) return 'integer'
+  if (/^(text|varchar|char|character|character varying|citext)$/.test(t)) return 'text'
+  return t
+}
+
 /** The single-column primary key of `table`, or a description of why there isn't one. */
 function singleKey(snap: TableSnapshot): string | { problem: string } {
   const pk = Object.values(snap.columns).filter((c) => c.primaryKey)
@@ -395,6 +403,15 @@ function resolveMorphTo(
     if (!snap) throw fail(`the target table '${decl.__name}' is not in the schema`)
     const key = singleKey(snap)
     if (typeof key !== 'string') throw fail(`'${decl.__name}' has ${key.problem}`)
+    // Every target's key is compared with the id column, for rows of every
+    // type: Postgres refuses integer = uuid even where it would never match.
+    const idType = tables[sourceTable]!.columns[spec.id.__name]!.type
+    const keyType = snap.columns[key]!.type
+    if (keyFamily(idType) !== keyFamily(keyType)) {
+      throw fail(
+        `'${spec.id.__name}' is ${idType}, but ${decl.__name}.${key} is ${keyType} — every target's key has to compare with it`,
+      )
+    }
     return { value, table: decl.__name, key }
   })
   if (targets.length === 0) throw fail('`targets` is empty')

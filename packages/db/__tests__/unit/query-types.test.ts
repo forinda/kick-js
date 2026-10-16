@@ -206,6 +206,11 @@ describe('FindManyOptions — compile-time guards', () => {
       with: { comments: { timeoutMs: 100 } },
     }
     void _bad
+    const _depth: FindManyOptions<FixtureDB, 'posts'> = {
+      // @ts-expect-error — the depth limit is the top level's
+      with: { comments: { maxDepth: 2 } },
+    }
+    void _depth
   })
 
   it('T-known-key — declared `with` keys compile fine', () => {

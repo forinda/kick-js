@@ -449,3 +449,25 @@ describe('.default() is a value, .defaultSql() is SQL', () => {
     await expect(checkDrift(value, sql, 'error')).resolves.toBeUndefined()
   })
 })
+
+it('pairs a column that went from its snake_case name to its key as a rename', () => {
+  const a = snap({
+    t: table('t', {
+      id: serial().primaryKey(),
+      project_id: integer().notNull(),
+      created_at: text(),
+      body: text(),
+    }),
+  })
+  const b = snap({
+    t: table('t', {
+      id: serial().primaryKey(),
+      projectId: integer().notNull(),
+      createdAt: text(),
+      body: text(),
+    }),
+  })
+  expect(
+    diff(a, b).map((c) => (c.kind === 'renameColumn' ? `${c.from}->${c.to}` : c.kind)),
+  ).toEqual(['project_id->projectId', 'created_at->createdAt'])
+})

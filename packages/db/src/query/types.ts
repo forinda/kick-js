@@ -206,10 +206,10 @@ type WithOptions<DB, E, Target extends keyof DB & string> = [E] extends [never]
     ? { withDeleted?: boolean }
     : NestedOptions<DB, Target>
 
-/** A nested level runs inside its parent's query: cancelling is the parent's. */
+/** A nested level runs inside its parent's query: cancelling and the depth limit are the parent's. */
 type NestedOptions<DB, Target extends keyof DB & string> = Omit<
   FindManyOptions<DB, Target>,
-  'signal' | 'timeoutMs'
+  'signal' | 'timeoutMs' | 'maxDepth'
 >
 
 /**
