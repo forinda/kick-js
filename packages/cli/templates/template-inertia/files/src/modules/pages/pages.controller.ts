@@ -14,16 +14,28 @@ export class PagesController {
   @Get('/')
   home() {
     // Renders src/client/pages/Home.tsx with these props.
-    return inertia('Home', { greeting: 'Welcome to {{name}}' })
+    return inertia(
+      'Home',
+      { greeting: 'Welcome to {{name}}' },
+      // In the first HTML response, for search engines and link previews.
+      { meta: { title: 'Home', description: 'Welcome to {{name}}.' } },
+    )
   }
 
   @Get('/posts')
   index() {
-    return inertia('Posts/Index', {
-      posts,
-      // Loaded right after the page renders, in a second request.
-      stats: defer(() => ({ total: posts.length })),
-    })
+    return inertia(
+      'Posts/Index',
+      {
+        // Plain props are in the first HTML response — keep what search
+        // engines should index here.
+        posts,
+        // Loaded right after the page renders, in a second request — not
+        // in the HTML a crawler reads.
+        stats: defer(() => ({ total: posts.length })),
+      },
+      { meta: { title: 'Posts', description: 'Every post on {{name}}.' } },
+    )
   }
 
   // A failed schema check redirects back with props.errors (see

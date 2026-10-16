@@ -22,6 +22,8 @@ describe('PagesController', () => {
     const res = await (await boot()).get('/').expect(200)
     expect(res.headers['content-type']).toMatch(/html/)
     expect(res.text).toContain('"component":"Home"')
+    // The controller's meta is in the HTML a search engine reads.
+    expect(res.text).toContain('<title data-inertia="">Home</title>')
   })
 
   it('answers an Inertia visit with the page as JSON', async () => {

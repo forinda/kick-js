@@ -17,6 +17,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineAdapter, Logger, type RequestContext } from '@forinda/kickjs'
 import { bindInertiaRuntime, requestUrl, type InertiaRuntime, type Page } from './inertia'
 import { defaultTemplate, devHead, manifestHead, pageBody, type HtmlTemplate } from './html'
+import { dedupeHead, metaTags, type MetaDefaults } from './seo'
 
 export interface InertiaAdapterOptions {
   /**
@@ -47,10 +48,22 @@ export interface InertiaAdapterOptions {
    */
   title?: string
   /**
-   * Tags added to every page's `<head>` — a favicon, meta tags, fonts. Per-page
-   * titles and meta belong in the page, with Inertia's `<Head>` component.
+   * Tags added to every page's `<head>` — a favicon, fonts. Titles and meta
+   * tags: `meta` here and per page, or Inertia's `<Head>` in the page.
    */
   head?: string
+  /**
+   * Meta every page starts from, under the `meta` a handler passes to
+   * `inertia()`: `{ titleTemplate: '%s · My App', description, og: { image } }`.
+   */
+  meta?: MetaDefaults
+  /**
+   * The site's public URL, e.g. `getEnv('APP_URL')`. Canonical URLs and
+   * meta image paths are made absolute with it, and a page without a
+   * `canonical` gets this + its path. Never taken from the request's Host
+   * header, which the client chooses.
+   */
+  baseUrl?: string
   /** Replace the HTML shell entirely. */
   template?: HtmlTemplate
   /**
@@ -174,6 +187,11 @@ export const InertiaAdapter = defineAdapter<ResolvedOptions>({
   build: (config) => {
     const clientDir = fromAppRoot(config.clientDir)
     const template = config.template ?? defaultTemplate(config.title)
+    if (config.baseUrl !== undefined && !/^https?:\/\/[^/]/.test(config.baseUrl)) {
+      throw new Error(
+        `InertiaAdapter: baseUrl must be an absolute http(s) URL, got '${config.baseUrl}'.`,
+      )
+    }
     let version: () => string | null = () => null
 
     // Built in beforeMount, once the dev server / build is known.
@@ -302,11 +320,16 @@ export const InertiaAdapter = defineAdapter<ResolvedOptions>({
           version: () => version(),
           share: config.share,
           errorPage: config.errorPage,
+          meta: config.meta,
+          baseUrl: config.baseUrl,
           async renderHtml(page, ctx) {
             const rendered = await render(page)
             const styles = vite && rendered && ssr ? devStylesheets(vite, ssr.entry) : []
+            const ssrHead = rendered?.head ?? []
+            // A tag the server-rendered <Head> set wins over the same one from meta.
+            const meta = dedupeHead(metaTags(page.meta), ssrHead)
             const html = template({
-              head: [config.head ?? '', head(page), ...styles, ...(rendered?.head ?? [])]
+              head: [config.head ?? '', head(page), ...styles, ...meta, ...ssrHead]
                 .filter(Boolean)
                 .join('\n    '),
               body: rendered?.body ?? pageBody(page),
