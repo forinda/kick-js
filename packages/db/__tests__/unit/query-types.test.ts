@@ -114,6 +114,28 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
     void _bad
   })
 
+  it('T-morph-to-targets — each target shaped by its own options', () => {
+    const opts = {
+      with: { subject: { targets: { post: { columns: { title: true } } } } },
+    } satisfies FindManyOptions<FixtureDB, 'comments'>
+    type Subject = NonNullable<Row<'comments', typeof opts>['subject']>
+    // Narrowed by __type: the post is shaped by its columns, the user is the whole row.
+    expectTypeOf<keyof Extract<Subject, { __type: 'post' }>>().toEqualTypeOf<'title' | '__type'>()
+    expectTypeOf<Extract<Subject, { __type: 'user' }>>().toEqualTypeOf<
+      FixtureDB['users'] & { __type: 'user' }
+    >()
+    const _unknown: FindManyOptions<FixtureDB, 'comments'> = {
+      // @ts-expect-error — no target 'video'
+      with: { subject: { targets: { video: true } } },
+    }
+    const _oneRow: FindManyOptions<FixtureDB, 'comments'> = {
+      // @ts-expect-error — a target is one row: no limit
+      with: { subject: { targets: { post: { limit: 1 } } } },
+    }
+    void _unknown
+    void _oneRow
+  })
+
   it('T-morph-to-loose — a hand-written morphTo: true types __type as string', () => {
     type Loose = Row<'comments', { with: { loose: true } }>['loose']
     expectTypeOf<Loose>().toEqualTypeOf<

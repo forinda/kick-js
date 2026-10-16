@@ -206,9 +206,24 @@ export type WithClause<DB, Rels extends Record<string, RelationMapEntry>> = {
  */
 type WithOptions<DB, E, Target extends keyof DB & string> = [E] extends [never]
   ? NestedOptions<DB, Target>
-  : E extends { morphTo: true | Record<string, string> }
-    ? { withDeleted?: boolean }
+  : E extends { morphTo: infer M }
+    ? M extends Record<string, string>
+      ? MorphToOptions<DB, M>
+      : { withDeleted?: boolean }
     : NestedOptions<DB, Target>
+
+/**
+ * A `morphTo` level: `withDeleted` for every target, and each target's own
+ * options under its type value — one row each, so no order, limit or offset.
+ */
+type MorphToOptions<DB, M extends Record<string, string>> = {
+  withDeleted?: boolean
+  targets?: {
+    [V in keyof M & string]?: M[V] extends keyof DB & string
+      ? true | Omit<NestedOptions<DB, M[V]>, 'orderBy' | 'limit' | 'offset'>
+      : never
+  }
+}
 
 /** A nested level runs inside its parent's query: cancelling and the depth limit are the parent's. */
 type NestedOptions<DB, Target extends keyof DB & string> = Omit<
@@ -300,7 +315,7 @@ type WithSlots<DB, Table extends keyof DB & string, W> =
 type ResolveRelationSlot<DB, R extends RelationMapEntry, V> = R['target'] extends keyof DB & string
   ? R extends { morphTo: infer M }
     ? M extends Record<string, string>
-      ? MorphToSubject<DB, M> | null
+      ? MorphToSubject<DB, M, V> | null
       : (DB[R['target']] & { __type: string }) | null
     : V extends true
       ? R['kind'] extends 'one'
@@ -317,12 +332,28 @@ type ResolveRelationSlot<DB, R extends RelationMapEntry, V> = R['target'] extend
  * A `morphTo` subject: its table's row, tagged with the type value it was
  * found by — `subject.__type === 'post'` narrows it to a post.
  */
-type MorphToSubject<DB, M> =
+type MorphToSubject<DB, M, W> =
   M extends Record<string, string>
     ? {
-        [V in keyof M & string]: M[V] extends keyof DB ? DB[M[V]] & { __type: V } : never
+        [V in keyof M & string]: M[V] extends keyof DB & string
+          ? TargetRow<DB, M[V], TargetOptions<W, V>> & { __type: V }
+          : never
       }[keyof M & string]
     : never
+
+/** A target's own options from `with: { subject: { targets: { <type>: … } } }`, or `true`. */
+type TargetOptions<W, V extends string> = W extends { targets?: infer T }
+  ? V extends keyof T
+    ? T[V]
+    : true
+  : true
+
+/** A target's row: the plain row, or shaped by its options. */
+type TargetRow<DB, Table extends keyof DB & string, O> = [O] extends [true | undefined]
+  ? DB[Table]
+  : O extends FindManyOptions<DB, Table>
+    ? FindManyRow<DB, Table, O>
+    : DB[Table]
 
 /**
  * Per-table query namespace exposed as `db.query.X`. v1 ships read

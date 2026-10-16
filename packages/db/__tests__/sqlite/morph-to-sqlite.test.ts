@@ -96,7 +96,9 @@ describe('morphTo on SQLite', () => {
     expect(rows[0]!.subject).toMatchObject({ id: 2, title: 'Gone' })
     await expect(
       db.query.comments.findMany({ with: { subject: { limit: 1 } as never } }),
-    ).rejects.toThrow(/morphTo 'subject' takes `true` or `\{ withDeleted \}`.*\(got limit\)/)
+    ).rejects.toThrow(
+      /morphTo 'subject' takes `true` or `\{ withDeleted, targets \}`.*so limit go under targets/,
+    )
   })
 
   it('binds the type values as parameters, never as SQL', async () => {
@@ -311,5 +313,43 @@ describe('morphTo on SQLite', () => {
       with: { subject: true },
     })
     expect(rows[0]!.subject).toMatchObject({ __type: 'post', url: '/posts/1' })
+  })
+
+  it('takes options per target: columns, extras, where and withDeleted', async () => {
+    const { db } = await make()
+    const rows = await db.query.comments.findMany({
+      orderBy: (_c, eb) => eb.ref('id'),
+      with: {
+        subject: {
+          targets: {
+            post: {
+              columns: { title: true },
+              extras: { shout: (_p, eb) => eb.fn('upper', [eb.ref('title')]) },
+              withDeleted: true,
+            },
+            // A podcast only when its name matches.
+            podcast: { where: (_p, eb) => eb('name', '=', 'nope') },
+          },
+        },
+      },
+    })
+    expect(rows.map((c) => c.subject)).toEqual([
+      { title: 'Hello', shout: 'HELLO', __type: 'post' },
+      null, // the podcast's where matched nothing
+      { title: 'Gone', shout: 'GONE', __type: 'post' }, // soft-deleted, kept by its withDeleted
+      null,
+    ])
+  })
+
+  it('refuses a target it does not have, and order or paging on one', async () => {
+    const { db } = await make()
+    await expect(
+      db.query.comments.findMany({ with: { subject: { targets: { video: true } } } as never }),
+    ).rejects.toThrow(/morphTo 'subject' has no target 'video' — its targets are 'post', 'podcast'/)
+    await expect(
+      db.query.comments.findMany({
+        with: { subject: { targets: { post: { limit: 1 } } } } as never,
+      }),
+    ).rejects.toThrow(/target 'post' is one row — it takes no limit/)
   })
 })
