@@ -1,7 +1,15 @@
 import 'reflect-metadata'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { Application, Container, defineSettings, loadEnv, resetEnvCache } from '../src/index'
+import {
+  APPLICATION,
+  Application,
+  Container,
+  defineModule,
+  defineSettings,
+  loadEnv,
+  resetEnvCache,
+} from '../src/index'
 
 beforeEach(() => Container.reset())
 const flag = Symbol.for('kickjs.config.describe')
@@ -69,5 +77,24 @@ describe('app.describeConfig', () => {
         vars: [{ name: 'KD_MAIL_HOST', required: true, list: false }],
       },
     ])
+  })
+
+  it('labels a defineModule module by its declared name, not "Object"', () => {
+    const MailModule = defineModule({
+      name: 'Mail',
+      build: () => ({ routes: () => null, settings: () => [Mail] }),
+    })
+    const app = new Application({ modules: [MailModule(), MailModule.scoped('eu')] as never })
+    expect(app.describeConfig().sections.map((s) => s.declaredBy)).toEqual(['module Mail'])
+  })
+})
+
+describe('APPLICATION token', () => {
+  it('resolves the constructed Application, and the new one after setup()', async () => {
+    const app = new Application({ modules: [] })
+    expect(Container.getInstance().resolve(APPLICATION)).toBe(app)
+    Container.reset()
+    await app.setup()
+    expect(Container.getInstance().resolve(APPLICATION)).toBe(app)
   })
 })

@@ -151,7 +151,7 @@ When validation fails, the response is a `422` in [RFC 9457 problem details](err
 ```
 
 - **detail** — the first issue's message for a body. For query errors it reads `"Invalid query parameters"`, and for path parameters `"Invalid path parameters"`.
-- **errors** — one entry per issue: `field` is the dotted path (`"address.zip"` for nested objects), `message` the schema's message. Left out in production, like every error's details, unless your [`onError`](error-handling.md) exposes them.
+- **errors** — one entry per issue: `field` is the dotted path (`"address.zip"` for nested objects), `message` the schema's message. Kept in production — a form needs them to say which field is wrong — with every other member dropped; other errors' details stay out of production responses.
 
 ## Custom Validation Errors
 

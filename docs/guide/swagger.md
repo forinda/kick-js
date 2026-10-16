@@ -497,15 +497,16 @@ SwaggerAdapter({
   docsPath: '/docs', // Swagger UI path (default: '/docs')
   redocPath: '/redoc', // ReDoc path (default: '/redoc')
   specPath: '/openapi.json', // JSON spec path (default: '/openapi.json')
-  disableInProd: true, // Skip mounting docs/spec/assets when NODE_ENV=production
+  disableInProd: true, // Skip mounting docs/spec/assets unless NODE_ENV is development/test
 })
 ```
 
 ### Disabling docs in production
 
 Set `disableInProd: true` to keep API docs out of production builds without
-conditionally constructing the adapter. When `NODE_ENV === 'production'`, the
-adapter becomes a no-op:
+conditionally constructing the adapter. Unless `NODE_ENV` is `development` or
+`test`, the adapter becomes a no-op — an unset `NODE_ENV` counts as production,
+so a deploy that forgets to set it doesn't publish its docs:
 
 - `/docs`, `/redoc`, and `/openapi.json` are not mounted
 - Controller route metadata is not collected

@@ -92,14 +92,24 @@ export function notFoundHandler(routes: readonly MountedRoute[] = []) {
 }
 
 /**
+ * A validation failure's `[{ field, message }]` with every other member
+ * dropped — or `undefined` when `details` isn't that shape.
+ */
+function fieldErrors(details: unknown): Array<{ field: string; message: string }> | undefined {
+  if (!Array.isArray(details) || details.length === 0) return undefined
+  const ok = details.every((d) => typeof d?.field === 'string' && typeof d?.message === 'string')
+  return ok ? details.map((d) => ({ field: d.field, message: d.message })) : undefined
+}
+
+/**
  * Global error handler.
  *
  * Default behavior strips error `details` from the response in production
- * (NODE_ENV === 'production') so internal context (DB errors, validation
- * issues, custom payloads) does not leak to clients. Apps that want to
- * expose details in production — for client-facing field-level validation,
- * for example — should pass their own `onError` to `bootstrap()` and decide
- * the policy explicitly.
+ * (any `NODE_ENV` but `development` / `test`, unset included) so internal
+ * context (DB errors, custom payloads) does not leak to clients. A 422's
+ * per-field `{ field, message }` list is kept — field names and messages are
+ * what a form shows — with every other member dropped. Apps that want a
+ * different policy pass their own `onError` to `bootstrap()`.
  *
  * Unexpected 500s carry `requestId` in every environment (the correlation
  * handle back to the log line) and, outside production, the error summary
@@ -137,7 +147,11 @@ export function errorHandler() {
       return res.status(body.status).json(body)
     }
 
-    // Zod validation errors
+    // A raw ZodError never comes from the framework's own validation (that
+    // raises an HttpException 422 with `[{ field, message }]`). It is the app
+    // parsing something — possibly internal data — so production shows no
+    // field paths; route validation (`@Post('/', { body })`) or an explicit
+    // `HttpException` is how a form gets its field errors.
     if (err?.name === 'ZodError') {
       const firstIssue = err.issues?.[0]
       return res.status(422).json({
@@ -160,16 +174,21 @@ export function errorHandler() {
           res.setHeader(k, v)
         }
       }
-      const exposeDetails = !isProduction && err.details !== undefined
+      // Extension member, permitted by RFC 9457 §3.2. Held back in production:
+      // `details` can carry the shape of the request that failed. A 422's
+      // per-field `{ field, message }` list is the exception — a form needs
+      // it to say which field is wrong — so production keeps just those two.
+      const errors = isProduction
+        ? err.status === 422
+          ? fieldErrors(err.details)
+          : undefined
+        : err.details
       res.setHeader('Content-Type', 'application/problem+json')
       return res.status(err.status).json(
         normalizeProblem({
           status: err.status,
           detail: err.message,
-          // Extension member, permitted by RFC 9457 §3.2. Held back in
-          // production for the same reason as before: `details` can carry the
-          // shape of the request that failed.
-          ...(exposeDetails ? { errors: err.details } : {}),
+          ...(errors !== undefined ? { errors } : {}),
         }),
       )
     }

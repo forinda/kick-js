@@ -1,5 +1,6 @@
 // Application
 export {
+  APPLICATION,
   Application,
   type ApplicationOptions,
   type MiddlewareEntry,

@@ -43,8 +43,9 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
   /** Other adapters to discover (e.g., WsAdapter for WebSocket server URLs) */
   adapters?: any[]
   /**
-   * When true, the adapter is a no-op while `NODE_ENV === 'production'` —
-   * docs, spec, and assets are not mounted. Useful for keeping API docs
+   * When true, the adapter is a no-op unless `NODE_ENV` is `development` or
+   * `test` — docs, spec, and assets are not mounted. An unset `NODE_ENV`
+   * counts as production. Useful for keeping API docs
    * out of production builds without conditionally constructing the adapter.
    */
   disableInProd?: boolean
@@ -103,7 +104,10 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
     // Resolved once at build time — config.disableInProd is set at
     // construction; NODE_ENV doesn't change at runtime. Checking on
     // every onRouteMount call (which fires per-controller) is noise.
-    const disabled = Boolean(config.disableInProd) && process.env.NODE_ENV === 'production'
+    // Fails closed: an unset NODE_ENV is production, not development.
+    const nodeEnv = process.env.NODE_ENV
+    const disabled =
+      Boolean(config.disableInProd) && nodeEnv !== 'development' && nodeEnv !== 'test'
     const isDisabled = (): boolean => disabled
 
     // Snapshot the user-supplied servers list once per adapter instance
