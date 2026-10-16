@@ -404,3 +404,25 @@ describe('the shipped layers', () => {
     }
   })
 })
+
+describe('env schema entries fail closed on secrets', () => {
+  it('a secret-like key never gets a default that production would accept', async () => {
+    const { readdirSync, readFileSync, existsSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { TEMPLATES_DIR } = await import('../src/scaffold/overlay')
+    const entries = readdirSync(TEMPLATES_DIR)
+      .map((layer) => join(TEMPLATES_DIR, layer, 'feature.json'))
+      .filter(existsSync)
+      .flatMap((file) => JSON.parse(readFileSync(file, 'utf8')).integrations ?? [])
+      .filter((i: { slot?: string }) => i.slot?.startsWith('env-'))
+    expect(entries.length).toBeGreaterThan(0)
+    for (const { code } of entries as { code: string }[]) {
+      const key = /^(\w+):/m.exec(code)![1]!
+      if (!/SECRET|PASSWORD|TOKEN|_KEY/.test(key)) continue
+      // A default is only allowed behind the dev/test-only refine.
+      if (/\.default\(|optional\([^)]*,/.test(code)) {
+        expect(code, key).toContain("['development', 'test'].includes(process.env.NODE_ENV ?? '')")
+      }
+    }
+  })
+})
