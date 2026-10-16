@@ -172,3 +172,51 @@ describe('M5.A.2 — AbortSignal cancels in-flight PG queries', () => {
     expect(result.map((r) => r.label).toSorted()).toEqual(['a', 'b', 'c'])
   }, 10_000)
 })
+
+describe('timeouts cancel on the server', () => {
+  const sleeping = async () =>
+    Number(
+      (
+        await pool.query(
+          `SELECT count(*) AS n FROM pg_stat_activity
+            WHERE state = 'active' AND pid <> pg_backend_pid() AND query LIKE '%pg_sleep(10)%'`,
+        )
+      ).rows[0].n,
+    )
+  const settled = async () => {
+    const until = Date.now() + 2_000
+    while ((await sleeping()) > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
+    return sleeping()
+  }
+
+  it('db.timeout() on a query builder', async () => {
+    await pool.query(`INSERT INTO "sleeper" (label) VALUES ('slow')`)
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    const start = Date.now()
+    await expect(
+      db
+        .selectFrom('sleeper')
+        .select(sql<string>`pg_sleep(10)::text`.as('slept'))
+        .execute(db.timeout(100)),
+    ).rejects.toMatchObject({ name: 'TimeoutError' })
+    expect(Date.now() - start).toBeLessThan(3_000)
+    expect(await settled()).toBe(0)
+  }, 30_000)
+
+  it('timeoutMs on db.query', async () => {
+    await pool.query(`INSERT INTO "sleeper" (label) VALUES ('slow')`)
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    let caught: unknown
+    try {
+      await db.query.sleeper.findMany({
+        where: () => sql<boolean>`pg_sleep(10)::text IS NOT NULL`,
+        timeoutMs: 100,
+      })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(RelationalQueryCancelledError)
+    expect((caught as { cause?: { name?: string } }).cause?.name).toBe('TimeoutError')
+    expect(await settled()).toBe(0)
+  }, 30_000)
+})

@@ -380,6 +380,7 @@ The options bag:
 | `withDeleted` | `boolean`                                   | include rows a [`softDelete()`](./database/schema.md#columns-kick-db-maintains) column marks deleted — this level only |
 | `maxDepth`    | `number`                                    | depth guard (default 5); throws `RelationalQueryDepthError`                                                            |
 | `signal`      | `AbortSignal`                               | cancels the in-flight query on the server (Postgres, MySQL) — bind to `ctx.signal`                                     |
+| `timeoutMs`   | `number`                                    | cancels it on the server once it has run this long; with `signal`, whichever fires first                               |
 
 The `with` keys are constrained to the relations declared for that table; a relation slot resolves to `Related | null` for `one` and `Related[]` for `many`.
 

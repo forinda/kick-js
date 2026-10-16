@@ -187,6 +187,19 @@ await this.db.query.users.findMany({
 
 The options, nesting, self-references, dialect notes and cancellation are on [Relational Queries](../db-relational-query).
 
+## Timeouts and cancellation
+
+`db.timeout(ms)` gives any query builder the execute options that cancel it on the server once it has run that long — `pg_cancel_backend` on Postgres, `KILL QUERY` on MySQL — instead of only giving up on the wait while it keeps running and holding its connection. It rejects with a `TimeoutError`. Pass a request's signal too, and whichever fires first cancels:
+
+```ts
+const rows = await this.db
+  .selectFrom('reports')
+  .selectAll()
+  .execute(this.db.timeout(5_000, { signal: ctx.signal }))
+```
+
+`db.query` reads take the same as options: `timeoutMs` and `signal`. A write may already have taken effect when it's cancelled — most databases can't stop one cleanly — so time out reads. better-sqlite3 runs each query synchronously, so there it has nothing to cancel.
+
 ## Pagination with `ctx.paginate`
 
 KickJS's HTTP layer already parses `page` / `limit` / filters / sort off the query string. `ctx.paginate()` wraps a fetcher that returns `{ data, total }` and emits a standardized paginated response. Use `parsed.pagination.limit` / `parsed.pagination.offset` to bound the query. `findManyAndCount` returns that shape, the page plus the total before paging:
