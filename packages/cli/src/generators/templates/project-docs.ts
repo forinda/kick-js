@@ -1261,7 +1261,7 @@ afterEach(() => {
 
 \`\`\`bash
 kick new my-api --yes                                  # CI-safe: minimal + inmemory, no prompts
-kick new my-api -t ddd --pm ${pm} --no-git --install   # Fully scriptable DDD scaffold
+kick new my-api -t rest --pm ${pm} --no-git --install  # Fully scriptable REST scaffold
 kick new . --yes --force                               # Scaffold into current dir, clear existing files
 kick g scaffold Post title:string body:text:optional   # Shell-safe optional field syntax
 kick g agents -f --only skills                         # Refresh just the skills after upgrade

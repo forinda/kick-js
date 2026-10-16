@@ -1,6 +1,6 @@
 # {{name}}
 
-A **{{templateLabel}}** built with [KickJS](https://kickjs.app/) — a decorator-driven Node.js framework for TypeScript that runs on Express, Fastify, or h3 (swap the engine in one line).
+Built from the **{{templateLabel}}** template of [KickJS](https://kickjs.app/) — a decorator-driven Node.js framework for TypeScript that runs on Express, Fastify, or h3 (swap the engine in one line).
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ A **{{templateLabel}}** built with [KickJS](https://kickjs.app/) — a decorator
 | `{{runBuild}}`                           | Production build                     |
 | `{{runStart}}`                           | Run production build                 |
 | `{{runTest}}`                            | Run tests with Vitest                |
-| `{{kick}} g module <name>`               | Generate a DDD module                |
+| `{{kick}} g module <name>`               | Generate a module                    |
 | `{{kick}} g scaffold <name> <fields...>` | Generate CRUD from field definitions |
 | `{{kick}} add <package>`                 | Add a KickJS package                 |
 

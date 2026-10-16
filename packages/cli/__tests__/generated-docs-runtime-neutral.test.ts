@@ -65,3 +65,17 @@ describe('generated skill docs follow modules.style', () => {
     expect(test.content).not.toContain('modules: [UserModule()]')
   })
 })
+
+describe('CLI-emitted docs name only templates that exist', () => {
+  // The ddd/cqrs patterns were removed; `kick new -t ddd` fails.
+  it.each([...EMITTERS, 'templates/base/files/README.md'])('%s has no DDD leftovers', (file) => {
+    const source = readFileSync(join(ROOT, file), 'utf8')
+    expect(source).not.toMatch(/\bDDD\b|-t ddd/)
+  })
+
+  it('the README reads for every template label', () => {
+    const readme = readFileSync(join(ROOT, 'templates/base/files/README.md'), 'utf8')
+    // "A **Minimal** built with KickJS" had no noun.
+    expect(readme).not.toMatch(/A \*\*\{\{templateLabel\}\}\*\*/)
+  })
+})
