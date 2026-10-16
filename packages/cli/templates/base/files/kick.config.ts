@@ -13,7 +13,7 @@ export default defineConfig({
   modules: {
     dir: 'src/modules',
     // @kick:repo
-    pluralize: true,
+    pluralize: false,
   },
 
   // `kick typegen` populates `.kickjs/types/` so `Ctx<KickRoutes.X['method']>`

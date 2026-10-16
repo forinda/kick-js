@@ -43,7 +43,7 @@ export async function generateMiddleware(options: GenerateMiddlewareOptions): Pr
     modulesDir,
     defaultDir: 'src/middleware',
     pattern,
-    shouldPluralize: options.pluralize ?? true,
+    shouldPluralize: options.pluralize ?? false,
   })
   const kebab = toKebabCase(name)
   const camel = toCamelCase(name)

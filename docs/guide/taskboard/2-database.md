@@ -217,7 +217,7 @@ import type { AppDb } from './client'
 export const APP_DB = createToken<AppDb>('taskboard/Db')
 ```
 
-Token names follow `<scope>/<PascalKey>` — your project's scope, then the thing. `kick typegen` warns about names that don't.
+Token names start with `<scope>/<key>` — your project's scope, all lowercase, then the thing — and may add more slash-separated segments (`<scope>/<area>/<key>`). `kick typegen` warns about names that don't.
 
 A small module registers the client. It serves no HTTP routes, so `routes` returns `null`:
 
@@ -387,7 +387,7 @@ Without that check the database would round `1.005` away silently. [Validation f
 
 Generate the module, then point it at the database the same way:
 
-<PmCommand exec="kick g module task" />
+<PmCommand exec="kick g module task --pluralize" />
 
 The task DTOs stay in Zod — the status list comes from the schema, so the API and the CHECK agree:
 

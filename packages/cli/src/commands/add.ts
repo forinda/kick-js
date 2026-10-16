@@ -15,11 +15,14 @@ import {
   applyLayerFiles,
   dirtyFiles,
   findEntry,
+  findEnvSchema,
   manualSnippet,
   planWiring,
   projectVars,
   wireEntry,
+  wireEnv,
   importsAny,
+  rebaseImports,
   sourceFilesInTheWay,
 } from './add-wire'
 
@@ -226,6 +229,8 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
  * Excludes core packages
  * (already installed), deprecated ones, `:` sub-variants (e.g. `queue:bullmq`),
  * and the db-dialect / schema-lib duplicates that clutter a one-line summary.
+ * `upload` isn't in the registry (it installs the runtime's multipart driver,
+ * see {@link UPLOAD_DRIVERS}) but is a `kick add` name, so it's listed too.
  * `kick add --list` shows the full catalog.
  */
 export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
@@ -237,6 +242,7 @@ export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
       !['pg', 'sqlite', 'mysql', 'zod', 'valibot', 'yup'].includes(name),
   )
   .map(([name]) => name)
+  .concat('upload')
   .join(', ')
 
 /**
@@ -665,6 +671,9 @@ export function registerAddCommand(program: Command): void {
       }
       const wiring = opts.wire === false ? undefined : planWiring(packages)
       const entry = wiring ? findEntry(cwd, opts.entry) : undefined
+      if (wiring && entry) wiring.integrations = rebaseImports(wiring.integrations, entry)
+      const envEntries = wiring?.integrations.filter((i) => i.slot?.startsWith('env-')) ?? []
+      const envSchema = envEntries.length > 0 ? findEnvSchema(cwd) : undefined
       if (wiring) {
         prodDeps = [...new Set([...prodDeps, ...wiring.dependencies])]
         devDeps = [
@@ -672,12 +681,17 @@ export function registerAddCommand(program: Command): void {
         ]
         // Wiring edits files in place; refuse over uncommitted work there, so
         // the change stays reviewable (and revertable) as its own diff.
-        const dirty = dirtyFiles(cwd, [...(entry ? [entry] : []), ...wiring.files.keys()])
+        const dirty = dirtyFiles(cwd, [
+          ...(entry ? [entry] : []),
+          ...(envSchema ? [envSchema] : []),
+          ...wiring.files.keys(),
+        ])
         if (dirty.length > 0 && !opts.force) {
           console.error(
             `\n  ${dirty.join(', ')} ${dirty.length === 1 ? 'has' : 'have'} uncommitted changes, ` +
               `and kick add would edit ${dirty.length === 1 ? 'it' : 'them'}.\n` +
-              `  Commit or stash first, pass --force to edit anyway, or --no-wire to install only.\n`,
+              `  Commit, stage (git add) or stash them first, rerun with --force to edit anyway, ` +
+              `or with --no-wire to install only.\n`,
           )
           process.exitCode = 1
           return
@@ -741,22 +755,39 @@ export function registerAddCommand(program: Command): void {
         if (!installed) {
           console.log('  Skipped wiring — the install did not finish.\n')
         } else {
-          // The app's own file where the layer would write one (src/storage.ts):
+          // The app's own file where the layer would write one (src/adapters/storage.ts):
           // keep it, and leave what imports it for the user to wire.
           const kept = sourceFilesInTheWay(cwd, wiring.files)
-          for (const path of await applyLayerFiles(cwd, wiring.files)) {
-            console.log(`  Updated ${path}`)
-          }
+          const { created, updated } = await applyLayerFiles(cwd, wiring.files)
+          for (const path of created) console.log(`  Created ${path}`)
+          for (const path of updated) console.log(`  Updated ${path}`)
           const blocked = entry ? wiring.integrations.filter((i) => importsAny(i, entry, kept)) : []
           const toWire = wiring.integrations.filter((i) => !blocked.includes(i))
           const result = entry ? await wireEntry(cwd, entry, toWire) : undefined
           for (const name of result?.added ?? []) console.log(`  Added ${name} to ${entry}`)
           for (const name of result?.present ?? []) console.log(`  ${name} is already in ${entry}`)
+          // The env keys the adapter reads go into the env schema, typed and validated.
+          const env = envSchema ? await wireEnv(cwd, envSchema, envEntries) : undefined
+          if (env?.added.length) console.log(`  Declared ${env.added.join(', ')} in ${envSchema}`)
+          const envManual = env ? env.manual : envEntries.filter((i) => i.slot === 'env-zod')
+          if (envManual.length > 0) {
+            console.log(
+              `\n  ${envSchema ? `Could not find the env schema object in ${envSchema}` : 'No env schema (src/config/index.ts) found'}` +
+                ' — declare these keys in it yourself:\n',
+            )
+            console.log(
+              envManual
+                .map((i) => `${i.code},`)
+                .join('\n')
+                .replace(/^/gm, '    '),
+            )
+            console.log()
+          }
           const fill = projectVars(cwd)
           const manual = result
             ? result.manual
             : wiring.integrations
-                .filter((i) => i.slot && i.code)
+                .filter((i) => i.slot && i.code && !i.slot.startsWith('env-'))
                 .map((i) => ({ ...i, code: fill(i.code!) }))
           if (kept.length > 0) {
             const fillBlocked = blocked.map((i) => ({ ...i, code: fill(i.code ?? '') }))

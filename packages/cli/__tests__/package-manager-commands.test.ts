@@ -156,3 +156,29 @@ describe('Yarn 2+ and older Bun', () => {
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.2.5')).toContain('COPY bun.lock ./')
   })
 })
+
+describe('Dockerfile install stages', () => {
+  it.each(['api', 'inertia', 'fullstack'] as const)(
+    '%s: compiles native addons and survives Prisma postinstall',
+    (kind) => {
+      const file = generateDockerfile(kind, 'pnpm', 'app')
+      // better-sqlite3 without a prebuilt binary needs a toolchain node:22-slim lacks.
+      const base = file.slice(file.indexOf('AS base'), file.indexOf('AS deps'))
+      expect(base).toContain('apt-get install -y --no-install-recommends python3 make g++')
+      // The runtime stage stays slim.
+      expect(file.slice(file.lastIndexOf('FROM '))).not.toContain('apt-get')
+      // A prod install has no Prisma CLI to run `prisma generate` with.
+      const deps = file.slice(file.indexOf('AS deps'), file.indexOf('AS build'))
+      expect(deps).toContain('ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1')
+      expect(file).toContain('COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma')
+    },
+  )
+
+  it('fullstack: copies a Prisma client generated under server/node_modules too', () => {
+    const file = generateDockerfile('fullstack', 'pnpm', 'app')
+    expect(file).toContain('RUN mkdir -p node_modules/.prisma server/node_modules/.prisma')
+    expect(file).toContain(
+      'COPY --from=build /app/server/node_modules/.prisma ./server/node_modules/.prisma',
+    )
+  })
+})

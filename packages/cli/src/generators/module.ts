@@ -4,7 +4,7 @@ import { confirm, log } from '../utils/prompts'
 import { colors } from '../utils/colors'
 import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
 import { escapeRegex } from '../utils/regex'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import type { ProjectPattern, RepoTypeConfig, SchemaLib } from '../config'
 import type { ModuleStyle } from './templates/types'
 import { generateMinimalFiles, generateRestFiles } from './patterns'
@@ -67,7 +67,7 @@ interface GenerateModuleOptions {
  */
 export async function generateModule(options: GenerateModuleOptions): Promise<string[]> {
   const { name, modulesDir, noEntity, noTests, repo = 'inmemory', force, dryRun } = options
-  const shouldPluralize = options.pluralize !== false
+  const shouldPluralize = options.pluralize === true
 
   let pattern = options.pattern ?? 'rest'
   if (options.minimal) pattern = 'minimal'
@@ -238,7 +238,9 @@ export const modules = defineModules().mount(${entryToken})
     content = appendModuleEntry(content, entryToken)
   }
 
-  await writeFile(indexPath, content, 'utf-8')
+  // Through writeFileSafe like every generated file: the project's oxfmt
+  // lays the chain out (one line for two mounts, one per line from three).
+  await writeFileSafe(indexPath, content)
 }
 
 /**

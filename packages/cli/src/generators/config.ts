@@ -34,7 +34,7 @@ export default defineConfig({
   modules: {
     dir: '${modulesDir}',
     repo: '${defaultRepo}',
-    pluralize: true,
+    pluralize: false,
   },
 
   typegen: {

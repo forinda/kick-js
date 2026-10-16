@@ -28,6 +28,7 @@ import { generateTest } from '../generators/test'
 import {
   loadKickConfig,
   resolveModuleConfig,
+  resolvePluralize,
   resolveTokenScope,
   warnIfDeprecatedRepo,
   type ProjectPattern,
@@ -231,8 +232,13 @@ async function printGeneratorList(): Promise<void> {
 function mergeGenOpts<T extends object>(cmd: Command, opts: T): T {
   const parent = (cmd.parent?.opts() ?? {}) as Record<string, unknown>
   const merged = { ...cmd.optsWithGlobals(), ...opts } as Record<string, unknown>
-  for (const key of ['entity', 'tests', 'pluralize']) {
+  for (const key of ['entity', 'tests']) {
     if (parent[key] === false) merged[key] = false
+  }
+  // Both --pluralize and --no-pluralize are defined, so it is undefined unless
+  // passed; whichever side set it wins.
+  if (merged.pluralize === undefined && parent.pluralize !== undefined) {
+    merged.pluralize = parent.pluralize
   }
   return merged as T
 }
@@ -249,7 +255,7 @@ async function runModuleGeneration(
   // `--repo prisma|drizzle` still scaffolds, but as a generic custom stub.
   if (opts.repo) warnIfDeprecatedRepo(opts.repo)
   const pattern = opts.pattern ?? config?.pattern ?? 'rest'
-  const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
+  const shouldPluralize = resolvePluralize(opts.pluralize, mc)
   const tokenScope = resolveTokenScope(config, process.cwd())
   // findProjectRoot, not cwd: `kick g` is routinely run from inside a module
   // directory, and reading package.json relative to cwd there finds nothing —
@@ -349,7 +355,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--pattern <pattern>', 'Override project pattern: rest | minimal')
     .option('--minimal', 'Shorthand for --pattern minimal')
     .option('--modules-dir <dir>', 'Modules directory')
-    .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
+    .option('--pluralize', 'Pluralize module folders and names (users/ for user)')
+    .option('--no-pluralize', 'Use names as typed (the default)')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (names: string[], opts: GenerateRootOpts, cmd: Command) => {
       if (opts.list) {
@@ -432,7 +439,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--pattern <pattern>', 'Override project pattern: rest | minimal')
     .option('--minimal', 'Shorthand for --pattern minimal')
     .option('--modules-dir <dir>', 'Modules directory')
-    .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
+    .option('--pluralize', 'Pluralize module folders and names (users/ for user)')
+    .option('--no-pluralize', 'Use names as typed (the default)')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (names: string[], opts: ModuleGenOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
@@ -487,7 +495,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
-        pluralize: mc.pluralize ?? true,
+        pluralize: resolvePluralize(undefined, mc),
         runtime: config?.runtime,
       })
       printGenerated(files, dryRun)
@@ -514,7 +522,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
-        pluralize: mc.pluralize ?? true,
+        pluralize: resolvePluralize(undefined, mc),
       })
       printGenerated(files, dryRun)
     })
@@ -558,7 +566,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
           moduleName: opts.module,
           modulesDir,
           pattern: config?.pattern,
-          pluralize: mc.pluralize ?? true,
+          pluralize: resolvePluralize(undefined, mc),
         })
         printGenerated(files, dryRun)
       },
@@ -585,7 +593,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
-        pluralize: mc.pluralize ?? true,
+        pluralize: resolvePluralize(undefined, mc),
       })
       printGenerated(files, dryRun)
     })
@@ -611,7 +619,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
-        pluralize: mc.pluralize ?? true,
+        pluralize: resolvePluralize(undefined, mc),
       })
       printGenerated(files, dryRun)
       await runPostTypegen(dryRun)
@@ -638,7 +646,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
-        pluralize: mc.pluralize ?? true,
+        pluralize: resolvePluralize(undefined, mc),
         schemaLib: resolveSchemaLib(findProjectRoot()),
       })
       printGenerated(files, dryRun)
@@ -664,7 +672,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
-        pluralize: mc.pluralize ?? true,
+        pluralize: resolvePluralize(undefined, mc),
       })
       printGenerated(files, dryRun)
     })
@@ -681,7 +689,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     )
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
-    .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
+    .option('--pluralize', 'Pluralize module folders and names (users/ for user)')
+    .option('--no-pluralize', 'Use names as typed (the default)')
     .option('--modules-dir <dir>', 'Modules directory')
     .action(async (name: string, rawFields: string[], scaffoldOpts: ScaffoldOpts, cmd: Command) => {
       const opts = mergeGenOpts(cmd, scaffoldOpts)
@@ -715,7 +724,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         modulesDir: resolve(modulesDir),
         noEntity: opts.entity === false,
         noTests: opts.tests === false,
-        pluralize: opts.pluralize === false ? false : (mc.pluralize ?? true),
+        pluralize: resolvePluralize(opts.pluralize, mc),
         tokenScope,
         swagger,
         style: mc.style,

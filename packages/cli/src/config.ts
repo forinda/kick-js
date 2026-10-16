@@ -334,8 +334,8 @@ export interface ModuleConfig {
   schemaDir?: string
   /**
    * Whether to pluralize module names in generated code.
-   * When true (default), `kick g module user` creates `src/modules/users/`.
-   * When false, it creates `src/modules/user/` and uses singular names throughout.
+   * When false (default), `kick g module user` creates `src/modules/user/` and
+   * uses the name as typed throughout. When true, it creates `src/modules/users/`.
    */
   pluralize?: boolean
   /**
@@ -774,6 +774,14 @@ function sanitizeScope(raw: string): string {
     .replace(/-{2,}/g, '-') // collapse runs of hyphens
 }
 
+/** Module names are used as typed unless a project or a flag asks for plurals. */
+export const PLURALIZE_DEFAULT = false
+
+/** `--pluralize` / `--no-pluralize`, else `modules.pluralize` in kick.config.ts, else `false`. */
+export function resolvePluralize(flag: boolean | undefined, mc?: ModuleConfig): boolean {
+  return flag ?? mc?.pluralize ?? PLURALIZE_DEFAULT
+}
+
 export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
   if (!config) return {}
   const mc: ModuleConfig = {
@@ -900,6 +908,11 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
           interopDefault: true,
           fsCache: false,
           alias: selfAlias(root),
+          // The project's tsconfig `paths` (`@/*` → `src/*`), for what the
+          // config imports — eagerly or lazily, like a `db.adapter()` that
+          // loads `src/db/client.ts`, which imports `@/config`. Outside Vite
+          // nothing else resolves the alias.
+          tsconfigPaths: true,
         })
         const config = (await jiti.import(filepath, { default: true })) as KickConfig
         const warnings = validateAssetMap(config, root)

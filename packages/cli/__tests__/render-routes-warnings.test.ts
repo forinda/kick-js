@@ -86,3 +86,65 @@ describe('renderRoutes fallback warnings', () => {
     expect(onWarn).not.toHaveBeenCalled()
   })
 })
+
+describe('a schema declared in the controller file but not exported', () => {
+  const controller = (exportKeyword: string) => `
+import { Controller, Post, type RequestContext } from '@forinda/kickjs'
+import { z } from 'zod'
+
+${exportKeyword}const createTaskSchema = z.object({ title: z.string() })
+
+@Controller()
+export class TaskController {
+  @Post('/', { body: createTaskSchema })
+  create(ctx: RequestContext) {}
+}
+`
+
+  it('is not imported (TS2459) — typegen says to export it instead', async () => {
+    const { extractFile } = await import('../src/typegen/scanner')
+    const file = path.resolve('src/modules/tasks/task.controller.ts')
+    const [found] = extractFile(controller(''), file, process.cwd()).routes
+    expect(found!.bodySchema).toEqual({
+      identifier: 'createTaskSchema',
+      source: null,
+      unexported: true,
+    })
+
+    const onWarn = vi.fn()
+    const src = renderRoutes([found!], OUT, 'zod', { onWarn })
+    expect(src).not.toContain('createTaskSchema')
+    expect(src).toContain('body: unknown')
+    expect(onWarn.mock.calls[0][0]).toContain('but not exported')
+    expect(onWarn.mock.calls[0][0]).toContain('export const createTaskSchema')
+  })
+
+  it('is imported once exported', async () => {
+    const { extractFile } = await import('../src/typegen/scanner')
+    const file = path.resolve('src/modules/tasks/task.controller.ts')
+    for (const source of [
+      controller('export '),
+      `${controller('')}\nexport { createTaskSchema }\n`,
+    ]) {
+      const [found] = extractFile(source, file, process.cwd()).routes
+      expect(found!.bodySchema).toEqual({ identifier: 'createTaskSchema', source: '' })
+      expect(renderRoutes([found!], OUT, 'zod')).toContain(
+        "import type { createTaskSchema as _S0 } from '../../src/modules/tasks/task.controller'",
+      )
+    }
+  })
+
+  it('is not imported when exported only under another name', async () => {
+    const { extractFile, extractFileRegex } = await import('../src/typegen/scanner')
+    const file = path.resolve('src/modules/tasks/task.controller.ts')
+    const source = `${controller('')}\nexport { createTaskSchema as publicSchema }\n`
+    for (const extract of [extractFile, extractFileRegex]) {
+      const [found] = extract(source, file, process.cwd()).routes
+      expect(found!.bodySchema).toEqual({
+        identifier: 'createTaskSchema',
+        source: null,
+        unexported: true,
+      })
+    }
+  })
+})

@@ -31,7 +31,8 @@ describe('fullstack entry wiring', () => {
   it('wires SpaAdapter when a client dir is given', () => {
     const entry = generateEntry([], '../web/dist')
     expect(entry).toContain("import { SpaAdapter } from '@forinda/kickjs/spa'")
-    expect(entry).toContain('SpaAdapter({ clientDir: \"../web/dist\" })')
+    // Single quotes, as oxfmt writes them.
+    expect(entry).toContain("SpaAdapter({ clientDir: '../web/dist' })")
     expect(entry).toContain('adapters:')
   })
 
@@ -61,18 +62,25 @@ describe('generated path is serialized, not interpolated', () => {
     // TypeScript module. A raw `'${dir}'` template hole let a quote close the
     // string early and emit invalid TS — or worse, silently change the path.
     const entry = generateEntry([], "../we'b/dist")
-    expect(entry).toContain('SpaAdapter({ clientDir: "../we\'b/dist" })')
+    expect(entry).toContain("SpaAdapter({ clientDir: '../we\\'b/dist' })")
     // The raw value must not reach the comment either.
     expect(entry).not.toContain("Inert until '../we'b/dist'")
   })
 
   it('escapes a backslash (Windows-style path)', () => {
     const entry = generateEntry([], '..\\web\\dist')
-    expect(entry).toContain('SpaAdapter({ clientDir: "..\\\\web\\\\dist" })')
+    expect(entry).toContain("SpaAdapter({ clientDir: '..\\\\web\\\\dist' })")
   })
 
   it('keeps the ordinary path readable', () => {
     const entry = generateEntry([], '../web/dist')
-    expect(entry).toContain('SpaAdapter({ clientDir: "../web/dist" })')
+    expect(entry).toContain("SpaAdapter({ clientDir: '../web/dist' })")
+  })
+
+  it('round-trips a quote, a double quote, a backslash and a newline', () => {
+    const dir = '../a\'b"c\\d\ne'
+    const entry = generateEntry([], dir)
+    const literal = /clientDir: ('(?:[^'\\\n]|\\.)*')/.exec(entry)![1]
+    expect(new Function(`return ${literal}`)()).toBe(dir)
   })
 })

@@ -9,7 +9,7 @@ import { join, posix } from 'node:path'
 
 import { writeFileSafe } from '../utils/fs'
 import { renderLayers, type Integration, type RenderedProject } from '../scaffold/overlay'
-import { wireIntegrations, type WireResult } from '../scaffold/wire'
+import { wireEnvSchema, wireIntegrations, type WireResult } from '../scaffold/wire'
 
 /**
  * `kick add` names with a layer. `queue` means BullMQ, as it does in
@@ -38,23 +38,41 @@ export function findEntry(cwd: string, entry?: string): string | undefined {
 }
 
 /**
- * Files among `files` with uncommitted changes. Outside a git repository
- * (or without git) nothing counts as dirty.
+ * Tracked files among `files` whose working copy differs from the index —
+ * edits `git diff` would mix with kick add's. Untracked files (a fresh
+ * `kick new`, before its first commit or inside a parent repo) and staged
+ * changes don't count: kick add's edits still show as their own diff.
+ * Outside a git repository (or without git) nothing counts as dirty.
  */
 export function dirtyFiles(cwd: string, files: readonly string[]): string[] {
   try {
-    const out = execFileSync('git', ['status', '--porcelain', '--', ...files], {
+    const out = execFileSync('git', ['ls-files', '--modified', '--', ...files], {
       cwd,
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
     })
-    return out
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => line.slice(3))
+    return [...new Set(out.split('\n').filter(Boolean))]
   } catch {
     return []
   }
+}
+
+/** The env schema file: `src/config/index.ts` (what `kick new` writes), else an older `src/env.ts`. */
+export function findEnvSchema(cwd: string): string | undefined {
+  return ['src/config/index.ts', 'src/env.ts'].find((file) => existsSync(join(cwd, file)))
+}
+
+/** Add the layers' env keys to the schema in `file` and write it back when it changed. */
+export async function wireEnv(
+  cwd: string,
+  file: string,
+  integrations: readonly Integration[],
+): Promise<WireResult> {
+  const abs = join(cwd, file)
+  const source = readFileSync(abs, 'utf-8')
+  const result = wireEnvSchema(source, integrations, file)
+  if (result.source !== source) await writeFileSafe(abs, result.source)
+  return result
 }
 
 /** Source files: never merged line by line — appending a module duplicates its declarations. */
@@ -62,7 +80,7 @@ const SOURCE = /\.(?:[cm]?[jt]sx?)$/
 
 /**
  * A layer's source files that already exist with other contents — the app's
- * own `src/storage.ts`, say. They're left alone, and what imports them isn't
+ * own `src/adapters/storage.ts`, say. They're left alone, and what imports them isn't
  * wired: merging is the user's call.
  */
 export function sourceFilesInTheWay(cwd: string, files: ReadonlyMap<string, string>): string[] {
@@ -78,18 +96,19 @@ export function sourceFilesInTheWay(cwd: string, files: ReadonlyMap<string, stri
  * Write a layer's non-entry files. A missing one is created. An existing one
  * only gains the lines it doesn't already have (`.env` keeps its values) —
  * except a source file, which is left as it is (see {@link sourceFilesInTheWay}).
- * Returns the paths changed.
+ * Returns the paths created and the existing ones that changed.
  */
 export async function applyLayerFiles(
   cwd: string,
   files: ReadonlyMap<string, string>,
-): Promise<string[]> {
-  const changed: string[] = []
+): Promise<{ created: string[]; updated: string[] }> {
+  const created: string[] = []
+  const updated: string[] = []
   for (const [path, contents] of files) {
     const abs = join(cwd, path)
     if (!existsSync(abs)) {
       await writeFileSafe(abs, contents)
-      changed.push(path)
+      created.push(path)
       continue
     }
     if (SOURCE.test(path)) continue
@@ -101,14 +120,14 @@ export async function applyLayerFiles(
     if (missing.length === 0) continue
     const sep = current === '' || current.endsWith('\n') ? '' : '\n'
     await writeFileSafe(abs, `${current}${sep}${missing.join('\n')}\n`)
-    changed.push(path)
+    updated.push(path)
   }
-  return changed
+  return { created, updated }
 }
 
 /**
  * Whether an integration imports one of `paths` (relative to the entry):
- * `./storage` from `src/index.ts` is `src/storage.ts`.
+ * `./adapters/storage` from `src/index.ts` is `src/adapters/storage.ts`.
  */
 export function importsAny(
   integration: Integration,
@@ -119,6 +138,23 @@ export function importsAny(
   if (!from?.startsWith('.')) return false
   const target = posix.join(posix.dirname(entry.replaceAll('\\', '/')), from)
   return paths.some((path) => path.replace(SOURCE, '') === target)
+}
+
+/**
+ * Layers write their imports for `src/index.ts` (`./adapters/queue`); point
+ * them at the same files from `entry` — `../adapters/queue` from `src/app/index.ts`.
+ */
+export function rebaseImports(integrations: readonly Integration[], entry: string): Integration[] {
+  const dir = posix.dirname(entry.replaceAll('\\', '/'))
+  return integrations.map((integration) => {
+    const from = integration.import?.from
+    if (!from?.startsWith('.')) return integration
+    const path = posix.relative(dir, posix.join('src', from))
+    return {
+      ...integration,
+      import: { ...integration.import!, from: path.startsWith('.') ? path : `./${path}` },
+    }
+  })
 }
 
 /** `REDIS_HOST` for `REDIS_HOST=…`, so an existing value counts as present. */

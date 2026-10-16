@@ -25,7 +25,7 @@ kick g module cats                  # rest is the default
 kick g module cats --pattern rest  # same thing, explicit
 ```
 
-This is the workhorse pattern. It covers the full CRUD lifecycle in a flat folder under `src/modules/<plural>/` — no subdirectories to navigate, everything for the module in one place:
+This is the workhorse pattern. It covers the full CRUD lifecycle in a flat folder under `src/modules/<name>/` — no subdirectories to navigate, everything for the module in one place:
 
 ```
 cats/
@@ -150,7 +150,7 @@ export default defineConfig({
   modules: {
     dir: 'src/modules',
     repo: 'inmemory',
-    pluralize: true,
+    pluralize: false,
   },
 })
 ```
@@ -257,7 +257,7 @@ kick g scaffold Post "body:text?"            # needs quoting
 kick g scaffold Post "body?:text"            # needs quoting
 ```
 
-Useful flags: `--no-tests` (skip the `__tests__/`), `--no-pluralize` (use singular names), and `--modules-dir <dir>` (override the target directory).
+Useful flags: `--no-tests` (skip the `__tests__/`), `--pluralize` (pluralize folder and route names), and `--modules-dir <dir>` (override the target directory).
 
 ::: tip
 `kick g scaffold` always emits the REST layout — it is the field-aware front door to the same structure `kick g module --pattern rest` produces. (The DDD layout this command used to generate was removed alongside the `ddd`/`cqrs` patterns.)

@@ -32,7 +32,7 @@ Generates a flat, simple module with a controller that delegates to a service. E
 <PmCommand exec="kick g module product --pattern rest" />
 
 ```
-products/
+product/
   product.module.ts                 # Module declaration (register + routes)
   product.constants.ts              # Query config (filterable, sortable, searchable)
   product.controller.ts             # @Controller with full CRUD
@@ -56,7 +56,7 @@ Generates only a module declaration and a bare controller. Use this as a startin
 <PmCommand exec="kick g module product --pattern minimal" />
 
 ```
-products/
+product/
   product.module.ts      # Module declaration
   product.controller.ts  # Bare @Controller with a single GET endpoint
 ```
@@ -68,28 +68,29 @@ products/
 | `--pattern <type>`    | Override project pattern: `rest`, `minimal`                       | from config or `rest`        |
 | `--no-tests`          | Skip test file generation                                         | false                        |
 | `--repo <name>`       | Repository name (see [Repository Variants](#repository-variants)) | from config or `inmemory`    |
-| `--no-pluralize`      | Use singular names for folders and routes                         | from config or `false`       |
+| `--pluralize`         | Pluralize folders and routes (`users/` for `user`)                | from config or off           |
+| `--no-pluralize`      | Use the name as typed, even if the config pluralizes              | —                            |
 | `--minimal`           | Shorthand for `--pattern minimal`                                 | false                        |
 | `--modules-dir <dir>` | Modules directory                                                 | from config or `src/modules` |
 | `-f, --force`         | Overwrite existing files without prompting                        | false                        |
 
 ### Pluralization
 
-By default, module names are pluralized: `kick g module user` creates `src/modules/users/` with route `/users`.
+By default, module names are used as typed: `kick g module user` creates `src/modules/user/` with route `/user`.
 
-Disable pluralization per-command or globally:
+Turn pluralization on per command or for the project:
 
 ```bash
-# Per-command
-kick g module user --no-pluralize    # → src/modules/user/, route /user
+# Per command
+kick g module user --pluralize    # → src/modules/users/, route /users
 
-# Via config (applies to all generators)
+# For the project (applies to all generators)
 export default defineConfig({
-  pluralize: false,
+  modules: { pluralize: true },
 })
 ```
 
-The `--no-pluralize` flag always wins over the config value.
+With it on, a countable noun pluralizes as English does (`user` → `users/`, `cron` → `crons/`), while names of a concern rather than a resource stay as typed — `auth`, `health`, `news`, `metadata`. A flag (`--pluralize` or `--no-pluralize`) always wins over the config value.
 
 ### Config-Aware Defaults
 
@@ -104,7 +105,7 @@ export default defineConfig({
     // deprecated — the name no longer changes the generated code, only
     // the TODO text in the stub body
     repo: { name: 'postgres' },
-    pluralize: true,
+    pluralize: false, // the default; true → users/ for `kick g module user`
     schemaDir: 'src/db/schema',
     style: 'define', // 'define' (default) or 'class' — see below
   },
@@ -124,7 +125,7 @@ The framework runtime accepts both shapes regardless of this setting — the fla
 # Pin a project to class form (existing-codebase consistency, etc.)
 # kick.config.ts → modules: { style: 'class' }
 kick g module task
-# → src/modules/tasks/task.module.ts emits:
+# → src/modules/task/task.module.ts emits:
 #     export class TaskModule implements AppModule { register() {...} routes() {...} }
 # → src/modules/index.ts: [TaskModule]
 ```
@@ -133,7 +134,7 @@ kick g module task
 kick g module user                   # uses rest pattern + postgres repo (from config)
 kick g module user --pattern minimal # overrides to minimal structure
 kick g module user --repo mongo      # overrides repo, keeps rest pattern
-kick g module user --no-pluralize    # overrides pluralization
+kick g module user --pluralize       # overrides the config
 ```
 
 ::: tip Backward compatibility
@@ -198,20 +199,24 @@ The only built-in repository is `inmemory`. For persistence, scaffold a generic 
 When you generate a module, the generator automatically updates `src/modules/index.ts`. `defineModule` factories are called at the registration site — the generator emits `Module()` so bootstrap receives the module instance. If the file does not exist, it creates one:
 
 ```ts
-import type { AppModuleEntry } from '@forinda/kickjs'
-import { ProductModule } from './products'
+import { defineModules } from '@forinda/kickjs'
+import { ProductModule } from './products/product.module'
 
-export const modules: AppModuleEntry[] = [ProductModule()]
+export const modules = defineModules().mount(ProductModule())
 ```
 
-If `index.ts` already exists, it appends the import and adds the module factory call to the array:
+If `index.ts` already exists, it adds the import and a `.mount(...)` call. The file is then formatted with the project's oxfmt, as every generated file is — two mounts stay on one line, three or more go one per line:
 
 ```ts
-import type { AppModuleEntry } from '@forinda/kickjs'
-import { UserModule } from './users'
-import { ProductModule } from './products'
+import { defineModules } from '@forinda/kickjs'
+import { HelloModule } from './hello/hello.module'
+import { UserModule } from './users/user.module'
+import { ProductModule } from './products/product.module'
 
-export const modules: AppModuleEntry[] = [UserModule(), ProductModule()]
+export const modules = defineModules()
+  .mount(HelloModule())
+  .mount(UserModule())
+  .mount(ProductModule())
 ```
 
 ### Generated Module Declaration
@@ -306,7 +311,8 @@ Scaffold emits the same flat REST module layout as `kick g module`, but with fie
 | --------------------- | ------------------------------------- | ---------------------------- |
 | `--no-entity`         | Skip entity + value object generation | `false`                      |
 | `--no-tests`          | Skip test file generation             | `false`                      |
-| `--no-pluralize`      | Use singular names                    | from config or `false`       |
+| `--pluralize`         | Pluralize names                       | from config or off           |
+| `--no-pluralize`      | Use names as typed                    | —                            |
 | `--modules-dir <dir>` | Modules directory                     | from config or `src/modules` |
 
 ### Example
@@ -534,4 +540,4 @@ All standalone generators accept:
 | `-o, --out <dir>`     | Output directory             | Varies by type |
 | `-m, --module <name>` | Place inside a module folder | -              |
 
-Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. Module names are pluralized for the directory (`user-profiles/`) unless `--no-pluralize` is passed or `pluralize: false` is set in config.
+Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. The directory uses the name as typed (`user-profile/`); with `--pluralize` or `modules: { pluralize: true }` it is pluralized (`user-profiles/`).

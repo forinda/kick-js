@@ -160,7 +160,10 @@ describe('kick new --yes (non-interactive)', () => {
     const dir = join(cwd, 'my-app')
     const entry = readFileSync(join(dir, 'server/src/index.ts'), 'utf-8')
     expect(entry).toContain('SwaggerAdapter(')
-    expect(entry).toContain('QueueAdapter(')
+    expect(entry).toContain('queueAdapter(')
+    expect(readFileSync(join(dir, 'server/src/adapters/queue.ts'), 'utf-8')).toContain(
+      'QueueAdapter(',
+    )
     expect(entry).toContain('SpaAdapter(')
     // The root installs the workspace, so the root records the answers.
     const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf-8')

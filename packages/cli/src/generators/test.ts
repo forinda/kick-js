@@ -12,7 +12,7 @@ interface GenerateTestOptions {
 
 export async function generateTest(options: GenerateTestOptions): Promise<string[]> {
   const { name, moduleName, modulesDir } = options
-  const shouldPluralize = options.pluralize ?? true
+  const shouldPluralize = options.pluralize ?? false
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
   const files: string[] = []

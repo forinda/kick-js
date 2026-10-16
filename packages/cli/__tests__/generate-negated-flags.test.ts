@@ -42,8 +42,19 @@ describe('kick g — negated flags after the subcommand', () => {
 
   it('module points an in-memory repository at a database, not at itself', async () => {
     await run('module', 'note', '--no-tests')
-    const index = readFileSync(join(dir, 'src/modules/notes/note.module.ts'), 'utf8')
+    const index = readFileSync(join(dir, 'src/modules/note/note.module.ts'), 'utf8')
     expect(index).toContain('Swap in a database by replacing')
+  })
+
+  it('module uses the name as typed by default', async () => {
+    await run('module', 'note', '--no-tests')
+    expect(existsSync(join(dir, 'src/modules/note'))).toBe(true)
+    expect(existsSync(join(dir, 'src/modules/notes'))).toBe(false)
+  })
+
+  it('module --pluralize pluralizes the folder', async () => {
+    await run('module', 'note', '--pluralize', '--no-tests')
+    expect(existsSync(join(dir, 'src/modules/notes'))).toBe(true)
   })
 
   it('scaffold --no-pluralize keeps the name singular', async () => {

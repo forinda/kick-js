@@ -45,10 +45,10 @@ Three drivers implement it:
 
 ## Setting it up
 
-`kick add storage`, or `kick new --packages storage`, installs the package and writes `src/storage.ts`:
+`kick add storage`, or `kick new --packages storage`, installs the package and writes `src/adapters/storage.ts`:
 
 ```ts
-// src/storage.ts
+// src/adapters/storage.ts
 import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
 import { diskStorage } from '@forinda/kickjs-storage/disk'
 import { s3FromSettings } from '@forinda/kickjs-storage/settings'

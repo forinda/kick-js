@@ -42,7 +42,10 @@ async function importConfig(file) {
           `Install it (\`npm i -D jiti\`) or use a .js/.mjs/.json config.`,
       )
     })
-    const jiti = createJiti(import.meta.url)
+    // From the config's own location, with the project's tsconfig `paths`:
+    // a lazy `db.adapter()` that imports src/db/client.ts, which imports
+    // `@/config`, resolves the alias the way the app does.
+    const jiti = createJiti(pathToFileURL(file).href, { tsconfigPaths: true })
     return await jiti.import(file, { default: true })
   }
   const mod = await import(pathToFileURL(file).href)

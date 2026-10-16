@@ -165,7 +165,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
     tokenScope = 'app',
     style = 'define',
   } = options
-  const shouldPluralize = options.pluralize !== false
+  const shouldPluralize = options.pluralize === true
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
   const plural = shouldPluralize ? pluralize(kebab) : kebab

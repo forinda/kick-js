@@ -1,9 +1,9 @@
 import { join } from 'node:path'
-import { readFile, writeFile, rm } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { toPascalCase, toKebabCase, pluralize } from '../utils/naming'
 import { confirm } from '../utils/prompts'
 import { colors } from '../utils/colors'
-import { fileExists } from '../utils/fs'
+import { fileExists, writeFileSafe } from '../utils/fs'
 import { escapeRegex } from '../utils/regex'
 import { findModulesRhsSpan } from './module'
 
@@ -152,7 +152,7 @@ interface RemoveModuleOptions {
  */
 export async function removeModule(options: RemoveModuleOptions): Promise<void> {
   const { name, modulesDir, force } = options
-  const shouldPluralize = options.pluralize !== false
+  const shouldPluralize = options.pluralize === true
 
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
@@ -210,7 +210,7 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
     content = content.replace(/\n{3,}/g, '\n\n')
 
     if (content !== originalContent) {
-      await writeFile(indexPath, content, 'utf-8')
+      await writeFileSafe(indexPath, content)
       console.log(`  Unregistered: ${pascal}Module from ${indexPath}`)
     }
   }

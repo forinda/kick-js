@@ -26,11 +26,11 @@
       }
     },
     {
-      "slot": "env",
+      "slot": "env-zod",
       "code": "// Signs the session cookie. The public dev-only default is accepted only when\n// NODE_ENV is 'development' (kick dev) or 'test' (vitest); anywhere else,\n// including an unset NODE_ENV, a real secret is required.\nSESSION_SECRET: z\n  .string()\n  .min(32)\n  .default('dev-only-session-secret-not-for-production')\n  // `: boolean` \u2014 inferring it would make this schema's type depend on\n  // process.env, whose type `kick typegen` derives from this schema.\n  .refine(\n    (s): boolean =>\n      ['development', 'test'].includes(process.env.NODE_ENV ?? '') || !s.startsWith('dev-only-'),\n    { error: 'set SESSION_SECRET \u2014 the dev-only default is public' },\n  )"
     },
     {
-      "slot": "env",
+      "slot": "env-zod",
       "code": "// The site's public URL \u2014 canonical links, the sitemap and social-card images\n// are built from it, never from the request's Host header. The localhost\n// default is accepted only when NODE_ENV is 'development' or 'test'; anywhere\n// else, including an unset NODE_ENV, APP_URL must be set.\nAPP_URL: z\n  .url()\n  .default('http://localhost:3000')\n  .refine(\n    (): boolean =>\n      ['development', 'test'].includes(process.env.NODE_ENV ?? '') ||\n      process.env.APP_URL !== undefined,\n    { error: 'set APP_URL to the public URL of the site' },\n  )"
     }
   ]

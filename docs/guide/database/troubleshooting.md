@@ -165,11 +165,11 @@ A `db.query … { with: { posts: true } }` call is a type error, or `posts` is t
 ### Token names don't match the convention
 
 ```text
-  kick typegen: 1 token(s) don't match the §22.2 convention:
-    'app/db' (src/db/token.ts) — does not match `<scope>/<PascalKey>[/<suffix>][:<instance>]`
+  kick typegen: 1 token(s) don't match the <scope>/<area>/<key> convention:
+    'AppDb' (src/db/token.ts) — does not match `<scope>/<area>/<key>[:<instance>]`
 ```
 
-A warning, not an error. Name the token `<scope>/<PascalKey>` — `createToken<AppDb>('app/Db')`.
+A warning, not an error. Name the token `<scope>/<area>/<key>` — a lowercase scope (your app's, or `kick` for framework tokens), then slash-separated segments: `createToken<AppDb>('app/db')`, `'app/tenants/repository'`.
 
 ### A database module without routes doesn't compile
 

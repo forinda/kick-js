@@ -229,9 +229,9 @@ Now every route requires a signed-in user, including the projects and tasks rout
 
 Generate a module with a single controller file:
 
-<PmCommand exec="kick g module auth --minimal --no-pluralize" />
+<PmCommand exec="kick g module auth --minimal" />
 
-`--no-pluralize` keeps the folder `src/modules/auth` rather than `auths`. Replace the generated CRUD routes with sign-in. First the request bodies, in `src/modules/auth/dtos/auth.dto.ts`:
+No `--pluralize` this time — the folder is `src/modules/auth`, and the routes mount at `/auth`. Replace the generated CRUD routes with sign-in. First the request bodies, in `src/modules/auth/dtos/auth.dto.ts`:
 
 ```ts
 import { z } from 'zod'

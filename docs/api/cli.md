@@ -71,7 +71,7 @@ interface KickConfig {
     /** @deprecated Only the stub's TODO text changes — see below. */
     repo?: 'inmemory' | { name: string } // default: 'inmemory'
     schemaDir?: string // e.g. 'src/db/schema'
-    pluralize?: boolean // default: true
+    pluralize?: boolean // default: false
     style?: 'define' | 'class' // module declaration style (default: 'define')
   }
 

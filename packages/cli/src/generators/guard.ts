@@ -22,7 +22,7 @@ export async function generateGuard(options: GenerateGuardOptions): Promise<stri
     modulesDir,
     defaultDir: 'src/guards',
     pattern,
-    shouldPluralize: options.pluralize ?? true,
+    shouldPluralize: options.pluralize ?? false,
   })
   const kebab = toKebabCase(name)
   const camel = toCamelCase(name)

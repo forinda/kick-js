@@ -661,7 +661,7 @@ export default defineConfig({
   modules: {
     dir: 'src/modules', // default location (convention) — override freely
     repo: { name: 'postgres' }, // 'inmemory' (built-in) or { name: '<db>' } for a custom stub
-    pluralize: true, // pluralize module names
+    pluralize: false, // true → `kick g module user` makes users/
     schemaDir: 'src/db/schema', // schema directory (configurable)
   },
   plugins: [], // KickCliPlugin[] — see ./cli-plugins.md

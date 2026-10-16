@@ -168,6 +168,12 @@ export interface SchemaRef {
    * statically determined (the generator falls back to `unknown`).
    */
   source: string | null
+  /**
+   * Declared in the controller file but not exported: the generated
+   * types can't import it, so `source` is `null` and typegen says to
+   * export it.
+   */
+  unexported?: true
 }
 
 /** A `createToken<T>('name')` call discovered in source */
@@ -732,10 +738,19 @@ function extractObjectFieldIdentifier(text: string, field: string): string | nul
  * - `import { X } from './path'` → returns `'./path'`
  * - `import X from './path'` (default import) → returns `'./path'`
  * - `import * as X from './path'` → returns `'./path'`
- * - `const X = z.object(...)` (same file) → returns `null` (caller emits a self-import)
+ * - `export const X = z.object(...)` (same file) → returns `''` (caller emits a self-import);
+ *   a same-file const that isn't exported can't be imported, so it is unresolved
  *
  * Returns `null` when the identifier cannot be resolved.
  */
+/** A schema reference; a same-file const that isn't exported is marked `unexported`. */
+function schemaRef(source: string, identifier: string): SchemaRef {
+  const resolved = resolveImportSource(source, identifier)
+  if (resolved !== null) return { identifier, source: resolved }
+  const local = new RegExp(String.raw`(?:^|\n)\s*const\s+${identifier}\b`).test(source)
+  return local ? { identifier, source: null, unexported: true } : { identifier, source: null }
+}
+
 function resolveImportSource(source: string, identifier: string): string | null {
   // Named import: `import { X, Y as Z } from './path'`
   const namedRe = new RegExp(
@@ -760,8 +775,12 @@ function resolveImportSource(source: string, identifier: string): string | null 
 
   // Same-file const declaration — return empty string as a sentinel meaning
   // "current file". The generator turns this into a self-relative reference.
-  const constRe = new RegExp(String.raw`(?:^|\n)\s*(?:export\s+)?const\s+${identifier}\b`)
-  if (constRe.test(source)) return ''
+  // Only an exported one, under its own name: the generated types import it
+  // by name, and `export { X as Y }` makes only `Y` importable.
+  const exportedRe = new RegExp(
+    String.raw`(?:^|\n)\s*export\s+const\s+${identifier}\b|export\s*\{[^}]*(?<!\bas\s+)\b${identifier}\b(?!\s+as\b)[^}]*\}(?!\s*from)`,
+  )
+  if (exportedRe.test(source)) return ''
 
   return null
 }
@@ -1058,18 +1077,10 @@ export function extractRoutesFromSource(
         queryFilterable: apiQp?.filterable ?? null,
         querySortable: apiQp?.sortable ?? null,
         querySearchable: apiQp?.searchable ?? null,
-        bodySchema: bodyId
-          ? { identifier: bodyId, source: resolveImportSource(source, bodyId) }
-          : null,
-        querySchema: queryId
-          ? { identifier: queryId, source: resolveImportSource(source, queryId) }
-          : null,
-        paramsSchema: paramsId
-          ? { identifier: paramsId, source: resolveImportSource(source, paramsId) }
-          : null,
-        responseSchema: responseId
-          ? { identifier: responseId, source: resolveImportSource(source, responseId) }
-          : null,
+        bodySchema: bodyId ? schemaRef(source, bodyId) : null,
+        querySchema: queryId ? schemaRef(source, queryId) : null,
+        paramsSchema: paramsId ? schemaRef(source, paramsId) : null,
+        responseSchema: responseId ? schemaRef(source, responseId) : null,
         filePath,
         relativePath: relPath,
         controllerIsDefaultExport: cls.isDefault,

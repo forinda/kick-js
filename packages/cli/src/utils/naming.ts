@@ -1,5 +1,10 @@
 import pkg from 'pluralize'
 
+// Names of a concern, not a countable resource: `kick g module auth` is
+// `auth/`, not `auths/`. (`health`, `news`, `metadata` are uncountable in
+// the library already.)
+pkg.addUncountableRule('auth')
+
 /** Convert a name to PascalCase */
 export function toPascalCase(name: string): string {
   return name

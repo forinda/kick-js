@@ -45,6 +45,8 @@ export function wireIntegrations(
   const result: WireResult = { source, added: [], present: [], manual: [] }
   for (const integration of integrations) {
     if (!integration.slot || !integration.code) continue
+    // The env schema's entries, wired by wireEnvSchema.
+    if (integration.slot.startsWith('env-')) continue
     const property = SLOT_PROPERTY[integration.slot]
     const code = fill(integration.code)
     const call = callName(code)
@@ -75,7 +77,7 @@ export function wireIntegrations(
     }
 
     result.source = prop
-      ? appendToArray(result.source, prop.value, code)
+      ? appendEntry(result.source, prop.value, prop.value.elements, code)
       : addProperty(result.source, options, property!, code)
     if (integration.import) result.source = addImport(result.source, integration.import, file)
     result.added.push(call ?? firstLine(code))
@@ -150,12 +152,14 @@ const indentBlock = (code: string, indent: string) =>
     .map((line) => (line ? indent + line : line))
     .join('\n')
 
-function appendToArray(source: string, array: Node, code: string): string {
-  const elements = (array.elements as Array<Node | null>).filter(Boolean) as Node[]
+/** Append `code` to an array literal's elements or an object literal's properties. */
+function appendEntry(source: string, array: Node, items: Array<Node | null>, code: string): string {
+  const elements = items.filter(Boolean) as Node[]
   const arrayIndent = lineIndent(source, array.start)
   if (elements.length === 0) {
     const inner = indentBlock(`${code},`, `${arrayIndent}  `)
-    return `${source.slice(0, array.start)}[\n${inner}\n${arrayIndent}]${source.slice(array.end)}`
+    const [open, close] = array.type === 'ObjectExpression' ? ['{', '}'] : ['[', ']']
+    return `${source.slice(0, array.start)}${open}\n${inner}\n${arrayIndent}${close}${source.slice(array.end)}`
   }
   const last = elements.at(-1)!
   const indent = lineIndent(source, last.start)
@@ -167,6 +171,116 @@ function appendToArray(source: string, array: Node, code: string): string {
   return comma
     ? source.slice(0, at) + entry + source.slice(at)
     : `${source.slice(0, at)},${entry.replace(/,$/, '')}${source.slice(at)}`
+}
+
+const SCHEMA_LIBS = ['zod', 'valibot', 'yup'] as const
+type SchemaLib = (typeof SCHEMA_LIBS)[number]
+
+/**
+ * Add a layer's env keys to an existing env schema in `src/config/index.ts`
+ * — the `<lib>.object({ ... })` passed to `fromZod` / `fromValibot` /
+ * `fromYup` (the one the default export names, when there are several). The
+ * wrapper picks the library, and the entries are the integrations for its
+ * slot (`env-zod`, …). A file without such a wrapper falls back to its first
+ * `x.object({ ... })` and the first of the three libraries it imports. A key
+ * the schema already declares is left as it is. When there is no schema
+ * object, or the library is unknown, the entries come back as `manual`
+ * (zod's, the default library, when the library is unknown).
+ */
+export function wireEnvSchema(
+  source: string,
+  integrations: readonly Integration[],
+  file = 'src/config/index.ts',
+): WireResult {
+  const result: WireResult = { source, added: [], present: [], manual: [] }
+  const { lib, object } = findEnvSchemaObject(parseSync(file, source).program as unknown as Node)
+  const entries = integrations.filter((i) => i.slot === `env-${lib ?? 'zod'}` && i.code)
+  if (entries.length === 0) return result
+  if (!lib || !object) {
+    result.manual.push(...entries)
+    return result
+  }
+  for (const entry of entries) {
+    const key = envKeyOf(entry.code!)
+    const object = findEnvSchemaObject(
+      parseSync(file, result.source).program as unknown as Node,
+    ).object!
+    const declared = (object.properties as Node[]).some(
+      (p) => p.type === 'Property' && (p.key?.name ?? p.key?.value) === key,
+    )
+    if (declared) {
+      result.present.push(key)
+      continue
+    }
+    result.source = appendEntry(result.source, object, object.properties, entry.code!)
+    result.added.push(key)
+  }
+  return result
+}
+
+/** `REDIS_HOST` for `// comment\nREDIS_HOST: z.string()`. */
+const envKeyOf = (code: string) => /^\s*['"]?(\w+)['"]?\s*:/m.exec(code)?.[1] ?? firstLine(code)
+
+/** The object literal of `x.object({ ... })`, when `node` is that call. */
+const objectLiteralOf = (node: Node | undefined): Node | undefined =>
+  node?.type === 'CallExpression' &&
+  node.callee?.type === 'MemberExpression' &&
+  node.callee.property?.name === 'object' &&
+  node.arguments?.[0]?.type === 'ObjectExpression'
+    ? node.arguments[0]
+    : undefined
+
+/** The env schema's object literal and the library it is written in; see `wireEnvSchema`. */
+function findEnvSchemaObject(program: Node): { lib?: SchemaLib; object?: Node } {
+  const body = program.body as Node[]
+  // `fromZod` (or its local rename) → 'zod', from `@forinda/kickjs-schema/zod`.
+  const wrappers = new Map<string, SchemaLib>()
+  for (const lib of SCHEMA_LIBS) {
+    const from = `from${lib[0].toUpperCase()}${lib.slice(1)}`
+    const imported = body.some(
+      (n) =>
+        n.type === 'ImportDeclaration' &&
+        n.source.value === `@forinda/kickjs-schema/${lib}` &&
+        n.specifiers.some((s: Node) => (s.imported?.name ?? s.imported?.value) === from),
+    )
+    if (imported) wrappers.set(localName(program, `@forinda/kickjs-schema/${lib}`, from), lib)
+  }
+
+  const wrapped: Array<{ call: Node; lib: SchemaLib; object: Node }> = []
+  const objects: Node[] = []
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) return node.forEach(visit)
+    const n = node as Node
+    const object = objectLiteralOf(n)
+    if (object) objects.push(object)
+    const lib = n.type === 'CallExpression' ? wrappers.get(n.callee?.name) : undefined
+    const inner = objectLiteralOf(n.arguments?.[0])
+    if (lib && inner) wrapped.push({ call: n, lib, object: inner })
+    for (const key in n) visit(n[key])
+  }
+  visit(program)
+
+  if (wrapped.length > 0) {
+    // `export default envSchema` → `const envSchema = fromZod(...)`.
+    let target = body.find((n) => n.type === 'ExportDefaultDeclaration')?.declaration as
+      | Node
+      | undefined
+    if (target?.type === 'Identifier') {
+      const name = target.name
+      target = body
+        .map((n) => (n.type === 'ExportNamedDeclaration' ? n.declaration : n))
+        .filter((n) => n?.type === 'VariableDeclaration')
+        .flatMap((n) => n.declarations as Node[])
+        .find((d) => d.id?.name === name)?.init
+    }
+    const { lib, object } = wrapped.find((w) => w.call === target) ?? wrapped[0]
+    return { lib, object }
+  }
+  const lib = SCHEMA_LIBS.find((name) =>
+    body.some((n) => n.type === 'ImportDeclaration' && n.source.value === name),
+  )
+  return { lib, object: objects[0] }
 }
 
 function addProperty(source: string, object: Node, property: string, code: string): string {
