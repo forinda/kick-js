@@ -1,5 +1,16 @@
 # @forinda/kickjs-queue
 
+## 8.1.0
+
+### Minor Changes
+
+- [#924](https://github.com/forinda/kick-js/pull/924) [`f6580e2`](https://github.com/forinda/kick-js/commit/f6580e26cfb57cbe54598a16553265ea691d9bae) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs-queue/testing` exports `MemoryQueueProvider`, an in-process provider for tests that runs `@Process` handlers with `attempts`, `backoff`, `delay`, `job.updateProgress()` and the handler's return value. `QueueAdapter` gains `workers: false` (dispatch only — for an API process whose jobs run elsewhere) and an `onHealthCheck()` for `/health/ready` (a Redis PING per queue, or the provider's new optional `ping()`; `BullMQProvider` implements it). With a `provider`, the job handler's return value is no longer dropped: the `processor` given to `createWorker` now resolves with it (`Promise<unknown>`, was `Promise<void>`).
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 8.0.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-inertia",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Inertia.js adapter for KickJS \u2014 server-driven pages rendered by React, Vue or Svelte",
   "keywords": [
     "kickjs",

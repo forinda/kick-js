@@ -1,5 +1,48 @@
 # @forinda/kickjs
 
+## 10.4.0
+
+### Minor Changes
+
+- [#925](https://github.com/forinda/kick-js/pull/925) [`6c3ded8`](https://github.com/forinda/kick-js/commit/6c3ded88ae7e2403666ff9abb59d090ed190de9c) Thanks [@forinda](https://github.com/forinda)! - `APPLICATION` — a DI token for the running `Application`, bound when the app is constructed and on each `setup()`. Inject it where a service needs the app itself, e.g. `describeConfig()`: `constructor(@Inject(APPLICATION) private readonly app: Application) {}`.
+
+- [#931](https://github.com/forinda/kick-js/pull/931) [`7a23a7f`](https://github.com/forinda/kick-js/commit/7a23a7f4a69b0f19f995be4525a02c815bb15605) Thanks [@forinda](https://github.com/forinda)! - Cursor (keyset) pagination: `ctx.paginateCursor(fetcher, fieldConfig?, options?)` reads `?cursor=&limit=` plus the usual filter / sort / `q`, hands the fetcher `{ filters, sort, search, cursor, limit }`, and answers `{ data, meta: { limit, hasNext, nextCursor }, links: { self, next } }`. The fetcher returns up to `limit + 1` rows; the extra one sets `hasNext`. The cursor is unsigned base64url JSON of the last row's sort-field values plus its id (`options.idField`, or `options.cursorKey(row)`), tagged with the sort — a malformed cursor or one replayed under a different `sort` answers 400. Keep filters and authorization scoping in the fetcher so a forged cursor cannot widen access. New types: `CursorPosition`, `CursorValue`, `CursorQuery`, `CursorPaginateOptions`, `CursorPaginatedResponse`; `kick typegen` infers `CursorPaginatedResponse<T>` for `return ctx.paginateCursor(...)`.
+  
+  `ctx.paginate()` responses gain `links: { self, next, prev }` (`null` at the ends). Links are path + query only — never a host — and keep the request's other parameters.
+  
+  **Migration:** `PaginatedResponse<T>` now requires `links`. Code that builds a `PaginatedResponse` by hand (rather than through `ctx.paginate`) must add `links`, or type the object as `Omit<PaginatedResponse<T>, 'links'>`.
+  
+  CLI: the generated in-memory repository gains `findAfter({ cursor, limit, sort, filters, search })` (plus a service passthrough and a repository test), the generated controller's `list` notes how to switch to `ctx.paginateCursor`, and the typed `@ApiQueryParams` query shape accepts `cursor`.
+
+- [#924](https://github.com/forinda/kick-js/pull/924) [`7030bcd`](https://github.com/forinda/kick-js/commit/7030bcd0f5f111e051aedc1f67f73182367ae130) Thanks [@forinda](https://github.com/forinda)! - `matchesBearer(header, secret)` is exported from `@forinda/kickjs` and `@forinda/kickjs/web`: a constant-time check of an `Authorization: Bearer <secret>` header for shared-secret endpoints (cron triggers, metrics scrapes, webhooks), so apps no longer re-implement it with `timingSafeEqual`. The built-in cron trigger and `metricsAdapter({ token })` now share it. An empty secret never matches. The comparison does not stop at the first wrong character, but its time can still reveal the secret's length — use a long random secret.
+
+- [#929](https://github.com/forinda/kick-js/pull/929) [`4cff5a2`](https://github.com/forinda/kick-js/commit/4cff5a2e5da8496e0348b7e29093906231e1cbfd) Thanks [@forinda](https://github.com/forinda)! - `reply()` takes headers: `reply(status, body, { headers })`, and `reply.created(body, { location })` answers 201 with a `Location` header. The runtime sets them before sending, on Express, Fastify, h3 and the `@forinda/kickjs/web` entry. The inferred type is unchanged — `reply.created(user, { location })` is still `Reply<201, User>`, and typegen still unwraps it to `User`. New exported types: `ReplyOptions`, `ReplyHeaders`.
+  
+  ```ts
+  const user = await this.users.create(ctx.body)
+  return reply.created(user, { location: ctx.urlFor('UsersController.show', { id: user.id }) })
+  ```
+
+- [#930](https://github.com/forinda/kick-js/pull/930) [`446bdca`](https://github.com/forinda/kick-js/commit/446bdca688a44d7cb0b0d7d3dd10a638b4dee165) Thanks [@forinda](https://github.com/forinda)! - Query sort accepts `-field` (descending) and `field` / `+field` (ascending), repeated or comma-separated, alongside `field:asc|desc`: `?sort=-featured,price` is the same as `?sort=featured:desc&sort=price:asc`. A bare field and comma lists were dropped before. `buildQueryParams` still writes the `field:dir` form.
+
+### Patch Changes
+
+- [#926](https://github.com/forinda/kick-js/pull/926) [`5da5c4f`](https://github.com/forinda/kick-js/commit/5da5c4f631b094f6ba330c34a788f59007342210) Thanks [@forinda](https://github.com/forinda)! - `MiddlewareHandler` returns `unknown` instead of `void | Promise<void>`. The return value was always ignored — a guard stops the request by writing a response and not calling `next()` — but the type rejected `if (!user) return ctx.problem.unauthorized()`, the idiom handlers use, so a guard written that way failed to type-check.
+
+- [#925](https://github.com/forinda/kick-js/pull/925) [`ab72482`](https://github.com/forinda/kick-js/commit/ab724829f368819d45169bc6085ef408d5c8310d) Thanks [@forinda](https://github.com/forinda)! - `describeConfig()` (and so `kick env example`'s "declared by module …") and the contributors table label a `defineModule` module by its declared name instead of `module Object`.
+
+- [#925](https://github.com/forinda/kick-js/pull/925) [`3dfa37a`](https://github.com/forinda/kick-js/commit/3dfa37ac0c65259ad5742305d5022923d4a05a5e) Thanks [@forinda](https://github.com/forinda)! - Production gates fail closed: an unset `NODE_ENV` is production, not development. Dev behaviour is on only when `NODE_ENV` is exactly `development` or `test`.
+  
+  - `csrf()` / `csrfGuard()` and `session()` cookies default to `Secure`.
+  - The error handler leaves stacks, error summaries and `details` out of responses.
+  - `ctx.body`'s read-only dev proxy is off, the asset manifest is cached, and deploy-only startup checks run.
+  - `AdapterContext.isProduction` is `true` and `AdapterContext.env` defaults to `'production'`.
+  - `SwaggerAdapter({ disableInProd: true })` mounts no docs.
+  
+  **Migration:** `kick dev` (Vite) and Vitest already set `NODE_ENV`, so they are unaffected. An app run another way (`node`, `tsx`) that relied on dev behaviour with `NODE_ENV` unset must set `NODE_ENV=development`.
+
+- [#925](https://github.com/forinda/kick-js/pull/925) [`3dfa37a`](https://github.com/forinda/kick-js/commit/3dfa37ac0c65259ad5742305d5022923d4a05a5e) Thanks [@forinda](https://github.com/forinda)! - A 422 keeps its per-field `errors` in production, so a form can say which field is wrong. Only each entry's `field` and `message` are sent — for route validation and `HttpException.unprocessable()` / `fromZodError()`. A raw thrown `ZodError` still shows no field paths in production (it may come from parsing internal data); other members (`code`, raw issues) and every other error's `details` stay out of production responses.
+
 ## 10.3.1
 
 ### Patch Changes

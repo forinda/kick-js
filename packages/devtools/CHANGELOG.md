@@ -1,5 +1,22 @@
 # @forinda/kickjs-devtools
 
+## 7.12.0
+
+### Minor Changes
+
+- [#924](https://github.com/forinda/kick-js/pull/924) [`57b63e1`](https://github.com/forinda/kick-js/commit/57b63e11c00c2b7082cd0227bcd8a8bc16a11a99) Thanks [@forinda](https://github.com/forinda)! - `/_debug/config` (`exposeConfig: true`) no longer lists every variable in `process.env`. It shows the values of variables matching `configPrefixes`, lists the app's other declared variables (env schema and settings sections) as `[REDACTED]`, and leaves everything else out — the names of unrelated environment variables no longer leak.
+  
+  Migration: a variable you relied on seeing as `[REDACTED]` must now be declared in the env schema or a settings section, or matched by `configPrefixes` (which shows its value).
+
+- [#923](https://github.com/forinda/kick-js/pull/923) [`0a0f086`](https://github.com/forinda/kick-js/commit/0a0f086f1f07e4a0967f559451a82d9854ff6448) Thanks [@forinda](https://github.com/forinda)! - `DevToolsAdapter` mounts `/_debug` by default only when `NODE_ENV` is `development` or `test`. It used to mount whenever `NODE_ENV` wasn't `production`, so a deploy that never set `NODE_ENV` served the dashboard.
+  
+  **Migration:** an app that ran DevTools with `NODE_ENV` unset (or set to something like `staging`) no longer gets `/_debug`. Set `NODE_ENV=development`, or pass `DevToolsAdapter({ enabled: true })` where you want it on regardless.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.11.0
 
 ### Minor Changes
