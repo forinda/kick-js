@@ -140,7 +140,7 @@ describe('defaults', () => {
 
   it('are quoted by column type on MySQL and Postgres', () => {
     const my = emitMysql(diff({ ...empty, dialect: 'mysql' }, snap(defaults, 'mysql')))
-    expect(my).toMatch(/`code` \w+(\(\d+\))? NOT NULL DEFAULT '0800'/)
+    expect(my).toMatch(/`code` TEXT NOT NULL DEFAULT \('0800'\)/)
     expect(my).toMatch(/`flag` VARCHAR\(10\) NOT NULL DEFAULT 'true'/)
     expect(my).toMatch(/`n` INT NOT NULL DEFAULT 5/)
     const pg = emitPg(diff({ ...empty, dialect: 'postgres' }, snap(defaults, 'postgres')))
@@ -153,4 +153,69 @@ it("MySQL's MODIFY on a serial key keeps AUTO_INCREMENT", () => {
   const a = snap({ t: table('t', { id: serial().primaryKey() }) }, 'mysql')
   const b = snap({ t: table('t', { id: bigSerial().primaryKey() }) }, 'mysql')
   expect(emitMysql(diff(a, b))).toMatch(/MODIFY COLUMN `id` BIGINT NOT NULL AUTO_INCREMENT/)
+})
+
+describe('dropping tables', () => {
+  const accounts = table('accounts', { id: serial().primaryKey() })
+  const members = table('members', {
+    id: serial().primaryKey(),
+    accountId: integer().references(() => accounts.id),
+  })
+  const notes = table('notes', {
+    id: serial().primaryKey(),
+    memberId: integer().references(() => members.id),
+  })
+
+  it("drops a kept table's foreign key to a dropped table first, and a child before its parent", () => {
+    const users = (withAccount: boolean) =>
+      table('users', {
+        id: serial().primaryKey(),
+        ...(withAccount ? { accountId: integer().references(() => accounts.id) } : {}),
+      })
+    const a = snap({ accounts, members, notes, users: users(true) }, 'postgres')
+    const b = snap({ users: users(false) }, 'postgres')
+    const order = diff(a, b).map((c) =>
+      c.kind === 'dropTable' ? `dropTable:${c.table.name}` : c.kind,
+    )
+    expect(order.indexOf('dropForeignKey')).toBeLessThan(order.indexOf('dropTable:accounts'))
+    expect(order.indexOf('dropTable:notes')).toBeLessThan(order.indexOf('dropTable:members'))
+    expect(order.indexOf('dropTable:members')).toBeLessThan(order.indexOf('dropTable:accounts'))
+    // Only once, not again from the table's own diff.
+    expect(order.filter((k) => k === 'dropForeignKey')).toHaveLength(1)
+  })
+})
+
+describe('expression defaults', () => {
+  it('are parenthesised on SQLite, which takes no bare function call', () => {
+    const s = snap({
+      t: table('t', { id: serial().primaryKey(), r: integer().default('random()') }),
+    })
+    const sql = emitSqlite(diff(empty, s), { from: empty, to: s })
+    expect(sql).toMatch(/DEFAULT \(random\(\)\)/)
+    new Database(':memory:').exec(sql)
+  })
+
+  it('on MySQL: parenthesised, a literal on TEXT/JSON in parentheses, backslashes escaped', () => {
+    const my = emitMysql(
+      diff(
+        { ...empty, dialect: 'mysql' },
+        snap(
+          {
+            t: table('t', {
+              id: serial().primaryKey(),
+              r: integer().default('rand()'),
+              doc: jsonb().notNull().default('{}'),
+              body: text().notNull().default('hi'),
+              path: varchar(20).notNull().default('C:\\temp'),
+            }),
+          },
+          'mysql',
+        ),
+      ),
+    )
+    expect(my).toMatch(/`r` INT DEFAULT \(rand\(\)\)/)
+    expect(my).toMatch(/`doc` JSON NOT NULL DEFAULT \('\{\}'\)/)
+    expect(my).toMatch(/`body` TEXT NOT NULL DEFAULT \('hi'\)/)
+    expect(my).toContain("`path` VARCHAR(20) NOT NULL DEFAULT 'C:\\\\temp'")
+  })
 })

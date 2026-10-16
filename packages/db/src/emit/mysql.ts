@@ -5,7 +5,7 @@ import type {
   IndexSnapshot,
   TableSnapshot,
 } from '../snapshot/types'
-import { quoteLiteral, allowsExpressionDefault } from './identifiers'
+import { allowsExpressionDefault } from './identifiers'
 import { primaryKeyOf } from '../snapshot/name'
 
 /** MySQL quotes identifiers with backticks, not double quotes. */
@@ -237,6 +237,12 @@ function mysqlDefault(value: unknown, type?: string): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value).trim()
+  // MySQL escapes with backslashes too; and a TEXT, JSON or BLOB column takes a
+  // default only as an expression: DEFAULT ('{}').
+  const literal = (v: string) =>
+    type !== undefined && /^(TEXT|JSON|BLOB)$/.test(mysqlType(type))
+      ? `(${mysqlString(v)})`
+      : mysqlString(v)
 
   // On a text-like column every default is a literal: '0800' and 'true' stay as written.
   const literalOnly = type !== undefined && !allowsExpressionDefault(type)
@@ -245,7 +251,7 @@ function mysqlDefault(value: unknown, type?: string): string {
     !/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str) &&
     !/^(CURRENT_\w+|NULL)$/i.test(str)
   ) {
-    return quoteLiteral(str)
+    return literal(str)
   }
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
@@ -256,7 +262,7 @@ function mysqlDefault(value: unknown, type?: string): string {
   if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
 
-  // Other bare function calls pass through; everything else is a literal.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
-  return quoteLiteral(str)
+  // Other function calls are expressions, which MySQL takes only in parentheses.
+  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return `(${str})`
+  return literal(str)
 }

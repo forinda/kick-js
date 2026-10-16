@@ -346,6 +346,7 @@ function sqliteDefault(value: unknown, type?: string): string {
   if (/^(now\(\)|CURRENT_TIMESTAMP)$/i.test(str)) return SQLITE_NOW
   if (/^(CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
+  // A function call is an expression, which SQLite takes only in parentheses.
+  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return `(${str})`
   return quoteLiteral(str)
 }

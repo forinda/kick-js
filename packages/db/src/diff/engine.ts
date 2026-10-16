@@ -51,11 +51,20 @@ export function diff(
   // table changes → dropEnum (appended at the end).
   diffEnumsCreatePhase(prev, next, changes)
 
-  // Drops first (so FKs that depend on dropped tables are handled before drops below)
+  // Drops first. A kept table's foreign key to a dropped one goes before it
+  // (Postgres won't drop a table something still references), and dropped
+  // tables go child before parent.
+  const dropped = new Set([...prevTables].filter((n) => !nextTables.has(n)))
   for (const name of prevTables) {
-    if (!nextTables.has(name)) {
-      changes.push({ kind: 'dropTable', table: prev.tables[name] })
+    if (dropped.has(name)) continue
+    for (const f of prev.tables[name].foreignKeys) {
+      if (dropped.has(f.refTable)) {
+        changes.push({ kind: 'dropForeignKey', table: snapshotTableName(prev.tables[name]), fk: f })
+      }
     }
+  }
+  for (const name of childrenFirst(dropped, prev)) {
+    changes.push({ kind: 'dropTable', table: prev.tables[name] })
   }
 
   // Creates — three passes so secondary objects only land after every new
@@ -84,7 +93,7 @@ export function diff(
   // Common tables — column/index/fk diff comes in Tasks 10-12
   for (const name of nextTables) {
     if (!prevTables.has(name)) continue
-    diffTable(prev.tables[name], next.tables[name], changes, next.dialect, options)
+    diffTable(prev.tables[name], next.tables[name], changes, next.dialect, options, dropped)
   }
 
   // Drop enums after every dependent table change has been emitted.
@@ -468,6 +477,8 @@ function diffTable(
   changes: Change[],
   dialect: SchemaSnapshot['dialect'],
   options: DiffOptions = {},
+  /** Tables this diff drops: a foreign key to one was dropped before them. */
+  dropped: ReadonlySet<string> = new Set(),
 ) {
   // Every `table:` field on a Change carries the QUALIFIED name — that is what
   // the emitters quote and what `invertChanges` matches dropTable against.
@@ -521,6 +532,7 @@ function diffTable(
   const nextFks = new Map(next.foreignKeys.map((f) => [f.name, f]))
   for (const [n, f] of prevFks) {
     const after = nextFks.get(n)
+    if (dropped.has(f.refTable)) continue
     if (!after || fkDefinition(after) !== fkDefinition(f)) {
       changes.push({ kind: 'dropForeignKey', table: tableRef, fk: f })
     }
@@ -625,6 +637,24 @@ function diffTable(
       to: next.comment ?? null,
     })
   }
+}
+
+/**
+ * Dropped tables ordered so a table goes before any table it references.
+ * ponytail: a reference cycle keeps declaration order for what's left.
+ */
+function childrenFirst(dropped: ReadonlySet<string>, prev: SchemaSnapshot): string[] {
+  const left = [...dropped]
+  const out: string[] = []
+  while (left.length > 0) {
+    // A table no other remaining table references can go now.
+    const i = left.findIndex(
+      (t) =>
+        !left.some((o) => o !== t && prev.tables[o]!.foreignKeys.some((f) => f.refTable === t)),
+    )
+    out.push(...left.splice(i === -1 ? 0 : i, 1))
+  }
+  return out
 }
 
 /** What makes two foreign keys the same key: a changed action or target is a new one. */
