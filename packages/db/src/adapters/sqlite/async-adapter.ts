@@ -1,3 +1,4 @@
+import { checkTriggers, triggersQuery, type TriggerRow } from './triggers'
 import type { Kysely } from 'kysely'
 import {
   lockTableDdl,
@@ -145,7 +146,15 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
     async applyMigrationInTx(sql: string, bookkeeping: MigrationBookkeeping | null) {
       const rebuilt = rebuiltTables(sql)
       await refuseCascadingRebuild(driver, sql, rebuilt)
+      // A rebuild drops the table's triggers with it: read them first, check
+      // they still fit the rebuilt table, and create them again after.
+      const triggers =
+        rebuilt.length > 0
+          ? ((await driver.query(triggersQuery(rebuilt), rebuilt)) as TriggerRow[])
+          : []
+      checkTriggers(triggers, sql)
       const batch = statements(sql)
+      for (const t of triggers) batch.push({ sql: t.sql })
       if (bookkeeping && 'record' in bookkeeping) batch.push(insertRow(bookkeeping.record))
       else if (bookkeeping) batch.push(deleteRow(bookkeeping.remove))
       const guard = foreignKeyGuard(rebuilt)

@@ -315,10 +315,16 @@ function pickColumnHelper(col: ColumnSnapshot): {
   if (/^char(\(\d+\))?$/.test(t)) return { helperName: 'char', args: extractParens(t), isArray }
   if (t === 'text') return { helperName: 'text', args: '', isArray }
   if (t === 'boolean') return { helperName: 'boolean', args: '', isArray }
-  if (t === 'timestamp') return { helperName: 'timestamp', args: '', isArray }
-  if (t === 'timestamptz') return { helperName: 'timestamptz', args: '', isArray }
+  // `timestamp(3)` → timestamp({ precision: 3 })
+  const timeType = /^(timestamptz|timestamp|time)(?:\((\d)\))?$/.exec(t)
+  if (timeType) {
+    return {
+      helperName: timeType[1]!,
+      args: timeType[2] === undefined ? '' : `{ precision: ${timeType[2]} }`,
+      isArray,
+    }
+  }
   if (t === 'date') return { helperName: 'date', args: '', isArray }
-  if (t === 'time') return { helperName: 'time', args: '', isArray }
   if (t === 'interval') return { helperName: 'interval', args: '', isArray }
   if (t === 'uuid') return { helperName: 'uuid', args: '', isArray }
   if (t === 'jsonb') return { helperName: 'jsonb', args: '', isArray }

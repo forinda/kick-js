@@ -8,13 +8,17 @@ import pg from 'pg'
 import { sql } from 'kysely'
 import {
   boolean,
+  checkDrift,
   createDbClient,
   diff,
   emitPg,
   extractSnapshot,
+  introspectPg,
   serial,
   table,
   text,
+  timestamp,
+  timestamptz,
   varchar,
 } from '@forinda/kickjs-db'
 import { pgDialect } from '@forinda/kickjs-db/pg'
@@ -161,4 +165,28 @@ describe('findOrCreate on Postgres', () => {
     ])
     await pool.query('DROP INDEX users_email_ci')
   }, 30_000)
+})
+
+describe('timestamp precision on Postgres', () => {
+  it('round-trips through introspection without drift', async () => {
+    const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }
+    const target = extractSnapshot(
+      {
+        stamps: table('stamps', {
+          id: serial().primaryKey(),
+          at: timestamp({ precision: 3 }),
+          plain: timestamp(),
+          zoned: timestamptz({ precision: 0 }),
+        }),
+      },
+      'postgres',
+    )
+    await pool.query(emitPg(diff(empty, target)))
+    const live = await introspectPg(pool)
+    const t = { ...live, tables: { stamps: live.tables.stamps! } }
+    expect(t.tables.stamps.columns.at!.type).toBe('timestamp(3)')
+    expect(t.tables.stamps.columns.plain!.type).toBe('timestamp')
+    expect(t.tables.stamps.columns.zoned!.type).toBe('timestamptz(0)')
+    await expect(checkDrift(t, target, 'error')).resolves.toBeUndefined()
+  }, 60_000)
 })

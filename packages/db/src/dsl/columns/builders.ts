@@ -172,20 +172,38 @@ export class TimestampBuilder extends ColumnBuilder<Date> {
   }
 }
 
-export function timestamp(): TimestampBuilder {
-  return new TimestampBuilder('timestamp')
+/** Fractional-second digits a time type stores: 0–6. */
+export interface TimeOptions {
+  precision?: number
 }
 
-export function timestamptz(): TimestampBuilder {
-  return new TimestampBuilder('timestamptz')
+/** `name(p)`, or `name` without a precision. */
+function withPrecision(name: string, opts?: TimeOptions): string {
+  const p = opts?.precision
+  if (p === undefined) return name
+  if (!Number.isInteger(p) || p < 0 || p > 6) {
+    throw new Error(
+      `kickjs-db: ${name}({ precision: ${p} }) — precision is a whole number from 0 to 6`,
+    )
+  }
+  return `${name}(${p})`
+}
+
+/** `timestamp({ precision: 3 })` keeps milliseconds; without one, the database's default. */
+export function timestamp(opts?: TimeOptions): TimestampBuilder {
+  return new TimestampBuilder(withPrecision('timestamp', opts))
+}
+
+export function timestamptz(opts?: TimeOptions): TimestampBuilder {
+  return new TimestampBuilder(withPrecision('timestamptz', opts))
 }
 
 export function date(): ColumnBuilder<Date> {
   return new ColumnBuilder<Date>('date')
 }
 
-export function time(): ColumnBuilder<string> {
-  return new ColumnBuilder<string>('time')
+export function time(opts?: TimeOptions): ColumnBuilder<string> {
+  return new ColumnBuilder<string>(withPrecision('time', opts))
 }
 
 export function interval(): ColumnBuilder<string> {

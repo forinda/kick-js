@@ -222,9 +222,9 @@ export function mysqlType(pgType: string): string {
   if (base === 'char' || base === 'character' || base === 'bpchar') return `CHAR${len || '(1)'}`
   if (base === 'text' || base === 'citext') return 'TEXT'
   if (base === 'json' || base === 'jsonb') return 'JSON'
-  if (base === 'timestamp' || base === 'timestamptz') return 'TIMESTAMP'
+  if (base === 'timestamp' || base === 'timestamptz') return `TIMESTAMP${len}`
   if (base === 'date') return 'DATE'
-  if (base === 'time' || base === 'timetz') return 'TIME'
+  if (base === 'time' || base === 'timetz') return `TIME${len}`
   if (base === 'bytea' || base === 'blob') return 'BLOB'
   // Pass anything else through uppercased with its length (best effort).
   return base.toUpperCase() + len
@@ -256,8 +256,11 @@ function mysqlDefault(value: unknown, type?: string, sql?: boolean): string {
 
   // Postgres UUID/`now()` generators → MySQL equivalents.
   if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return '(UUID())'
-  if (/^now\(\)$/i.test(str)) return 'CURRENT_TIMESTAMP'
-  if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
+  // A fractional-second column needs the same precision on its CURRENT_TIMESTAMP.
+  const fsp = type === undefined ? '' : (/\((\d)\)\s*$/.exec(type)?.[1] ?? '')
+  if (/^(now\(\)|CURRENT_TIMESTAMP)$/i.test(str))
+    return fsp ? `CURRENT_TIMESTAMP(${fsp})` : 'CURRENT_TIMESTAMP'
+  if (/^(CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
 
   // Other function calls are expressions, which MySQL takes only in parentheses.
