@@ -1,5 +1,5 @@
 /**
- * Unit tests for the §22.4 token convention validator.
+ * Unit tests for the token convention validator: `<scope>/<area>/<key>`.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -30,6 +30,19 @@ describe('validateTokenConventions — conformant tokens', () => {
       token('mycorp/Cache'),
       token('acme/AuditLog'),
       token('forinda/Foo'),
+    ])
+    expect(out).toEqual([])
+  })
+
+  it('accepts the documented lowercase <scope>/<area>/<key> names', () => {
+    // First-party tokens and the guides' examples use this form.
+    const out = validateTokenConventions([
+      token('kick/storage/default'),
+      token('kick/db/primary'),
+      token('app/tenants/repository'),
+      token('app/tenant/db-pool'),
+      token('app/Task/repository'), // kick g module's repository token
+      token('app/db'),
     ])
     expect(out).toEqual([])
   })
@@ -67,19 +80,13 @@ describe('validateTokenConventions — non-conformant tokens', () => {
       variable: 'AUTH_USER',
       filePath: 'src/file.ts',
     })
-    expect(out[0].suggestion).toContain("'mycorp/AuthUser'")
-  })
-
-  it('flags lowercase keys and suggests PascalCase', () => {
-    const out = validateTokenConventions([token('auth/user')])
-    expect(out).toHaveLength(1)
-    expect(out[0].suggestion).toContain("'auth/User'")
+    expect(out[0].suggestion).toContain("'app/AuthUser'")
   })
 
   it('flags dotted forms (non-legacy) and suggests slash form', () => {
     const out = validateTokenConventions([token('config.database.url')])
     expect(out).toHaveLength(1)
-    expect(out[0].suggestion).toContain('dotted')
+    expect(out[0].suggestion).toContain("'config/database/url'")
   })
 
   it('flags scope without a key', () => {

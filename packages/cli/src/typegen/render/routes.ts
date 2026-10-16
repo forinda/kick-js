@@ -86,7 +86,7 @@ export const kickRpc = {} as const
   }
 
   const renderField = (
-    schema: { identifier: string; source: string | null } | null,
+    schema: { identifier: string; source: string | null; unexported?: true } | null,
     m: DiscoveredRoute,
     field: 'body' | 'query' | 'params' | 'response',
   ): string | null => {
@@ -111,11 +111,16 @@ export const kickRpc = {} as const
             : field === 'query' && m.queryFilterable !== null
               ? 'the @ApiQueryParams-derived query shape'
               : `'unknown'`
+        const route = `route ${m.controller}.${m.method} (${m.httpMethod} ${m.path})`
         opts.onWarn?.(
-          `route ${m.controller}.${m.method} (${m.httpMethod} ${m.path}): ` +
-            `${field} schema '${schema.identifier}' could not be statically resolved — ` +
-            `falling back to ${fallback}. ` +
-            `Export the schema from the controller file or import it with a static specifier.`,
+          schema.unexported
+            ? `${route}: ${field} schema '${schema.identifier}' is declared in ` +
+                `${relative(process.cwd(), m.filePath)} but not exported, so the generated ` +
+                `types can't import it — ${field} is typed as ${fallback}. ` +
+                `Export it (\`export const ${schema.identifier} = ...\`) to type ctx.${field}.`
+            : `${route}: ${field} schema '${schema.identifier}' could not be statically resolved — ` +
+                `falling back to ${fallback}. ` +
+                `Export the schema from the controller file or import it with a static specifier.`,
         )
       }
       return null

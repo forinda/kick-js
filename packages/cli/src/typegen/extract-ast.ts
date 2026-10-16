@@ -190,12 +190,22 @@ interface ImportBinding {
 interface FileContext {
   imports: Map<string, ImportBinding>
   topLevelConsts: Set<string>
+  /** Top-level names the file exports (`export const X`, `export { X }`). */
+  exported: Set<string>
 }
 
 function buildFileContext(program: Node): FileContext {
   const imports = new Map<string, ImportBinding>()
   const topLevelConsts = new Set<string>()
+  const exported = new Set<string>()
   for (const stmt of (program.body as Node[] | undefined) ?? []) {
+    // `export { X, Y as Z }` (not a re-export `from` another module)
+    if (stmt.type === 'ExportNamedDeclaration' && !stmt.source) {
+      for (const spec of (stmt.specifiers as Node[] | undefined) ?? []) {
+        const local = identifierName(spec.local)
+        if (local) exported.add(local)
+      }
+    }
     if (stmt.type === 'ImportDeclaration') {
       const source = stringValue(stmt.source) ?? ''
       for (const spec of (stmt.specifiers as Node[] | undefined) ?? []) {
@@ -215,21 +225,28 @@ function buildFileContext(program: Node): FileContext {
       for (const d of (decl.declarations as Node[] | undefined) ?? []) {
         const name = identifierName(d.id)
         if (name) topLevelConsts.add(name)
+        if (name && stmt !== decl) exported.add(name)
       }
     }
   }
-  return { imports, topLevelConsts }
+  return { imports, topLevelConsts, exported }
 }
 
 /**
  * Mirror of scanner.ts `resolveImportSource` semantics on top of the
- * AST import map: imported → module specifier, same-file const → `''`
- * sentinel, otherwise null.
+ * AST import map: imported → module specifier, exported same-file const →
+ * `''` sentinel, otherwise null (`unexported` when it's a same-file const
+ * the generated types can't import).
  */
 function resolveSchemaRef(identifier: string, ctx: FileContext): SchemaRef {
   const imported = ctx.imports.get(identifier)
   if (imported) return { identifier, source: imported.source }
-  if (ctx.topLevelConsts.has(identifier)) return { identifier, source: '' }
+  if (ctx.topLevelConsts.has(identifier)) {
+    // The generated types import it by name, which needs an export.
+    return ctx.exported.has(identifier)
+      ? { identifier, source: '' }
+      : { identifier, source: null, unexported: true }
+  }
   return { identifier, source: null }
 }
 

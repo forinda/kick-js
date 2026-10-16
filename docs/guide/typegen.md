@@ -100,7 +100,7 @@ A decorated class registers when its file is imported. Modules load their files 
 
 ### Watch-mode failure surfacing
 
-A failing scan or plugin pass in watch mode prints a deduplicated warning (`kick typegen: <source> pass failed (<error>) — types in .kickjs/types may be stale`) and broadcasts a `kickjs:typegen-error` custom HMR event. Repeated identical failures stay quiet until the message changes or a pass succeeds. Separately, a route whose wired `body`/`query`/`params` schema can't be statically resolved warns with the controller, method, and schema identifier instead of silently emitting `unknown`.
+A failing scan or plugin pass in watch mode prints a deduplicated warning (`kick typegen: <source> pass failed (<error>) — types in .kickjs/types may be stale`) and broadcasts a `kickjs:typegen-error` custom HMR event. Repeated identical failures stay quiet until the message changes or a pass succeeds. Separately, a route whose wired `body`/`query`/`params` schema can't be statically resolved warns with the controller, method, and schema identifier instead of silently emitting `unknown`. The generated types import each schema by name, so a schema declared in the controller file must be exported (`export const createTaskSchema = ...`); one that isn't is left out — the field falls back to `unknown` — and the warning says to export it, rather than emitting an import that fails your typecheck with TS2459.
 
 ## How `params` is typed
 

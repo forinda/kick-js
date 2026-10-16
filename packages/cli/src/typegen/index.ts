@@ -167,7 +167,7 @@ function resolveOptions(opts: RunTypegenOptions): {
 export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   scan: ScanResult
   result: GenerateResult
-  /** Token convention warnings — empty when every literal matches §22.2. */
+  /** Token convention warnings — empty when every literal matches `<scope>/<area>/<key>`. */
   tokenWarnings: TokenConventionWarning[]
 }> {
   const { cwd, srcDir, outDir, silent, allowDuplicates, envFile } = resolveOptions(opts)
@@ -249,7 +249,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     )
     if (tokenWarnings.length > 0) {
       console.warn(
-        `  kick typegen: ${tokenWarnings.length} token(s) don't match the §22.2 convention:`,
+        `  kick typegen: ${tokenWarnings.length} token(s) don't match the <scope>/<area>/<key> convention:`,
       )
       for (const warning of tokenWarnings) {
         const variableNote = warning.variable ? ` [${warning.variable}]` : ''

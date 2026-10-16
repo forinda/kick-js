@@ -86,7 +86,7 @@ When generating or modifying code in this project, stay aligned with the v4 conv
 
 - **Adapters**: \`defineAdapter()\` factory — never \`class implements AppAdapter\`.
 - **Plugins**: \`definePlugin()\` factory — never plain function returning \`KickPlugin\`.
-- **DI tokens**: \`<scope>/<PascalKey>[/<suffix>]\` — scope is lowercase, the key segment is **PascalCase** (e.g. \`'app/Users/repository'\`, \`'mycorp/Cache/redis'\`). First-party uses the reserved \`'kick/'\` prefix; this project owns its own scope.
+- **DI tokens**: \`<scope>/<area>/<key>[:<instance>]\` — a lowercase scope, then slash-separated segments (e.g. \`'app/users/repository'\`, \`'app/Users/repository'\`, \`'mycorp/cache/redis'\`). First-party uses the reserved \`'kick/'\` prefix; this project owns its own scope.
 - **Decorators**: \`@Controller()\` (no path arg — mount prefix comes from \`routes().path\`).
 - **HTTP runtime**: this app may run on Express, Fastify, or h3 — check \`kick.config.ts\` \`runtime\` (or \`bootstrap({ runtime })\`) before writing engine-specific code. Prefer engine-neutral \`ctx\` APIs (\`ctx.json\`/\`ctx.body\`/\`ctx.params\`/\`ctx.sse\`); don't assume \`ctx.req\` is an Express request. Uploads (\`@FileUpload\` → \`ctx.file\`/\`ctx.files\`) work on all three (\`kick add upload\` installs the driver). Full rules in \`.agents/AGENTS.md\` → "HTTP runtime".
 - **Module entry file** MUST be named \`<name>.module.ts\` and live under \`src/modules/<name>/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed \`projects.ts\` silently degrades every save into a full restart.
@@ -213,8 +213,10 @@ mistakes:
 
 - **Plugins** — \`definePlugin()\` factory. Same shape, never plain function returning \`KickPlugin\`.
 
-- **DI tokens** — \`<scope>/<PascalKey>[/<suffix>]\`. Scope is lowercase,
-  the key segment is **PascalCase** (the regex enforces both):
+- **DI tokens** — \`<scope>/<area>/<key>[:<instance>]\`. The scope is
+  lowercase; the segments after it are identifiers (\`kick typegen\` warns
+  on names that don't fit — a bare \`'UserRepository'\`, a dotted
+  \`'app.db'\`):
 
   \`\`\`ts
   const USERS_REPO = createToken<UsersRepo>('app/Users/repository')
