@@ -67,7 +67,9 @@ describe('PACKAGE_REGISTRY catalog health', () => {
   it('the post-scaffold "Available:" list excludes deprecated and core packages', () => {
     const names = AVAILABLE_ADD_PACKAGES.split(',').map((s) => s.trim())
     expect(names.length).toBeGreaterThan(0)
-    for (const name of names) {
+    // Not a package: installs the runtime's multipart driver.
+    expect(names).toContain('upload')
+    for (const name of names.filter((n) => n !== 'upload')) {
       const entry = PACKAGE_REGISTRY[name]
       expect(entry, `'${name}' is not a known registry package`).toBeDefined()
       expect(entry?.deprecated, `'${name}' is deprecated — must not be advertised`).toBeUndefined()

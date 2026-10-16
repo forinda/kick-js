@@ -228,6 +228,8 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
  * Excludes core packages
  * (already installed), deprecated ones, `:` sub-variants (e.g. `queue:bullmq`),
  * and the db-dialect / schema-lib duplicates that clutter a one-line summary.
+ * `upload` isn't in the registry (it installs the runtime's multipart driver,
+ * see {@link UPLOAD_DRIVERS}) but is a `kick add` name, so it's listed too.
  * `kick add --list` shows the full catalog.
  */
 export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
@@ -239,6 +241,7 @@ export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
       !['pg', 'sqlite', 'mysql', 'zod', 'valibot', 'yup'].includes(name),
   )
   .map(([name]) => name)
+  .concat('upload')
   .join(', ')
 
 /**
