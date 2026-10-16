@@ -16,6 +16,7 @@ import {
 import { QUEUE_MANAGER, type QueueAdapterOptions } from './types'
 import { QueueService } from './queue.service'
 import { bullmqInspector } from './inspector'
+import { pingQueue } from './ping'
 
 const log = Logger.for('QueueAdapter')
 
@@ -58,7 +59,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
     queues: [],
     concurrency: 1,
   },
-  build: (options) => {
+  build: (options, { name: adapterName }) => {
     const workers: Worker[] = []
     const queueService = new QueueService(options.provider)
     let jobClassCount = 0
@@ -116,7 +117,11 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
         ),
 
       async beforeStart({ container }) {
-        const { queues: preCreateQueues = [], concurrency = 1 } = options
+        const {
+          queues: preCreateQueues = [],
+          concurrency = 1,
+          workers: runWorkers = true,
+        } = options
 
         // Every @Job / @Process the container can resolve — `@Job` and
         // `@Process` live in @forinda/kickjs, and runJob() routes each job.
@@ -129,12 +134,10 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
           for (const name of new Set([...preCreateQueues, ...handled])) {
             queueService.registerQueue(name, (provider.getQueue?.(name) ?? { name }) as Queue)
           }
-          for (const name of handled) {
-            provider.createWorker(
-              name,
-              (job) => runJob(container, name, job).then(() => {}),
-              concurrency,
-            )
+          for (const name of runWorkers ? handled : []) {
+            // The handler's return value goes back to the provider, which
+            // keeps it where status endpoints can read it.
+            provider.createWorker(name, (job) => runJob(container, name, job), concurrency)
             log.info(`Worker started: ${name} (provider, concurrency: ${concurrency})`)
           }
         } else {
@@ -150,7 +153,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
           // Errors runJob already reported; the 'failed' event reports the rest
           // (a stalled job, a timeout) without reporting one twice.
           const reported = new WeakSet<object>()
-          for (const name of handled) {
+          for (const name of runWorkers ? handled : []) {
             const worker = new Worker(
               name,
               // The BullMQ job itself goes to the handler, so it keeps
@@ -192,8 +195,18 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
         container.registerFactory(JOB_DISPATCHER, () => queueService, Scope.SINGLETON)
 
         log.info(
-          `QueueAdapter ready — ${queueService.getQueueNames().length} queue(s), ${handled.length} worker(s)`,
+          `QueueAdapter ready — ${queueService.getQueueNames().length} queue(s), ${runWorkers ? handled.length : 0} worker(s)`,
         )
+      },
+
+      /** `/health/ready`: PING Redis behind every queue, or the provider's `ping()`. */
+      async onHealthCheck() {
+        if (options.provider) await options.provider.ping?.()
+        else {
+          const queues = queueService.getQueueNames().map((n) => queueService.getQueue(n)!)
+          await Promise.all(queues.map(pingQueue))
+        }
+        return { name: adapterName, status: 'up' as const }
       },
 
       async shutdown() {

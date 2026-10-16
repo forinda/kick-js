@@ -23,6 +23,10 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./testing": {
+      "import": "./dist/testing.mjs",
+      "types": "./dist/testing.d.mts"
     }
   },
   "files": [

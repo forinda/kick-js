@@ -52,6 +52,7 @@ export { reply, isReply, type Reply, type InferHandlerResponse } from './http/re
 export type { SseHandler } from './http/context'
 export { waitUntil, type PlatformContext } from './http/background'
 export { runCronJobs, type CronRun } from './core/cron'
+export { matchesBearer } from './core/web-crypto'
 export {
   runJob,
   registerJobContext,

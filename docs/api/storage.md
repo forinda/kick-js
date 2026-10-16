@@ -52,11 +52,11 @@ Needs `@forinda/kickjs` 10.1 or later.
 
 Needs `@forinda/kickjs` 10.1 or later.
 
-| Export                    | Description                                                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `StorageAdapter(options)` | Binds `options.storage` to `options.token` (default `STORAGE`) and declares the storage's settings section, if it has one. `.scoped(name, options)` for a second storage |
-| `STORAGE`                 | The default token                                                                                                                                                        |
-| `StorageAdapterOptions`   | `storage`, `token`                                                                                                                                                       |
+| Export                    | Description                                                                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `StorageAdapter(options)` | Binds `options.storage` to `options.token` (default `STORAGE`) and declares the storage's settings section, if it has one. `.scoped(name, options)` for a second storage. `onHealthCheck()` lists one key for `/health/ready` |
+| `STORAGE`                 | The default token                                                                                                                                                                                                             |
+| `StorageAdapterOptions`   | `storage`, `token`, `healthCheck` (default `true`; `false` reports `up` without checking)                                                                                                                                     |
 
 ### tus (`@forinda/kickjs-storage/tus`)
 

@@ -4,7 +4,7 @@ description: Hash passwords with scrypt and upgrade them on login, and sign toke
 
 # Passwords and Signed Tokens
 
-Two primitives that [bring-your-own auth](./authentication.md) builds on. Both live in `@forinda/kickjs` and are Node only (they use `node:crypto`).
+Two primitives that [bring-your-own auth](./authentication.md) builds on. Both live in `@forinda/kickjs` and are Node only (they use `node:crypto`). A third, [`matchesBearer`](#shared-secret-endpoints-matchesbearer), checks a shared-secret bearer token and runs anywhere.
 
 ## Passwords: `hashPassword` / `verifyPassword`
 
@@ -120,6 +120,24 @@ createSigner({
 ```
 
 Remove the old secret once the longest `maxAge` has passed. Sessions rotate the same way: see [`session({ secret: [...] })`](./sessions.md).
+
+## Shared-secret endpoints: `matchesBearer`
+
+An endpoint called by a machine with a shared secret — a cron trigger, a metrics scraper, a webhook — checks `Authorization: Bearer <secret>`. Compare it in constant time, or the response timing leaks how much of a guess was right:
+
+```ts
+import { HttpException, getEnv, matchesBearer } from '@forinda/kickjs'
+
+@Post('/hooks/rebuild')
+rebuild(ctx: RequestContext) {
+  if (!matchesBearer(ctx.headers.authorization, getEnv('HOOK_SECRET'))) {
+    throw new HttpException(401, 'Invalid token')
+  }
+  // ...
+}
+```
+
+It returns `false` for a missing or non-string header, and for an empty secret, so an unset env var doesn't let `Bearer ` through. The comparison doesn't stop at the first wrong character, so a guess's contents don't show in the timing; the secret's length can, so use a long random one. It uses no `node:crypto`, so it is also exported from `@forinda/kickjs/web`. The framework's own cron trigger and `metricsAdapter({ token })` use it.
 
 ## See also
 

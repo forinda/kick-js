@@ -23,6 +23,7 @@ import {
   getRouteFlags,
   type MatchedRoute,
   type RequestContext,
+  type ConfigOrigins,
 } from '@forinda/kickjs'
 import * as kick from '@forinda/kickjs'
 import {
@@ -225,7 +226,11 @@ export interface DevToolsOptions {
    * each declared variable's value comes from (default: false)
    */
   exposeConfig?: boolean
-  /** Env var prefixes to expose (default: ['APP_', 'NODE_ENV']). Others are redacted. */
+  /**
+   * Env var prefixes whose values `/config` shows (default: ['APP_', 'NODE_ENV']).
+   * The app's other declared variables (env schema, settings sections) are
+   * listed as `[REDACTED]`; the rest of the environment is left out.
+   */
   configPrefixes?: string[]
   /** Callback when error rate exceeds threshold */
   onErrorRateExceeded?: (rate: number) => void
@@ -1221,16 +1226,24 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
         if (exposeConfig) {
           router.get('/config', (ctx: RequestContext) => {
+            // Where each declared variable's value comes from — names only.
+            const origins = (
+              appRef?.__kickApp as { configOrigins?: () => ConfigOrigins } | undefined
+            )?.configOrigins?.()
+            // The app's own variables — its env schema and settings sections.
+            // Anything else in the environment (the shell's, the platform's)
+            // isn't the app's config, and even its name stays out.
+            const declared = new Set(
+              [...(origins?.env ?? []), ...(origins?.sections ?? []).flatMap((s) => s.vars)].map(
+                (v) => v.name,
+              ),
+            )
             const config: Record<string, string> = {}
             for (const [key, value] of Object.entries(process.env)) {
               if (value === undefined) continue
-              const allowed = configPrefixes.some((prefix) => key.startsWith(prefix))
-              config[key] = allowed ? value : '[REDACTED]'
+              if (configPrefixes.some((prefix) => key.startsWith(prefix))) config[key] = value
+              else if (declared.has(key)) config[key] = '[REDACTED]'
             }
-            // Where each declared variable's value comes from — names only.
-            const origins = (
-              appRef?.__kickApp as { configOrigins?: () => unknown } | undefined
-            )?.configOrigins?.()
             ctx.json({ config, origins })
           })
         }

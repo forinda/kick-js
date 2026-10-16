@@ -11,7 +11,7 @@ import {
   listJobHandlers,
   NoJobHandlerError,
 } from '@forinda/kickjs'
-import { Worker } from 'bullmq'
+import { Queue, Worker } from 'bullmq'
 import { setObservers } from '../../kickjs/src/core/observers'
 
 // ─── Mock bullmq ────────────────────────────────────────────────────────────
@@ -29,7 +29,9 @@ vi.mock('bullmq', () => {
   })
 
   class Queue {
+    static ping = vi.fn().mockResolvedValue('PONG')
     name: string
+    client = Promise.resolve({ ping: Queue.ping })
     add = mockAdd
     addBulk = mockAddBulk
     close = mockClose
@@ -593,5 +595,75 @@ describe('QueueAdapter — with a provider', () => {
 
     await adapter.shutdown!()
     expect(provider.shutdown).toHaveBeenCalled()
+  })
+
+  it("hands the handler's return value back to the provider", async () => {
+    @Job('ret-q')
+    class _Ret {
+      @Process('sum')
+      sum(job: { data: number[] }) {
+        return job.data.reduce((a, b) => a + b, 0)
+      }
+    }
+    const provider = fakeProvider()
+    await QueueAdapter({ provider }).beforeStart({ container: Container.getInstance() } as any)
+    await expect(provider.workers.get('ret-q')!({ name: 'sum', data: [1, 2, 3] })).resolves.toBe(6)
+  })
+
+  it('workers: false dispatches but starts no worker', async () => {
+    @Job('api-only-q')
+    class _ApiOnly {
+      @Process('x')
+      x() {}
+    }
+    const provider = fakeProvider()
+    const adapter = QueueAdapter({ provider, workers: false })
+    const container = Container.getInstance()
+    await adapter.beforeStart({ container } as any)
+    expect(provider.createWorker).not.toHaveBeenCalled()
+    await container.resolve(JOB_DISPATCHER).dispatch('api-only-q', 'x', 1)
+    expect(provider.addJob).toHaveBeenCalledWith('api-only-q', 'x', 1, undefined)
+  })
+
+  it("onHealthCheck reports the provider's ping()", async () => {
+    const provider = { ...fakeProvider(), ping: vi.fn(async () => {}) }
+    const adapter = QueueAdapter({ provider })
+    await expect(adapter.onHealthCheck!()).resolves.toEqual({ name: 'QueueAdapter', status: 'up' })
+    provider.ping.mockRejectedValueOnce(new Error('down'))
+    await expect(adapter.onHealthCheck!()).rejects.toThrow('down')
+  })
+})
+
+describe('QueueAdapter — BullMQ health and workers: false', () => {
+  const redis = { host: 'localhost', port: 6379 }
+  const QueueMock = Queue as unknown as { ping: ReturnType<typeof vi.fn> }
+
+  it('onHealthCheck PINGs Redis behind each queue and fails when it does', async () => {
+    const adapter = QueueAdapter({ redis, queues: ['h1', 'h2'] })
+    await adapter.beforeStart({ container: Container.getInstance() } as any)
+    QueueMock.ping.mockClear()
+    await expect(adapter.onHealthCheck!()).resolves.toEqual({ name: 'QueueAdapter', status: 'up' })
+    const container = Container.getInstance()
+    const queues = container.resolve(QUEUE_MANAGER).getQueueNames()
+    expect(queues).toEqual(expect.arrayContaining(['h1', 'h2']))
+    expect(QueueMock.ping).toHaveBeenCalledTimes(queues.length)
+    QueueMock.ping.mockRejectedValueOnce(new Error('Connection is closed.'))
+    await expect(adapter.onHealthCheck!()).rejects.toThrow('Connection is closed.')
+  })
+
+  it('workers: false creates the queues to dispatch to but no Worker', async () => {
+    @Job('bull-api-only')
+    class _BullApiOnly {
+      @Process('x')
+      x() {}
+    }
+    const before = (Worker as unknown as { instances: unknown[] }).instances.length
+    const adapter = QueueAdapter({ redis, workers: false })
+    const container = Container.getInstance()
+    await adapter.beforeStart({ container } as any)
+    expect((Worker as unknown as { instances: unknown[] }).instances.length).toBe(before)
+    await expect(
+      container.resolve(JOB_DISPATCHER).dispatch('bull-api-only', 'x', {}),
+    ).resolves.toMatchObject({ id: '1' })
   })
 })

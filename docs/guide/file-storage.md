@@ -74,6 +74,8 @@ adapters: [
 ]
 ```
 
+Each `StorageAdapter` also reports to [`/health/ready`](./adapters.md#health-check-adapter): it lists one key (`list({ limit: 1 })`), so an unreachable bucket or rejected credentials mark it `down`. With S3 the credentials need list permission on the bucket for the check to pass; `healthCheck: false` reports it `up` without checking.
+
 ## Saving an upload
 
 ```ts

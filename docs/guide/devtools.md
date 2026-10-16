@@ -255,7 +255,7 @@ Full reactive state snapshot — everything in one endpoint.
 
 ### `GET /_debug/config` (opt-in)
 
-Sanitized environment variables. Only variables matching configured prefixes are shown; everything else is `[REDACTED]`. `origins` says where each variable the app declares (its env schema and [settings sections](./configuration.md#where-a-value-came-from)) gets its value: `env`, `file` (a `_FILE` secret), `default`, `provided`, or `unset`. It lists names only, never values.
+The app's configuration. Variables matching `configPrefixes` show their value; the other variables the app declares (its env schema and settings sections) are listed as `[REDACTED]`; everything else in the environment — the shell's, the platform's — is left out, names included. `origins` says where each variable the app declares (its env schema and [settings sections](./configuration.md#where-a-value-came-from)) gets its value: `env`, `file` (a `_FILE` secret), `default`, `provided`, or `unset`. It lists names only, never values.
 
 ```json
 {
@@ -263,11 +263,14 @@ Sanitized environment variables. Only variables matching configured prefixes are
     "APP_NAME": "my-api",
     "APP_PORT": "3000",
     "NODE_ENV": "development",
-    "DATABASE_URL": "[REDACTED]",
+    "DATABASE_URL": "postgres://db.example/my-api",
     "JWT_SECRET": "[REDACTED]"
   },
   "origins": {
-    "env": [{ "name": "PORT", "origin": "default" }],
+    "env": [
+      { "name": "PORT", "origin": "default" },
+      { "name": "JWT_SECRET", "origin": "env" }
+    ],
     "sections": [
       {
         "prefix": "DB",
