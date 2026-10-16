@@ -1,5 +1,13 @@
 # @forinda/kickjs-storage
 
+## 0.2.0
+
+### Minor Changes
+
+- [#924](https://github.com/forinda/kick-js/pull/924) [`a6b8538`](https://github.com/forinda/kick-js/commit/a6b853876b5225123d0ead711053ee76c7adb1be) Thanks [@forinda](https://github.com/forinda)! - `StorageAdapter` reports to `/health/ready`: its `onHealthCheck()` lists one key (`list({ limit: 1 })`), so an unreachable bucket or rejected credentials mark it `down`. With S3, the credentials need list permission on the bucket for the check to pass.
+  
+  Migration: if your S3 credentials can't list the bucket, `/health/ready` now reports the storage `down` — grant `s3:ListBucket`, or pass `healthCheck: false` to `StorageAdapter`.
+
 ## 0.1.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @forinda/kickjs-ws
 
+## 7.2.2
+
+### Patch Changes
+
+- [#924](https://github.com/forinda/kick-js/pull/924) [`7c3b5c7`](https://github.com/forinda/kick-js/commit/7c3b5c762901760db0e0eeff4cf56715179825cf) Thanks [@forinda](https://github.com/forinda)! - `redisBroker().close()` no longer fails with `Connection is closed.` on shutdown when the app has already quit the subscriber connection in its own cleanup (adapters shut down concurrently). A closed connection holds no subscription, so the unsubscribe is skipped.
+
 ## 7.2.1
 
 ### Patch Changes

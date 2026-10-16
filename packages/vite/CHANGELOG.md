@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.0.3
+
+### Patch Changes
+
+- [#923](https://github.com/forinda/kick-js/pull/923) [`e34923f`](https://github.com/forinda/kick-js/commit/e34923f80b6c4b8230e8bbc002e0a70519b7bb2f) Thanks [@forinda](https://github.com/forinda)! - `resolveDevtoolsFlag()` called outside a Vite build (no `command` to go by) is `true` only when `NODE_ENV` is `development` or `test`. An unset `NODE_ENV` used to turn it on.
+
 ## 8.0.2
 
 ### Patch Changes

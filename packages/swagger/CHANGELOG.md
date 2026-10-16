@@ -1,5 +1,21 @@
 # @forinda/kickjs-swagger
 
+## 7.3.2
+
+### Patch Changes
+
+- [#925](https://github.com/forinda/kick-js/pull/925) [`3dfa37a`](https://github.com/forinda/kick-js/commit/3dfa37ac0c65259ad5742305d5022923d4a05a5e) Thanks [@forinda](https://github.com/forinda)! - Production gates fail closed: an unset `NODE_ENV` is production, not development. Dev behaviour is on only when `NODE_ENV` is exactly `development` or `test`.
+  
+  - `csrf()` / `csrfGuard()` and `session()` cookies default to `Secure`.
+  - The error handler leaves stacks, error summaries and `details` out of responses.
+  - `ctx.body`'s read-only dev proxy is off, the asset manifest is cached, and deploy-only startup checks run.
+  - `AdapterContext.isProduction` is `true` and `AdapterContext.env` defaults to `'production'`.
+  - `SwaggerAdapter({ disableInProd: true })` mounts no docs.
+  
+  **Migration:** `kick dev` (Vite) and Vitest already set `NODE_ENV`, so they are unaffected. An app run another way (`node`, `tsx`) that relied on dev behaviour with `NODE_ENV` unset must set `NODE_ENV=development`.
+
+- [#930](https://github.com/forinda/kick-js/pull/930) [`446bdca`](https://github.com/forinda/kick-js/commit/446bdca688a44d7cb0b0d7d3dd10a638b4dee165) Thanks [@forinda](https://github.com/forinda)! - Query sort accepts `-field` (descending) and `field` / `+field` (ascending), repeated or comma-separated, alongside `field:asc|desc`: `?sort=-featured,price` is the same as `?sort=featured:desc&sort=price:asc`. A bare field and comma lists were dropped before. `buildQueryParams` still writes the `field:dir` form.
+
 ## 7.3.1
 
 ### Patch Changes
