@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { kickjsVitePlugin } from '@forinda/kickjs-vite'
 import type { Plugin } from 'vite'
 
@@ -286,8 +286,16 @@ describe('kickjs:hmr plugin', () => {
   let hmrPlugin: Plugin
 
   beforeEach(() => {
+    // handleHotUpdate arms a debounced flush that logs; a real timer would
+    // fire after the file ends, while the worker is closing.
+    vi.useFakeTimers()
     hmrPlugin = findPlugin(kickjsVitePlugin(), 'kickjs:hmr')!
     expect(hmrPlugin).toBeDefined()
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
   })
 
   describe('transform() — decorator detection', () => {
