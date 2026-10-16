@@ -140,6 +140,62 @@ export interface PaginatedResponse<T = any> {
     hasNext: boolean
     hasPrev: boolean
   }
+  /**
+   * Relative links (path + query, never a host) to this page and its
+   * neighbours. `next` / `prev` are `null` at the ends.
+   */
+  links: { self: string; next: string | null; prev: string | null }
+}
+
+/** A JSON primitive stored in a cursor. Dates arrive as ISO strings. */
+export type CursorValue = string | number | boolean | null
+
+/**
+ * Where the previous page ended: the last row's values for the active sort
+ * fields plus the id tie-breaker, keyed by field name — e.g.
+ * `{ createdAt: '2026-01-01T00:00:00.000Z', id: 'u7' }`.
+ *
+ * Decoded from a client-supplied cursor and NOT signed: treat it as untrusted
+ * input. Bind the values as query parameters and keep filters / authorization
+ * scoping in the fetcher, so a forged cursor can only move the position,
+ * never widen what the caller may see.
+ */
+export type CursorPosition = Readonly<Record<string, CursorValue>>
+
+/** What `ctx.paginateCursor()` hands its fetcher. */
+export interface CursorQuery<TConfig extends QueryFieldConfig | undefined = undefined> extends Omit<
+  TypedParsedQuery<TConfig>,
+  'pagination'
+> {
+  /** `null` on the first page. */
+  cursor: CursorPosition | null
+  /** Page size. Fetch `limit + 1` rows — the extra one tells whether a next page exists. */
+  limit: number
+}
+
+/** Options for `ctx.paginateCursor()`. */
+export interface CursorPaginateOptions<T = any> {
+  /** Unique, stable tie-breaker field read off each row. Default `'id'`. */
+  idField?: string
+  /**
+   * Build the cursor values from a row yourself, instead of reading the sort
+   * fields + `idField` off it (e.g. when the row shape differs from the
+   * sortable field names). Values must be JSON primitives.
+   */
+  cursorKey?: (row: T) => Record<string, CursorValue>
+}
+
+/** Standardized cursor (keyset) paginated response shape */
+export interface CursorPaginatedResponse<T = any> {
+  data: T[]
+  meta: {
+    limit: number
+    hasNext: boolean
+    /** Opaque; pass back as `?cursor=` for the next page. `null` on the last page. */
+    nextCursor: string | null
+  }
+  /** Relative links (path + query, never a host); `next` is `null` on the last page. */
+  links: { self: string; next: string | null }
 }
 
 /**

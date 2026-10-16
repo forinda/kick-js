@@ -31,6 +31,22 @@ export function generateRepositoryFactory(ctx: TemplateContext): string {
   // generated project that cannot serve a single request.
   const body = `  const store = new Map<string, ${pascal}ResponseDTO>()
 
+  /**
+   * Filtered, searched and sorted. \`byId\` breaks sort-key ties by id — what a
+   * cursor needs; without it ties (and an unsorted list) keep insertion order.
+   */
+  function select(parsed: Omit<ParsedQuery, 'pagination'>, byId = false): ${pascal}ResponseDTO[] {
+    // The parser already limited fields to ${pascal.toUpperCase()}_QUERY_CONFIG.
+    const q = parsed.search.toLowerCase()
+    return [...store.values()]
+      .filter(
+        (row) =>
+          parsed.filters.every((f) => matches(field(row, f.field), f)) &&
+          (!q || SEARCHABLE.some((name) => String(field(row, name) ?? '').toLowerCase().includes(q))),
+      )
+      .sort((a, b) => order(a, b, parsed.sort, byId))
+  }
+
   return {
     async findById(id: string): Promise<${pascal}ResponseDTO | null> {
       return store.get(id) ?? null
@@ -43,22 +59,28 @@ export function generateRepositoryFactory(ctx: TemplateContext): string {
     async findPaginated(
       parsed: ParsedQuery,
     ): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
-      // The parser already limited fields to ${pascal.toUpperCase()}_QUERY_CONFIG.
-      const q = parsed.search.toLowerCase()
-      const rows = [...store.values()].filter(
-        (row) =>
-          parsed.filters.every((f) => matches(field(row, f.field), f)) &&
-          (!q || SEARCHABLE.some((name) => String(field(row, name) ?? '').toLowerCase().includes(q))),
-      )
-      rows.sort((a, b) => {
-        for (const { field: name, direction } of parsed.sort) {
-          const order = compare(field(a, name), field(b, name))
-          if (order) return direction === 'desc' ? -order : order
-        }
-        return 0
-      })
+      const rows = select(parsed)
       const { offset, limit } = parsed.pagination
       return { data: rows.slice(offset, offset + limit), total: rows.length }
+    },
+
+    /**
+     * Keyset page for \`ctx.paginateCursor\`: the rows strictly after
+     * \`cursor\` in sort order (id breaks ties), at most \`limit\` of them —
+     * the caller asks for one more than it shows, to learn whether a next
+     * page exists. A database does the same with
+     * \`WHERE (sortField, id) > (cursor.sortField, cursor.id)\`.
+     */
+    async findAfter(
+      query: Omit<ParsedQuery, 'pagination'> & {
+        cursor: Readonly<Record<string, unknown>> | null
+        limit: number
+      },
+    ): Promise<${pascal}ResponseDTO[]> {
+      const { cursor, limit, sort } = query
+      const rows = select(query, true)
+      const after = cursor ? rows.filter((row) => order(row, cursor, sort, true) > 0) : rows
+      return after.slice(0, limit)
     },
 
     async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
@@ -102,7 +124,7 @@ import { createToken, HttpException } from '@forinda/kickjs'`
  * in the module — nothing else has to change.
  */
 ${imports}
-import type { FilterItem, ParsedQuery } from '@forinda/kickjs'
+import type { FilterItem, ParsedQuery, SortItem } from '@forinda/kickjs'
 import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
@@ -121,6 +143,20 @@ function field(row: object, name: string): unknown {
 function compare(stored: unknown, other: unknown): number {
   if (typeof stored === 'number') return stored - Number(other)
   return String(stored ?? '').localeCompare(String(other ?? ''))
+}
+
+/**
+ * Sort order of two rows (or a row and a cursor position): each sort field in
+ * turn, then — with \`byId\` — id, in the direction of the last sort field.
+ */
+function order(a: object, b: object, sort: readonly SortItem[], byId: boolean): number {
+  for (const { field: name, direction } of sort) {
+    const result = compare(field(a, name), field(b, name))
+    if (result) return direction === 'desc' ? -result : result
+  }
+  if (!byId) return 0
+  const result = compare(field(a, 'id'), field(b, 'id'))
+  return sort.at(-1)?.direction === 'desc' ? -result : result
 }
 
 /** One \`?filter=field:op:value\` — \`in\` and \`between\` take comma-separated values. */

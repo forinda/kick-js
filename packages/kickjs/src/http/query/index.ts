@@ -25,6 +25,11 @@ export type {
   ColumnQueryFieldConfig,
   QueryBuilderAdapter,
   PaginatedResponse,
+  CursorValue,
+  CursorPosition,
+  CursorQuery,
+  CursorPaginateOptions,
+  CursorPaginatedResponse,
 } from './types'
 
 export { FILTER_OPERATORS } from './types'

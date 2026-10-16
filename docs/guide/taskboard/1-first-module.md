@@ -166,7 +166,7 @@ export function createProjectRepository() {
       store.set(entity.id, entity)
       return entity
     },
-    // findAll, findPaginated, update, delete …
+    // findAll, findPaginated, findAfter, update, delete …
   }
 }
 
@@ -192,7 +192,7 @@ and the service asks for the token, not the implementation:
 @Service()
 export class ProjectService {
   constructor(@Inject(PROJECT_REPOSITORY) private readonly repo: ProjectRepository) {}
-  // findById, findPaginated, create, update, delete — each delegates to this.repo
+  // findById, findPaginated, findAfter, create, update, delete — each delegates to this.repo
 }
 ```
 

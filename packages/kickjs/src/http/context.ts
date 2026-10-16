@@ -27,7 +27,12 @@ import {
   type QueryFieldConfig,
   type PaginatedResponse,
   type TypedParsedQuery,
+  type CursorPaginatedResponse,
+  type CursorPaginateOptions,
+  type CursorQuery,
+  type CursorValue,
 } from './query'
+import { decodeCursor, encodeCursor, pageLink, selfLink, sortSignature } from './query/cursor'
 import { isProduction } from '../core/is-production'
 
 /**
@@ -1049,6 +1054,11 @@ export class RequestContext<
         hasNext: page < totalPages,
         hasPrev: page > 1,
       },
+      links: {
+        self: selfLink(this.requestUrl()),
+        next: page < totalPages ? pageLink(this.requestUrl(), 'page', page + 1) : null,
+        prev: page > 1 ? pageLink(this.requestUrl(), 'page', page - 1) : null,
+      },
     }
 
     this.json(response)
@@ -1066,6 +1076,77 @@ export class RequestContext<
     // nothing was written (`if (!res.headersSent)`), so there is no double
     // send.
     return response
+  }
+
+  /**
+   * Cursor (keyset) pagination: parse `?cursor=&limit=` plus the usual
+   * filter / sort / `q`, call the fetcher, and send
+   * `{ data, meta: { limit, hasNext, nextCursor }, links: { self, next } }`.
+   *
+   * The fetcher gets `{ filters, sort, search, cursor, limit }` and returns up
+   * to `limit + 1` rows ordered by the sort fields then `idField`, strictly
+   * after `cursor` (`null` on the first page). The extra row only sets
+   * `hasNext`; it is trimmed off. The next cursor encodes the last returned
+   * row's sort-field values + id, and the active sort — a cursor replayed
+   * under a different `sort`, or one that does not decode, is a 400.
+   *
+   * Cursors are not signed. The decoded position is plain data: bind it as
+   * query parameters, and keep filters and authorization scoping in the
+   * fetcher so a forged cursor can never widen what the caller sees.
+   *
+   * @example
+   * ```ts
+   * @Get('/')
+   * list(ctx: RequestContext) {
+   *   return ctx.paginateCursor(
+   *     (q) => this.repo.findAfter({ ...q, limit: q.limit + 1 }),
+   *     { sortable: ['createdAt'] },
+   *   )
+   * }
+   * ```
+   */
+  async paginateCursor<T, TConfig extends QueryFieldConfig | undefined = undefined>(
+    fetcher: (query: CursorQuery<TConfig>) => Promise<T[]>,
+    fieldConfig?: TConfig,
+    options?: CursorPaginateOptions<T>,
+  ): Promise<CursorPaginatedResponse<T>> {
+    const { pagination, ...parsed } = this.qs<TConfig>(fieldConfig)
+    const { limit } = pagination
+    const idField = options?.idField ?? 'id'
+    const signature = sortSignature(parsed.sort)
+    // Exact key set to expect back — unknown when the app builds the key itself.
+    const keys = options?.cursorKey
+      ? undefined
+      : [...new Set([...parsed.sort.map((s) => s.field), idField])]
+
+    const raw = (this.req.query as Record<string, unknown>)?.cursor
+    const cursor = raw === undefined || raw === '' ? null : decodeCursor(raw, signature, keys)
+
+    const rows = await fetcher({ ...parsed, cursor, limit })
+    const hasNext = rows.length > limit
+    const data = hasNext ? rows.slice(0, limit) : rows
+    const last = data.at(-1)
+    let nextCursor: string | null = null
+    if (hasNext && last !== undefined) {
+      nextCursor = encodeCursor(cursorValues(last, keys ?? [], options?.cursorKey), signature)
+    }
+
+    const url = this.requestUrl()
+    const response: CursorPaginatedResponse<T> = {
+      data,
+      meta: { limit, hasNext, nextCursor },
+      links: { self: selfLink(url), next: nextCursor ? pageLink(url, 'cursor', nextCursor) : null },
+    }
+    // Sends AND returns — same reasoning as `paginate` above.
+    this.json(response)
+    return response
+  }
+
+  /** Path + query as the client sent it, before any router mount stripped it. */
+  private requestUrl(): string {
+    const req = this.req as { originalUrl?: unknown; url?: unknown }
+    if (typeof req.originalUrl === 'string') return req.originalUrl
+    return typeof req.url === 'string' ? req.url : '/'
   }
 
   // ── Server-Sent Events ──────────────────────────────────────────────
@@ -1292,4 +1373,34 @@ export function contentDisposition(filename: string): string {
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
   )
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`
+}
+
+/**
+ * A row's cursor values: the app's `cursorKey`, or the sort fields + id read
+ * off the row. Dates become ISO strings and bigints decimal strings (JSON
+ * would do the first and throw on the second).
+ */
+function cursorValues<T>(
+  row: T,
+  keys: readonly string[],
+  cursorKey: ((row: T) => Record<string, CursorValue>) | undefined,
+): Record<string, CursorValue> {
+  if (cursorKey) return cursorKey(row)
+  const values: Record<string, CursorValue> = {}
+  for (const key of keys) {
+    const value = (row as Record<string, unknown>)[key]
+    if (value === undefined) {
+      throw new Error(
+        `paginateCursor: row has no '${key}' — return the sort fields and the id ` +
+          `field on every row, or pass options.cursorKey / options.idField`,
+      )
+    }
+    values[key] =
+      value instanceof Date
+        ? value.toISOString()
+        : typeof value === 'bigint'
+          ? value.toString()
+          : (value as CursorValue)
+  }
+  return values
 }

@@ -252,6 +252,33 @@ describe('${pascal} repository', () => {
     expect(sorted.data.map((row) => row.name)).toEqual(['001', '10', '9'])
   })
 
+  it('pages through rows with findAfter, stable when sort keys tie', async () => {
+    // Three rows share 'a', so a page boundary falls inside the tie: only the
+    // id tie-breaker keeps the third 'a' from being skipped or repeated.
+    for (const name of ['b', 'a', 'b', 'a', 'a']) await repo.create({ name })
+    const query = { filters: [], sort: [{ field: 'name', direction: 'asc' as const }], search: '' }
+    const limit = 2
+
+    const pages: string[][] = []
+    const ids: string[] = []
+    let cursor: Record<string, unknown> | null = null
+    let hasNext = true
+    while (hasNext) {
+      // Ask for one more than a page, as ctx.paginateCursor's fetcher does.
+      const rows = await repo.findAfter({ ...query, cursor, limit: limit + 1 })
+      hasNext = rows.length > limit
+      const page = rows.slice(0, limit)
+      pages.push(page.map((row) => row.name))
+      ids.push(...page.map((row) => row.id))
+      const last = page.at(-1)
+      cursor = last ? { name: last.name, id: last.id } : null
+    }
+
+    expect(pages.map((page) => page.length)).toEqual([2, 2, 1])
+    expect(pages.flat()).toEqual(['a', 'a', 'a', 'b', 'b'])
+    expect(new Set(ids).size).toBe(5)
+  })
+
   it('should update a ${kebab}', async () => {
     const created = await repo.create({ name: 'Original' })
     const updated = await repo.update(created.id, { name: 'Updated' })

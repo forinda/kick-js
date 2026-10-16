@@ -57,6 +57,15 @@ describe('renderRoutes fallback warnings', () => {
     expect(onWarn.mock.calls[0][0]).not.toContain("'unknown'")
   })
 
+  it('an @ApiQueryParams query shape accepts a pagination cursor', () => {
+    const src = renderRoutes(
+      [route({ httpMethod: 'GET', method: 'list', queryFilterable: ['status'] })],
+      OUT,
+      'zod',
+    )
+    expect(src).toContain('limit?: string; cursor?: string }')
+  })
+
   it('does not warn when no schema is wired', () => {
     const onWarn = vi.fn()
     renderRoutes([route({})], OUT, 'zod', { onWarn })

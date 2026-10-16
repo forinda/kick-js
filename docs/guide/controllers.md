@@ -258,9 +258,12 @@ Response shape:
     "totalPages": 5,
     "hasNext": true,
     "hasPrev": false
-  }
+  },
+  "links": { "self": "/api/v1/tasks", "next": "/api/v1/tasks?page=2", "prev": null }
 }
 ```
+
+For feeds and large tables, `ctx.paginateCursor()` pages by position instead of offset (`?cursor=&limit=`), answering `{ data, meta: { limit, hasNext, nextCursor }, links: { self, next } }` — see [Cursor pagination](./query-parsing.md#cursor-pagination).
 
 ### Template Rendering
 
@@ -415,13 +418,14 @@ inferable** — the foundation for typed-client generation. `kick typegen` fills
 `KickRoutes[...].response` with `InferHandlerResponse<Controller['method']>`,
 which reads the method's return type and nothing else:
 
-| Handler style                      | Inferred `response`                                    |
-| ---------------------------------- | ------------------------------------------------------ |
-| `return payload`                   | the payload's type                                     |
-| `return reply.created(payload)`    | the payload's type (`Reply<S, T>` → `T`)               |
-| `ctx.json(payload)` then no return | `unknown`                                              |
-| `return ctx.json(payload)`         | `unknown` — the helper reports no payload type         |
-| `return ctx.paginate(fetcher)`     | `PaginatedResponse<T>` — sends AND returns its payload |
+| Handler style                        | Inferred `response`                                    |
+| ------------------------------------ | ------------------------------------------------------ |
+| `return payload`                     | the payload's type                                     |
+| `return reply.created(payload)`      | the payload's type (`Reply<S, T>` → `T`)               |
+| `ctx.json(payload)` then no return   | `unknown`                                              |
+| `return ctx.json(payload)`           | `unknown` — the helper reports no payload type         |
+| `return ctx.paginate(fetcher)`       | `PaginatedResponse<T>` — sends AND returns its payload |
+| `return ctx.paginateCursor(fetcher)` | `CursorPaginatedResponse<T>` — likewise                |
 
 The two `ctx.json` rows are the same case: `ctx.json()` returns the runtime's response
 driver for fluent chaining, and a driver says nothing about the body — so

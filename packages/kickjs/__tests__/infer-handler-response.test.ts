@@ -2,7 +2,7 @@ import { describe, it, expectTypeOf } from 'vitest'
 
 import { reply, type InferHandlerResponse, type Reply } from '../src/http/reply'
 import type { RequestContext } from '../src/http/context'
-import type { PaginatedResponse } from '../src/http/query'
+import type { CursorPaginatedResponse, PaginatedResponse } from '../src/http/query'
 
 /**
  * Type-level contract for InferHandlerResponse — what `kick typegen` R2
@@ -80,6 +80,35 @@ describe('InferHandlerResponse — response helpers', () => {
     expectTypeOf<InferHandlerResponse<typeof handler>>().toEqualTypeOf<PaginatedResponse<User>>()
     // `meta` is part of the contract the docs advertise.
     expectTypeOf<InferHandlerResponse<typeof handler>['meta']>().toHaveProperty('totalPages')
+  })
+
+  it('infers the cursor-paginated payload exactly', () => {
+    const handler = async (ctx: RequestContext) =>
+      ctx.paginateCursor(async (q) => (q.cursor ? [] : ([] as User[])), {
+        sortable: ['name'],
+      } as const)
+    expectTypeOf<InferHandlerResponse<typeof handler>>().toEqualTypeOf<
+      CursorPaginatedResponse<User>
+    >()
+    expectTypeOf<InferHandlerResponse<typeof handler>['meta']['nextCursor']>().toEqualTypeOf<
+      string | null
+    >()
+  })
+
+  it('types the cursor fetcher input', () => {
+    const handler = async (ctx: RequestContext) =>
+      ctx.paginateCursor(
+        async (q) => {
+          expectTypeOf(q.sort[0].field).toEqualTypeOf<'name'>()
+          expectTypeOf(q.limit).toEqualTypeOf<number>()
+          expectTypeOf(q).not.toHaveProperty('pagination')
+          return [] as User[]
+        },
+        { sortable: ['name'] } as const,
+      )
+    expectTypeOf<InferHandlerResponse<typeof handler>['links']['next']>().toEqualTypeOf<
+      string | null
+    >()
   })
 
   it('degrades an imperative ctx.json to unknown', () => {
