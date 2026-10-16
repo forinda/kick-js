@@ -167,3 +167,47 @@ describe('query plugins', () => {
     expect(withTitle).toEqual([{ title: 'a', name: 'f', slug: 'A' }])
   })
 })
+
+describe("$extends under casing: 'snake_case' and .colName()", () => {
+  it('finds the table by its key and adds needed columns by their database names', async () => {
+    const blogPosts = table('blogPosts', {
+      id: serial().primaryKey(),
+      fullTitle: text().notNull(),
+      authorId: integer().notNull(),
+    })
+    const authors = table('authors', {
+      id: serial().primaryKey(),
+      displayName: text().colName('DISPLAY').notNull(),
+    })
+    const rel = relations(blogPosts, ({ one }) => ({
+      author: one(authors, { fields: [blogPosts.authorId], references: [authors.id] }),
+    }))
+    const s = { blogPosts, authors, rel }
+    const database = new Database(':memory:')
+    const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
+    const t = extractSnapshot(s, 'sqlite', { casing: 'snake_case' })
+    database.exec(emitSqlite(diff(empty, t), { from: empty, to: t }))
+    database.exec(`INSERT INTO authors (DISPLAY) VALUES ('Ada');
+      INSERT INTO blog_posts (full_title, author_id) VALUES ('Hi', 1);`)
+    const db = createDbClient({
+      schema: s,
+      dialect: sqliteDialect({ database }),
+      casing: 'snake_case',
+    }).$extends({
+      result: {
+        blogPosts: {
+          shout: { needs: { fullTitle: true }, compute: (p) => p.fullTitle.toUpperCase() },
+        },
+        authors: { handle: { needs: { displayName: true }, compute: (a) => `@${a.displayName}` } },
+      },
+    })
+    expect(await db.selectFrom('blogPosts').select('id').execute()).toEqual([
+      { id: 1, fullTitle: 'Hi', shout: 'HI' },
+    ])
+    expect(await db.selectFrom('authors').select('id').execute()).toEqual([
+      { id: 1, displayName: 'Ada', handle: '@Ada' },
+    ])
+    const [post] = await db.query.blogPosts.findMany({ with: { author: true } })
+    expect(post).toMatchObject({ shout: 'HI', author: { displayName: 'Ada', handle: '@Ada' } })
+  })
+})

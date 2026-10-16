@@ -22,6 +22,8 @@
 
 import {
   ColumnNode,
+  IdentifierNode,
+  AliasNode,
   ReferenceNode,
   SelectAllNode,
   SelectQueryNode,
@@ -39,6 +41,22 @@ import {
 
 import type { ResolvedRelations } from '../query/relations'
 import type { ResultExtension, ResultExtensions } from './types'
+
+/** Database names ↔ schema keys, for a plugin that runs after renaming. */
+export interface Naming {
+  /** A table's schema key from its database name. */
+  tableKey(dbName: string): string
+  /** A column's database name from its table's key and its own key. */
+  columnDb(tableKey: string, key: string): string
+  /** The name a result row has to carry for the client to read it back as `key`. */
+  resultName(key: string): string
+}
+
+const IDENTITY_NAMING: Naming = {
+  tableKey: (t) => t,
+  columnDb: (_t, k) => k,
+  resultName: (k) => k,
+}
 
 /** Per-table computed-field bag. */
 type TableExtensionBag = Record<string, ResultExtension<UnknownRow>>
@@ -61,6 +79,12 @@ export class ResultExtensionPlugin implements KyselyPlugin {
   constructor(
     extensions: ResultExtensions<unknown>,
     private relations: ResolvedRelations = {},
+    /**
+     * The client's naming, under `casing` or `.colName()`: the plugin runs
+     * after the query has been renamed, so it reads a table by its database
+     * name and adds a needed column by its database name.
+     */
+    private naming: Naming = IDENTITY_NAMING,
   ) {
     this.byTable = new Map()
     for (const [tableName, bag] of Object.entries(extensions)) {
@@ -74,8 +98,9 @@ export class ResultExtensionPlugin implements KyselyPlugin {
   transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
     const { node, queryId } = args
     if (!SelectQueryNode.is(node)) return node
-    const tableName = singleTableTarget(node)
-    if (!tableName) return node
+    const dbTable = singleTableTarget(node)
+    if (!dbTable) return node
+    const tableName = this.naming.tableKey(dbTable)
     const bag = this.byTable.get(tableName)
     // A table with no computeds of its own may still nest rows that have some.
     if (!bag && !this.relations[tableName]) return node
@@ -84,7 +109,12 @@ export class ResultExtensionPlugin implements KyselyPlugin {
     this.pending.set(queryId, tableName)
 
     // With a join, an unqualified needs column could name either table: not injected.
-    return bag && !node.joins?.length ? injectNeeds(node, bag) : node
+    return bag && !node.joins?.length
+      ? injectNeeds(node, bag, (key) => ({
+          column: this.naming.columnDb(tableName, key),
+          as: this.naming.resultName(key),
+        }))
+      : node
   }
 
   async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
@@ -182,7 +212,11 @@ function unwrapAlias(node: OperationNode): OperationNode {
  * deduped by name so a column already selected explicitly stays put
  * exactly once.
  */
-function injectNeeds(node: SelectQueryNode, bag: TableExtensionBag): SelectQueryNode {
+function injectNeeds(
+  node: SelectQueryNode,
+  bag: TableExtensionBag,
+  dbName: (key: string) => { column: string; as: string },
+): SelectQueryNode {
   const selections = node.selections ?? []
   // Wildcard select — every column is implicitly present.
   if (selections.some(isSelectAll)) return node
@@ -197,19 +231,24 @@ function injectNeeds(node: SelectQueryNode, bag: TableExtensionBag): SelectQuery
     }
   }
 
-  const allNeeded = new Set<string>()
+  const allNeeded = new Map<string, string>()
   for (const ext of Object.values(bag)) {
     for (const col of Object.keys(ext.needs)) {
-      allNeeded.add(col)
+      const { column, as } = dbName(col)
+      allNeeded.set(column, as)
     }
   }
 
-  const missing = [...allNeeded].filter((c) => !have.has(c))
+  const missing = [...allNeeded].filter(([c]) => !have.has(c))
   if (missing.length === 0) return node
 
-  const additions: SelectionNode[] = missing.map((col) =>
-    SelectionNode.create(ReferenceNode.create(ColumnNode.create(col))),
-  )
+  // Named the way the client's result renaming expects (a `.colName()`
+  // column comes back under its key), since that renaming has already been
+  // set up for the rest of the query.
+  const additions: SelectionNode[] = missing.map(([col, as]) => {
+    const ref = ReferenceNode.create(ColumnNode.create(col))
+    return SelectionNode.create(as === col ? ref : AliasNode.create(ref, IdentifierNode.create(as)))
+  })
   return SelectQueryNode.cloneWithSelections(node, additions)
 }
 

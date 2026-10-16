@@ -85,6 +85,8 @@ export interface InternalContext {
    * present after `createDbClient` runs — the compiler may be a
    * throw-stub for unsupported dialects (MySQL until M4.A.3).
    */
+  /** Database names ↔ schema keys, under `casing` or `.colName()`. */
+  naming?: import('../extend/result-plugin').Naming
   query: {
     relations: ResolvedRelations
     tables: Record<string, TableSnapshot>

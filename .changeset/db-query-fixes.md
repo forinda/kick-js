@@ -11,3 +11,4 @@ Relational reads and query plugins that returned wrong rows or failed:
 - A relation named like an `Object.prototype` member (`constructor`) no longer reads as a column collision, and `with: { toString: true }` is an unknown relation, not a `TypeError`.
 - Managed columns (`onUpdateNow()`, `version()`, `$onUpdate`, insert defaults) are set on an insert or update inside a `WITH` too.
 - `$extends({ result })` on a select with joins no longer adds its `needs` columns (an unqualified one was ambiguous), and computes a field only when the row has every column it needs.
+- `$extends({ result })` works under `casing: 'snake_case'` and with `.colName()` columns: a table named in camelCase (`blogPosts`) got no computed fields, and a needed column was added by its key (`no such column: "passwordHash"`). It's now found by its key and added by its database name.
