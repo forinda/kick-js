@@ -432,6 +432,50 @@ export default (page: Page) =>
 
 In dev the entry is loaded through Vite. In production the adapter loads the built bundle — `dist/ssr/ssr.js` by default, or `ssr.bundle`. A render that throws falls back to client rendering for that request.
 
+## Styling with Tailwind CSS
+
+The template's `src/client/app.css` is imported by both `main.tsx` and `ssr.tsx`, so whatever it compiles to reaches the browser and the server-rendered HTML. Tailwind v4 compiles it through its Vite plugin:
+
+```bash
+pnpm add -D tailwindcss @tailwindcss/vite
+```
+
+Add the plugin to both Vite configs — `vite.config.ts` serves the pages under `kick dev`, `vite.client.config.ts` builds them:
+
+```ts
+// vite.config.ts
+import tailwindcss from '@tailwindcss/vite'
+
+  plugins: [
+    { ...swc.vite({ exclude: [/node_modules/, client] }), config: undefined },
+    react(),
+    tailwindcss(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+  ],
+```
+
+```ts
+// vite.client.config.ts
+import tailwindcss from '@tailwindcss/vite'
+
+  plugins: [react(), tailwindcss()],
+```
+
+Then make Tailwind the stylesheet:
+
+```css
+/* src/client/app.css */
+@import 'tailwindcss';
+```
+
+Classes work in any page or component:
+
+```tsx
+<h1 className="text-3xl font-bold text-sky-600">{title}</h1>
+```
+
+Nothing else changes. In dev, server-rendered pages link `app.css` and Vite serves it compiled, so they arrive styled. In production the built stylesheet is listed in the manifest and the adapter adds its `<link>`. Tailwind finds class names by scanning the project's files, skipping anything in `.gitignore`.
+
 ## Building for production
 
 The pages need their own Vite config, separate from the server's:
