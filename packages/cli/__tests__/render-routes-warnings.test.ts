@@ -133,4 +133,18 @@ export class TaskController {
       )
     }
   })
+
+  it('is not imported when exported only under another name', async () => {
+    const { extractFile, extractFileRegex } = await import('../src/typegen/scanner')
+    const file = path.resolve('src/modules/tasks/task.controller.ts')
+    const source = `${controller('')}\nexport { createTaskSchema as publicSchema }\n`
+    for (const extract of [extractFile, extractFileRegex]) {
+      const [found] = extract(source, file, process.cwd()).routes
+      expect(found!.bodySchema).toEqual({
+        identifier: 'createTaskSchema',
+        source: null,
+        unexported: true,
+      })
+    }
+  })
 })

@@ -775,9 +775,10 @@ function resolveImportSource(source: string, identifier: string): string | null 
 
   // Same-file const declaration — return empty string as a sentinel meaning
   // "current file". The generator turns this into a self-relative reference.
-  // Only an exported one: the generated types import it by name.
+  // Only an exported one, under its own name: the generated types import it
+  // by name, and `export { X as Y }` makes only `Y` importable.
   const exportedRe = new RegExp(
-    String.raw`(?:^|\n)\s*export\s+const\s+${identifier}\b|export\s*\{[^}]*\b${identifier}\b[^}]*\}(?!\s*from)`,
+    String.raw`(?:^|\n)\s*export\s+const\s+${identifier}\b|export\s*\{[^}]*(?<!\bas\s+)\b${identifier}\b(?!\s+as\b)[^}]*\}(?!\s*from)`,
   )
   if (exportedRe.test(source)) return ''
 

@@ -199,11 +199,12 @@ function buildFileContext(program: Node): FileContext {
   const topLevelConsts = new Set<string>()
   const exported = new Set<string>()
   for (const stmt of (program.body as Node[] | undefined) ?? []) {
-    // `export { X, Y as Z }` (not a re-export `from` another module)
+    // `export { X }` (not a re-export `from` another module). `export { X as Y }`
+    // makes only `Y` importable, so `X` stays unexported.
     if (stmt.type === 'ExportNamedDeclaration' && !stmt.source) {
       for (const spec of (stmt.specifiers as Node[] | undefined) ?? []) {
         const local = identifierName(spec.local)
-        if (local) exported.add(local)
+        if (local && local === identifierName(spec.exported)) exported.add(local)
       }
     }
     if (stmt.type === 'ImportDeclaration') {
