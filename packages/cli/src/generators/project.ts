@@ -642,11 +642,16 @@ export async function initProject(
   return { builds }
 }
 
+/** A single-quoted JS string literal: JSON's escapes, with `'` escaped instead of `"`. */
+const singleQuoted = (text: string) =>
+  `'${JSON.stringify(text).slice(1, -1).replaceAll('\\"', '"').replaceAll("'", "\\'")}'`
+
 /**
  * `SpaAdapter` for the fullstack server, which serves `web/`'s build from the
  * API's origin in production. The path is text the caller chose, so it goes
- * in through JSON.stringify — a quote, backslash or newline in it would
- * otherwise break the emitted module or change the path it resolves.
+ * in escaped — a quote, backslash or newline in it would otherwise break the
+ * emitted module or change the path it resolves — and single-quoted, as
+ * oxfmt writes it.
  */
 export function spaIntegration(clientDir: string): Integration {
   return {
@@ -656,7 +661,7 @@ export function spaIntegration(clientDir: string): Integration {
       '// Serves the built frontend from this origin in production.\n' +
       '// Inert until the client build exists, so `kick dev` (where Vite\n' +
       '// serves the client and proxies /api here) is unaffected.\n' +
-      `SpaAdapter({ clientDir: ${JSON.stringify(clientDir)} })`,
+      `SpaAdapter({ clientDir: ${singleQuoted(clientDir)} })`,
   }
 }
 

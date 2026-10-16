@@ -338,7 +338,11 @@ export function rootPackageJson(
           // Every package manager puts `node_modules/.bin` on PATH for
           // scripts, so the bare name resolves locally, and a missing install
           // fails loudly instead of fetching a stranger.
-          typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web',
+          //
+          // `--no-typegen` for web: it has no kick project to generate types
+          // for (it reads the server's), and typegen there left a stray
+          // web/.kickjs behind.
+          typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web --no-typegen',
           test: 'pnpm --filter ./server test',
           // The server's own `format` command (kick.config.ts).
           format: 'cd server && kick format',
@@ -367,7 +371,7 @@ export function rootPackageJson(
           // Every package manager puts `node_modules/.bin` on PATH for
           // scripts, so the bare name resolves locally, and a missing install
           // fails loudly instead of fetching a stranger.
-          typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web',
+          typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web --no-typegen',
           test: `cd server && ${pm} run test`,
           // The server's own `format` command (kick.config.ts).
           format: 'cd server && kick format',

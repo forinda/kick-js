@@ -29,4 +29,20 @@ describe.each(PACKAGE_MANAGERS)('fullstack root on %s', (pm) => {
   it('runs test, typecheck and format from the root', () => {
     expect(scripts).toEqual(expect.arrayContaining(['test', 'typecheck', 'format']))
   })
+
+  it('type-checks web without running typegen there (no stray web/.kickjs)', () => {
+    const { typecheck } = JSON.parse(rootPackageJson('demo', pm, '1.0.0', undefined)).scripts
+    expect(typecheck).toContain('kick typecheck --cwd web --no-typegen')
+  })
+})
+
+describe('fullstack web package', () => {
+  it('ships an oxfmt config like the server', async () => {
+    const { renderLayers } = await import('../src/scaffold/overlay')
+    const { files } = renderLayers(['web-kick'])
+    expect(JSON.parse(files.get('web/.oxfmtrc.json')!)).toMatchObject({
+      semi: false,
+      singleQuote: true,
+    })
+  })
 })

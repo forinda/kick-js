@@ -149,7 +149,7 @@ Each one is installed with the packages it needs and wired into `src/index.ts`:
 
 `fullstack` scaffolds a pnpm workspace — `server/` (KickJS API) + `web/`
 (Vite + React typed against the API via the
-[typed client](./typed-client.md)); `pnpm dev` runs both.
+[typed client](./typed-client.md)); `pnpm dev` runs both. Both packages carry the same `.oxfmtrc.json`. The root `typecheck` script type-checks `server/` (refreshing its generated types first) and then `web/` with `--no-typegen` — `web/` reads the server's types and has none of its own.
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
