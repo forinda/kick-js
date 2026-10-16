@@ -129,6 +129,17 @@ export function retryDelay(plan: ReturnType<typeof retryPlan>, failedAttempt: nu
 const withPlugins = <DB>(qb: Kysely<any>, plugins: KyselyPlugin[]): Kysely<DB> =>
   plugins.reduce((q, p) => q.withPlugin(p), qb) as Kysely<DB>
 
+/**
+ * How an aborted query stops. Outside a transaction it's cancelled on the
+ * server (every client connection can cancel; a no-op where the driver
+ * can't). Inside one, a cancel would abort the whole transaction — Postgres
+ * then turns its COMMIT into a ROLLBACK — so the query is only abandoned: it
+ * finishes on the server, and the transaction carries on after it.
+ */
+export function abortStrategy(qb: Kysely<any>): 'cancel query' | 'ignore query' {
+  return qb.isTransaction ? 'ignore query' : 'cancel query'
+}
+
 export function wrap<DB>(
   qb: Kysely<DB>,
   ctx: InternalContext,
@@ -407,8 +418,7 @@ export function wrap<DB>(
       const timer = AbortSignal.timeout(ms)
       return {
         signal: opts?.signal ? AbortSignal.any([opts.signal, timer]) : timer,
-        // Every client connection can cancel (a no-op where the driver can't).
-        inflightQueryAbortStrategy: 'cancel query' as const,
+        inflightQueryAbortStrategy: abortStrategy(qb),
       }
     },
 

@@ -161,7 +161,8 @@ export class ResultExtensionPlugin implements KyselyPlugin {
       const value = base[key]
       // A morphTo row's table follows the source row's type column.
       const target = rel.morphTo
-        ? rel.morphTo.targets.find((t) => t.value === base[rel.morphTo!.column])?.table
+        ? // The type value is a string in the snapshot; the column may hold a number.
+          rel.morphTo.targets.find((t) => t.value === String(base[rel.morphTo!.column]))?.table
         : rel.target
       if (target === undefined) continue
       if (Array.isArray(value)) {
@@ -192,7 +193,8 @@ function singleTableTarget(node: SelectQueryNode): string | null {
   if (!from || from.froms.length !== 1) return null
   const target = unwrapAlias(from.froms[0])
   if (!TableNode.is(target)) return null
-  return target.table.identifier.name
+  const { schema, identifier } = target.table
+  return schema ? `${schema.name}.${identifier.name}` : identifier.name
 }
 
 function unwrapAlias(node: OperationNode): OperationNode {

@@ -200,6 +200,14 @@ describe('FindManyOptions — compile-time guards', () => {
     void _bad
   })
 
+  it('T-nested-cancel — signal and timeoutMs are the top level’s only', () => {
+    const _bad: FindManyOptions<FixtureDB, 'posts'> = {
+      // @ts-expect-error — a nested level runs inside its parent's query
+      with: { comments: { timeoutMs: 100 } },
+    }
+    void _bad
+  })
+
   it('T-known-key — declared `with` keys compile fine', () => {
     const _good: FindManyOptions<FixtureDB, 'posts'> = {
       with: { author: true, comments: { limit: 10 } },

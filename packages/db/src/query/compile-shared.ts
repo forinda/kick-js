@@ -344,7 +344,7 @@ function buildMorphTo(
     let sub: any = eb.selectFrom(`${t.table} as ${alias}` as any)
     sub = table
       ? sub.select(
-          nestedColumns(t.table, table, Object.keys(table.columns), helpers).map(
+          nestedColumns(t.table, table, Object.keys(table.columns), helpers, 'skip').map(
             (c) => `${alias}.${c}`,
           ),
         )
@@ -366,9 +366,13 @@ function nestedColumns(
   table: CompileTable,
   columns: string[],
   helpers: JsonHelpers,
+  /** `'skip'` for a morphTo target, which can't take `columns` to leave one out. */
+  blobs: 'refuse' | 'skip' = 'refuse',
 ): string[] {
   if (helpers.dialect !== 'sqlite') return columns
-  const blob = columns.find((c) => /^(bytea|blob)/i.test(table.columns[c]?.type ?? ''))
+  const isBlob = (c: string) => /^(bytea|blob)/i.test(table.columns[c]?.type ?? '')
+  if (blobs === 'skip') return columns.filter((c) => !isBlob(c))
+  const blob = columns.find(isBlob)
   if (blob) {
     throw new Error(
       `kickjs-db: ${name}.${blob} is a bytea column, which SQLite can't put in a related row's JSON — leave it out with columns: { ${blob}: false }`,

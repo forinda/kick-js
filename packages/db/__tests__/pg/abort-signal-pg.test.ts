@@ -220,3 +220,21 @@ describe('timeouts cancel on the server', () => {
     expect(await settled()).toBe(0)
   }, 30_000)
 })
+
+describe('a timeout inside a transaction', () => {
+  it("abandons the read instead of cancelling it, so the transaction's writes commit", async () => {
+    const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+    await db.transaction(async (tx) => {
+      await tx.insertInto('sleeper').values({ label: 'before' }).execute()
+      await expect(
+        tx.query.sleeper.findMany({
+          where: () => sql<boolean>`pg_sleep(1)::text IS NOT NULL`,
+          timeoutMs: 100,
+        }),
+      ).rejects.toThrow(RelationalQueryCancelledError)
+      await tx.insertInto('sleeper').values({ label: 'after' }).execute()
+    })
+    const { rows } = await pool.query(`SELECT label FROM "sleeper" ORDER BY id`)
+    expect(rows.map((r: { label: string }) => r.label)).toEqual(['before', 'after'])
+  }, 30_000)
+})

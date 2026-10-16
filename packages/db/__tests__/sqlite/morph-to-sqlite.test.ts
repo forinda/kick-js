@@ -12,6 +12,7 @@ import {
   diff,
   emitSqlite,
   extractSnapshot,
+  bytea,
   integer,
   primaryKey,
   relations,
@@ -245,5 +246,32 @@ describe('morphTo on SQLite', () => {
     )
     expect(rows).toHaveLength(1)
     expect(rows[0]!.subject).toBeNull()
+  })
+
+  it('runs computeds on a subject whose type column holds numbers, and leaves a SQLite blob out of it', async () => {
+    const files = table('files', {
+      id: serial().primaryKey(),
+      name: text().notNull(),
+      body: bytea(),
+    })
+    const notes = table('notes', {
+      id: serial().primaryKey(),
+      kind: integer().notNull(),
+      subjectId: integer().notNull(),
+    })
+    const rel = relations(notes, ({ morphTo }) => ({
+      subject: morphTo({ type: notes.kind, id: notes.subjectId, targets: { 1: files } }),
+    }))
+    const s = { files, notes, rel }
+    const { database } = open(s)
+    database.exec(`
+      INSERT INTO files (name, body) VALUES ('a.txt', x'0102');
+      INSERT INTO notes (kind, subjectId) VALUES (1, 1);
+    `)
+    const db = createDbClient({ schema: s, dialect: sqliteDialect({ database }) }).$extends({
+      result: { files: { upper: { needs: { name: true }, compute: (f) => f.name.toUpperCase() } } },
+    })
+    const rows = await db.query.notes.findMany({ with: { subject: true } })
+    expect(rows[0]!.subject).toEqual({ id: 1, name: 'a.txt', upper: 'A.TXT' })
   })
 })

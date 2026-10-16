@@ -12,3 +12,7 @@ Relational reads and query plugins that returned wrong rows or failed:
 - Managed columns (`onUpdateNow()`, `version()`, `$onUpdate`, insert defaults) are set on an insert or update inside a `WITH` too.
 - `$extends({ result })` on a select with joins no longer adds its `needs` columns (an unqualified one was ambiguous), and computes a field only when the row has every column it needs.
 - `$extends({ result })` works under `casing: 'snake_case'` and with `.colName()` columns: a table named in camelCase (`blogPosts`) got no computed fields, and a needed column was added by its key (`no such column: "passwordHash"`). It's now found by its key and added by its database name.
+
+- A `morphTo` subject gets its table's computed fields when the type column holds numbers, and on SQLite leaves its `bytea` columns out instead of failing; computed fields apply to a table in a named schema (`billing.invoices`).
+
+Behaviour changes: a many-to-many level now returns each related row once even if the junction links the pair twice (the junction is matched with `EXISTS`); a computed field on a select with joins is left off a row that lacks the columns it needs, instead of computing from `undefined`.

@@ -15,6 +15,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { abortStrategy } from '../client/wrap'
 import type { CompiledQuery, Kysely } from 'kysely'
 import type { ResolvedRelations } from './relations'
 import type { CompileMode, CompilePgOptions } from './compile-pg'
@@ -176,12 +177,15 @@ async function execute<DB>(
       qb as unknown as {
         executeQuery: (
           q: CompiledQuery,
-          opts?: { signal?: AbortSignal; inflightQueryAbortStrategy?: 'cancel query' },
+          opts?: {
+            signal?: AbortSignal
+            inflightQueryAbortStrategy?: 'cancel query' | 'ignore query'
+          },
         ) => Promise<{ rows: unknown[] }>
       }
     ).executeQuery(
       compiled,
-      signal ? { signal, inflightQueryAbortStrategy: 'cancel query' } : undefined,
+      signal ? { signal, inflightQueryAbortStrategy: abortStrategy(qb as Kysely<any>) } : undefined,
     )
     return result.rows
   } catch (err) {

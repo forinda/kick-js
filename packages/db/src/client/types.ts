@@ -197,14 +197,16 @@ export interface KickDbClient<DB = RegisteredDB> {
    * Execute options that cancel a query on the server once it has run `ms`
    * (Postgres `pg_cancel_backend`, MySQL `KILL QUERY`), or when `signal`
    * aborts first. The query rejects with the signal's reason — a
-   * `TimeoutError` for the timeout.
+   * `DOMException` named `TimeoutError` for the timeout. Inside a
+   * transaction the query is abandoned, not cancelled: a cancel would abort
+   * the transaction.
    *
    *   await db.selectFrom('reports').selectAll().execute(db.timeout(5_000))
    */
   timeout(
     ms: number,
     opts?: { signal?: AbortSignal },
-  ): { signal: AbortSignal; inflightQueryAbortStrategy: 'cancel query' }
+  ): { signal: AbortSignal; inflightQueryAbortStrategy: 'cancel query' | 'ignore query' }
 
   /**
    * Insert, or update the rows whose `target` key already exists — one

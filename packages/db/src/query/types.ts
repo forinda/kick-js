@@ -201,10 +201,16 @@ export type WithClause<DB, Rels extends Record<string, RelationMapEntry>> = {
  * the full options.
  */
 type WithOptions<DB, E, Target extends keyof DB & string> = [E] extends [never]
-  ? FindManyOptions<DB, Target>
+  ? NestedOptions<DB, Target>
   : E extends { morphTo: true }
     ? { withDeleted?: boolean }
-    : FindManyOptions<DB, Target>
+    : NestedOptions<DB, Target>
+
+/** A nested level runs inside its parent's query: cancelling is the parent's. */
+type NestedOptions<DB, Target extends keyof DB & string> = Omit<
+  FindManyOptions<DB, Target>,
+  'signal' | 'timeoutMs'
+>
 
 /**
  * Resolved row shape returned by `findMany`. Base table columns
