@@ -42,16 +42,24 @@ export default defineConfig({
 
 `schemaPath` is where `kick db generate` reads your tables. `adapter` is the connection `kick db migrate` uses: the app's own, from `src/db/client.ts` below. The import is inside the function, so the client loads only when a `kick db` command calls `adapter`. Other `kick` commands read this config without loading it. The app imports the same file when it starts, so the database is opened in one file, with one handle shared by the app's queries and its migrations.
 
+Add the database file to the environment schema in `src/config/index.ts`:
+
+```ts
+DB_FILE: z.string().default('taskboard.db'),
+```
+
 One file opens the database. It builds the typed client the app queries through, and the migration adapter both the app and `kick db` run migrations with. It imports the schema you write next:
 
 ```ts
 // src/db/client.ts
+import '@/config' // registers the env schema — `kick db` loads this file without src/index.ts
 import Database from 'better-sqlite3'
+import { getEnv } from '@forinda/kickjs'
 import { createDbClient } from '@forinda/kickjs-db'
 import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
 import * as schema from './schema'
 
-const database = new Database(process.env.DB_FILE ?? 'taskboard.db')
+const database = new Database(getEnv('DB_FILE'))
 // SQLite leaves foreign keys off by default; ON DELETE CASCADE needs them on.
 database.pragma('foreign_keys = ON')
 
@@ -62,7 +70,7 @@ export type AppDb = typeof db
 export const migrationAdapter = sqliteAdapter({ database })
 ```
 
-`DB_FILE` lets production point at a different file; you'll use it in Part 5. `kick db` reads it from this file too, through the config's `adapter`, so the app and the CLI always open the same database. This file is imported on its own by `kick db`, without `src/index.ts`. If it reads `getEnv()` rather than `process.env`, give it `import '../config'` first.
+`DB_FILE` lets production point at a different file; you'll use it in Part 5. `kick db` reads it from this file too, through the config's `adapter`, so the app and the CLI always open the same database. `kick db` imports this file on its own, without `src/index.ts` — hence the `import '@/config'` at the top: without it the schema isn't registered and `getEnv('DB_FILE')` is `undefined`.
 
 ## The schema
 
@@ -182,7 +190,6 @@ import 'reflect-metadata'
 import './config'
 import { bootstrap, cors, expressRuntime, helmet, requestId, requestLogger } from '@forinda/kickjs'
 import express from 'express'
-import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { kickDbAdapter } from '@forinda/kickjs-db'
 import { migrationAdapter } from './db/client'
 import { modules } from './modules'
@@ -191,7 +198,7 @@ export const app = await bootstrap({
   modules,
   runtime: expressRuntime(),
   adapters: [
-    DevToolsAdapter(),
+    ...(__KICKJS_DEVTOOLS__ ? [(await import('@forinda/kickjs-devtools')).DevToolsAdapter()] : []),
     kickDbAdapter({
       migrationAdapter,
       migrationsDir: 'db/migrations',
@@ -521,24 +528,15 @@ Nested rows decode like top-level ones: `labels` is an array, dates are dates. [
 
 ## Test against a throwaway database
 
-Tests shouldn't touch `taskboard.db`. This helper builds the whole schema in an in-memory SQLite database — milliseconds — straight from `schema.ts`, so it never lags behind a migration you forgot to apply:
+Tests shouldn't touch `taskboard.db`. `createTestDb` from `@forinda/kickjs-db/testing` builds the whole schema in an in-memory SQLite database — milliseconds, foreign keys on — straight from `schema.ts`, so it never lags behind a migration you forgot to apply. Bind it to the schema once:
 
 ```ts
 // test/db.ts
-import Database from 'better-sqlite3'
-import { createDbClient, diff, emitSqlite, extractSnapshot } from '@forinda/kickjs-db'
-import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import { createTestDb as createSchemaDb } from '@forinda/kickjs-db/testing'
 import * as schema from '@/db/schema'
 
-/** A fresh in-memory database with the whole schema — milliseconds to create. */
-export function createTestDb() {
-  const database = new Database(':memory:')
-  database.pragma('foreign_keys = ON')
-  const empty = { version: 1 as const, dialect: 'sqlite' as const, tables: {} }
-  const target = extractSnapshot(schema, 'sqlite')
-  database.exec(emitSqlite(diff(empty, target), { from: empty, to: target }))
-  return createDbClient({ schema, dialect: sqliteDialect({ database }) })
-}
+/** A fresh in-memory database with the whole schema. */
+export const createTestDb = () => createSchemaDb({ schema })
 ```
 
 Add `"test"` to `include` in `tsconfig.json` so it's type-checked with the rest.
@@ -557,7 +555,7 @@ describe('Task repository', () => {
   let projectId: string
 
   beforeEach(async () => {
-    const db = createTestDb()
+    const db = await createTestDb()
     tasks = createTaskRepository(db)
     projectId = (await createProjectRepository(db).create({ name: 'Launch' })).id
   })
@@ -606,7 +604,7 @@ describe('TaskController', () => {
   async function boot() {
     const { app } = await createTestApp({
       modules: [ProjectModule(), TaskModule()],
-      overrides: [[APP_DB, createTestDb()]],
+      overrides: [[APP_DB, await createTestDb()]],
     })
     return request(app.handle.bind(app))
   }
@@ -647,7 +645,7 @@ describe('TaskController', () => {
 })
 ```
 
-`overrides: [[APP_DB, createTestDb()]]` replaces the registration `DbModule` would make, so each test starts from an empty database without mounting `DbModule` at all. Write the project controller test the same way, with a case for the `422` on `budget: '10.005'`. [Database Testing](../database/testing.md) covers transactions-per-test and other dialects.
+`overrides: [[APP_DB, await createTestDb()]]` replaces the registration `DbModule` would make, so each test starts from an empty database without mounting `DbModule` at all. Write the project controller test the same way, with a case for the `422` on `budget: '10.005'`. [Database Testing](../database/testing.md) covers transactions-per-test and other dialects.
 
 <PmCommand run="test" />
 

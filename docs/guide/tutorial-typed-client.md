@@ -15,6 +15,10 @@ cover_image: ''
 - Combined with KickJS's `SpaAdapter`, this enables a full-stack monorepo with end-to-end type safety
 - The ideal DX: `api.tasks.create({ title: 'Fix bug', priority: 'high' })` with full autocomplete and type checking
 
+::: tip This shipped, under a different name
+There is no `kick generate:client`. `kick typegen` (it also runs on `kick dev`) emits the route map, and [`@forinda/kickjs-client`](./typed-client.md) consumes it. The commands below are the original proposal, kept as written.
+:::
+
 ---
 
 ## The Problem: Types Stop at the API Boundary
@@ -40,7 +44,7 @@ async create(ctx: RequestContext) {
     user.id,
     ctx.body,
   );
-  ctx.created(successResponse(result, 'Task created'));
+  return reply.created(result);
 }
 ```
 
@@ -302,7 +306,7 @@ Key properties of this DX:
 2. **Compile-time errors for typos** — `priorty` instead of `priority` is caught by TypeScript, not by a 400 response at runtime
 3. **Path params are required** — calling `api.tasks.create()` without `params.projectId` is a type error
 4. **Response types are exact** — `task.key` is typed as `string`, `task.orderIndex` is typed as `number`, no `any` casting
-5. **Pagination is typed** — list endpoints return `{ data: T[], meta: PaginationMeta }` automatically
+5. **Pagination is typed** — list endpoints return `{ data: T[], meta, links }` automatically
 
 ---
 
@@ -328,10 +332,10 @@ vibed/
 The workflow:
 
 ```bash
-kick new my-app --spa react    # Scaffold full-stack project
-kick dev                       # HMR for backend + frontend
-kick generate:client           # Regenerate client after route changes
-kick build                     # Build everything for production
+kick new my-app --template fullstack  # Scaffold full-stack project
+kick dev                              # HMR for backend + frontend
+kick typegen                          # Regenerate the route map (kick dev also runs it)
+kick build                            # Build everything for production
 ```
 
 One server. One deploy. One type system. The backend defines the API contract via Zod and decorators. The client is generated from that contract. The frontend imports the client. No API boundary to manually bridge.

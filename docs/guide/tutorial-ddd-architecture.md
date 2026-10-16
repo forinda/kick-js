@@ -1,6 +1,6 @@
 # REST Module Architecture with a Decorator-Driven Framework
 
-_Part of "Building a Jira Clone with KickJS"_
+_Part of "Building a Shared Task App with KickJS"_
 
 ---
 
@@ -202,6 +202,10 @@ A few things worth noting:
   service is a concrete class registered by its own `@Service()` decorator.
 - `@Post('/', { body: createTaskSchema })` validates the request body against the Zod schema
   before your handler runs, and feeds the OpenAPI spec when `SwaggerAdapter` is mounted.
+  `@ApiTags` and its import are only emitted when the project depends on
+  `@forinda/kickjs-swagger`.
+- `list` uses offset pages; the generated file carries a comment showing the swap to
+  `ctx.paginateCursor()` for keyset pages.
 - `create` answers `201` with a `Location` header built by `ctx.urlFor()` from the `getById`
   route, and `update` is a `PATCH` because its schema makes every field optional.
 - The `Ctx<KickRoutes.TaskController['list']>` annotation gives you fully typed
@@ -236,6 +240,10 @@ export class TaskService {
 
   async findPaginated(parsed: ParsedQuery) {
     return this.repo.findPaginated(parsed)
+  }
+
+  async findAfter(query: Parameters<TaskRepository['findAfter']>[0]) {
+    return this.repo.findAfter(query)
   }
 
   async create(dto: CreateTaskDTO): Promise<TaskResponseDTO> {
@@ -285,10 +293,13 @@ export function createTaskRepository() {
     },
 
     async findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }> {
+      // The generated body also applies parsed.filters, parsed.search and parsed.sort — trimmed here.
       const all = [...store.values()]
       const { offset, limit } = parsed.pagination
       return { data: all.slice(offset, offset + limit), total: all.length }
     },
+
+    // findAfter(query) — the keyset page behind ctx.paginateCursor(); see Query Parsing → Cursor pagination.
 
     async create(dto: CreateTaskDTO): Promise<TaskResponseDTO> {
       const now = new Date().toISOString()

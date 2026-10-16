@@ -65,68 +65,34 @@ CREATE TABLE "attachments" (
 
 Read it, mark it reviewed (`kick db migrate review <id>`), and `kick dev` applies it on the next boot.
 
-## File storage behind an interface
+## File storage
 
-The service shouldn't care where bytes go. Today that's a directory; later it might be S3. Put the three operations it needs behind an interface and a DI token:
+The service shouldn't care where bytes go. Today that's a directory; later it might be S3. [`@forinda/kickjs-storage`](../file-storage.md) puts both behind one `Storage` interface:
 
-```ts
-// src/storage/files.ts
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { createToken } from '@forinda/kickjs'
+<PmCommand exec="kick add storage" />
 
-/** Where attachment bytes live. Swap the implementation for S3 or similar without touching callers. */
-export interface FileStorage {
-  put(key: string, bytes: Buffer): Promise<void>
-  get(key: string): Promise<Buffer>
-  remove(key: string): Promise<void>
-}
-
-export const FILE_STORAGE = createToken<FileStorage>('taskboard/FileStorage')
-
-/** Files in a directory on disk, named by key. Keys are database-generated UUIDs, never user input. */
-export function diskStorage(dir: string): FileStorage {
-  return {
-    async put(key, bytes) {
-      await mkdir(dir, { recursive: true })
-      await writeFile(join(dir, key), bytes)
-    },
-    get: (key) => readFile(join(dir, key)),
-    remove: (key) => rm(join(dir, key), { force: true }),
-  }
-}
-
-/** Files in memory — for tests. */
-export function memoryStorage(): FileStorage & { keys(): string[] } {
-  const files = new Map<string, Buffer>()
-  return {
-    async put(key, bytes) {
-      files.set(key, bytes)
-    },
-    async get(key) {
-      const bytes = files.get(key)
-      if (!bytes) throw new Error(`No file ${key}`)
-      return bytes
-    },
-    async remove(key) {
-      files.delete(key)
-    },
-    keys: () => [...files.keys()],
-  }
-}
-```
-
-The key is always the attachment's `id`, a UUID the database generated, never the uploaded file name. So a name like `../../etc/passwd` can't steer a write outside the directory. The name is stored as data and only used in the download header.
-
-The directory comes from config. Add it to the env schema next to `SESSION_SECRET`:
+That installs the package, adds `storageAdapter()` to `bootstrap({ adapters })` in `src/index.ts`, and writes the adapter:
 
 ```ts
-// src/config/index.ts
-    // Where attachment files are written.
-    UPLOAD_DIR: z.string().default('uploads'),
+// src/adapters/storage.ts
+import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
+import { diskStorage } from '@forinda/kickjs-storage/disk'
+import { s3FromSettings } from '@forinda/kickjs-storage/settings'
+
+export { STORAGE } from '@forinda/kickjs-storage/adapter'
+export type { Storage } from '@forinda/kickjs-storage'
+
+export const storageAdapter = () =>
+  StorageAdapter({
+    storage: process.env.S3_BUCKET ? s3FromSettings() : diskStorage({ root: 'uploads' }),
+  })
 ```
 
-and register the storage, plus a repository, in the task module:
+Files go to the `uploads/` folder until `S3_BUCKET` is set, then to that bucket. `StorageAdapter` binds the storage to the `STORAGE` token, so a service injects it like anything else, and reports it to `/health/ready`.
+
+The key is always the attachment's `id`, a UUID the database generated, never the uploaded file name. Every driver also refuses a key with a `..` segment, so a name like `../../etc/passwd` can't steer a write outside the folder. The name is stored as data and only used in the download header.
+
+Register the repository in the task module:
 
 ```ts
 // src/modules/tasks/task.module.ts
@@ -135,7 +101,6 @@ register(container) {
   container.registerFactory(ATTACHMENT_REPOSITORY, () =>
     createAttachmentRepository(container.resolve(APP_DB)),
   )
-  container.registerFactory(FILE_STORAGE, () => diskStorage(getEnv('UPLOAD_DIR')))
 },
 ```
 
@@ -211,7 +176,7 @@ You never get a row pointing at a missing file. The reverse can happen: if the c
 import { HttpException, Inject, Service } from '@forinda/kickjs'
 import { APP_DB } from '@/db/token'
 import type { AppDb } from '@/db/client'
-import { FILE_STORAGE, type FileStorage } from '@/storage/files'
+import { STORAGE, type Storage } from '@/adapters/storage'
 import { ATTACHMENT_REPOSITORY, type AttachmentRepository } from './attachment.repository'
 import { TaskService } from './task.service'
 
@@ -226,7 +191,7 @@ export interface UploadedFile {
 export class AttachmentService {
   constructor(
     @Inject(ATTACHMENT_REPOSITORY) private readonly repo: AttachmentRepository,
-    @Inject(FILE_STORAGE) private readonly storage: FileStorage,
+    @Inject(STORAGE) private readonly storage: Storage,
     @Inject(APP_DB) private readonly db: AppDb,
     private readonly tasks: TaskService,
   ) {}
@@ -245,7 +210,7 @@ export class AttachmentService {
         size: file.size,
         uploadedBy: userId,
       })
-      await this.storage.put(attachment.id, file.buffer)
+      await this.storage.put(attachment.id, file.buffer, { contentType: file.mimetype })
       return attachment
     })
   }
@@ -257,7 +222,9 @@ export class AttachmentService {
 
   async download(taskId: string, id: string, userId: string) {
     const attachment = await this.find(taskId, id, userId)
-    return { attachment, bytes: await this.storage.get(attachment.id) }
+    const bytes = await this.storage.get(attachment.id)
+    if (!bytes) throw HttpException.notFound('Attachment not found')
+    return { attachment, bytes: Buffer.from(bytes) }
   }
 
   /** Delete the row now, the bytes once that commits — never a row pointing at a missing file. */
@@ -265,7 +232,7 @@ export class AttachmentService {
     const attachment = await this.find(taskId, id, userId)
     await this.db.transaction(async () => {
       await this.repo.delete(attachment.id)
-      await this.db.afterCommit(() => this.storage.remove(attachment.id))
+      await this.db.afterCommit(() => this.storage.delete(attachment.id))
     })
   }
 
@@ -290,12 +257,12 @@ async delete(id: string, userId: string): Promise<void> {
   await this.db.transaction(async () => {
     const files = await this.attachments.listForTask(id)
     await this.repo.delete(id)
-    await this.db.afterCommit(() => Promise.all(files.map((f) => this.storage.remove(f.id))))
+    await this.db.afterCommit(() => Promise.all(files.map((f) => this.storage.delete(f.id))))
   })
 }
 ```
 
-`TaskService` now also injects `ATTACHMENT_REPOSITORY`, `FILE_STORAGE` and `APP_DB`.
+`TaskService` now also injects `ATTACHMENT_REPOSITORY`, `STORAGE` and `APP_DB`.
 
 ## Routes
 
@@ -352,17 +319,18 @@ curl -b jar -OJ localhost:3000/api/v1/tasks/$TASK/attachments/$ATTACHMENT
 
 ## Test it
 
-The test app swaps disk storage for memory. That way tests write nothing to disk, and they can see what's stored:
+The test app swaps disk storage for `memoryStorage()`. That way tests write nothing to disk, and they can see what's stored:
 
 ```ts
 // test/app.ts — the imports from Part 4, plus the storage token
 import request from 'supertest'
 import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
+import { memoryStorage } from '@forinda/kickjs-storage'
 
 import { createTestDb } from './db'
 import { APP_DB } from '@/db/token'
-import { FILE_STORAGE, memoryStorage } from '@/storage/files'
+import { STORAGE } from '@/adapters/storage'
 import { LoadUser } from '@/auth/current-user'
 import { middlewares } from '@/middleware'
 import { AuthModule } from '@/modules/auth/auth.module'
@@ -377,8 +345,8 @@ export async function testApp() {
     middlewares,
     contributors: [LoadUser.registration],
     overrides: [
-      [APP_DB, createTestDb()],
-      [FILE_STORAGE, storage],
+      [APP_DB, await createTestDb()],
+      [STORAGE, storage],
     ],
   })
   // … agent() and signUp() as in Part 4
@@ -389,7 +357,10 @@ export async function testApp() {
 ```ts
 // src/modules/tasks/__tests__/attachments.test.ts
 import { describe, it, expect } from 'vitest'
+import type { Storage } from '@/adapters/storage'
 import { testApp } from '../../../../test/app'
+
+const keys = async (storage: Storage) => (await storage.list()).files.map((f) => f.key)
 
 describe('task attachments', () => {
   async function scene() {
@@ -427,10 +398,10 @@ describe('task attachments', () => {
   it('removes the file once the delete commits', async () => {
     const { ada, url, storage } = await scene()
     const uploaded = await ada.post(`${url}/attachments`).attach('file', Buffer.from('x'), 'a.txt')
-    expect(storage.keys()).toEqual([uploaded.body.id])
+    expect(await keys(storage)).toEqual([uploaded.body.id])
 
     await ada.delete(`${url}/attachments/${uploaded.body.id}`).expect(204)
-    expect(storage.keys()).toEqual([])
+    expect(await keys(storage)).toEqual([])
   })
 
   it("deleting a task removes its attachments' files", async () => {
@@ -439,7 +410,7 @@ describe('task attachments', () => {
     await ada.post(`${url}/attachments`).attach('file', Buffer.from('y'), 'b.txt')
 
     await ada.delete(url).expect(204)
-    expect(storage.keys()).toEqual([])
+    expect(await keys(storage)).toEqual([])
   })
 
   it("keeps other people's files private", async () => {
@@ -465,9 +436,9 @@ Production reads its settings from the environment. Everything the app needs:
 | `NODE_ENV`        | `src/index.ts`, the migration runner | `production`; `kick start` sets it for you                           |
 | `PORT`            | the env schema                       | defaults to `3000`                                                   |
 | `SESSION_SECRET`  | the env schema → `session()`         | required, 32+ characters: `openssl rand -hex 32`                     |
-| `UPLOAD_DIR`      | the env schema → `diskStorage()`     | defaults to `uploads`; put it on a persistent volume                 |
+| `S3_BUCKET`       | `src/adapters/storage.ts`            | unset: files go to `uploads/` — put it on a persistent volume        |
 | `AUTH_RATE_LIMIT` | the env schema → the auth controller | defaults to `10` attempts per IP per 15 minutes                      |
-| `DB_FILE`         | `src/db/client.ts`                   | defaults to `taskboard.db`; `kick db` opens it through the same file |
+| `DB_FILE`         | the env schema → `src/db/client.ts`  | defaults to `taskboard.db`; `kick db` opens it through the same file |
 
 The env schema validates at boot, so a missing or short `SESSION_SECRET` stops the app before it serves anything. Keep `.env.example` listing every key with placeholder values. See [Configuration](../configuration.md).
 
@@ -534,6 +505,7 @@ Across the five parts:
 ## Further reading
 
 - [File Uploads](../file-uploads.md): `allowedTypes`, multiple files, rejected uploads
+- [File Storage](../file-storage.md): S3 and R2, signed URLs, streaming, direct uploads
 - [Transactions](../database/transactions.md): savepoints, retries, `afterCommit`
 - [Migrations](../database/migrations.md): rollback, boot policy, the review gate
 - [Database testing](../database/testing.md): more patterns for testing against kick/db

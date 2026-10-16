@@ -9,11 +9,15 @@ cover_image: ''
 
 # Building JWT Auth with Refresh Token Rotation Without a Framework Auth Adapter
 
-Most Node.js frameworks ship with an authentication adapter. You configure it, decorate your public routes, and everything just works. That was the plan when I started building Vibed, a task management backend with KickJS. The framework has an `AuthAdapter` with JWT strategy support, a `@Public()` decorator, and configurable default policies.
+Most Node.js frameworks ship with an authentication adapter. You configure it, decorate your public routes, and everything just works. That was the plan when I started building Vibed, a task management backend with KickJS. The framework had an `AuthAdapter` with JWT strategy support, a `@Public()` decorator, and configurable default policies.
 
 I configured all of it. Then I spent a day figuring out why none of it worked the way I expected. In the end, I threw out the built-in auth adapter for route protection and built the entire JWT auth flow by hand -- registration, login, access tokens, refresh token rotation, and a layered guard system for workspace and project access.
 
 This article walks through the full implementation with real code from the Vibed codebase.
+
+::: warning `@forinda/kickjs-auth` was removed in v8
+`AuthAdapter`, `JwtStrategy` and `@Public()` in the next section came from `@forinda/kickjs-auth`, which no longer ships. Its replacement is the [BYO Auth recipe](./byo-recipes.md#auth): the user is loaded by a context contributor and `@Public` is a [route flag](./route-flags.md), both resolved per route after matching, so the timing problem described below does not apply to it. The rest of this tutorial — the middleware, token rotation and guards — does not depend on the removed package.
+:::
 
 ## Why the Built-In AuthAdapter Did Not Work
 
@@ -70,19 +74,30 @@ export const adapters = [
 ]
 ```
 
-The `AuthAdapter` with `defaultPolicy: 'protected'` validates JWTs globally and stores the decoded user on `req`. We keep it for the JWT validation part. But for deciding which routes are protected and which are public, we handle that ourselves at the controller level with middleware.
+The `AuthAdapter` with `defaultPolicy: 'protected'` validated JWTs globally and stored the decoded user on `req`. In the end we dropped it: validating the JWT and deciding which routes are protected both moved into a middleware applied at the controller level.
 
 ## The authBridgeMiddleware Approach
 
-Instead of relying on the adapter's policy system, I built a simple bridge middleware that reads the user the `AuthAdapter` stored on `req` and makes it available through the context API:
+Instead of relying on the adapter's policy system, I built a small bridge middleware that verifies the bearer token and makes the user available through the context API:
 
 ```typescript
-import type { MiddlewareHandler, RequestContext } from '@forinda/kickjs'
+import jwt from 'jsonwebtoken'
+import { getEnv, HttpException, type MiddlewareHandler, type RequestContext } from '@forinda/kickjs'
 
 export const authBridgeMiddleware: MiddlewareHandler<RequestContext> = (ctx, next) => {
-  const user = (ctx.req as any).user
-  if (user) {
-    ctx.set('user', user)
+  const header = ctx.headers.authorization
+  if (!header?.startsWith('Bearer ')) {
+    throw HttpException.unauthorized('Authentication required')
+  }
+  try {
+    const payload = jwt.verify(header.slice(7), getEnv('JWT_SECRET')) as jwt.JwtPayload
+    ctx.set('user', {
+      id: payload.sub,
+      email: payload.email,
+      globalRole: payload.globalRole ?? 'user',
+    })
+  } catch {
+    throw HttpException.unauthorized('Invalid or expired token')
   }
   next()
 }
@@ -224,7 +239,7 @@ export class RegisterUseCase {
 }
 ```
 
-Notice the DI pattern: `@Inject(TOKENS.USER_REPOSITORY)` in the constructor injects the repository interface implementation. `@Inject(QUEUE_MANAGER)` injects the BullMQ queue service from the framework adapter. These are Symbol-based tokens, which is why they use `@Inject` on constructor parameters rather than `@Autowired` on properties.
+Notice the DI pattern: `@Inject(TOKENS.USER_REPOSITORY)` in the constructor injects the repository interface implementation. `@Inject(QUEUE_MANAGER)` injects the queue service registered by `QueueAdapter` from `@forinda/kickjs-queue`. These are typed `createToken<T>()` tokens: `@Inject(TOKEN)` on a constructor parameter and `@Autowired(TOKEN)` on a property both resolve them.
 
 ### Login
 
@@ -396,27 +411,21 @@ export class AuthController {
   @Autowired() private logoutUseCase!: LogoutUseCase
 
   @Post('/register', { body: registerSchema })
-  @Public()
   @ApiOperation({ summary: 'Register a new user account' })
   async register(ctx: RequestContext) {
-    const result = await this.registerUseCase.execute(ctx.body)
-    ctx.created(successResponse(result, 'Registration successful'))
+    return reply.created(await this.registerUseCase.execute(ctx.body))
   }
 
   @Post('/login', { body: loginSchema })
-  @Public()
   @ApiOperation({ summary: 'Log in with credentials' })
   async login(ctx: RequestContext) {
-    const result = await this.loginUseCase.execute(ctx.body)
-    ctx.json(successResponse(result, 'Login successful'))
+    return this.loginUseCase.execute(ctx.body)
   }
 
   @Post('/refresh', { body: refreshTokenSchema })
-  @Public()
   @ApiOperation({ summary: 'Refresh an access token' })
   async refresh(ctx: RequestContext) {
-    const result = await this.refreshTokenUseCase.execute(ctx.body)
-    ctx.json(successResponse(result))
+    return this.refreshTokenUseCase.execute(ctx.body)
   }
 
   @Post('/logout')
@@ -425,12 +434,12 @@ export class AuthController {
   async logout(ctx: RequestContext) {
     const { refreshToken } = ctx.body
     await this.logoutUseCase.execute(refreshToken)
-    ctx.json(successResponse(null, 'Logged out successfully'))
+    return reply.noContent()
   }
 }
 ```
 
-The `@Public()` decorator is still there for Swagger documentation purposes and because the `AuthAdapter` (which handles global JWT validation) respects it. But the real access control is structural -- no `authBridgeMiddleware` means no auth check.
+Handlers return their result (`reply` from `@forinda/kickjs` sets a non-200 status). The access control is structural -- no `authBridgeMiddleware` means no auth check.
 
 ## Guards: Layered Authorization
 
@@ -523,13 +532,9 @@ Guards stack. A route like `POST /projects/:projectId/tasks` applies the auth br
 })
 @Middleware(projectAccessGuard)
 async create(ctx: RequestContext) {
-  const user = ctx.get('user');
-  const result = await this.createTaskUseCase.execute(
-    ctx.params.projectId,
-    user.id,
-    ctx.body,
-  );
-  ctx.created(successResponse(result, 'Task created'));
+  const user = getUser(ctx)
+  const result = await this.createTaskUseCase.execute(ctx.params.projectId, user.id, ctx.body)
+  return reply.created(result)
 }
 ```
 

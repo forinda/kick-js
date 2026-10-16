@@ -90,8 +90,7 @@ We provide both a regular JSON endpoint and an SSE stream for each stat:
 // One-shot JSON
 @Get('/workspace/:workspaceId')
 async workspaceStats(ctx: RequestContext) {
-  const stats = await this.workspaceStatsUseCase.execute(ctx.params.workspaceId)
-  ctx.json(successResponse(stats))
+  return this.workspaceStatsUseCase.execute(ctx.params.workspaceId)
 }
 
 // Live SSE stream
@@ -112,11 +111,24 @@ WebSocket requires the `@forinda/kickjs-ws` package and a `WsAdapter`.
 <PmCommand add="@forinda/kickjs-ws" />
 
 ```typescript
-// config/adapters.ts
+// src/config/adapters.ts
+import jwt from 'jsonwebtoken'
+import { getEnv } from '@forinda/kickjs'
+import { WsAdapter } from '@forinda/kickjs-ws'
+
 const wsAdapter = WsAdapter({
   path: '/ws',
   heartbeatInterval: 30000,
   maxPayload: 1048576, // 1MB
+  auth: {
+    // Runs once per socket at upgrade time, before any @OnConnect handler
+    resolveUser: (request) => {
+      const token = new URL(request.url ?? '', 'http://localhost').searchParams.get('token')
+      if (!token) return null // socket closes with 4401
+      const payload = jwt.verify(token, getEnv('JWT_SECRET')) as { sub: string; email: string }
+      return { id: payload.sub, email: payload.email }
+    },
+  },
 })
 ```
 
@@ -130,31 +142,23 @@ This is necessary because `@WsController` decorators need to register before the
 
 ### Authentication at Connection Time
 
-There's no `authBridgeMiddleware` for WebSocket — authentication happens in the `@OnConnect` handler:
+HTTP middleware doesn't run for WebSocket upgrades — authentication happens in the adapter's `auth.resolveUser` hook (above). It stores the user on the context as `user`, and its `id` as `userId`, before `@OnConnect` fires:
 
 ```typescript
 @WsController('/chat')
 export class ChatWsController {
   @OnConnect()
   handleConnect(ctx: WsContext) {
-    try {
-      const token = ctx.data?.token || ''
-      const payload = jwt.verify(token, getEnv('JWT_SECRET')) as any
+    const user = ctx.get<{ id: string; email: string }>('user')!
+    onlineUsers.set(ctx.id, { userId: user.id, userName: user.email })
 
-      ctx.set('userId', payload.sub)
-      ctx.set('email', payload.email)
-      onlineUsers.set(ctx.id, { userId: payload.sub, userName: payload.email })
-
-      ctx.send('welcome', { id: ctx.id, userId: payload.sub })
-      ctx.broadcastAll('presence:online', { userId: payload.sub, userName: payload.email })
-    } catch {
-      ctx.send('error', { message: 'Invalid authentication token' })
-    }
+    ctx.send('welcome', { id: ctx.id, userId: user.id })
+    ctx.broadcastAll('presence:online', { userId: user.id, userName: user.email })
   }
 }
 ```
 
-The client sends the JWT token in the connection payload. If verification fails, we send an error but don't forcefully disconnect — the client can retry with a valid token.
+The client sends the JWT in the connection URL (`ws://host/ws/chat?token=…`) — browsers can't set headers on a WebSocket. If `resolveUser` returns `null` or throws, the socket closes with code `4401` and `@OnConnect` never runs, so the client reconnects with a valid token. See [WebSockets → Authenticated Handshake](./websockets.md#authenticated-handshake).
 
 ### Rooms for Channel Isolation
 
@@ -197,13 +201,12 @@ async handleSend(ctx: WsContext) {
     createdAt: message.createdAt,
   }
 
-  // Send to everyone in the room AND back to the sender
+  // Send to everyone in the room — the sender included, since it joined the channel
   ctx.to(`channel:${channelId}`).send('message:new', payload)
-  ctx.send('message:new', payload)
 }
 ```
 
-Note: `ctx.to(room).send()` sends to everyone in the room EXCEPT the sender. We call `ctx.send()` separately to also notify the sender (for confirmation).
+Note: `ctx.to(room).send()` sends to every socket in the room, the sender included. Use `ctx.broadcast()` when the sender should be left out.
 
 ### Typing Indicators
 
@@ -240,7 +243,7 @@ handleDisconnect(ctx: WsContext) {
 }
 ```
 
-**Limitation**: In-memory presence doesn't work across multiple server instances. For production, move the presence map to Redis. We have a placeholder cron job (`presence-cleanup.cron.ts`) ready for this.
+**Limitation**: In-memory presence doesn't work across multiple server instances. For production, move the presence map to Redis. (Broadcasts themselves can cross instances with `WsAdapter({ broker: redisBroker(...) })` — see [Scaling across instances](./websockets.md#scaling-across-instances).) We have a placeholder cron job (`presence-cleanup.cron.ts`) ready for this.
 
 ### Message Edit and Delete
 
@@ -280,11 +283,11 @@ async listByChannel(ctx: RequestContext) {
     ctx.query.cursor as string | undefined,
     ctx.query.limit ? Number(ctx.query.limit) : undefined,
   )
-  ctx.json(successResponse(messages))
+  return messages
 }
 ```
 
-This uses cursor-based pagination (not offset-based) because chat messages are append-only and users scroll backwards through history. The cursor is a `createdAt` timestamp — the repository fetches messages older than the cursor, newest first:
+This uses cursor-based pagination (not offset-based) because chat messages are append-only and users scroll backwards through history. (`ctx.paginateCursor()` now does this generically, with an opaque cursor and `links.next` — see [Cursor pagination](./query-parsing.md#cursor-pagination).) The cursor is a `createdAt` timestamp — the repository fetches messages older than the cursor, newest first:
 
 ```typescript
 async findByChannel(channelId: string, cursor?: string, limit = 50) {
@@ -296,4 +299,4 @@ async findByChannel(channelId: string, cursor?: string, limit = 50) {
 
 ## Next Up
 
-In [Part 5](/guide/tutorial-background-jobs), we'll cover background jobs — BullMQ queue processors for emails and notifications, cron jobs for overdue reminders and cleanup, and how to wire it all together with the KickJS adapter system.
+In [Part 5](./tutorial-background-jobs.md), we'll cover background jobs — BullMQ queue processors for emails and notifications, cron jobs for overdue reminders and cleanup, and how to wire it all together with the KickJS adapter system.
