@@ -22,4 +22,10 @@ describe('matchesBearer', () => {
   ])('rejects %s', (_, header) => {
     expect(matchesBearer(header, 's3cret')).toBe(false)
   })
+
+  it('never matches an empty secret, so an unset env var fails closed', () => {
+    expect(matchesBearer('Bearer ', '')).toBe(false)
+    expect(matchesBearer('Bearer', '')).toBe(false)
+    expect(matchesBearer('Bearer ', undefined as unknown as string)).toBe(false)
+  })
 })
