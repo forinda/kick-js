@@ -14,7 +14,7 @@ Commit first — `vp migrate` has no dry run:
 
 <PmCommand exec="vp migrate" />
 
-`vp migrate` rewrites the project:
+With `vite-plus` already installed, `vp migrate` runs its upgrade path, which rewrites the project:
 
 - removes the `oxlint`, `oxfmt` and `vitest` devDependencies;
 - points `vite` at a catalog alias of `@voidzero-dev/vite-plus-core`;
@@ -22,6 +22,8 @@ Commit first — `vp migrate` has no dry run:
 - reformats the files it touches in its own style — double quotes and semicolons.
 
 The last point is undone by the `fmt` block below: add it, then run `vp fmt`.
+
+The upgrade path skips Vite+'s setup actions — git hooks, editor config and agent files. Run `vp migrate --full` for all of them, or `--hooks`, `--editor` or `--agent` for one; review what they write next to the scaffold's own `.agents/` files and `kick.config.ts` commands.
 
 ## Formatting and linting: `vite.config.ts`
 
