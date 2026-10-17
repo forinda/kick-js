@@ -1,5 +1,5 @@
 {
-  "devDependencies": ["@forinda/kickjs-devtools"],
+  "devDependencies": ["@forinda/kickjs-devtools", "ws"],
   "integrations": [
     {
       "slot": "adapter",

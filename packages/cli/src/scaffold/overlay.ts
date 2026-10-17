@@ -152,7 +152,8 @@ export function renderLayers(
   return {
     files,
     dependencies: [...new Set(dependencies)],
-    devDependencies: [...new Set(devDependencies)],
+    // A package a layer needs at runtime (ws for WsAdapter) stays out of devDependencies.
+    devDependencies: [...new Set(devDependencies)].filter((d) => !dependencies.includes(d)),
     builds,
     integrations,
     scripts,

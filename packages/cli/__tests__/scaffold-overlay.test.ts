@@ -182,6 +182,21 @@ describe('the shipped layers', () => {
     expect(files.get('netlify.toml')).toContain('pnpm run build:netlify')
   })
 
+  it('install the ws peer of devtools as a dev dependency', () => {
+    const project = renderLayers(
+      scaffoldLayers({
+        template: 'minimal',
+        runtime: 'express',
+        schemaLib: 'zod',
+        packages: ['devtools'],
+      }),
+    )
+    expect(project.devDependencies).toEqual(
+      expect.arrayContaining(['@forinda/kickjs-devtools', 'ws']),
+    )
+    expect(project.dependencies).not.toContain('ws')
+  })
+
   it('only list packages the scaffold resolves a version for', () => {
     const resolvable = new Set<string>([...SIBLING_PACKAGES, ...Object.keys(THIRD_PARTY_PACKAGES)])
     const project = renderLayers(layers.filter((l) => !l.startsWith('template-')))
@@ -263,6 +278,9 @@ describe('the shipped layers', () => {
     expect(entry).not.toMatch(/import \{[^}]*DevToolsAdapter[^}]*\} from/)
     expect(project.devDependencies).toContain('@forinda/kickjs-devtools')
     expect(project.dependencies).not.toContain('@forinda/kickjs-devtools')
+    // Its `ws` peer comes with it (yarn 1 doesn't install peers) — here WsAdapter
+    // needs ws at runtime, so it's a dependency and only that.
+    expect(project.devDependencies).not.toContain('ws')
     expect(project.files.get('src/devtools.d.ts')).toMatch(
       /^\/\/\/ <reference types="@forinda\/kickjs-vite\/globals" \/>$/m,
     )
