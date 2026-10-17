@@ -39,6 +39,8 @@ class Application {
   /** @deprecated Use getRuntimeApp(). */
   getExpressApp(): Express
   getHttpServer(): KickServer | null
+  /** The management listener — null without `management`, in dev, or before start(). */
+  getManagementServer(): http.Server | https.Server | null
   getAdapters(): AppAdapter[]
   getPlugins(): readonly KickPlugin[]
   getRoutes(): readonly MountedRouteInfo[]

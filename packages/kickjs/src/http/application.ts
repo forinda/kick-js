@@ -2405,6 +2405,15 @@ export class Application {
     return this.httpServer
   }
 
+  /**
+   * The management listener (`bootstrap({ management })`) — its address, or
+   * something to attach to it. `null` without a management port, in dev mode,
+   * before `start()` has opened it, and after shutdown has closed it.
+   */
+  getManagementServer(): http.Server | https.Server | null {
+    return this.managementServer
+  }
+
   // ── Internal helpers ────────────────────────────────────────────────
 
   /**

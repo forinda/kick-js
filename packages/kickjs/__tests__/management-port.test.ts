@@ -110,7 +110,10 @@ describe.each(runtimes)('management port on %s', (_name, runtime) => {
     expect(lines.find((l) => l.includes('HealthController'))).toContain('[management port]')
     expect(lines.find((l) => l.includes('PingController'))).not.toContain('[management port]')
 
+    expect(app.getManagementServer()).toBe(seen.management)
+
     await app.shutdown()
+    expect(app.getManagementServer()).toBeNull()
     app = undefined
     expect(seen.management!.listening).toBe(false)
   })
