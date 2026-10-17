@@ -43,6 +43,7 @@ class Application {
   getManagementServer(): http.Server | https.Server | null
   getAdapters(): AppAdapter[]
   getPlugins(): readonly KickPlugin[]
+  /** Every route served: modules' and adapters', each with `source` ('module' | 'adapter') and `port` ('app' | 'management'). */
   getRoutes(): readonly MountedRouteInfo[]
   getContributors(): ReadonlyArray<{ key; source; label; dependsOn }>
   getConditionReport(): readonly ConditionOutcome[]

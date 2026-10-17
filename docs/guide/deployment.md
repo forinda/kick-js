@@ -104,7 +104,18 @@ bootstrap({
 - `host` picks the interface to listen on. The default is all of them, like the public port: a kubelet probes the pod's address, so `127.0.0.1` would fail the probes. Keep the port private with a network policy.
 - It's plain HTTP unless you pass `tls` (the same shape as `server.tls`) — set it when anything crossing that network carries a credential, such as the DevTools token.
 - The port opens before the app has finished starting; until it has, readiness answers `503` with `status: 'starting'`.
-- With `logRouteTable: true`, the startup route table marks the routes on the management port.
+- At startup the log lists what the management port serves, one line per controller or adapter:
+
+  ```
+  Management server on http://localhost:9090
+    HealthController  GET /health/live, GET /health/ready
+    MetricsAdapter    GET /metrics
+    DevToolsAdapter   41 routes under /_debug
+  ```
+
+  `app.getRoutes()` lists every route with the port it's on (`port: 'app' | 'management'`), adapters' included, and with `logRouteTable: true` the route table marks the management port's.
+
+- Routes on the management port stay out of the OpenAPI spec: Swagger describes the API the public port serves.
 - In code, `app.getManagementServer()` returns the listener — its address, say — and an adapter gets it as `ctx.management.server` from `afterStart` on.
 - Off by default. In `kick dev` and on serverless platforms everything stays on the one port.
 
