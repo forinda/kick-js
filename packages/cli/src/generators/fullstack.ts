@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSafe } from '../utils/fs'
 import { execBin, runScript, type PackageManager } from '../config'
 import { packageManagerSpec, yarnrc } from './templates/project-config'
-import { generateDockerfile, generateDockerignore } from './templates/docker'
+import { generateDeploy, type DeployTarget } from './deploy'
 import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
 import { approveInstallScripts } from '../commands/add'
@@ -88,6 +88,8 @@ export interface InitFullstackOptions {
   runtime?: 'express' | 'fastify' | 'h3'
   /** Optional packages (`--packages`), wired into the server like a plain scaffold. */
   packages?: string[]
+  /** Deploy targets to write files for, at the workspace root — `kick new --deploy`. */
+  deploy?: DeployTarget[]
 }
 
 export async function initFullstackProject(options: InitFullstackOptions): Promise<void> {
@@ -139,7 +141,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     extraLayers: ['server-fullstack'],
     // server/ is a workspace member; the root records the approvals.
     approveInstallScripts: false,
-    // netlify.toml / vercel.json live at the workspace root, written below.
+    // The root owns the packageManager field and the deploy files.
     platformConfig: false,
     // Root owns install + git so the lockfile/commit cover the workspace.
     initGit: false,
@@ -182,19 +184,18 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   }
   // Before install, at the root every package manager reads them from.
   approveInstallScripts(packageManager, dir, server.builds)
-  // .gitignore, and netlify.toml / vercel.json at the root both platforms
-  // build from; plus the kick web app's files under web/.
+  // .gitignore, plus the kick web app's files under web/.
   const layers = ['fullstack-root', ...(frontend === 'vite' ? [] : ['web-kick'])]
   const files = fillVars(renderLayers(layers).files, { name, packageManager })
   for (const [path, contents] of files) {
     await writeFileSafe(join(dir, path), contents)
   }
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager, frontend))
-  await writeFileSafe(
-    join(dir, 'Dockerfile'),
-    generateDockerfile('fullstack', packageManager, name, pmSpec),
-  )
-  await writeFileSafe(join(dir, '.dockerignore'), generateDockerignore())
+  // Deploy files only for the targets asked for — `kick g deploy` from the
+  // root adds the rest later.
+  if (options.deploy?.length) {
+    await generateDeploy({ dir, targets: options.deploy, pm: packageManager, force: true })
+  }
 
   // Workspace-root agent docs (CLAUDE.md + .agents/) flavored for the
   // fullstack layout — the server/ subdir keeps its own generated set.
@@ -204,7 +205,7 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     name,
     pm: packageManager,
     template: 'fullstack',
-    only: 'all',
+    only: 'both',
     force: true,
   })
 
@@ -327,8 +328,6 @@ export function rootPackageJson(
           // git-ignored, so a fresh clone (CI, Netlify, Vercel) has none and
           // `pnpm -r run build` races the two packages anyway.
           build: 'pnpm --filter ./server exec kick typegen && pnpm -r run build',
-          'build:netlify': 'pnpm build && pnpm --filter ./server exec kick build:netlify',
-          'build:vercel': 'pnpm build && pnpm --filter ./server exec kick build:vercel',
           // No `npx`: the binary is `kick` but the package is
           // `@forinda/kickjs-cli`, so npx cannot map one to the other and
           // falls back to the REGISTRY — where `kick` is an unrelated
@@ -358,8 +357,6 @@ export function rootPackageJson(
           // `<pm> exec kick` (`bun exec` runs a shell string): the root depends
           // on the CLI, so scripts have it on PATH — see `typecheck` below.
           build: `cd server && kick typegen && cd .. && ${pm} run build:server && ${pm} run build:web`,
-          'build:netlify': `${pm} run build && cd server && kick build:netlify`,
-          'build:vercel': `${pm} run build && cd server && kick build:vercel`,
           'build:server': `cd server && ${pm} run build`,
           'build:web': `cd web && ${pm} run build`,
           // No `npx`: the binary is `kick` but the package is
@@ -417,6 +414,17 @@ Server: http://localhost:3000 · Web: http://localhost:5173 (Vite proxies \`/api
 From this root: \`${runScript(pm as PackageManager, 'test')}\` (the server's tests), \`${runScript(pm as PackageManager, 'typecheck')}\` (both packages),
 \`${runScript(pm as PackageManager, 'format')}\` and \`${runScript(pm as PackageManager, 'build')}\`. The \`kick\` CLI itself runs in \`server/\`, which holds
 \`kick.config.ts\`: \`cd server && ${execBin(pm as PackageManager, 'kick')} typegen\`.
+
+## Deploy
+
+Deploy files are added when you need them, from this folder:
+
+\`\`\`bash
+${execBin(pm as PackageManager, 'kick')} g deploy docker           # Dockerfile for the whole app
+${execBin(pm as PackageManager, 'kick')} g deploy netlify vercel   # serverless: platform config, entry and build script
+\`\`\`
+
+See [Serverless](https://kickjs.app/guide/serverless).
 
 ## The type loop
 

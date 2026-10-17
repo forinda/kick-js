@@ -8,9 +8,7 @@
   ],
   "devDependencies": ["@vitejs/plugin-react", "@types/react", "@types/react-dom"],
   "scripts": {
-    "build": "kick build && vite build --config vite.client.config.ts && vite build --config vite.client.config.ts --ssr src/client/ssr.tsx",
-    "build:netlify": "kick build && vite build --config vite.client.config.ts && vite build --config vite.client.config.ts --ssr src/client/ssr.tsx && kick build:netlify",
-    "build:vercel": "kick build && vite build --config vite.client.config.ts && vite build --config vite.client.config.ts --ssr src/client/ssr.tsx && kick build:vercel"
+    "build": "kick build && vite build --config vite.client.config.ts && vite build --config vite.client.config.ts --ssr src/client/ssr.tsx"
   },
   "integrations": [
     {

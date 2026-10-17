@@ -48,6 +48,17 @@ src/
 
 For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and notifications use the BYO recipes in the [KickJS guides](https://kickjs.app/guide/) — they wire the upstream library through `defineAdapter()` / `definePlugin()` directly, so you keep control of the integration.
 
+## Deploying
+
+Deploy files are added when you need them:
+
+```bash
+{{kick}} g deploy docker           # Dockerfile for a Node host or a container
+{{kick}} g deploy netlify vercel   # serverless: platform config, entry and build script
+```
+
+See [Deploying](https://kickjs.app/guide/deployment) and [Serverless](https://kickjs.app/guide/serverless).
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:

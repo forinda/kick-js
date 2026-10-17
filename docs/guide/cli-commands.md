@@ -110,19 +110,20 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 5. **Git init** — initialize a git repository with an initial commit
 6. **Install deps** — run the selected package manager's install command
 
-| Flag                             | Description                                                            | Default                                  |
-| -------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
-| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`, `inertia`            | Prompted (or `minimal` with `--yes`)     |
-| `--runtime <engine>`             | HTTP engine: `express`, `fastify`, `h3`                                | Prompted (or `express` with `--yes`)     |
-| `-s, --schema <lib>`             | Schema library: `zod`, `valibot`, `yup`                                | Prompted (or `zod` with `--yes`)         |
-| `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`) | Prompted (or `inmemory` with `--yes`)    |
-| `-d, --directory <dir>`          | Target directory                                                       | Project name                             |
-| `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`                       | Prompted (or auto-detected with `--yes`) |
-| `--packages <list>`              | Comma-separated optional packages (see below)                          | Prompted (or none with `--yes`)          |
-| `--git / --no-git`               | Initialize git repository                                              | Prompted (or `true` with `--yes`)        |
-| `--install / --no-install`       | Install dependencies                                                   | Prompted (or `true` with `--yes`)        |
-| `-f, --force`                    | Clear non-empty directory without prompting                            | `false`                                  |
-| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults                                 | `false`                                  |
+| Flag                             | Description                                                                            | Default                                  |
+| -------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`, `inertia`                            | Prompted (or `minimal` with `--yes`)     |
+| `--runtime <engine>`             | HTTP engine: `express`, `fastify`, `h3`                                                | Prompted (or `express` with `--yes`)     |
+| `-s, --schema <lib>`             | Schema library: `zod`, `valibot`, `yup`                                                | Prompted (or `zod` with `--yes`)         |
+| `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`)                 | Prompted (or `inmemory` with `--yes`)    |
+| `-d, --directory <dir>`          | Target directory                                                                       | Project name                             |
+| `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`                                       | Prompted (or auto-detected with `--yes`) |
+| `--packages <list>`              | Comma-separated optional packages (see below)                                          | Prompted (or none with `--yes`)          |
+| `--deploy <targets>`             | Deploy files to write: `netlify`, `vercel`, `docker` ([kick g deploy](#kick-g-deploy)) | none                                     |
+| `--git / --no-git`               | Initialize git repository                                                              | Prompted (or `true` with `--yes`)        |
+| `--install / --no-install`       | Install dependencies                                                                   | Prompted (or `true` with `--yes`)        |
+| `-f, --force`                    | Clear non-empty directory without prompting                                            | `false`                                  |
+| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults                                                 | `false`                                  |
 
 ### Templates
 
@@ -692,9 +693,27 @@ kick g config --repo postgres        # Default repo name
 
 If `kick.config.ts` already exists, the CLI prompts for confirmation before overwriting.
 
+### kick g deploy
+
+The files a deploy target needs, added when the project needs them — `kick new` writes none unless `--deploy` names some:
+
+```bash
+kick g deploy netlify            # netlify.toml, src/serverless.ts, a build:netlify script
+kick g deploy vercel             # vercel.json, src/serverless.ts, a build:vercel script
+kick g deploy docker             # Dockerfile, .dockerignore
+kick g deploy netlify vercel docker
+```
+
+Run it in the project, or at a fullstack workspace's root — the config files and scripts go to the root, the serverless entry to `server/`. The build scripts run the project's own `build` first (an Inertia app's builds its pages too), and an existing script or `src/serverless.ts` is kept. The Dockerfile matches the template and package manager.
+
+| Flag          | Description                       | Default |
+| ------------- | --------------------------------- | ------- |
+| `--pm <pm>`   | Package manager                   | auto    |
+| `-f, --force` | Overwrite existing files silently | `false` |
+
 ### kick g agents
 
-Regenerate the AI-agent documentation from the latest CLI templates: `.agents/AGENTS.md`, `.agents/GEMINI.md`, `.agents/COPILOT.md`, one `.agents/skills/<slug>/SKILL.md` per skill, and `CLAUDE.md` at the project root. Use after a KickJS upgrade to pull in new conventions and gotchas without copy-pasting between projects.
+`kick new` writes `.agents/AGENTS.md` and `CLAUDE.md`. This adds the rest, or regenerates everything from the latest CLI templates: `.agents/AGENTS.md`, `.agents/GEMINI.md`, `.agents/COPILOT.md`, one `.agents/skills/<slug>/SKILL.md` per skill, and `CLAUDE.md` at the project root. Use after a KickJS upgrade to pull in new conventions and gotchas without copy-pasting between projects.
 
 ```bash
 kick g agents                      # Everything (prompts before overwrite)

@@ -168,10 +168,13 @@ describe('the shipped layers', () => {
   const layers = readdirSync(TEMPLATES_DIR)
 
   it('leave no markers or {{vars}} in the fullstack root and web layers', () => {
-    const files = fillVars(renderLayers(['fullstack-root', 'web-kick']).files, {
-      name: 'demo',
-      packageManager: 'pnpm',
-    })
+    const files = fillVars(
+      renderLayers(['fullstack-root', 'web-kick', 'deploy-netlify-workspace']).files,
+      {
+        name: 'demo',
+        packageManager: 'pnpm',
+      },
+    )
     for (const [path, contents] of files) {
       expect(contents, path).not.toMatch(/@kick:|\{\{\w+\}\}/)
     }
@@ -198,7 +201,9 @@ describe('the shipped layers', () => {
               schemaLib: 'zod',
               packages: ['swagger', 'devtools', 'ws', 'queue'],
             }),
-            'host-config',
+            'deploy-netlify',
+            'deploy-vercel',
+            'deploy-serverless',
             'server-fullstack',
           ],
           { vars: { name: 'demo', version: '1.0.0' } },
@@ -336,10 +341,8 @@ describe('the shipped layers', () => {
     expect(project.files.get('tsconfig.json')).toContain('"jsx": "react-jsx"')
     expect(project.files.get('vite.config.ts')).toContain('react()')
     expect(project.scripts.build).toContain('--ssr src/client/ssr.tsx')
-    // The platform builds need the client manifest the adapter reads at startup.
-    for (const script of ['build:netlify', 'build:vercel']) {
-      expect(project.scripts[script], script).toContain('--ssr src/client/ssr.tsx')
-    }
+    // `kick g deploy` builds the platform scripts on this one, so they build
+    // the client manifest the adapter reads at startup (deploy-generator.test.ts).
     expect(project.files.get('.env')).toContain('SESSION_SECRET={{sessionSecret}}')
     // SESSION_SECRET is in the env schema. The dev-only default is accepted only
     // under NODE_ENV 'development' or 'test' — an unset NODE_ENV fails closed.

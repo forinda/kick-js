@@ -109,10 +109,7 @@ export function generatePackageJson(
         build: 'kick build',
         start: 'kick start',
         test: 'vitest run --passWithNoTests',
-        // Serverless targets — see guide/serverless.md. Each bundles
-        // src/serverless.ts and writes the platform's build output.
-        'build:netlify': 'kick build && kick build:netlify',
-        'build:vercel': 'kick build && kick build:vercel',
+        // Deploy scripts come with `kick g deploy netlify | vercel`.
         ...packages.scripts,
       },
       dependencies: pinned(packages.dependencies, versions),

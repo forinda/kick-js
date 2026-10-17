@@ -28,14 +28,14 @@ reference for this project (Claude, Copilot, Codex, Gemini, etc.) —
 project conventions, structure, decorator patterns, env wiring, CLI
 generators, every gotcha.
 
-**Then browse \`./.agents/skills/\`.** Each subdirectory is a single
-task-oriented skill (\`add-module/\`, \`write-controller-test/\`,
-\`bootstrap-export/\`, \`deny-list/\`, …) containing a \`SKILL.md\`
-with YAML frontmatter (\`name\`, \`description\`) and the recipe body.
-The structure follows the Claude Code skills convention — agents that
-auto-load skills from \`.agents/skills/\` will pick each up by its
-frontmatter. Use this directory as the playbook when executing common
-KickJS workflows.
+**Skills, when you want them:** \`kick g agents --only skills\` writes
+\`./.agents/skills/\` — one task-oriented skill per subdirectory
+(\`add-module/\`, \`write-controller-test/\`, \`bootstrap-export/\`,
+\`deny-list/\`, …), each a \`SKILL.md\` with YAML frontmatter (\`name\`,
+\`description\`) and the recipe body. The structure follows the Claude
+Code skills convention — agents that auto-load skills from
+\`.agents/skills/\` pick each up by its frontmatter. \`kick g agents\`
+alone also adds \`GEMINI.md\` and \`COPILOT.md\`.
 
 This file is a thin Claude-specific layer on top of those two; when
 they disagree on anything substantive, treat \`.agents/AGENTS.md\` as
@@ -1427,8 +1427,12 @@ options / subcommands / async work, \`generators\` (\`defineGenerator\`) for
       frontmatterName: 'kickjs-deploy',
       description:
         'Use when deploying this app — a Node host or Docker, Netlify, Vercel or Cloudflare Workers — or when an API route returns the SPA shell, the platform build fails, or the function is missing from a deploy.',
-      body: `**A Node host or a container** runs the long-running server. The project
-ships a \`Dockerfile\`; without Docker:
+      body: `Deploy files are added on demand: \`kick g deploy docker\` writes a
+\`Dockerfile\` and \`.dockerignore\`; \`kick g deploy netlify vercel\` writes
+\`netlify.toml\` / \`vercel.json\`, \`src/serverless.ts\` and the
+\`build:netlify\` / \`build:vercel\` scripts.
+
+**A Node host or a container** runs the long-running server. Without Docker:
 
 \`\`\`bash
 ${pm} run build && NODE_ENV=production node dist/index.js
