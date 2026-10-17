@@ -82,6 +82,8 @@ class HomeController {
 }
 ```
 
+For a full locale setup (negotiation by q-value, a cookie, translations from anywhere), see [Internationalization](./i18n.md).
+
 That's the whole minimum surface. The rest of this guide covers DI deps, dependency ordering, error handling, the four registration sites beyond `@`-on-method, and how to author reusable decorators inside an adapter or plugin.
 
 ::: tip Two factories, same pipeline

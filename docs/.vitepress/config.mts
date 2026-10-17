@@ -86,6 +86,7 @@ const guideSidebar = [
       { text: 'Cron Jobs', link: '/guide/cron' },
       { text: 'Background Jobs', link: '/guide/jobs' },
       { text: 'Mailer', link: '/guide/mailer' },
+      { text: 'Internationalization (i18n)', link: '/guide/i18n' },
       { text: 'Notifications', link: '/guide/notifications' },
       { text: 'OpenTelemetry', link: '/guide/otel' },
       { text: 'AI', link: '/guide/ai' },

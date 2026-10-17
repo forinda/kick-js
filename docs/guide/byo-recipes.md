@@ -32,6 +32,7 @@ The current BYO targets, with a recipe for each:
 - **`@forinda/kickjs-notifications`** — see [Notifications](./notifications.md).
 - **`@forinda/kickjs-mailer`** — see [Mailer](./mailer.md).
 - **`@forinda/kickjs-cron`** — see [Cron](./cron.md).
+- **i18n** (never a package) — see [Internationalization](./i18n.md).
 
 The framework keeps shipping the **primitives** that those packages wrapped (`defineContextDecorator`, `defineAdapter`, `definePlugin`, the DI container, the metadata helpers) — see the [Context Decorators guide](./context-decorators.md) for the parameterised contributor primitive that drives most of the recipes here. Migrations are one-way and additive.
 
