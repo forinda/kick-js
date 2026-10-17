@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
 import { execBin, runScript, type PackageManager } from '../config'
 import { fillVars, renderLayers, TEMPLATES_DIR, type Integration } from '../scaffold/overlay'
-import { generateDockerfile, generateDockerignore } from './templates/docker'
+import { generateDeploy, type DeployTarget } from './deploy'
 import { captureCommand, captureCommandAsync } from '../utils/shell'
 import { generatePackageJson, packageManagerSpec, yarnrc } from './templates/project-config'
 import {
@@ -340,10 +340,12 @@ interface InitProjectOptions {
    */
   approveInstallScripts?: boolean
   /**
-   * Write netlify.toml / vercel.json. Default true; false for a workspace
-   * member — the platforms build from the root, which owns those files.
+   * A standalone project. False for a workspace member: the root owns the
+   * `packageManager` field and the deploy files.
    */
   platformConfig?: boolean
+  /** Deploy targets to write files for — `kick new --deploy` / `kick g deploy`. */
+  deploy?: DeployTarget[]
   /**
    * Ranges resolved by the caller. The fullstack generator passes one map for
    * the whole workspace: resolving per package lets a failed lookup fall back
@@ -453,13 +455,7 @@ export async function initProject(
     )
   }
   const project = renderLayers(
-    [
-      ...scaffoldLayers({ template, runtime, schemaLib, packages }),
-      // netlify.toml / vercel.json — inert until the project is connected to
-      // a platform. A workspace member leaves them to the root.
-      ...(options.platformConfig !== false ? ['host-config'] : []),
-      ...(options.extraLayers ?? []),
-    ],
+    [...scaffoldLayers({ template, runtime, schemaLib, packages }), ...(options.extraLayers ?? [])],
     {
       vars: { name, version: cliPkg.version },
       extra: [
@@ -497,9 +493,6 @@ export async function initProject(
     runtime,
     packageManager,
     ...commandVars(packageManager),
-    // Netlify serves this directory before the function: an Inertia app's
-    // built pages and assets, else an empty one so nothing shadows the API.
-    netlifyPublish: template === 'inertia' ? 'dist/client' : 'dist/public',
     templateLabel: { rest: 'REST API', minimal: 'Minimal', inertia: 'Inertia (React)' }[template],
     // A fresh secret per project, written to the gitignored .env.
     sessionSecret: randomBytes(32).toString('hex'),
@@ -512,15 +505,10 @@ export async function initProject(
     await writeFileSafe(join(dir, path), contents)
   }
 
-  // A container image for the long-running server. A workspace member gets
-  // the workspace's own Dockerfile instead.
-  if (options.platformConfig !== false) {
-    const kind = template === 'inertia' ? 'inertia' : 'api'
-    await writeFileSafe(
-      join(dir, 'Dockerfile'),
-      generateDockerfile(kind, packageManager, name, pmSpec),
-    )
-    await writeFileSafe(join(dir, '.dockerignore'), generateDockerignore())
+  // Deploy files only for the targets asked for — `kick g deploy` adds the
+  // rest later. A workspace member leaves them to the workspace root.
+  if (options.deploy?.length && options.platformConfig !== false) {
+    await generateDeploy({ dir, targets: options.deploy, pm: packageManager, force: true })
   }
 
   // ── Agent docs ──────────────────────────────────────────────────────
@@ -537,7 +525,9 @@ export async function initProject(
     name,
     pm: packageManager,
     template,
-    only: 'all',
+    // AGENTS.md and CLAUDE.md; skills and the Gemini / Copilot files are one
+    // `kick g agents` away.
+    only: 'both',
     force: true,
   })
 

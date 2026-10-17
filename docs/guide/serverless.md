@@ -289,7 +289,7 @@ The function receives the original path, so routes stay under `/api/v1/…`.
 
 ## Build it with one command
 
-`kick build:netlify` and `kick build:vercel` do everything above: they bundle `src/serverless.ts` with the same Vite + SWC setup as `kick build`, then write the platform's output around it. Both ship with the CLI, so there is nothing to install — a project scaffolded by `kick new` already has the scripts and the platform files.
+`kick build:netlify` and `kick build:vercel` do everything above: they bundle `src/serverless.ts` with the same Vite + SWC setup as `kick build`, then write the platform's output around it. Both ship with the CLI, so there is nothing to install. `kick g deploy netlify vercel` (or `kick new --deploy netlify,vercel`) adds the scripts, the platform files and `src/serverless.ts`.
 
 ```bash
 kick build            # the long-running server, as always

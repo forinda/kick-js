@@ -372,9 +372,27 @@ kick rm module user --force          # skip confirmation prompt
 
 The command also supports `kick remove module` as the full form.
 
+## kick g deploy
+
+The files a deploy target needs, added when the project needs them — `kick new` writes none unless `--deploy` names some:
+
+```bash
+kick g deploy netlify            # netlify.toml, src/serverless.ts, a build:netlify script
+kick g deploy vercel             # vercel.json, src/serverless.ts, a build:vercel script
+kick g deploy docker             # Dockerfile, .dockerignore
+kick g deploy netlify vercel docker
+```
+
+Run it in the project, or at a fullstack workspace's root — the config files and scripts go to the root, the serverless entry to `server/`. The build scripts run the project's own `build` first (an Inertia app's builds its pages too), and an existing script or `src/serverless.ts` is kept. The Dockerfile matches the template and package manager.
+
+| Flag          | Description                       | Default |
+| ------------- | --------------------------------- | ------- |
+| `--pm <pm>`   | Package manager                   | auto    |
+| `-f, --force` | Overwrite existing files silently | `false` |
+
 ## kick g agents
 
-Regenerate the AI-agent documentation from the latest CLI templates. Everything lands under `.agents/` except `CLAUDE.md`, which stays at the project root because Claude Code auto-loads it from there. Use this after a KickJS upgrade to pull in new conventions, decorator changes, and gotchas without manually copy-pasting between projects.
+`kick new` writes `.agents/AGENTS.md` and `CLAUDE.md`; this command adds the skills and the Gemini and Copilot files, or regenerates all of them from the latest CLI templates. Everything lands under `.agents/` except `CLAUDE.md`, which stays at the project root because Claude Code auto-loads it from there. Use this after a KickJS upgrade to pull in new conventions, decorator changes, and gotchas without manually copy-pasting between projects.
 
 ```bash
 kick g agents                          # Refresh everything (prompts before overwrite)

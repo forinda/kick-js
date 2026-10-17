@@ -2,6 +2,7 @@ import { resolve, basename } from 'node:path'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import type { Command } from 'commander'
 import { initProject } from '../generators/project'
+import { parseDeployTargets, type DeployTarget } from '../generators/deploy'
 import { intro, outro, text, select, multiSelect, confirm, log } from '../utils/prompts'
 import { colors } from '../utils/colors'
 import { runScript, warnIfDeprecatedRepo, type PackageManager } from '../config'
@@ -48,12 +49,27 @@ export function registerInitCommand(program: Command): void {
       'Comma-separated packages to include (e.g. swagger,ws,queue,devtools)',
     )
     .option(
+      '--deploy <targets>',
+      'Comma-separated deploy targets to write files for: netlify, vercel, docker (later: kick g deploy)',
+    )
+    .option(
       '-y, --yes',
       'Pick safe defaults for every prompt (template=minimal, repo=inmemory, no extras, git+install on)',
     )
     .option('--non-interactive', 'alias for --yes')
     .action(async (name: string | undefined, opts: any) => {
       intro('KickJS — Create a new project')
+
+      // Checked first, so a typo stops before anything is written.
+      let deploy: DeployTarget[] = []
+      try {
+        deploy = opts.deploy ? parseDeployTargets(opts.deploy) : []
+      } catch (err) {
+        log.error((err as Error).message)
+        outro('Aborted.')
+        process.exitCode = 1
+        return
+      }
 
       // `--yes` / `--non-interactive` swap every "would prompt" branch
       // for a sensible default. Explicit flags still override; the
@@ -348,6 +364,7 @@ export function registerInitCommand(program: Command): void {
           packages: selectedPackages,
           frontend,
           viteTemplate,
+          deploy,
         })
         outro(
           `Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager}${packageManager === 'pnpm' ? ' dev' : ' run dev:server'}`)}`,
@@ -365,6 +382,7 @@ export function registerInitCommand(program: Command): void {
         packages: selectedPackages,
         schemaLib,
         runtime,
+        deploy,
       })
 
       outro(

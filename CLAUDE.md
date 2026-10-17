@@ -254,7 +254,7 @@ templates/                        # scaffold layers shipped with the CLI
   runtime-{express,fastify,h3}/   # runtime factory + engine packages
   schema-{zod,valibot,yup}/       # src/config/index.ts
   feature-{swagger,devtools,ws,queue}/  # adapter entries + packages (also used by kick add)
-  host-config/                    # netlify.toml / vercel.json for a standalone project
+  deploy-{netlify,vercel,serverless,netlify-workspace}/  # kick g deploy / kick new --deploy (src/generators/deploy.ts)
   server-fullstack/               # fullstack server: strictPort, client route map, TS 6 pin
   fullstack-root/ web-kick/       # fullstack workspace root files; the kick web app
 ```

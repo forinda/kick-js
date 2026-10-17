@@ -14,7 +14,7 @@
  * build instead of leaving it external, which is not what users run.
  * Third-party packages come from the registry.
  *
- * Per scenario: kick new → (kick add) → pnpm install → kick typegen →
+ * Per scenario: kick new → pnpm install → (kick add) → (kick g deploy) → kick typegen →
  * tsc --noEmit → (web build) → kick build (or the app's build script) → kick start → HTTP checks.
  * With `deploy`, also build:netlify / build:vercel and serve the Vercel
  * function from a copy outside the project; with `docker`, build the
@@ -56,6 +56,8 @@ const SCENARIOS = {
   },
   'rest-deploy': {
     args: ['--template', 'rest'],
+    // Added after scaffolding, as `kick g deploy` does for an existing project.
+    generateDeploy: ['netlify', 'vercel', 'docker'],
     get: ['/api/v1/hello'],
     deploy: true,
     docker: true,
@@ -66,7 +68,7 @@ const SCENARIOS = {
     get: ['/api/v1/hello', '/openapi.json'],
   },
   inertia: {
-    args: ['--template', 'inertia', '--packages', 'devtools'],
+    args: ['--template', 'inertia', '--packages', 'devtools', '--deploy', 'netlify,vercel,docker'],
     buildScript: true,
     get: ['/api/v1/hello', '/', '/posts', '/sitemap.xml', '/robots.txt'],
     // Rendered on the server, not the client-side fallback; meta in the head.
@@ -80,7 +82,14 @@ const SCENARIOS = {
     docker: true,
   },
   fullstack: {
-    args: ['--template', 'fullstack', '--packages', 'swagger,devtools'],
+    args: [
+      '--template',
+      'fullstack',
+      '--packages',
+      'swagger,devtools',
+      '--deploy',
+      'netlify,vercel,docker',
+    ],
     fullstack: true,
     get: ['/api/v1/hello', '/openapi.json'],
     deploy: true,
@@ -375,6 +384,14 @@ async function runScenario(name, scenario, tarballs) {
         'pnpm',
         ['exec', 'kick', 'add', ...scenario.add],
         server,
+      )
+    }
+    if (scenario.generateDeploy) {
+      run(
+        `kick g deploy ${scenario.generateDeploy.join(' ')}`,
+        'pnpm',
+        ['exec', 'kick', 'g', 'deploy', ...scenario.generateDeploy, '--force'],
+        root,
       )
     }
     run('kick typegen', 'pnpm', ['exec', 'kick', 'typegen'], server)

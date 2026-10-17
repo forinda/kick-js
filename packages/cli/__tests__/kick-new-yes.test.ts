@@ -234,12 +234,47 @@ describe('kick new --yes (non-interactive)', () => {
     expect(existsSync(join(project, 'kickjs-skills.md'))).toBe(false)
 
     expect(existsSync(join(project, '.agents', 'AGENTS.md'))).toBe(true)
-    expect(existsSync(join(project, '.agents', 'GEMINI.md'))).toBe(true)
-    expect(existsSync(join(project, '.agents', 'COPILOT.md'))).toBe(true)
+    // The rest is `kick g agents` away, not in every new project.
+    expect(existsSync(join(project, '.agents', 'GEMINI.md'))).toBe(false)
+    expect(existsSync(join(project, '.agents', 'COPILOT.md'))).toBe(false)
+    expect(existsSync(join(project, '.agents', 'skills'))).toBe(false)
+  })
 
-    // Per-skill SKILL.md format — at least one slug confirms the
-    // structure; a missing add-module slug would mean the
-    // generateKickJsSkillFiles helper is no longer wired up.
-    expect(existsSync(join(project, '.agents', 'skills', 'add-module', 'SKILL.md'))).toBe(true)
+  it('writes deploy files only for --deploy targets', () => {
+    const lean = runNew(cwd, ['lean', '--yes', '--no-install', '--no-git'])
+    expect(lean.exitCode).toBe(0)
+    for (const file of [
+      'netlify.toml',
+      'vercel.json',
+      'Dockerfile',
+      '.dockerignore',
+      'src/serverless.ts',
+    ]) {
+      expect(existsSync(join(cwd, 'lean', file))).toBe(false)
+    }
+    const leanPkg = JSON.parse(readFileSync(join(cwd, 'lean', 'package.json'), 'utf-8'))
+    expect(leanPkg.scripts['build:netlify']).toBeUndefined()
+
+    const deployed = runNew(cwd, [
+      'shipped',
+      '--yes',
+      '--no-install',
+      '--no-git',
+      '--deploy',
+      'netlify,docker',
+    ])
+    expect(deployed.exitCode).toBe(0)
+    const project = join(cwd, 'shipped')
+    for (const file of ['netlify.toml', 'Dockerfile', '.dockerignore', 'src/serverless.ts']) {
+      expect(existsSync(join(project, file))).toBe(true)
+    }
+    expect(existsSync(join(project, 'vercel.json'))).toBe(false)
+    const pkg = JSON.parse(readFileSync(join(project, 'package.json'), 'utf-8'))
+    expect(pkg.scripts['build:netlify']).toBe('kick build && kick build:netlify')
+    expect(pkg.scripts['build:vercel']).toBeUndefined()
+
+    expect(
+      runNew(cwd, ['typo', '--yes', '--no-install', '--no-git', '--deploy', 'heroku']).exitCode,
+    ).not.toBe(0)
   })
 })

@@ -259,7 +259,7 @@ export default defineConfig({
 1. The project: `src/views` from the folder the server starts in, which is the source in development.
 2. Beside the running entry file: `node dist/index.js` looks in `dist/src/views`, where `copyDirs` put them.
 
-So a deployment that holds only `dist/` and `node_modules`, like the `Dockerfile` `kick new` writes, renders from the copy. If you copy to another destination (`{ src: 'src/views', dest: 'dist/views' }`), point `viewsDir` at it in production.
+So a deployment that holds only `dist/` and `node_modules`, like the `Dockerfile` `kick g deploy docker` writes, renders from the copy. If you copy to another destination (`{ src: 'src/views', dest: 'dist/views' }`), point `viewsDir` at it in production.
 
 **Netlify and Vercel.** The function bundle holds code, not templates. List the folder in `deploy.include` so it ships with the function:
 

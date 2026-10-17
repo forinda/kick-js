@@ -43,7 +43,7 @@ What the server reads from the environment:
 
 ## Docker
 
-The `Dockerfile` `kick new` writes matches the project's template and package manager (pnpm, npm, yarn or bun):
+`kick g deploy docker` (or `kick new --deploy docker`) writes a `Dockerfile` and `.dockerignore` that match the project's template and package manager (pnpm, npm, yarn or bun):
 
 ```bash
 docker build -t my-app .

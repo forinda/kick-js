@@ -21,6 +21,7 @@ import { hasDependency, hasSwagger, resolveSchemaLib, testImportSource } from '.
 import { findProjectRoot } from '../utils/project-root'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
+import { generateDeploy, parseDeployTargets } from '../generators/deploy'
 import { findStyleDriftModules } from '../generators/migrate-modules'
 import { colors } from '../utils/colors'
 import { generateScaffold, parseFields } from '../generators/scaffold'
@@ -160,6 +161,10 @@ const GENERATORS = [
   {
     name: 'agents',
     description: 'Regenerate .agents/* + root CLAUDE.md from upstream templates',
+  },
+  {
+    name: 'deploy <targets...>',
+    description: 'Deploy files: netlify | vercel | docker (config, entry, build script)',
   },
 ]
 
@@ -813,6 +818,36 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         force: opts.force,
       })
       printGenerated(files, dryRun)
+    })
+
+  // ── kick g deploy ───────────────────────────────────────────────────
+  // The files a deploy target needs, when the project needs them: `kick new`
+  // writes none unless `--deploy` names some. From the project, or a fullstack
+  // workspace's root.
+  gen
+    .command('deploy <targets...>')
+    .description(
+      'Add deploy files: netlify | vercel | docker (config, serverless entry, build script)',
+    )
+    .option('--pm <pm>', 'Package manager (default: detected)')
+    .option('-f, --force', 'Overwrite existing files without prompting')
+    .action(async (targetArgs: string[], opts: { pm?: string; force?: boolean }, cmd: Command) => {
+      const dryRun = isDryRun(cmd)
+      setDryRun(dryRun)
+      let targets
+      try {
+        targets = parseDeployTargets(targetArgs.flatMap((t) => t.split(',')))
+        const files = await generateDeploy({
+          dir: resolve('.'),
+          targets,
+          pm: opts.pm,
+          force: opts.force,
+        })
+        printGenerated(files, dryRun)
+      } catch (err) {
+        console.error(`  ${(err as Error).message}`)
+        process.exitCode = 1
+      }
     })
 
   // ── Plugin-shipped generators ───────────────────────────────────────
