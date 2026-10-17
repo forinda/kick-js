@@ -1,5 +1,14 @@
 # @forinda/kickjs-cli
 
+## 8.13.1
+
+### Patch Changes
+
+- [#968](https://github.com/forinda/kick-js/pull/968) [`938dec6`](https://github.com/forinda/kick-js/commit/938dec687714fbc12c86887be2b484a9aebb86b1) Thanks [@forinda](https://github.com/forinda)! - `kick new` and `kick add devtools` install `ws` alongside `@forinda/kickjs-devtools`. DevTools needs it, and yarn 1 doesn't install peers, so a yarn app with DevTools failed under `kick dev` with "Cannot find package 'ws'". An app that also uses `WsAdapter` lists `ws` once, as a dependency.
+- Updated dependencies [[`bfda011`](https://github.com/forinda/kick-js/commit/bfda01144b26bc07fd3e535bfe71ac0f3d303199), [`78fd681`](https://github.com/forinda/kick-js/commit/78fd681e2a498eb9f1c4206fc37861eb61194aea)]:
+  - @forinda/kickjs@10.7.0
+  - @forinda/kickjs-db@8.9.0
+
 ## 8.13.0
 
 ### Minor Changes
