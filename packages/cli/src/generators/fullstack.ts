@@ -294,6 +294,7 @@ function webPackageJson(name: string, versions: Record<string, string>): string 
         'react-dom': dep('react-dom'),
       },
       devDependencies: {
+        '@forinda/kickjs-vite': dep('@forinda/kickjs-vite'),
         '@types/react': dep('@types/react'),
         '@types/react-dom': dep('@types/react-dom'),
         '@vitejs/plugin-react': dep('@vitejs/plugin-react'),

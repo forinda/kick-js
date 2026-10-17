@@ -153,3 +153,9 @@ SpaAdapter({
   cacheControl: false, // no cache headers on assets
 })
 ```
+
+## Compressed assets
+
+`SpaAdapter` sends a file's `.br` or `.gz` copy to a browser that accepts it.
+Write the copies when you build the client with `compressAssets()` — see
+[Compressed static files](./middleware.md#compressed-static-files).

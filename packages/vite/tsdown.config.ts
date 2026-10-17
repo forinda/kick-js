@@ -6,17 +6,12 @@ const pkg = readPkg(import.meta.dirname)
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    compress: 'src/compress-plugin.ts',
   },
   format: ['esm'],
   platform: 'node',
   minify: { compress: true, mangle: false },
   dts: true,
-  external: [
-    '@forinda/kickjs',
-    'reflect-metadata',
-    'express',
-    'vite',
-    /^node:/,
-  ],
+  external: ['@forinda/kickjs', 'reflect-metadata', 'express', 'vite', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })
