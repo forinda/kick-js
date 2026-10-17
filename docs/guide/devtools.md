@@ -178,6 +178,7 @@ Deep health check with computed status derived from reactive error rate.
 ```json
 {
   "status": "healthy",
+  "app": "ready",
   "errorRate": 0.0019,
   "uptime": 3600,
   "adapters": {
@@ -186,7 +187,7 @@ Deep health check with computed status derived from reactive error rate.
 }
 ```
 
-Returns `200` when healthy, `503` when degraded (error rate exceeds threshold).
+Returns `200` when healthy, `503` when degraded (error rate exceeds threshold). `app` is the application's [status](./lifecycle.md#watching-the-app-s-status); the dashboard also receives every change to it as an `app:status` event on its live connection.
 
 ### `GET /_debug/startup`
 

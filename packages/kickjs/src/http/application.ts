@@ -47,6 +47,7 @@ import {
   runDisposables,
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
+import { computed, ref, type ComputedRef } from '../core/reactivity'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './body-policy'
 import { requestId } from './middleware/request-id'
 import { pendingBackgroundWork, settleBackgroundWork } from './background'
@@ -757,6 +758,9 @@ function isConstructible(fn: unknown): boolean {
  */
 export const APPLICATION = createToken<Application>('kick/Http/Application')
 
+/** {@link Application.status}. */
+export type AppStatus = 'idle' | 'starting' | 'ready' | 'draining' | 'stopped'
+
 /** {@link ApplicationOptions.management}. */
 export interface ManagementOptions {
   /** Port for the management listener. */
@@ -841,9 +845,15 @@ export class Application {
   /** Number of HTTP requests currently being processed */
   private _inFlightRequests = 0
   /** Whether the application is draining (shutting down gracefully) */
-  private _draining = false
-  /** True while start() runs — readiness answers 503 until the app serves. */
-  private _starting = false
+  private readonly _status = ref<AppStatus>('idle')
+  /**
+   * Where the app is in its lifecycle, as a read-only reactive value: read
+   * `status.value`, or `watch(app.status, fn)` to act on a change —
+   * `'starting'` while `start()` runs, `'ready'` once it serves, `'draining'`
+   * from `shutdown()`, `'stopped'` after. An app that is only set up (tests)
+   * stays `'idle'`.
+   */
+  readonly status: ComputedRef<AppStatus> = computed(() => this._status.value)
   /** Whether shutdown has already been initiated (prevents double-shutdown) */
   private _shutdownInitiated = false
   /** Resolvers waiting for in-flight requests to reach zero */
@@ -948,7 +958,7 @@ export class Application {
 
   /** Whether the application is currently draining in-flight requests */
   get isDraining(): boolean {
-    return this._draining
+    return this._status.value === 'draining' || this._status.value === 'stopped'
   }
 
   /** Number of HTTP requests currently being processed */
@@ -1433,8 +1443,8 @@ export class Application {
     // so a replacement module can satisfy the same token.
     if (this.options.health !== false) {
       this.container.registerInstance(HEALTH_PROBE, {
-        isDraining: () => this._draining,
-        isStarting: () => this._starting,
+        isDraining: () => this.isDraining,
+        isStarting: () => this._status.value === 'starting',
         checks: createHealthChecks(() => this.adapters, {
           timeoutMs:
             typeof this.options.health === 'object' ? this.options.health.checkTimeout : undefined,
@@ -1767,7 +1777,25 @@ export class Application {
    * (it receives the `http.Server`), and no process signal handlers.
    */
   async startWithoutServer(): Promise<void> {
+    await this.untilStartedOrStopped(() => this.startWithoutServerSteps())
+  }
+
+  /**
+   * Run a startup, leaving the status at `'stopped'` if it fails — a failed
+   * startup is not still starting.
+   */
+  private async untilStartedOrStopped(run: () => Promise<void>): Promise<void> {
+    try {
+      await run()
+    } catch (err) {
+      this._status.value = 'stopped'
+      throw err
+    }
+  }
+
+  private async startWithoutServerSteps(): Promise<void> {
     this.handlerMode = true
+    this._status.value = 'starting'
     await this.setup()
     this.runChecks()
 
@@ -1786,6 +1814,7 @@ export class Application {
       await plugin.onReady?.(this.container)
     }
     this.timeline.mark('ready')
+    this._status.value = 'ready'
     this.timeline.complete()
     this.reportStartup()
   }
@@ -1800,9 +1829,13 @@ export class Application {
    * In **production**: creates its own `http.Server` and binds to the port.
    */
   async start(): Promise<void> {
+    await this.untilStartedOrStopped(() => this.startSteps())
+  }
+
+  private async startSteps(): Promise<void> {
     const g = globalThis as any
     const serverOptions = this.options.server
-    this._starting = true
+    this._status.value = 'starting'
 
     // Check the server options before setup() so a bad combination fails
     // before any adapter has done work.
@@ -1852,7 +1885,7 @@ export class Application {
         await plugin.onReady?.(this.container)
       }
       this.timeline.mark('ready')
-      this._starting = false
+      this._status.value = 'ready'
       this.timeline.complete()
       this.reportStartup()
 
@@ -1916,7 +1949,7 @@ export class Application {
             await plugin.onReady?.(this.container)
           }
           this.timeline.mark('ready')
-          this._starting = false
+          this._status.value = 'ready'
           this.timeline.complete()
           this.reportStartup()
 
@@ -2059,7 +2092,7 @@ export class Application {
       return
     }
     this._shutdownInitiated = true
-    this._draining = true
+    this._status.value = 'draining'
 
     // Readiness already answers 503; keep serving while the balancers notice.
     const preStopDelay = this.options.preStopDelay ?? 0
@@ -2230,6 +2263,7 @@ export class Application {
       if (closeServer) releaseObservers(this.observers)
     } finally {
       if (timer) clearTimeout(timer)
+      this._status.value = 'stopped'
     }
   }
 
@@ -2371,6 +2405,15 @@ export class Application {
     return this.httpServer
   }
 
+  /**
+   * The management listener (`bootstrap({ management })`) — its address, or
+   * something to attach to it. `null` without a management port, in dev mode,
+   * before `start()` has opened it, and after shutdown has closed it.
+   */
+  getManagementServer(): http.Server | https.Server | null {
+    return this.managementServer
+  }
+
   // ── Internal helpers ────────────────────────────────────────────────
 
   /**
@@ -2489,7 +2532,7 @@ export class Application {
         }
         this._inFlightRequests--
         // If draining and no more in-flight requests, resolve all waiters
-        if (this._draining && this._inFlightRequests === 0) {
+        if (this.isDraining && this._inFlightRequests === 0) {
           for (const resolve of this._drainResolvers) {
             resolve()
           }

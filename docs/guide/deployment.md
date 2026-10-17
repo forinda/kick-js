@@ -105,6 +105,7 @@ bootstrap({
 - It's plain HTTP unless you pass `tls` (the same shape as `server.tls`) — set it when anything crossing that network carries a credential, such as the DevTools token.
 - The port opens before the app has finished starting; until it has, readiness answers `503` with `status: 'starting'`.
 - With `logRouteTable: true`, the startup route table marks the routes on the management port.
+- In code, `app.getManagementServer()` returns the listener — its address, say — and an adapter gets it as `ctx.management.server` from `afterStart` on.
 - Off by default. In `kick dev` and on serverless platforms everything stays on the one port.
 
 ## Metrics

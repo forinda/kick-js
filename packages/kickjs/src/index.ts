@@ -14,6 +14,7 @@ export {
   Application,
   type ApplicationOptions,
   type ManagementOptions,
+  type AppStatus,
   type MiddlewareEntry,
   type ServerOptions,
   type ConfigDescription,
