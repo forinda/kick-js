@@ -8,7 +8,11 @@ import {
   DEFAULT_BODY_LIMIT,
   classifyMediaType,
   parseByteSize,
+  formFields,
+  hasPrototypeKey,
   parseForm,
+  prototypeKeyError,
+  readBodyBytes,
   readBodyText,
   unsupportedMediaTypeError,
 } from '../body-policy'
@@ -18,7 +22,12 @@ import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
-import { applyUploadConfig, type RawUploadPart } from '../middleware/upload-config'
+import {
+  applyUploadConfig,
+  tooManyFiles,
+  uploadLimits,
+  type RawUploadPart,
+} from '../middleware/upload-config'
 import type { RouteEntry, RuntimeResponse } from '../runtime'
 import { WebRequestShim, WebResponseDriver } from './driver'
 import { errorHandler, notFoundHandler } from '../middleware/error-handler'
@@ -114,13 +123,27 @@ export function compileWebRoute(
     // Body: uploads consume the stream as FormData; everything else parses
     // by content-type.
     if (upload) {
-      const form = await request.formData().catch(() => undefined)
+      // Bounded before anything is parsed: the route's file budget plus room
+      // for fields. Past it is a 413, held like a parse failure below.
+      const limits = uploadLimits(upload)
+      let form: FormData | undefined
+      try {
+        const bytes = await readBodyBytes(request, limits.total)
+        const type = request.headers.get('content-type') ?? ''
+        form = await new Response(bytes as unknown as ConstructorParameters<typeof Response>[0], {
+          headers: { 'content-type': type },
+        })
+          .formData()
+          .catch(() => undefined)
+      } catch (err) {
+        if (err instanceof HttpException) bodyError = err
+      }
       if (form) {
         const rawParts: RawUploadPart[] = []
-        const fields: Record<string, unknown> = {}
+        const fields: Array<[string, string]> = []
         for (const [name, value] of form.entries()) {
           if (typeof value === 'string') {
-            fields[name] = value
+            fields.push([name, value])
           } else {
             rawParts.push({
               fieldname: name,
@@ -135,16 +158,20 @@ export function compileWebRoute(
             })
           }
         }
-        req.body = fields
-        // A refused type (415) or an oversized file (413) is held like a parse
-        // failure — thrown before the driver exists, it would escape the
+        req.body = formFields(fields)
+        // A refused type (415), an oversized file or too many (413) is held like
+        // a parse failure — thrown before the driver exists, it would escape the
         // route and reach the client as the host's bare error, not kick's.
-        try {
-          const { file, files } = applyUploadConfig(rawParts, entry.meta.upload!)
-          req.file = file
-          req.files = files
-        } catch (err) {
-          bodyError = err
+        if (rawParts.length > limits.files) {
+          bodyError = tooManyFiles(limits.files)
+        } else {
+          try {
+            const { file, files } = applyUploadConfig(rawParts, entry.meta.upload!)
+            req.file = file
+            req.files = files
+          } catch (err) {
+            bodyError = err
+          }
         }
       }
     } else if (BODY_METHODS.has(request.method)) {
@@ -187,6 +214,9 @@ export function compileWebRoute(
         }
       }
     }
+
+    // A key that could rewrite a prototype — refused before any of the app's code sees it.
+    if (!bodyError && hasPrototypeKey(req.body)) bodyError = prototypeKeyError()
 
     // Reuse the id `requestId()` middleware already gave the request, so the
     // response header, the route's ctx and observers agree on one id.

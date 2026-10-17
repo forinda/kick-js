@@ -138,6 +138,29 @@ export interface RawUploadPart {
 
 const DEFAULT_MAX_SIZE = 5 * 1024 * 1024
 
+/** What an upload request may carry besides its files: field values, part headers. */
+export const UPLOAD_FIELDS_ALLOWANCE = 1024 * 1024
+
+/**
+ * The most a `@FileUpload` request may carry, for stopping the parser before it
+ * buffers more: `fileSize` per file, `files` in all (on any field), and `total`
+ * bytes for the whole body.
+ */
+export function uploadLimits(config: FileUploadConfig): {
+  fileSize: number
+  files: number
+  total: number
+} {
+  const fileSize = config.maxSize ?? DEFAULT_MAX_SIZE
+  const files = config.mode === 'none' ? 0 : config.mode === 'single' ? 1 : (config.maxCount ?? 10)
+  return { fileSize, files, total: fileSize * files + UPLOAD_FIELDS_ALLOWANCE }
+}
+
+/** The 413 for more files than a route takes. */
+export function tooManyFiles(limit: number): HttpException {
+  return new HttpException(HttpStatus.PAYLOAD_TOO_LARGE, `Too many files: at most ${limit}`)
+}
+
 /**
  * Apply a `@FileUpload` config to already-buffered multipart parts and return
  * the multer-shaped `file` / `files` for `ctx`. Enforces the field name, type

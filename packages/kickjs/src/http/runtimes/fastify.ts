@@ -18,7 +18,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import Fastify from 'fastify'
 
 import { HttpException } from '../../core/errors'
-import { parseForm, unsupportedMediaTypeError } from '../body-policy'
+import {
+  formFields,
+  hasPrototypeKey,
+  parseForm,
+  prototypeKeyError,
+  unsupportedMediaTypeError,
+} from '../body-policy'
 import { RequestContext } from '../context'
 import { publishMatchedRoute, stringifyJson } from '../runtime'
 import { applyHandlerResult } from '../reply'
@@ -26,6 +32,7 @@ import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
+import { UPLOAD_FIELDS_ALLOWANCE, tooManyFiles, uploadLimits } from '../middleware/upload-config'
 import { lazyServeStatic } from './lazy-serve-static'
 import { createLogger } from '../../core/logger'
 import type {
@@ -72,7 +79,7 @@ interface FastifyRequestLike {
   /** Request headers, as Fastify normalises them (lowercased keys). */
   headers?: Record<string, string | string[] | undefined>
   /** Present once @fastify/multipart is registered — async iterator of parts. */
-  parts?: () => AsyncIterableIterator<MultipartPart>
+  parts?: (options?: { limits?: Record<string, number> }) => AsyncIterableIterator<MultipartPart>
   isMultipart?: () => boolean
 }
 type FastifyHandler = (request: FastifyRequestLike, reply: FastifyReplyLike) => void | Promise<void>
@@ -132,6 +139,30 @@ function settleOrFail(reply: FastifyReplyLike, returned: unknown): void {
 }
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
 const NO_FALLTHROUGH = Symbol('kickjs.fastify.noFallthrough')
+
+/**
+ * @fastify/multipart's limit errors as the exceptions every engine raises —
+ * the same status and message as `applyUploadConfig` and the web runtime.
+ */
+function multipartError(
+  err: unknown,
+  limits: { fileSize: number; files: number },
+  file: string,
+): unknown {
+  switch ((err as { code?: string } | null)?.code) {
+    case 'FST_REQ_FILE_TOO_LARGE':
+      return new HttpException(413, `File ${file} exceeds the ${limits.fileSize}-byte limit`)
+    case 'FST_FILES_LIMIT':
+      return tooManyFiles(limits.files)
+    case 'FST_FIELDS_LIMIT':
+    case 'FST_PARTS_LIMIT':
+      return new HttpException(413, 'Too many form fields')
+    case 'FST_PROTO_VIOLATION':
+      return prototypeKeyError()
+    default:
+      return err
+  }
+}
 
 // A @fastify/multipart part as we consume it from `request.parts()`.
 interface MultipartPart {
@@ -262,25 +293,43 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
             'Install it as a peer dependency: pnpm add @fastify/multipart.',
         )
       }
+      // The parser stops at the route's limits instead of buffering whatever
+      // arrives: a file past maxSize, or more files than the route takes, is a 413.
+      const limits = uploadLimits(entry.meta.upload)
       const rawParts: RawUploadPart[] = []
-      const fields: Record<string, unknown> = {}
-      for await (const part of request.parts()) {
-        if (part.type === 'file' && part.toBuffer) {
-          rawParts.push({
-            fieldname: part.fieldname,
-            filename: part.filename ?? '',
-            mimetype: part.mimetype ?? 'application/octet-stream',
-            buffer: await part.toBuffer(),
-          })
-        } else {
-          fields[part.fieldname] = part.value
+      const fields: Array<[string, string]> = []
+      let current = 'file'
+      try {
+        for await (const part of request.parts({
+          limits: {
+            fileSize: limits.fileSize,
+            files: limits.files,
+            fieldSize: UPLOAD_FIELDS_ALLOWANCE,
+          },
+        })) {
+          if (part.type === 'file' && part.toBuffer) {
+            current = part.filename ?? part.fieldname
+            rawParts.push({
+              fieldname: part.fieldname,
+              filename: part.filename ?? '',
+              mimetype: part.mimetype ?? 'application/octet-stream',
+              buffer: await part.toBuffer(),
+            })
+          } else {
+            fields.push([part.fieldname, String(part.value)])
+          }
         }
+      } catch (err) {
+        throw multipartError(err, limits, current)
       }
       const { file, files } = applyUploadConfig(rawParts, entry.meta.upload)
       raw.file = file
       raw.files = files
-      raw.body = { ...(raw.body as Record<string, unknown> | undefined), ...fields }
+      raw.body = { ...(raw.body as Record<string, unknown> | undefined), ...formFields(fields) }
     }
+
+    // A key that could rewrite a prototype — refused before any of the app's code sees it.
+    if (hasPrototypeKey(raw.body)) throw prototypeKeyError()
 
     const headerId = raw.headers['x-request-id']
     // An id already assigned (requestId() middleware) wins over the header,

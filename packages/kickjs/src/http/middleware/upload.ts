@@ -42,7 +42,7 @@ export {
   type UploadStorageEngine,
   type RawUploadPart,
 } from './upload-config'
-import { buildFileTypeFilter, type UploadStorageEngine } from './upload-config'
+import { buildFileTypeFilter, tooManyFiles, type UploadStorageEngine } from './upload-config'
 
 /**
  * Upload options for the middleware.
@@ -64,10 +64,22 @@ export interface UploadOptions extends BaseUploadOptions {
  * a server fault on Express while Fastify and h3 answered 413. The message is
  * matched to `applyUploadConfig` so the response does not depend on the engine.
  */
-function translateMulterErrors(mw: RequestHandler, options: UploadOptions): RequestHandler {
+function translateMulterErrors(
+  mw: RequestHandler,
+  options: UploadOptions,
+  files?: { field: string; max: number },
+): RequestHandler {
   const maxSize = options.maxSize ?? 5 * 1024 * 1024
   return (req, res, next) => {
     mw(req, res, (err?: unknown) => {
+      // multer reports one file more than the field takes as an unexpected one.
+      if (
+        files &&
+        (err as { code?: string } | undefined)?.code === 'LIMIT_UNEXPECTED_FILE' &&
+        (err as { field?: string }).field === files.field
+      ) {
+        return next(tooManyFiles(files.max))
+      }
       if (err && (err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
         const name = (err as { field?: string }).field ?? 'file'
         return next(
@@ -180,7 +192,9 @@ function bothConventions(handler: RequestHandler): RequestHandler {
 
 function single(fieldName: string, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.single(fieldName), options))
+  return bothConventions(
+    translateMulterErrors(m.single(fieldName), options, { field: fieldName, max: 1 }),
+  )
 }
 
 /**
@@ -188,7 +202,12 @@ function single(fieldName: string, options: UploadOptions = {}): RequestHandler 
  */
 function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.array(fieldName, maxCount), options))
+  return bothConventions(
+    translateMulterErrors(m.array(fieldName, maxCount), options, {
+      field: fieldName,
+      max: maxCount,
+    }),
+  )
 }
 
 /**

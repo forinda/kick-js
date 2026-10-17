@@ -158,10 +158,14 @@ All middleware methods accept an `UploadOptions` object:
 A violation is the client's, so it answers 4xx — identically on every runtime,
 even though each engine detects it in its own backend:
 
-| Violation                  | Status                       | Body                                               |
-| -------------------------- | ---------------------------- | -------------------------------------------------- |
-| Larger than `maxSize`      | `413 Payload Too Large`      | `{ "message": "File … exceeds the N-byte limit" }` |
-| Type not in `allowedTypes` | `415 Unsupported Media Type` | `{ "message": "File type … is not allowed" }`      |
+| Violation                                                             | Status                       | Body                                                                 |
+| --------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------- |
+| Larger than `maxSize`                                                 | `413 Payload Too Large`      | `{ "message": "File … exceeds the N-byte limit" }`                   |
+| Type not in `allowedTypes`                                            | `415 Unsupported Media Type` | `{ "message": "File type … is not allowed" }`                        |
+| More files than the route takes (`single`: 1, `array`: `maxCount`)    | `413 Payload Too Large`      | `{ "message": "Too many files: at most N" }`                         |
+| A field that sets a prototype (`__proto__`, `constructor[prototype]`) | `400 Bad Request`            | `{ "message": "A body key that sets a prototype … is not allowed" }` |
+
+Limits are enforced while the request is read, not after: a route never buffers more than `maxSize` per file, `maxCount` files, and about 1 MB of form fields, whatever the client sends. A body past that is refused with `413` on every runtime.
 
 ::: tip Express names the field, the others name the file
 On a `413`, Express reports the form **field** (`doc`) where Fastify and h3
