@@ -48,8 +48,11 @@ import {
   MAX_UPLOAD_FIELDS,
   UPLOAD_FIELDS_ALLOWANCE,
   buildFileTypeFilter,
+  normalizeOriginalName,
+  serverFileName,
   tooManyFiles,
   uploadLimits,
+  type UploadedFile,
   type UploadStorageEngine,
 } from './upload-config'
 
@@ -98,8 +101,28 @@ function translateMulterErrors(
           ),
         )
       }
+      if (!err) {
+        try {
+          nameUploads(req as { file?: unknown; files?: unknown }, options.rename)
+        } catch (error) {
+          return next(error as never)
+        }
+      }
       next(err as never)
     })
+  }
+}
+
+/**
+ * The names every engine gives an upload: the client's name normalized, and a
+ * server-side `filename` — kept when disk storage already wrote the file under one.
+ */
+function nameUploads(req: { file?: unknown; files?: unknown }, rename: UploadOptions['rename']) {
+  const files = [req.file, ...(Array.isArray(req.files) ? req.files : [])]
+  for (const file of files as Array<UploadedFile | undefined>) {
+    if (!file) continue
+    file.originalname = normalizeOriginalName(file.originalname)
+    file.filename ??= serverFileName(file, rename)
   }
 }
 
@@ -133,6 +156,9 @@ function createMulter(options: UploadOptions) {
 
   const multerOptions: MulterOptions = {
     limits,
+    // busboy reads a part's filename as latin1 unless told otherwise, so a
+    // UTF-8 name — 中文, an emoji — arrived as mojibake ("ä¸­æ").
+    defParamCharset: 'utf8',
     ...(fileFilter ? { fileFilter } : {}),
     ...(options.storage ? { storage: options.storage } : {}),
     ...(options.dest ? { dest: options.dest } : {}),
@@ -321,6 +347,7 @@ export function buildUploadMiddleware(config: FileUploadConfig): RequestHandler 
   if (config.maxSize) options.maxSize = config.maxSize
   if (config.allowedTypes) options.allowedTypes = config.allowedTypes
   if (config.customMimeMap) options.customMimeMap = config.customMimeMap
+  if (config.rename) options.rename = config.rename
 
   const fieldName = config.fieldName ?? 'file'
 

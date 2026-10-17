@@ -294,6 +294,19 @@ export interface BaseUploadOptions {
   allowedTypes?: FileTypeFilter
   /** Extend the built-in extension-to-MIME map */
   customMimeMap?: Record<string, string>
+  /**
+   * The file's server-side name, `file.filename`, from what the client sent.
+   * Default: a random UUID plus the client name's extension when it is a plain
+   * one (`3f2b….png`) — never the client's name itself. The result must not
+   * contain a slash or backslash, nor be `.` or `..`. Disk storage (`dest`) keeps the name
+   * it wrote the file under.
+   */
+  rename?: (file: {
+    originalname: string
+    mimetype: string
+    fieldname: string
+    size: number
+  }) => string
 }
 
 export interface FileUploadConfig extends BaseUploadOptions {
