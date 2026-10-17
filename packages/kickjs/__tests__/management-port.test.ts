@@ -1,7 +1,14 @@
 import 'reflect-metadata'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Container, Controller, Get, type RequestContext } from '../src/index'
+import {
+  Container,
+  Controller,
+  Get,
+  Logger,
+  metricsAdapter,
+  type RequestContext,
+} from '../src/index'
 import { Application } from '../src/http/application'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
@@ -30,10 +37,27 @@ describe.each(runtimes)('management port on %s', (_name, runtime) => {
   afterEach(async () => {
     await app?.shutdown()
     app = undefined
+    Logger.resetProvider()
   })
 
   it('serves health and adapter routes on its own port, apart from the app', async () => {
     Container.reset()
+    const lines: string[] = []
+    const capture = (msg: string) => void lines.push(String(msg))
+    const quiet = () => {}
+    Logger.setProvider({
+      info: capture,
+      warn: quiet,
+      error: quiet,
+      debug: quiet,
+      child: () => ({
+        info: capture,
+        warn: quiet,
+        error: quiet,
+        debug: quiet,
+        child: () => ({}) as any,
+      }),
+    })
     const seen: { server?: KickServer; management?: KickServer } = {}
     const adapter: AppAdapter = {
       name: 'Probe',
@@ -51,7 +75,8 @@ describe.each(runtimes)('management port on %s', (_name, runtime) => {
     })
     app = new Application({
       modules: [module],
-      adapters: [adapter],
+      adapters: [adapter, metricsAdapter({ management: true })],
+      logRouteTable: true,
       runtime: runtime(),
       port: 0,
       management: { port: 0, host: '127.0.0.1' },
@@ -73,6 +98,10 @@ describe.each(runtimes)('management port on %s', (_name, runtime) => {
     expect(await (await mgmt('/health/ready')).json()).toMatchObject({ status: 'ready' })
     expect(await (await mgmt('/_probe')).json()).toEqual({ on: 'management' })
     expect((await mgmt('/api/v1/ping')).status).toBe(404)
+    expect((await mgmt('/metrics')).status).toBe(200)
+    expect((await main('/metrics')).status).toBe(404)
+    expect(lines.find((l) => l.includes('HealthController'))).toContain('[management port]')
+    expect(lines.find((l) => l.includes('PingController'))).not.toContain('[management port]')
 
     await app.shutdown()
     app = undefined

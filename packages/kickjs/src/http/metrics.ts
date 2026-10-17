@@ -22,6 +22,12 @@ export interface MetricsOptions {
   token?: string
   /** Histogram buckets, in seconds. Default: Prometheus' defaults, 5ms to 10s. */
   buckets?: number[]
+  /**
+   * Serve the metrics on the management port (`bootstrap({ management: { port } })`)
+   * instead of the app's — reachable by the scraper, not the public. Without a
+   * management port it stays on the app's.
+   */
+  management?: boolean
 }
 
 const DEFAULT_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
@@ -134,7 +140,8 @@ export function metricsAdapter(options: MetricsOptions = {}): AppAdapter {
 
   return {
     name: 'MetricsAdapter',
-    beforeMount({ http }: AdapterContext) {
+    beforeMount({ http: appHttp, management }: AdapterContext) {
+      const http = options.management && management ? management.http : appHttp
       loop = monitorEventLoopDelay({ resolution: 20 })
       loop.enable()
       http.route('GET', path, (ctx: RequestContext) => {

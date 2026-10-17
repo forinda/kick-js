@@ -85,21 +85,25 @@ Behind a proxy or load balancer, set `bootstrap({ trustProxy })` so `ctx.ip` and
 
 ### A management port
 
-`management: { port }` serves the operational endpoints on a second port — the same app and container, a second listener, as Spring Boot's `management.server.port` does:
+`management: { port }` serves health checks, metrics and DevTools on a second port, so the public port carries only your API — like Spring Boot's `management.server.port`:
 
 ```ts
 bootstrap({
   modules,
   management: { port: 9090 },
-  adapters: [DevToolsAdapter({ management: true, secret: getEnv('DEVTOOLS_TOKEN') })],
+  adapters: [
+    metricsAdapter({ management: true }),
+    DevToolsAdapter({ management: true, enabled: true, secret: getEnv('DEVTOOLS_TOKEN') }),
+  ],
 })
 ```
 
-- `/health/live` and `/health/ready` move to it, and answer `404` on the public port. Point the probes at `9090` and expose only the public port through the ingress.
-- The management port skips the app's middleware — auth, rate limits, CSRF, the request log — so probes need no exemptions, and they keep answering (readiness `503`) while the public port drains. It closes last.
-- An adapter can serve routes there through `ctx.management.http`; `DevToolsAdapter({ management: true })` moves `/_debug` and its event bus, which keeps the dashboard off the internet. It still needs `enabled: true` outside development, and a `secret`.
-- `host` binds one interface. The default is every interface, like the public port: a kubelet probes the pod's address, so `127.0.0.1` would fail the probes. Keep the port private with a network policy instead.
-- Off by default, and ignored in dev mode (Vite owns the only server) and on serverless platforms.
+- `/health/live` and `/health/ready` answer on `9090` only. Point the probes there, and expose only the public port through the ingress.
+- Your middleware — auth, rate limits, CSRF, the request log — doesn't run on the management port, so probes need no exemptions (`health: { flags }` makes no difference there). Readiness keeps answering `503` while the app shuts down.
+- `metricsAdapter({ management: true })` serves `/metrics` there, and `DevToolsAdapter({ management: true })` serves `/_debug`, keeping both off the internet. DevTools still needs `enabled: true` outside development, and a `secret`.
+- `host` picks the interface to listen on. The default is all of them, like the public port: a kubelet probes the pod's address, so `127.0.0.1` would fail the probes. Keep the port private with a network policy.
+- With `logRouteTable: true`, the startup route table marks the routes on the management port.
+- Off by default. In `kick dev` and on serverless platforms everything stays on the one port.
 
 ## Metrics
 
@@ -124,7 +128,7 @@ bootstrap({
 
 `route` is the route pattern (`/api/v1/users/:id`), never the raw URL, so one route is one series; requests no route matched share `route="unmatched"`. The scrape itself is not counted.
 
-- **Protect it.** The endpoint is mounted before your middleware — a scraper doesn't need your auth, and your auth doesn't cover it. Pass `token` and configure the scraper with `authorization: { credentials: … }`, or keep the port reachable only from Prometheus.
+- **Protect it.** A scraper doesn't need your auth, and your auth doesn't cover the endpoint. Pass `token` and configure the scraper with `authorization: { credentials: … }`, or serve it on the [management port](#a-management-port) with `metricsAdapter({ management: true })`.
 - **With `allowedHosts`**, Prometheus scrapes by pod IP: add the path to the allow-list's exemptions — `security: { allowedHosts: { hosts: [...], ignorePaths: ['/metrics'] } }`.
 - `metricsAdapter({ path, buckets })` changes the path and the histogram buckets (seconds).
 

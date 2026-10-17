@@ -1460,7 +1460,7 @@ export class Application {
     const shouldLogRoutes = this.options.logRouteTable ?? this.options.logRoutesTable ?? false
 
     // Collect route metadata during mounting (avoids calling mod.routes() twice)
-    const mountedRoutes: Array<{ controller: any; mountPath: string }> = []
+    const mountedRoutes: Array<{ controller: any; mountPath: string; management?: boolean }> = []
 
     // Context Contributors (#107) — collect adapter + plugin + global once;
     // per-module sources are computed inside the loop so module isolation is
@@ -1627,7 +1627,11 @@ export class Application {
               }
             }
             if (shouldLogRoutes) {
-              mountedRoutes.push({ controller: route.controller, mountPath })
+              mountedRoutes.push({
+                controller: route.controller,
+                mountPath,
+                management: !!this.managementApp && route.controller === HealthController,
+              })
             }
           }
         }
@@ -1647,7 +1651,7 @@ export class Application {
       let totalRoutes = 0
       log.info('Routes:')
 
-      for (const { controller, mountPath } of mountedRoutes) {
+      for (const { controller, mountPath, management } of mountedRoutes) {
         const defs: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
           METADATA.ROUTES,
           controller,
@@ -1667,7 +1671,10 @@ export class Application {
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
-        log.info(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
+        const port = management ? '  [management port]' : ''
+        log.info(
+          `  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})${port}`,
+        )
       }
 
       log.info(`  Total: ${totalRoutes} routes`)
