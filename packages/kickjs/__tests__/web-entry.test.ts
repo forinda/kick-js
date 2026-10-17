@@ -6,7 +6,7 @@ import * as h3v2 from 'h3'
 
 import { createWebApp, createFetchHandler } from '../src/web'
 import { Container } from '../src/core/container'
-import { Controller, Get, Post, Service, Value } from '../src/core/decorators'
+import { Controller, FileUpload, Get, Post, Service, Value } from '../src/core/decorators'
 import { defineModule } from '../src/core/define-module'
 import type { RequestContext } from '../src/http/context'
 import { HttpException } from '../src/core/errors'
@@ -112,6 +112,55 @@ describe('createWebApp — fetch entry', () => {
       EDGE_REGION: 'weur',
     })
     expect(await res.json()).toEqual({ region: 'weur' })
+  })
+})
+
+describe('createWebApp — uploads', () => {
+  function uploadApp() {
+    @Controller()
+    class Files {
+      @Post('/')
+      @FileUpload({ mode: 'single', fieldName: 'doc', allowedTypes: ['text/plain'], maxSize: 16 })
+      take(ctx: RequestContext) {
+        ctx.json({
+          name: ctx.file?.originalname,
+          text: ctx.file?.buffer.toString(),
+          note: ctx.body.note,
+        })
+      }
+    }
+    const mod = defineModule({
+      name: 'Files',
+      build: () => ({ routes: () => ({ path: '/files', controller: Files }) }),
+    })()
+    return createWebApp({ h3: h3v2, modules: [mod] })
+  }
+  const send = (app: ReturnType<typeof uploadApp>, content: string, type: string) => {
+    const form = new FormData()
+    form.append('doc', new Blob([content], { type }), 'a.txt')
+    form.append('note', 'n')
+    return app.fetch(new Request('http://edge/api/v1/files', { method: 'POST', body: form }))
+  }
+
+  it('hands the file and the fields to the handler', async () => {
+    const res = await send(uploadApp(), 'hi there', 'text/plain')
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ name: 'a.txt', text: 'hi there', note: 'n' })
+  })
+
+  it('answers a refused upload with problem details, as bootstrap does', async () => {
+    const app = uploadApp()
+    const wrongType = await send(app, 'x', 'image/png')
+    expect(wrongType.status).toBe(415)
+    expect(wrongType.headers.get('content-type')).toContain('application/problem+json')
+    expect(await wrongType.json()).toMatchObject({
+      status: 415,
+      detail: expect.stringContaining('image/png'),
+    })
+
+    const tooBig = await send(app, 'x'.repeat(64), 'text/plain')
+    expect(tooBig.status).toBe(413)
+    expect(tooBig.headers.get('content-type')).toContain('application/problem+json')
   })
 })
 
