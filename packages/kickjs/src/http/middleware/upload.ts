@@ -1,6 +1,11 @@
 import { HttpException, HttpStatus } from '../../core/errors'
 import { unlink } from 'node:fs/promises'
-import type { Request, Response, NextFunction, RequestHandler } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+  ConnectHandler as RequestHandler,
+} from '../connect'
 import type { Options as MulterOptions } from 'multer'
 import type { BaseUploadOptions, FileUploadConfig } from '../../core'
 
@@ -33,9 +38,11 @@ export {
   resolveMimeTypes,
   applyUploadConfig,
   type UploadedFileLike,
+  type UploadedFile,
+  type UploadStorageEngine,
   type RawUploadPart,
 } from './upload-config'
-import { buildFileTypeFilter } from './upload-config'
+import { buildFileTypeFilter, type UploadStorageEngine } from './upload-config'
 
 /**
  * Upload options for the middleware.
@@ -43,8 +50,8 @@ import { buildFileTypeFilter } from './upload-config'
  * and adds Multer-specific storage options.
  */
 export interface UploadOptions extends BaseUploadOptions {
-  /** Multer storage config (default: memory storage) */
-  storage?: MulterOptions['storage']
+  /** Multer storage engine (default: memory storage) */
+  storage?: UploadStorageEngine
   /** Multer dest for disk storage shorthand */
   dest?: string
 }

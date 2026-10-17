@@ -107,6 +107,27 @@ export interface UploadedFileLike {
   buffer: Buffer
 }
 
+/**
+ * An uploaded file as `ctx.file` / `ctx.files` hold it, on every runtime —
+ * multer's shape, declared here so the typings need no `@types/multer`. The
+ * disk fields are set only by `upload({ dest })` / a multer `diskStorage`
+ * (Express), which leaves `buffer` unset, as multer does.
+ */
+export interface UploadedFile extends UploadedFileLike {
+  destination?: string
+  filename?: string
+  path?: string
+}
+
+/**
+ * A multer storage engine — `multer.diskStorage()`, `multer.memoryStorage()` or
+ * your own — declared here so the typings need no `@types/multer`.
+ */
+export interface UploadStorageEngine {
+  _handleFile(req: any, file: any, callback: (error?: any, info?: any) => void): void
+  _removeFile(req: any, file: any, callback: (error: Error | null) => void): void
+}
+
 /** A buffered multipart file part, as the runtime hands it to {@link applyUploadConfig}. */
 export interface RawUploadPart {
   fieldname: string

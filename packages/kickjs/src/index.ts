@@ -161,10 +161,16 @@ export type {
   RuntimeCapabilities,
   UseConnectOptions,
   RuntimeTypeMap,
-  ExpressRuntimeTypes,
   KickRuntimeRegister,
   ActiveRuntime,
 } from './http/runtime'
+export type {
+  ConnectRequest,
+  ConnectResponse,
+  ConnectNext,
+  ConnectHandler,
+  ConnectErrorHandler,
+} from './http/connect'
 
 // Request-Scoped DI
 export {
@@ -217,6 +223,8 @@ export {
   resolveMimeTypes,
   buildUploadMiddleware,
   type UploadOptions,
+  type UploadedFile,
+  type UploadStorageEngine,
 } from './http/middleware/upload'
 
 // Trace Context (W3C traceparent propagation)

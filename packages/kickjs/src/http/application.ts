@@ -8,7 +8,8 @@ import { matchesBearer } from '../core/web-crypto'
 import https from 'node:https'
 import http2 from 'node:http2'
 import tls from 'node:tls'
-import express, { type Express, type RequestHandler } from 'express'
+import express from 'express'
+import type { ConnectHandler, ConnectMiddleware } from './connect'
 import {
   Container,
   createLogger,
@@ -115,7 +116,7 @@ const log = createLogger('Application')
  * A middleware entry in the declarative pipeline.
  * Can be a bare handler or an object with path scoping.
  */
-export type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
+export type MiddlewareEntry = ConnectHandler | { path: string; handler: ConnectHandler }
 
 /** Options for {@link Application.shutdown}. */
 export interface ShutdownOptions {
@@ -746,7 +747,7 @@ function isConstructible(fn: unknown): boolean {
 export const APPLICATION = createToken<Application>('kick/Http/Application')
 
 export class Application {
-  private app: Express
+  private app: unknown
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
   private readonly runtime: HttpRuntime
   private container: Container
@@ -959,19 +960,19 @@ export class Application {
   }
 
   /** The engine app, from the options — one place, so a rebuild (HMR) keeps them all. */
-  private createEngineApp(): Express {
+  private createEngineApp(): unknown {
     return this.runtime.createApp({
       trustProxy: this.options.trustProxy,
       notFoundFallthrough: this.options.notFoundFallthrough,
       bodyLimit: parseByteSize(this.options.jsonLimit ?? DEFAULT_BODY_LIMIT),
-    }) as Express
+    })
   }
 
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
     // Built once per engine app — the serverless and loopback paths call this
     // per request, and h3 wraps the app in a fresh node listener on each call.
     // Keyed on the app, so a rebuild (HMR) gets a handler for the new one.
-    if (this.handlerFor?.app !== this.app) {
+    if (!this.handlerFor || this.handlerFor.app !== this.app) {
       this.handlerFor = { app: this.app, handler: this.runtime.nodeHandler(this.app) }
     }
     const handler = this.handlerFor.handler
@@ -1643,16 +1644,21 @@ export class Application {
 
     const builtInNotFound = notFoundHandler(mountedPaths)
     const customNotFound = this.options.onNotFound
+    // Typed with RuntimeResponse, which every runtime's driver provides; the
+    // connect types only promise Node's ServerResponse.
     this.runtime.setNotFound(
       this.app,
-      customNotFound
+      (customNotFound
         ? (req: any, res: RuntimeResponse, next: (err?: unknown) => void) =>
             customNotFound(req, res, (err?: unknown) =>
               err === undefined ? builtInNotFound(req, res, next as () => void) : next(err),
             )
-        : builtInNotFound,
+        : builtInNotFound) as unknown as ConnectMiddleware,
     )
-    this.runtime.setErrorHandler(this.app, observeErrors(this.options.onError ?? errorHandler()))
+    this.runtime.setErrorHandler(
+      this.app,
+      observeErrors(this.options.onError ?? errorHandler()) as unknown as ConnectMiddleware,
+    )
     this.timeline.mark('error handlers')
   }
 
@@ -2092,7 +2098,7 @@ export class Application {
   }
 
   /** @deprecated Use {@link getRuntimeApp}. Returns the engine-native app. */
-  getExpressApp(): Express {
+  getExpressApp(): ActiveRuntime['app'] {
     return this.app
   }
 
@@ -2298,7 +2304,7 @@ export class Application {
   }
 
   /** Middleware that tracks in-flight requests for graceful draining */
-  private requestTrackingMiddleware(): RequestHandler {
+  private requestTrackingMiddleware(): ConnectHandler {
     return (req, res, next) => {
       this._inFlightRequests++
       // Timed only while something observes responses — checked per request,

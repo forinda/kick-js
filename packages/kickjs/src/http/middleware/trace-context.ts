@@ -1,4 +1,8 @@
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 import { requestStore } from '../request-store'
 
 import { randomHex } from '../../core/web-crypto'

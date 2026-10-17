@@ -5,7 +5,10 @@ import type http from 'node:http'
 import type https from 'node:https'
 import type http2 from 'node:http2'
 import type { ErrorInfo, ResponseInfo } from './observers'
-import type { RequestHandler, ErrorRequestHandler } from 'express'
+import type {
+  ConnectHandler as RequestHandler,
+  ConnectErrorHandler as ErrorRequestHandler,
+} from '../http/connect'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
 import type { IntrospectionSnapshot } from './introspect'
@@ -54,10 +57,9 @@ export type MiddlewarePath = string | RegExp | ReadonlyArray<string | RegExp>
 /** A middleware entry contributed by an adapter */
 export interface AdapterMiddleware {
   /**
-   * Express handler: either a `RequestHandler` (`(req, res, next) => …`)
-   * or an `ErrorRequestHandler` (`(err, req, res, next) => …`).
-   * Express dispatches based on arity, so the same field accepts both
-   * without a discriminant.
+   * Connect-style middleware: `(req, res, next) => …` or, for errors,
+   * `(err, req, res, next) => …` — told apart by arity, so the one field takes
+   * both. Express middleware fits as is; it runs on every runtime.
    */
   handler: RequestHandler | ErrorRequestHandler
   /** Which phase to insert into (default: 'afterGlobal') */

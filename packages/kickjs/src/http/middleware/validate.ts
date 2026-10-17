@@ -1,4 +1,8 @@
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 // core/errors directly (not the barrel) — keeps the edge-safe web entry
 // graph free of the barrel's eager node:fs asset-manager import.
 import { HttpException, HttpStatus } from '../../core/errors'

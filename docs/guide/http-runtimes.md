@@ -219,12 +219,19 @@ reach past `ctx.*`, and it has a helper —
 — which works on every runtime. `ctx.res.setHeader()` + `ctx.res.end()` compiles
 on Express and breaks on the other two.
 
-Under the default Express runtime these are typed as Express's `Application`,
-`Request`, and `Response`. The types follow the active runtime via the
-`ActiveRuntime` registry: set `runtime: 'fastify'` (or `'h3'`) in `kick.config.ts`
-and the `kick/runtime` typegen emits a `KickRuntimeRegister` augmentation that
-retypes them to that engine — Fastify's `FastifyInstance` / `FastifyRequest` /
-`FastifyReply`, or for h3 the types of the installed major.
+The types follow the active runtime via the `ActiveRuntime` registry: the
+`kick/runtime` typegen reads `runtime` in `kick.config.ts` (Express when unset)
+and emits a `KickRuntimeRegister` augmentation that types them as that engine's —
+Express's `Application` / `Request` / `Response` (from `@forinda/kickjs/express`),
+Fastify's `FastifyInstance` / `FastifyRequest` / `FastifyReply`, or for h3 the
+types of the installed major. Without the augmentation they're the
+engine-neutral connect types (`ConnectRequest`, `ConnectResponse`) and an
+`unknown` app, so nothing in `@forinda/kickjs`'s own typings needs `express`.
+
+Middleware is typed the same way on every runtime: `ConnectHandler` /
+`ConnectErrorHandler`, kick's own `(req, res, next)` types. Express middleware —
+`express.json()`, `cors()`, a handler typed with Express's `Request` — fits them
+as is.
 
 ## Writing a custom runtime
 

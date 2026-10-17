@@ -1,4 +1,8 @@
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 
 /** Brand identifying a `helmet()` handler, so auto-injection can stand down. */
 export const HELMET_MIDDLEWARE = Symbol.for('kick/http/helmet')

@@ -1,5 +1,9 @@
 import { readCookies, sendJson, setCookie } from './respond'
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { randomHex, safeEqual } from '../../core/web-crypto'

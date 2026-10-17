@@ -1,4 +1,8 @@
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 
 export const REQUEST_ID_HEADER = 'x-request-id'
 

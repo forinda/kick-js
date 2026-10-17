@@ -126,7 +126,7 @@ interface AdapterHttp {
 }
 ```
 
-`app` is the **engine-native** instance — an `express.Express` under the default
+`app` is the **engine-native** instance — an `express.Express` under the Express
 runtime, a `FastifyInstance` under Fastify, an h3 app under h3. It is typed from
 the active runtime (`ActiveRuntime['app']`), not as Express. Reach for it only
 when you need something genuinely engine-specific, and know that an adapter

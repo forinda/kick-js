@@ -23,6 +23,7 @@ export default defineConfig({
     'http/bootstrap': 'src/http/bootstrap.ts',
     'http/context': 'src/http/context.ts',
     'http/router-builder': 'src/http/router-builder.ts',
+    'http/runtimes/express': 'src/http/runtimes/express-entry.ts',
     'http/runtimes/fastify': 'src/http/runtimes/fastify.ts',
     'http/runtimes/h3': 'src/http/runtimes/h3.ts',
     'http/runtimes/h3-web': 'src/http/runtimes/h3-web.ts',
