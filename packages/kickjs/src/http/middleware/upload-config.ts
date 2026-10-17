@@ -100,7 +100,14 @@ export function buildFileTypeFilter(
 /** A multer-shaped uploaded file — what `ctx.file` / `ctx.files` expose. */
 export interface UploadedFileLike {
   fieldname: string
+  /**
+   * The client's name for the file, made safe to show: Unicode NFC, no
+   * directory part, no control characters. Still the client's choice — use
+   * `filename` to store the file.
+   */
   originalname: string
+  /** The server-side name: generated (or from `rename`), safe as a storage key. */
+  filename: string
   encoding: string
   mimetype: string
   size: number
@@ -115,7 +122,6 @@ export interface UploadedFileLike {
  */
 export interface UploadedFile extends UploadedFileLike {
   destination?: string
-  filename?: string
   path?: string
 }
 
@@ -137,6 +143,63 @@ export interface RawUploadPart {
 }
 
 const DEFAULT_MAX_SIZE = 5 * 1024 * 1024
+
+/**
+ * The client's file name made safe to show: Unicode NFC (so the same text
+ * compares equal however the client composed it), without a directory part
+ * (`C:\fakepath\a.png` → `a.png`) or control characters. Non-Latin text and
+ * emoji are kept as they are.
+ */
+export function normalizeOriginalName(name: string): string {
+  const base = name.normalize('NFC').split(/[\\/]/).pop() ?? ''
+  // oxlint-disable-next-line no-control-regex
+  return base.replace(/[\u0000-\u001f\u007f]/g, '').trim()
+}
+
+/**
+ * The client name's extension, kept only when it names the file's own type:
+ * `photo.PNG` sent as `image/png` → `.png`. `evil.html` sent as `image/png`
+ * gets none — an extension the type check never saw must not decide how the
+ * stored file is later served.
+ */
+function matchingExtension(
+  name: string,
+  mimetype: string,
+  customMimeMap?: Record<string, string>,
+): string {
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return ''
+  const ext = name.slice(dot + 1).toLowerCase()
+  const type = mimetype.split(';')[0]!.trim().toLowerCase()
+  return (customMimeMap?.[ext] ?? MIME_MAP[ext]) === type ? `.${ext}` : ''
+}
+
+/**
+ * The server-side name for an upload: `rename`'s, checked, or a random UUID
+ * plus the extension of the file's type when the client name carries it.
+ */
+export function serverFileName(
+  file: { originalname: string; mimetype: string; fieldname: string; size: number },
+  options: Pick<BaseUploadOptions, 'rename' | 'customMimeMap'> = {},
+): string {
+  const { rename, customMimeMap } = options
+  if (!rename) {
+    const ext = matchingExtension(file.originalname, file.mimetype, customMimeMap)
+    return `${globalThis.crypto.randomUUID()}${ext}`
+  }
+  const name = rename(file)
+  if (
+    typeof name !== 'string' ||
+    name === '' ||
+    name === '.' ||
+    name === '..' ||
+    name.length > 255 ||
+    /[\\/\0]/.test(name)
+  ) {
+    throw new Error(`@FileUpload rename(): '${String(name)}' is not a safe file name`)
+  }
+  return name
+}
 
 /** What an upload request may carry besides its files: field values, part headers. */
 export const UPLOAD_FIELDS_ALLOWANCE = 1024 * 1024
@@ -195,12 +258,16 @@ export function applyUploadConfig(
         `File ${p.filename} exceeds the ${maxSize}-byte limit`,
       )
     }
-    return {
+    const named = {
       fieldname: p.fieldname,
-      originalname: p.filename,
-      encoding: '7bit',
+      originalname: normalizeOriginalName(p.filename),
       mimetype: p.mimetype,
       size: p.buffer.length,
+    }
+    return {
+      ...named,
+      filename: serverFileName(named, config),
+      encoding: '7bit',
       buffer: p.buffer,
     }
   })

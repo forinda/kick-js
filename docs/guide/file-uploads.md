@@ -145,13 +145,14 @@ Rule of thumb: **portable + memory → `@FileUpload`; Express-specific storage e
 
 All middleware methods accept an `UploadOptions` object:
 
-| Option          | Type                       | Default                  | Description                                 |
-| --------------- | -------------------------- | ------------------------ | ------------------------------------------- |
-| `maxSize`       | `number`                   | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes                  |
-| `allowedTypes`  | `string[] \| FileFilterFn` | all                      | String array or filter function (see below) |
-| `customMimeMap` | `Record<string, string>`   | —                        | Extend the built-in extension-to-MIME map   |
-| `storage`       | Multer `StorageEngine`     | memory                   | Custom Multer storage engine (Express only) |
-| `dest`          | `string`                   | —                        | Disk storage destination dir, Express only  |
+| Option          | Type                       | Default                  | Description                                                                  |
+| --------------- | -------------------------- | ------------------------ | ---------------------------------------------------------------------------- |
+| `maxSize`       | `number`                   | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes                                                   |
+| `allowedTypes`  | `string[] \| FileFilterFn` | all                      | String array or filter function (see below)                                  |
+| `customMimeMap` | `Record<string, string>`   | —                        | Extend the built-in extension-to-MIME map                                    |
+| `storage`       | Multer `StorageEngine`     | memory                   | Custom Multer storage engine (Express only)                                  |
+| `dest`          | `string`                   | —                        | Disk storage destination dir, Express only                                   |
+| `rename`        | `(file) => string`         | UUID + extension         | The file's server-side name (`file.filename`); see [File names](#file-names) |
 
 ## What a rejected upload returns
 
@@ -344,7 +345,36 @@ Uploaded files are available on the `RequestContext`:
 - **`ctx.file`** — the single uploaded file object (when using `single` mode)
 - **`ctx.files`** — an array of uploaded files (when using `array` mode)
 
-Each file object follows the standard Multer file shape: `originalname`, `mimetype`, `size`, `buffer` (memory storage), or `path` and `filename` (disk storage).
+Each file object follows the standard Multer file shape: `originalname`, `filename`, `mimetype`, `size`, and `buffer` (memory storage) or `path` (disk storage).
+
+## File names
+
+Every file carries two names, on every runtime:
+
+- **`filename`** is the server-side name: a random UUID plus the client name's extension when that extension names the file's type (`3f2b9c1e-….png` for `photo.png` sent as `image/png`). A mismatched one is dropped: `evil.html` sent as `image/png` is stored without an extension, so it can't later be served as HTML. Use it as the storage key or the file name on disk. With `dest` (disk storage, Express), it is the name the file was written under.
+- **`originalname`** is the name the client sent, made safe to show: Unicode NFC (so `é` typed two ways compares equal), without a directory part (`C:\fakepath\photo.png` becomes `photo.png`), and without control characters. Chinese, Arabic, emoji and the rest arrive intact. It is still the client's choice, so display it, but never build a path from it.
+
+```ts
+@Post('/avatar')
+@FileUpload({ mode: 'single', fieldName: 'avatar', maxSize: 2_000_000, allowedTypes: ['image/*'] })
+async avatar(ctx: RequestContext) {
+  const file = ctx.file!
+  await this.storage.put(`avatars/${file.filename}`, file.buffer, { contentType: file.mimetype })
+  ctx.json({ key: file.filename, name: file.originalname })
+}
+```
+
+To choose the name yourself, pass `rename`. It gets the file's normalized `originalname`, `mimetype`, `fieldname` and `size`:
+
+```ts
+@FileUpload({
+  mode: 'single',
+  fieldName: 'avatar',
+  rename: (file) => `${crypto.randomUUID()}-${file.size}.webp`,
+})
+```
+
+The result must not contain a slash or backslash, nor be `.` or `..`; an unsafe name fails the request (500) rather than reaching your storage.
 
 ## Sending a file back out
 
