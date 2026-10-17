@@ -96,7 +96,7 @@ describe.each(runtimes)('built-in health routes on $name', ({ make }) => {
     // deciding whether to keep routing traffic to this instance. Liveness
     // stays 200 (a failing one restarts the container); readiness is 503.
     const { app, agent } = await boot()
-    ;(app as unknown as { _draining: boolean })._draining = true
+    ;(app as unknown as { _status: { value: string } })._status.value = 'draining'
     const res = await agent.get(path)
     expect(res.status).toBe(status)
     expect(res.body.status).toBe('draining')

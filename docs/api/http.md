@@ -28,6 +28,8 @@ class Application {
   /** The URL of a named route ('Controller.method'), params filled. */
   urlFor(name: RouteName, params?, query?): string
 
+  /** 'idle' | 'starting' | 'ready' | 'draining' | 'stopped' — read .value, or watch() it. */
+  readonly status: ComputedRef<AppStatus>
   readonly isDraining: boolean
   readonly inFlightRequests: number
 

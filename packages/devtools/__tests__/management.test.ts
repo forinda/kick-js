@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AddressInfo } from 'node:net'
 import { Application, Container, type AppAdapter, type KickServer } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
+import { getActiveDevtoolsBus } from '@forinda/kickjs-devtools-kit/bus/token'
 
 let app: Application | undefined
 afterEach(async () => {
@@ -40,7 +41,16 @@ describe('DevTools on the management port', () => {
     const at = (server: KickServer | undefined) =>
       `http://127.0.0.1:${(server!.address() as AddressInfo).port}/_debug/health`
 
-    expect((await fetch(at(seen.management))).status).toBe(200)
+    const health = await fetch(at(seen.management))
+    expect(health.status).toBe(200)
+    expect(await health.json()).toMatchObject({ app: 'ready' })
     expect((await fetch(at(seen.server))).status).toBe(404)
+
+    // The dashboard hears the app's status change as it happens.
+    const heard: unknown[] = []
+    getActiveDevtoolsBus()!.on('app:status', (payload) => heard.push(payload))
+    await app.shutdown()
+    app = undefined
+    expect(heard).toContainEqual({ status: 'draining' })
   })
 })
