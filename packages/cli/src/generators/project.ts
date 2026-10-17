@@ -312,7 +312,15 @@ export async function newerCliRelease(): Promise<string | null> {
       timeout: 5000,
     }),
   )
-  return latest && !baseVersionGte(cliVersion, latest) ? latest : null
+  return latest && isBehind(cliVersion, latest) ? latest : null
+}
+
+/** Whether `current` is an older release than `latest` — a prerelease is behind its stable. */
+export function isBehind(current: string, latest: string): boolean {
+  if (current.split('-')[0] === latest.split('-')[0]) {
+    return current.includes('-') && !latest.includes('-')
+  }
+  return !baseVersionGte(current, latest)
 }
 
 function tagExportsSubpath(name: string, tag: string, subpath: string): boolean {

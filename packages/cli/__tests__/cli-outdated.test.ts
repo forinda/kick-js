@@ -8,7 +8,7 @@ vi.mock('../src/utils/shell', async (importOriginal) => ({
   captureCommandAsync: (...args: unknown[]) => capture(...args),
 }))
 
-const { cliVersion, newerCliRelease } = await import('../src/generators/project')
+const { cliVersion, isBehind, newerCliRelease } = await import('../src/generators/project')
 const [major] = cliVersion.split('.').map(Number)
 
 describe('newerCliRelease', () => {
@@ -24,5 +24,13 @@ describe('newerCliRelease', () => {
     expect(await newerCliRelease()).toBeNull()
     capture.mockResolvedValue(null)
     expect(await newerCliRelease()).toBeNull()
+  })
+
+  it('orders releases, a prerelease behind its stable', () => {
+    expect(isBehind('8.13.1', '8.14.0')).toBe(true)
+    expect(isBehind('8.14.0-rc.1', '8.14.0')).toBe(true)
+    expect(isBehind('8.14.0', '8.14.0')).toBe(false)
+    expect(isBehind('8.14.0', '8.14.0-rc.1')).toBe(false)
+    expect(isBehind('9.0.0-alpha.1', '8.14.0')).toBe(false)
   })
 })

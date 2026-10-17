@@ -147,7 +147,8 @@ export function registerInitCommand(program: Command): void {
       // Before the template list, which an old CLI shows short. Never waits long.
       if (!yes) {
         warnIfOutdated(
-          await Promise.race([newer, new Promise<null>((r) => setTimeout(r, 3000, null))]),
+          // unref: a lookup that wins the race leaves no timer holding the process open.
+          await Promise.race([newer, new Promise<null>((r) => setTimeout(r, 3000, null).unref())]),
         )
       }
       let template = opts.template
