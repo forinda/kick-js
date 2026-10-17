@@ -1059,12 +1059,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     const registerResourceProvider = (provider: McpResourceProvider): void => {
       const taken = new Set(
-        [...resourceProviders.values()]
-          .filter((p) => p.name !== provider.name)
-          .flatMap((p) => [
-            ...(p.resources ?? []).map((r: McpResource) => r.uri),
-            ...(p.templates ?? []).map((t: McpResourceTemplate) => t.uriTemplate),
-          ]),
+        [...resourceProviders.values()].flatMap((p) =>
+          p.name === provider.name
+            ? []
+            : [
+                ...(p.resources ?? []).map((r: McpResource) => r.uri),
+                ...(p.templates ?? []).map((t: McpResourceTemplate) => t.uriTemplate),
+              ],
+        ),
       )
       for (const key of [
         ...(provider.resources ?? []).map((r) => r.uri),

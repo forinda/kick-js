@@ -20,6 +20,7 @@
     "eslint/no-shadow": "off",
     "typescript/no-extraneous-class": "off",
     "oxc/no-async-endpoint-handlers": "off",
+    "oxc/no-map-spread": "off",
     "unicorn/consistent-function-scoping": "off"
   },
   "env": {

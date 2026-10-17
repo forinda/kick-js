@@ -371,10 +371,10 @@ describe.each(RUNTIMES)('tus on %s', (_name, runtime) => {
   })
 
   it('serves an upload as the type onCreate chose, never as the client declared it', async () => {
-    const TYPES = ['image/png', 'text/plain']
+    const TYPES = new Set(['image/png', 'text/plain'])
     const { agent, files, completed } = await boot(runtime, {
       onCreate: ({ metadata }) =>
-        TYPES.includes(metadata.filetype) ? { contentType: metadata.filetype } : {},
+        TYPES.has(metadata.filetype) ? { contentType: metadata.filetype } : {},
     })
     const upload = async (filetype: string) => {
       const { headers } = await agent
