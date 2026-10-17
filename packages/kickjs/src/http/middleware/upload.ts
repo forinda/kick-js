@@ -210,6 +210,7 @@ function bothConventions(handler: RequestHandler): RequestHandler {
 function capBody(mw: RequestHandler, limit: number): RequestHandler {
   return (req, res, next) => {
     if (Number(req.headers['content-length']) > limit) return next(tooLarge(limit))
+    if (typeof req.pipe !== 'function') return mw(req, res, next)
     const pipe = req.pipe.bind(req)
     // multer reads the request with `req.pipe(busboy)`; count what passes.
     req.pipe = (<T extends NodeJS.WritableStream>(destination: T): T => {
