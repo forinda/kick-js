@@ -14,6 +14,7 @@ import { registerRunCommands } from '../commands/run'
 import { registerInfoCommand } from '../commands/info'
 import { registerInspectCommand } from '../commands/inspect'
 import { registerAddCommand, registerListCommand } from '../commands/add'
+import { registerRuntimeCommand } from '../commands/runtime'
 import { registerExplainCommand } from '../commands/explain'
 import { registerMcpCommand } from '../commands/mcp'
 import { registerTinkerCommand } from '../commands/tinker'
@@ -45,6 +46,7 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/info', register: registerInfoCommand }),
   defineCliPlugin({ name: 'kick/inspect', register: registerInspectCommand }),
   defineCliPlugin({ name: 'kick/add', register: registerAddCommand }),
+  defineCliPlugin({ name: 'kick/runtime-swap', register: registerRuntimeCommand }),
   defineCliPlugin({ name: 'kick/list', register: registerListCommand }),
   defineCliPlugin({ name: 'kick/explain', register: registerExplainCommand }),
   defineCliPlugin({ name: 'kick/mcp', register: registerMcpCommand }),

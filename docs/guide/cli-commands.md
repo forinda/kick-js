@@ -612,6 +612,34 @@ The "nearest ancestor" climb means a workspace sub-package inherits the workspac
 | `--list`         | List packages (core only by default)                         |
 | `--all`          | When paired with `--list`, include the full optional catalog |
 
+## kick runtime
+
+Show the HTTP engine the app boots on, or move it to another one:
+
+```bash
+kick runtime            # HTTP runtime: express (kick.config.ts)
+kick runtime fastify    # move to Fastify
+kick runtime h3 --dry-run
+```
+
+Moving edits two files and the packages, and prints each change:
+
+- **The entry file** (`src/index.ts`): `runtime:` calls the new engine's factory, the old factory's import goes and the new one's comes in. Leaving Express removes `express.json()` from `middlewares`, since Fastify and h3 parse bodies themselves; arriving on Express adds it back.
+- **`kick.config.ts`:** `runtime: '<engine>'`.
+- **Packages:** the new engine's are installed, and when a route takes uploads, its multipart parser (`multer` and `@types/multer` on Express, `@fastify/multipart` on Fastify; h3 needs none). The old engine's packages and its parser are removed, unless code in `src/` still imports them.
+
+Code that uses the old engine directly, such as an `import … from 'express'` or `ctx.res`, isn't rewritten. It's listed with file and line for you to review. Options passed to the old runtime factory are reported too, since each engine takes its own. Then run `kick typegen` and your typecheck.
+
+The entry file and `kick.config.ts` must have no uncommitted changes, so the move is its own diff (`--force` overrides).
+
+| Flag             | Description                                              |
+| ---------------- | -------------------------------------------------------- |
+| `--dry-run`      | Print what would change, and change nothing              |
+| `--no-install`   | Edit the files only; leave packages to you               |
+| `--pm <manager>` | Package manager override                                 |
+| `--entry <file>` | Entry file (default: `src/index.ts`, then `src/main.ts`) |
+| `-f, --force`    | Edit files with uncommitted changes                      |
+
 ## kick generate (kick g)
 
 Generate code scaffolds. See the [Generators](./generators.md) page for full details.
