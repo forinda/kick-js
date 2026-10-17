@@ -114,6 +114,13 @@ rather than `false`, matching what every other consumer sees. The dashboard's Ro
 same values in a Flags column, so "why does this endpoint not require auth" is answerable from the
 route list instead of by reading the controller.
 
+The list covers everything the app serves except the dashboard itself: routes adapters add
+(`/metrics`, a webhook) are listed under the adapter's name with `"source": "adapter"`, and each
+route says which listener serves it, `"port": "app"` or `"management"`. The top-level `port` is
+where the dashboard is. With a [management port](./deployment.md#a-management-port), the Routes tab
+badges its routes `mgmt`; a route on the other port than the dashboard's can't be sent from the
+runner, which calls the dashboard's own origin.
+
 ### `GET /_debug/container`
 
 Shows all DI container registrations with their scope and instantiation status.

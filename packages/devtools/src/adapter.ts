@@ -682,26 +682,45 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             http.route('POST', joinBase(path), guarded(handler)),
         }
 
+        // Which listener serves the dashboard — the API runner can only call
+        // routes on that one.
+        const dashboardPort = options.management && management ? 'management' : 'app'
         router.get('/routes', (ctx: RequestContext) => {
-          // Each route's context-contributor chain, from what the app actually
-          // mounted — decorators, module, adapter and global, in execution order.
+          // Everything the app mounted, in order: controller routes with their
+          // context-contributor chain, routes adapters added, and which port
+          // serves each. The dashboard's own routes stay out.
           const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
           const mounted = kickApp?.getRoutes?.()
           if (!mounted) {
-            ctx.json({ routes })
+            ctx.json({ routes, port: dashboardPort })
             return
           }
-          const chains = new Map(
-            mounted.map((r) => [
-              `${r.method.toUpperCase()} ${r.controller}.${r.handler}`,
-              r.contributors,
-            ]),
+          const tracked = new Map(
+            routes.map((r) => [`${r.method} ${r.controller}.${r.handler}`, r]),
           )
           ctx.json({
-            routes: routes.map((r) => ({
-              ...r,
-              contributors: chains.get(`${r.method} ${r.controller}.${r.handler}`) ?? [],
-            })),
+            port: dashboardPort,
+            routes: mounted
+              .filter((r) => r.controller !== 'DevToolsAdapter')
+              .map((r) => {
+                const method = r.method.toUpperCase()
+                const known = tracked.get(`${method} ${r.controller}.${r.handler}`)
+                // Metadata is per handler; the path is per mount — one controller
+                // can be mounted under several prefixes.
+                return {
+                  ...(known ?? {
+                    method,
+                    controller: r.controller,
+                    handler: r.handler,
+                    middleware: [],
+                    flags: {},
+                  }),
+                  path: r.pattern,
+                  contributors: r.contributors,
+                  ...(r.source ? { source: r.source } : {}),
+                  ...(r.port ? { port: r.port } : {}),
+                }
+              }),
           })
         })
 

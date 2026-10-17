@@ -44,6 +44,9 @@ export interface TopologyApplicationLike {
       beforeValidation: boolean
       overrides: ReadonlyArray<{ source: string; label?: string }>
     }>
+    /** Absent on Applications older than the route inventory. */
+    source?: 'module' | 'adapter'
+    port?: 'app' | 'management'
   }>
   /**
    * Optional in older Application implementations — when present, returns

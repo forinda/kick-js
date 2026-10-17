@@ -283,7 +283,11 @@ export const rpc = {
         controller: string
         handler: string
         middleware: string[]
+        source?: 'module' | 'adapter'
+        port?: 'app' | 'management'
       }>
+      /** The port the dashboard is served on. */
+      port?: 'app' | 'management'
     }>('/routes'),
   /** DI container registrations with kind/scope/status/dependencies. */
   container: () =>

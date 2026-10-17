@@ -2,7 +2,15 @@
 import 'reflect-metadata'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AddressInfo } from 'node:net'
-import { Application, Container, type AppAdapter, type KickServer } from '@forinda/kickjs'
+import {
+  Application,
+  Container,
+  Controller,
+  Get,
+  type AppAdapter,
+  type KickServer,
+  type RequestContext,
+} from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { getActiveDevtoolsBus } from '@forinda/kickjs-devtools-kit/bus/token'
 
@@ -54,5 +62,111 @@ describe('DevTools on the management port', () => {
     // Through to the end: the bus stays open until 'stopped' has gone out.
     expect(heard).toEqual([{ status: 'draining' }, { status: 'stopped' }])
     expect(getActiveDevtoolsBus()).toBeUndefined()
+  })
+
+  it.each([
+    ['the app port', false, 'app'],
+    ['the management port', true, 'management'],
+  ] as const)(
+    'lists every route with its port when served on %s',
+    async (_where, onManagement, dashboard) => {
+      Container.reset()
+      let listener: KickServer | undefined
+      const probe: AppAdapter = {
+        name: 'Probe',
+        beforeMount({ http, management }) {
+          http.route('GET', '/probe', (ctx) => ctx.json({}))
+          management!.http.route('GET', '/internal', (ctx) => ctx.json({}))
+        },
+        afterStart({ server, management }) {
+          listener = onManagement ? management?.server : server
+        },
+      }
+      app = new Application({
+        modules: [],
+        adapters: [
+          DevToolsAdapter({
+            enabled: true,
+            secret: false,
+            management: onManagement,
+            runtime: { enabled: false },
+          }),
+          probe,
+        ],
+        port: 0,
+        management: { port: 0, host: '127.0.0.1' },
+      })
+      await app.start()
+      const res = await fetch(
+        `http://127.0.0.1:${(listener!.address() as AddressInfo).port}/_debug/routes`,
+      )
+      const body = (await res.json()) as {
+        port: string
+        routes: Array<{ path: string; controller: string; source?: string; port?: string }>
+      }
+
+      expect(body.port).toBe(dashboard)
+      const pick = ({ path, controller, source, port }: (typeof body.routes)[number]) => ({
+        path,
+        controller,
+        source,
+        port,
+      })
+      expect(body.routes.map(pick)).toEqual(
+        expect.arrayContaining([
+          { path: '/probe', controller: 'Probe', source: 'adapter', port: 'app' },
+          { path: '/internal', controller: 'Probe', source: 'adapter', port: 'management' },
+          {
+            path: '/health/live',
+            controller: 'HealthController',
+            source: 'module',
+            port: 'management',
+          },
+        ]),
+      )
+      // The dashboard's own routes stay out.
+      expect(body.routes.some((r) => r.controller === 'DevToolsAdapter')).toBe(false)
+    },
+  )
+
+  it('keeps each mount of a controller under its own path', async () => {
+    Container.reset()
+    @Controller()
+    class EchoController {
+      @Get('/echo')
+      echo(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+    let server: KickServer | undefined
+    app = new Application({
+      modules: [
+        {
+          routes: () => [
+            { path: '/v1', controller: EchoController },
+            { path: '/v2', controller: EchoController },
+          ],
+        } as never,
+      ],
+      adapters: [
+        DevToolsAdapter({ enabled: true, secret: false, runtime: { enabled: false } }),
+        {
+          name: 'Spy',
+          afterStart(ctx) {
+            server = ctx.server
+          },
+        },
+      ],
+      port: 0,
+    })
+    await app.start()
+    const res = await fetch(
+      `http://127.0.0.1:${(server!.address() as AddressInfo).port}/_debug/routes`,
+    )
+    const { routes } = (await res.json()) as { routes: Array<{ path: string; handler: string }> }
+    expect(routes.filter((r) => r.handler === 'echo').map((r) => r.path)).toEqual([
+      '/api/v1/v1/echo',
+      '/api/v1/v2/echo',
+    ])
   })
 })
