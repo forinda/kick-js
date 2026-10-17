@@ -223,6 +223,8 @@ export {
   resolveMimeTypes,
   buildUploadMiddleware,
   type UploadOptions,
+  type UploadedFile,
+  type UploadStorageEngine,
 } from './http/middleware/upload'
 
 // Trace Context (W3C traceparent propagation)

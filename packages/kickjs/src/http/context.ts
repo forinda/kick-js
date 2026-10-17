@@ -2,6 +2,7 @@
 import type { RouteName, UrlForArgs } from './url-for'
 import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
 import type { ConnectRequest as Request, ConnectNext as NextFunction } from './connect'
+import type { UploadedFile } from './middleware/upload-config'
 import { ROUTE_SLOT } from '../core/route-flag'
 import {
   isBigIntJsonError,
@@ -603,9 +604,9 @@ export class RequestContext<
    * File metadata is set by the upload middleware and shouldn't be
    * mutated downstream.
    */
-  get file(): Express.Multer.File | undefined {
+  get file(): UploadedFile | undefined {
     const f = this.req.file
-    return f ? makeReadOnlyProxy<Express.Multer.File>(f, this.req, 'file') : undefined
+    return f ? makeReadOnlyProxy<UploadedFile>(f, this.req, 'file') : undefined
   }
 
   /**
@@ -614,7 +615,7 @@ export class RequestContext<
    * that warns on `push`/`pop` and per-file mutation. Use
    * `ctx.req.files` if you genuinely need the mutable Express handle.
    */
-  get files(): Express.Multer.File[] | undefined {
+  get files(): UploadedFile[] | undefined {
     // multer's `Request['files']` is a union — array (mode: 'array' /
     // 'any') or `{ [fieldname]: File[] }` (mode: 'fields'). The
     // `@FileUpload({ mode: 'array' })` decorator only sets the array
@@ -624,7 +625,7 @@ export class RequestContext<
     // dictionary shape.
     const f = this.req.files
     if (!Array.isArray(f)) return undefined
-    return makeReadOnlyProxy<Express.Multer.File[]>(f, this.req, 'files')
+    return makeReadOnlyProxy<UploadedFile[]>(f, this.req, 'files')
   }
 
   // ── Metadata Store ──────────────────────────────────────────────────

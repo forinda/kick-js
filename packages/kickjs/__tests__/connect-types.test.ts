@@ -6,12 +6,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import express from 'express'
+import multer from 'multer'
 import type { NextFunction, Request, Response } from 'express'
 import type {
   AdapterMiddleware,
   ConnectHandler,
   ConnectMiddleware,
   MiddlewareEntry,
+  UploadOptions,
+  UploadedFile,
 } from '@forinda/kickjs'
 
 // Compile-time: checked by `pnpm typecheck` (tsconfig.typetests.json).
@@ -36,23 +39,36 @@ export const handler: ConnectHandler = (req, res, next) => {
   next()
 }
 export const adapterMw: AdapterMiddleware = { handler: expressTyped, phase: 'beforeRoutes' }
+// multer's own storage engines and files fit the upload types.
+export const storage: UploadOptions[] = [
+  { storage: multer.diskStorage({ destination: '/tmp' }) },
+  { storage: multer.memoryStorage() },
+]
+export const fromMulter = (file: Express.Multer.File): UploadedFile => file
 
 const dist = join(import.meta.dirname, '..', 'dist')
 
 describe('published typings', () => {
   // CI builds before testing; an unbuilt checkout has nothing to look at.
-  it.skipIf(!existsSync(dist))("don't import express outside @forinda/kickjs/express", () => {
-    const offenders: string[] = []
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name)
-        if (entry.isDirectory()) walk(path)
-        else if (path.endsWith('.d.mts') && /from "express"/.test(readFileSync(path, 'utf8'))) {
-          offenders.push(path.slice(dist.length + 1))
+  it.skipIf(!existsSync(dist))(
+    "don't need express or multer outside @forinda/kickjs/express",
+    () => {
+      const offenders: string[] = []
+      const walk = (dir: string) => {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const path = join(dir, entry.name)
+          if (entry.isDirectory()) walk(path)
+          else if (
+            path.endsWith('.d.mts') &&
+            // An import, or a global namespace @types/express / @types/multer declares.
+            /from "(express|multer)"|\bExpress\.[A-Z]/.test(readFileSync(path, 'utf8'))
+          ) {
+            offenders.push(path.slice(dist.length + 1))
+          }
         }
       }
-    }
-    walk(dist)
-    expect(offenders).toEqual(['http/runtimes/express.d.mts'])
-  })
+      walk(dist)
+      expect(offenders).toEqual(['http/runtimes/express.d.mts'])
+    },
+  )
 })

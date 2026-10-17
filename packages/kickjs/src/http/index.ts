@@ -126,6 +126,8 @@ export {
   resolveMimeTypes,
   buildUploadMiddleware,
   type UploadOptions,
+  type UploadedFile,
+  type UploadStorageEngine,
 } from './middleware/upload'
 
 // Query String Parsing
