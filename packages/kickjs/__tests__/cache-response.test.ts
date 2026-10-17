@@ -5,6 +5,7 @@ import { fastifyRuntime } from '../src/http/runtimes/fastify'
 import { h3Runtime } from '../src/http/runtimes/h3'
 import {
   Application,
+  CacheEvict,
   CacheResponse,
   Container,
   Controller,
@@ -34,9 +35,10 @@ for (const [name, runtime] of RUNTIMES)
       version = 1
     })
 
-    async function boot(controller: new () => unknown) {
+    async function boot(controller: new () => unknown, middlewares: unknown[] = []) {
       const app = new Application({
         runtime: runtime(),
+        middlewares: middlewares as never,
         modules: [{ routes: () => ({ path: '/c', controller }) } as never],
       })
       await app.setup()
@@ -197,5 +199,102 @@ for (const [name, runtime] of RUNTIMES)
       expect(responses.map((r) => r.status)).toEqual([200, 200, 200])
       expect(responses.map((r) => r.body)).toEqual([{ version: 1 }, { version: 1 }, { version: 1 }])
       expect(loads).toBe(1)
+    })
+
+    it('a key function decides the key, even for a signed-in request; null skips the cache', async () => {
+      @Controller()
+      class C {
+        @CacheResponse({
+          maxAge: 60,
+          key: (ctx) => (ctx.query.fresh ? null : `tenant:${ctx.headers['x-tenant']}`),
+        })
+        @Get('/stats')
+        stats(ctx: RequestContext) {
+          loads++
+          ctx.json({ tenant: ctx.headers['x-tenant'] })
+        }
+      }
+      const http = await boot(C)
+
+      const auth = { Authorization: 'Bearer ann', 'X-Tenant': 'acme' }
+      await http.get('/api/v1/c/stats').set(auth).expect(200)
+      const again = await http.get('/api/v1/c/stats').set({ ...auth, Authorization: 'Bearer ben' })
+      expect(again.body).toEqual({ tenant: 'acme' })
+      await http.get('/api/v1/c/stats').set({ 'X-Tenant': 'globex' }).expect(200)
+      expect(loads).toBe(2)
+      await http.get('/api/v1/c/stats?fresh=1').set(auth).expect(200)
+      expect(loads).toBe(3)
+    })
+
+    it('keys on the host, skips an API key, and @CacheEvict clears a named prefix', async () => {
+      @Controller()
+      class C {
+        @CacheResponse({ maxAge: 60, key: 'products' })
+        @Get('/products')
+        list(ctx: RequestContext) {
+          loads++
+          ctx.json({ host: ctx.headers.host, version })
+        }
+        @CacheEvict('products')
+        @Get('/products/touch')
+        touch(ctx: RequestContext) {
+          ctx.json({ ok: true })
+        }
+      }
+      const http = await boot(C)
+
+      await http.get('/api/v1/c/products').set('Host', 'a.example').expect(200)
+      await http.get('/api/v1/c/products').set('Host', 'a.example').expect(200)
+      const b = await http.get('/api/v1/c/products').set('Host', 'b.example').expect(200)
+      expect(b.body.host).toBe('b.example')
+      expect(loads).toBe(2)
+
+      await http
+        .get('/api/v1/c/products')
+        .set('Host', 'a.example')
+        .set('X-Api-Key', 'k')
+        .expect(200)
+      expect(loads).toBe(3)
+
+      version = 2
+      await http.get('/api/v1/c/products/touch').expect(200)
+      const after = await http.get('/api/v1/c/products').set('Host', 'a.example').expect(200)
+      expect(after.body.version).toBe(2)
+    })
+
+    it('skips a request whose ctx.user is set, unless the route varies on a caller header', async () => {
+      @Controller()
+      class C {
+        @CacheResponse({ maxAge: 60 })
+        @Get('/me')
+        me(ctx: RequestContext) {
+          loads++
+          ctx.json({ id: (ctx.user as { id?: number } | undefined)?.id })
+        }
+      }
+      const signIn = (req: { user?: unknown }, _res: unknown, next: () => void) => {
+        req.user = { id: 7 }
+        next()
+      }
+      const http = await boot(C, [signIn])
+      await http.get('/api/v1/c/me').expect(200)
+      expect((await http.get('/api/v1/c/me').expect(200)).body).toEqual({ id: 7 })
+      expect(loads).toBe(2)
+    })
+
+    it('maxAge 0 without swr stores nothing', async () => {
+      @Controller()
+      class C {
+        @CacheResponse({ maxAge: 0 })
+        @Get('/now')
+        now(ctx: RequestContext) {
+          loads++
+          ctx.json({ loads })
+        }
+      }
+      const http = await boot(C)
+      await http.get('/api/v1/c/now').expect(200)
+      await http.get('/api/v1/c/now').expect(200)
+      expect(loads).toBe(2)
     })
   })

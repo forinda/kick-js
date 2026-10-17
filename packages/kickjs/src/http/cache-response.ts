@@ -30,14 +30,24 @@ export interface CacheResponseOptions {
   /**
    * Request headers that select a different response — `accept-language`, or
    * `authorization` for per-user responses. Their values are part of the key.
+   * Every header the handler reads belongs here.
    *
-   * A request carrying `authorization` or `cookie` skips the cache unless that
-   * header is listed here: cached under a shared key, one user's response would
-   * be served to another.
+   * A request that identifies its caller — `authorization`, `proxy-authorization`,
+   * `x-api-key`, a `cookie`, or a signed-in `ctx.user` — skips the cache unless
+   * that header is listed here: under a shared key, one user's response would
+   * reach another.
    */
   varies?: string[]
-  /** Key prefix. Default: `Controller.method`. */
-  key?: string
+  /**
+   * A string is the key prefix — `@CacheEvict(prefix)` clears the route's
+   * entries. Default: `kick:response:Controller.method`.
+   *
+   * A function decides the key per request, from the whole context — params,
+   * `ctx.get('tenant')`, `ctx.user`. It owns the decision: the caller check
+   * above doesn't apply, so include the user or tenant when the response
+   * depends on them. Return `null` to skip the cache for that request.
+   */
+  key?: string | ((ctx: RequestContext) => string | null)
 }
 
 /** What a handler sent, enough to send it again. */
@@ -59,7 +69,7 @@ interface Entry {
 const inFlight = new Map<string, Promise<Recorded | null>>()
 
 /** Headers that identify the caller: a request carrying one is never cached under a shared key. */
-const PERSONAL = ['authorization', 'cookie']
+const PERSONAL = ['authorization', 'proxy-authorization', 'x-api-key', 'cookie']
 
 export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
   const maxAgeMs = options.maxAge * 1000
@@ -69,19 +79,34 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
   return (target, propertyKey, descriptor: PropertyDescriptor) => {
     const original = descriptor.value as (ctx: RequestContext, ...rest: unknown[]) => unknown
     const owner = typeof target === 'function' ? target.name : target.constructor?.name
-    const prefix = options.key ?? `${owner ?? 'anonymous'}.${String(propertyKey)}`
+    const prefix =
+      typeof options.key === 'string'
+        ? options.key
+        : `kick:response:${owner ?? 'anonymous'}.${String(propertyKey)}`
+    const keyOf = typeof options.key === 'function' ? options.key : undefined
 
     descriptor.value = async function (this: unknown, ctx: RequestContext, ...rest: unknown[]) {
       const req = ctx.req as { method?: string; url?: string; originalUrl?: string }
       const method = String(req.method ?? 'GET').toUpperCase()
       const headers = ctx.headers as Record<string, string | string[] | undefined>
-      const personal = PERSONAL.some((h) => headers[h] !== undefined && !varies.includes(h))
-      if ((method !== 'GET' && method !== 'HEAD') || personal) {
+      if ((method !== 'GET' && method !== 'HEAD') || maxAgeMs + swrMs <= 0) {
         return original.call(this, ctx, ...rest)
       }
-
+      let identity: string
+      if (keyOf) {
+        const chosen = keyOf(ctx)
+        if (chosen === null) return original.call(this, ctx, ...rest)
+        identity = chosen
+      } else {
+        const personal =
+          PERSONAL.some((h) => headers[h] !== undefined && !varies.includes(h)) ||
+          (ctx.user !== undefined && !varies.some((h) => PERSONAL.includes(h)))
+        if (personal) return original.call(this, ctx, ...rest)
+        // The host too: one app serving several hosts answers each differently.
+        identity = `${hostname(headers.host)}${req.originalUrl ?? req.url ?? ''}`
+      }
       const varied = varies.map((h) => `${h}=${String(headers[h] ?? '')}`).join('&')
-      const key = `kick:response:${prefix}:${req.originalUrl ?? req.url ?? ''}|${varied}`
+      const key = `${prefix}:${identity}|${varied}`
       const provider = getCacheProvider()
       const build = () => buildOnce(key, () => record(original, this, ctx, rest))
       const store = async (recorded: Recorded | null) => {
@@ -109,6 +134,12 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
     }
     return descriptor
   }
+}
+
+/** The Host header without its port — `[::1]:3000` → `[::1]`. */
+function hostname(host: string | string[] | undefined): string {
+  const value = String(host ?? '').toLowerCase()
+  return value.startsWith('[') ? value.slice(0, value.indexOf(']') + 1) : value.split(':')[0]!
 }
 
 /** Concurrent misses on one key share a single build. */

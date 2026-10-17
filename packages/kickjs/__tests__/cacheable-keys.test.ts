@@ -107,3 +107,45 @@ describe('@Cacheable concurrent misses', () => {
     expect(calls).toBe(2)
   })
 })
+
+describe('cache keys from a function', () => {
+  it('@Cacheable and @CacheEvict compute the key from the arguments', async () => {
+    let loads = 0
+    class Products {
+      @Cacheable(60, { key: (id: string) => `product:${id}` })
+      async find(id: string) {
+        loads++
+        return { id, loads }
+      }
+
+      @CacheEvict((id: string) => `product:${id}`)
+      async update(_id: string) {}
+    }
+    const products = new Products()
+
+    await products.find('a')
+    await products.find('a')
+    await products.find('b')
+    expect(loads).toBe(2)
+    expect(await provider.get('product:a')).toEqual({ id: 'a', loads: 1 })
+
+    await products.update('a')
+    expect(await provider.get('product:a')).toBeNull()
+    expect(await provider.get('product:b')).not.toBeNull()
+    await products.find('a')
+    expect(loads).toBe(3)
+  })
+
+  it('a ttl of 0 stores nothing', async () => {
+    let loads = 0
+    class S {
+      @Cacheable(0)
+      async load() {
+        return ++loads
+      }
+    }
+    const s = new S()
+    expect(await s.load()).toBe(1)
+    expect(await s.load()).toBe(2)
+  })
+})
