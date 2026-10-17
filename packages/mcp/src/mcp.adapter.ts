@@ -1059,12 +1059,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
     const registerResourceProvider = (provider: McpResourceProvider): void => {
       const taken = new Set(
-        [...resourceProviders.values()]
-          .filter((p) => p.name !== provider.name)
-          .flatMap((p) => [
-            ...(p.resources ?? []).map((r: McpResource) => r.uri),
-            ...(p.templates ?? []).map((t: McpResourceTemplate) => t.uriTemplate),
-          ]),
+        [...resourceProviders.values()].flatMap((p) =>
+          p.name === provider.name
+            ? []
+            : [
+                ...(p.resources ?? []).map((r: McpResource) => r.uri),
+                ...(p.templates ?? []).map((t: McpResourceTemplate) => t.uriTemplate),
+              ],
+        ),
       )
       for (const key of [
         ...(provider.resources ?? []).map((r) => r.uri),
@@ -1092,10 +1094,11 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
      * dispatches calls through the HTTP pipeline, where the route's own
      * validation checks the arguments.
      *
-     * Uses the SDK's low-level `Server` (marked deprecated only in favour of
-     * `McpServer` for simple cases): `McpServer.registerTool` accepts Zod
-     * schemas only, and tools here carry JSON Schema built from any schema
-     * library.
+     * Uses the SDK's low-level `Server`, which it deprecates for everything
+     * but advanced use. This is one: what `tools/list` and `resources/list`
+     * return, and what `tools/call` accepts, depends on the caller (a tool
+     * they can't see answers like one that doesn't exist). `McpServer` keeps
+     * one global registry and installs its own handlers for these methods.
      */
     const buildMcpServer = (): Server => {
       const server = new Server(
