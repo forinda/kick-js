@@ -179,6 +179,30 @@ describe('management port details', () => {
     expect(closed[0]).not.toBe(closed[1])
   })
 
+  it('closes the management listener when startup fails after it opened', async () => {
+    Container.reset()
+    let management: KickServer | undefined
+    const failing = new Application({
+      modules: [],
+      adapters: [{ name: 'Spy', afterStart: ({ management: m }) => void (management = m!.server) }],
+      plugins: [
+        {
+          name: 'Broken',
+          onReady: async () => {
+            throw new Error('not ready')
+          },
+        },
+      ],
+      runtime: h3Runtime(),
+      port: 0,
+      management: { port: 0, host: '127.0.0.1' },
+    })
+    await expect(failing.start()).rejects.toThrow('not ready')
+    expect(management).toBeDefined()
+    expect(management!.listening).toBe(false)
+    await failing.shutdown()
+  })
+
   const hasOpenssl = (() => {
     try {
       execFileSync('openssl', ['version'], { stdio: 'ignore' })

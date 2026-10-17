@@ -1878,6 +1878,20 @@ export class Application {
 
     if (this.managementApp && management) await this.listenManagement(management)
 
+    try {
+      await this.listenAndFinishStartup(port, serverOptions)
+    } catch (err) {
+      // A failed startup leaves no listener behind to keep the process up.
+      await this.closeManagementServer()
+      throw err
+    }
+  }
+
+  /** Listen on the public port, then run afterStart and onReady. */
+  private async listenAndFinishStartup(
+    port: number,
+    serverOptions: ApplicationOptions['server'],
+  ): Promise<void> {
     // Wrap listen in a Promise so afterStart/onReady errors propagate
     await new Promise<void>((resolve, reject) => {
       this.httpServer!.listen(port, async () => {
@@ -1914,7 +1928,17 @@ export class Application {
     })
   }
 
-  /** The management listener: plain HTTP, on its own port, before the public one. */
+  private async closeManagementServer(): Promise<void> {
+    const server = this.managementServer
+    if (!server) return
+    this.managementServer = null
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve())
+      server.closeAllConnections()
+    })
+  }
+
+  /** The management listener: on its own port, before the public one; HTTPS with `tls`. */
   private async listenManagement(options: ManagementOptions): Promise<void> {
     const handler = this.runtime.nodeHandler(this.managementApp!)
     if (options.tls) assertUsableTls(options.tls)
@@ -2200,14 +2224,7 @@ export class Application {
       await this.loopback?.close()
       this.loopback = undefined
       // Last: probes kept answering (readiness 503) while the public port drained.
-      if (closeServer && this.managementServer) {
-        const server = this.managementServer
-        this.managementServer = null
-        await new Promise<void>((resolve) => {
-          server.close(() => resolve())
-          server.closeAllConnections()
-        })
-      }
+      if (closeServer) await this.closeManagementServer()
       // The adapters are shut down: stop routing reports to them. A reload
       // keeps the same adapters, so it keeps them observing.
       if (closeServer) releaseObservers(this.observers)
