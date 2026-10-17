@@ -351,7 +351,7 @@ Each file object follows the standard Multer file shape: `originalname`, `filena
 
 Every file carries two names, on every runtime:
 
-- **`filename`** is the server-side name: a random UUID plus the client name's extension when it is a plain one (`3f2b9c1e-….png`). Use it as the storage key or the file name on disk. With `dest` (disk storage, Express), it is the name the file was written under.
+- **`filename`** is the server-side name: a random UUID plus the client name's extension when that extension names the file's type (`3f2b9c1e-….png` for `photo.png` sent as `image/png`). A mismatched one is dropped: `evil.html` sent as `image/png` is stored without an extension, so it can't later be served as HTML. Use it as the storage key or the file name on disk. With `dest` (disk storage, Express), it is the name the file was written under.
 - **`originalname`** is the name the client sent, made safe to show: Unicode NFC (so `é` typed two ways compares equal), without a directory part (`C:\fakepath\photo.png` becomes `photo.png`), and without control characters. Chinese, Arabic, emoji and the rest arrive intact. It is still the client's choice, so display it, but never build a path from it.
 
 ```ts

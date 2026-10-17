@@ -85,6 +85,12 @@ for (const [name, runtime] of RUNTIMES)
       expect(png.body.filename).toMatch(new RegExp(`${UUID.source}\\.png$`))
       const odd = await http.post('/api/v1/u/one').attach('file', Buffer.from('x'), 'notes.t x t')
       expect(odd.body.filename).toMatch(new RegExp(`${UUID.source}$`))
+      // An extension that doesn't name the declared type is dropped, not kept.
+      const evil = await http.post('/api/v1/u/one').attach('file', Buffer.from('<script>'), {
+        filename: 'evil.html',
+        contentType: 'image/png',
+      })
+      expect(evil.body.filename).toMatch(new RegExp(`${UUID.source}$`))
     })
 
     it('names each file in an array upload', async () => {

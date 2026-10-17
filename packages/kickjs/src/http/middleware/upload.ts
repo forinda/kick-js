@@ -103,7 +103,7 @@ function translateMulterErrors(
       }
       if (!err) {
         try {
-          nameUploads(req as { file?: unknown; files?: unknown }, options.rename)
+          nameUploads(req as { file?: unknown; files?: unknown }, options)
         } catch (error) {
           return next(error as never)
         }
@@ -117,12 +117,12 @@ function translateMulterErrors(
  * The names every engine gives an upload: the client's name normalized, and a
  * server-side `filename` — kept when disk storage already wrote the file under one.
  */
-function nameUploads(req: { file?: unknown; files?: unknown }, rename: UploadOptions['rename']) {
+function nameUploads(req: { file?: unknown; files?: unknown }, options: UploadOptions) {
   const files = [req.file, ...(Array.isArray(req.files) ? req.files : [])]
   for (const file of files as Array<UploadedFile | undefined>) {
     if (!file) continue
     file.originalname = normalizeOriginalName(file.originalname)
-    file.filename ??= serverFileName(file, rename)
+    file.filename ??= serverFileName(file, options)
   }
 }
 

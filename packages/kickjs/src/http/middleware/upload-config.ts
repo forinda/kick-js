@@ -156,23 +156,37 @@ export function normalizeOriginalName(name: string): string {
   return base.replace(/[\u0000-\u001f\u007f]/g, '').trim()
 }
 
-/** `report.PDF` → `.pdf`; nothing when the extension isn't plain `[a-z0-9]`. */
-function plainExtension(name: string): string {
+/**
+ * The client name's extension, kept only when it names the file's own type:
+ * `photo.PNG` sent as `image/png` → `.png`. `evil.html` sent as `image/png`
+ * gets none — an extension the type check never saw must not decide how the
+ * stored file is later served.
+ */
+function matchingExtension(
+  name: string,
+  mimetype: string,
+  customMimeMap?: Record<string, string>,
+): string {
   const dot = name.lastIndexOf('.')
   if (dot <= 0) return ''
   const ext = name.slice(dot + 1).toLowerCase()
-  return /^[a-z0-9]{1,16}$/.test(ext) ? `.${ext}` : ''
+  const type = mimetype.split(';')[0]!.trim().toLowerCase()
+  return (customMimeMap?.[ext] ?? MIME_MAP[ext]) === type ? `.${ext}` : ''
 }
 
 /**
  * The server-side name for an upload: `rename`'s, checked, or a random UUID
- * plus the client name's plain extension.
+ * plus the extension of the file's type when the client name carries it.
  */
 export function serverFileName(
   file: { originalname: string; mimetype: string; fieldname: string; size: number },
-  rename?: BaseUploadOptions['rename'],
+  options: Pick<BaseUploadOptions, 'rename' | 'customMimeMap'> = {},
 ): string {
-  if (!rename) return `${globalThis.crypto.randomUUID()}${plainExtension(file.originalname)}`
+  const { rename, customMimeMap } = options
+  if (!rename) {
+    const ext = matchingExtension(file.originalname, file.mimetype, customMimeMap)
+    return `${globalThis.crypto.randomUUID()}${ext}`
+  }
   const name = rename(file)
   if (
     typeof name !== 'string' ||
@@ -252,7 +266,7 @@ export function applyUploadConfig(
     }
     return {
       ...named,
-      filename: serverFileName(named, config.rename),
+      filename: serverFileName(named, config),
       encoding: '7bit',
       buffer: p.buffer,
     }

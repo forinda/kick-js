@@ -296,8 +296,8 @@ export interface BaseUploadOptions {
   customMimeMap?: Record<string, string>
   /**
    * The file's server-side name, `file.filename`, from what the client sent.
-   * Default: a random UUID plus the client name's extension when it is a plain
-   * one (`3f2b….png`) — never the client's name itself. The result must not
+   * Default: a random UUID plus the client name's extension when it names the
+   * file's type (`3f2b….png`) — never the client's name itself. The result must not
    * contain a slash or backslash, nor be `.` or `..`. Disk storage (`dest`) keeps the name
    * it wrote the file under.
    */
