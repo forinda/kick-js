@@ -1,726 +1,206 @@
 # Contributing to KickJS
 
-🎉 Thank you for your interest in contributing to KickJS! We welcome contributions from developers of all skill levels and backgrounds.
+Thanks for helping make KickJS better. Bug reports, fixes, docs and features are
+all welcome, from anyone. This guide covers setting up the repo, the checks a
+change needs, and how a pull request lands.
 
-## 📋 Table of Contents
+- [Code of conduct](#code-of-conduct)
+- [Setup](#setup)
+- [The repository](#the-repository)
+- [Making a change](#making-a-change)
+- [Checks](#checks)
+- [Code style](#code-style)
+- [Tests](#tests)
+- [Docs](#docs)
+- [Pull requests](#pull-requests)
+- [Releases](#releases)
+- [Issues and questions](#issues-and-questions)
 
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [Project Structure](#project-structure)
-- [Development Workflow](#development-workflow)
-- [Coding Standards](#coding-standards)
-- [Testing Guidelines](#testing-guidelines)
-- [Documentation](#documentation)
-- [Pull Request Process](#pull-request-process)
-- [Issue Reporting](#issue-reporting)
-- [Feature Requests](#feature-requests)
-- [Release Process](#release-process)
-- [Community](#community)
+## Code of conduct
 
-## 🤝 Code of Conduct
+Be welcoming and respectful: assume good faith, take criticism of your code
+gracefully, and keep discussion about the work. Harassment, insults, sexualized
+language or imagery, and publishing someone's private information are not
+tolerated. Report conduct problems to the maintainers by
+[opening an issue](https://github.com/forinda/kick-js/issues), or privately
+through a maintainer's GitHub profile.
 
-We are committed to providing a welcoming and inclusive environment for everyone. By participating in this project, you agree to abide by our Code of Conduct:
+## Setup
 
-### Our Standards
-
-**Positive behavior includes:**
-
-- Using welcoming and inclusive language
-- Being respectful of differing viewpoints and experiences
-- Gracefully accepting constructive criticism
-- Focusing on what is best for the community
-- Showing empathy towards other community members
-
-**Unacceptable behavior includes:**
-
-- The use of sexualized language or imagery
-- Trolling, insulting/derogatory comments, and personal or political attacks
-- Public or private harassment
-- Publishing others' private information without explicit permission
-- Other conduct which could reasonably be considered inappropriate in a professional setting
-
-### Enforcement
-
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers at [the project maintainers via GitHub Issues](https://github.com/forinda/kick-js/issues). All complaints will be reviewed and investigated promptly and fairly.
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-Before contributing, ensure you have:
-
-- **Node.js** (version 18 or higher)
-- **pnpm** (preferred package manager)
-- **Git** for version control
-- **TypeScript** knowledge
-- **Express.js** familiarity
-
-### Quick Start
-
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
-   ```bash
-   git clone https://github.com/<your-username>/kick-js.git
-   cd kick-js
-   ```
-3. **Add upstream remote**:
-   ```bash
-   git remote add upstream https://github.com/forinda/kick-js.git
-   ```
-4. **Install dependencies**:
-   ```bash
-   pnpm install
-   ```
-5. **Run tests** to ensure everything works:
-   ```bash
-   pnpm test
-   ```
-
-## 💻 Development Setup
-
-### Environment Setup
-
-1. **Install dependencies**:
-
-   ```bash
-   pnpm install
-   ```
-
-2. **Build the project**:
-
-   ```bash
-   pnpm build
-   ```
-
-3. **Run development server**:
-
-   ```bash
-   pnpm dev
-   ```
-
-4. **Run tests**:
-   ```bash
-   pnpm test
-   pnpm test:watch  # Watch mode
-   pnpm test:coverage  # With coverage
-   ```
-
-### Development Scripts
+You need **Node.js 20 or newer** (CI runs 24), **pnpm**, and Git.
 
 ```bash
-# Development
-pnpm dev                 # Start development server with hot reload
-pnpm dev:examples        # Run example applications
+git clone https://github.com/<your-username>/kick-js.git
+cd kick-js
+git remote add upstream https://github.com/forinda/kick-js.git
+pnpm install
+pnpm build
+pnpm test
+```
 
-# Building
-pnpm build              # Build the library
-pnpm build:watch        # Build in watch mode
+`pnpm install` also installs the git hooks (lefthook): every commit runs the
+formatter check, oxlint and the token lint on the staged files. Builds and the
+full test suite run in CI, not on commit.
 
-# Testing
-pnpm test               # Run all tests
-pnpm test:watch         # Run tests in watch mode
-pnpm test:coverage      # Run tests with coverage report
-pnpm test:e2e           # Run end-to-end tests
+## The repository
 
-# Code Quality
-pnpm lint               # oxlint over packages/
-pnpm lint:fix           # oxlint --fix
-pnpm typecheck          # tsc (TypeScript 7, native) across packages (turbo)
-pnpm format             # oxfmt --write (repo standard; no ESLint/Prettier)
+A pnpm + Turbo monorepo. Every package under `packages/` publishes as
+`@forinda/kickjs-*`, except the private ones.
+
+```
+packages/
+  kickjs/     the framework: DI wiring, HTTP layer, RequestContext, runtimes
+              (Express / Fastify / h3), the web entry (@forinda/kickjs/web)
+  cli/        kick new, generators, typegen, kick add / doctor
+  di/ schema/ client/ vite/ swagger/ testing/ devtools/ db/ …
+  <pkg>/__tests__/   that package's tests
+__tests__/    root integration tests
+docs/         the VitePress site (kickjs.app)
+scripts/      the scaffold matrix, benchmarks, bundle-size and Bun smoke checks
 ```
 
 Runnable example apps live in
-[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive) —
-clone that repo to run them; `examples/` here holds test fixtures only.
+[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive),
+not here. Create them with the CLI (`kick new`, `kick g module`) — a scaffold
+that fails is a CLI bug to fix first.
 
-## 📁 Project Structure
+[`.agents/AGENTS.md`](./.agents/AGENTS.md) goes deeper: where things live, how
+to add a middleware, a package or an adapter, and the conventions the codebase
+follows. It's written for AI coding agents and reads fine for people too.
 
-Understanding the project structure will help you navigate and contribute effectively:
+## Making a change
 
-```
-kick-js/                          # pnpm + Turbo monorepo
-├── packages/
-│   ├── kickjs/                   # THE framework (DI core, http, runtimes, /web entry)
-│   ├── cli/                      # kick new / generators / typegen
-│   ├── client/                   # typed fetch client (frontend)
-│   ├── vite/ schema/ swagger/ testing/ …   # the rest of the @forinda/kickjs* family
-│   └── <pkg>/__tests__/          # per-package tests (vitest)
-├── __tests__/                    # root integration tests
-├── examples/                     # test fixtures only (apps → kickjs-examples-archive)
-├── docs/                         # VitePress site (kickjs.app)
-└── CLAUDE.md / .agents/          # AI agent context
-```
+1. Branch from an up-to-date `main`:
 
-### Key Directories
+   ```bash
+   git checkout main && git pull upstream main
+   git checkout -b fix/route-prefix
+   ```
 
-- **`src/core/`**: Contains the main framework logic
-- **`src/core/decorators/`**: All framework decorators (`@KickController`, `@KickMiddleware`, etc.)
-- **`src/core/types/`**: TypeScript interfaces and types
-- **`src/core/utils/`**: Utility functions and helpers
-- **`examples/`**: Working example applications demonstrating framework features
+   Name the branch by kind: `feat/`, `fix/`, `docs/`, `refactor/`, `chore/`,
+   `ci/`, `test/`.
 
-## 🔄 Development Workflow
+2. Make the change, with tests, and docs if users see it.
+3. Run the [checks](#checks) for what you touched.
+4. Add a changeset unless the change is docs, tests or CI only:
 
-### Branch Strategy
+   ```bash
+   pnpm changeset
+   ```
 
-We follow a **feature branch workflow**:
+   Pick each affected package and its bump, then describe the change the way a
+   user reads it in the changelog — what they can do now, not how it's built.
 
-1. **Long-lived branches**:
-   - `main`: Stable, production-ready code. Published as `latest` on npm.
-   - `dev`: Pre-release channel. Published as `alpha`/`beta` on npm.
+5. Commit with a [Conventional Commits](https://www.conventionalcommits.org/)
+   message, push, and open a pull request against `main`.
 
-2. **Feature branches** (auto-deleted after PR merge):
-   - `feat/feature-name`: New features
-   - `fix/bug-description`: Bug fixes
-   - `docs/documentation-update`: Documentation updates
-   - `chore/maintenance-task`: Maintenance, deps, CI
+## Checks
 
-### Release Channels
+| You changed                                 | Run                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------- |
+| Anything                                    | `pnpm build`, `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check` |
+| The CLI, a scaffold template or a generator | `pnpm build && pnpm scaffold:matrix <scenario>`                               |
+| A runtime, the web entry or the bundle      | `pnpm test:bundle-size`, `pnpm test:bun` (needs Bun)                          |
+| Token names (DI tokens, context keys)       | `pnpm lint:tokens`                                                            |
+| `packages/devtools`                         | `pnpm --filter @forinda/kickjs-devtools build:spa`, then `pnpm build`         |
+| Docs                                        | `pnpm docs:build` (fails on a dead link)                                      |
 
-Release is automated via [Changesets](https://github.com/changesets/changesets) + [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/). You add a changeset to your PR; the release workflow does the rest. See [RELEASE.md](./RELEASE.md) for the full flow.
+`pnpm format` fixes formatting; `pnpm lint:fix` fixes what oxlint can. Turbo
+caches builds and tests — `pnpm build:nocache` rebuilds everything.
 
-- **Adding a changeset**: `pnpm changeset` — prompts for affected packages + bump type per package + summary.
-- **Pre-release channels**: `pnpm release:enter:alpha` / `:beta` / `:rc` to enter a pre-release window; `pnpm release:exit:pre` to leave it. Subsequent merges produce versions like `1.5.0-alpha.0`, `1.5.0-alpha.1`, … with the matching npm dist-tag inferred automatically.
-- **Stable**: outside pre-release mode, merging the auto-opened "Version Packages" PR publishes with `latest`.
+### The scaffold matrix
 
-Versions are **per-package independent** — `@forinda/kickjs@5.3.0` may pair with `@forinda/kickjs-cli@5.2.1`. Each changeset picks its own bump per package.
-
-### Workflow Steps
-
-**Stable work (target: main):**
+`pnpm scaffold:matrix` checks what users actually get from `kick new`. For each
+scenario it scaffolds a project, installs it against this checkout's packages
+(packed with `pnpm pack`, as npm would ship them), runs `kick typegen` and
+`tsc`, builds it, starts it and requests its routes. Some scenarios also build
+for Netlify and Vercel, or build and run the Dockerfile.
 
 ```bash
-git checkout main && git pull origin main
-git checkout -b feat/amazing-feature
-# ... make changes, commit, push ...
-gh pr create --base main
+pnpm build                                     # the matrix packs the built packages
+pnpm scaffold:matrix                           # every scenario
+pnpm scaffold:matrix yes-default inertia       # just these
+node scripts/scaffold-matrix.mjs --list        # the scenarios
 ```
 
-**Experimental work (pre-release window):**
-
-```bash
-# 1. Enter pre-release mode (alpha, beta, or rc)
-pnpm release:enter:alpha
-git add .changeset/pre.json
-git commit -m "chore: enter alpha pre-release"
-git push
-
-# 2. Land PRs targeting main as usual; their changesets bump to
-#    1.5.0-alpha.0, 1.5.0-alpha.1, … with the alpha npm dist-tag.
-
-# 3. When ready for stable
-pnpm release:exit:pre
-git add .changeset/pre.json
-git commit -m "chore: exit pre-release"
-git push   # next merge bumps to 1.5.0 (latest)
-```
-
-There is no separate `dev` branch in this flow. Pre-release windows are explicit (`pnpm release:enter:<tag>`), and `release.yml` runs only on `main`. See [RELEASE.md](./RELEASE.md) for the full pre-release procedure.
-
-2. **Make your changes**:
-   - Write code following our standards
-   - Add tests for new functionality
-   - Update documentation as needed
-
-3. **Test your changes**:
-
-   ```bash
-   pnpm build              # Build framework packages
-   pnpm test               # Run package tests
-   pnpm format:check       # Check formatting
-   pnpm build:examples     # Verify examples still compile
-   ```
-
-   ::: warning
-   If you change any framework package (`packages/*`), always run `pnpm build:examples` before submitting your PR. Example apps depend on the framework packages — a breaking change in `@forinda/kickjs` can silently break examples that CI may not catch in every job.
-   :::
-
-4. **Commit your changes**:
-
-   ```bash
-   git add .
-   git commit -m "feat: add amazing new feature"
-   ```
-
-5. **Push and create PR**:
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-
-## 📝 Coding Standards
-
-### TypeScript Guidelines
-
-1. **Use strict TypeScript**:
-
-   ```typescript
-   // ✅ Good
-   interface User {
-     id: string
-     name: string
-     email: string
-   }
-
-   // ❌ Avoid
-   interface User {
-     id: any
-     name: any
-     email: any
-   }
-   ```
-
-2. **Prefer explicit types**:
-
-   ```typescript
-   // ✅ Good
-   function createUser(data: CreateUserDto): Promise<User> {
-     // implementation
-   }
-
-   // ❌ Avoid
-   function createUser(data: any): any {
-     // implementation
-   }
-   ```
-
-3. **Use meaningful names**:
-
-   ```typescript
-   // ✅ Good
-   const userRepository = new UserRepository()
-   const isEmailValid = validateEmail(email)
-
-   // ❌ Avoid
-   const repo = new UserRepository()
-   const valid = validateEmail(email)
-   ```
-
-### Decorator Guidelines
-
-1. **Follow naming conventions**:
-
-   ```typescript
-   // ✅ Framework decorators
-   @KickController("/users")
-   @KickMiddleware({ name: "Auth" })
-   @KickInjectable()
-
-   // ✅ Route decorators
-   @KickGet("/")
-   @KickPost("/")
-   ```
-
-2. **Provide comprehensive options**:
-
-   ```typescript
-   // ✅ Good - comprehensive options
-   @KickMiddleware({
-     name: "AuthMiddleware",
-     priority: 1,
-     global: false,
-     tags: ["auth", "security"]
-   })
-
-   // ❌ Avoid - minimal options
-   @KickMiddleware()
-   ```
-
-### Code Style
-
-1. **Use consistent formatting**:
-   - 2 spaces for indentation
-   - Single quotes for strings
-   - Trailing commas in objects/arrays
-   - Semicolons at statement ends
-
-2. **Follow ESLint rules**:
-
-   ```bash
-   pnpm lint        # Check for issues
-   pnpm lint:fix    # Auto-fix issues
-   ```
-
-3. **Use meaningful comments**:
-
-   ```typescript
-   /**
-    * Creates a new user with the provided data
-    * @param userData - The user data to create
-    * @returns Promise resolving to the created user
-    */
-   async createUser(userData: CreateUserDto): Promise<User> {
-     // Validate email format before creation
-     if (!this.isValidEmail(userData.email)) {
-       throw new ValidationError('Invalid email format');
-     }
-
-     return this.userRepository.create(userData);
-   }
-   ```
-
-## 🧪 Testing Guidelines
-
-### Test Structure
-
-We use **Vitest** for testing with the following structure:
-
-```
-tests/
-├── unit/                 # Unit tests
-├── integration/          # Integration tests
-├── e2e/                  # End-to-end tests
-└── fixtures/             # Test fixtures and mocks
-```
-
-### Writing Tests
-
-1. **Unit Tests** - Test individual functions/classes:
-
-   ```typescript
-   import { describe, it, expect } from 'vitest'
-   import { UserService } from '../src/services/user.service'
-
-   describe('UserService', () => {
-     it('should create a user successfully', async () => {
-       const userService = new UserService()
-       const userData = { name: 'John', email: 'john@example.com' }
-
-       const user = await userService.create(userData)
-
-       expect(user).toBeDefined()
-       expect(user.name).toBe('John')
-       expect(user.email).toBe('john@example.com')
-     })
-   })
-   ```
-
-2. **Integration Tests** - Test feature combinations:
-
-   ```typescript
-   import { describe, it, expect } from 'vitest'
-   import { createKickApp } from '../src'
-   import { TestModule } from './fixtures/test.module'
-
-   describe('KickApp Integration', () => {
-     it('should register controllers and middlewares', () => {
-       const server = createKickApp({
-         name: 'TestApp',
-         modules: [TestModule],
-       })
-
-       const stats = server.getStats()
-       expect(stats.controllersCount).toBeGreaterThan(0)
-       expect(stats.middlewaresCount).toBeGreaterThan(0)
-     })
-   })
-   ```
-
-3. **Test Naming Conventions**:
-   - Use descriptive test names
-   - Follow "should [expected behavior] when [condition]" pattern
-   - Group related tests with `describe` blocks
-
-### Test Coverage
-
-- Aim for **80%+ code coverage**
-- All new features must include tests
-- Bug fixes should include regression tests
-- Run coverage with: `pnpm test:coverage`
-
-## 📚 Documentation
-
-### Code Documentation
-
-1. **JSDoc Comments**:
-
-   ````typescript
-   /**
-    * Decorator to define a controller class with automatic route registration
-    * @param path - Base path for all routes in this controller
-    * @returns Class decorator function
-    * @example
-    * ```typescript
-    * @KickController('/users')
-    * export class UserController {
-    *   // controller methods
-    * }
-    * ```
-    */
-   export function KickController(path: string): ClassDecorator {
-     // implementation
-   }
-   ````
-
-2. **README Updates**:
-   - Update examples when adding new features
-   - Keep API documentation current
-   - Include migration guides for breaking changes
-
-3. **Inline Comments**:
-
-   ```typescript
-   // Extract middlewares from DI container after module loading
-   this.extractMiddlewaresFromContainer()
-
-   // Sort middleware by priority (lower numbers execute first)
-   const sortedMiddleware = middleware.sort((a, b) => {
-     const priorityA = getMiddlewarePriority(a)
-     const priorityB = getMiddlewarePriority(b)
-     return priorityA - priorityB
-   })
-   ```
-
-## 🔀 Pull Request Process
-
-### Before Submitting
-
-1. **Ensure your branch is up to date**:
-
-   ```bash
-   git checkout dev
-   git pull upstream dev
-   git checkout feature/your-feature
-   git rebase dev
-   ```
-
-2. **Run all checks**:
-
-   ```bash
-   pnpm test
-   pnpm lint
-   pnpm type-check
-   pnpm build
-   ```
-
-### PR Template
-
-Use this template for your pull requests:
-
-```markdown
-## Description
-
-Brief description of changes and motivation.
-
-## Type of Change
-
-- [ ] Bug fix (non-breaking change fixing an issue)
-- [ ] New feature (non-breaking change adding functionality)
-- [ ] Breaking change (fix or feature causing existing functionality to change)
-- [ ] Documentation update
-
-## Testing
-
-- [ ] Tests pass locally
-- [ ] Added tests for new functionality
-- [ ] Updated existing tests if needed
-
-## Documentation
-
-- [ ] Updated README if needed
-- [ ] Updated inline documentation
-- [ ] Added JSDoc comments for new functions
-
-## Checklist
-
-- [ ] Code follows project style guidelines
-- [ ] Self-review of code completed
-- [ ] Comments added for complex logic
-- [ ] No new warnings or errors introduced
-```
-
-### Review Process
-
-1. **Automated Checks**: All PRs run automated tests and linting
-2. **Code Review**: At least one maintainer reviews all PRs
-3. **Testing**: Reviewers test functionality manually if needed
-4. **Approval**: PRs need approval before merging
-5. **Merge**: Maintainers handle merging to preserve commit history
-
-## 🐛 Issue Reporting
-
-### Before Creating an Issue
-
-1. **Search existing issues** to avoid duplicates
-2. **Check latest version** - issue might be fixed
-3. **Review documentation** - might be usage issue
-
-### Bug Report Template
-
-````markdown
-**Bug Description**
-Clear description of the bug.
-
-**Steps to Reproduce**
-
-1. Step one
-2. Step two
-3. See error
-
-**Expected Behavior**
-What you expected to happen.
-
-**Actual Behavior**
-What actually happened.
-
-**Environment**
-
-- OS: [e.g., macOS 12.0]
-- Node.js: [e.g., 18.17.0]
-- KickJS: [e.g., 1.0.0]
-- TypeScript: [e.g., 5.0.0]
-
-**Additional Context**
-Any other relevant information.
-
-**Code Example**
-
-```typescript
-// Minimal reproduction code
-```
-````
-
-### Issue Labels
-
-We use labels to categorize issues:
-
-- `bug`: Something isn't working
-- `enhancement`: New feature or request
-- `documentation`: Documentation improvements
-- `good first issue`: Good for newcomers
-- `help wanted`: Extra attention needed
-- `priority:high`: Critical issues
-- `priority:medium`: Important issues
-- `priority:low`: Nice to have
-
-## 💡 Feature Requests
-
-### Proposing Features
-
-1. **Check existing issues** for similar requests
-2. **Consider scope**: Does it fit KickJS goals?
-3. **Provide use cases**: Real-world scenarios
-4. **Consider alternatives**: Other solutions you've tried
-
-### Feature Request Template
-
-````markdown
-**Feature Description**
-Clear description of the proposed feature.
-
-**Problem Statement**
-What problem does this solve?
-
-**Proposed Solution**
-How should this feature work?
-
-**Use Cases**
-Real-world scenarios where this would be useful.
-
-**Alternative Solutions**
-Other approaches you've considered.
-
-**Additional Context**
-Any other relevant information.
-
-**API Design** (if applicable)
-
-```typescript
-// Proposed API usage
-```
-````
-
-## 🚀 Release Process
-
-### Versioning
-
-We follow [Semantic Versioning](https://semver.org/):
-
-- **MAJOR** (1.0.0): Breaking changes
-- **MINOR** (0.1.0): New features (backward compatible)
-- **PATCH** (0.0.1): Bug fixes (backward compatible)
-
-### Release Steps
-
-1. **Update version** in `package.json`
-2. **Update CHANGELOG.md** with new features/fixes
-3. **Create release PR** targeting `main`
-4. **Tag release** after merging
-5. **Publish to npm** (automated via CI)
-
-### Commit Message Format
-
-We use [Conventional Commits](https://conventionalcommits.org/):
-
-```bash
-<type>(<scope>): <description>
-
-[optional body]
-
-[optional footer]
-```
-
-**Types:**
-
-- `feat`: New features
-- `fix`: Bug fixes
-- `docs`: Documentation changes
-- `refactor`: Code refactoring
-- `test`: Adding tests
-- `chore`: Maintenance tasks
-- `perf`: Performance improvements
-- `ci`: CI/CD changes
-
-**Examples:**
-
-```bash
-feat(decorators): add @KickMiddleware decorator with priority support
-fix(routing): resolve route prefix concatenation issue
-docs(readme): update installation instructions
-refactor(utils): extract route mapping to separate utility class
-test(middleware): add integration tests for middleware system
-```
-
-## 🌟 Community
-
-### Communication Channels
-
-- **GitHub Issues**: Bug reports and feature requests
-- **GitHub Discussions**: General questions and community chat
-- **Discord** (coming soon): Real-time community support
-- **Twitter**: [@KickJSFramework](https://twitter.com/KickJSFramework) - Updates and announcements
-
-### Getting Help
-
-1. **Documentation**: Check README and code comments
-2. **Examples**: Look at example applications
-3. **Issues**: Search existing GitHub issues
-4. **Discussions**: Ask questions in GitHub Discussions
-5. **Community**: Join our Discord for real-time help
-
-### Contributing to Community
-
-- **Answer questions** in GitHub Discussions
-- **Help review PRs** from other contributors
-- **Improve documentation** and examples
-- **Share your KickJS projects** with the community
-- **Write blog posts** or tutorials about KickJS
-
-### Recognition
-
-We value all contributions and recognize contributors through:
-
-- **Contributors list** in README
-- **Release notes** mentioning significant contributions
-- **Special badges** for consistent contributors
-- **Community highlights** for exceptional contributions
-
-## 🙏 Thank You
-
-Thank you for contributing to KickJS! Your efforts help make this framework better for everyone. Every contribution, no matter how small, is valuable and appreciated.
-
-**Happy coding!** 🚀
-
----
-
-_For questions about this contribution guide, please [open an issue](https://github.com/forinda/kick-js/issues) or reach out to the maintainers._
+Run it for any change to `packages/cli` — templates, generators, `kick add` —
+and for changes to a package a scaffold depends on in a way its unit tests
+don't show. Third-party packages come from the registry, so it needs a
+network connection; a full run takes a few minutes per scenario.
+
+In CI, pull requests that touch the CLI run the `yes-default` scenario, and
+every scenario runs daily.
+
+## Code style
+
+- **oxfmt** formats: no semicolons, single quotes, trailing commas, 100
+  columns. Not Prettier — it reformats unrelated lines.
+- **oxlint** lints, plus `pnpm lint:tokens` for the token naming conventions.
+- TypeScript is strict. Avoid `any` in public types; a cast at an internal
+  seam is fine with a comment saying why.
+- Comments say why, not what. Keep them true when the code changes.
+- Runtime code stays engine-neutral: write against `ctx` and the `ctx.http`
+  adapter surface, not Express's request and response, unless the file is the
+  Express runtime itself.
+
+## Tests
+
+Tests use **Vitest**: per package in `packages/<pkg>/__tests__/`, and the root
+`__tests__/` for integration tests across packages.
+
+- A bug fix comes with a test that fails without it.
+- A behaviour that differs by engine runs on all three — see the
+  `describe.each` over `expressRuntime()`, `fastifyRuntime()` and `h3Runtime()`
+  in existing tests.
+- Decorators register when a class is defined, so reset DI between tests:
+  `Container.reset()` in `beforeEach`.
+- `@forinda/kickjs-testing` has `createTestApp()` and `createTestModule()` for
+  booting an app in a test.
+
+Check Vitest's summary for a separate `Errors` line and the exit code, not only
+the `Tests` count: an unhandled error can fail a run whose tests all pass.
+
+## Docs
+
+The site lives in `docs/` and builds with `pnpm docs:build`; `pnpm docs:dev`
+serves it locally.
+
+- Change the docs in the same pull request as the behaviour.
+- Link between pages with relative links (`./middleware.md`), never absolute
+  site URLs — they break versioned and translated builds.
+- Write for the reader: what they can do and how, not how the code works.
+
+Design notes and plans stay out of the repository (in the git-ignored
+`.ignored/`), and nothing tracked — code comments, docs, changesets, pull
+requests — refers to them.
+
+## Pull requests
+
+The [pull request template](./.github/pull_request_template.md) carries the
+checklist. Keep a pull request to one change; a stack of small dependent pull
+requests reviews faster than one large one.
+
+CI runs formatting, oxlint, the token lint, typecheck, the tests, the build,
+Bun and Deno smoke tests and the bundle-size check, and the scaffold matrix's
+smoke scenario when the CLI changed. A maintainer reviews and merges.
+
+Commit messages have no `Co-Authored-By` trailer naming an AI assistant. A
+pull request description may say it was written with one.
+
+## Releases
+
+Releases are automated with [Changesets](https://github.com/changesets/changesets)
+and npm trusted publishing — you don't bump versions or edit changelogs by
+hand. Merging a pull request with a changeset into `main` updates a "Version
+Packages" pull request; merging that one publishes. Each package versions on
+its own, so `@forinda/kickjs@10.5.0` pairs with `@forinda/kickjs-cli@8.12.1`.
+[RELEASE.md](./RELEASE.md) covers pre-release channels and the publishing setup.
+
+## Issues and questions
+
+- **Bugs, features, docs:** [open an issue](https://github.com/forinda/kick-js/issues/new/choose)
+  from a template. A minimal reproduction gets a bug fixed fastest.
+- **Questions and ideas:** [GitHub Discussions](https://github.com/forinda/kick-js/discussions).
+- **Security vulnerabilities:** [report them privately](https://github.com/forinda/kick-js/security/advisories/new),
+  not in an issue.
+- Issues labelled `good first issue` are a good place to start.
