@@ -83,6 +83,30 @@ Behind a proxy or load balancer, set `bootstrap({ trustProxy })` so `ctx.ip` and
 - **Shutdown:** set `preStopDelay` to a few seconds (for example `5_000`). The app keeps serving while balancers and Kubernetes endpoints notice it is unready, then stops accepting connections and drains. Draining and the adapters' shutdown hooks each get up to `shutdownTimeout`, so keep the platform's grace period (`terminationGracePeriodSeconds`) above `preStopDelay` plus twice `shutdownTimeout`, with a few seconds to spare — with the defaults and `preStopDelay: 5_000`, at least 70 seconds.
 - **Keep-alive:** the server keeps idle connections for 65 seconds, above AWS ALB's 60-second idle timeout. If your balancer's idle timeout is longer, raise `server: { keepAliveTimeout }` above it — otherwise requests on reused connections fail with 502.
 
+### A management port
+
+`management: { port }` serves health checks, metrics and DevTools on a second port, so the public port carries only your API — like Spring Boot's `management.server.port`:
+
+```ts
+bootstrap({
+  modules,
+  management: { port: 9090 },
+  adapters: [
+    metricsAdapter({ management: true }),
+    DevToolsAdapter({ management: true, enabled: true, secret: getEnv('DEVTOOLS_TOKEN') }),
+  ],
+})
+```
+
+- `/health/live` and `/health/ready` answer on `9090` only. Point the probes there, and expose only the public port through the ingress.
+- Your middleware — auth, rate limits, CSRF, the request log — doesn't run on the management port, so probes need no exemptions (`health: { flags }` makes no difference there). Readiness keeps answering `503` while the app shuts down.
+- `metricsAdapter({ management: true })` serves `/metrics` there, and `DevToolsAdapter({ management: true })` serves `/_debug`, keeping both off the internet. DevTools still needs `enabled: true` outside development, and a `secret`.
+- `host` picks the interface to listen on. The default is all of them, like the public port: a kubelet probes the pod's address, so `127.0.0.1` would fail the probes. Keep the port private with a network policy.
+- It's plain HTTP unless you pass `tls` (the same shape as `server.tls`) — set it when anything crossing that network carries a credential, such as the DevTools token.
+- The port opens before the app has finished starting; until it has, readiness answers `503` with `status: 'starting'`.
+- With `logRouteTable: true`, the startup route table marks the routes on the management port.
+- Off by default. In `kick dev` and on serverless platforms everything stays on the one port.
+
 ## Metrics
 
 `metricsAdapter()` serves Prometheus metrics at `/metrics`:
@@ -106,7 +130,7 @@ bootstrap({
 
 `route` is the route pattern (`/api/v1/users/:id`), never the raw URL, so one route is one series; requests no route matched share `route="unmatched"`. The scrape itself is not counted.
 
-- **Protect it.** The endpoint is mounted before your middleware — a scraper doesn't need your auth, and your auth doesn't cover it. Pass `token` and configure the scraper with `authorization: { credentials: … }`, or keep the port reachable only from Prometheus.
+- **Protect it.** A scraper doesn't need your auth, and your auth doesn't cover the endpoint. Pass `token` and configure the scraper with `authorization: { credentials: … }`, or serve it on the [management port](#a-management-port) with `metricsAdapter({ management: true })`.
 - **With `allowedHosts`**, Prometheus scrapes by pod IP: add the path to the allow-list's exemptions — `security: { allowedHosts: { hosts: [...], ignorePaths: ['/metrics'] } }`.
 - `metricsAdapter({ path, buckets })` changes the path and the histogram buckets (seconds).
 

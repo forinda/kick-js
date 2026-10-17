@@ -50,6 +50,8 @@ export interface HealthCheckResult {
 export interface HealthProbe {
   /** True once shutdown has begun and traffic should drain away. */
   isDraining(): boolean
+  /** True while the app is still starting — before it serves. */
+  isStarting?(): boolean
   /** Aggregated `onHealthCheck()` results from every adapter that has one. */
   checks(): Promise<HealthCheckResult[]>
 }
@@ -165,6 +167,10 @@ export class HealthController {
   async ready() {
     if (this.probe.isDraining()) {
       return reply(503, { status: 'draining', checks: [] })
+    }
+    // A management port answers before the app has finished starting.
+    if (this.probe.isStarting?.()) {
+      return reply(503, { status: 'starting', checks: [] })
     }
     const checks = await this.probe.checks()
     const healthy = checks.every((c) => c.status === 'up')

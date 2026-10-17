@@ -86,6 +86,7 @@ import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
 import {
   HEALTH_PROBE,
+  HealthController,
   createHealthChecks,
   healthModule,
   type HealthModuleConfig,
@@ -251,6 +252,22 @@ export interface ApplicationOptions {
    * ```
    */
   server?: ServerOptions
+  /**
+   * Serve operational endpoints on a second port — the same app and container,
+   * a second listener, like Spring Boot's `management.server.port`. `/health/live`
+   * and `/health/ready` move there, off the public port, along with whatever
+   * adapters register on `AdapterContext.management` (DevTools with
+   * `DevToolsAdapter({ management: true })`). The management port skips the
+   * app's middleware, and keeps answering while the public port drains.
+   *
+   * Off by default. Ignored in dev mode (Vite owns the only server) and in
+   * handler mode (serverless), where everything stays on the one entry.
+   *
+   * ```ts
+   * bootstrap({ modules, management: { port: 9090 } })
+   * ```
+   */
+  management?: ManagementOptions
   /** Global API prefix (default: '/api'). Pass `''` to mount at the root. */
   apiPrefix?: string
   /**
@@ -740,12 +757,39 @@ function isConstructible(fn: unknown): boolean {
  */
 export const APPLICATION = createToken<Application>('kick/Http/Application')
 
+/** {@link ApplicationOptions.management}. */
+export interface ManagementOptions {
+  /** Port for the management listener. */
+  port: number
+  /**
+   * Interface to bind. Default: every interface, like the public port — an
+   * orchestrator probes the pod's address, so `127.0.0.1` would fail its
+   * probes. Narrow it with a network policy, or bind an internal address.
+   */
+  host?: string
+  /**
+   * Serve the management port over HTTPS — same shape as `server.tls`. Off by
+   * default: the port is meant for an internal network. Set it when anything
+   * that crosses that network carries a credential (a DevTools token, an
+   * admin route's bearer token).
+   */
+  tls?: tls.SecureContextOptions & tls.TlsOptions
+}
+
 export class Application {
   private app: unknown
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: KickServer | null = null
+  /**
+   * `bootstrap({ management })`: its engine app, created by start() outside dev
+   * mode — whatever `runtime` builds (Express, Fastify, h3), so not typed as one.
+   */
+  private managementApp: unknown = null
+  private managementServer: http.Server | https.Server | null = null
+  /** Set by start() when `management` applies; setup() then creates the management app. */
+  private wantsManagement = false
   /** Set by startWithoutServer() — the serverless path, where cron runs over HTTP. */
   private handlerMode = false
   /** The observer set this app installed — released on shutdown only if still current. */
@@ -798,6 +842,8 @@ export class Application {
   private _inFlightRequests = 0
   /** Whether the application is draining (shutting down gracefully) */
   private _draining = false
+  /** True while start() runs — readiness answers 503 until the app serves. */
+  private _starting = false
   /** Whether shutdown has already been initiated (prevents double-shutdown) */
   private _shutdownInitiated = false
   /** Resolvers waiting for in-flight requests to reach zero */
@@ -1004,12 +1050,21 @@ export class Application {
   /** Build the adapter context object (shared across all hooks) */
   private adapterCtx(server?: any): AdapterContext {
     const env = process.env.NODE_ENV ?? 'production'
+    const managementApp = this.managementApp
     return {
       http: this.adapterHttp(),
       app: this.app,
       fetch: (request) => this.fetch(request),
       container: this.container,
       server,
+      ...(managementApp
+        ? {
+            management: {
+              http: this.adapterHttp(() => managementApp),
+              server: this.managementServer ?? undefined,
+            },
+          }
+        : {}),
       env,
       isProduction: isProduction(),
     }
@@ -1020,7 +1075,7 @@ export class Application {
    * call routes through the active runtime over the current `this.app`, so an
    * adapter written against this works under any runtime.
    */
-  private adapterHttp(): AdapterHttp {
+  private adapterHttp(target: () => unknown = () => this.app): AdapterHttp {
     return {
       route: (method, path, handler) => {
         const entry: RouteEntry = {
@@ -1031,16 +1086,16 @@ export class Application {
           handler,
           meta: {},
         }
-        this.runtime.mountRoutes(this.app, [{ mountPath: '/', routes: [entry] }])
+        this.runtime.mountRoutes(target(), [{ mountPath: '/', routes: [entry] }])
       },
       mount: (prefix, routes) => {
-        this.runtime.mountRoutes(this.app, [{ mountPath: prefix, routes }])
+        this.runtime.mountRoutes(target(), [{ mountPath: prefix, routes }])
       },
       serveStatic: (prefix, dir) => {
-        this.runtime.serveStatic(this.app, prefix, dir)
+        this.runtime.serveStatic(target(), prefix, dir)
       },
       use: (mw, opts) => {
-        this.runtime.useConnect(this.app, mw, opts)
+        this.runtime.useConnect(target(), mw, opts)
       },
     }
   }
@@ -1211,6 +1266,7 @@ export class Application {
     await this.runtime.load?.()
     await settleExpressLoad()
     this.app ??= this.createEngineApp()
+    if (this.wantsManagement) this.managementApp ??= this.createEngineApp()
     this.timeline = new StartupTimeline()
     // Bound before modules register, so their services can inject it; the
     // routes fill it in as they mount.
@@ -1278,6 +1334,11 @@ export class Application {
     // or already included one in their middleware list.
     if (this.shouldAutoMountRequestScope()) {
       this.runtime.useConnect(this.app, requestScopeMiddleware())
+    }
+    // The management app runs none of the app's middleware, so it gets its own
+    // request scope even when the app mounted one itself.
+    if (this.managementApp && this.options.contextStore !== 'manual') {
+      this.runtime.useConnect(this.managementApp, requestScopeMiddleware())
     }
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
@@ -1373,6 +1434,7 @@ export class Application {
     if (this.options.health !== false) {
       this.container.registerInstance(HEALTH_PROBE, {
         isDraining: () => this._draining,
+        isStarting: () => this._starting,
         checks: createHealthChecks(() => this.adapters, {
           timeoutMs:
             typeof this.options.health === 'object' ? this.options.health.checkTimeout : undefined,
@@ -1412,7 +1474,7 @@ export class Application {
     const shouldLogRoutes = this.options.logRouteTable ?? this.options.logRoutesTable ?? false
 
     // Collect route metadata during mounting (avoids calling mod.routes() twice)
-    const mountedRoutes: Array<{ controller: any; mountPath: string }> = []
+    const mountedRoutes: Array<{ controller: any; mountPath: string; management?: boolean }> = []
 
     // Context Contributors (#107) — collect adapter + plugin + global once;
     // per-module sources are computed inside the loop so module isolation is
@@ -1460,6 +1522,7 @@ export class Application {
     // is the only place that knows the FULL mounted path — prefix, version and
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
+    const managementPaths: MountedRoute[] = []
     this.mountedRoutes = mountedPaths
     this.mountedRouteInfo = []
 
@@ -1514,6 +1577,11 @@ export class Application {
           if (route.router) {
             this.runtime.useConnect(this.app, route.router, { path: mountPath })
           } else if (route.controller) {
+            // The built-in health routes answer on the management port when there is one.
+            const target =
+              this.managementApp && route.controller === HealthController
+                ? this.managementApp
+                : this.app
             const routeTable = buildRouteTable(route.controller, { mountFlags: route.flags })
             const ctrl = route.controller.name ?? 'controller'
             for (const entry of routeTable) {
@@ -1521,7 +1589,10 @@ export class Application {
               const owner = `${ctrl}.${String(entry.meta.handlerName ?? '?')}`
               const fullPath = joinPaths(mountPath, entry.path)
               assertRouteUnique(seenRoutes, entry.method, fullPath, owner)
-              mountedPaths.push({ method: entry.method, path: fullPath })
+              ;(target === this.app ? mountedPaths : managementPaths).push({
+                method: entry.method,
+                path: fullPath,
+              })
               this.routeUrls.add(owner, fullPath)
               this.routePolicy.add(entry.method, fullPath, entry.meta.flags)
             }
@@ -1546,7 +1617,7 @@ export class Application {
                 urls: this.routeUrls,
               }
             })
-            this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])
+            this.runtime.mountRoutes(target, [{ mountPath, routes: traced }])
             for (const entry of traced) {
               this.mountedRouteInfo.push({
                 method: entry.method,
@@ -1570,7 +1641,11 @@ export class Application {
               }
             }
             if (shouldLogRoutes) {
-              mountedRoutes.push({ controller: route.controller, mountPath })
+              mountedRoutes.push({
+                controller: route.controller,
+                mountPath,
+                management: !!this.managementApp && route.controller === HealthController,
+              })
             }
           }
         }
@@ -1590,7 +1665,7 @@ export class Application {
       let totalRoutes = 0
       log.info('Routes:')
 
-      for (const { controller, mountPath } of mountedRoutes) {
+      for (const { controller, mountPath, management } of mountedRoutes) {
         const defs: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
           METADATA.ROUTES,
           controller,
@@ -1610,7 +1685,10 @@ export class Application {
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
-        log.info(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
+        const port = management ? '  [management port]' : ''
+        log.info(
+          `  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})${port}`,
+        )
       }
 
       log.info(`  Total: ${totalRoutes} routes`)
@@ -1662,6 +1740,16 @@ export class Application {
       this.app,
       observeErrors(this.options.onError ?? errorHandler()) as unknown as ConnectMiddleware,
     )
+    if (this.managementApp) {
+      this.runtime.setNotFound(
+        this.managementApp,
+        notFoundHandler(managementPaths) as unknown as ConnectMiddleware,
+      )
+      this.runtime.setErrorHandler(
+        this.managementApp,
+        observeErrors(errorHandler()) as unknown as ConnectMiddleware,
+      )
+    }
     this.timeline.mark('error handlers')
   }
 
@@ -1714,6 +1802,7 @@ export class Application {
   async start(): Promise<void> {
     const g = globalThis as any
     const serverOptions = this.options.server
+    this._starting = true
 
     // Check the server options before setup() so a bad combination fails
     // before any adapter has done work.
@@ -1725,6 +1814,15 @@ export class Application {
         throw http2UnsupportedRuntimeError(this.runtime.name)
       }
       if (serverOptions.tls) assertUsableTls(serverOptions.tls)
+    }
+
+    const management = this.options.management
+    if (management && g.__kickjs_httpServer) {
+      log.info('management port is ignored in dev mode — /health stays on the dev server')
+    } else if (management) {
+      // setup() creates it beside the app, once the runtime has loaded its
+      // engine — adapters see `ctx.management` from beforeMount on.
+      this.wantsManagement = true
     }
 
     await this.setup()
@@ -1754,6 +1852,7 @@ export class Application {
         await plugin.onReady?.(this.container)
       }
       this.timeline.mark('ready')
+      this._starting = false
       this.timeline.complete()
       this.reportStartup()
 
@@ -1777,6 +1876,22 @@ export class Application {
       throw err
     })
 
+    if (this.managementApp && management) await this.listenManagement(management)
+
+    try {
+      await this.listenAndFinishStartup(port, serverOptions)
+    } catch (err) {
+      // A failed startup leaves no listener behind to keep the process up.
+      await this.closeManagementServer()
+      throw err
+    }
+  }
+
+  /** Listen on the public port, then run afterStart and onReady. */
+  private async listenAndFinishStartup(
+    port: number,
+    serverOptions: ApplicationOptions['server'],
+  ): Promise<void> {
     // Wrap listen in a Promise so afterStart/onReady errors propagate
     await new Promise<void>((resolve, reject) => {
       this.httpServer!.listen(port, async () => {
@@ -1801,6 +1916,7 @@ export class Application {
             await plugin.onReady?.(this.container)
           }
           this.timeline.mark('ready')
+          this._starting = false
           this.timeline.complete()
           this.reportStartup()
 
@@ -1810,6 +1926,35 @@ export class Application {
         }
       })
     })
+  }
+
+  private async closeManagementServer(): Promise<void> {
+    const server = this.managementServer
+    if (!server) return
+    this.managementServer = null
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve())
+      server.closeAllConnections()
+    })
+  }
+
+  /** The management listener: on its own port, before the public one; HTTPS with `tls`. */
+  private async listenManagement(options: ManagementOptions): Promise<void> {
+    const handler = this.runtime.nodeHandler(this.managementApp!)
+    if (options.tls) assertUsableTls(options.tls)
+    const server = options.tls
+      ? https.createServer(options.tls, handler)
+      : http.createServer(handler)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(options.port, options.host, () => {
+        server.off('error', reject)
+        resolve()
+      })
+    })
+    this.managementServer = server
+    const scheme = options.tls ? 'https' : 'http'
+    log.info(`Management server on ${scheme}://${options.host ?? 'localhost'}:${options.port}`)
   }
 
   /** The production server for {@link ApplicationOptions.server}. */
@@ -2043,6 +2188,13 @@ export class Application {
           timeBoxed(`Adapter '${adapter.name}'`, () => adapter.shutdown?.()),
         ),
         timeBoxed(`Runtime '${this.runtime.name}'`, () => this.runtime.close?.(this.app)),
+        ...(this.managementApp && closeServer
+          ? [
+              timeBoxed(`Runtime '${this.runtime.name}' (management)`, () =>
+                this.runtime.close?.(this.managementApp),
+              ),
+            ]
+          : []),
       ])
 
       // A reload must leave the shared dev server listening. If a hook closed
@@ -2071,6 +2223,8 @@ export class Application {
       this.container.flushChanges()
       await this.loopback?.close()
       this.loopback = undefined
+      // Last: probes kept answering (readiness 503) while the public port drained.
+      if (closeServer) await this.closeManagementServer()
       // The adapters are shut down: stop routing reports to them. A reload
       // keeps the same adapters, so it keeps them observing.
       if (closeServer) releaseObservers(this.observers)

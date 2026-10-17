@@ -622,6 +622,7 @@ interface MetricsOptions {
   path?: string // default '/metrics'
   token?: string // require Authorization: Bearer <token>
   buckets?: number[] // seconds, default Prometheus' 5ms–10s
+  management?: boolean // serve on the bootstrap({ management }) port instead
 }
 ```
 

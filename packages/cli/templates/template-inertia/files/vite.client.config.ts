@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { compressAssets } from '@forinda/kickjs-vite/compress'
 
 // Production builds of the pages (`{{runBuild}}` runs both):
 //   vite build --config vite.client.config.ts                         → dist/client
@@ -15,7 +16,9 @@ process.env.NODE_ENV = 'production'
 export default defineConfig(({ isSsrBuild }) => ({
   // Nothing from the server's .env belongs in the browser bundle.
   envDir: false,
-  plugins: [react()],
+  // compressAssets: .br / .gz beside the built pages' files, which the server
+  // sends to browsers that accept them. Skips the SSR build.
+  plugins: [react(), compressAssets()],
   // Same aliases as the dev server: tsconfig.json `paths`.
   resolve: { tsconfigPaths: true },
   // The SSR bundle carries its dependencies: a Netlify or Vercel function

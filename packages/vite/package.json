@@ -23,6 +23,10 @@
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
     },
+    "./compress": {
+      "import": "./dist/compress.mjs",
+      "types": "./dist/compress.d.mts"
+    },
     "./globals": {
       "types": "./globals.d.ts"
     }
@@ -72,6 +76,9 @@
     "url": "https://github.com/forinda/kick-js/issues"
   },
   "peerDependenciesMeta": {
+    "@forinda/kickjs": {
+      "optional": true
+    },
     "@forinda/kickjs-cli": {
       "optional": true
     }

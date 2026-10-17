@@ -217,6 +217,23 @@ bootstrap({
 
 Responses under 1 KB are left alone, and `Vary: Accept-Encoding` is set for caches. Server-sent events are never compressed: `ctx.sse()` sends `Cache-Control: no-transform`, so events reach the client as they are sent instead of waiting in a gzip buffer.
 
+### Compressed static files
+
+`compression()` covers your routes, not the files `SpaAdapter`, the Inertia adapter or `ctx.http.serveStatic()` serve. Those are served compressed when a `.br` or `.gz` copy sits beside the file — `app.js.br` next to `app.js` — and the browser accepts that encoding: Brotli first, then gzip, with `Vary: Accept-Encoding` and the original file's `Content-Type`. A range request gets the file as stored.
+
+Write the copies when you build the client, with the Vite plugin from `@forinda/kickjs-vite`:
+
+```ts
+// vite.config.ts of the client
+import { compressAssets } from '@forinda/kickjs-vite/compress'
+
+export default defineConfig({
+  plugins: [react(), compressAssets()],
+})
+```
+
+It compresses HTML, CSS, JavaScript, JSON, source maps, SVG, text, XML and WebAssembly files of 1 KB or more, keeps a copy only when it is smaller, and skips SSR builds. `compressAssets({ threshold, encodings: ['br'] })` changes the size floor and the encodings. Projects from `kick new --template fullstack` and `--template inertia` have it already.
+
 ### BREACH padding (opt-in)
 
 Compression can leak a secret: when a response holds both a secret (a token rendered into the page) and text an attacker controls (an echoed search term), how well the response compresses reveals whether the attacker's guess matches the secret — and TLS hides the bytes, not their count. This is the BREACH attack. Mitigate it by making every compressed response's size vary at random:

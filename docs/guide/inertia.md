@@ -484,13 +484,14 @@ The pages need their own Vite config, separate from the server's:
 // vite.client.config.ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { compressAssets } from '@forinda/kickjs-vite/compress'
 
 // Production builds only — the server's .env sets NODE_ENV=development.
 process.env.NODE_ENV = 'production'
 
 export default defineConfig(({ isSsrBuild }) => ({
   envDir: false,
-  plugins: [react()],
+  plugins: [react(), compressAssets()],
   resolve: { tsconfigPaths: true },
   // The render bundle carries React: a serverless function has no node_modules.
   ssr: { noExternal: true },
@@ -509,7 +510,7 @@ export default defineConfig(({ isSsrBuild }) => ({
 }
 ```
 
-The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. Under `NODE_ENV` development or test a missing manifest is tolerated — pages render without their scripts and a warning says so, which is what lets tests run before the client is built. Anywhere else, including an unset `NODE_ENV`, it stops the app at startup.
+The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. `compressAssets()` writes a `.br` and a `.gz` beside each built file; the adapter sends one of those to a browser that accepts it (see [Compressed static files](./middleware.md#compressed-static-files)). It skips the SSR build. Under `NODE_ENV` development or test a missing manifest is tolerated — pages render without their scripts and a warning says so, which is what lets tests run before the client is built. Anywhere else, including an unset `NODE_ENV`, it stops the app at startup.
 
 ## Testing
 
