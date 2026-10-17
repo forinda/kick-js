@@ -23,6 +23,7 @@ import {
   hasPrototypeKey,
   parseForm,
   prototypeKeyError,
+  tooLarge,
   unsupportedMediaTypeError,
 } from '../body-policy'
 import { RequestContext } from '../context'
@@ -32,7 +33,12 @@ import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
-import { UPLOAD_FIELDS_ALLOWANCE, tooManyFiles, uploadLimits } from '../middleware/upload-config'
+import {
+  MAX_UPLOAD_FIELDS,
+  UPLOAD_FIELDS_ALLOWANCE,
+  tooManyFiles,
+  uploadLimits,
+} from '../middleware/upload-config'
 import { lazyServeStatic } from './lazy-serve-static'
 import { createLogger } from '../../core/logger'
 import type {
@@ -299,24 +305,38 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
       const rawParts: RawUploadPart[] = []
       const fields: Array<[string, string]> = []
       let current = 'file'
+      // Per-part limits alone allow many parts; the whole body is held to the
+      // route's budget too, the same total h3 and the web entry read at most.
+      let received = 0
+      const count = (bytes: number) => {
+        received += bytes
+        if (received > limits.total) {
+          throw tooLarge(limits.total)
+        }
+      }
       try {
         for await (const part of request.parts({
           limits: {
             fileSize: limits.fileSize,
             files: limits.files,
+            fields: MAX_UPLOAD_FIELDS,
             fieldSize: UPLOAD_FIELDS_ALLOWANCE,
           },
         })) {
           if (part.type === 'file' && part.toBuffer) {
             current = part.filename ?? part.fieldname
+            const buffer = await part.toBuffer()
+            count(buffer.length)
             rawParts.push({
               fieldname: part.fieldname,
               filename: part.filename ?? '',
               mimetype: part.mimetype ?? 'application/octet-stream',
-              buffer: await part.toBuffer(),
+              buffer,
             })
           } else {
-            fields.push([part.fieldname, String(part.value)])
+            const value = String(part.value)
+            count(part.fieldname.length + value.length)
+            fields.push([part.fieldname, value])
           }
         }
       } catch (err) {

@@ -42,7 +42,16 @@ export {
   type UploadStorageEngine,
   type RawUploadPart,
 } from './upload-config'
-import { buildFileTypeFilter, tooManyFiles, type UploadStorageEngine } from './upload-config'
+import { Transform, type Writable } from 'node:stream'
+import { tooLarge } from '../body-policy'
+import {
+  MAX_UPLOAD_FIELDS,
+  UPLOAD_FIELDS_ALLOWANCE,
+  buildFileTypeFilter,
+  tooManyFiles,
+  uploadLimits,
+  type UploadStorageEngine,
+} from './upload-config'
 
 /**
  * Upload options for the middleware.
@@ -97,6 +106,8 @@ function translateMulterErrors(
 function createMulter(options: UploadOptions) {
   const limits: MulterOptions['limits'] = {
     fileSize: options.maxSize ?? 5 * 1024 * 1024,
+    fields: MAX_UPLOAD_FIELDS,
+    fieldSize: UPLOAD_FIELDS_ALLOWANCE,
   }
 
   let fileFilter: MulterOptions['fileFilter'] | undefined
@@ -190,10 +201,45 @@ function bothConventions(handler: RequestHandler): RequestHandler {
   }) as RequestHandler
 }
 
+/**
+ * Hold a multipart body to `limit` bytes while multer reads it: by
+ * Content-Length up front, and counted as it streams for a body that doesn't
+ * declare one. multer has a per-file and per-field size but no total, so
+ * without this a request could carry any number of fields.
+ */
+function capBody(mw: RequestHandler, limit: number): RequestHandler {
+  return (req, res, next) => {
+    if (Number(req.headers['content-length']) > limit) return next(tooLarge(limit))
+    const pipe = req.pipe.bind(req)
+    // multer reads the request with `req.pipe(busboy)`; count what passes.
+    req.pipe = (<T extends NodeJS.WritableStream>(destination: T): T => {
+      let received = 0
+      const counter = new Transform({
+        transform(chunk: Buffer, _encoding, done) {
+          received += chunk.length
+          if (received <= limit) return done(null, chunk)
+          // busboy's error reaches multer, which hands it to `next`.
+          if (received - chunk.length <= limit) {
+            ;(destination as unknown as Writable).destroy(tooLarge(limit))
+          }
+          done()
+        },
+      })
+      pipe(counter)
+      return counter.pipe(destination)
+    }) as typeof req.pipe
+    mw(req, res, next)
+  }
+}
+
 function single(fieldName: string, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
+  const { total } = uploadLimits({ mode: 'single', maxSize: options.maxSize })
   return bothConventions(
-    translateMulterErrors(m.single(fieldName), options, { field: fieldName, max: 1 }),
+    capBody(
+      translateMulterErrors(m.single(fieldName), options, { field: fieldName, max: 1 }),
+      total,
+    ),
   )
 }
 
@@ -202,11 +248,15 @@ function single(fieldName: string, options: UploadOptions = {}): RequestHandler 
  */
 function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
+  const { total } = uploadLimits({ mode: 'array', maxSize: options.maxSize, maxCount })
   return bothConventions(
-    translateMulterErrors(m.array(fieldName, maxCount), options, {
-      field: fieldName,
-      max: maxCount,
-    }),
+    capBody(
+      translateMulterErrors(m.array(fieldName, maxCount), options, {
+        field: fieldName,
+        max: maxCount,
+      }),
+      total,
+    ),
   )
 }
 
@@ -215,7 +265,8 @@ function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): R
  */
 function none(options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.none(), options))
+  const { total } = uploadLimits({ mode: 'none' })
+  return bothConventions(capBody(translateMulterErrors(m.none(), options), total))
 }
 
 /**

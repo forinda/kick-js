@@ -141,6 +141,9 @@ const DEFAULT_MAX_SIZE = 5 * 1024 * 1024
 /** What an upload request may carry besides its files: field values, part headers. */
 export const UPLOAD_FIELDS_ALLOWANCE = 1024 * 1024
 
+/** Form fields an upload request may carry beside its files. */
+export const MAX_UPLOAD_FIELDS = 1000
+
 /**
  * The most a `@FileUpload` request may carry, for stopping the parser before it
  * buffers more: `fileSize` per file, `files` in all (on any field), and `total`

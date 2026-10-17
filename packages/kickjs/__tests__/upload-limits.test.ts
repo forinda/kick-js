@@ -4,6 +4,8 @@
  * buffered past the route's budget first.
  */
 import 'reflect-metadata'
+import http from 'node:http'
+import type { AddressInfo } from 'node:net'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
@@ -42,6 +44,8 @@ for (const [name, runtime] of RUNTIMES)
   describe(`upload limits — ${name}`, () => {
     beforeEach(() => Container.reset())
 
+    let app: Application
+
     async function boot() {
       @Controller()
       class C {
@@ -56,7 +60,7 @@ for (const [name, runtime] of RUNTIMES)
           ctx.json({ count: ctx.files?.length })
         }
       }
-      const app = new Application({
+      app = new Application({
         runtime: runtime(),
         modules: [{ routes: () => ({ path: '/u', controller: C }) } as never],
       })
@@ -99,5 +103,62 @@ for (const [name, runtime] of RUNTIMES)
         .attach('files', Buffer.alloc(10), 'c.bin')
       expect(res.status).toBe(413)
       expect(res.body.detail).toMatch(/Too many files: at most 2/)
+    })
+
+    it('refuses many fields that together pass the budget with 413', async () => {
+      const http = await boot()
+      const big = 'x'.repeat(600 * 1024)
+      const res = await http
+        .post('/api/v1/u/one')
+        .field('a', big)
+        .field('b', big)
+        .field('c', big)
+        .attach('file', Buffer.alloc(10), 'a.bin')
+      expect(res.status).toBe(413)
+    })
+
+    it('counts a body that declares no length while it streams', async () => {
+      await boot()
+      const server = http.createServer(app.handle.bind(app) as never)
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      try {
+        const { port } = server.address() as AddressInfo
+        const boundary = 'kickboundary'
+        const status = await new Promise<number>((resolve, reject) => {
+          const req = http.request(
+            {
+              port,
+              host: '127.0.0.1',
+              method: 'POST',
+              path: '/api/v1/u/one',
+              headers: {
+                'content-type': `multipart/form-data; boundary=${boundary}`,
+                'transfer-encoding': 'chunked',
+              },
+            },
+            (res) => {
+              res.resume()
+              resolve(res.statusCode ?? 0)
+            },
+          )
+          req.on('error', (err) => {
+            // The server may close the connection once it has refused the body.
+            if (
+              (err as NodeJS.ErrnoException).code === 'EPIPE' ||
+              (err as NodeJS.ErrnoException).code === 'ECONNRESET'
+            )
+              return
+            reject(err)
+          })
+          const field = (name: string) =>
+            `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${'x'.repeat(600 * 1024)}\r\n`
+          for (const name of ['a', 'b', 'c', 'd']) req.write(field(name))
+          req.end(`--${boundary}--\r\n`)
+        })
+        expect(status).toBe(413)
+      } finally {
+        server.closeAllConnections()
+        await new Promise((resolve) => server.close(resolve))
+      }
     })
   })

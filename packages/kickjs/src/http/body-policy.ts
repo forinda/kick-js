@@ -200,7 +200,8 @@ export function parseByteSize(value: string | number): number {
   return Math.floor(Number(match[1]) * BYTE_UNITS[(match[2] ?? 'b').toLowerCase()])
 }
 
-function tooLarge(limit: number): HttpException {
+/** The 413 for a body past `limit` bytes. */
+export function tooLarge(limit: number): HttpException {
   return new HttpException(413, `Request body is larger than the ${limit}-byte limit`)
 }
 
