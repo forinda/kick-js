@@ -1,46 +1,43 @@
-name: Feature Request
-description: Suggest a new feature or enhancement for KickJS
+name: Feature request
+description: Suggest a new feature or an improvement
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Have an idea for KickJS? We'd love to hear it. Please describe the feature below.
+        Thanks for the idea. Check the [roadmap](https://kickjs.app/guide/roadmap) and open issues first — it may be planned already.
 
   - type: dropdown
     id: package
     attributes:
-      label: Related Package
-      description: Which package would this feature belong to?
+      label: Package
+      description: Where it would live.
       multiple: true
       options:
+        - "@forinda/kickjs"
+        - "@forinda/kickjs-ai"
         - "@forinda/kickjs-cli"
+        - "@forinda/kickjs-cli-kit"
+        - "@forinda/kickjs-client"
+        - "@forinda/kickjs-db"
+        - "@forinda/kickjs-devtools"
+        - "@forinda/kickjs-devtools-kit"
+        - "@forinda/kickjs-di"
+        - "@forinda/kickjs-grpc"
+        - "@forinda/kickjs-inertia"
+        - "@forinda/kickjs-lint"
+        - "@forinda/kickjs-mcp"
+        - "@forinda/kickjs-queue"
+        - "@forinda/kickjs-schema"
+        - "@forinda/kickjs-storage"
         - "@forinda/kickjs-swagger"
         - "@forinda/kickjs-testing"
-        - "@forinda/kickjs-prisma"
-        - "New package"
+        - "@forinda/kickjs-vite"
+        - "@forinda/kickjs-ws"
+        - "A new package"
         - "Documentation"
-        - "Other"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: type
-    attributes:
-      label: Feature Type
-      description: What kind of feature is this?
-      options:
-        - "New middleware"
-        - "New decorator"
-        - "New adapter"
-        - "New CLI command / generator"
-        - "New package"
-        - "API enhancement"
-        - "DX improvement"
-        - "Performance"
-        - "Documentation"
-        - "Other"
+        - "Not sure"
     validations:
       required: true
 
@@ -48,25 +45,19 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: What problem does this feature solve? Is this related to a frustration?
-      placeholder: "I'm always frustrated when..."
+      description: What you're trying to do, and what gets in the way today.
+      placeholder: "When I …, I have to …, because KickJS doesn't …"
     validations:
       required: true
 
   - type: textarea
     id: solution
     attributes:
-      label: Proposed Solution
-      description: Describe the solution you'd like. Include API examples if possible.
+      label: Proposed solution
+      description: How you'd like it to work. A sketch of the API helps.
       placeholder: |
         ```ts
-        // Example usage of the proposed feature
-        @Controller('/users')
-        class UserController {
-          @Get('/')
-          @RateLimit({ max: 100, windowMs: 60_000 })
-          async list(ctx: RequestContext) { ... }
-        }
+        // How you'd use it
         ```
     validations:
       required: true
@@ -74,15 +65,15 @@ body:
   - type: textarea
     id: alternatives
     attributes:
-      label: Alternatives Considered
-      description: Any alternative solutions or workarounds you've considered.
+      label: Alternatives
+      description: Workarounds you use now, or how other frameworks solve it.
     validations:
       required: false
 
-  - type: textarea
-    id: context
+  - type: checkboxes
+    id: contribute
     attributes:
-      label: Additional Context
-      description: Any other context, mockups, or references.
-    validations:
-      required: false
+      label: Contributing
+      options:
+        - label: I'd like to open a pull request for this.
+          required: false

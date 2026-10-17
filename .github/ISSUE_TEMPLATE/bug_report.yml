@@ -1,72 +1,87 @@
-name: Bug Report
-description: Report a bug in KickJS
+name: Bug report
+description: Something in KickJS doesn't work as documented
 title: "[Bug]: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug! Please fill out the sections below so we can reproduce and fix it.
-
-  - type: input
-    id: version
-    attributes:
-      label: KickJS Version
-      description: Which version of KickJS are you using?
-      placeholder: "0.3.2"
-    validations:
-      required: true
+        Thanks for reporting a bug. A small reproduction is the fastest way to a fix.
+        For a security issue, don't open an issue — [report it privately](https://github.com/forinda/kick-js/security/advisories/new).
 
   - type: dropdown
     id: package
     attributes:
-      label: Affected Package
-      description: Which package is affected?
+      label: Package
+      description: Which package is it in? `@forinda/kickjs` is the framework itself.
       multiple: true
       options:
+        - "@forinda/kickjs"
+        - "@forinda/kickjs-ai"
         - "@forinda/kickjs-cli"
+        - "@forinda/kickjs-cli-kit"
+        - "@forinda/kickjs-client"
+        - "@forinda/kickjs-db"
+        - "@forinda/kickjs-devtools"
+        - "@forinda/kickjs-devtools-kit"
+        - "@forinda/kickjs-di"
+        - "@forinda/kickjs-grpc"
+        - "@forinda/kickjs-inertia"
+        - "@forinda/kickjs-lint"
+        - "@forinda/kickjs-mcp"
+        - "@forinda/kickjs-queue"
+        - "@forinda/kickjs-schema"
+        - "@forinda/kickjs-storage"
         - "@forinda/kickjs-swagger"
         - "@forinda/kickjs-testing"
-        - "@forinda/kickjs-prisma"
-        - "Other / Not sure"
+        - "@forinda/kickjs-vite"
+        - "@forinda/kickjs-ws"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The affected package's version — `pnpm why @forinda/kickjs` (or `npm ls`) shows it.
+      placeholder: "10.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Which HTTP engine the app runs on, if it matters.
+      options:
+        - "Express (the default)"
+        - "Fastify"
+        - "h3"
+        - "Web entry (createWebApp — Workers, Bun, Deno)"
+        - "Serverless (Netlify / Vercel)"
+        - "Not applicable / not sure"
     validations:
       required: true
 
   - type: textarea
     id: description
     attributes:
-      label: Description
-      description: A clear and concise description of the bug.
+      label: What happened
+      description: What you did, what you expected, and what happened instead — with the error message or stack trace.
     validations:
       required: true
 
   - type: textarea
     id: reproduction
     attributes:
-      label: Steps to Reproduce
-      description: Minimal steps or code to reproduce the issue.
+      label: Reproduction
+      description: A link to a minimal repository, or the smallest code and steps that show it.
       placeholder: |
-        1. Create a controller with `@Controller('/test')`
-        2. Add `@Get('/')` handler
-        3. Start the server with `kick dev`
-        4. Send a GET request to `/test`
-        5. See error...
-    validations:
-      required: true
-
-  - type: textarea
-    id: expected
-    attributes:
-      label: Expected Behavior
-      description: What did you expect to happen?
-    validations:
-      required: true
-
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual Behavior
-      description: What actually happened? Include error messages or stack traces.
+        1. `kick new demo --yes` then `kick g module users`
+        2. In the generated controller, add …
+        3. `kick dev`, then `curl localhost:3000/api/v1/users`
+        4. The response is … instead of …
     validations:
       required: true
 
@@ -74,18 +89,17 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Your runtime environment.
       value: |
-        - Node.js version:
+        - Node.js (or Bun / Deno) version:
         - OS:
-        - Package manager:
+        - Package manager and version:
     validations:
       required: false
 
   - type: textarea
     id: context
     attributes:
-      label: Additional Context
-      description: Any other context, screenshots, or logs.
+      label: Anything else
+      description: Logs, screenshots, or what you've already tried.
     validations:
       required: false

@@ -143,6 +143,14 @@ pnpm install && pnpm build && pnpm test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Contributors
+
+Thanks to everyone who has contributed to KickJS.
+
+<a href="https://github.com/forinda/kick-js/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=forinda/kick-js" alt="KickJS contributors" />
+</a>
+
 ## Acknowledgements
 
 kick/db's query builder is built on [Kysely](https://github.com/kysely-org/kysely) (MIT).
