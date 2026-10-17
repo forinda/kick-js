@@ -231,6 +231,11 @@ Middleware takes the same `(req, res, next)` types on every runtime
 (`ConnectHandler`, `ConnectErrorHandler`), and Express middleware —
 `express.json()`, `cors()` — fits them.
 
+## Running inside another framework
+
+To serve KickJS from inside Hono, Nitro or another framework — the host owns the
+server, KickJS answers its prefix — see [Embedding](./embedding.md).
+
 ## Writing a custom runtime
 
 A runtime implements the `HttpRuntime` contract (`createApp`, `nodeHandler`,
