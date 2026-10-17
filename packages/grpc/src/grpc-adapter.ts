@@ -7,7 +7,7 @@ import {
   type SourcedRegistration,
 } from '@forinda/kickjs'
 import { connectNodeAdapter } from '@connectrpc/connect-node'
-import type { NextFunction, Request, Response } from 'express'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   GRPC_ADAPTER,
   type GrpcAdapterExtensions,
@@ -114,7 +114,7 @@ export const GrpcAdapter = defineAdapter<GrpcAdapterOptions, GrpcAdapterExtensio
         return [
           {
             phase: 'beforeGlobal',
-            handler: (req: Request, res: Response, next: NextFunction) => {
+            handler: (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
               if (nodeHandler === null) {
                 next()
                 return

@@ -719,15 +719,9 @@ importers:
       '@swc/core':
         specifier: ^1.16.13
         version: 1.16.13
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
-      express:
-        specifier: ^5.3.0
-        version: 5.3.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -804,15 +798,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../cli
-      '@types/express':
-        specifier: ^5.0.6
-        version: 5.0.6
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
-      express:
-        specifier: ^5.3.0
-        version: 5.3.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

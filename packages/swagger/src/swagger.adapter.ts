@@ -1,6 +1,6 @@
 import { dirname } from 'node:path'
 import { createRequire } from 'node:module'
-import type { Request, Response, NextFunction } from 'express'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Logger, defineAdapter } from '@forinda/kickjs'
 import {
   buildOpenAPISpec,
@@ -206,7 +206,7 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
             : ['https://unpkg.com', 'https://fonts.googleapis.com']
         const imgOrigins = uiDistAvailable || customSwaggerRenderer ? [] : ['https://unpkg.com']
 
-        http.use((_req: Request, res: Response, next: NextFunction) => {
+        http.use((_req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
           // Build connect-src dynamically so "Try it out" can call any configured server URL.
           // Includes dev-friendly localhost/127.0.0.1 origins so docs served from one host
           // can call an API spec'd at the other (a common cross-origin gotcha).
