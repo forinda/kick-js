@@ -79,6 +79,19 @@ const SCENARIOS = {
     deploy: true,
     docker: true,
   },
+  // The same pages on h3: the adapter serves them, their assets and SSR on
+  // every engine. Deploy and Docker are left to the Express scenario above.
+  'inertia-h3': {
+    args: ['--template', 'inertia', '--runtime', 'h3'],
+    buildScript: true,
+    get: ['/api/v1/hello', '/', '/posts', '/sitemap.xml', '/robots.txt'],
+    contains: {
+      '/': 'data-server-rendered',
+      '/posts': 'name="description"',
+      '/sitemap.xml': '<loc>',
+      '/robots.txt': 'Sitemap: ',
+    },
+  },
   fullstack: {
     args: ['--template', 'fullstack', '--packages', 'swagger,devtools'],
     fullstack: true,
