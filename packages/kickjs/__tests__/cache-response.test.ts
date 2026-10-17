@@ -42,7 +42,9 @@ for (const [name, runtime] of RUNTIMES)
         modules: [{ routes: () => ({ path: '/c', controller }) } as never],
       })
       await app.setup()
-      return request(app.handle.bind(app))
+      const http = request(app.handle.bind(app))
+      // supertest listens on a new port per request; the Host header is part of the key.
+      return { get: (path: string) => http.get(path).set('Host', 'test.local') }
     }
 
     it('serves a stored response, with an ETag a matching request gets 304 for', async () => {
@@ -255,6 +257,12 @@ for (const [name, runtime] of RUNTIMES)
         .set('X-Api-Key', 'k')
         .expect(200)
       expect(loads).toBe(3)
+
+      // The port is part of the host the handler sees; a malformed host is never cached.
+      await http.get('/api/v1/c/products').set('Host', 'a.example:8080').expect(200)
+      await http.get('/api/v1/c/products').set('Host', 'a.example/evil').expect(200)
+      await http.get('/api/v1/c/products').set('Host', 'a.example/evil').expect(200)
+      expect(loads).toBe(6)
 
       version = 2
       await http.get('/api/v1/c/products/touch').expect(200)

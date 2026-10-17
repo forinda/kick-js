@@ -183,7 +183,7 @@ export class ProductController {
 ```
 
 - **What's stored:** a `GET` (or `HEAD`) answered with `200`: the body and its content type, whether the handler called `ctx.json` / `ctx.send` / `ctx.html` or returned a value. Other statuses, and responses that set a cookie, are sent but not stored. The entry lives in your `CacheProvider`, so with Redis every instance shares it.
-- **Key:** the route, the host (without its port) and the URL, query string included, plus the headers in `varies`.
+- **Key:** the route, the `Host` header and the URL, query string included, plus the headers in `varies`. A request whose `Host` isn't a plain `name[:port]` isn't cached.
 - **ETag:** a cached response carries one. A client that sends it back in `If-None-Match` gets `304` with no body.
 - **`maxAge`:** seconds the entry is served as fresh.
 - **`swr`:** seconds past `maxAge` the stale entry is still served, while one request rebuilds it in the background with [`waitUntil`](./serverless.md#work-that-outlives-the-response-waituntil). Without it, the first request after `maxAge` waits for a new one.

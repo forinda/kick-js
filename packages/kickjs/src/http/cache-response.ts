@@ -102,8 +102,12 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
           PERSONAL.some((h) => headers[h] !== undefined && !varies.includes(h)) ||
           (ctx.user !== undefined && !varies.some((h) => PERSONAL.includes(h)))
         if (personal) return original.call(this, ctx, ...rest)
-        // The host too: one app serving several hosts answers each differently.
-        identity = `${hostname(headers.host)}${req.originalUrl ?? req.url ?? ''}`
+        // The exact host the handler sees: one app serving several hosts answers
+        // each differently, and a handler may put the host in the body. A host
+        // that isn't `name[:port]` is never cached — nothing ambiguous in the key.
+        const host = String(headers.host ?? '')
+        if (!VALID_HOST.test(host)) return original.call(this, ctx, ...rest)
+        identity = JSON.stringify([host.toLowerCase(), req.originalUrl ?? req.url ?? ''])
       }
       const varied = varies.map((h) => `${h}=${String(headers[h] ?? '')}`).join('&')
       const key = `${prefix}:${identity}|${varied}`
@@ -136,11 +140,8 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
   }
 }
 
-/** The Host header without its port — `[::1]:3000` → `[::1]`. */
-function hostname(host: string | string[] | undefined): string {
-  const value = String(host ?? '').toLowerCase()
-  return value.startsWith('[') ? value.slice(0, value.indexOf(']') + 1) : value.split(':')[0]!
-}
+/** `name[:port]` or `[ipv6][:port]` — no path, userinfo or whitespace. */
+const VALID_HOST = /^(?:\[[0-9a-f:.]+\]|[a-z0-9-]+(?:\.[a-z0-9-]+)*)(?::\d{1,5})?$/i
 
 /** Concurrent misses on one key share a single build. */
 function buildOnce(key: string, run: () => Promise<Recorded | null>): Promise<Recorded | null> {
