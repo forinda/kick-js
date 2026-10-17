@@ -943,6 +943,13 @@ export class Application {
    * call the app's own routes, such as MCP and AI tool dispatch.
    */
   fetch(request: Request): Promise<Response> {
+    if (this.app === undefined) {
+      return Promise.reject(
+        new Error(
+          'kickjs: Application.fetch() before setup — await start() or startWithoutServer() first',
+        ),
+      )
+    }
     const runtimeApp = this.app as { fetch?: (request: Request) => unknown }
     if (typeof runtimeApp?.fetch === 'function') {
       return Promise.resolve(runtimeApp.fetch(request) as Response | Promise<Response>)

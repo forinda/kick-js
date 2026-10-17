@@ -21,8 +21,8 @@ export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
 ```
 
 An app on Fastify or h3 doesn't need `express` installed. To use
-`buildRoutes()` or `expressRuntime()` on a plain `express()` app — in a test,
-say — import them from `@forinda/kickjs/express`.
+`buildRoutes()`, `materializeRouter()` or `expressRuntime()` on a plain
+`express()` app — in a test, say — import them from `@forinda/kickjs/express`.
 
 ## Why it works
 

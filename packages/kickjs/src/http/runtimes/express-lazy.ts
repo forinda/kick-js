@@ -25,18 +25,20 @@ export const EXPRESS_CAPABILITIES: RuntimeCapabilities = {
 
 let loaded: ExpressModule | undefined
 let loading: Promise<ExpressModule> | undefined
+/** Why the load failed — thrown where Express is used, not at every app's setup. */
+let loadError: Error | undefined
 
 /** Start loading Express once; every caller shares the one load. */
 function loadExpress(): Promise<ExpressModule> {
   loading ??= import('./express').then(
     (mod) => (loaded = mod),
     (err: unknown) => {
-      throw new Error(
+      throw (loadError = new Error(
         "kickjs: the Express runtime needs the 'express' package — install it, or pass another " +
           "runtime to bootstrap(): `runtime: fastifyRuntime()` from '@forinda/kickjs/fastify', " +
           "or `h3Runtime()` from '@forinda/kickjs/h3'.",
         { cause: err },
-      )
+      ))
     },
   )
   return loading
@@ -46,9 +48,11 @@ function loadExpress(): Promise<ExpressModule> {
  * Wait for an Express load something already started — `expressRuntime()`
  * starts one when called, so a custom runtime wrapping it (and calling its
  * methods without forwarding `load()`) still finds Express there by setup.
+ * Never throws: an app on another runtime mustn't fail because something else
+ * asked for Express; a failed load surfaces where Express is used.
  */
 export async function settleExpressLoad(): Promise<void> {
-  await loading
+  await loading?.catch(() => {})
 }
 
 /**
@@ -76,7 +80,7 @@ export function expressRuntime(): HttpRuntime {
   let real: HttpRuntime | undefined
   const engine = (): HttpRuntime => real ?? (real = loaded?.expressRuntime()) ?? fail()
   const fail = (): never => {
-    throw notLoaded('expressRuntime() used before load()')
+    throw loadError ?? notLoaded('expressRuntime() used before load()')
   }
   return {
     name: 'express',
