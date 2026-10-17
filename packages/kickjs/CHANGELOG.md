@@ -1,5 +1,13 @@
 # @forinda/kickjs
 
+## 10.7.0
+
+### Minor Changes
+
+- [#964](https://github.com/forinda/kick-js/pull/964) [`bfda011`](https://github.com/forinda/kick-js/commit/bfda01144b26bc07fd3e535bfe71ac0f3d303199) Thanks [@forinda](https://github.com/forinda)! - `app.status` is the application's lifecycle as a reactive value: `'idle'`, `'starting'` while `start()` runs, `'ready'` once it serves, `'draining'` from `shutdown()`, then `'stopped'`. Read `app.status.value`, or `watch(app.status, fn)` to act on a change — deregister from service discovery when the app starts draining, say. `isDraining` and the readiness probe follow it. DevTools reports it in `/_debug/health` (`app`) and sends each change to the dashboard as an `app:status` event; its adapter statuses are reactive too. `app.getManagementServer()` returns the management listener, beside `getHttpServer()`.
+
+- [#965](https://github.com/forinda/kick-js/pull/965) [`78fd681`](https://github.com/forinda/kick-js/commit/78fd681e2a498eb9f1c4206fc37861eb61194aea) Thanks [@forinda](https://github.com/forinda)! - Know what each port serves. `app.getRoutes()` now lists every route — the ones adapters add through `ctx.http` / `ctx.management.http` too (`/metrics`, `/_debug/*`, an adapter's own), static directories as `/prefix/*` — each with `source` (`'module'` or `'adapter'`) and `port` (`'app'` or `'management'`). With a management port, the startup log lists its routes. Fixed: with a management port, the health routes were still reported to `onRouteMount`, so the OpenAPI spec documented `/health/live` and `/health/ready` on the public server, where they answer 404.
+
 ## 10.6.0
 
 ### Minor Changes

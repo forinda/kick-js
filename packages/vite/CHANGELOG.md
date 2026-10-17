@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.1.1
+
+### Patch Changes
+
+- [#966](https://github.com/forinda/kick-js/pull/966) [`9512d56`](https://github.com/forinda/kick-js/commit/9512d56a0ae27af0edbe0675f27e31d66d920012) Thanks [@forinda](https://github.com/forinda)! - A build that keeps DevTools — `kickjsVitePlugin({ devtools: { enabled: true } })` or `KICKJS_DEVTOOLS=1` — keeps your `@forinda/kickjs-devtools-kit` imports and custom tabs too. They were stripped from every `vite build`, so the dashboard shipped without them.
+
 ## 8.1.0
 
 ### Minor Changes
