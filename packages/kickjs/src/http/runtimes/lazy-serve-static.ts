@@ -1,4 +1,4 @@
-import type { RequestHandler } from 'express'
+import type { ConnectHandler as RequestHandler } from '../connect'
 
 /**
  * `serve-static` as connect middleware, imported on the first request. Only

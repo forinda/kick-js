@@ -73,10 +73,16 @@ export type {
   RuntimeCapabilities,
   UseConnectOptions,
   RuntimeTypeMap,
-  ExpressRuntimeTypes,
   KickRuntimeRegister,
   ActiveRuntime,
 } from './runtime'
+export type {
+  ConnectRequest,
+  ConnectResponse,
+  ConnectNext,
+  ConnectHandler,
+  ConnectErrorHandler,
+} from './connect'
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './middleware/request-id'

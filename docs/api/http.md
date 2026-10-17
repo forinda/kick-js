@@ -131,7 +131,7 @@ bootstrap({ modules, runtime: h3Runtime() })
 | `h3Runtime(options?)`       | `@forinda/kickjs/h3`      | `h3` v2 (v1 fails fast at boot)          |
 | `h3WebRuntime` (deprecated) | `@forinda/kickjs/h3-web`  | alias of `h3Runtime`, kept for one major |
 
-`h3Runtime({ h3 })` accepts a pre-imported h3 module, for when the app's `h3` is a different copy from the one this package resolves (a linked checkout). The engine-native types for typegen are `ExpressRuntimeTypes`, `FastifyRuntimeTypes` and `H3RuntimeTypes`. The runtime contract (`HttpRuntime`, `RuntimeResponse`, `RouteEntry`, `RuntimeCapabilities`, …) is exported as types from `@forinda/kickjs`. See the [HTTP runtimes guide](../guide/http-runtimes.md).
+`h3Runtime({ h3 })` accepts a pre-imported h3 module, for when the app's `h3` is a different copy from the one this package resolves (a linked checkout). The engine-native types for typegen are `ExpressRuntimeTypes` (from `@forinda/kickjs/express`), `FastifyRuntimeTypes` and `H3RuntimeTypes`. Middleware is typed with kick's own connect types — `ConnectRequest`, `ConnectResponse`, `ConnectNext`, `ConnectHandler`, `ConnectErrorHandler` — which Express middleware fits. The runtime contract (`HttpRuntime`, `RuntimeResponse`, `RouteEntry`, `RuntimeCapabilities`, …) is exported as types from `@forinda/kickjs`. See the [HTTP runtimes guide](../guide/http-runtimes.md).
 
 ## Web fetch entry
 

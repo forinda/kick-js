@@ -19,13 +19,7 @@
 
 import { ROUTE_SLOT, type RouteFlags } from '../core/route-flag'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type {
-  RequestHandler,
-  ErrorRequestHandler,
-  Express,
-  Request as ExpressRequest,
-  Response as ExpressResponse,
-} from 'express'
+import type { ConnectMiddleware, ConnectRequest, ConnectResponse } from './connect'
 
 import type { Constructor, FileUploadConfig, MiddlewareHandler, RouteDefinition } from '../core'
 import type { RequestContext } from './context'
@@ -48,14 +42,10 @@ export type CtxHandler = (ctx: RequestContext) => unknown | Promise<unknown>
 /**
  * Connect-style middleware — the portable middleware format. Built-in
  * middleware and adopter-supplied Express middleware are this shape. The
- * Express runtime hands them straight to `app.use`; later runtimes bridge
- * them (Fastify via `@fastify/middie`, h3 via its node adapter).
- *
- * Typed as the Express handler union for M1 (Express is the only runtime);
- * a future milestone narrows this to bare node `(req, res, next)` primitives
- * once the driver layer lands.
+ * Express runtime hands them straight to `app.use`; the others bridge them
+ * (Fastify via `@fastify/middie`, h3 via its node adapter). See `./connect`.
  */
-export type ConnectMiddleware = RequestHandler | ErrorRequestHandler
+export type { ConnectMiddleware }
 
 /**
  * One materialized route, as plain data. Produced by {@link buildRouteTable}
@@ -265,13 +255,6 @@ export interface RuntimeTypeMap {
   app: unknown
 }
 
-/** The Express runtime's native types — the default when nothing is augmented. */
-export interface ExpressRuntimeTypes {
-  request: ExpressRequest
-  response: ExpressResponse
-  app: Express
-}
-
 /**
  * Augmentable runtime registry. Empty by default; the `kick/runtime` typegen
  * plugin emits a `{ runtime: <RuntimeTypeMap> }` augmentation from the configured
@@ -293,10 +276,25 @@ export interface ExpressRuntimeTypes {
 
 export interface KickRuntimeRegister {}
 
-/** The active runtime's type map — the augmented one, or Express by default. */
+/**
+ * The active runtime's type map — the augmented one, or the connect-style
+ * {@link ConnectRuntimeTypes} when nothing is augmented. `kick typegen` augments it from kick.config's
+ * `runtime`, Express included.
+ */
 export type ActiveRuntime = KickRuntimeRegister extends { runtime: infer R extends RuntimeTypeMap }
   ? R
-  : ExpressRuntimeTypes
+  : ConnectRuntimeTypes
+
+/**
+ * What the escape hatches are typed as with no augmentation: the connect-style
+ * request and response every runtime's middleware sees, and an app of unknown
+ * engine.
+ */
+export interface ConnectRuntimeTypes {
+  request: ConnectRequest
+  response: ConnectResponse
+  app: unknown
+}
 
 /** Options passed to {@link HttpRuntime.createApp}. */
 export interface RuntimeAppOptions {

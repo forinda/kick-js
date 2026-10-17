@@ -3,10 +3,10 @@
 // Emits the `KickRuntimeRegister` augmentation (spec §4.3b) that flips the
 // runtime-typed escape hatches — `AdapterContext.app`, `getRuntimeApp()`, and
 // (once the driver layer lands) `ctx.req.raw` / `ctx.res.raw` — to the configured
-// engine's native types. Reads `runtime` from kick.config; the Express runtime is
-// the framework default, so for `express` (or no runtime field) the plugin emits
-// nothing (returns null) — `ActiveRuntime` already falls back to
-// `ExpressRuntimeTypes` with no augmentation present.
+// engine's native types. Reads `runtime` from kick.config — Express when unset,
+// as the framework defaults to it. Without the augmentation `ActiveRuntime` is
+// the engine-neutral connect types, so Express gets one too: its types live
+// in `@forinda/kickjs/express`, which an app on another engine never loads.
 //
 // Output filename: `.kickjs/types/kick__runtime.ts`. `.ts` (not `.d.ts`) for the
 // same reason kick/routes uses it — the inline `import('@forinda/kickjs/<rt>').X`
@@ -16,8 +16,9 @@
 
 import type { TypegenPlugin } from '../plugin'
 
-/** The engine-native types export each non-default runtime subpath provides. */
-const RUNTIME_TYPES: Record<'fastify' | 'h3', { subpath: string; typeName: string }> = {
+/** The engine-native types export each runtime subpath provides. */
+const RUNTIME_TYPES: Record<'express' | 'fastify' | 'h3', { subpath: string; typeName: string }> = {
+  express: { subpath: '@forinda/kickjs/express', typeName: 'ExpressRuntimeTypes' },
   fastify: { subpath: '@forinda/kickjs/fastify', typeName: 'FastifyRuntimeTypes' },
   h3: { subpath: '@forinda/kickjs/h3', typeName: 'H3RuntimeTypes' },
 }
@@ -28,9 +29,8 @@ export const kickRuntimeTypegen = (): TypegenPlugin => ({
   // Re-run when kick.config changes (the `runtime` field is the only input).
   inputs: ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json'],
   async generate(ctx) {
-    const runtime = (ctx.config as { runtime?: string } | undefined)?.runtime
-    // Express (or unset) needs no augmentation — ActiveRuntime defaults to it.
-    if (runtime !== 'fastify' && runtime !== 'h3') return null
+    const runtime = (ctx.config as { runtime?: string } | undefined)?.runtime ?? 'express'
+    if (runtime !== 'express' && runtime !== 'fastify' && runtime !== 'h3') return null
 
     const { subpath, typeName } = RUNTIME_TYPES[runtime]
     return [

@@ -1,4 +1,3 @@
-import express from 'express'
 import {
   Application,
   Container,
@@ -17,6 +16,7 @@ import {
   type KickPlugin,
   type MetaValue,
   type ModuleRoutes,
+  type ActiveRuntime,
 } from '@forinda/kickjs'
 import * as kick from '@forinda/kickjs'
 import { createClient, loadSupertest, type TestClient, type TestClientOptions } from './client'
@@ -167,7 +167,7 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
    * instance mistyped as `express.Express`, which is how a suite ends up
    * silently exercising the wrong runtime.
    */
-  expressApp: express.Express
+  expressApp: ActiveRuntime['app']
   container: Container
 }> {
   let container: Container
@@ -244,7 +244,7 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   return {
     app,
     client: (clientOptions) => createClient(app, request, clientOptions),
-    get expressApp(): express.Express {
+    get expressApp(): ActiveRuntime['app'] {
       if (runtimeName !== 'express') {
         throw new Error(
           `createTestApp: 'expressApp' is only available under the Express runtime — ` +

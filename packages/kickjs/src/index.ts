@@ -161,10 +161,16 @@ export type {
   RuntimeCapabilities,
   UseConnectOptions,
   RuntimeTypeMap,
-  ExpressRuntimeTypes,
   KickRuntimeRegister,
   ActiveRuntime,
 } from './http/runtime'
+export type {
+  ConnectRequest,
+  ConnectResponse,
+  ConnectNext,
+  ConnectHandler,
+  ConnectErrorHandler,
+} from './http/connect'
 
 // Request-Scoped DI
 export {

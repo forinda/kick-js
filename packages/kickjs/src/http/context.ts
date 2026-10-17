@@ -1,7 +1,7 @@
 /// <reference types="multer" />
 import type { RouteName, UrlForArgs } from './url-for'
 import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
-import type { Request, NextFunction } from 'express'
+import type { ConnectRequest as Request, ConnectNext as NextFunction } from './connect'
 import { ROUTE_SLOT } from '../core/route-flag'
 import {
   isBigIntJsonError,
@@ -339,7 +339,7 @@ export class RequestContext<
   ) {
     // Under the Express runtime `res` IS a RuntimeResponse (structural); other
     // runtimes pass an explicit driver wrapping their native reply.
-    this._response = responseDriver ?? (res as RuntimeResponse)
+    this._response = responseDriver ?? (res as unknown as RuntimeResponse)
   }
 
   /**

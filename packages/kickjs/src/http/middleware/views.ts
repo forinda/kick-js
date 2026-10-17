@@ -67,7 +67,12 @@ export interface ViewAdapterOptions {
 export const ViewAdapter = defineAdapter<ViewAdapterOptions>({
   name: 'ViewAdapter',
   build: (options) => ({
-    beforeMount({ app }) {
+    beforeMount({ app: engineApp }) {
+      // Express-only: template engines register on Express's app settings.
+      const app = engineApp as {
+        engine(ext: string, fn: unknown): unknown
+        set(setting: string, value: unknown): unknown
+      }
       const { engine, ext, viewsDir = 'src/views' } = options
 
       // Register the engine. Three resolution paths cover every

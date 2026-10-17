@@ -21,6 +21,7 @@ import { applyHandlerResult } from '../reply'
 import { validate } from '../middleware/validate'
 import { publishMatchedRoute } from '../runtime'
 import { buildUploadMiddleware } from '../middleware/upload'
+import type { ConnectHandler } from '../connect'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -39,7 +40,11 @@ import type {
  * state lives in the AsyncLocalStorage store, not on the ctx instance, so the
  * per-step instances share state exactly as before.
  */
-export function materializeRouter(entries: RouteEntry[]): Router {
+export function materializeRouter(entries: RouteEntry[]): ConnectHandler {
+  return expressRouter(entries)
+}
+
+function expressRouter(entries: RouteEntry[]): Router {
   const router = Router()
 
   for (const entry of entries) {
@@ -121,16 +126,19 @@ export function materializeRouter(entries: RouteEntry[]): Router {
  *
  * @see buildRouteTable for the engine-neutral route-table form.
  */
-export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = {}): Router {
-  return materializeRouter(buildRouteTable(controllerClass, options))
+export function buildRoutes(
+  controllerClass: any,
+  options: BuildRoutesOptions = {},
+): ConnectHandler {
+  return expressRouter(buildRouteTable(controllerClass, options))
 }
 
 /**
  * The default HTTP runtime. Express stays a peer dependency of `@forinda/kickjs`;
  * apps that pass no `runtime` get this and behave exactly as before.
  */
-export function expressRuntime(): HttpRuntime<Express> {
-  return {
+export function expressRuntime(): HttpRuntime {
+  const runtime: HttpRuntime<Express> = {
     name: 'express',
 
     createApp(options: RuntimeAppOptions = {}): Express {
@@ -153,7 +161,7 @@ export function expressRuntime(): HttpRuntime<Express> {
 
     mountRoutes(app, table: RouteTable) {
       for (const { mountPath, routes } of table) {
-        app.use(mountPath, materializeRouter(routes))
+        app.use(mountPath, expressRouter(routes))
       }
     },
 
@@ -185,4 +193,5 @@ export function expressRuntime(): HttpRuntime<Express> {
       http2: false,
     },
   }
+  return runtime as HttpRuntime
 }

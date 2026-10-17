@@ -9,7 +9,11 @@ import {
   timingSafeEqual,
 } from 'node:crypto'
 import { createLogger } from '../../core/logger'
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 
 import { registerDisposable } from '../../core/disposables'
 import { isProduction } from '../../core/is-production'

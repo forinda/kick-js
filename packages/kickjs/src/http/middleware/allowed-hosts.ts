@@ -1,4 +1,8 @@
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 import { HOST_GRAMMAR, parseHttpUrl } from '../host'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 import { sendJson } from './respond'

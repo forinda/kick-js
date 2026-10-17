@@ -1,7 +1,11 @@
 import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import { bindRoutePolicy, type RoutePolicyTable } from '../../core/route-policy'
 import { sendJson } from './respond'
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { registerDisposable } from '../../core/disposables'

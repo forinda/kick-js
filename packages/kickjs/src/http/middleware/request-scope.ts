@@ -1,7 +1,11 @@
 // Web Crypto via globalThis.crypto (randomUUID) — portable across
 // node/bun/deno/workers; node:crypto deliberately NOT imported here so this
 // module stays on the edge-safe request path.
-import type { Request, Response, NextFunction } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+} from '../connect'
 import { requestStore, type RequestStore } from '../request-store'
 import { METADATA } from '../../core/interfaces'
 import { getClassMetaOrUndefined } from '../../core/metadata'

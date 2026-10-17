@@ -1,6 +1,11 @@
 import { HttpException, HttpStatus } from '../../core/errors'
 import { unlink } from 'node:fs/promises'
-import type { Request, Response, NextFunction, RequestHandler } from 'express'
+import type {
+  ConnectRequest as Request,
+  ConnectResponse as Response,
+  ConnectNext as NextFunction,
+  ConnectHandler as RequestHandler,
+} from '../connect'
 import type { Options as MulterOptions } from 'multer'
 import type { BaseUploadOptions, FileUploadConfig } from '../../core'
 
