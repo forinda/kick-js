@@ -135,7 +135,7 @@ export interface AdapterContext {
    * the public port. `server` is set from `afterStart` on. Absent without the
    * option, and in dev mode, where Vite owns the only server.
    */
-  management?: { http: AdapterHttp; server?: http.Server }
+  management?: { http: AdapterHttp; server?: http.Server | https.Server }
   /** Current NODE_ENV value (default: 'production' — unset fails closed) */
   env: string
   /** true unless NODE_ENV is exactly 'development' or 'test' */

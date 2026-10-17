@@ -4,7 +4,7 @@
  * file instead of compressing on each request. KickJS's static serving
  * (`SpaAdapter`, `ctx.http.serveStatic`) picks the sibling the client accepts.
  */
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { brotliCompress, constants, gzip } from 'node:zlib'
@@ -55,7 +55,14 @@ export async function compressDirectory(
   let written = 0
   for await (const file of files(dir)) {
     if (!COMPRESSIBLE.has(extname(file).slice(1).toLowerCase())) continue
-    if ((await stat(file)).size < threshold) continue
+    // A sibling not rewritten below is from an older build of this file, and
+    // the server would send it instead: remove it.
+    const stale = new Set(['.br', '.gz'])
+    const clearStale = () => Promise.all([...stale].map((ext) => rm(file + ext, { force: true })))
+    if ((await stat(file)).size < threshold) {
+      await clearStale()
+      continue
+    }
     const source = await readFile(file)
     const variants: Array<[string, Promise<Buffer>]> = []
     if (encodings.includes('br')) {
@@ -75,8 +82,10 @@ export async function compressDirectory(
       // Only when it saves something: the server would send the larger file otherwise.
       if (compressed.length >= source.length) continue
       await writeFile(file + ext, compressed)
+      stale.delete(ext)
       written++
     }
+    await clearStale()
   }
   return written
 }
@@ -87,13 +96,17 @@ export async function compressDirectory(
  */
 export function compressAssets(options: CompressAssetsOptions = {}): Plugin {
   let outDir = ''
+  let writes = true
   return {
     name: 'kickjs:compress-assets',
     apply: (_config, env) => env.command === 'build' && !env.isSsrBuild,
     configResolved(config) {
       outDir = resolve(config.root, config.build.outDir)
+      writes = config.build.write !== false
     },
     async closeBundle() {
+      // `build.write: false` leaves nothing on disk to compress.
+      if (!writes) return
       const written = await compressDirectory(outDir, options)
       this.info(`precompressed ${written} file(s) in ${outDir}`)
     },

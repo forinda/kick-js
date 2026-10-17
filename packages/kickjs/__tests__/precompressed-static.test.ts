@@ -26,6 +26,8 @@ beforeAll(() => {
   writeFileSync(join(dir, 'assets/app.js.gz'), gzipSync(js))
   writeFileSync(join(dir, 'assets/plain.css'), 'body{color:red}\n'.repeat(100))
   writeFileSync(join(dir, 'secret.txt.br'), 'outside the static root')
+  // The file itself was removed; its old compressed copy was left behind.
+  writeFileSync(join(dir, 'assets/orphan.js.br'), brotliCompressSync('old'))
 })
 
 /** Raw response: headers and the bytes as sent (no decoding, unlike fetch). */
@@ -100,6 +102,11 @@ describe.each(runtimes)('precompressed static files on %s', (_name, runtime) => 
     const css = await get(port, '/static/plain.css', { 'accept-encoding': 'br' })
     expect(css.status).toBe(200)
     expect(css.headers['content-encoding']).toBeUndefined()
+
+    // A copy is never served in place of a file that's gone.
+    const orphan = await get(port, '/static/orphan.js', { 'accept-encoding': 'br' })
+    expect(orphan.status).toBe(404)
+    expect(orphan.headers['content-encoding']).toBeUndefined()
 
     // Nothing outside the static root, compressed or not.
     const escape = await get(port, '/static/..%2fsecret.txt', { 'accept-encoding': 'br' })

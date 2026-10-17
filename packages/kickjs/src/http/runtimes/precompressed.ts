@@ -75,6 +75,8 @@ export function withPrecompressed(root: string, serve: ConnectHandler): ConnectH
     }
     const accept = String(req.headers['accept-encoding'] ?? '')
     ;(async () => {
+      // A sibling stands in for its file — never for one that's gone.
+      if (!(await stat(file).catch(() => undefined))?.isFile()) return serve(req, res, next)
       for (const [encoding, ext] of ENCODINGS) {
         if (!acceptsEncoding(accept, encoding)) continue
         const sibling = await stat(file + ext).catch(() => undefined)

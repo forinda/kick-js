@@ -767,6 +767,13 @@ export interface ManagementOptions {
    * probes. Narrow it with a network policy, or bind an internal address.
    */
   host?: string
+  /**
+   * Serve the management port over HTTPS — same shape as `server.tls`. Off by
+   * default: the port is meant for an internal network. Set it when anything
+   * that crosses that network carries a credential (a DevTools token, an
+   * admin route's bearer token).
+   */
+  tls?: tls.SecureContextOptions & tls.TlsOptions
 }
 
 export class Application {
@@ -780,7 +787,7 @@ export class Application {
    * mode — whatever `runtime` builds (Express, Fastify, h3), so not typed as one.
    */
   private managementApp: unknown = null
-  private managementServer: http.Server | null = null
+  private managementServer: http.Server | https.Server | null = null
   /** Set by start() when `management` applies; setup() then creates the management app. */
   private wantsManagement = false
   /** Set by startWithoutServer() — the serverless path, where cron runs over HTTP. */
@@ -835,6 +842,8 @@ export class Application {
   private _inFlightRequests = 0
   /** Whether the application is draining (shutting down gracefully) */
   private _draining = false
+  /** True while start() runs — readiness answers 503 until the app serves. */
+  private _starting = false
   /** Whether shutdown has already been initiated (prevents double-shutdown) */
   private _shutdownInitiated = false
   /** Resolvers waiting for in-flight requests to reach zero */
@@ -1325,7 +1334,11 @@ export class Application {
     // or already included one in their middleware list.
     if (this.shouldAutoMountRequestScope()) {
       this.runtime.useConnect(this.app, requestScopeMiddleware())
-      if (this.managementApp) this.runtime.useConnect(this.managementApp, requestScopeMiddleware())
+    }
+    // The management app runs none of the app's middleware, so it gets its own
+    // request scope even when the app mounted one itself.
+    if (this.managementApp && this.options.contextStore !== 'manual') {
+      this.runtime.useConnect(this.managementApp, requestScopeMiddleware())
     }
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
@@ -1421,6 +1434,7 @@ export class Application {
     if (this.options.health !== false) {
       this.container.registerInstance(HEALTH_PROBE, {
         isDraining: () => this._draining,
+        isStarting: () => this._starting,
         checks: createHealthChecks(() => this.adapters, {
           timeoutMs:
             typeof this.options.health === 'object' ? this.options.health.checkTimeout : undefined,
@@ -1788,6 +1802,7 @@ export class Application {
   async start(): Promise<void> {
     const g = globalThis as any
     const serverOptions = this.options.server
+    this._starting = true
 
     // Check the server options before setup() so a bad combination fails
     // before any adapter has done work.
@@ -1837,6 +1852,7 @@ export class Application {
         await plugin.onReady?.(this.container)
       }
       this.timeline.mark('ready')
+      this._starting = false
       this.timeline.complete()
       this.reportStartup()
 
@@ -1886,6 +1902,7 @@ export class Application {
             await plugin.onReady?.(this.container)
           }
           this.timeline.mark('ready')
+          this._starting = false
           this.timeline.complete()
           this.reportStartup()
 
@@ -1899,7 +1916,11 @@ export class Application {
 
   /** The management listener: plain HTTP, on its own port, before the public one. */
   private async listenManagement(options: ManagementOptions): Promise<void> {
-    const server = http.createServer(this.runtime.nodeHandler(this.managementApp!))
+    const handler = this.runtime.nodeHandler(this.managementApp!)
+    if (options.tls) assertUsableTls(options.tls)
+    const server = options.tls
+      ? https.createServer(options.tls, handler)
+      : http.createServer(handler)
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
       server.listen(options.port, options.host, () => {
@@ -1908,7 +1929,8 @@ export class Application {
       })
     })
     this.managementServer = server
-    log.info(`Management server on http://${options.host ?? 'localhost'}:${options.port}`)
+    const scheme = options.tls ? 'https' : 'http'
+    log.info(`Management server on ${scheme}://${options.host ?? 'localhost'}:${options.port}`)
   }
 
   /** The production server for {@link ApplicationOptions.server}. */
@@ -2142,6 +2164,13 @@ export class Application {
           timeBoxed(`Adapter '${adapter.name}'`, () => adapter.shutdown?.()),
         ),
         timeBoxed(`Runtime '${this.runtime.name}'`, () => this.runtime.close?.(this.app)),
+        ...(this.managementApp && closeServer
+          ? [
+              timeBoxed(`Runtime '${this.runtime.name}' (management)`, () =>
+                this.runtime.close?.(this.managementApp),
+              ),
+            ]
+          : []),
       ])
 
       // A reload must leave the shared dev server listening. If a hook closed

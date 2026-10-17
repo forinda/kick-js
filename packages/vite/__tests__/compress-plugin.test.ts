@@ -60,6 +60,33 @@ describe('compressAssets', () => {
     expect(existsSync(join(dir, 'noise.txt.gz'))).toBe(false)
   })
 
+  it('removes a copy the current build no longer writes', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-compress-'))
+    const file = join(dir, 'app.js')
+    writeFileSync(file, 'console.log(1)\n'.repeat(200))
+    await compressDirectory(dir)
+    expect(existsSync(`${file}.br`)).toBe(true)
+
+    // Gzip only now: the old .br would otherwise be served for the new file.
+    writeFileSync(file, 'console.log(2)\n'.repeat(200))
+    await compressDirectory(dir, { encodings: ['gzip'] })
+    expect(existsSync(`${file}.br`)).toBe(false)
+    expect(gunzipSync(readFileSync(`${file}.gz`)).toString()).toContain('console.log(2)')
+
+    // Under the threshold now: no copy at all.
+    writeFileSync(file, 'x')
+    await compressDirectory(dir)
+    expect(existsSync(`${file}.gz`)).toBe(false)
+  })
+
+  it('does nothing when the build writes nothing (build.write: false)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kick-compress-'))
+    writeFileSync(join(root, 'index.html'), '<script type="module" src="./main.js"></script>')
+    writeFileSync(join(root, 'main.js'), `console.log(${JSON.stringify('x'.repeat(4000))})\n`)
+    await build({ root, logLevel: 'silent', build: { write: false }, plugins: [compressAssets()] })
+    expect(existsSync(join(root, 'dist'))).toBe(false)
+  })
+
   it('runs on client builds only', () => {
     const apply = compressAssets().apply as (c: object, env: object) => boolean
     expect(apply({}, { command: 'build', isSsrBuild: false })).toBe(true)

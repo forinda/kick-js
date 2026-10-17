@@ -102,6 +102,8 @@ bootstrap({
 - Your middleware — auth, rate limits, CSRF, the request log — doesn't run on the management port, so probes need no exemptions (`health: { flags }` makes no difference there). Readiness keeps answering `503` while the app shuts down.
 - `metricsAdapter({ management: true })` serves `/metrics` there, and `DevToolsAdapter({ management: true })` serves `/_debug`, keeping both off the internet. DevTools still needs `enabled: true` outside development, and a `secret`.
 - `host` picks the interface to listen on. The default is all of them, like the public port: a kubelet probes the pod's address, so `127.0.0.1` would fail the probes. Keep the port private with a network policy.
+- It's plain HTTP unless you pass `tls` (the same shape as `server.tls`) — set it when anything crossing that network carries a credential, such as the DevTools token.
+- The port opens before the app has finished starting; until it has, readiness answers `503` with `status: 'starting'`.
 - With `logRouteTable: true`, the startup route table marks the routes on the management port.
 - Off by default. In `kick dev` and on serverless platforms everything stays on the one port.
 
