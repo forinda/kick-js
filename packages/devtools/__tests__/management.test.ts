@@ -55,4 +55,69 @@ describe('DevTools on the management port', () => {
     expect(heard).toEqual([{ status: 'draining' }, { status: 'stopped' }])
     expect(getActiveDevtoolsBus()).toBeUndefined()
   })
+
+  it.each([
+    ['the app port', false, 'app'],
+    ['the management port', true, 'management'],
+  ] as const)(
+    'lists every route with its port when served on %s',
+    async (_where, onManagement, dashboard) => {
+      Container.reset()
+      let listener: KickServer | undefined
+      const probe: AppAdapter = {
+        name: 'Probe',
+        beforeMount({ http, management }) {
+          http.route('GET', '/probe', (ctx) => ctx.json({}))
+          management!.http.route('GET', '/internal', (ctx) => ctx.json({}))
+        },
+        afterStart({ server, management }) {
+          listener = onManagement ? management?.server : server
+        },
+      }
+      app = new Application({
+        modules: [],
+        adapters: [
+          DevToolsAdapter({
+            enabled: true,
+            secret: false,
+            management: onManagement,
+            runtime: { enabled: false },
+          }),
+          probe,
+        ],
+        port: 0,
+        management: { port: 0, host: '127.0.0.1' },
+      })
+      await app.start()
+      const res = await fetch(
+        `http://127.0.0.1:${(listener!.address() as AddressInfo).port}/_debug/routes`,
+      )
+      const body = (await res.json()) as {
+        port: string
+        routes: Array<{ path: string; controller: string; source?: string; port?: string }>
+      }
+
+      expect(body.port).toBe(dashboard)
+      const pick = ({ path, controller, source, port }: (typeof body.routes)[number]) => ({
+        path,
+        controller,
+        source,
+        port,
+      })
+      expect(body.routes.map(pick)).toEqual(
+        expect.arrayContaining([
+          { path: '/probe', controller: 'Probe', source: 'adapter', port: 'app' },
+          { path: '/internal', controller: 'Probe', source: 'adapter', port: 'management' },
+          {
+            path: '/health/live',
+            controller: 'HealthController',
+            source: 'module',
+            port: 'management',
+          },
+        ]),
+      )
+      // The dashboard's own routes stay out.
+      expect(body.routes.some((r) => r.controller === 'DevToolsAdapter')).toBe(false)
+    },
+  )
 })

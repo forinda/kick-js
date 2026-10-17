@@ -3,7 +3,9 @@
  * runner for the selected route on the right. The divider position and the
  * collapsed groups are remembered.
  *
- * Reads the shared store (`store.routes()`, fed by the unified stream).
+ * Reads the shared store (`store.routes()`, fed by the unified stream). Routes
+ * adapters add are listed under the adapter; routes on the management port
+ * carry a badge, and can't be run from a dashboard on the other port.
  */
 
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
@@ -171,15 +173,22 @@ export const RoutesTab: Component = () => {
                   {(r) => (
                     <button
                       type="button"
-                      class={`flex w-full cursor-pointer items-center gap-2 border-0 border-b border-border/50 px-2.5 py-1 text-left text-[0.78rem] text-text-body ${
-                        isSelected(r)
-                          ? 'bg-accent/12 shadow-[inset_2px_0_0_0_var(--color-accent)]'
-                          : 'bg-transparent hover:bg-surface-hover'
+                      disabled={r.offPort}
+                      class={`flex w-full items-center gap-2 border-0 border-b border-border/50 px-2.5 py-1 text-left text-[0.78rem] text-text-body ${
+                        r.offPort
+                          ? 'cursor-default bg-transparent opacity-60'
+                          : isSelected(r)
+                            ? 'cursor-pointer bg-accent/12 shadow-[inset_2px_0_0_0_var(--color-accent)]'
+                            : 'cursor-pointer bg-transparent hover:bg-surface-hover'
                       }`}
                       onClick={() => openApiRunner(r)}
                       title={`${r.controller}.${r.handler}${
                         r.middleware.length ? ` · middleware: ${r.middleware.join(', ')}` : ''
-                      }${r.contributors?.length ? `\ncontext contributors:\n${describeContributors(r)}` : ''}`}
+                      }${r.contributors?.length ? `\ncontext contributors:\n${describeContributors(r)}` : ''}${
+                        r.offPort
+                          ? `\nServed on the ${r.port} port — the runner calls this page's own port.`
+                          : ''
+                      }`}
                     >
                       <span
                         class={`w-[3.4rem] shrink-0 font-mono text-[0.68rem] font-bold ${methodColor(r.method)}`}
@@ -187,6 +196,11 @@ export const RoutesTab: Component = () => {
                         {r.method}
                       </span>
                       <span class="min-w-0 flex-1 truncate font-mono">{r.path}</span>
+                      <Show when={r.port === 'management'}>
+                        <span class="shrink-0 rounded border border-border-strong px-1 text-[0.62rem] text-text-muted">
+                          mgmt
+                        </span>
+                      </Show>
                       <Show when={formatContributors(r)}>
                         {(c) => (
                           <span class="shrink-0 font-mono text-[0.66rem] text-text-muted">

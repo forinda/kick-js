@@ -132,6 +132,8 @@ export function activeEnvironmentVariables(): Record<string, string> {
 }
 
 export function openApiRunner(route: RouteEntry, params?: Record<string, string>): void {
+  // Requests go to this page's origin; a route on the other port isn't there.
+  if (route.offPort) return
   if (params) {
     const saved = load(() => localStorage, inputsKey(route), emptyInputs(route))
     pendingInputs = { ...saved, params: { ...saved.params, ...params } }

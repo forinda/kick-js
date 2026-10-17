@@ -44,6 +44,12 @@ export interface RouteEntry {
   schemas?: RouteSchemas
   /** Context contributors the route runs, in execution order — decorators included. */
   contributors?: RouteContributorEntry[]
+  /** A module's controller, or an adapter's own route (`/metrics`, a webhook…). */
+  source?: 'module' | 'adapter'
+  /** Which listener serves it. */
+  port?: 'app' | 'management'
+  /** Served on the other port than the dashboard's, so the runner can't call it. */
+  offPort?: boolean
 }
 
 export interface RouteContributorEntry {

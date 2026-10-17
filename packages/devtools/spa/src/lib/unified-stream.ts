@@ -142,7 +142,12 @@ async function refetchSnapshots(): Promise<void> {
     })
   }
   if (routes.status === 'fulfilled') {
-    storeActions.setRoutes(routes.value.routes ?? [])
+    const here = routes.value.port
+    storeActions.setRoutes(
+      (routes.value.routes ?? []).map((r) =>
+        here && r.port && r.port !== here ? { ...r, offPort: true } : r,
+      ),
+    )
   }
   if (container.status === 'fulfilled') {
     storeActions.setContainer(container.value.registrations ?? [])
