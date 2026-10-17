@@ -143,7 +143,7 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     // devtools-kit imports + their top-level call sites without
     // requiring adopters to gate them behind the flag. See
     // `babel-strip-devtools.ts` for the rule set.
-    plugins.push(devtoolsStripPlugin())
+    plugins.push(devtoolsStripPlugin({ devtools: options.devtools ?? {} }))
   }
   return plugins
 }

@@ -68,6 +68,8 @@ export default defineConfig({
 
 Resolution order: explicit `enabled` option → `KICKJS_DEVTOOLS=0|1|true|false` env → Vite `command` (`'serve'` → `true`, `'build'` → `false`).
 
+A build without DevTools also drops your `@forinda/kickjs-devtools-kit` imports and the tabs they define. A build that keeps it — `devtools: { enabled: true }` or `KICKJS_DEVTOOLS=1` — keeps them too. To run the dashboard in production, keep it in the build, pass `DevToolsAdapter({ enabled: true, secret })`, and serve it [on a private port](#on-a-private-port) if the app has a management port.
+
 ## Endpoints
 
 ### `GET /_debug/routes`
