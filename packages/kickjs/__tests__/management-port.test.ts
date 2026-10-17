@@ -18,6 +18,8 @@ class PingController {
 }
 
 const runtimes = [
+  // The default runtime, which loads Express during setup.
+  ['default', () => undefined],
   ['express', () => expressRuntime()],
   ['fastify', () => fastifyRuntime()],
   ['h3', () => h3Runtime()],

@@ -781,6 +781,8 @@ export class Application {
    */
   private managementApp: unknown = null
   private managementServer: http.Server | null = null
+  /** Set by start() when `management` applies; setup() then creates the management app. */
+  private wantsManagement = false
   /** Set by startWithoutServer() — the serverless path, where cron runs over HTTP. */
   private handlerMode = false
   /** The observer set this app installed — released on shutdown only if still current. */
@@ -1255,6 +1257,7 @@ export class Application {
     await this.runtime.load?.()
     await settleExpressLoad()
     this.app ??= this.createEngineApp()
+    if (this.wantsManagement) this.managementApp ??= this.createEngineApp()
     this.timeline = new StartupTimeline()
     // Bound before modules register, so their services can inject it; the
     // routes fill it in as they mount.
@@ -1795,8 +1798,9 @@ export class Application {
     if (management && g.__kickjs_httpServer) {
       log.info('management port is ignored in dev mode — /health stays on the dev server')
     } else if (management) {
-      // Before setup(): adapters see `ctx.management` from beforeMount on.
-      this.managementApp = this.createEngineApp()
+      // setup() creates it beside the app, once the runtime has loaded its
+      // engine — adapters see `ctx.management` from beforeMount on.
+      this.wantsManagement = true
     }
 
     await this.setup()
