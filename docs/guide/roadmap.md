@@ -2,7 +2,7 @@
 
 This document captures ideas for how to evolve KickJS. Each proposal carries enough detail to deliberate on it without re-deriving the motivation every time. **DB-related items are deferred** — we're working through the non-DB tracks first.
 
-> **Last audited 2026-09-30** against the source, not from memory. Statuses below reflect what
+> **Last audited 2026-10-17** against the source, not from memory. Statuses below reflect what
 > actually ships; where a proposal was delivered by a different design than the one sketched, the
 > status says so rather than quietly matching the text to the code.
 
@@ -230,7 +230,7 @@ A centralized error catalog (`packages/kickjs/src/core/error-catalog.ts`) keyed 
 
 ### B.3 Interactive docs / WebContainers playground
 
-**Status:** `proposed` — nothing in the docs site references WebContainers or an embedded playground yet.
+**Status:** `not planned` — overreach for a backend framework: it means hosting an in-browser Node sandbox and keeping it working across releases. The guides and the examples archive cover evaluation.
 **Effort:** 2–4 weeks
 
 **Why it matters.** VitePress + markdown is great, but everything is static. Vue's docs let you tweak code in the page and see it run. SvelteKit, Astro, Hono — they all do this now. For a backend framework, the friction-to-evaluation is even higher (you need a terminal, Node, a port…) — letting visitors try `bootstrap({ modules: [HelloModule] })` in the docs without leaving the page would be a real adoption boost.
@@ -411,7 +411,7 @@ Phasing: **1)** primitive + `ctx.route` + contributor `skipWhen`/`onlyWhen`; **2
 
 ### B.7 `kick dev` starts your backing services {#b-7-kick-dev-starts-your-backing-services}
 
-**Status:** `proposed`
+**Status:** `not planned` — overreach: starting containers is the project's job, one `docker compose up -d --wait` in a `predev` script, not the framework's. Tests keep `startService()`.
 **Effort:** ~1 week
 
 **Why it matters.** Starting the app's database or Redis is a separate step before every `kick dev`. After it, the connection details have to be copied into `.env` by hand. Tests already have this covered: [`startService()`](./testing/large-suites.md#a-service-per-file-startservice) starts a container and hands its URL to a settings section with `provide()`. Local development has no equivalent.
@@ -720,13 +720,13 @@ uncompressed JS unless a CDN sits in front.
 
 ### E.8 Smaller items
 
-| #     | What they do                                                                                                                                              | KickJS today                                                                                                                           | Effort |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| E.8.1 | Per-path route rules — `headers`, `cors`, `redirect`, `proxy`, `cache` on a pattern (`/api/**`)                                                           | Decorators and global middleware; no proxy helper. Lower value for a decorator-first framework                                         | M      |
-| E.8.2 | mTLS: `request.tls.{peerCertificate, authorized}`, and `496` when no client certificate is sent                                                           | `server.tls` already passes `requestCert` / `ca` through; no `ctx.tls` and no guard                                                    | S      |
-| E.8.3 | Accept a file path for `tls.cert` / `tls.key` (srvx reads the file)                                                                                       | Callers `readFileSync` themselves                                                                                                      | S      |
-| E.8.4 | Request body size limit — `srvx/body-limit` rejects early on `content-length` and counts streamed bytes (so length-less HTTP/2 bodies are covered), `413` | Express's JSON parser caps at 100 KB by default; the h3 runtime has no limit at all. Should apply to every runtime, as problem details | S–M    |
-| E.8.5 | Source-mapped, colourised dev error output (Youch)                                                                                                        | Dev JSON with raw stack lines; framework errors already carry fix hints                                                                | S, low |
+| #     | What they do                                                                                                                                              | KickJS today                                                                                                                    | Effort |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| E.8.1 | Per-path route rules — `headers`, `cors`, `redirect`, `proxy`, `cache` on a pattern (`/api/**`)                                                           | Decorators and global middleware; no proxy helper. Lower value for a decorator-first framework                                  | M      |
+| E.8.2 | mTLS: `request.tls.{peerCertificate, authorized}`, and `496` when no client certificate is sent                                                           | `server.tls` already passes `requestCert` / `ca` through; no `ctx.tls` and no guard                                             | S      |
+| E.8.3 | Accept a file path for `tls.cert` / `tls.key` (srvx reads the file)                                                                                       | Callers `readFileSync` themselves                                                                                               | S      |
+| E.8.4 | Request body size limit — `srvx/body-limit` rejects early on `content-length` and counts streamed bytes (so length-less HTTP/2 bodies are covered), `413` | `shipped` — `jsonLimit` (default `'1mb'`) applies on every engine; a larger body is `413` ([HTTP runtimes](./http-runtimes.md)) | S–M    |
+| E.8.5 | Source-mapped, colourised dev error output (Youch)                                                                                                        | Dev JSON with raw stack lines; framework errors already carry fix hints                                                         | S, low |
 
 ### Reports for upstream
 
@@ -769,7 +769,7 @@ Small enough to bundle into other work or do in a half-day. Listed for visibilit
 | #   | Idea                                                           | Effort | Status                                                                                                                                                                                                                                    |
 | --- | -------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Q.1 | `@Flag('feature-name')` decorator + ConfigService integration  | 2 days | `rejected` — covered by [B.6](#b-6-route-flags-one-vocabulary-for-per-route-policy) (`defineRouteFlag`)                                                                                                                                   |
-| Q.2 | `kick db:seed` first-class command                             | 3 days | `proposed` (DB)                                                                                                                                                                                                                           |
+| Q.2 | `kick db:seed` first-class command                             | 3 days | `shipped` as `kick db seed` ([D.2](#track-d-database))                                                                                                                                                                                    |
 | Q.3 | HTTP/2 + HTTP/3 support in the default adapter                 | 1 week | `shipped` for HTTP/2 — `server: { tls, http2 }` on Fastify / h3 ([HTTPS and HTTP/2](./http-runtimes.md#https-and-http-2)); Express cannot (KICK007). HTTP/3 `deferred` until Node ships stable QUIC                                       |
 | Q.4 | `kick new --with swagger,db,docker` preset bundles             | 3 days | `shipped` in part — `kick new --packages a,b` and `kick add --list`; no docker or named presets                                                                                                                                           |
 | Q.5 | `kick test:e2e` wrapper around supertest + test-app            | 1 week | `proposed` — `createTestApp` + supertest covers it without a command; confirm the wrapper still earns its keep                                                                                                                            |
@@ -879,12 +879,11 @@ Conventions: per-dialect code tabs, copyable one-problem recipes, every error li
 Already delivered, in roughly the order the list first proposed them: **B.5** Problem Details,
 **B.2** error messages with fix hints, **B.4** `kick doctor`, **A.1** typed client, **A.3**
 runtime portability (via the runtime seam + web entry rather than the package split sketched
-above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), **E.9** background jobs with any runner, **D.5–D.8** typed database errors, call-chain transactions, transaction retry, and primary-key / CHECK migrations, **D.2** `kick db seed`, **D.10** maintained columns (`onUpdateNow`, `version`, `softDelete`), **D.11** upsert and a race-safe `findOrCreate`, **D.12** read replicas, **D.13** many-to-many relational reads, **D.15** test helpers, **D.16** `findManyAndCount`, **D.9** richer indexes, **D.17** rename prompts, **D.20** generated and identity columns, **D.19** picking fields in relational reads, **D.18** TypeScript migrations, **D.21** `casing`, **D.22** migration and transaction options, **D.23** edge and serverless drivers, **D.24** more column options, **D.25** views and materialized views, **D.26** row-level security, and **D.14** database documentation on par with established ORMs. The list below is what remains.
+above), **B.6** route flags (all four phases), **E.2** `waitUntil`, the **E.1** API runner (MVP and phase 2), **E.3 + E.4** observer hooks and tracing channels (A.2 re-scoped), **E.5** `@Cron` on serverless, and **B.1** the layered scaffolder with `kick add` wiring and the scaffold matrix, **C.1** re-scoped (validation from tables, and table forms), **E.9** background jobs with any runner, **D.5–D.8** typed database errors, call-chain transactions, transaction retry, and primary-key / CHECK migrations, **D.2** `kick db seed`, **D.10** maintained columns (`onUpdateNow`, `version`, `softDelete`), **D.11** upsert and a race-safe `findOrCreate`, **D.12** read replicas, **D.13** many-to-many relational reads, **D.15** test helpers, **D.16** `findManyAndCount`, **D.9** richer indexes, **D.17** rename prompts, **D.20** generated and identity columns, **D.19** picking fields in relational reads, **D.18** TypeScript migrations, **D.21** `casing`, **D.22** migration and transaction options, **D.23** edge and serverless drivers, **D.24** more column options, **D.25** views and materialized views, **D.26** row-level security, and **D.14** database documentation on par with established ORMs. Outside the proposals, a management port for health, metrics and DevTools, `app.status` as a reactive lifecycle, and a route inventory (`app.getRoutes()` with `source` and `port`, shown in the DevTools Routes tab) have shipped too. The list below is what remains.
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-2. **B.7 — `kick dev` backing services** (~1 week; not urgent)
+1. **E.6 — Response caching** with stale-while-revalidate and ETag / 304 (3–5 days; Q.8 and E.2 have shipped)
 
 Open for redirection — these are starting points, not commitments.
 
