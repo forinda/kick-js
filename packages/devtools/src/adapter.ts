@@ -705,15 +705,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               .map((r) => {
                 const method = r.method.toUpperCase()
                 const known = tracked.get(`${method} ${r.controller}.${r.handler}`)
+                // Metadata is per handler; the path is per mount — one controller
+                // can be mounted under several prefixes.
                 return {
                   ...(known ?? {
                     method,
-                    path: r.pattern,
                     controller: r.controller,
                     handler: r.handler,
                     middleware: [],
                     flags: {},
                   }),
+                  path: r.pattern,
                   contributors: r.contributors,
                   ...(r.source ? { source: r.source } : {}),
                   ...(r.port ? { port: r.port } : {}),

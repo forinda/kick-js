@@ -2,7 +2,15 @@
 import 'reflect-metadata'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AddressInfo } from 'node:net'
-import { Application, Container, type AppAdapter, type KickServer } from '@forinda/kickjs'
+import {
+  Application,
+  Container,
+  Controller,
+  Get,
+  type AppAdapter,
+  type KickServer,
+  type RequestContext,
+} from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { getActiveDevtoolsBus } from '@forinda/kickjs-devtools-kit/bus/token'
 
@@ -120,4 +128,45 @@ describe('DevTools on the management port', () => {
       expect(body.routes.some((r) => r.controller === 'DevToolsAdapter')).toBe(false)
     },
   )
+
+  it('keeps each mount of a controller under its own path', async () => {
+    Container.reset()
+    @Controller()
+    class EchoController {
+      @Get('/echo')
+      echo(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+    let server: KickServer | undefined
+    app = new Application({
+      modules: [
+        {
+          routes: () => [
+            { path: '/v1', controller: EchoController },
+            { path: '/v2', controller: EchoController },
+          ],
+        } as never,
+      ],
+      adapters: [
+        DevToolsAdapter({ enabled: true, secret: false, runtime: { enabled: false } }),
+        {
+          name: 'Spy',
+          afterStart(ctx) {
+            server = ctx.server
+          },
+        },
+      ],
+      port: 0,
+    })
+    await app.start()
+    const res = await fetch(
+      `http://127.0.0.1:${(server!.address() as AddressInfo).port}/_debug/routes`,
+    )
+    const { routes } = (await res.json()) as { routes: Array<{ path: string; handler: string }> }
+    expect(routes.filter((r) => r.handler === 'echo').map((r) => r.path)).toEqual([
+      '/api/v1/v1/echo',
+      '/api/v1/v2/echo',
+    ])
+  })
 })
