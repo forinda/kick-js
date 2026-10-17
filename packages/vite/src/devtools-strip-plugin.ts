@@ -13,10 +13,11 @@
 
 import type { Plugin } from 'vite'
 import { stripDevtoolsCode } from './babel-strip-devtools'
+import { resolveDevtoolsFlag, type DevtoolsFlagOptions } from './devtools-flag-plugin'
 
 export interface DevtoolsStripOptions {
   /**
-   * Force enable / disable. Default: enabled when `command === 'build'`.
+   * Force enable / disable. Default: on for `vite build` when the devtools flag is off.
    * Adopters running a debug-prod build (`kick build` with the flag
    * forced on) can pass `false` to keep devtools-kit code in the
    * bundle.
@@ -29,6 +30,12 @@ export interface DevtoolsStripOptions {
    * normally fine to leave at the default.
    */
   include?: RegExp
+  /**
+   * The devtools flag options the build uses (`kickjsVitePlugin({ devtools })`).
+   * Without an explicit `enabled`, the strip runs only when that flag is off —
+   * a build that keeps DevTools keeps its tabs.
+   */
+  devtools?: DevtoolsFlagOptions
 }
 
 const DEFAULT_INCLUDE = /\.(?:m|c)?[jt]sx?$/
@@ -47,7 +54,7 @@ export function devtoolsStripPlugin(opts: DevtoolsStripOptions = {}): Plugin {
     enforce: 'pre',
     apply: 'build',
     config(_userConfig, env) {
-      active = opts.enabled ?? env.command === 'build'
+      active = opts.enabled ?? (env.command === 'build' && !resolveDevtoolsFlag(opts.devtools, env))
     },
     transform(code, id) {
       if (!active) return null
