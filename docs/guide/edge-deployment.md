@@ -180,6 +180,11 @@ middleware itself is not wired on the web entry yet.
 | Vercel (Node runtime)  | ✅        | use their Node functions — Vercel recommends Node over their legacy Edge runtime |
 | Netlify Edge Functions | ❌        | no AsyncLocalStorage — use Netlify's regular (Node) Functions instead            |
 
+## Inside Hono or Nitro
+
+The fetch entry also runs inside another framework's handler — see
+[Embedding](./embedding.md).
+
 ## One pipeline, two entries
 
 `createWebApp` and `h3Runtime()` on h3 v2 share the same request pipeline (the web
