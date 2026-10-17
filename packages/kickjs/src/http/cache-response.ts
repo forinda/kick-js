@@ -58,6 +58,8 @@ interface Recorded {
   body: string
   /** `body` is base64 of bytes the handler sent. */
   binary?: boolean
+  /** The handler used `ctx.res` directly: what it did there isn't recorded, so this is never stored. */
+  native?: boolean
 }
 
 interface Entry {
@@ -112,13 +114,14 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
       const varied = varies.map((h) => `${h}=${String(headers[h] ?? '')}`).join('&')
       const key = `${prefix}:${identity}|${varied}`
       const provider = getCacheProvider()
-      const build = () => buildOnce(key, () => record(original, this, ctx, rest))
-      const store = async (recorded: Recorded | null) => {
-        if (recorded && cacheable(recorded)) {
+      const run = () => record(original, this, ctx, rest)
+      const build = () => buildOnce(key, run)
+      const store = async ({ recorded, shared }: Built) => {
+        // The request that ran the handler stores it; the ones that waited don't again.
+        if (!shared && recorded && cacheable(recorded)) {
           const entry: Entry = { recorded, storedAt: Date.now() }
           await provider.set(key, entry, maxAgeMs + swrMs)
         }
-        return recorded
       }
 
       const entry = (await provider.get(key)) as Entry | null
@@ -132,7 +135,12 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
         }
       }
 
-      const recorded = await build().then(store)
+      const built = await build()
+      await store(built)
+      let recorded = built.recorded
+      // A response that isn't shared — a cookie, a 404, ctx.res — belongs to the
+      // request that produced it: one that only waited for it runs the handler itself.
+      if (built.shared && !(recorded && cacheable(recorded))) recorded = await run()
       if (recorded) replay(ctx, recorded)
       return undefined
     }
@@ -143,18 +151,24 @@ export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
 /** `name[:port]` or `[ipv6][:port]` — no path, userinfo or whitespace. */
 const VALID_HOST = /^(?:\[[0-9a-f:.]+\]|[a-z0-9-]+(?:\.[a-z0-9-]+)*)(?::\d{1,5})?$/i
 
-/** Concurrent misses on one key share a single build. */
-function buildOnce(key: string, run: () => Promise<Recorded | null>): Promise<Recorded | null> {
-  const pending = inFlight.get(key)
-  if (pending) return pending
-  const load = run().finally(() => inFlight.delete(key))
-  inFlight.set(key, load)
-  return load
+/** A build's result, and whether this request only waited for another one's. */
+interface Built {
+  recorded: Recorded | null
+  shared: boolean
 }
 
-/** Only a 200 that sets no cookie is shared. */
+/** Concurrent misses on one key share a single build. */
+async function buildOnce(key: string, run: () => Promise<Recorded | null>): Promise<Built> {
+  const pending = inFlight.get(key)
+  if (pending) return { recorded: await pending, shared: true }
+  const load = run().finally(() => inFlight.delete(key))
+  inFlight.set(key, load)
+  return { recorded: await load, shared: false }
+}
+
+/** Only a 200 that sets no cookie, written through ctx alone, is shared. */
 function cacheable(recorded: Recorded): boolean {
-  return recorded.status === 200 && !('set-cookie' in recorded.headers)
+  return recorded.status === 200 && !('set-cookie' in recorded.headers) && !recorded.native
 }
 
 /**
@@ -224,9 +238,26 @@ async function record(
     flushHeaders: unsupported('flushHeaders()'),
     write: unsupported('write()'),
   }
-  // Everything but the response is the real request's: params, query, headers, metadata.
+  // `ctx.res` is the engine's own response: what a handler does to it directly
+  // (a header, a cookie) isn't recorded, so any use of it marks the response unshareable.
+  const native = new Proxy(ctx.res as object, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target)
+      if (typeof value !== 'function') return value
+      return (...args: unknown[]) => {
+        recorded.native = true
+        return value.apply(target, args)
+      }
+    },
+    set(target, prop, value) {
+      recorded.native = true
+      return Reflect.set(target, prop, value, target)
+    },
+  })
+  // Everything else is the real request's: params, query, headers, metadata.
   const recordingCtx = Object.create(ctx, {
     _response: { value: response as unknown as RuntimeResponse },
+    res: { value: native },
   }) as RequestContext
   const result = await handler.call(self, recordingCtx, ...rest)
   if (!sent) await applyHandlerResult(recordingCtx, result)
@@ -235,6 +266,8 @@ async function record(
 
 /** Send a recorded response — `304` when the client's copy is current. */
 function replay(ctx: RequestContext, recorded: Recorded): void {
+  // The handler already answered through ctx.res itself.
+  if (ctx['_response'].headersSent) return
   for (const [name, value] of Object.entries(recorded.headers)) {
     if (name !== 'etag' && name !== 'content-type') ctx.setHeader(name, value)
   }

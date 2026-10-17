@@ -290,6 +290,46 @@ for (const [name, runtime] of RUNTIMES)
       expect(loads).toBe(2)
     })
 
+    it("never hands one request's unshareable response to another that waited for it", async () => {
+      @Controller()
+      class C {
+        @CacheResponse({ maxAge: 60 })
+        @Get('/session')
+        async session(ctx: RequestContext) {
+          const id = ++loads
+          await new Promise((r) => setTimeout(r, 30))
+          ctx.setHeader('Set-Cookie', `sid=${id}`)
+          ctx.json({ id })
+        }
+      }
+      const http = await boot(C)
+
+      const responses = await Promise.all([1, 2, 3].map(() => http.get('/api/v1/c/session')))
+      const cookies = responses.map((r) => String(r.headers['set-cookie']))
+      expect(new Set(cookies).size).toBe(3)
+      expect(responses.map((r) => r.body.id).toSorted()).toEqual([1, 2, 3])
+    })
+
+    it('never stores a response the handler touched through ctx.res', async () => {
+      @Controller()
+      class C {
+        @CacheResponse({ maxAge: 60 })
+        @Get('/native')
+        native(ctx: RequestContext) {
+          loads++
+          const res = ctx.res as unknown as Record<string, (...a: unknown[]) => unknown>
+          ;(res.setHeader ?? res.header).call(res, 'Set-Cookie', 'sid=native')
+          ctx.json({ loads })
+        }
+      }
+      const http = await boot(C)
+
+      const first = await http.get('/api/v1/c/native').expect(200)
+      expect(String(first.headers['set-cookie'])).toContain('sid=native')
+      await http.get('/api/v1/c/native').expect(200)
+      expect(loads).toBe(2)
+    })
+
     it('maxAge 0 without swr stores nothing', async () => {
       @Controller()
       class C {
