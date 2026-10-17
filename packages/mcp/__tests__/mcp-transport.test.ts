@@ -3,7 +3,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import express, { type Express } from 'express'
 import request from 'supertest'
 import { z } from 'zod'
-import { Container, Controller, Get, Post, expressRuntime, type AdapterHttp } from '@forinda/kickjs'
+import { Container, Controller, Get, Post, type AdapterHttp } from '@forinda/kickjs'
+// Standalone, outside an Application: the eager module, which loads Express.
+import { expressRuntime } from '@forinda/kickjs/express'
 import { McpAdapter, McpTool } from '@forinda/kickjs-mcp'
 
 /**

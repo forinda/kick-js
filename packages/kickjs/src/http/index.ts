@@ -56,7 +56,7 @@ export type { TypedParsedQuery, FieldsOf } from './query'
 // Router Builder — engine-neutral route table + the default Express materializer
 export { buildRouteTable } from './router-builder'
 export type { BuildRoutesOptions } from './router-builder'
-export { buildRoutes, materializeRouter, expressRuntime } from './runtimes/express'
+export { buildRoutes, materializeRouter, expressRuntime } from './runtimes/express-lazy'
 
 // HTTP runtime seam
 export type {

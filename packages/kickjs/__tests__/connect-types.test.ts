@@ -71,4 +71,25 @@ describe('published typings', () => {
       expect(offenders).toEqual(['http/runtimes/express.d.mts'])
     },
   )
+
+  it.skipIf(!existsSync(dist))(
+    "the root entry doesn't load express — only a dynamic import() reaches it",
+    () => {
+      // Follow static imports from dist/index.mjs; dynamic ones are left out.
+      const seen = new Set<string>()
+      const loadsExpress: string[] = []
+      const visit = (file: string) => {
+        if (seen.has(file)) return
+        seen.add(file)
+        const code = readFileSync(file, 'utf8')
+        if (/from\s*"express"|import\s*"express"/.test(code)) loadsExpress.push(file)
+        for (const m of code.matchAll(/(?:from|import)\s*"(\.[^"]+)"/g)) {
+          visit(join(file, '..', m[1]!))
+        }
+      }
+      visit(join(dist, 'index.mjs'))
+      expect(seen.size).toBeGreaterThan(5)
+      expect(loadsExpress).toEqual([])
+    },
+  )
 })

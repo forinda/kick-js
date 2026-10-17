@@ -22,6 +22,8 @@ import { validate } from '../middleware/validate'
 import { publishMatchedRoute } from '../runtime'
 import { buildUploadMiddleware } from '../middleware/upload'
 import type { ConnectHandler } from '../connect'
+import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from '../body-policy'
+import { EXPRESS_CAPABILITIES } from './express-lazy'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -185,13 +187,25 @@ export function expressRuntime(): HttpRuntime {
       ;(app as any).use(mw)
     },
 
-    capabilities: {
-      render: true,
-      uploads: true,
-      connectMiddleware: true,
-      nativeBodyParsing: false,
-      http2: false,
+    bodyParsers({ limit }) {
+      return [
+        // EXPRESS_JSON_TYPES, not the default: `express.json()` matches the
+        // exact string `application/json`, so `application/merge-patch+json`
+        // arrived unparsed while Fastify answered 415 and h3 parsed it (#590).
+        express.json({ limit, type: [...EXPRESS_JSON_TYPES] }),
+        // Forms and text were parsed by h3 and rejected by Fastify; on Express
+        // they reached the handler as `undefined`, because the engine parsed
+        // only what its middleware list happened to cover.
+        express.urlencoded({ extended: true, limit }),
+        express.text({ limit, type: 'text/*' }),
+        // After the parsers: Express leaves an unmatched type as `undefined`,
+        // which is indistinguishable from "no body sent". This restores the
+        // difference so an unsupported type is answered rather than ignored.
+        rejectUnsupportedBody(),
+      ]
     },
+
+    capabilities: EXPRESS_CAPABILITIES,
   }
   return runtime as HttpRuntime
 }

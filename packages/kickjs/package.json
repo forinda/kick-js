@@ -163,6 +163,9 @@
     "dotenv": {
       "optional": true
     },
+    "express": {
+      "optional": true
+    },
     "fastify": {
       "optional": true
     },

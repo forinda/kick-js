@@ -34,13 +34,14 @@ import {
   Get,
   RequestContext,
   Service,
-  buildRoutes,
   createToken,
   defineHttpContextDecorator,
   getRequestValue,
   requestScopeMiddleware,
   type SourcedRegistration,
 } from '../src/index'
+// Standalone, outside an Application: the eager module, which loads Express.
+import { buildRoutes } from '../src/http/runtimes/express'
 
 // ── ContextMeta augmentation ────────────────────────────────────────────
 

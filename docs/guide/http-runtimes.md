@@ -8,7 +8,7 @@ application rewrite.
 ```ts
 import { bootstrap } from '@forinda/kickjs'
 
-// Express — the zero-config default. Nothing to install or configure.
+// Express — the default. Needs `express` installed (kick new adds it).
 export const app = await bootstrap({ modules })
 ```
 
@@ -19,6 +19,14 @@ import { fastifyRuntime } from '@forinda/kickjs/fastify'
 // Opt in to Fastify — same modules, same controllers.
 export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
 ```
+
+`express` is an optional peer of `@forinda/kickjs`: an app on Fastify or h3
+doesn't need it installed, and nothing loads it. The default runtime loads it
+when the app starts — without it installed, `start()` fails with a message
+naming the package. `expressRuntime()`, `buildRoutes()` and
+`materializeRouter()` from `@forinda/kickjs` load Express with the app; to use
+them on their own — `express().use(buildRoutes(Controller))` in a test — import
+them from `@forinda/kickjs/express`, which loads it straight away.
 
 ## Why it works
 
@@ -238,4 +246,7 @@ as is.
 A runtime implements the `HttpRuntime` contract (`createApp`, `nodeHandler`,
 `mountRoutes`, `useConnect`, `serveStatic`, `setNotFound`, `setErrorHandler`,
 `capabilities`). `expressRuntime()` is the reference implementation; the Fastify
-runtime is ~250 lines over the same contract.
+runtime is ~250 lines over the same contract. Two hooks are optional: `load()`,
+awaited before the first `createApp()`, for a runtime that imports its engine
+lazily; and `bodyParsers({ limit })`, the parsers to mount when
+`capabilities.nativeBodyParsing` is `false` — without it, Express's are used.

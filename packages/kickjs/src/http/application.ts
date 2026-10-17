@@ -8,7 +8,6 @@ import { matchesBearer } from '../core/web-crypto'
 import https from 'node:https'
 import http2 from 'node:http2'
 import tls from 'node:tls'
-import express from 'express'
 import type { ConnectHandler, ConnectMiddleware } from './connect'
 import {
   Container,
@@ -48,12 +47,7 @@ import {
   runDisposables,
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
-import {
-  DEFAULT_BODY_LIMIT,
-  EXPRESS_JSON_TYPES,
-  parseByteSize,
-  rejectUnsupportedBody,
-} from './body-policy'
+import { DEFAULT_BODY_LIMIT, parseByteSize } from './body-policy'
 import { requestId } from './middleware/request-id'
 import { pendingBackgroundWork, settleBackgroundWork } from './background'
 import { installChannelPublisher, traceHandler } from './tracing'
@@ -96,7 +90,7 @@ import {
   healthModule,
   type HealthModuleConfig,
 } from './health-module'
-import { expressRuntime } from './runtimes/express'
+import { expressBodyParsers, expressRuntime, settleExpressLoad } from './runtimes/express-lazy'
 import { createLoopback, type Loopback } from './loopback'
 import type {
   ActiveRuntime,
@@ -810,11 +804,9 @@ export class Application {
   private _drainResolvers: Array<() => void> = []
 
   constructor(private readonly options: ApplicationOptions) {
+    // The default loads Express in setup(), so an app that passes another
+    // runtime never needs it installed.
     this.runtime = options.runtime ?? expressRuntime()
-    // `this.app` is the engine-native app; typed Express here (the default) for
-    // the legacy escape hatches. Under another runtime it holds that engine's
-    // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
-    this.app = this.createEngineApp()
     this.container = Container.getInstance()
     this.container.registerInstance(APPLICATION, this)
 
@@ -969,6 +961,11 @@ export class Application {
   }
 
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
+    if (this.app === undefined) {
+      throw new Error(
+        'kickjs: Application.handle() before setup — await start() or startWithoutServer() first',
+      )
+    }
     // Built once per engine app — the serverless and loopback paths call this
     // per request, and h3 wraps the app in a fresh node listener on each call.
     // Keyed on the app, so a rebuild (HMR) gets a handler for the new one.
@@ -1201,6 +1198,12 @@ export class Application {
 
   async setup(): Promise<void> {
     log.debug('Bootstrapping application...')
+    // The engine app — `getRuntimeApp()` / `AdapterContext.app`, typed through
+    // ActiveRuntime — once the runtime has loaded its engine. A rebuild (HMR)
+    // brings its own.
+    await this.runtime.load?.()
+    await settleExpressLoad()
+    this.app ??= this.createEngineApp()
     this.timeline = new StartupTimeline()
     // Bound before modules register, so their services can inject it; the
     // routes fill it in as they mount.
@@ -1326,19 +1329,12 @@ export class Application {
       // otherwise the body stream is read twice and the engine's parser hangs.
       if (!this.runtime.capabilities.nativeBodyParsing) {
         const limit = this.options.jsonLimit ?? DEFAULT_BODY_LIMIT
-        // EXPRESS_JSON_TYPES, not the default: `express.json()` matches the
-        // exact string `application/json`, so `application/merge-patch+json`
-        // arrived unparsed while Fastify answered 415 and h3 parsed it (#590).
-        this.runtime.useConnect(this.app, express.json({ limit, type: [...EXPRESS_JSON_TYPES] }))
-        // Forms and text were parsed by h3 and rejected by Fastify; on Express
-        // they reached the handler as `undefined`, because the engine parsed
-        // only what its middleware list happened to cover.
-        this.runtime.useConnect(this.app, express.urlencoded({ extended: true, limit }))
-        this.runtime.useConnect(this.app, express.text({ limit, type: 'text/*' }))
-        // After the parsers: Express leaves an unmatched type as `undefined`,
-        // which is indistinguishable from "no body sent". This restores the
-        // difference so an unsupported type is answered rather than ignored.
-        this.runtime.useConnect(this.app, rejectUnsupportedBody())
+        const parsers = this.runtime.bodyParsers
+          ? this.runtime.bodyParsers({ limit })
+          : await expressBodyParsers(limit)
+        for (const parser of parsers) {
+          this.runtime.useConnect(this.app, parser)
+        }
       }
     }
 
