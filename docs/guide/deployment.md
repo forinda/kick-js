@@ -83,6 +83,24 @@ Behind a proxy or load balancer, set `bootstrap({ trustProxy })` so `ctx.ip` and
 - **Shutdown:** set `preStopDelay` to a few seconds (for example `5_000`). The app keeps serving while balancers and Kubernetes endpoints notice it is unready, then stops accepting connections and drains. Draining and the adapters' shutdown hooks each get up to `shutdownTimeout`, so keep the platform's grace period (`terminationGracePeriodSeconds`) above `preStopDelay` plus twice `shutdownTimeout`, with a few seconds to spare — with the defaults and `preStopDelay: 5_000`, at least 70 seconds.
 - **Keep-alive:** the server keeps idle connections for 65 seconds, above AWS ALB's 60-second idle timeout. If your balancer's idle timeout is longer, raise `server: { keepAliveTimeout }` above it — otherwise requests on reused connections fail with 502.
 
+### A management port
+
+`management: { port }` serves the operational endpoints on a second port — the same app and container, a second listener, as Spring Boot's `management.server.port` does:
+
+```ts
+bootstrap({
+  modules,
+  management: { port: 9090 },
+  adapters: [DevToolsAdapter({ management: true, secret: getEnv('DEVTOOLS_TOKEN') })],
+})
+```
+
+- `/health/live` and `/health/ready` move to it, and answer `404` on the public port. Point the probes at `9090` and expose only the public port through the ingress.
+- The management port skips the app's middleware — auth, rate limits, CSRF, the request log — so probes need no exemptions, and they keep answering (readiness `503`) while the public port drains. It closes last.
+- An adapter can serve routes there through `ctx.management.http`; `DevToolsAdapter({ management: true })` moves `/_debug` and its event bus, which keeps the dashboard off the internet. It still needs `enabled: true` outside development, and a `secret`.
+- `host` binds one interface. The default is every interface, like the public port: a kubelet probes the pod's address, so `127.0.0.1` would fail the probes. Keep the port private with a network policy instead.
+- Off by default, and ignored in dev mode (Vite owns the only server) and on serverless platforms.
+
 ## Metrics
 
 `metricsAdapter()` serves Prometheus metrics at `/metrics`:

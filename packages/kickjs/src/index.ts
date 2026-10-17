@@ -13,6 +13,7 @@ export {
   APPLICATION,
   Application,
   type ApplicationOptions,
+  type ManagementOptions,
   type MiddlewareEntry,
   type ServerOptions,
   type ConfigDescription,

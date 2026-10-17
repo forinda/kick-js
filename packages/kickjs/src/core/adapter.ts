@@ -128,6 +128,14 @@ export interface AdapterContext {
    * for HTTP/1.1 clients, which is what WebSocket libraries attach to.
    */
   server?: KickServer
+  /**
+   * The management listener, when `bootstrap({ management })` runs one: the
+   * same app and container on a second port, serving `/health` — and whatever
+   * an adapter registers on `management.http` (DevTools' `/_debug`), kept off
+   * the public port. `server` is set from `afterStart` on. Absent without the
+   * option, and in dev mode, where Vite owns the only server.
+   */
+  management?: { http: AdapterHttp; server?: http.Server }
   /** Current NODE_ENV value (default: 'production' — unset fails closed) */
   env: string
   /** true unless NODE_ENV is exactly 'development' or 'test' */

@@ -86,6 +86,7 @@ import { builtInAdvice, formatAdvice, type FailureAdvice } from '../core/failure
 import { builtInChecks, runStartupChecks, type StartupCheck } from './startup-checks'
 import {
   HEALTH_PROBE,
+  HealthController,
   createHealthChecks,
   healthModule,
   type HealthModuleConfig,
@@ -251,6 +252,22 @@ export interface ApplicationOptions {
    * ```
    */
   server?: ServerOptions
+  /**
+   * Serve operational endpoints on a second port — the same app and container,
+   * a second listener, like Spring Boot's `management.server.port`. `/health/live`
+   * and `/health/ready` move there, off the public port, along with whatever
+   * adapters register on `AdapterContext.management` (DevTools with
+   * `DevToolsAdapter({ management: true })`). The management port skips the
+   * app's middleware, and keeps answering while the public port drains.
+   *
+   * Off by default. Ignored in dev mode (Vite owns the only server) and in
+   * handler mode (serverless), where everything stays on the one entry.
+   *
+   * ```ts
+   * bootstrap({ modules, management: { port: 9090 } })
+   * ```
+   */
+  management?: ManagementOptions
   /** Global API prefix (default: '/api'). Pass `''` to mount at the root. */
   apiPrefix?: string
   /**
@@ -740,12 +757,27 @@ function isConstructible(fn: unknown): boolean {
  */
 export const APPLICATION = createToken<Application>('kick/Http/Application')
 
+/** {@link ApplicationOptions.management}. */
+export interface ManagementOptions {
+  /** Port for the management listener. */
+  port: number
+  /**
+   * Interface to bind. Default: every interface, like the public port — an
+   * orchestrator probes the pod's address, so `127.0.0.1` would fail its
+   * probes. Narrow it with a network policy, or bind an internal address.
+   */
+  host?: string
+}
+
 export class Application {
   private app: unknown
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: KickServer | null = null
+  /** `bootstrap({ management })`: its engine app, created by start() outside dev mode. */
+  private managementApp: unknown = null
+  private managementServer: http.Server | null = null
   /** Set by startWithoutServer() — the serverless path, where cron runs over HTTP. */
   private handlerMode = false
   /** The observer set this app installed — released on shutdown only if still current. */
@@ -1004,12 +1036,21 @@ export class Application {
   /** Build the adapter context object (shared across all hooks) */
   private adapterCtx(server?: any): AdapterContext {
     const env = process.env.NODE_ENV ?? 'production'
+    const managementApp = this.managementApp
     return {
       http: this.adapterHttp(),
       app: this.app,
       fetch: (request) => this.fetch(request),
       container: this.container,
       server,
+      ...(managementApp
+        ? {
+            management: {
+              http: this.adapterHttp(() => managementApp),
+              server: this.managementServer ?? undefined,
+            },
+          }
+        : {}),
       env,
       isProduction: isProduction(),
     }
@@ -1020,7 +1061,7 @@ export class Application {
    * call routes through the active runtime over the current `this.app`, so an
    * adapter written against this works under any runtime.
    */
-  private adapterHttp(): AdapterHttp {
+  private adapterHttp(target: () => unknown = () => this.app): AdapterHttp {
     return {
       route: (method, path, handler) => {
         const entry: RouteEntry = {
@@ -1031,16 +1072,16 @@ export class Application {
           handler,
           meta: {},
         }
-        this.runtime.mountRoutes(this.app, [{ mountPath: '/', routes: [entry] }])
+        this.runtime.mountRoutes(target(), [{ mountPath: '/', routes: [entry] }])
       },
       mount: (prefix, routes) => {
-        this.runtime.mountRoutes(this.app, [{ mountPath: prefix, routes }])
+        this.runtime.mountRoutes(target(), [{ mountPath: prefix, routes }])
       },
       serveStatic: (prefix, dir) => {
-        this.runtime.serveStatic(this.app, prefix, dir)
+        this.runtime.serveStatic(target(), prefix, dir)
       },
       use: (mw, opts) => {
-        this.runtime.useConnect(this.app, mw, opts)
+        this.runtime.useConnect(target(), mw, opts)
       },
     }
   }
@@ -1278,6 +1319,7 @@ export class Application {
     // or already included one in their middleware list.
     if (this.shouldAutoMountRequestScope()) {
       this.runtime.useConnect(this.app, requestScopeMiddleware())
+      if (this.managementApp) this.runtime.useConnect(this.managementApp, requestScopeMiddleware())
     }
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
@@ -1460,6 +1502,7 @@ export class Application {
     // is the only place that knows the FULL mounted path — prefix, version and
     // controller route joined.
     const mountedPaths: MountedRoute[] = []
+    const managementPaths: MountedRoute[] = []
     this.mountedRoutes = mountedPaths
     this.mountedRouteInfo = []
 
@@ -1514,6 +1557,11 @@ export class Application {
           if (route.router) {
             this.runtime.useConnect(this.app, route.router, { path: mountPath })
           } else if (route.controller) {
+            // The built-in health routes answer on the management port when there is one.
+            const target =
+              this.managementApp && route.controller === HealthController
+                ? this.managementApp
+                : this.app
             const routeTable = buildRouteTable(route.controller, { mountFlags: route.flags })
             const ctrl = route.controller.name ?? 'controller'
             for (const entry of routeTable) {
@@ -1521,7 +1569,10 @@ export class Application {
               const owner = `${ctrl}.${String(entry.meta.handlerName ?? '?')}`
               const fullPath = joinPaths(mountPath, entry.path)
               assertRouteUnique(seenRoutes, entry.method, fullPath, owner)
-              mountedPaths.push({ method: entry.method, path: fullPath })
+              ;(target === this.app ? mountedPaths : managementPaths).push({
+                method: entry.method,
+                path: fullPath,
+              })
               this.routeUrls.add(owner, fullPath)
               this.routePolicy.add(entry.method, fullPath, entry.meta.flags)
             }
@@ -1546,7 +1597,7 @@ export class Application {
                 urls: this.routeUrls,
               }
             })
-            this.runtime.mountRoutes(this.app, [{ mountPath, routes: traced }])
+            this.runtime.mountRoutes(target, [{ mountPath, routes: traced }])
             for (const entry of traced) {
               this.mountedRouteInfo.push({
                 method: entry.method,
@@ -1662,6 +1713,16 @@ export class Application {
       this.app,
       observeErrors(this.options.onError ?? errorHandler()) as unknown as ConnectMiddleware,
     )
+    if (this.managementApp) {
+      this.runtime.setNotFound(
+        this.managementApp,
+        notFoundHandler(managementPaths) as unknown as ConnectMiddleware,
+      )
+      this.runtime.setErrorHandler(
+        this.managementApp,
+        observeErrors(errorHandler()) as unknown as ConnectMiddleware,
+      )
+    }
     this.timeline.mark('error handlers')
   }
 
@@ -1727,6 +1788,14 @@ export class Application {
       if (serverOptions.tls) assertUsableTls(serverOptions.tls)
     }
 
+    const management = this.options.management
+    if (management && g.__kickjs_httpServer) {
+      log.info('management port is ignored in dev mode — /health stays on the dev server')
+    } else if (management) {
+      // Before setup(): adapters see `ctx.management` from beforeMount on.
+      this.managementApp = this.createEngineApp()
+    }
+
     await this.setup()
     this.runChecks()
 
@@ -1777,6 +1846,8 @@ export class Application {
       throw err
     })
 
+    if (this.managementApp && management) await this.listenManagement(management)
+
     // Wrap listen in a Promise so afterStart/onReady errors propagate
     await new Promise<void>((resolve, reject) => {
       this.httpServer!.listen(port, async () => {
@@ -1810,6 +1881,20 @@ export class Application {
         }
       })
     })
+  }
+
+  /** The management listener: plain HTTP, on its own port, before the public one. */
+  private async listenManagement(options: ManagementOptions): Promise<void> {
+    const server = http.createServer(this.runtime.nodeHandler(this.managementApp!))
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(options.port, options.host, () => {
+        server.off('error', reject)
+        resolve()
+      })
+    })
+    this.managementServer = server
+    log.info(`Management server on http://${options.host ?? 'localhost'}:${options.port}`)
   }
 
   /** The production server for {@link ApplicationOptions.server}. */
@@ -2071,6 +2156,15 @@ export class Application {
       this.container.flushChanges()
       await this.loopback?.close()
       this.loopback = undefined
+      // Last: probes kept answering (readiness 503) while the public port drained.
+      if (closeServer && this.managementServer) {
+        const server = this.managementServer
+        this.managementServer = null
+        await new Promise<void>((resolve) => {
+          server.close(() => resolve())
+          server.closeAllConnections()
+        })
+      }
       // The adapters are shut down: stop routing reports to them. A reload
       // keeps the same adapters, so it keeps them observing.
       if (closeServer) releaseObservers(this.observers)

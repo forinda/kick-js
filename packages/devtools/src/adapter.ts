@@ -217,6 +217,12 @@ export interface DevToolsOptions {
   /** Base path for debug endpoints (default: '/_debug') */
   basePath?: string
   /**
+   * Serve the dashboard and its event bus on the management port
+   * (`bootstrap({ management: { port } })`) instead of the public one. Without a
+   * management listener — no option, or dev mode — it stays on the app's port.
+   */
+  management?: boolean
+  /**
    * Mount the dashboard. Default: only when `NODE_ENV` is `'development'` or
    * `'test'` — an unset or unrecognised `NODE_ENV` keeps `/_debug` off.
    */
@@ -613,8 +619,9 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
       // ── Lifecycle ─────────────────────────────────────────────────
 
-      beforeMount({ app, http, container: containerArg }) {
+      beforeMount({ app, http: appHttp, container: containerArg, management }) {
         if (!enabled) return
+        const http = options.management && management ? management.http : appHttp
 
         appRef = app
         container = containerArg
@@ -1365,7 +1372,8 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         }
       },
 
-      afterStart({ server }) {
+      afterStart({ server: appServer, management }) {
+        const server = options.management && management?.server ? management.server : appServer
         if (!enabled) return
         // Wire the bus's WS upgrade to the framework's http.Server.
         // Path-based routing inside attachUpgrade means kickjs-ws or
