@@ -51,6 +51,8 @@ describe('DevTools on the management port', () => {
     getActiveDevtoolsBus()!.on('app:status', (payload) => heard.push(payload))
     await app.shutdown()
     app = undefined
-    expect(heard).toContainEqual({ status: 'draining' })
+    // Through to the end: the bus stays open until 'stopped' has gone out.
+    expect(heard).toEqual([{ status: 'draining' }, { status: 'stopped' }])
+    expect(getActiveDevtoolsBus()).toBeUndefined()
   })
 })

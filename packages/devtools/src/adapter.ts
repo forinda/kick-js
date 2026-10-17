@@ -1418,12 +1418,27 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
       shutdown() {
         stopErrorWatch?.()
-        stopStatusWatch?.()
         runtimeSampler?.stop()
         memoryAnalyzer?.stop()
-        if (bus && getActiveDevtoolsBus() === bus) setActiveDevtoolsBus(undefined)
-        bus?.close()
         adapterStatuses['DevToolsAdapter'] = 'stopped'
+        const closeBus = () => {
+          stopStatusWatch?.()
+          stopStatusWatch = null
+          if (bus && getActiveDevtoolsBus() === bus) setActiveDevtoolsBus(undefined)
+          bus?.close()
+        }
+        // The app reports 'stopped' after its adapters have shut down: keep the
+        // bus open until the dashboard has heard it, then close.
+        const status = appStatus()
+        if (status && stopStatusWatch && status.value !== 'stopped') {
+          stopStatusWatch()
+          stopStatusWatch = watch(status, (value) => {
+            bus?.emit('app:status', { status: value })
+            if (value === 'stopped') closeBus()
+          })
+        } else {
+          closeBus()
+        }
       },
     }
   },

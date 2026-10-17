@@ -1777,6 +1777,23 @@ export class Application {
    * (it receives the `http.Server`), and no process signal handlers.
    */
   async startWithoutServer(): Promise<void> {
+    await this.untilStartedOrStopped(() => this.startWithoutServerSteps())
+  }
+
+  /**
+   * Run a startup, leaving the status at `'stopped'` if it fails — a failed
+   * startup is not still starting.
+   */
+  private async untilStartedOrStopped(run: () => Promise<void>): Promise<void> {
+    try {
+      await run()
+    } catch (err) {
+      this._status.value = 'stopped'
+      throw err
+    }
+  }
+
+  private async startWithoutServerSteps(): Promise<void> {
     this.handlerMode = true
     this._status.value = 'starting'
     await this.setup()
@@ -1812,6 +1829,10 @@ export class Application {
    * In **production**: creates its own `http.Server` and binds to the port.
    */
   async start(): Promise<void> {
+    await this.untilStartedOrStopped(() => this.startSteps())
+  }
+
+  private async startSteps(): Promise<void> {
     const g = globalThis as any
     const serverOptions = this.options.server
     this._status.value = 'starting'

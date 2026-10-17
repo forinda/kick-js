@@ -24,6 +24,28 @@ describe('Application.status', () => {
     stop()
   })
 
+  it('is stopped, not still starting, when startup fails', async () => {
+    Container.reset()
+    const failing = new Application({
+      modules: [],
+      runtime: h3Runtime(),
+      port: 0,
+      plugins: [{ name: 'Broken', onReady: async () => Promise.reject(new Error('no')) }],
+    })
+    await expect(failing.start()).rejects.toThrow('no')
+    expect(failing.status.value).toBe('stopped')
+
+    Container.reset()
+    const failingHandler = new Application({
+      modules: [],
+      runtime: h3Runtime(),
+      plugins: [{ name: 'Broken', onReady: async () => Promise.reject(new Error('no')) }],
+    })
+    await expect(failingHandler.startWithoutServer()).rejects.toThrow('no')
+    expect(failingHandler.status.value).toBe('stopped')
+    await failing.shutdown()
+  })
+
   it('reaches ready without a server, and stays idle when only set up', async () => {
     Container.reset()
     const handler = new Application({ modules: [], runtime: h3Runtime() })
