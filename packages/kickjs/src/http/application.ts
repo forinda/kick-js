@@ -775,7 +775,10 @@ export class Application {
   private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: KickServer | null = null
-  /** `bootstrap({ management })`: its engine app, created by start() outside dev mode. */
+  /**
+   * `bootstrap({ management })`: its engine app, created by start() outside dev
+   * mode — whatever `runtime` builds (Express, Fastify, h3), so not typed as one.
+   */
   private managementApp: unknown = null
   private managementServer: http.Server | null = null
   /** Set by startWithoutServer() — the serverless path, where cron runs over HTTP. */
