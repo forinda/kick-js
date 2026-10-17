@@ -20,13 +20,9 @@ import { fastifyRuntime } from '@forinda/kickjs/fastify'
 export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
 ```
 
-`express` is an optional peer of `@forinda/kickjs`: an app on Fastify or h3
-doesn't need it installed, and nothing loads it. The default runtime loads it
-when the app starts — without it installed, `start()` fails with a message
-naming the package. `expressRuntime()`, `buildRoutes()` and
-`materializeRouter()` from `@forinda/kickjs` load Express with the app; to use
-them on their own — `express().use(buildRoutes(Controller))` in a test — import
-them from `@forinda/kickjs/express`, which loads it straight away.
+An app on Fastify or h3 doesn't need `express` installed. To use
+`buildRoutes()` or `expressRuntime()` on a plain `express()` app — in a test,
+say — import them from `@forinda/kickjs/express`.
 
 ## Why it works
 
@@ -227,26 +223,19 @@ reach past `ctx.*`, and it has a helper —
 — which works on every runtime. `ctx.res.setHeader()` + `ctx.res.end()` compiles
 on Express and breaks on the other two.
 
-The types follow the active runtime via the `ActiveRuntime` registry: the
-`kick/runtime` typegen reads `runtime` in `kick.config.ts` (Express when unset)
-and emits a `KickRuntimeRegister` augmentation that types them as that engine's —
-Express's `Application` / `Request` / `Response` (from `@forinda/kickjs/express`),
-Fastify's `FastifyInstance` / `FastifyRequest` / `FastifyReply`, or for h3 the
-types of the installed major. Without the augmentation they're the
-engine-neutral connect types (`ConnectRequest`, `ConnectResponse`) and an
-`unknown` app, so nothing in `@forinda/kickjs`'s own typings needs `express`.
+`kick typegen` types them for the `runtime` in `kick.config.ts` (Express when
+unset): Express's `Application` / `Request` / `Response`, Fastify's
+`FastifyInstance` / `FastifyRequest` / `FastifyReply`, or h3's.
 
-Middleware is typed the same way on every runtime: `ConnectHandler` /
-`ConnectErrorHandler`, kick's own `(req, res, next)` types. Express middleware —
-`express.json()`, `cors()`, a handler typed with Express's `Request` — fits them
-as is.
+Middleware takes the same `(req, res, next)` types on every runtime
+(`ConnectHandler`, `ConnectErrorHandler`), and Express middleware —
+`express.json()`, `cors()` — fits them.
 
 ## Writing a custom runtime
 
 A runtime implements the `HttpRuntime` contract (`createApp`, `nodeHandler`,
 `mountRoutes`, `useConnect`, `serveStatic`, `setNotFound`, `setErrorHandler`,
 `capabilities`). `expressRuntime()` is the reference implementation; the Fastify
-runtime is ~250 lines over the same contract. Two hooks are optional: `load()`,
-awaited before the first `createApp()`, for a runtime that imports its engine
-lazily; and `bodyParsers({ limit })`, the parsers to mount when
-`capabilities.nativeBodyParsing` is `false` — without it, Express's are used.
+runtime is ~250 lines over the same contract. Optionally, `load()` runs once
+before `createApp()` to import the engine, and `bodyParsers({ limit })` returns
+the body parsers for an engine that doesn't parse bodies itself.
