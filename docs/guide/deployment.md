@@ -116,6 +116,7 @@ bootstrap({
   `app.getRoutes()` lists every route with the port it's on (`port: 'app' | 'management'`), adapters' included, and with `logRouteTable: true` the route table marks the management port's.
 
 - Routes on the management port stay out of the OpenAPI spec: Swagger describes the API the public port serves.
+- In code, `app.getManagementServer()` returns the listener — its address, say — and an adapter gets it as `ctx.management.server` from `afterStart` on.
 - Off by default. In `kick dev` and on serverless platforms everything stays on the one port.
 
 ## Metrics

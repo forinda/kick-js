@@ -507,8 +507,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       stats.samples.push(elapsedMs)
       if (stats.samples.length > MAX_SAMPLES) stats.samples.shift()
     }
-    const adapterStatuses: Record<string, string> = {}
+    // Reactive, like the counters: a watcher sees an adapter's status change.
+    const adapterStatuses = reactive<Record<string, string>>({})
     let stopErrorWatch: (() => void) | null = null
+    let stopStatusWatch: (() => void) | null = null
+    /** The Application's lifecycle status, on Applications that have one. */
+    const appStatus = (): ComputedRef<string> | undefined =>
+      (appRef as { __kickApp?: { status?: ComputedRef<string> } } | undefined)?.__kickApp?.status
 
     // Watch error rate — log warnings when elevated
     if (options.onErrorRateExceeded) {
@@ -631,6 +636,13 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // Also published process-wide, so a kick/db client created at import
         // time — before any container exists — reports its queries here.
         setActiveDevtoolsBus(ensureBus(containerArg))
+        // The dashboard hears the app become ready, start draining, and so on,
+        // as it happens rather than on its next poll.
+        stopStatusWatch?.()
+        const status = appStatus()
+        stopStatusWatch = status
+          ? watch(status, (value) => bus?.emit('app:status', { status: value }))
+          : null
         startedAt.value = Date.now()
         // Clear routes on rebuild/restart to prevent HMR duplication
         routes = []
@@ -792,6 +804,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           ctx.json(
             {
               status,
+              app: appStatus()?.value,
               errorRate: errorRate.value,
               uptime: uptimeSeconds.value,
               runtime: readActiveRuntime(),
@@ -1407,9 +1420,25 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         stopErrorWatch?.()
         runtimeSampler?.stop()
         memoryAnalyzer?.stop()
-        if (bus && getActiveDevtoolsBus() === bus) setActiveDevtoolsBus(undefined)
-        bus?.close()
         adapterStatuses['DevToolsAdapter'] = 'stopped'
+        const closeBus = () => {
+          stopStatusWatch?.()
+          stopStatusWatch = null
+          if (bus && getActiveDevtoolsBus() === bus) setActiveDevtoolsBus(undefined)
+          bus?.close()
+        }
+        // The app reports 'stopped' after its adapters have shut down: keep the
+        // bus open until the dashboard has heard it, then close.
+        const status = appStatus()
+        if (status && stopStatusWatch && status.value !== 'stopped') {
+          stopStatusWatch()
+          stopStatusWatch = watch(status, (value) => {
+            bus?.emit('app:status', { status: value })
+            if (value === 'stopped') closeBus()
+          })
+        } else {
+          closeBus()
+        }
       },
     }
   },

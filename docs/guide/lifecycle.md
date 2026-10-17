@@ -171,6 +171,27 @@ See [Dependency Injection → Lifecycle Hooks](./dependency-injection.md#predest
 
 See [Adapters](./adapters.md) for the full `defineAdapter()` reference.
 
+### Watching the app's status
+
+`app.status` holds where the app is in its lifecycle — `'idle'`, `'starting'` while `start()` runs, `'ready'` once it serves, `'draining'` from `shutdown()`, then `'stopped'` — as a reactive value. Read `app.status.value`, or `watch()` it to act on a change rather than polling:
+
+```ts
+import { watch } from '@forinda/kickjs'
+
+const discovery: AppAdapter = {
+  name: 'Discovery',
+  afterStart({ container }) {
+    const app = container.resolve(APPLICATION)
+    watch(app.status, (status) => {
+      if (status === 'ready') registry.register(instanceId)
+      if (status === 'draining') registry.deregister(instanceId)
+    })
+  },
+}
+```
+
+Readiness follows it: `/health/ready` answers `503` while it is `'starting'` or `'draining'`. An app that is only set up — `createTestApp()` — stays `'idle'`, and answers ready.
+
 ## Middleware Phases
 
 Adapter middleware runs at specific phases in the pipeline:
