@@ -88,9 +88,24 @@ interface AdapterContext {
   fetch(request: Request): Promise<Response> // run a Request through this app, no server needed
   container: Container // DI container
   server?: http.Server // populated only inside afterStart
+  management?: { http: AdapterHttp; server?: http.Server } // the management port, when the app has one
   env: string // NODE_ENV (default: 'production')
   isProduction: boolean // true unless NODE_ENV is 'development' or 'test' (unset = production)
 }
+```
+
+An operational endpoint — a status page, an admin route — can go on the app's
+[management port](./deployment.md#a-management-port) instead of the public one.
+`ctx.management` is there only when the app has one, so fall back to `ctx.http`:
+
+```ts
+const statusAdapter = (options: { management?: boolean } = {}): AppAdapter => ({
+  name: 'StatusAdapter',
+  beforeMount({ http, management }) {
+    const target = options.management && management ? management.http : http
+    target.route('GET', '/status', (ctx) => ctx.json({ ok: true }))
+  },
+})
 ```
 
 `fetch` sends a web `Request` through the app's pipeline — routing,

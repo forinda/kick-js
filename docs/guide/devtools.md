@@ -310,8 +310,31 @@ DevToolsAdapter({
 
   // Recent requests the Requests tab keeps (default: 200; 0 keeps none)
   requestLog: 200,
+
+  // Serve on the management port instead of the app's (default: false)
+  management: true,
 })
 ```
+
+### On a private port
+
+To use the dashboard outside development without exposing it, serve it on the
+app's [management port](./deployment.md#a-management-port) — reachable inside
+your network, not through the ingress:
+
+```ts
+bootstrap({
+  modules,
+  management: { port: 9090 },
+  adapters: [
+    DevToolsAdapter({ management: true, enabled: true, secret: getEnv('DEVTOOLS_TOKEN') }),
+  ],
+})
+```
+
+Keep a `secret`: anything that can reach the port can otherwise read the app's
+routes, container and requests. Without a management port, `management: true`
+leaves the dashboard on the app's port.
 
 ## Accessing Reactive State Programmatically
 
