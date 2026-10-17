@@ -1,6 +1,6 @@
 # Caching
 
-KickJS provides `@Cacheable` and `@CacheEvict` decorators with a pluggable cache backend. By default, an in-memory `Map` is used. Swap in Redis, Memcached, or any custom store by implementing the `CacheProvider` interface.
+KickJS provides `@Cacheable` and `@CacheEvict` decorators, and `@CacheResponse` for whole route responses, with a pluggable cache backend. By default, an in-memory `Map` is used. Swap in Redis, Memcached, or any custom store by implementing the `CacheProvider` interface.
 
 ## Quick Start
 
@@ -149,6 +149,46 @@ async createUser(data: any) { ... }
 
 For this to work across methods, both decorators must use the same `key` prefix, and your `CacheProvider` must implement `delByPrefix`.
 
+## Caching Whole Responses
+
+`@Cacheable` caches what a service method returns. `@CacheResponse` caches what a route sends, so the handler doesn't run again until the entry expires:
+
+```ts
+import { CacheResponse, Controller, Get, type RequestContext } from '@forinda/kickjs'
+
+@Controller()
+export class ProductController {
+  @CacheResponse({ maxAge: 60, swr: 300 })
+  @Get('/')
+  async list(ctx: RequestContext) {
+    ctx.json(await this.products.list(ctx.query))
+  }
+}
+```
+
+- **What's stored:** a `GET` (or `HEAD`) answered with `200`: the body and its content type, whether the handler called `ctx.json` / `ctx.send` / `ctx.html` or returned a value. Other statuses, and responses that set a cookie, are sent but not stored. The entry lives in your `CacheProvider`, so with Redis every instance shares it.
+- **Key:** the route and the URL, query string included.
+- **ETag:** a cached response carries one. A client that sends it back in `If-None-Match` gets `304` with no body.
+- **`maxAge`:** seconds the entry is served as fresh.
+- **`swr`:** seconds past `maxAge` the stale entry is still served, while one request rebuilds it in the background with [`waitUntil`](./serverless.md#work-that-outlives-the-response-waituntil). Without it, the first request after `maxAge` waits for a new one.
+- **Concurrent misses** on one key share a single run of the handler.
+
+### Responses that differ per caller
+
+A request with an `Authorization` header or a cookie skips the cache: under one key, one user's response would reach another. To cache per user, list the header in `varies`, and its value becomes part of the key:
+
+```ts
+@CacheResponse({ maxAge: 30, varies: ['authorization'] })
+@Get('/me/feed')
+feed(ctx: RequestContext) { … }
+```
+
+`varies` works for any header that selects a different response, such as `accept-language`.
+
+The cache lives on the server; no `Cache-Control` header is sent. Set one yourself if a CDN or the browser should cache the response too.
+
+A cached route can't stream (`ctx.res.write`) or render a template; those throw an error that says so.
+
 ## Conditional Requests (ETag / 304)
 
 `@Cacheable` saves your server the work; conditional requests save the transfer. When a client already holds the current version, answer `304 Not Modified` with no body — and skip loading the data at all:
@@ -185,6 +225,15 @@ Preconditions are evaluated in RFC 9110 order (`If-Match`, `If-Unmodified-Since`
 | ------------- | -------- | ---------------------- | --------------------------- |
 | `ttl`         | `number` | `60`                   | Time-to-live in **seconds** |
 | `options.key` | `string` | `{method}:{ClassName}` | Cache key prefix            |
+
+### `@CacheResponse(options)`
+
+| Option   | Type       | Default             | Description                                                                               |
+| -------- | ---------- | ------------------- | ----------------------------------------------------------------------------------------- |
+| `maxAge` | `number`   | —                   | Seconds a stored response is fresh                                                        |
+| `swr`    | `number`   | `0`                 | Seconds past `maxAge` the stale response is served while it's rebuilt in the background   |
+| `varies` | `string[]` | `[]`                | Request headers whose values are part of the key; `authorization` / `cookie` opt those in |
+| `key`    | `string`   | `Controller.method` | Key prefix                                                                                |
 
 ### `@CacheEvict(key)`
 

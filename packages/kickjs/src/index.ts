@@ -43,6 +43,7 @@ export {
 } from './core/adapter-conditions'
 export type { StartupStep, StartupTimelineSnapshot } from './http/startup-timeline'
 export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './http/conditional'
+export { CacheResponse, type CacheResponseOptions } from './http/cache-response'
 export {
   ROUTE_URLS,
   type RouteName,

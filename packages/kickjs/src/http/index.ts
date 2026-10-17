@@ -12,6 +12,7 @@ export {
 } from './application'
 export type { StartupStep, StartupTimelineSnapshot } from './startup-timeline'
 export { evaluatePreconditions, type ConditionalOutcome, type Validators } from './conditional'
+export { CacheResponse, type CacheResponseOptions } from './cache-response'
 export {
   ROUTE_URLS,
   type RouteName,
