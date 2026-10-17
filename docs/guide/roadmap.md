@@ -706,7 +706,7 @@ dynamic responses.
 
 ### E.7 Compressed static assets
 
-**Status:** `proposed`
+**Status:** `shipped` (precompressed) — static files (`SpaAdapter`, the Inertia adapter, `ctx.http.serveStatic`) are served from a `.br` / `.gz` copy when the browser accepts it, on every runtime, and `compressAssets()` from `@forinda/kickjs-vite/compress` writes the copies at build time; the fullstack and Inertia templates use it. See [Compressed static files](./middleware.md#compressed-static-files). Still open: compressing a static file that has no copy on the fly, and `zstd`.
 **Effort:** 1–2 days
 
 **What they do.** srvx serves precompressed `.br` / `.gz` siblings and compresses on the fly

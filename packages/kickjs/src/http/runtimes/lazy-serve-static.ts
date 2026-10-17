@@ -1,4 +1,5 @@
 import type { ConnectHandler as RequestHandler } from '../connect'
+import { withPrecompressed } from './precompressed'
 
 /**
  * `serve-static` as connect middleware, imported on the first request. Only
@@ -8,7 +9,7 @@ import type { ConnectHandler as RequestHandler } from '../connect'
  */
 export function lazyServeStatic(dir: string): RequestHandler {
   let serve: Promise<RequestHandler> | undefined
-  return (req, res, next) => {
+  return withPrecompressed(dir, (req, res, next) => {
     serve ??= import('serve-static').then((mod) => {
       const factory = ((mod as { default?: unknown }).default ?? mod) as (
         root: string,
@@ -16,5 +17,5 @@ export function lazyServeStatic(dir: string): RequestHandler {
       return factory(dir)
     })
     serve.then((handler) => handler(req, res, next), next)
-  }
+  })
 }

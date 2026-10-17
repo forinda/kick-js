@@ -175,3 +175,4 @@ export {
   type StripDevtoolsOptions,
   type StripResult,
 } from './babel-strip-devtools'
+export { compressAssets, compressDirectory, type CompressAssetsOptions } from './compress-plugin'

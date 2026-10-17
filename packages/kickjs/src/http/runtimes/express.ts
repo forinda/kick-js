@@ -23,6 +23,7 @@ import { publishMatchedRoute } from '../runtime'
 import { buildUploadMiddleware } from '../middleware/upload'
 import type { ConnectHandler } from '../connect'
 import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from '../body-policy'
+import { withPrecompressed } from './precompressed'
 import { EXPRESS_CAPABILITIES } from './express-lazy'
 import type {
   ConnectMiddleware,
@@ -176,7 +177,7 @@ export function expressRuntime(): HttpRuntime {
     },
 
     serveStatic(app, prefix, dir) {
-      app.use(prefix, express.static(dir))
+      app.use(prefix, withPrecompressed(dir, express.static(dir) as ConnectHandler))
     },
 
     setNotFound(app, mw: ConnectMiddleware) {
