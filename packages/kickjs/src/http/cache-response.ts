@@ -1,0 +1,305 @@
+/**
+ * `@CacheResponse` — cache a route's whole response on the server, answer
+ * `304` on a matching ETag, and serve a stale copy while a fresh one is built
+ * in the background (stale-while-revalidate).
+ *
+ * The handler runs against a recording of the response: whatever it sends —
+ * `ctx.json`, `ctx.send`, `ctx.html`, or a returned value — is captured,
+ * replayed onto the real response, and stored when the status is 200. Entries
+ * live in the {@link CacheProvider} (`setCacheProvider`), so a shared store
+ * such as Redis serves every instance.
+ *
+ * Edge-safe: no node imports — shared by every runtime and the web entry.
+ *
+ * @module @forinda/kickjs/http/cache-response
+ */
+import { getCacheProvider } from '../core/cache'
+import { waitUntil } from './background'
+import type { RequestContext } from './context'
+import { applyHandlerResult } from './reply'
+import { stringifyJson, type RuntimeResponse } from './runtime'
+
+export interface CacheResponseOptions {
+  /** Seconds a stored response is served as fresh. */
+  maxAge: number
+  /**
+   * Seconds past `maxAge` a stale response is still served, while one request
+   * rebuilds it in the background. Default 0: past `maxAge` the next request waits.
+   */
+  swr?: number
+  /**
+   * Request headers that select a different response — `accept-language`, or
+   * `authorization` for per-user responses. Their values are part of the key.
+   * Every header the handler reads belongs here.
+   *
+   * A request that identifies its caller — `authorization`, `proxy-authorization`,
+   * `x-api-key`, a `cookie`, or a signed-in `ctx.user` — skips the cache unless
+   * that header is listed here: under a shared key, one user's response would
+   * reach another.
+   */
+  varies?: string[]
+  /**
+   * A string is the key prefix — `@CacheEvict(prefix)` clears the route's
+   * entries. Default: `kick:response:Controller.method`.
+   *
+   * A function decides the key per request, from the whole context — params,
+   * `ctx.get('tenant')`, `ctx.user`. It owns the decision: the caller check
+   * above doesn't apply, so include the user or tenant when the response
+   * depends on them. Return `null` to skip the cache for that request.
+   */
+  key?: string | ((ctx: RequestContext) => string | null)
+}
+
+/** What a handler sent, enough to send it again. */
+interface Recorded {
+  status: number
+  type?: string
+  headers: Record<string, string | string[]>
+  body: string
+  /** `body` is base64 of bytes the handler sent. */
+  binary?: boolean
+  /** The handler used `ctx.res` directly: what it did there isn't recorded, so this is never stored. */
+  native?: boolean
+}
+
+interface Entry {
+  recorded: Recorded
+  storedAt: number
+}
+
+/** Requests that would otherwise each build the same response, by key. */
+const inFlight = new Map<string, Promise<Recorded | null>>()
+
+/** Headers that identify the caller: a request carrying one is never cached under a shared key. */
+const PERSONAL = ['authorization', 'proxy-authorization', 'x-api-key', 'cookie']
+
+export function CacheResponse(options: CacheResponseOptions): MethodDecorator {
+  const maxAgeMs = options.maxAge * 1000
+  const swrMs = (options.swr ?? 0) * 1000
+  const varies = (options.varies ?? []).map((h) => h.toLowerCase())
+
+  return (target, propertyKey, descriptor: PropertyDescriptor) => {
+    const original = descriptor.value as (ctx: RequestContext, ...rest: unknown[]) => unknown
+    const owner = typeof target === 'function' ? target.name : target.constructor?.name
+    const prefix =
+      typeof options.key === 'string'
+        ? options.key
+        : `kick:response:${owner ?? 'anonymous'}.${String(propertyKey)}`
+    const keyOf = typeof options.key === 'function' ? options.key : undefined
+
+    descriptor.value = async function (this: unknown, ctx: RequestContext, ...rest: unknown[]) {
+      const req = ctx.req as { method?: string; url?: string; originalUrl?: string }
+      const method = String(req.method ?? 'GET').toUpperCase()
+      const headers = ctx.headers as Record<string, string | string[] | undefined>
+      if ((method !== 'GET' && method !== 'HEAD') || maxAgeMs + swrMs <= 0) {
+        return original.call(this, ctx, ...rest)
+      }
+      let identity: string
+      if (keyOf) {
+        const chosen = keyOf(ctx)
+        if (chosen === null) return original.call(this, ctx, ...rest)
+        identity = chosen
+      } else {
+        const personal =
+          PERSONAL.some((h) => headers[h] !== undefined && !varies.includes(h)) ||
+          (ctx.user !== undefined && !varies.some((h) => PERSONAL.includes(h)))
+        if (personal) return original.call(this, ctx, ...rest)
+        // The exact host the handler sees: one app serving several hosts answers
+        // each differently, and a handler may put the host in the body. A host
+        // that isn't `name[:port]` is never cached — nothing ambiguous in the key.
+        const host = String(headers.host ?? '')
+        if (!VALID_HOST.test(host)) return original.call(this, ctx, ...rest)
+        identity = JSON.stringify([host.toLowerCase(), req.originalUrl ?? req.url ?? ''])
+      }
+      const varied = varies.map((h) => `${h}=${String(headers[h] ?? '')}`).join('&')
+      const key = `${prefix}:${identity}|${varied}`
+      const provider = getCacheProvider()
+      const run = () => record(original, this, ctx, rest)
+      const build = () => buildOnce(key, run)
+      const store = async ({ recorded, shared }: Built) => {
+        // The request that ran the handler stores it; the ones that waited don't again.
+        if (!shared && recorded && cacheable(recorded)) {
+          const entry: Entry = { recorded, storedAt: Date.now() }
+          await provider.set(key, entry, maxAgeMs + swrMs)
+        }
+      }
+
+      const entry = (await provider.get(key)) as Entry | null
+      if (entry) {
+        const age = Date.now() - entry.storedAt
+        if (age < maxAgeMs + swrMs) {
+          // Stale: answer now, rebuild for the next request.
+          if (age >= maxAgeMs) waitUntil(build().then(store))
+          replay(ctx, entry.recorded)
+          return undefined
+        }
+      }
+
+      const built = await build()
+      await store(built)
+      let recorded = built.recorded
+      // A response that isn't shared — a cookie, a 404, ctx.res — belongs to the
+      // request that produced it: one that only waited for it runs the handler itself.
+      if (built.shared && !(recorded && cacheable(recorded))) recorded = await run()
+      if (recorded) replay(ctx, recorded)
+      return undefined
+    }
+    return descriptor
+  }
+}
+
+/** `name[:port]` or `[ipv6][:port]` — no path, userinfo or whitespace. */
+const VALID_HOST = /^(?:\[[0-9a-f:.]+\]|[a-z0-9-]+(?:\.[a-z0-9-]+)*)(?::\d{1,5})?$/i
+
+/** A build's result, and whether this request only waited for another one's. */
+interface Built {
+  recorded: Recorded | null
+  shared: boolean
+}
+
+/** Concurrent misses on one key share a single build. */
+async function buildOnce(key: string, run: () => Promise<Recorded | null>): Promise<Built> {
+  const pending = inFlight.get(key)
+  if (pending) return { recorded: await pending, shared: true }
+  const load = run().finally(() => inFlight.delete(key))
+  inFlight.set(key, load)
+  return { recorded: await load, shared: false }
+}
+
+/** Only a 200 that sets no cookie, written through ctx alone, is shared. */
+function cacheable(recorded: Recorded): boolean {
+  return recorded.status === 200 && !('set-cookie' in recorded.headers) && !recorded.native
+}
+
+/**
+ * Run the handler against a context whose response is a recording. Null when
+ * it sent nothing — the request then falls through as it would uncached.
+ */
+async function record(
+  handler: (ctx: RequestContext, ...rest: unknown[]) => unknown,
+  self: unknown,
+  ctx: RequestContext,
+  rest: unknown[],
+): Promise<Recorded | null> {
+  const recorded: Recorded = { status: 200, headers: {}, body: '' }
+  let sent = false
+  const finish = (body: unknown) => {
+    if (body instanceof Uint8Array) {
+      recorded.body = toBase64(body)
+      recorded.binary = true
+    } else if (typeof body === 'string') {
+      recorded.body = body
+    } else if (body !== undefined && body !== null) {
+      recorded.type ??= 'application/json; charset=utf-8'
+      recorded.body = stringifyJson(body)
+    }
+    sent = true
+  }
+  const unsupported = (what: string) => () => {
+    throw new Error(
+      `@CacheResponse: the handler called ${what}. A cached route answers with ` +
+        'ctx.json / ctx.send / ctx.html or a returned value, not a stream or a template.',
+    )
+  }
+  const response = {
+    status(code: number) {
+      recorded.status = code
+      return response
+    },
+    type(contentType: string) {
+      recorded.type = contentType
+      return response
+    },
+    json(data: unknown) {
+      recorded.type ??= 'application/json; charset=utf-8'
+      recorded.body = stringifyJson(data)
+      sent = true
+      return response
+    },
+    send(data: unknown) {
+      finish(data)
+      return response
+    },
+    end(data?: unknown) {
+      finish(data)
+      return response
+    },
+    setHeader(name: string, value: string | number | readonly string[]) {
+      recorded.headers[name.toLowerCase()] = Array.isArray(value)
+        ? [...(value as readonly string[])]
+        : String(value)
+    },
+    get headersSent() {
+      return sent
+    },
+    once() {},
+    render: unsupported('render()'),
+    writeHead: unsupported('writeHead()'),
+    flushHeaders: unsupported('flushHeaders()'),
+    write: unsupported('write()'),
+  }
+  // `ctx.res` is the engine's own response: what a handler does to it directly
+  // (a header, a cookie) isn't recorded, so any use of it marks the response unshareable.
+  const native = new Proxy(ctx.res as object, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target)
+      if (typeof value !== 'function') return value
+      return (...args: unknown[]) => {
+        recorded.native = true
+        return value.apply(target, args)
+      }
+    },
+    set(target, prop, value) {
+      recorded.native = true
+      return Reflect.set(target, prop, value, target)
+    },
+  })
+  // Everything else is the real request's: params, query, headers, metadata.
+  const recordingCtx = Object.create(ctx, {
+    _response: { value: response as unknown as RuntimeResponse },
+    res: { value: native },
+  }) as RequestContext
+  const result = await handler.call(self, recordingCtx, ...rest)
+  if (!sent) await applyHandlerResult(recordingCtx, result)
+  return sent ? recorded : null
+}
+
+/** Send a recorded response — `304` when the client's copy is current. */
+function replay(ctx: RequestContext, recorded: Recorded): void {
+  // The handler already answered through ctx.res itself.
+  if (ctx['_response'].headersSent) return
+  for (const [name, value] of Object.entries(recorded.headers)) {
+    if (name !== 'etag' && name !== 'content-type') ctx.setHeader(name, value)
+  }
+  if (recorded.status === 200) {
+    const etag = (recorded.headers.etag as string | undefined) ?? weakEtag(recorded.body)
+    if (ctx.conditional({ etag })) return
+  }
+  const options = { status: recorded.status, type: recorded.type ?? 'text/plain; charset=utf-8' }
+  ctx.send(recorded.binary ? fromBase64(recorded.body) : recorded.body, options)
+}
+
+/** A weak ETag from the body — FNV-1a, enough to tell versions apart. */
+function weakEtag(body: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < body.length; i++) {
+    hash ^= body.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return `W/"${body.length.toString(16)}-${(hash >>> 0).toString(16)}"`
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(binary)
+}
+
+function fromBase64(text: string): Uint8Array {
+  const binary = atob(text)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}

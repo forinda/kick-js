@@ -1,4 +1,5 @@
 import 'reflect-metadata'
+import { createLogger } from './logger'
 
 // String metadata key (post-Symbol migration). Slash-delimited
 // `kick/cacheable` so it can't collide with adopter metadata keys.
@@ -24,8 +25,10 @@ const CACHEABLE_META = 'kick/cacheable'
  *   }
  *   async del(key: string) { await this.client.del(key) }
  *   async delByPrefix(prefix: string) {
- *     const keys = await this.client.keys(prefix + '*')
- *     if (keys.length) await this.client.del(...keys)
+ *     // SCAN, not KEYS — KEYS blocks Redis while it walks the keyspace
+ *     for await (const keys of this.client.scanStream({ match: prefix + '*' })) {
+ *       if (keys.length) await this.client.del(...keys)
+ *     }
  *   }
  * }
  * ```
@@ -131,7 +134,7 @@ export function getCacheProvider(): CacheProvider {
 export interface CacheOptions {
   /** Time-to-live in seconds (default: 60) */
   ttl?: number
-  /** Cache key prefix (default: ClassName.methodName) */
+  /** Cache key prefix (default: `methodName:ClassName`) */
   key?: string
 }
 
@@ -143,8 +146,9 @@ export interface CacheOptions {
  *
  * Call `setCacheProvider()` to use Redis or any custom backend.
  *
- * @param ttl - Time-to-live in seconds (default: 60)
- * @param options.key - Custom cache key prefix
+ * @param ttl - Time-to-live in seconds (default: 60). `0` turns caching off.
+ * @param options.key - A key prefix, followed by the arguments; or a function
+ *   of the arguments that returns the whole key — e.g. `(id) => "product:" + id`.
  */
 // Sentinel stored in place of a legitimate `null` result. Providers signal
 // "miss" with null, so caching null directly was indistinguishable from a
@@ -173,7 +177,10 @@ function isCachedNull(value: unknown): boolean {
  */
 const inFlight = new Map<string, Promise<unknown>>()
 
-export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecorator {
+export function Cacheable(
+  ttl?: number,
+  options?: { key?: string | ((...args: any[]) => string) },
+): MethodDecorator {
   return (target, propertyKey, descriptor: PropertyDescriptor) => {
     const original = descriptor.value
     const cacheTtl = (ttl ?? 60) * 1000
@@ -184,10 +191,16 @@ export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecor
     // shared cache computes the same key. An explicit `key` is used as given:
     // the caller chose it, possibly to share it.
     const owner = typeof target === 'function' ? target.name : target.constructor?.name
-    const keyPrefix = options?.key ?? `${String(propertyKey)}:${owner ?? 'anonymous'}`
+    const keyOf = typeof options?.key === 'function' ? options.key : undefined
+    const keyPrefix =
+      typeof options?.key === 'string'
+        ? options.key
+        : `${String(propertyKey)}:${owner ?? 'anonymous'}`
 
     descriptor.value = async function (...args: any[]) {
-      const cacheKey = `${keyPrefix}:${JSON.stringify(args)}`
+      // A TTL of 0 stores nothing — and Redis rejects `PX 0`.
+      if (cacheTtl <= 0) return original.apply(this, args)
+      const cacheKey = keyOf ? keyOf(...args) : `${keyPrefix}:${JSON.stringify(args)}`
       const provider = getCacheProvider()
 
       const cached = await provider.get(cacheKey)
@@ -219,15 +232,19 @@ export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecor
   }
 }
 
+const log = createLogger('Cache')
+let warnedNoDelByPrefix = false
+
 // ── @CacheEvict Decorator ───────────────────────────────────────────────
 
 /**
  * Evict cached values matching a key prefix after the method executes.
  * Works with any CacheProvider that implements `delByPrefix`.
  *
- * @param key - Cache key prefix to evict (matches the @Cacheable key)
+ * @param key - Cache key prefix to evict (matches the @Cacheable key), or a
+ *   function of the method's arguments that returns it — e.g. `(id) => "product:" + id`.
  */
-export function CacheEvict(key: string): MethodDecorator {
+export function CacheEvict(key: string | ((...args: any[]) => string)): MethodDecorator {
   return (_target, _propertyKey, descriptor: PropertyDescriptor) => {
     const original = descriptor.value
 
@@ -235,7 +252,10 @@ export function CacheEvict(key: string): MethodDecorator {
       const result = await original.apply(this, args)
       const provider = getCacheProvider()
       if (provider.delByPrefix) {
-        await provider.delByPrefix(key)
+        await provider.delByPrefix(typeof key === 'function' ? key(...args) : key)
+      } else if (!warnedNoDelByPrefix) {
+        warnedNoDelByPrefix = true
+        log.warn('@CacheEvict: the cache provider has no delByPrefix(), so nothing is evicted')
       }
       return result
     }

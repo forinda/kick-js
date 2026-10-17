@@ -689,7 +689,7 @@ when a serverless build has jobs it can't schedule; later, a `scheduled` export 
 
 ### E.6 Response caching with stale-while-revalidate and ETag / 304
 
-**Status:** `proposed` — after [Q.8](#quick-wins)
+**Status:** `shipped` — `@CacheResponse({ maxAge, swr, varies })`: whole responses stored in the `CacheProvider`, a weak ETag answered with `304`, stale-while-revalidate through `waitUntil`; requests with `Authorization` or a cookie skip it unless varied on. See [Caching](./caching.md#caching-whole-responses).
 **Effort:** 3–5 days
 
 **What they do.** `defineCachedHandler` and the `cache` route rule cache whole responses, with
