@@ -81,13 +81,16 @@
     "url": "https://github.com/forinda/kick-js/issues"
   },
   "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    },
     "supertest": {
       "optional": true
     },
-    "vitest": {
+    "testcontainers": {
       "optional": true
     },
-    "testcontainers": {
+    "vitest": {
       "optional": true
     }
   }

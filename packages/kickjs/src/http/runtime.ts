@@ -386,6 +386,20 @@ export interface HttpRuntime<TApp = unknown> {
   /** Terminal error handler. */
   setErrorHandler(app: TApp, mw: ConnectMiddleware): void
 
+  /**
+   * Load the engine before the first `createApp()` — for a runtime that
+   * imports it lazily, as the root `expressRuntime()` does so that
+   * `@forinda/kickjs` doesn't need `express` installed. Awaited at setup.
+   */
+  load?(): Promise<void>
+
+  /**
+   * Body parsers to mount among the default middleware, for an engine that
+   * doesn't parse request bodies itself (`capabilities.nativeBodyParsing:
+   * false`). `limit` is `bootstrap({ jsonLimit })`.
+   */
+  bodyParsers?(options: { limit: string | number }): ConnectMiddleware[]
+
   /** Release the engine app on shutdown (Fastify runs its `onClose` hooks). */
   close?(app: TApp): void | Promise<void>
 

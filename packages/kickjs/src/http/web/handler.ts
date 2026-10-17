@@ -135,10 +135,17 @@ export function compileWebRoute(
             })
           }
         }
-        const { file, files } = applyUploadConfig(rawParts, entry.meta.upload!)
-        req.file = file
-        req.files = files
         req.body = fields
+        // A refused type (415) or an oversized file (413) is held like a parse
+        // failure — thrown before the driver exists, it would escape the
+        // route and reach the client as the host's bare error, not kick's.
+        try {
+          const { file, files } = applyUploadConfig(rawParts, entry.meta.upload!)
+          req.file = file
+          req.files = files
+        } catch (err) {
+          bodyError = err
+        }
       }
     } else if (BODY_METHODS.has(request.method)) {
       // Read once — a Request body is a stream and cannot be consumed twice.

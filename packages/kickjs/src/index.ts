@@ -146,7 +146,7 @@ export {
 
 export { buildRouteTable } from './http/router-builder'
 export type { BuildRoutesOptions } from './http/router-builder'
-export { buildRoutes, materializeRouter, expressRuntime } from './http/runtimes/express'
+export { buildRoutes, materializeRouter, expressRuntime } from './http/runtimes/express-lazy'
 export type {
   HttpRuntime,
   AdapterHttp,

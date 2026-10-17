@@ -141,9 +141,9 @@ export function kickjsDevServerPlugin(_ctx: PluginContext): Plugin {
 
             // The entry file exports: export const app = bootstrap({ modules })
             // `app` is the configured Application (not yet listening).
-            const expressApp = mod.app
+            const kickApp = mod.app
 
-            if (!expressApp?.handle) {
+            if (!kickApp?.handle) {
               // Entry file doesn't export an app — fall through to Vite's 404
               return next()
             }
@@ -151,7 +151,7 @@ export function kickjsDevServerPlugin(_ctx: PluginContext): Plugin {
             // Let the app handle the request.
             // If no route matches, it calls next() and
             // Vite's default 404 handler takes over.
-            expressApp.handle(req, res, (err?: any) => {
+            kickApp.handle(req, res, (err?: any) => {
               if (err) {
                 // Fix stack traces to point to original source (not compiled)
                 if (err instanceof Error) {

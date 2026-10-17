@@ -77,9 +77,8 @@ default), but an adapter written against `ctx.http` works on every runtime.
 
 ### `AdapterContext.app` is now runtime-typed
 
-`AdapterContext.app` and `getRuntimeApp()` are typed `ActiveRuntime['app']` —
-`Express` once `kick typegen` writes the augmentation for the Express runtime, and
-`unknown` without it. If you build a **mock** `AdapterContext` in tests, it now
+`AdapterContext.app` and `getRuntimeApp()` are typed for the app's runtime by
+`kick typegen` — `Express` in an Express app. If you build a **mock** `AdapterContext` in tests, it now
 needs an `http` entry alongside `app`.
 
 ## Removed packages

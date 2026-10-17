@@ -42,7 +42,6 @@
     "swagger-ui-dist": "^5.33.1"
   },
   "peerDependencies": {
-    "express": "^5.3.0",
     "zod": "^4.0.0",
     "@forinda/kickjs": ">=5.18.0"
   },
@@ -54,9 +53,7 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@swc/core": "^1.16.13",
-    "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
-    "express": "^5.3.0",
     "typescript": "^7.0.2",
     "valibot": "^1.5.0",
     "vitest": "^5.0.3",

@@ -10,12 +10,11 @@ import {
   Middleware,
   RequestContext,
   buildRouteTable,
-  buildRoutes,
-  materializeRouter,
-  expressRuntime,
   requestScopeMiddleware,
   type RouteTable,
 } from '../src/index'
+// Standalone, outside an Application: the eager module, which loads Express.
+import { buildRoutes, materializeRouter, expressRuntime } from '../src/http/runtimes/express'
 
 beforeEach(() => {
   Container.reset()
