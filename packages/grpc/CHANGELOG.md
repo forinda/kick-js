@@ -1,5 +1,11 @@
 # @forinda/kickjs-grpc
 
+## 0.1.3
+
+### Patch Changes
+
+- [#957](https://github.com/forinda/kick-js/pull/957) [`8e9ccda`](https://github.com/forinda/kick-js/commit/8e9ccda170e1397958f209f61a1f4d9b18dd3bf5) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs-swagger` and `@forinda/kickjs-vite` no longer require `express`, and swagger's and grpc's typings no longer need `@types/express`, so an app on Fastify or h3 installs without either.
+
 ## 0.1.2
 
 ### Patch Changes
