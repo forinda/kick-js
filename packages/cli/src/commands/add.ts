@@ -170,7 +170,7 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   // DevTools
   devtools: {
     pkg: '@forinda/kickjs-devtools',
-    peers: [],
+    peers: ['ws'],
     description: 'Development dashboard — routes, DI, metrics, health',
     dev: true,
   },

@@ -37,6 +37,8 @@ describe('planWiring', () => {
     // The entry imports devtools only under `kick dev`, so it stays a dev dependency.
     expect(plan.dependencies).not.toContain('@forinda/kickjs-devtools')
     expect(plan.devDependencies).toContain('@forinda/kickjs-devtools')
+    // Its `ws` peer too: yarn 1 doesn't install peers.
+    expect(plan.devDependencies).toContain('ws')
     expect(plan.integrations.flatMap((i) => i.import?.names ?? [])).toEqual(['queueAdapter'])
     expect(plan.files.get('src/devtools.d.ts')).toContain(
       '/// <reference types="@forinda/kickjs-vite/globals" />',
