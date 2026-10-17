@@ -168,12 +168,17 @@ export interface ServerOptions {
 /** A mounted controller route, as `app.getRoutes()` lists it. */
 export interface MountedRouteInfo {
   method: string
-  /** Full pattern, prefix and version included: `/api/v1/users/:id`. */
+  /** Full pattern, prefix and version included: `/api/v1/users/:id`. Static files: `/assets/*`. */
   pattern: string
+  /** The controller — or, for a route an adapter added, the adapter's name. */
   controller: string
   handler: string
   /** Context contributors in execution order, with where each was registered. */
   contributors: readonly RouteContributor[]
+  /** A module's controller, or an adapter through `ctx.http` / `ctx.management.http`. */
+  source: 'module' | 'adapter'
+  /** Which listener serves it: the app's port, or the management port. */
+  port: 'app' | 'management'
 }
 
 /** What `app.describeConfig()` returns. */
@@ -1048,11 +1053,11 @@ export class Application {
    * 10. Error handlers (notFound + global)
    */
   /** Build the adapter context object (shared across all hooks) */
-  private adapterCtx(server?: any): AdapterContext {
+  private adapterCtx(server?: any, owner?: string): AdapterContext {
     const env = process.env.NODE_ENV ?? 'production'
     const managementApp = this.managementApp
     return {
-      http: this.adapterHttp(),
+      http: this.adapterHttp(undefined, owner),
       app: this.app,
       fetch: (request) => this.fetch(request),
       container: this.container,
@@ -1060,7 +1065,7 @@ export class Application {
       ...(managementApp
         ? {
             management: {
-              http: this.adapterHttp(() => managementApp),
+              http: this.adapterHttp(() => managementApp, owner),
               server: this.managementServer ?? undefined,
             },
           }
@@ -1075,9 +1080,23 @@ export class Application {
    * call routes through the active runtime over the current `this.app`, so an
    * adapter written against this works under any runtime.
    */
-  private adapterHttp(target: () => unknown = () => this.app): AdapterHttp {
+  private adapterHttp(target: () => unknown = () => this.app, owner = 'kick'): AdapterHttp {
+    // What an adapter mounts is recorded like a module's routes, so
+    // getRoutes() and the startup log can say what each port serves.
+    const record = (method: string, pattern: string, handler: string) => {
+      this.mountedRouteInfo.push({
+        method,
+        pattern,
+        controller: owner,
+        handler,
+        contributors: [],
+        source: 'adapter',
+        port: target() === this.app ? 'app' : 'management',
+      })
+    }
     return {
       route: (method, path, handler) => {
+        record(method, path, '')
         const entry: RouteEntry = {
           method,
           path,
@@ -1089,9 +1108,13 @@ export class Application {
         this.runtime.mountRoutes(target(), [{ mountPath: '/', routes: [entry] }])
       },
       mount: (prefix, routes) => {
+        for (const entry of routes) {
+          record(entry.method, joinPaths(prefix, entry.path), String(entry.meta.handlerName ?? ''))
+        }
         this.runtime.mountRoutes(target(), [{ mountPath: prefix, routes }])
       },
       serveStatic: (prefix, dir) => {
+        record('GET', `${joinPaths(prefix, '/').replace(/\/$/, '')}/*`, 'static')
         this.runtime.serveStatic(target(), prefix, dir)
       },
       use: (mw, opts) => {
@@ -1268,6 +1291,8 @@ export class Application {
     this.app ??= this.createEngineApp()
     if (this.wantsManagement) this.managementApp ??= this.createEngineApp()
     this.timeline = new StartupTimeline()
+    // Before the adapters' hooks: the routes they add are recorded too.
+    this.mountedRouteInfo = []
     // Bound before modules register, so their services can inject it; the
     // routes fill it in as they mount.
     this.routeUrls = new RouteUrls()
@@ -1297,8 +1322,6 @@ export class Application {
     // Expose the Application instance on the Express app for adapter discovery
     ;(this.app as any).__kickApp = this
 
-    const ctx = this.adapterCtx()
-
     // ── 0. Host allow-list, before anything is mounted ─────────────────
     // First, ahead of adapter beforeMount: routes an adapter registers there
     // (docs UIs, devtools, the cron trigger) would otherwise answer on
@@ -1317,7 +1340,12 @@ export class Application {
 
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
-      await this.callHook(adapter.beforeMount?.bind(adapter), ctx, adapter.name, 'beforeMount')
+      await this.callHook(
+        adapter.beforeMount?.bind(adapter),
+        this.adapterCtx(undefined, adapter.name),
+        adapter.name,
+        'beforeMount',
+      )
     }
 
     // ── 1a. Cron trigger (serverless) ─────────────────────────────────
@@ -1524,7 +1552,6 @@ export class Application {
     const mountedPaths: MountedRoute[] = []
     const managementPaths: MountedRoute[] = []
     this.mountedRoutes = mountedPaths
-    this.mountedRouteInfo = []
 
     for (const mod of modules) {
       const moduleLabel = moduleName(mod)
@@ -1625,14 +1652,19 @@ export class Application {
                 controller: route.controller.name,
                 handler: String(entry.meta.handlerName ?? ''),
                 contributors: entry.meta.contributors ?? [],
+                source: 'module',
+                port: target === this.app ? 'app' : 'management',
               })
             }
           } else {
             throw moduleRouteMissingControllerError(mountPath)
           }
 
-          // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
-          if (route.controller) {
+          // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation) —
+          // of the app's own routes: one on the management port isn't part of
+          // the API a spec describes.
+          const onManagement = !!this.managementApp && route.controller === HealthController
+          if (route.controller && !onManagement) {
             for (const adapter of this.adapters) {
               try {
                 adapter.onRouteMount?.(route.controller, mountPath)
@@ -1640,13 +1672,13 @@ export class Application {
                 log.error(err, `adapter.onRouteMount() failed for ${mountPath}`)
               }
             }
-            if (shouldLogRoutes) {
-              mountedRoutes.push({
-                controller: route.controller,
-                mountPath,
-                management: !!this.managementApp && route.controller === HealthController,
-              })
-            }
+          }
+          if (route.controller && shouldLogRoutes) {
+            mountedRoutes.push({
+              controller: route.controller,
+              mountPath,
+              management: onManagement,
+            })
           }
         }
       } finally {
@@ -1705,7 +1737,12 @@ export class Application {
     // catch-all that never calls next() — would pre-empt anything an
     // adapter adds afterwards and adapter-mounted endpoints would 404.
     for (const adapter of this.adapters) {
-      await this.callHook(adapter.beforeStart?.bind(adapter), ctx, adapter.name, 'beforeStart')
+      await this.callHook(
+        adapter.beforeStart?.bind(adapter),
+        this.adapterCtx(undefined, adapter.name),
+        adapter.name,
+        'beforeStart',
+      )
     }
 
     // ── 11. Error handlers ───────────────────────────────────────────
@@ -1844,7 +1881,7 @@ export class Application {
       g.__kickjs_app_shutdown = () => this.shutdown()
 
       for (const adapter of this.adapters) {
-        const ctx = this.adapterCtx(this.httpServer!)
+        const ctx = this.adapterCtx(this.httpServer!, adapter.name)
         await this.callHook(adapter.afterStart?.bind(adapter), ctx, adapter.name, 'afterStart')
       }
 
@@ -1902,7 +1939,7 @@ export class Application {
           log.info(`Server running on ${scheme}://localhost:${port}${protocol}`)
 
           for (const adapter of this.adapters) {
-            const afterCtx = this.adapterCtx(this.httpServer!)
+            const afterCtx = this.adapterCtx(this.httpServer!, adapter.name)
             await this.callHook(
               adapter.afterStart?.bind(adapter),
               afterCtx,
@@ -1955,6 +1992,11 @@ export class Application {
     this.managementServer = server
     const scheme = options.tls ? 'https' : 'http'
     log.info(`Management server on ${scheme}://${options.host ?? 'localhost'}:${options.port}`)
+    for (const line of describeRoutes(
+      this.mountedRouteInfo.filter((r) => r.port === 'management'),
+    )) {
+      log.info(`  ${line}`)
+    }
   }
 
   /** The production server for {@link ApplicationOptions.server}. */
@@ -2503,6 +2545,29 @@ export class Application {
   }
 
   /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
+}
+
+/**
+ * One line per owner (controller or adapter): its routes, or — past a few —
+ * how many there are under their common prefix, so `/_debug`'s dozens stay one line.
+ */
+export function describeRoutes(routes: readonly MountedRouteInfo[]): string[] {
+  const byOwner = new Map<string, MountedRouteInfo[]>()
+  for (const route of routes) {
+    byOwner.set(route.controller, [...(byOwner.get(route.controller) ?? []), route])
+  }
+  const width = Math.max(0, ...[...byOwner.keys()].map((owner) => owner.length))
+  return [...byOwner].map(([owner, list]) => {
+    if (list.length <= 4) {
+      return `${owner.padEnd(width)}  ${list.map((r) => `${r.method} ${r.pattern}`).join(', ')}`
+    }
+    const segments = list.map((r) => r.pattern.split('/'))
+    const common: string[] = []
+    for (let i = 0; segments.every((s) => s[i] !== undefined && s[i] === segments[0]![i]); i++) {
+      common.push(segments[0]![i]!)
+    }
+    return `${owner.padEnd(width)}  ${list.length} routes under ${common.join('/') || '/'}`
+  })
 }
 
 /** The request path without the query string, on every engine. */
