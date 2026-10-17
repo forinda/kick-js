@@ -1,5 +1,23 @@
 # @forinda/kickjs-testing
 
+## 8.3.1
+
+### Patch Changes
+
+- [#954](https://github.com/forinda/kick-js/pull/954) [`609ffc1`](https://github.com/forinda/kick-js/commit/609ffc1387efb685f9f423c2504e5e702dbeba31) Thanks [@forinda](https://github.com/forinda)! - An app on Fastify or h3 type-checks without `@types/express` or `@types/multer`.
+  
+  - Middleware types are KickJS's own: `ConnectRequest`, `ConnectResponse`, `ConnectNext`, `ConnectHandler`, `ConnectErrorHandler`. Express middleware (`express.json()`, `cors()`, handlers typed with Express's `Request`) fits them.
+  - Uploaded files are typed `UploadedFile` (`ctx.file`, `ctx.files`), and `upload({ storage })` takes an `UploadStorageEngine`; multer's files and storage engines fit both.
+  - `ExpressRuntimeTypes` is exported from `@forinda/kickjs/express`.
+  - `ctx.app`, `getRuntimeApp()`, `ctx.req` and `ctx.res` are typed for the app's runtime by `kick typegen`, now for Express apps too. Without typegen, cast them to your engine's types.
+  - `buildRoutes()` and `materializeRouter()` return a `ConnectHandler`.
+
+- [#956](https://github.com/forinda/kick-js/pull/956) [`2c8d84c`](https://github.com/forinda/kick-js/commit/2c8d84ca19f04fca6baba7dff37747033124a0fe) Thanks [@forinda](https://github.com/forinda)! - `express` is an optional peer: an app on Fastify or h3 installs and runs without it. An Express app works as before; if `express` is missing, `start()` says so.
+  
+  To use `buildRoutes()`, `materializeRouter()` or `expressRuntime()` on a plain `express()` app outside a KickJS app — in a test, say — import them from `@forinda/kickjs/express`.
+  
+  Custom runtimes can implement two new optional `HttpRuntime` methods: `load()`, to import the engine before `createApp()`, and `bodyParsers({ limit })`, for an engine that doesn't parse bodies itself.
+
 ## 8.3.0
 
 ### Minor Changes

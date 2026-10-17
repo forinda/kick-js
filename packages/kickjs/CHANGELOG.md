@@ -1,5 +1,31 @@
 # @forinda/kickjs
 
+## 10.6.0
+
+### Minor Changes
+
+- [#960](https://github.com/forinda/kick-js/pull/960) [`c5991d8`](https://github.com/forinda/kick-js/commit/c5991d82b59b510a94c1acb865dc95e54408e9eb) Thanks [@forinda](https://github.com/forinda)! - Static files are served compressed. `SpaAdapter`, the Inertia adapter and `ctx.http.serveStatic()` send a file's `.br` or `.gz` copy to a browser that accepts it (Brotli first), with `Vary: Accept-Encoding` and the original `Content-Type`, on Express, Fastify and h3. `compressAssets()` from the new `@forinda/kickjs-vite/compress` writes the copies when the client is built, and `kick new --template fullstack` and `--template inertia` projects use it. `@forinda/kickjs-vite` no longer requires `@forinda/kickjs`, so a client package can use the plugin on its own.
+
+- [#954](https://github.com/forinda/kick-js/pull/954) [`609ffc1`](https://github.com/forinda/kick-js/commit/609ffc1387efb685f9f423c2504e5e702dbeba31) Thanks [@forinda](https://github.com/forinda)! - An app on Fastify or h3 type-checks without `@types/express` or `@types/multer`.
+  
+  - Middleware types are KickJS's own: `ConnectRequest`, `ConnectResponse`, `ConnectNext`, `ConnectHandler`, `ConnectErrorHandler`. Express middleware (`express.json()`, `cors()`, handlers typed with Express's `Request`) fits them.
+  - Uploaded files are typed `UploadedFile` (`ctx.file`, `ctx.files`), and `upload({ storage })` takes an `UploadStorageEngine`; multer's files and storage engines fit both.
+  - `ExpressRuntimeTypes` is exported from `@forinda/kickjs/express`.
+  - `ctx.app`, `getRuntimeApp()`, `ctx.req` and `ctx.res` are typed for the app's runtime by `kick typegen`, now for Express apps too. Without typegen, cast them to your engine's types.
+  - `buildRoutes()` and `materializeRouter()` return a `ConnectHandler`.
+
+- [#956](https://github.com/forinda/kick-js/pull/956) [`2c8d84c`](https://github.com/forinda/kick-js/commit/2c8d84ca19f04fca6baba7dff37747033124a0fe) Thanks [@forinda](https://github.com/forinda)! - `express` is an optional peer: an app on Fastify or h3 installs and runs without it. An Express app works as before; if `express` is missing, `start()` says so.
+  
+  To use `buildRoutes()`, `materializeRouter()` or `expressRuntime()` on a plain `express()` app outside a KickJS app — in a test, say — import them from `@forinda/kickjs/express`.
+  
+  Custom runtimes can implement two new optional `HttpRuntime` methods: `load()`, to import the engine before `createApp()`, and `bodyParsers({ limit })`, for an engine that doesn't parse bodies itself.
+
+- [#953](https://github.com/forinda/kick-js/pull/953) [`509b9f5`](https://github.com/forinda/kick-js/commit/509b9f5fe0e734399667df4ad6603645227abd70) Thanks [@forinda](https://github.com/forinda)! - `bootstrap({ management: { port, host?, tls? } })` serves health checks on a second port, so the public port carries only your API — like Spring Boot's `management.server.port`. `/health/live` and `/health/ready` move there, your middleware doesn't run there, and readiness keeps answering while the app shuts down. `metricsAdapter({ management: true })` and `DevToolsAdapter({ management: true })` serve `/metrics` and `/_debug` there too, and adapters can add their own routes through `ctx.management`. Off by default; in `kick dev` and on serverless platforms everything stays on the one port. Readiness answers `503` with `status: 'starting'` until the app has started.
+
+### Patch Changes
+
+- [#958](https://github.com/forinda/kick-js/pull/958) [`5d1597b`](https://github.com/forinda/kick-js/commit/5d1597b652e9087592b5bcc0cef687e8e06d1659) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs/web` (`createWebApp`) answers a refused upload — a file type the route doesn't allow, or a file over its size limit — with KickJS's problem details (`415` / `413` with a `detail`), as the other runtimes do, instead of the host's bare error.
+
 ## 10.5.0
 
 ### Minor Changes

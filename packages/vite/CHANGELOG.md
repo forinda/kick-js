@@ -1,5 +1,15 @@
 # @forinda/kickjs-vite
 
+## 8.1.0
+
+### Minor Changes
+
+- [#960](https://github.com/forinda/kick-js/pull/960) [`c5991d8`](https://github.com/forinda/kick-js/commit/c5991d82b59b510a94c1acb865dc95e54408e9eb) Thanks [@forinda](https://github.com/forinda)! - Static files are served compressed. `SpaAdapter`, the Inertia adapter and `ctx.http.serveStatic()` send a file's `.br` or `.gz` copy to a browser that accepts it (Brotli first), with `Vary: Accept-Encoding` and the original `Content-Type`, on Express, Fastify and h3. `compressAssets()` from the new `@forinda/kickjs-vite/compress` writes the copies when the client is built, and `kick new --template fullstack` and `--template inertia` projects use it. `@forinda/kickjs-vite` no longer requires `@forinda/kickjs`, so a client package can use the plugin on its own.
+
+### Patch Changes
+
+- [#957](https://github.com/forinda/kick-js/pull/957) [`8e9ccda`](https://github.com/forinda/kick-js/commit/8e9ccda170e1397958f209f61a1f4d9b18dd3bf5) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs-swagger` and `@forinda/kickjs-vite` no longer require `express`, and swagger's and grpc's typings no longer need `@types/express`, so an app on Fastify or h3 installs without either.
+
 ## 8.0.3
 
 ### Patch Changes

@@ -1,5 +1,30 @@
 # @forinda/kickjs-cli
 
+## 8.13.0
+
+### Minor Changes
+
+- [#960](https://github.com/forinda/kick-js/pull/960) [`c5991d8`](https://github.com/forinda/kick-js/commit/c5991d82b59b510a94c1acb865dc95e54408e9eb) Thanks [@forinda](https://github.com/forinda)! - Static files are served compressed. `SpaAdapter`, the Inertia adapter and `ctx.http.serveStatic()` send a file's `.br` or `.gz` copy to a browser that accepts it (Brotli first), with `Vary: Accept-Encoding` and the original `Content-Type`, on Express, Fastify and h3. `compressAssets()` from the new `@forinda/kickjs-vite/compress` writes the copies when the client is built, and `kick new --template fullstack` and `--template inertia` projects use it. `@forinda/kickjs-vite` no longer requires `@forinda/kickjs`, so a client package can use the plugin on its own.
+
+- [#954](https://github.com/forinda/kick-js/pull/954) [`609ffc1`](https://github.com/forinda/kick-js/commit/609ffc1387efb685f9f423c2504e5e702dbeba31) Thanks [@forinda](https://github.com/forinda)! - An app on Fastify or h3 type-checks without `@types/express` or `@types/multer`.
+  
+  - Middleware types are KickJS's own: `ConnectRequest`, `ConnectResponse`, `ConnectNext`, `ConnectHandler`, `ConnectErrorHandler`. Express middleware (`express.json()`, `cors()`, handlers typed with Express's `Request`) fits them.
+  - Uploaded files are typed `UploadedFile` (`ctx.file`, `ctx.files`), and `upload({ storage })` takes an `UploadStorageEngine`; multer's files and storage engines fit both.
+  - `ExpressRuntimeTypes` is exported from `@forinda/kickjs/express`.
+  - `ctx.app`, `getRuntimeApp()`, `ctx.req` and `ctx.res` are typed for the app's runtime by `kick typegen`, now for Express apps too. Without typegen, cast them to your engine's types.
+  - `buildRoutes()` and `materializeRouter()` return a `ConnectHandler`.
+
+- [#963](https://github.com/forinda/kick-js/pull/963) [`e3de0f8`](https://github.com/forinda/kick-js/commit/e3de0f8bde7bf16492b9faeef8ab3cf6fe90fcef) Thanks [@forinda](https://github.com/forinda)! - `kick new` writes fewer files — 32 instead of 57 for a minimal project — and the rest is one command away:
+  
+  - **Deploy files on demand.** `kick g deploy netlify | vercel | docker` adds what a target needs: `netlify.toml` / `vercel.json`, `src/serverless.ts` and the `build:netlify` / `build:vercel` script, or a `Dockerfile` and `.dockerignore`. In a fullstack workspace, run it at the root. `kick new --deploy netlify,vercel,docker` writes them up front; without it, a new project has none of them.
+  - **Agent docs.** A new project gets `.agents/AGENTS.md` and `CLAUDE.md`; `kick g agents` adds the skills and the Gemini and Copilot files.
+
+### Patch Changes
+
+- Updated dependencies [[`c5991d8`](https://github.com/forinda/kick-js/commit/c5991d82b59b510a94c1acb865dc95e54408e9eb), [`609ffc1`](https://github.com/forinda/kick-js/commit/609ffc1387efb685f9f423c2504e5e702dbeba31), [`2c8d84c`](https://github.com/forinda/kick-js/commit/2c8d84ca19f04fca6baba7dff37747033124a0fe), [`509b9f5`](https://github.com/forinda/kick-js/commit/509b9f5fe0e734399667df4ad6603645227abd70), [`5d1597b`](https://github.com/forinda/kick-js/commit/5d1597b652e9087592b5bcc0cef687e8e06d1659)]:
+  - @forinda/kickjs@10.6.0
+  - @forinda/kickjs-db@8.9.0
+
 ## 8.12.1
 
 ### Patch Changes
