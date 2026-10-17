@@ -297,6 +297,24 @@ function baseVersionGte(a: string, b: string): boolean {
   return a2 >= b2
 }
 
+/** This CLI's version. */
+export const cliVersion: string = cliPkg.version
+
+/**
+ * The latest published CLI when it's newer than this one — else null: current
+ * already, offline, or npm missing. An old global `kick` silently lacks the
+ * templates and options released since, so `kick new` says so.
+ */
+export async function newerCliRelease(): Promise<string | null> {
+  const latest = parseNpmVersion(
+    // Short: an aborted `kick new` waits for this before it exits.
+    await captureCommandAsync('npm', ['view', '@forinda/kickjs-cli', 'version'], {
+      timeout: 5000,
+    }),
+  )
+  return latest && !baseVersionGte(cliVersion, latest) ? latest : null
+}
+
 function tagExportsSubpath(name: string, tag: string, subpath: string): boolean {
   const out = captureCommand('npm', ['view', `${name}@${tag}`, 'exports', '--json'], {
     timeout: 20_000,

@@ -1,7 +1,7 @@
 import { resolve, basename } from 'node:path'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import type { Command } from 'commander'
-import { initProject } from '../generators/project'
+import { cliVersion, initProject, newerCliRelease } from '../generators/project'
 import { parseDeployTargets, type DeployTarget } from '../generators/deploy'
 import { intro, outro, text, select, multiSelect, confirm, log } from '../utils/prompts'
 import { colors } from '../utils/colors'
@@ -59,6 +59,14 @@ export function registerInitCommand(program: Command): void {
     .option('--non-interactive', 'alias for --yes')
     .action(async (name: string | undefined, opts: any) => {
       intro('KickJS — Create a new project')
+      // Looked up while the first prompts are answered.
+      const newer = newerCliRelease()
+      const warnIfOutdated = (latest: string | null) => {
+        if (!latest) return
+        log.warn(
+          `kick ${cliVersion} is behind the latest release, ${latest} — templates and options added since are missing. Upgrade: npm i -g @forinda/kickjs-cli@latest`,
+        )
+      }
 
       // Checked first, so a typo stops before anything is written.
       let deploy: DeployTarget[] = []
@@ -136,6 +144,12 @@ export function registerInitCommand(program: Command): void {
       }
 
       // ── Template ──────────────────────────────────────────────────
+      // Before the template list, which an old CLI shows short. Never waits long.
+      if (!yes) {
+        warnIfOutdated(
+          await Promise.race([newer, new Promise<null>((r) => setTimeout(r, 3000, null))]),
+        )
+      }
       let template = opts.template
       if (!template) {
         if (yes) {
@@ -366,6 +380,7 @@ export function registerInitCommand(program: Command): void {
           viteTemplate,
           deploy,
         })
+        if (yes) warnIfOutdated(await newer)
         outro(
           `Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager}${packageManager === 'pnpm' ? ' dev' : ' run dev:server'}`)}`,
         )
@@ -385,6 +400,7 @@ export function registerInitCommand(program: Command): void {
         deploy,
       })
 
+      if (yes) warnIfOutdated(await newer)
       outro(
         `Done! Next steps: ${colors.cyan(`cd ${name} && ${runScript(packageManager as PackageManager, 'dev')}`)}`,
       )
