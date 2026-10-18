@@ -168,11 +168,11 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   // ambient process.env (Workers). Latest-wins like loadEnv().
   if (options.env) {
     const env = options.env
-    Container._envResolver = (key: string) => env[key]
+    Container.setEnvResolver((key: string) => env[key])
   }
 
   // Request-scope provider — same wiring Application.setup() performs.
-  Container._requestStoreProvider = () => requestStore.getStore() ?? null
+  Container.setRequestStoreProvider(() => requestStore.getStore() ?? null)
 
   // Module mounting — mirrors Application.setup() steps 1:1 for the module
   // path (plugins/adapters are out of scope for the edge entry at launch).

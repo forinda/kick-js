@@ -33,7 +33,9 @@ export interface Rule {
 }
 
 const SYMBOL_DECL_REGEX = /\bexport\s+const\s+([A-Z_][A-Z0-9_]*)\s*=\s*Symbol\s*\(/g
-const CREATE_TOKEN_LITERAL_REGEX = /createToken\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`]+)['"`]/g
+// `ctn` is createToken's short alias, held to the same conventions.
+const CREATE_TOKEN_LITERAL_REGEX =
+  /\b(?:createToken|ctn)\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`]+)['"`]/g
 
 function lineOf(source: string, index: number): number {
   return source.slice(0, index).split('\n').length

@@ -33,7 +33,7 @@ function buildApp(table: RouteTable) {
 
 beforeEach(() => {
   Container.reset()
-  Container._requestStoreProvider = () => requestStore.getStore() ?? null
+  Container.setRequestStoreProvider(() => requestStore.getStore() ?? null)
 })
 
 describe('h3Runtime — fetch round-trips', () => {

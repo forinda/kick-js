@@ -12,7 +12,7 @@
  *
  * ## Hardening layers
  *
- * KickJS has four DI token kinds, listed from safest to riskiest:
+ * The container takes four kinds of token, listed from safest to riskiest:
  *
  * 1. **Class identity** — `container.resolve(UserService)`. Reference
  *    equality, never collides. Type-safe via `Constructor<T>` overload.
@@ -38,16 +38,15 @@
  * const url = container.resolve(DATABASE_URL) // typed as `string`
  * ```
  *
- * @module @forinda/kickjs/core/token
+ * @module @forinda/kickjs-di/token
  */
 
 /**
  * Symbol marker stamped on every InjectionToken so the container can
  * detect them at runtime regardless of which package created them.
  *
- * Uses `Symbol.for()` so cross-package isolation (different copies of
- * `@forinda/kickjs` loaded under different module identities) still
- * shares the same marker.
+ * Uses `Symbol.for()` so two copies of this package loaded under
+ * different module identities still share the same marker.
  */
 export const INJECTION_TOKEN: unique symbol = Symbol.for('@kickjs/InjectionToken') as never
 
@@ -81,6 +80,9 @@ export function createToken<T>(name: string): InjectionToken<T> {
     name,
   })
 }
+
+/** Short for {@link createToken}: `ctn<Mailer>('app/mailer')`. */
+export const ctn: typeof createToken = createToken
 
 /** Type guard — returns `true` if `value` is an InjectionToken */
 export function isInjectionToken(value: unknown): value is InjectionToken<unknown> {

@@ -1,7 +1,7 @@
 /**
  * The container's own errors, by stable code. A host can replace the factory
- * (`Container._error`) to turn them into richer errors — kickjs maps each
- * code to its catalogue entry, with the cause and the fix.
+ * (`Container.setErrorFactory`) to turn them into richer errors, with a cause
+ * and a fix for each code.
  */
 export type DiErrorCode =
   /** Nothing is registered for the token. */

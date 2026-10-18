@@ -65,6 +65,8 @@ class OrderService {
 }
 ```
 
+`ctn` is a short alias of `createToken`, the same function: `const MAILER = ctn<Mailer>('app/mailer')`. kick-lint holds it to the same token-naming rules.
+
 ## Property Injection
 
 Use `@Autowired` for lazy property injection. For token-based property injection, pass the token to `@Autowired`:

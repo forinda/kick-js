@@ -50,16 +50,16 @@ A class constructor parameter is injected by its type; a token or an interface n
 
 ## Exports
 
-| Group             | Exports                                                                                                                 |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Container         | `Container`, `tokenName`, `ContainerChangeEvent`, `ContainerChangeListener`, `KickJsRegistry`                           |
-| Class decorators  | `Injectable`, `Service`, `Component`, `Repository`, `Builder`, `withBuilder`                                            |
-| Member decorators | `Inject`, `Autowired`, `Value`, `PostConstruct`, `PreDestroy`                                                           |
-| Tokens            | `createToken`, `isInjectionToken`, `INJECTION_TOKEN`, `InjectionToken`                                                  |
-| Types             | `Scope`, `Constructor`, `ServiceOptions`, `BuilderOf`, `Buildable`, `ClassKind`, `PostConstructStatus`, `EnvKey`, `Env` |
-| Errors            | `DiError`, `diError`, `DiErrorCode`, `DiLogger`, `defaultLogger`                                                        |
-| Metadata helpers  | `DI_METADATA`, `setClassMeta`, `getClassMeta`, `setInMetaMap`, `getMetaMap`, …                                          |
-| Disposables       | `registerDisposable`, `drainDisposables`, `runDisposables`, `disposeAll`                                                |
+| Group             | Exports                                                                                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container         | `Container`, `tokenName`, `ContainerChangeEvent`, `ContainerChangeListener`, `KickJsRegistry`, `RequestStore`, `RequestStoreProvider`, `EnvResolver`, `ErrorFactory`, `PropertyInjector` |
+| Class decorators  | `Injectable`, `Service`, `Component`, `Repository`, `Builder`, `withBuilder`, `registerInjectable` (for your own class decorators)                                                       |
+| Member decorators | `Inject`, `Autowired`, `Value`, `PostConstruct`, `PreDestroy`                                                                                                                            |
+| Tokens            | `createToken` (short: `ctn`), `isInjectionToken`, `INJECTION_TOKEN`, `InjectionToken`                                                                                                    |
+| Types             | `Scope`, `Constructor`, `ServiceOptions`, `BuilderOf`, `Buildable`, `ClassKind`, `PostConstructStatus`, `EnvKey`, `Env`                                                                  |
+| Errors            | `DiError`, `diError`, `DiErrorCode`, `DiLogger`, `defaultLogger`                                                                                                                         |
+| Metadata helpers  | `DI_METADATA`, `setClassMeta`, `getClassMeta`, `setInMetaMap`, `getMetaMap`, …                                                                                                           |
+| Disposables       | `registerDisposable`, `drainDisposables`, `runDisposables`, `disposeAll`                                                                                                                 |
 
 `@Controller`, the route decorators and `@Asset` are HTTP and asset features; they stay in `@forinda/kickjs`.
 
@@ -99,24 +99,31 @@ try {
 
 Inside KickJS the same codes become the catalogued `KickError`s, with the cause and the fix (see [Error handling](../guide/error-handling.md)).
 
-## Hooks
+## Configuring the container
 
-The framework plugs into the container through static hooks. Standalone, set the ones you need once at startup.
+Set these once at startup, before anything resolves. Each has a getter to read it back, and passing `null` to the setter restores the default.
 
-| Hook                              | Default                                     | What it does                                                                                                              |
-| --------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `Container._envResolver`          | `null`                                      | `(key) => value` for `@Value`. Without one, `@Value` reads `process.env`, then the default.                               |
-| `Container._requestStoreProvider` | `null`                                      | Returns the current request's store for `Scope.REQUEST`. See below.                                                       |
-| `Container._error`                | `diError`                                   | `(code, subject) => Error` — build your own errors from the codes.                                                        |
-| `Container._logger`               | errors to `console.error`, warnings dropped | `{ warn, error }` — told when an async `@PostConstruct` isn't awaited, or one throws.                                     |
-| `Container._propertyInjectors`    | empty                                       | A `Map` from metadata key to `(config, prop) => getter`: your own lazy property decorators, the way KickJS adds `@Asset`. |
+| Setter                                        | Getter                           | Default                                     | What it does                                                                                |
+| --------------------------------------------- | -------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `Container.setLogger(logger)`                 | `Container.logger`               | errors to `console.error`, warnings dropped | `{ warn, error }`, told when an async `@PostConstruct` isn't awaited, or one throws.        |
+| `Container.setErrorFactory(factory)`          | `Container.errorFactory`         | `diError`                                   | `(code, subject) => Error`: build your own errors from the codes above.                     |
+| `Container.setEnvResolver(resolver)`          | `Container.envResolver`          | none                                        | `(key) => value` for `@Value`. Without one, `@Value` reads `process.env`, then the default. |
+| `Container.setRequestStoreProvider(provider)` | `Container.requestStoreProvider` | none                                        | Returns the current unit of work's store for `Scope.REQUEST`. See below.                    |
 
 ```ts
-Container._logger = {
+Container.setLogger({
   warn: (message) => console.warn(message),
   error: (err, message) => console.error(message, err),
-}
+})
 ```
+
+### Your own property decorators
+
+`Container.definePropertyInjector(metadataKey, prepare)` adds a lazy property decorator like `@Value`. For each property a class stores under `metadataKey` (a `Map` on the prototype), `prepare(config, prop)` runs once when the container first builds the class, so it can reject a bad config up front, and returns the getter the property reads through on every instance.
+
+### Your own class decorators
+
+`registerInjectable(target, scope)` registers a class the way `@Service` does, for a class decorator of your own that should also make the class injectable.
 
 ### Request scope without the framework
 
@@ -124,11 +131,10 @@ Container._logger = {
 
 ```ts
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { Container, Scope, Service } from '@forinda/kickjs-di'
+import { Container, Scope, Service, type RequestStore } from '@forinda/kickjs-di'
 
-type Store = { instances: Map<unknown, unknown>; values: Map<unknown, unknown> }
-const scope = new AsyncLocalStorage<Store>()
-Container._requestStoreProvider = () => scope.getStore() ?? null
+const scope = new AsyncLocalStorage<RequestStore>()
+Container.setRequestStoreProvider(() => scope.getStore() ?? null)
 
 @Service({ scope: Scope.REQUEST })
 class JobContext {

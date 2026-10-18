@@ -6,9 +6,14 @@ export {
   type ContainerChangeEvent,
   type ContainerChangeListener,
   type KickJsRegistry,
+  type EnvResolver,
+  type ErrorFactory,
+  type PropertyInjector,
+  type RequestStore,
+  type RequestStoreProvider,
 } from './container'
 export {
-  _registerInjectable,
+  registerInjectable,
   Injectable,
   Service,
   Component,
@@ -57,4 +62,4 @@ export {
   setInMetaRecord,
   getMetaRecord,
 } from './metadata'
-export { INJECTION_TOKEN, createToken, isInjectionToken, type InjectionToken } from './token'
+export { INJECTION_TOKEN, createToken, ctn, isInjectionToken, type InjectionToken } from './token'

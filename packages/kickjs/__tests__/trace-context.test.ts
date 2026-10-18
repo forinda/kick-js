@@ -194,11 +194,11 @@ function readTraceContext(): Record<string, unknown> | null {
 describe('traceId in the per-request trace context', () => {
   beforeEach(() => {
     Container.reset()
-    Container._requestStoreProvider = () => requestStore.getStore() ?? null
+    Container.setRequestStoreProvider(() => requestStore.getStore() ?? null)
   })
 
   afterEach(() => {
-    Container._requestStoreProvider = null
+    Container.setRequestStoreProvider(null)
   })
 
   it('traceId appears in logger context during a request with traceparent', async () => {

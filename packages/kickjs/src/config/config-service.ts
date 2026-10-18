@@ -53,7 +53,7 @@ export class ConfigService {
    * eagerly, or HMR's `reloadEnv()` cleared the cache between rebuilds),
    * an eager snapshot would freeze the base shape and never see the
    * extended values — even though `@Value()` (which reads lazily through
-   * `Container._envResolver`) would resolve them correctly.
+   * `Container.envResolver`) would resolve them correctly.
    *
    * `loadEnv()` is sticky: once an extended schema has been parsed it
    * keeps returning that schema's values, so this getter is cheap (one

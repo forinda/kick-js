@@ -4,7 +4,7 @@ import 'reflect-metadata'
 import { expect, it, vi } from 'vitest'
 import { Container } from '../src/container'
 import { Autowired, Inject, PostConstruct, Service, Value } from '../src/decorators'
-import { createToken } from '../src/token'
+import { createToken, ctn } from '../src/token'
 import { DiError } from '../src/errors'
 import { Scope } from '../src/interfaces'
 
@@ -49,8 +49,8 @@ it('runs the request-scope example from the docs', async () => {
   const { AsyncLocalStorage } = await import('node:async_hooks')
   type Store = { instances: Map<unknown, unknown>; values: Map<unknown, unknown> }
   const scope = new AsyncLocalStorage<Store>()
-  const previous = Container._requestStoreProvider
-  Container._requestStoreProvider = () => scope.getStore() ?? null
+  const previous = Container.requestStoreProvider
+  Container.setRequestStoreProvider(() => scope.getStore() ?? null)
   try {
     @Service({ scope: Scope.REQUEST })
     class JobContext {}
@@ -66,7 +66,7 @@ it('runs the request-scope example from the docs', async () => {
       expect.objectContaining({ code: 'KICK003' }),
     )
   } finally {
-    Container._requestStoreProvider = previous
+    Container.setRequestStoreProvider(previous)
   }
 })
 
@@ -111,4 +111,12 @@ it('reports a @PostConstruct that threw on console.error by default', () => {
   Container.create().resolve(Broken)
   expect(error).toHaveBeenCalledWith(expect.stringContaining('Broken.init()'), expect.any(Error))
   error.mockRestore()
+})
+
+it('ctn is createToken under a short name', () => {
+  const MAILER = ctn<{ send(): string }>('app/mailer')
+  const container = Container.create()
+  container.registerInstance(MAILER, { send: () => 'sent' })
+  expect(ctn).toBe(createToken)
+  expect(container.resolve(MAILER).send()).toBe('sent')
 })

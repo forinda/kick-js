@@ -28,7 +28,7 @@ function resetCallCount() {
 
 /** Wire the container's request store provider to use the shared AsyncLocalStorage */
 function wireRequestStoreProvider() {
-  Container._requestStoreProvider = () => requestStore.getStore() ?? null
+  Container.setRequestStoreProvider(() => requestStore.getStore() ?? null)
 }
 
 /** Run a callback inside a fake request context */
@@ -52,7 +52,7 @@ describe('REQUEST into SINGLETON — the error names a fix the parent can use', 
   })
 
   afterEach(() => {
-    Container._requestStoreProvider = null
+    Container.setRequestStoreProvider(null)
   })
 
   // @Controller() takes no options, so "change the parent's scope" is advice a
@@ -106,7 +106,7 @@ describe('REQUEST scope — Container unit tests', () => {
   })
 
   afterEach(() => {
-    Container._requestStoreProvider = null
+    Container.setRequestStoreProvider(null)
   })
 
   it('returns a fresh instance per request context', () => {
@@ -162,7 +162,7 @@ describe('REQUEST scope — Container unit tests', () => {
 
     const container = Container.getInstance()
     container.register(NoProviderService, NoProviderService, Scope.REQUEST)
-    Container._requestStoreProvider = null
+    Container.setRequestStoreProvider(null)
 
     expect(() => container.resolve(NoProviderService)).toThrow(
       /KICK002|request scope middleware not mounted/,

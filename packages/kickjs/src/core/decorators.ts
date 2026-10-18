@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import './di-hooks'
-import { _registerInjectable } from '@forinda/kickjs-di'
+import { registerInjectable } from '@forinda/kickjs-di'
 import { METADATA, Scope } from './interfaces'
 import {
   setClassMeta,
@@ -41,7 +41,7 @@ export {
 export function Controller(): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'controller', target)
-    _registerInjectable(target, Scope.SINGLETON)
+    registerInjectable(target, Scope.SINGLETON)
   }
 }
 

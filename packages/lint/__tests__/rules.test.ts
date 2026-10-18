@@ -98,6 +98,21 @@ describe('token-reserved-prefix', () => {
     expect(v[0].suggestion).toContain('mycorp')
   })
 
+  it('holds the ctn alias to the same rule, and only the identifier ctn', () => {
+    const v = tokenReservedPrefix.check({
+      source: `const FOO = ctn<Foo>('kick/cool/Thing')`,
+      file: 'mycorp/src/types.ts',
+      firstParty: false,
+    })
+    expect(v).toHaveLength(1)
+    const other = tokenReservedPrefix.check({
+      source: `const FOO = fnctn('kick/cool/Thing')`,
+      file: 'mycorp/src/types.ts',
+      firstParty: false,
+    })
+    expect(other).toEqual([])
+  })
+
   it('does not run on first-party code', () => {
     const v = tokenReservedPrefix.check({
       source: `const FOO = createToken<Foo>('kick/mailer/Service')`,

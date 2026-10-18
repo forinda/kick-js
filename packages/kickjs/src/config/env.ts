@@ -370,7 +370,7 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
   cachedEnv = s.parse(withSecretFiles(process.env, Object.keys(s.shape ?? {})))
 
   // Register env resolver so @Value() reads validated values
-  Container._envResolver = resolveEnvKey
+  Container.setEnvResolver(resolveEnvKey)
 
   return overlaid(cachedEnv)
 }
@@ -506,7 +506,7 @@ export function resetEnvCache(): void {
   // installed left `@Value()` reading through a live closure over a
   // null cache — indistinguishable from "key not set" but with no
   // schema to re-parse against.
-  Container._envResolver = null
+  Container.setEnvResolver(null)
 }
 
 /**
@@ -564,7 +564,7 @@ export function loadEnvFromSchema(schema: unknown): unknown {
   }
   cachedEnv = result.data
   cachedSchema = schema
-  Container._envResolver = resolveEnvKey
+  Container.setEnvResolver(resolveEnvKey)
   return overlaid(result.data)
 }
 
