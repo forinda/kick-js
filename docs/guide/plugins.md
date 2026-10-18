@@ -398,7 +398,7 @@ const RequestLogger = definePlugin({
 })
 ```
 
-The framework topologically sorts plugins at boot. Cycles throw `MountCycleError`; unknown names throw `MissingMountDepError` — both at boot, never at request time. After `kick typegen`, `dependsOn` is typed as a string-literal union of the project's actual plugin names instead of bare `string`.
+The framework topologically sorts plugins at boot. Cycles throw `MountCycleError`; unknown names throw `MissingMountDepError` — both at boot, never at request time. After `kick typegen`, `dependsOn` is typed as a string-literal union of the project's plugin and adapter names instead of bare `string`.
 
 ## Usage
 

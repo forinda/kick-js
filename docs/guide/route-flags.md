@@ -216,7 +216,7 @@ Keep predicates cheap — they run per request, per consumer.
 ## Type safety: declare your flags
 
 Flag names are plain strings by default, which means a typo is a flag that silently never matches.
-`kick typegen` (run by `kick dev` on save) picks up every `defineRouteFlag('name')` call, so
+`kick typegen` (run by `kick dev` on save) picks up every `defineRouteFlag('name')` call under `src/` (or `typegen.srcDir`), so
 declaring a flag is the only step:
 
 ```ts

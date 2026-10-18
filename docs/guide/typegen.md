@@ -120,7 +120,7 @@ Change the schema and the body type follows on the next typegen run.
 - ✅ Named imports: `import { schema } from './dto'` then `body: schema`
 - ✅ Default imports: `import schema from './dto'` then `body: schema`
 - ✅ Namespace imports: `import * as Schemas from './dto'` then `body: Schemas` (the whole module is referenced)
-- ✅ Same-file `const`: `const schema = z.object({...})` declared anywhere in the file
+- ✅ Same-file `export const`: `export const schema = z.object({...})` declared anywhere in the file (an unexported `const` warns and falls back to `unknown`)
 
 ### What the scanner cannot resolve (falls back to `unknown`)
 
@@ -368,7 +368,7 @@ These are known and deliberate for the current release; some will be lifted in f
 
 - **Imperative `ctx.json(...)` handlers infer `response: unknown`.** Response types come from what the handler returns. Use [return-value handlers](./controllers.md#return-value-handlers) or declare `{ response: schema }` on the route for exact types.
 - **Joi and JSON Schema are not yet supported.** `typegen.schemaValidator: 'kickjs-schema'` already covers Zod, Valibot, Yup, and Standard Schema v1 — Joi and JSON Schema need a `@forinda/kickjs-schema` adapter first (PRs welcome).
-- **Schema references must be bare top-level identifiers.** Member access, function calls, and inline compositions silently fall back to `body: unknown` (see [What the scanner cannot resolve](#what-the-scanner-cannot-resolve-falls-back-to-unknown)).
+- **Schema references must be bare top-level identifiers.** A name typegen can't find warns before falling back to `unknown`; member access, function calls, and inline compositions fall back to `body: unknown` without a warning (see [What the scanner cannot resolve](#what-the-scanner-cannot-resolve-falls-back-to-unknown)).
 - **Column-object `@ApiQueryParams` configs (Drizzle-style) are recognised but not narrowed.** Use the string-array form (or `ctx.qs(config as const)`) for typed query field names.
 - **A type error can point inside `.kickjs/`** rather than your controller. If it does, check the schema the failing route's decorator references.
 
