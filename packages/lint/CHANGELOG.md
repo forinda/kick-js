@@ -1,5 +1,17 @@
 # @forinda/kickjs-lint
 
+## 5.2.6
+
+### Patch Changes
+
+- [#979](https://github.com/forinda/kick-js/pull/979) [`c258a19`](https://github.com/forinda/kick-js/commit/c258a19151b8e69f00feb796c130a88c0171e36b) Thanks [@forinda](https://github.com/forinda)! - The container's hooks are methods now, not `_`-prefixed static fields. `Container.setLogger()`, `setErrorFactory()`, `setEnvResolver()` and `setRequestStoreProvider()` set them, and `null` restores the default; `Container.logger`, `errorFactory`, `envResolver` and `requestStoreProvider` read them back. `Container.definePropertyInjector(key, prepare)` replaces `Container._propertyInjectors.set(...)`, and `registerInjectable()` replaces `_registerInjectable()`. The decorator lifecycle hooks (`_onReady`, `_onReset`, `_onCreate`) are internal and no longer part of the published types.
+  
+  The new types `RequestStore`, `RequestStoreProvider`, `EnvResolver`, `ErrorFactory` and `PropertyInjector` are exported. Doc comments no longer describe KickJS internals; where KickJS fills something in for you (`kick typegen` writing `KickJsRegistry` and `Env`), they say so.
+  
+  Migrating: `Container._logger = x` becomes `Container.setLogger(x)`, and likewise for the other hooks.
+  
+  `ctn` is a short alias of `createToken`, exported from both packages: `const MAILER = ctn<Mailer>('app/mailer')`. kick-lint's token-naming rules check `ctn(...)` calls too.
+
 ## 5.2.5
 
 ### Patch Changes

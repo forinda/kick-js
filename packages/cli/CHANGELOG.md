@@ -1,5 +1,25 @@
 # @forinda/kickjs-cli
 
+## 8.14.0
+
+### Minor Changes
+
+- [#971](https://github.com/forinda/kick-js/pull/971) [`5a216f8`](https://github.com/forinda/kick-js/commit/5a216f864f1b694f671f9eb8e4fb0185be08ef5b) Thanks [@forinda](https://github.com/forinda)! - `kick new` warns when the running CLI is behind the latest release: an old global `kick` silently lacks the templates and options added since (Inertia, for one). Interactively the warning comes before the template list; with `--yes`, after scaffolding. Offline, it says nothing.
+
+- [#978](https://github.com/forinda/kick-js/pull/978) [`c661409`](https://github.com/forinda/kick-js/commit/c6614098e5f470f6ac5c87518c0ed9b7b1471c01) Thanks [@forinda](https://github.com/forinda)! - `kick runtime [engine]` shows the HTTP engine an app boots on, or moves it to another: `kick runtime fastify`.
+  
+  - **Entry file:** `runtime:` calls the new engine's factory, and the imports follow. Leaving Express removes `express.json()` from `middlewares`; arriving on Express adds it back.
+  - **`kick.config.ts`:** its `runtime` is updated.
+  - **Packages:** the new engine's are installed, with its multipart parser when a route takes uploads. The old engine's are removed unless `src/` still imports them.
+  
+  Code that uses the old engine directly, such as `from 'express'` or `ctx.res`, is listed with file and line for review. `--dry-run` prints the plan and changes nothing; `--no-install` leaves packages to you.
+
+### Patch Changes
+
+- Updated dependencies [[`7762b7f`](https://github.com/forinda/kick-js/commit/7762b7f708c26aad18038ba114f92b0885ab12ed), [`c258a19`](https://github.com/forinda/kick-js/commit/c258a19151b8e69f00feb796c130a88c0171e36b), [`8ee9d05`](https://github.com/forinda/kick-js/commit/8ee9d0584eea2156f4f7751878e820a0c22468eb), [`e0860a1`](https://github.com/forinda/kick-js/commit/e0860a15fdc97286f0adc7fe07aff5b25def5f82), [`aff5737`](https://github.com/forinda/kick-js/commit/aff5737ff703a5b84c72a4498cb832009edeb16f)]:
+  - @forinda/kickjs@10.8.0
+  - @forinda/kickjs-db@8.9.0
+
 ## 8.13.1
 
 ### Patch Changes

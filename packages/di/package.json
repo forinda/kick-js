@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-di",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The dependency injection container behind KickJS: typed tokens, decorators, REQUEST scope, HMR-safe registrations",
   "keywords": [
     "kickjs",

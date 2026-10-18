@@ -1,5 +1,24 @@
 # @forinda/kickjs-di
 
+## 0.3.0
+
+### Minor Changes
+
+- [#980](https://github.com/forinda/kick-js/pull/980) [`f58ce9e`](https://github.com/forinda/kick-js/commit/f58ce9ebf464b6867129bde31d816da0eba6f3a1) Thanks [@forinda](https://github.com/forinda)! - `container.createChild()` returns a container that resolves its own bindings first and falls back to its parent: overrides for one tenant, job or test without touching the parent.
+  
+  - **Lookup:** `has()` looks through to the parent; the new `hasOwn()` doesn't. Lookup order is the child's binding, the parent's, the child's fallback, then the parent's.
+  - **REQUEST scope:** a child's REQUEST-scoped instances are kept apart from the parent's in the same request.
+  - **HMR:** an invalidation in the parent rebuilds what the child built on it.
+  - **Lifetime:** `dispose()` detaches a child. Children are held weakly, so one that is never disposed is still garbage-collected.
+
+- [#979](https://github.com/forinda/kick-js/pull/979) [`c258a19`](https://github.com/forinda/kick-js/commit/c258a19151b8e69f00feb796c130a88c0171e36b) Thanks [@forinda](https://github.com/forinda)! - The container's hooks are methods now, not `_`-prefixed static fields. `Container.setLogger()`, `setErrorFactory()`, `setEnvResolver()` and `setRequestStoreProvider()` set them, and `null` restores the default; `Container.logger`, `errorFactory`, `envResolver` and `requestStoreProvider` read them back. `Container.definePropertyInjector(key, prepare)` replaces `Container._propertyInjectors.set(...)`, and `registerInjectable()` replaces `_registerInjectable()`. The decorator lifecycle hooks (`_onReady`, `_onReset`, `_onCreate`) are internal and no longer part of the published types.
+  
+  The new types `RequestStore`, `RequestStoreProvider`, `EnvResolver`, `ErrorFactory` and `PropertyInjector` are exported. Doc comments no longer describe KickJS internals; where KickJS fills something in for you (`kick typegen` writing `KickJsRegistry` and `Env`), they say so.
+  
+  Migrating: `Container._logger = x` becomes `Container.setLogger(x)`, and likewise for the other hooks.
+  
+  `ctn` is a short alias of `createToken`, exported from both packages: `const MAILER = ctn<Mailer>('app/mailer')`. kick-lint's token-naming rules check `ctn(...)` calls too.
+
 ## 0.2.0
 
 ### Minor Changes

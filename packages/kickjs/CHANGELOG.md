@@ -1,5 +1,52 @@
 # @forinda/kickjs
 
+## 10.8.0
+
+### Minor Changes
+
+- [#974](https://github.com/forinda/kick-js/pull/974) [`7762b7f`](https://github.com/forinda/kick-js/commit/7762b7f708c26aad18038ba114f92b0885ab12ed) Thanks [@forinda](https://github.com/forinda)! - `@CacheResponse({ maxAge, swr?, varies?, key? })` caches a route's whole response in your `CacheProvider`. A `GET` answered with `200` is stored, whether the handler sent it with `ctx.json` / `ctx.send` / `ctx.html` or returned it. It carries a weak ETag, so a matching `If-None-Match` gets `304`. With `swr`, a stale entry is still served while one request rebuilds it in the background, and concurrent misses share one run of the handler.
+  
+  The key is the route, the `Host` header and the URL, plus the headers in `varies`; a malformed `Host` isn't cached. A request that identifies its caller (`Authorization`, `Proxy-Authorization`, `X-Api-Key`, a cookie, or `ctx.user`) skips the cache unless the route varies on it. `key` can be a string prefix, which `@CacheEvict(prefix)` clears, or a function of the context that returns the key, or `null` to skip.
+  
+  `@Cacheable` and `@CacheEvict` take a function of the method's arguments as their key too, e.g. `@CacheEvict((id) => `product:${id}`)`. `@Cacheable(0)` stores nothing instead of writing an entry that expires at once (Redis rejects `PX 0`). `@CacheEvict` warns once when the provider has no `delByPrefix`.
+
+- [#979](https://github.com/forinda/kick-js/pull/979) [`c258a19`](https://github.com/forinda/kick-js/commit/c258a19151b8e69f00feb796c130a88c0171e36b) Thanks [@forinda](https://github.com/forinda)! - The container's hooks are methods now, not `_`-prefixed static fields. `Container.setLogger()`, `setErrorFactory()`, `setEnvResolver()` and `setRequestStoreProvider()` set them, and `null` restores the default; `Container.logger`, `errorFactory`, `envResolver` and `requestStoreProvider` read them back. `Container.definePropertyInjector(key, prepare)` replaces `Container._propertyInjectors.set(...)`, and `registerInjectable()` replaces `_registerInjectable()`. The decorator lifecycle hooks (`_onReady`, `_onReset`, `_onCreate`) are internal and no longer part of the published types.
+  
+  The new types `RequestStore`, `RequestStoreProvider`, `EnvResolver`, `ErrorFactory` and `PropertyInjector` are exported. Doc comments no longer describe KickJS internals; where KickJS fills something in for you (`kick typegen` writing `KickJsRegistry` and `Env`), they say so.
+  
+  Migrating: `Container._logger = x` becomes `Container.setLogger(x)`, and likewise for the other hooks.
+  
+  `ctn` is a short alias of `createToken`, exported from both packages: `const MAILER = ctn<Mailer>('app/mailer')`. kick-lint's token-naming rules check `ctn(...)` calls too.
+
+- [#981](https://github.com/forinda/kick-js/pull/981) [`8ee9d05`](https://github.com/forinda/kick-js/commit/8ee9d0584eea2156f4f7751878e820a0c22468eb) Thanks [@forinda](https://github.com/forinda)! - Reactivity fixes and additions.
+  
+  **Fixed:**
+  
+  - **A throwing `watch` callback or `subscribe` handler no longer breaks the write that triggered it, or the other watchers.** The error is logged and reported to `onError` observers (`source: 'watch'`). Before, a watcher on `app.status` that threw would interrupt `shutdown()`.
+  - **`isRef()` and `unref()` recognise computed refs.** `unref(computed)` returned the computed object itself.
+  - **`toRefs()` returns live views onto the object, not copies.** The new `toRef(obj, key)` gives one.
+  - **`reactive()` now tracks** nested arrays (`state.list.push(x)`), `delete`, key iteration (`Object.keys`, `for…in`) and `in`. It also returns an existing proxy unchanged instead of wrapping it again.
+  
+  **Added:**
+  
+  - **`batch(fn)`** groups writes, so watchers and subscribers run once, after it, with the final values. Computed values stay current inside a batch.
+  - **`ref(value, { deep: true })`** makes changes inside an object value notify too.
+  - **Loop detection:** an effect that re-triggers itself 100 levels deep, such as a watcher writing to what it watches, is stopped and reported instead of overflowing the stack. Long chains of updates, which run one after another, are not affected.
+
+- [#977](https://github.com/forinda/kick-js/pull/977) [`aff5737`](https://github.com/forinda/kick-js/commit/aff5737ff703a5b84c72a4498cb832009edeb16f) Thanks [@forinda](https://github.com/forinda)! - Every uploaded file now carries a server-side `filename` on every runtime: a random UUID plus the client name's extension when that extension names the file's type (`photo.png` as `image/png` keeps `.png`; `evil.html` as `image/png` gets none), or the name `@FileUpload({ rename })` / `upload.single(..., { rename })` returns, checked to contain no slash or backslash and to be neither `.` nor `..`. Store files under `filename`, never `originalname`. Disk storage (`dest`) keeps the name it wrote the file under.
+  
+  `originalname` is normalized to Unicode NFC, without a directory part or control characters. On Express, multer read a non-ASCII file name (Chinese, an emoji) as Latin-1, so it arrived as mojibake; it now arrives intact, as it already did on Fastify and h3.
+
+### Patch Changes
+
+- [#976](https://github.com/forinda/kick-js/pull/976) [`e0860a1`](https://github.com/forinda/kick-js/commit/e0860a15fdc97286f0adc7fe07aff5b25def5f82) Thanks [@forinda](https://github.com/forinda)! - Security: upload routes stop reading at their limits on every runtime. On Fastify, `@fastify/multipart` was registered with no file-size limit, and on h3 and the web entry `request.formData()` read the whole body, so each file was buffered in full before `maxSize` was checked. A large upload to any `@FileUpload` route could exhaust memory. Now every engine holds an upload request to the route's budget, `maxSize × files` plus about 1 MB of form fields (at most 1000), checked from `Content-Length` and counted while streaming. Express too: multer had per-file and per-field limits but no total, so a request could carry any number of fields. More files than a route takes is a `413` ("Too many files: at most N") on every runtime; extra files used to be dropped silently.
+  
+  A request body with a `__proto__` or `constructor.prototype` key, whether JSON, urlencoded or multipart, is refused with `400` on Express and h3 too, as Fastify already did. Such a key was harmless in `ctx.body`, but it turned `Object.assign(target, ctx.body)` or a naive deep merge into prototype pollution.
+  
+  Repeated multipart field names become arrays on Fastify and h3, as they already did for urlencoded forms.
+- Updated dependencies [[`f58ce9e`](https://github.com/forinda/kick-js/commit/f58ce9ebf464b6867129bde31d816da0eba6f3a1), [`c258a19`](https://github.com/forinda/kick-js/commit/c258a19151b8e69f00feb796c130a88c0171e36b)]:
+  - @forinda/kickjs-di@0.3.0
+
 ## 10.7.0
 
 ### Minor Changes
