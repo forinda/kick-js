@@ -552,7 +552,7 @@ class DatabaseService {
 
 ### How it knows the schema
 
-Once `kick typegen` has run against `src/env.ts`, the generated `.kickjs/types/env.ts` augments a global `KickEnv` interface with your schema's inferred shape. `ConfigService.get` (and `loadEnv`, `getEnv`, the `@Value` decorator, and `process.env`) all consume that single source of truth — see [Type Generation](typegen.md#how-env-vars-are-typed) for the details.
+Once `kick typegen` has run, `ConfigService.get`, `loadEnv`, `getEnv`, `@Value` and `process.env` all know your schema's keys and types — see [Type Generation](typegen.md#how-env-vars-are-typed) for the details.
 
 ### Without typegen (legacy projects)
 

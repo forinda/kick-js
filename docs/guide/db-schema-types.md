@@ -105,9 +105,8 @@ The CLI ships a `kick/db` typegen plugin that emits the augmentation for you:
 
 ```bash
 kick typegen
-# → writes .kickjs/types/kick__db.d.ts containing the KickDbRegister
-#   declaration pinned to your schema. `kick dev` regenerates on schema
-#   change.
+# → types the db client from your schema; `kick dev` regenerates
+#   on schema change.
 ```
 
 Adopters who let typegen manage this can delete the hand-written `register.ts`. See [Typegen — Disabling specific plugin typegens](./typegen.md#disabling-specific-plugin-typegens) for the opt-out (`typegen.disable: ['kick/db']`).

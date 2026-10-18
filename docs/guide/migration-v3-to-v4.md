@@ -156,7 +156,7 @@ The shape of `ViewAdapterOptions` is unchanged. Only the construction syntax dif
 
 The Context Contributor pipeline ([architecture.md §20](https://github.com/forinda/kick-js/blob/main/architecture.md#20-context-contributor-pipeline-issue-107)) didn't change shape in v4 — `defineContextDecorator()`, `contributors()` on adapters / plugins / modules, the precedence ordering, and the topo-sort all behave exactly as in v3. **Adopter code keeps working with zero edits.**
 
-What v4 adds on top is **typed narrowing for `dependsOn`** ([architecture.md §21.2.1](https://github.com/forinda/kick-js/blob/main/architecture.md#2121-plugin-dependency-declaration)). After `kick typegen` runs, the framework's `KickJsPluginRegistry` interface is augmented with every plugin/adapter name the project boots, and the `dependsOn` field on plugins/adapters narrows from `readonly string[]` to `readonly (keyof KickJsPluginRegistry)[]`:
+What v4 adds on top is **typed narrowing for `dependsOn`**: after `kick typegen` runs, `dependsOn` on plugins and adapters only accepts the plugin/adapter names your project boots.
 
 ```ts
 // Before typegen runs — accepts any string (back-compat).
@@ -165,21 +165,21 @@ class AuthAdapter implements AppAdapter {
   dependsOn = ['TenantAdapter'] // ✓ accepted as string[]
 }
 
-// After `kick typegen` populates KickJsPluginRegistry:
+// After `kick typegen`:
 class AuthAdapter implements AppAdapter {
   name = 'AuthAdapter'
   dependsOn = ['TenantAdapter'] // ✓ narrowed to a known name
-  // dependsOn = ['Tennant']     // ✗ TS error: not assignable to keyof KickJsPluginRegistry
+  // dependsOn = ['Tennant']     // ✗ TS error: unknown name
 }
 ```
 
-Same `[Type] extends [never]` back-compat trick used by `@Value` and the typed `@Inject('literal')` overload — fresh projects that haven't run typegen yet keep compiling; once typegen lands, typo'd names become compile errors instead of boot-time `MissingMountDepError`.
+Projects that haven't run typegen yet keep compiling; once it runs, a typo'd name is a compile error instead of a boot-time `MissingMountDepError`.
 
 **Migration steps:** none required. The narrowing is opt-in via `kick typegen`. To benefit:
 
 1. Run `kick typegen` (or let `kick dev` do it on every save).
 2. Existing `dependsOn` literals get type-checked from the next compile pass.
-3. Add `'.kickjs/types/**/*.d.ts'` to your `tsconfig.json` `include` if you haven't already (most adopters did this when first using typegen for `KickRoutes` / `KickJsRegistry`).
+3. Add `'.kickjs/types/**/*.d.ts'` to your `tsconfig.json` `include` if you haven't already (most projects already have it).
 
 Plugins that ship contributors via `contributors()` and depend on another plugin's contributors via `dependsOn` get the same typed list with no source change.
 
@@ -228,6 +228,6 @@ The Vite dev plugin already suppresses signal registration in dev mode, so this 
 
 ## Related
 
-- [Dependency Injection](dependency-injection.md) — `createToken<T>`, `KickJsRegistry`, and the four-layer DI hardening.
+- [Dependency Injection](dependency-injection.md) — `createToken<T>` and typed `container.resolve()`.
 - [Type Generation](typegen.md) — how `kick typegen` discovers tokens and narrows `@Inject` literals.
 - [Architecture §22](https://github.com/forinda/kick-js/blob/main/architecture.md#22-di-token-convention--symbol-to-string-migration) — full convention spec + design rationale.

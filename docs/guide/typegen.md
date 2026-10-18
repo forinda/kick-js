@@ -1,49 +1,17 @@
 # Type Generation
 
-KickJS ships a static type generator that scans your controllers, decorators, and Zod schemas and emits a `.kickjs/types/` directory of `.d.ts` and `.ts` files. The output makes `container.resolve()`, `ctx.params`, `ctx.body`, and `ctx.query` fully typed end-to-end with no manual annotations beyond a single `Ctx<>` helper on each handler.
+`kick typegen` reads your controllers, decorators and schemas and writes types to a gitignored `.kickjs/` folder. `kick dev` keeps them current. You don't edit or import anything in that folder.
 
-The pattern is modeled on React Router's `.react-router/types/` directory: a generated, gitignored folder that lives next to your `src/` and is refreshed automatically on `kick dev`.
-
-## What it generates
-
-After running `kick typegen` (or starting `kick dev`), you'll have:
-
-```
-.kickjs/
-  .gitignore                    # ignores everything inside
-  types/
-    kick__registry.d.ts         # KickJsRegistry augmentation for container.resolve()
-    kick__services.d.ts         # ServiceToken string-literal union
-    kick__modules.d.ts          # ModuleToken string-literal union
-    kick__plugins.d.ts          # KickJsPluginRegistry augmentation (narrows dependsOn)
-    kick__routes.ts             # KickRoutes augmentation — typed Ctx<>, per-route
-                                #   response types, the flat KickRoutes.Api map
-                                #   ('METHOD /mounted/path' keys) for the typed client,
-                                #   and KickRoutes.Named ('Controller.method') for urlFor
-    kick__env.ts                # KickEnv + NodeJS.ProcessEnv augmentation (when src/env.ts exists)
-    kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
-    kick__db.d.ts               # DB model types (when a DB adapter is configured)
-    kick__context.d.ts          # ContextKeys augmentation (when context decorators exist)
-    kick__route-flags.d.ts      # KickRouteFlags augmentation (from defineRouteFlag calls)
-```
-
-Each file is emitted by its own typegen plugin. There is no barrel
-`index.d.ts` — the scaffolded tsconfig pulls the whole directory in via
-`include: ['.kickjs/types/**/*.d.ts', '.kickjs/types/**/*.ts']`, so every
-`declare module` / `declare global` augmentation applies just by being
-present. (Upgrading from an older CLI? The first `kick typegen` run
-sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` /
-`modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` / `kick__augmentations.d.ts` files
-automatically.)
-
-Six things become type-safe as a result:
+## What gets typed
 
 1. **`container.resolve('UserService')`** returns `UserService` instead of `any`.
 2. **`ctx.params`, `ctx.body`, `ctx.query`** are typed per route — including the inferred shape of any Zod schema you wired into the route decorator.
-3. **Response types** — inferred from each handler's return type ([return-value handlers](./controllers.md#return-value-handlers); `Reply<S, T>` unwraps; a declared `{ response: schema }` on the route wins). Emitted both per controller and as the flat `KickRoutes.Api` map that powers the [typed client](./typed-client.md).
+3. **Response types** — inferred from each handler's return type ([return-value handlers](./controllers.md#return-value-handlers); `Reply<S, T>` unwraps; a declared `{ response: schema }` on the route wins). The [typed client](./typed-client.md) uses the same types.
 4. **`ctx.qs(config as const)`** narrows `parsed.filters[].field` and `parsed.sort[].field` to the literal whitelist you passed.
-5. **`ctx.urlFor('UsersController.show', { id })`** — route names and their params, from `KickRoutes.Named`. See [Linking to routes](./controllers.md#linking-to-routes).
+5. **`ctx.urlFor('UsersController.show', { id })`** — route names and their params are checked. See [Linking to routes](./controllers.md#linking-to-routes).
 6. **`@Value('DATABASE_URL')` and `process.env.DATABASE_URL`** are typed from your project's `src/env.ts` schema — autocomplete on keys, tsc errors on typos, and `Env<'PORT'>` looks up the inferred type.
+7. **`dependsOn`** on plugins, adapters and context contributors autocompletes the names in your app; a typo is a compile error instead of a boot error.
+8. **Route flags** — `flags.get('rate.limit')` returns the type given to `defineRouteFlag`.
 
 ## Quick start
 
@@ -76,7 +44,7 @@ export class UserController {
 }
 ```
 
-`KickRoutes` is a global ambient namespace populated by `kick typegen` — you don't import it. `Ctx<T>` is a thin alias over `RequestContext` that infers the body/params/query from the `RouteShape` you pass in.
+`KickRoutes` is global — you don't import it. `Ctx<…>` gives the handler the route's typed body, params and query.
 
 ## Running typegen
 
@@ -92,7 +60,7 @@ export class UserController {
 | `kick g scaffold ...`   | Runs after the new files are written                                         |
 | `kick init`             | Runs once after the project is scaffolded                                    |
 
-You almost never need to run it manually — the dev loop keeps `.kickjs/types/` up to date for you. (`kick dev` is the recommended entry; if something boots Vite directly, the `@forinda/kickjs-vite` plugin runs the identical watcher, resolving `@forinda/kickjs-cli` from your project — exactly one of the two ever owns the pipeline per process.)
+You almost never need to run it manually — the dev loop keeps the types up to date.
 
 ### Classes no module loads
 
@@ -100,7 +68,7 @@ A decorated class registers when its file is imported. Modules load their files 
 
 ### Watch-mode failure surfacing
 
-A failing scan or plugin pass in watch mode prints a deduplicated warning (`kick typegen: <source> pass failed (<error>) — types in .kickjs/types may be stale`) and broadcasts a `kickjs:typegen-error` custom HMR event. Repeated identical failures stay quiet until the message changes or a pass succeeds. Separately, a route whose wired `body`/`query`/`params` schema can't be statically resolved warns with the controller, method, and schema identifier instead of silently emitting `unknown`. The generated types import each schema by name, so a schema declared in the controller file must be exported under its own name (`export const createTaskSchema = ...` or `export { createTaskSchema }`); one that isn't — including one exported only under an alias, `export { createTaskSchema as publicSchema }` — is left out — the field falls back to `unknown` — and the warning says to export it, rather than emitting an import that fails your typecheck with TS2459.
+A failing pass in watch mode prints one warning (`kick typegen: <source> pass failed (<error>) — types may be stale`) and stays quiet until the message changes or a pass succeeds. A route whose `body`/`query`/`params` schema can't be resolved warns with the controller, method and schema name, and that field is typed `unknown`. A schema declared in the controller file must be exported under its own name (`export const createTaskSchema = ...`); the warning tells you when it isn't.
 
 ## How `params` is typed
 
@@ -145,7 +113,7 @@ async create(ctx: Ctx<KickRoutes.PostController['create']>) {
 }
 ```
 
-The scanner resolves the identifier through your top-level imports (`import { createPostSchema } from '...'`) and emits a hoisted `import type` at the top of `.kickjs/types/routes.ts`. The body type is then `import('zod').infer<typeof <alias>>`, so any change to your Zod schema is reflected immediately the next time typegen runs.
+Change the schema and the body type follows on the next typegen run.
 
 ### What the scanner can resolve
 
@@ -161,7 +129,7 @@ The scanner resolves the identifier through your top-level imports (`import { cr
 - ❌ Inline composition: `body: { ...other, refined: true }`
 - ❌ Cross-file aliases that don't reach a top-level identifier in the controller file
 
-These cases silently produce `body: unknown` rather than emitting a broken import. Refactor to a top-level named import if you want them typed.
+These produce `body: unknown`. Use a top-level named import to get them typed.
 
 ## How `query` is typed
 
@@ -207,12 +175,9 @@ Without `as const`, the field unions widen to `string` — that's the documented
 
 ## How env vars are typed
 
-KickJS scans `src/config/index.ts` (or `src/env.ts`, `src/config/env.ts`, `src/config.ts`) for a default-exported schema. When found, the generator emits `.kickjs/types/kick__env.ts` augmenting two globals:
+KickJS reads the default-exported schema in `src/config/index.ts` (or `src/env.ts`, `src/config/env.ts`, `src/config.ts`). From it, `@Value`, `Env<K>` and `process.env` know your keys and their types.
 
-- **`KickEnv`** — an interface holding the inferred shape of your env schema. This drives `@Value` and the `Env<K>` type helper.
-- **`NodeJS.ProcessEnv`** — narrowed so known keys exist as `string` (the raw pre-coercion form).
-
-The accepted schema-construction calls are `defineEnv(...)` (legacy Zod scaffold) and `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` (the [`@forinda/kickjs-schema`](schema.md) adapters). A file that constructs one of those AND default-exports the schema is detected; a file that default-exports the _parsed_ env (e.g. `export default loadEnvFromSchema(schema)`) is explicitly rejected so the generator doesn't run the env value type through `InferSchemaOutput`.
+Build the schema with `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` (from [`@forinda/kickjs-schema`](schema.md)) or the older `defineEnv(...)`, and default-export the schema itself — not the parsed env.
 
 ### Authoring `src/config/index.ts`
 
@@ -266,7 +231,7 @@ Note that `process.env.DATABASE_URL` returns the _raw_ string from the OS enviro
 
 ### When the env file is missing
 
-If `src/env.ts` doesn't exist (or doesn't have `defineEnv` + `export default`), typegen silently skips the env augmentation. `KickEnv` stays empty, and `@Value('ANY_STRING')` keeps accepting any literal — back-compat for legacy projects. To opt out explicitly, set `typegen.envFile: false` in `kick.config.ts`.
+With no env schema file, env typing is skipped and `@Value('ANY_STRING')` accepts any key. To opt out explicitly, set `typegen.envFile: false` in `kick.config.ts`.
 
 ### Configuring the env file path
 
@@ -295,7 +260,6 @@ export default defineConfig({
     schemaValidator: 'kickjs-schema', // 'zod' | 'kickjs-schema' | false (default: 'zod')
     envFile: 'src/config/index.ts', // string | false (default: candidate search)
     srcDir: 'src', // optional override
-    outDir: '.kickjs/types', // optional override
     disable: ['kick/db'], // skip specific plugin typegens (see below)
   },
 })
@@ -303,25 +267,22 @@ export default defineConfig({
 
 | Field             | Default            | What it does                                                                                                                                                                                                                   |
 | ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemaValidator` | `'zod'`            | Drives `body`/`query`/`params` type inference and the `KickEnv` codegen. See the table below for what each value emits. Set to `false` to skip schema-driven typing entirely (params still come from URL patterns).            |
+| `schemaValidator` | `'zod'`            | Which schemas drive `body`/`query`/`params` and env typing. See below. `false` skips schema typing (params still come from URL patterns).                                                                                      |
 | `envFile`         | _(candidate list)_ | Path to the project's env schema file. The default sentinel searches `src/config/index.ts`, `src/config/env.ts`, `src/config.ts`, `src/env.ts` in order. Pass an explicit path to pin one; pass `false` to disable env typing. |
 | `srcDir`          | `'src'`            | Directory to scan for controllers and decorators.                                                                                                                                                                              |
-| `outDir`          | `'.kickjs/types'`  | Where to write generated files.                                                                                                                                                                                                |
 | `disable`         | `[]`               | Plugin typegen ids to skip. The plugin still loads — only its `generate()` is bypassed. Discover ids with `kick typegen --list`.                                                                                               |
 
 #### `schemaValidator` values
 
-| Value             | Env codegen                                                            | Body/query/params codegen                              | Use when                                                                                                                            |
-| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `'zod'`           | `import('zod').infer<typeof _envSchema>`                               | `import('zod').infer<typeof Schema>`                   | Legacy / Zod-only projects (default for back-compat).                                                                               |
-| `'kickjs-schema'` | `InferSchemaOutput<typeof _envSchema>` flattened through a mapped type | `InferSchemaOutput<typeof Schema>`                     | Projects using `fromZod` / `fromValibot` / `fromYup` schemas. **Recommended for new projects.** `kick new` sets this automatically. |
-| `false`           | (skipped — no `KickEnv` augmentation)                                  | `unknown` for body/query/params (URL params unchanged) | Adopters who want hand-rolled typing or are validator-agnostic.                                                                     |
+- `'kickjs-schema'` — schemas built with `fromZod` / `fromValibot` / `fromYup`. **Recommended**; `kick new` sets it.
+- `'zod'` — plain Zod schemas (the default, for older projects).
+- `false` — no schema typing: `body`/`query`/`params` are `unknown` (URL params still typed), env keys untyped.
 
 CLI flags override the config for a single run: `--schema-validator <name>`, `--env-file <path>` (`--env-file false` disables it).
 
 ## Disabling specific plugin typegens
 
-Use `typegen.disable` when an adopter wants to keep the legacy pass and most plugin typegens but opt out of one — for example, to hand-write `KickDbRegister` instead of letting the `kick/db` plugin emit `kick__db.d.ts`:
+Use `typegen.disable` to turn off one plugin's types — for example, to type the database client yourself instead of letting `kick/db` do it:
 
 ```ts
 // kick.config.ts
@@ -341,31 +302,13 @@ declare module '@forinda/kickjs-db' {
 }
 ```
 
-The plugin still loads (so merge-time conflict detection still runs); only its `generate()` invocation is skipped. Adopters disabling `kick/db` typically import their `register.ts` for the side-effect declaration.
+The plugin still loads; only its types are skipped.
 
 ### Discover registered ids
 
 <PmCommand exec="kick typegen --list" />
 
-Prints every typegen plugin id, the file it owns, and the inputs it watches:
-
-```
-  Registered typegen plugins:
-
-    kick/db      → .kickjs/types/kick__db.d.ts
-                   watches: src/db/schema.ts, src/db/schema/**/*.ts
-    kick/assets  → .kickjs/types/kick__assets.d.ts
-                   watches: kick.config.ts, kick.config.js, kick.config.mjs
-
-  Disable one in kick.config.ts:
-
-    typegen: { disable: ['kick/db'] }
-```
-
-The output file is the part you usually want: it answers "which plugin writes this file, and what
-happens if I turn it off". Disabled ids show `(disabled)` next to the entry. Unknown ids in `typegen.disable` (typos, removed plugins) surface as a startup warning rather than a hard error so the dev loop stays alive while you fix the config.
-
-See [CLI Plugins](./cli-plugins.md) for the full plugin contract — every typegen above ships as a `KickCliPlugin.typegens[]` entry, including the built-ins.
+Prints every typegen plugin id and the inputs it watches; disabled ones show `(disabled)`. An unknown id in `typegen.disable` is a warning, not an error. Plugins add their own typegens — see [CLI Plugins](./cli-plugins.md).
 
 ## Token collisions
 
@@ -381,7 +324,7 @@ kick typegen: token collision detected
 Resolutions:
   (a) Rename one of the classes
   (b) Use createToken<T>('namespaced/Name') and import the token explicitly
-  (c) Pass --allow-duplicates to namespace the registry keys automatically
+  (c) Pass --allow-duplicates to namespace the names automatically
 ```
 
 `kick dev` enables `--allow-duplicates` internally so an in-progress rename never blocks the dev server — colliding entries get auto-namespaced (e.g. `'modules/users/UserService'`) until you resolve them.
@@ -404,7 +347,7 @@ See [Dependency Injection](dependency-injection.md) for the full DI hardening st
 If you have an existing KickJS project that pre-dates the typegen, two changes are needed in your `tsconfig.json`:
 
 1. Add `".kickjs/types/**/*.d.ts"` and `".kickjs/types/**/*.ts"` to `include`.
-2. **Remove `rootDir: 'src'`** if present — the generated `routes.ts` lives outside `src/` and tsc refuses to include files outside the rootDir.
+2. **Remove `rootDir: 'src'`** if present — the generated types live outside `src/`.
 
 ```json
 {
@@ -419,116 +362,19 @@ If you have an existing KickJS project that pre-dates the typegen, two changes a
 
 Then add `.kickjs/` to your `.gitignore` and run `kick typegen` once to generate the initial files. Your existing handlers continue to work with `RequestContext` — `Ctx<T>` is opt-in per handler.
 
-## Why is `routes.ts` a `.ts` file and the others are `.d.ts`?
-
-TypeScript silently degrades top-level `import('...')` calls inside `.d.ts` files to `unknown` when `moduleResolution` is `bundler`. The generator emits `routes.ts` as a regular TypeScript file (declarations only — zero runtime cost) so the schema imports actually resolve. The other generated files are pure declarations and stay as `.d.ts`.
-
-This is why your tsconfig include needs to match both extensions.
-
-## Plugin & adapter registry
-
-`kick typegen` walks your `src/` for `defineAdapter({ name: '...' })` and `definePlugin({ name: '...' })` calls and writes the discovered names into `.kickjs/types/plugins.d.ts` as a `KickJsPluginRegistry` augmentation. Class-style declarations (`class X implements AppAdapter`) are _not_ scanned — those are the v3 pattern and were removed in v4.
-
-```ts
-// .kickjs/types/plugins.d.ts (generated)
-declare module '@forinda/kickjs' {
-  interface KickJsPluginRegistry {
-    TenantAdapter: 'adapter'
-    AuthAdapter: 'adapter'
-    FlagsPlugin: 'plugin'
-  }
-}
-```
-
-Once the registry is populated, the `dependsOn` field on plugins and adapters narrows from `readonly string[]` to `readonly (keyof KickJsPluginRegistry)[]`:
-
-```ts
-export const AuthAdapter = defineAdapter({
-  name: 'AuthAdapter',
-  dependsOn: ['TenantAdapter'], // ✓ — autocompletes from the registry
-  // dependsOn: ['Tennant'],      // ✗ — TS error: not assignable to keyof KickJsPluginRegistry
-  build: (config) => ({/* ... */}),
-})
-```
-
-Two payoffs:
-
-- **Typo-killing.** Misspelled `dependsOn` references become compile errors instead of boot-time `MissingMountDepError`.
-- **Discoverability.** IDE autocomplete inside `dependsOn: [...]` lists every plugin/adapter name in scope.
-
-When the registry is empty (fresh project, never ran `kick typegen`), `keyof KickJsPluginRegistry` resolves to `never` and the runtime falls back to `string` so existing code keeps compiling. Run `kick typegen` once and the narrowing kicks in.
-
-## Context keys (`dependsOn` on contributors)
-
-`kick typegen` also walks your `src/` for `defineContextDecorator({ key: '...' })` and `defineHttpContextDecorator({ key: '...' })` calls (including the curried `.withParams<T>()({ key: '...' })` form) and writes every discovered key into `.kickjs/types/kick__context.d.ts` as a `ContextKeys` augmentation:
-
-```ts
-// .kickjs/types/kick__context.d.ts (generated)
-declare module '@forinda/kickjs' {
-  interface ContextKeys {
-    tenant: true
-    session: true
-  }
-}
-```
-
-This is what makes a Context Contributor's `dependsOn` typo-checked **without you hand-maintaining a registry** — and without forcing a value type into `ContextMeta`. `dependsOn` narrows to the union of `keyof ContextMeta` (keys with a value type) and `keyof ContextKeys` (every contributor key), so:
-
-```ts
-defineHttpContextDecorator({
-  key: 'project',
-  dependsOn: ['tenant'], // ✓ — autocompletes from discovered keys
-  // dependsOn: ['tenent'], // ✗ — TS error: "Did you mean 'tenant'?"
-  resolve: (ctx) => loadProject(ctx),
-})
-```
-
-`ContextMeta` still drives the value type of `ctx.get('tenant')`; `ContextKeys` only records that the key exists. Scaffold a contributor (and its `ContextMeta` stub) with [`kick g contributor`](./context-decorators.md). Empty project → no `kick__context.d.ts` emitted and `dependsOn` falls back to `string[]`.
-
-### Route flags — `kick__route-flags.d.ts`
-
-The same pass collects every `defineRouteFlag('name')` call into a `KickRouteFlags` augmentation:
-
-```ts
-// src/flags.ts
-export const Public = defineRouteFlag('auth.public')
-export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
-```
-
-```ts
-// .kickjs/types/kick__route-flags.d.ts (generated)
-declare module '@forinda/kickjs' {
-  interface KickRouteFlags {
-    'auth.public': true
-    'rate.limit': { rpm: number }
-  }
-}
-```
-
-This one carries the **value type** as well as the name, which is why it can do more than
-`ContextKeys` does for contributors: `flags.get('rate.limit')` is typed, not just checked for
-existence. A bare flag registers as `true`; an explicit generic registers that type verbatim.
-
-It is also the cheapest plugin in the set. A flag is a positional string literal with no
-`dependsOn` graph and no per-route ordering to resolve, so discovery is a single AST branch and
-the output is a flat map — where the context-key registry has to reason about the contributor
-pipeline before it can say anything. See [Route Flags](./route-flags.md).
-
-Empty project → an empty registry, and every flag name falls back to `string`.
-
 ## Limitations
 
 These are known and deliberate for the current release; some will be lifted in follow-up work:
 
-- **Imperative `ctx.json(...)` handlers infer `response: unknown`.** Response types come from handler RETURN types (emitted as `InferHandlerResponse<Controller['method']>` references your own tsc computes — no compiler-API integration in the scanner). Use [return-value handlers](./controllers.md#return-value-handlers) or declare `{ response: schema }` on the route for exact types.
+- **Imperative `ctx.json(...)` handlers infer `response: unknown`.** Response types come from what the handler returns. Use [return-value handlers](./controllers.md#return-value-handlers) or declare `{ response: schema }` on the route for exact types.
 - **Joi and JSON Schema are not yet supported.** `typegen.schemaValidator: 'kickjs-schema'` already covers Zod, Valibot, Yup, and Standard Schema v1 — Joi and JSON Schema need a `@forinda/kickjs-schema` adapter first (PRs welcome).
 - **Schema references must be bare top-level identifiers.** Member access, function calls, and inline compositions silently fall back to `body: unknown` (see [What the scanner cannot resolve](#what-the-scanner-cannot-resolve-falls-back-to-unknown)).
 - **Column-object `@ApiQueryParams` configs (Drizzle-style) are recognised but not narrowed.** Use the string-array form (or `ctx.qs(config as const)`) for typed query field names.
-- **Errors in generated `routes.ts` point at the generated file**, not your controller. The line numbers and identifiers are accurate, but the file path is `.kickjs/types/routes.ts` rather than your source. If you see a tsc error there, look at the schema that the failing route's decorator references.
+- **A type error can point inside `.kickjs/`** rather than your controller. If it does, check the schema the failing route's decorator references.
 
 ## See also
 
 - [Validation](validation.md) — how Zod schemas validate request data at runtime
 - [Controllers & Routes](controllers.md) — route decorators and handler patterns
-- [Dependency Injection](dependency-injection.md) — `createToken<T>`, `KickJsRegistry`, and the four-layer DI hardening
+- [Dependency Injection](dependency-injection.md) — `createToken<T>` and typed `container.resolve()`
 - [Query Parsing](query-parsing.md) — `ctx.qs()` and `ctx.paginate()` in depth

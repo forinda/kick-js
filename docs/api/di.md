@@ -187,7 +187,7 @@ declare module '@forinda/kickjs-di' {
 const users = container.resolve('UserService') // UserService
 ```
 
-In a KickJS app, augment `'@forinda/kickjs'` instead (`kick typegen` writes it for you). It is the same interface, re-exported.
+In a KickJS app, `kick typegen` does this for you.
 
 ## One copy only
 

@@ -27,7 +27,7 @@ bootstrap({ adapters: [MyAdapter] })               // ✗ type error — passed 
 
 The factory captures three things:
 
-- `name` — string, used for diagnostics and the `KickJsPluginRegistry` typegen output. Required.
+- `name` — string, used for diagnostics and `dependsOn` typing. Required.
 - `defaults?` — partial config the factory pre-applies before merging the caller's options. Optional.
 - `build(config, ctx)` — runs once per adapter instance and returns the lifecycle object. Closures inside `build` are how each adapter instance owns its own state (Redis client, database pool, internal Map, etc.). The second arg is the `BuildContext` — `{ name, scoped }`, identical to `definePlugin`'s — useful for namespacing DI tokens in [`.scoped()`](#multi-instance-adapters-scoped) adapters.
 

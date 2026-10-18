@@ -458,7 +458,7 @@ interface KickPlugin {
 }
 ```
 
-`KickJsPluginName` resolves to `string` until `kick typegen` populates `KickJsPluginRegistry`, at which point it narrows to a string-literal union of every plugin/adapter name in the project — making `dependsOn` autocomplete-safe.
+`KickJsPluginName` is `string` until `kick typegen` runs; after that it is the union of every plugin and adapter name in the project, so `dependsOn` autocompletes.
 
 ### Mounting plugins
 
@@ -728,9 +728,8 @@ interface KickRouteFlags {} // augment to narrow every flag name
 
 Empty by default, so flag names are plain `string` and everything compiles. Once
 augmented, `defineRouteFlag`, `has`, `get`, and every consumer option narrow to
-the declared names and value types. `kick typegen` writes the augmentation from
-your `defineRouteFlag()` calls into `.kickjs/types/kick__route-flags.d.ts` — see
-[Typegen](../guide/typegen.md).
+the declared names and value types. `kick typegen` fills it from your
+`defineRouteFlag()` calls — see [Typegen](../guide/typegen.md).
 
 ## Logger
 

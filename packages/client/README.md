@@ -21,14 +21,13 @@ const task = await api.get('/tasks/:id', { params: { id: '42' } })
 const created = await api.post('/tasks', { body: { title: 'Ship it' } })
 ```
 
-`KickClientApi.Api` is resolved to plain shapes, so the frontend never compiles
+`KickClientApi.Api` has no server imports, so the frontend never compiles
 the server. Code that already compiles with the server's source — its own
 tests, for one — can use the global `KickApi` instead: same types. See
 [Typed client](https://kickjs.app/guide/typed-client.html#frontends-outside-the-server-s-typescript-program).
 
 - **Paths + params + body typed** from the generated route map; response
-  types flow from your controller handlers (return-value style) via
-  `InferHandlerResponse`.
+  types flow from your controller handlers (return-value style).
 - **Runtime-neutral**: fetch/URL/Headers only — browsers, node ≥ 20, Bun, Deno,
   edge workers. Zero dependencies.
 - **Typed errors**: non-2xx throws `KickClientError` carrying the parsed body

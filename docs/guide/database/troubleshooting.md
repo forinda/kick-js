@@ -160,7 +160,7 @@ pnpm stops with `ERR_PNPM_IGNORED_BUILDS`, or the app fails with `Could not loca
 
 A `db.query … { with: { posts: true } }` call is a type error, or `posts` is typed loosely, though it works at run time.
 
-**Fix.** Relation names reach the type system through `kick typegen`, which writes `.kickjs/types/kick__db.d.ts` when `dbCliPlugin` is mounted. `kick dev` runs it on every save; otherwise run `kick typegen` after changing `relations()`. [Schema Types](../db-schema-types.md).
+**Fix.** Relation names are typed by `kick typegen` when `dbCliPlugin` is mounted. `kick dev` runs it on every save; otherwise run `kick typegen` after changing `relations()`. [Schema Types](../db-schema-types.md).
 
 ### Token names don't match the convention
 
