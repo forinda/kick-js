@@ -1,4 +1,5 @@
 import { Head, usePage } from '@inertiajs/react'
+import { createElement, useEffect } from 'react'
 import type { PageMeta } from '@forinda/kickjs-inertia'
 
 // Renders the meta a controller passes to inertia(..., { meta }), merged with
@@ -8,6 +9,10 @@ import type { PageMeta } from '@forinda/kickjs-inertia'
 // duplicated.
 export function Seo() {
   const meta = (usePage() as { meta?: PageMeta }).meta
+  // <html lang> sits outside the app; the first visit's HTML has it already.
+  useEffect(() => {
+    if (meta?.lang) document.documentElement.lang = meta.lang
+  }, [meta?.lang])
   if (!meta) return null
   return (
     <Head title={meta.title}>
@@ -29,6 +34,9 @@ export function Seo() {
           // `<` escaped, so a value can't close the script tag.
           dangerouslySetInnerHTML={{ __html: JSON.stringify(meta.jsonLd).replace(/</g, '\\u003c') }}
         />
+      )}
+      {meta.head?.map(({ tag, attrs, key }) =>
+        createElement(tag, { key, 'head-key': key, ...attrs }),
       )}
     </Head>
   )

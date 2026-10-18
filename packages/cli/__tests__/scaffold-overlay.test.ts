@@ -338,7 +338,7 @@ describe('the shipped layers', () => {
       /middlewares: \[\n\s+requestId\(\),[\s\S]*express\.json\(\),[\s\S]*session\(/,
     )
     expect(entry).toContain(
-      "import { InertiaAdapter, inertiaErrorHandler, inertiaNotFound } from '@forinda/kickjs-inertia'",
+      "import { InertiaAdapter, h, inertiaErrorHandler, inertiaNotFound } from '@forinda/kickjs-inertia'",
     )
     expect(entry).toContain('onError: inertiaErrorHandler()')
     expect(entry).toContain('onNotFound: inertiaNotFound()')
@@ -377,7 +377,8 @@ describe('the shipped layers', () => {
     expect(config).toContain('process.env.APP_URL !== undefined')
     expect(project.files.get('.env')).toContain('APP_URL=http://localhost:3000')
     expect(entry).toContain("baseUrl: getEnv('APP_URL')")
-    expect(entry).toMatch(/meta: \{\n\s+titleTemplate: '%s · \{\{name\}\}'/)
+    expect(entry).toMatch(/meta: \{\n\s+lang: 'en',\n\s+titleTemplate: '%s · \{\{name\}\}'/)
+    expect(entry).toContain("head: [h('meta', { name: 'theme-color', content: '#ffffff' })]")
     // The client keeps <head> in sync from the page's meta; robots.txt is a route.
     expect(project.files.get('src/client/Layout.tsx')).toContain(
       "import { Seo } from '@/client/Seo'",
@@ -388,9 +389,12 @@ describe('the shipped layers', () => {
     expect(seo).toContain("@Get('/sitemap.xml')")
     expect(seo).toContain("@Get('/robots.txt')")
     expect(project.files.get('src/modules/index.ts')).toContain('.mount(SeoModule())')
-    expect(project.files.get('src/modules/pages/pages.controller.ts')).toContain(
-      "{ meta: { title: 'Home'",
-    )
+    const pages = project.files.get('src/modules/pages/pages.controller.ts')!
+    expect(pages).toContain("title: 'Home'")
+    // APP_URL through the injected ConfigService, not getEnv.
+    expect(pages).toContain('constructor(private readonly config: ConfigService)')
+    expect(pages).toContain("url: this.config.get('APP_URL')")
+    expect(seo).toContain("baseUrl: this.config.get('APP_URL')")
     expect(entry).not.toContain('process.env.SESSION_SECRET')
     expect(entry).toContain("import './config'")
     expect(entry).toContain("session({ secret: getEnv('SESSION_SECRET')")

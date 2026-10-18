@@ -9,6 +9,7 @@ import { h3Runtime } from '@forinda/kickjs/h3'
 import { Application, Container, Controller, Get, expressRuntime } from '@forinda/kickjs'
 import {
   InertiaAdapter,
+  h,
   inertia,
   inertiaNotFound,
   robots,
@@ -50,6 +51,24 @@ async function makeApp(options: Partial<InertiaAdapterOptions> = {}) {
     @Get('/plain')
     plain() {
       return inertia('Plain')
+    }
+
+    @Get('/fr/notes/1')
+    french() {
+      return inertia(
+        'Notes/Show',
+        {},
+        {
+          meta: {
+            title: 'Note',
+            lang: 'fr',
+            head: [
+              h('meta', { name: 'theme-color', content: EVIL }),
+              h('link', { rel: 'alternate', hreflang: 'en', href: '/notes/1' }),
+            ],
+          },
+        },
+      )
     }
 
     @Get('/sitemap.xml')
@@ -209,6 +228,62 @@ for (const rt of RUNTIMES)
       expect(res.text).toContain('property="og:type" content="article"')
     })
 
+    it('renders head tags from h(): escaped, a page tag over the default, alternates absolute', async () => {
+      const app = await makeApp({
+        baseUrl: 'https://example.com',
+        meta: {
+          head: [
+            h('meta', { name: 'theme-color', content: '#000' }),
+            h('link', { rel: 'alternate', hreflang: 'fr', href: '/fr/notes/1' }),
+          ],
+        },
+      })
+      const head = (await app.get('/fr/notes/1').expect(200)).text.split('</head>')[0]!
+      expect(head.match(/name="theme-color"/g)).toHaveLength(1)
+      expect(head).toContain(
+        '<meta data-inertia="meta:theme-color" name="theme-color" content="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />',
+      )
+      expect(head).not.toContain('<script>alert(1)')
+      expect(head).toContain(
+        '<link data-inertia="link:alternate:en" rel="alternate" hreflang="en" href="https://example.com/notes/1" />',
+      )
+      expect(head).toContain('hreflang="fr" href="https://example.com/fr/notes/1"')
+
+      // The defaults alone on a page without its own.
+      const plain = (await app.get('/plain').expect(200)).text
+      expect(plain).toContain('name="theme-color" content="#000"')
+    })
+
+    it('sets <html lang> from meta.lang, escaped; en by default', async () => {
+      const app = await makeApp()
+      expect((await app.get('/fr/notes/1').expect(200)).text).toContain('<html lang="fr">')
+      expect((await app.get('/plain').expect(200)).text).toContain('<html lang="en">')
+      const evil = await makeApp({ meta: { lang: EVIL } })
+      const res = (await evil.get('/plain').expect(200)).text
+      expect(res).toContain('<html lang="&quot;&gt;&lt;script&gt;')
+    })
+
+    it('puts the title and meta ahead of the asset tags', async () => {
+      const res = await (
+        await makeApp({ head: '<link rel="icon" href="/favicon.svg" />' })
+      )
+        .get('/notes/1')
+        .expect(200)
+      expect(res.text.indexOf('<title')).toBeLessThan(res.text.indexOf('rel="icon"'))
+    })
+
+    it('drops an h() tag a server-rendered <Head> already set', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.tsx',
+          bundle: ssrBundle(['<meta name="theme-color" content="#fff" data-inertia="">']),
+        },
+      })
+      const res = await app.get('/fr/notes/1').expect(200)
+      expect(res.text.match(/name="theme-color"/g)).toHaveLength(1)
+      expect(res.text).toContain('content="#fff"')
+    })
+
     it('answers /sitemap.xml with escaped, absolute URLs', async () => {
       const res = await (await makeApp()).get('/sitemap.xml').expect(200)
       expect(res.headers['content-type']).toMatch(/^application\/xml/)
@@ -236,7 +311,44 @@ describe('InertiaAdapter baseUrl', () => {
   })
 })
 
+describe('h()', () => {
+  it('builds meta and link tags keyed by what they set', () => {
+    expect(h('meta', { property: 'og:locale', content: 'fr_FR' }).key).toBe('meta:og:locale')
+    expect(h('link', { rel: 'preload', as: 'image', href: '/a.png' }).key).toBe(
+      'link:preload:/a.png',
+    )
+    expect(h('link', { rel: 'canonical', href: '/x' }).key).toBe('canonical')
+  })
+
+  it('refuses other tags, event handlers, odd attribute names and keyless tags', () => {
+    expect(() => h('script' as never, {})).toThrow(/only meta and link/)
+    expect(() => h('link', { rel: 'preload', onload: 'alert(1)' })).toThrow(/onload/)
+    expect(() => h('meta', { name: 'x', 'a"b': '1' })).toThrow(/not allowed/)
+    expect(() => h('meta', { content: 'x' })).toThrow(/name, property or http-equiv/)
+    expect(() => h('link', { href: '/x' })).toThrow(/needs a rel/)
+  })
+})
+
 describe('resolveMeta', () => {
+  it('makes an alternate link absolute whatever the case of its rel', async () => {
+    const { resolveMeta } = await import('../src/seo')
+    const meta = resolveMeta(
+      {},
+      { head: [h('link', { rel: 'Alternate', hreflang: 'fr', href: '/fr' })] },
+      { baseUrl: 'https://example.com' },
+    )
+    expect(meta!.head![0]!.attrs.href).toBe('https://example.com/fr')
+  })
+
+  it('gives /posts and /posts/ one canonical, without the query', async () => {
+    const { resolveMeta } = await import('../src/seo')
+    const at = (path: string) =>
+      resolveMeta({}, {}, { baseUrl: 'https://example.com', path })!.canonical
+    expect(at('/posts/')).toBe('https://example.com/posts')
+    expect(at('/posts//?page=2')).toBe('https://example.com/posts')
+    expect(at('/')).toBe('https://example.com/')
+  })
+
   it("treats `$&` and `$'` in a title as text, not replacement patterns", async () => {
     const { resolveMeta } = await import('../src/seo')
     const meta = resolveMeta({ titleTemplate: '%s · App' }, { title: "Save $& 50% $'" })

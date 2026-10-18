@@ -20,7 +20,7 @@
     {
       "import": {
         "from": "@forinda/kickjs-inertia",
-        "names": ["InertiaAdapter", "inertiaErrorHandler", "inertiaNotFound"]
+        "names": ["InertiaAdapter", "h", "inertiaErrorHandler", "inertiaNotFound"]
       }
     },
     {

@@ -7,9 +7,19 @@
  */
 import { RESPOND, type RequestContext, type Respondable } from '@forinda/kickjs'
 
+/** A `<meta>` or `<link>` for the page's `<head>`, built with {@link h}. */
+export interface HeadTag {
+  tag: 'meta' | 'link'
+  attrs: Record<string, string>
+  /** A later tag with the same key replaces it — a page's over the defaults'. */
+  key: string
+}
+
 /** A page's title, description and social tags. Every value is escaped on output. */
 export interface PageMeta {
   title?: string
+  /** `<html lang>` of the first visit; the template's `Seo` keeps it in sync on later ones. */
+  lang?: string
   description?: string
   /** A path (`'/posts/1'`, made absolute with `baseUrl`) or a full URL. */
   canonical?: string
@@ -21,6 +31,8 @@ export interface PageMeta {
   twitter?: Record<string, string>
   /** Structured data, rendered as `<script type="application/ld+json">`. */
   jsonLd?: Record<string, unknown> | Record<string, unknown>[]
+  /** Any other `<meta>` / `<link>` — hreflang alternates, theme-color, preloads. See {@link h}. */
+  head?: HeadTag[]
 }
 
 /** Adapter-wide meta, under each page's. */
@@ -36,6 +48,59 @@ const escapeHtml = (value: string): string =>
 function absolute(value: string | undefined, baseUrl: string | undefined): string | undefined {
   if (!value || !baseUrl || !/^\/(?![/\\])/.test(value)) return value
   return baseUrl.replace(/\/+$/, '') + value
+}
+
+/** What a `meta` / `link` sets, from its attributes — two tags with the same key are duplicates. */
+function headKey(tag: string, attr: (name: string) => string | undefined): string | null {
+  if (tag === 'meta') {
+    const key = attr('name') ?? attr('property') ?? attr('http-equiv')
+    return key ? `meta:${key.toLowerCase()}` : null
+  }
+  if (tag === 'link') {
+    const rel = attr('rel')?.toLowerCase()
+    if (!rel) return null
+    if (rel === 'canonical') return 'canonical'
+    return `link:${rel}:${(attr('hreflang') ?? attr('href') ?? '').toLowerCase()}`
+  }
+  return null
+}
+
+const ATTR_NAME = /^[a-z][a-z0-9:-]*$/i
+
+/**
+ * A head tag for `meta.head`, like Vue's `h()`:
+ *
+ * ```ts
+ * meta: {
+ *   head: [
+ *     h('link', { rel: 'alternate', hreflang: 'fr', href: '/fr/posts/1' }),
+ *     h('meta', { name: 'theme-color', content: '#0f172a' }),
+ *   ],
+ * }
+ * ```
+ *
+ * Only `meta` and `link`, and no `on*` attributes — values are escaped, but a
+ * handler is still script. A `meta` needs a `name`, `property` or
+ * `http-equiv`, a `link` a `rel`: that is what a later tag replaces it by.
+ */
+export function h(tag: 'meta' | 'link', attrs: Record<string, string>): HeadTag {
+  if (tag !== 'meta' && tag !== 'link') {
+    throw new Error(`h(): only meta and link tags, got '${String(tag)}'.`)
+  }
+  for (const name of Object.keys(attrs)) {
+    if (!ATTR_NAME.test(name) || /^on/i.test(name)) {
+      throw new Error(`h(): attribute '${name}' is not allowed.`)
+    }
+  }
+  const key = headKey(tag, (name) => attrs[name])
+  if (!key) {
+    throw new Error(
+      tag === 'meta'
+        ? "h('meta'): needs a name, property or http-equiv."
+        : "h('link'): needs a rel.",
+    )
+  }
+  return { tag, attrs: { ...attrs }, key }
 }
 
 /**
@@ -59,7 +124,8 @@ export function resolveMeta(
   const description = meta.description ?? base.description
   let canonical = meta.canonical ?? base.canonical
   if (canonical === undefined && baseUrl && path !== undefined && status < 300) {
-    canonical = path.split(/[?#]/)[0]
+    // `/posts/` and `/posts` are one page: one canonical.
+    canonical = path.split(/[?#]/)[0]!.replace(/(.)\/+$/, '$1')
   }
   canonical = absolute(canonical, baseUrl)
 
@@ -71,16 +137,27 @@ export function resolveMeta(
   const twitter = { ...base.twitter, ...meta.twitter }
   twitter.image = absolute(twitter.image, baseUrl)!
 
+  // A page's tag replaces the default with the same key. An hreflang
+  // alternate must be absolute, like the canonical.
+  const head = new Map<string, HeadTag>()
+  for (const t of [...(base.head ?? []), ...(meta.head ?? [])]) {
+    const href =
+      t.tag === 'link' && t.attrs.rel?.toLowerCase() === 'alternate' ? t.attrs.href : undefined
+    head.set(t.key, href ? { ...t, attrs: { ...t.attrs, href: absolute(href, baseUrl)! } } : t)
+  }
+
   const strip = (r: Record<string, string>) =>
     Object.fromEntries(Object.entries(r).filter(([, v]) => v !== undefined))
   const out: PageMeta = {
     title,
+    lang: meta.lang ?? base.lang,
     description,
     canonical,
     robots: meta.robots ?? base.robots,
     og: strip(og),
     twitter: strip(twitter),
     jsonLd: meta.jsonLd ?? base.jsonLd,
+    head: [...head.values()],
   }
   for (const key of Object.keys(out) as (keyof PageMeta)[]) {
     const v = out[key]
@@ -125,6 +202,12 @@ export function metaTags(meta: PageMeta | undefined): string[] {
       `<script data-inertia="json-ld" type="application/ld+json">${scriptJson(meta.jsonLd)}</script>`,
     )
   }
+  for (const t of meta.head ?? []) {
+    const attrs = Object.entries(t.attrs)
+      .map(([k, v]) => `${k}="${escapeHtml(v)}"`)
+      .join(' ')
+    tags.push(`<${t.tag} data-inertia="${escapeHtml(t.key)}" ${attrs} />`)
+  }
   return tags
 }
 
@@ -133,13 +216,9 @@ function tagKey(tag: string): string | null {
   const attr = (name: string) =>
     tag.match(new RegExp(`\\s${name}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1]?.toLowerCase()
   if (/^<title[\s>]/i.test(tag)) return 'title'
-  if (/^<meta\s/i.test(tag)) {
-    const key = attr('name') ?? attr('property')
-    return key ? `meta:${key}` : null
-  }
-  if (/^<link\s/i.test(tag) && attr('rel') === 'canonical') return 'canonical'
   if (/^<script\s/i.test(tag) && attr('type') === 'application/ld+json') return 'json-ld'
-  return null
+  const name = tag.match(/^<(meta|link)\s/i)?.[1]
+  return name ? headKey(name.toLowerCase(), attr) : null
 }
 
 /** `tags` minus the ones `winners` (a server-rendered `<Head>`) already set. */

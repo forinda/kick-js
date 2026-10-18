@@ -14,9 +14,9 @@ Peer dependency: `@forinda/kickjs` (`>=10.0.0`). Add the Inertia client for your
 
 ## Entry points
 
-| Import path               | Exports                                                                                                                                                                                                                                                                                                                |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@forinda/kickjs-inertia` | `InertiaAdapter`, `inertia`, `redirect`, `back`, `location`, `flash`, `buildPage`, `isInertiaRequest`, `isPageRequest`, `errorPage`, prop helpers (`optional`, `always`, `defer`, `merge`, `once`, `scroll`), `inertiaErrorHandler`, `inertiaNotFound`, `precognitive`, `defaultTemplate`, `pageBody`, and their types |
+| Import path               | Exports                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@forinda/kickjs-inertia` | `InertiaAdapter`, `inertia`, `redirect`, `back`, `location`, `flash`, `buildPage`, `isInertiaRequest`, `isPageRequest`, `errorPage`, prop helpers (`optional`, `always`, `defer`, `merge`, `once`, `scroll`), `inertiaErrorHandler`, `inertiaNotFound`, `precognitive`, `defaultTemplate`, `pageBody`, `h`, `sitemap`, `robots`, and their types |
 
 ## InertiaAdapter
 
@@ -94,12 +94,14 @@ interface PageOptions {
 
 interface PageMeta {
   title?: string
+  lang?: string // <html lang>, default 'en'
   description?: string
   canonical?: string // a path (made absolute with baseUrl) or a full URL
   robots?: string // 'noindex, nofollow'
   og?: Record<string, string> // without the prefix: { type: 'article', image: '/cover.png' }
   twitter?: Record<string, string> // { card: 'summary_large_image' }
   jsonLd?: Record<string, unknown> | Record<string, unknown>[]
+  head?: HeadTag[] // other <meta> / <link>, built with h()
 }
 
 interface MetaDefaults extends PageMeta {
@@ -107,7 +109,21 @@ interface MetaDefaults extends PageMeta {
 }
 ```
 
-The resolved meta (defaults merged, template applied, URLs absolute) is the page's `meta` field on every response, and is rendered — escaped — into the first-visit `<head>` as tags with `data-inertia="<key>"` (`description`, `robots`, `canonical`, `og:<key>`, `twitter:<key>`, `json-ld`), the same keys a `<Head>` tag with that `head-key` gets. A tag a server-rendered `<Head>` sets is left out. `og:title`, `og:description` and `og:url` default to the title, description and canonical URL. `errorPage()` responses carry `robots: 'noindex'`.
+The resolved meta (defaults merged, template applied, URLs absolute) is the page's `meta` field on every response, and is rendered — escaped — into the first-visit `<head>` as tags with `data-inertia="<key>"` (`description`, `robots`, `canonical`, `og:<key>`, `twitter:<key>`, `json-ld`), the same keys a `<Head>` tag with that `head-key` gets. A tag a server-rendered `<Head>` sets is left out. `og:title`, `og:description` and `og:url` default to the title, description and canonical URL. `errorPage()` responses carry `robots: 'noindex'`. The default canonical is the path without its query string or trailing slash.
+
+### h
+
+A `<meta>` or `<link>` for `meta.head`. Throws on another tag, an `on*` attribute, or a tag with nothing to key it by (a `meta` without `name` / `property` / `http-equiv`, a `link` without `rel`). A page's tag replaces a default with the same key; an `alternate` link's path is made absolute with `baseUrl`.
+
+```typescript
+function h(tag: 'meta' | 'link', attrs: Record<string, string>): HeadTag
+
+interface HeadTag {
+  tag: 'meta' | 'link'
+  attrs: Record<string, string>
+  key: string // 'meta:theme-color', 'link:alternate:fr'
+}
+```
 
 ```ts
 @Get('/users')
