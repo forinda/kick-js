@@ -1,5 +1,16 @@
 # @forinda/kickjs-devtools
 
+## 7.15.0
+
+### Minor Changes
+
+- [#970](https://github.com/forinda/kick-js/pull/970) [`1abfd15`](https://github.com/forinda/kick-js/commit/1abfd15c0e2c46aaa1ae21fd9d601c294302fe8b) Thanks [@forinda](https://github.com/forinda)! - The Routes tab lists everything the app serves: routes adapters add (`/metrics`, a webhook) under the adapter's name, and routes on the management port with a `mgmt` badge. `/_debug/routes` gives each route `source` (`'module'` or `'adapter'`) and `port` (`'app'` or `'management'`), and says which port the dashboard is on; the API runner sends only to routes on that one.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.14.0
 
 ### Minor Changes
