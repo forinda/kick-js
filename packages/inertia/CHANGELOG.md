@@ -1,5 +1,18 @@
 # @forinda/kickjs-inertia
 
+## 0.4.0
+
+### Minor Changes
+
+- [#983](https://github.com/forinda/kick-js/pull/983) [`1cac536`](https://github.com/forinda/kick-js/commit/1cac5365a30a0264a29663dfe99e8f80b218605e) Thanks [@forinda](https://github.com/forinda)! - SEO additions:
+  
+  - **`h()` and `meta.head`:** any other `<meta>` or `<link>` for a page, such as hreflang alternates, `theme-color` or preloads. A tag is keyed by what it sets, so a page's tag replaces the default with the same key.
+  - **`meta.lang`:** sets `<html lang>`. The default is still `'en'`.
+  - **Fixes:**
+    - The default canonical drops a trailing slash, so `/posts/` and `/posts` share one canonical URL.
+    - The title and meta tags now come before the asset tags in `<head>`.
+    - Content-hashed build files are sent with `Cache-Control: public, max-age=31536000, immutable`.
+
 ## 0.3.0
 
 ### Minor Changes

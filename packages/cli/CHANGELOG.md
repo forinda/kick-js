@@ -1,5 +1,16 @@
 # @forinda/kickjs-cli
 
+## 8.14.1
+
+### Patch Changes
+
+- [#983](https://github.com/forinda/kick-js/pull/983) [`1cac536`](https://github.com/forinda/kick-js/commit/1cac5365a30a0264a29663dfe99e8f80b218605e) Thanks [@forinda](https://github.com/forinda)! - Inertia template SEO defaults:
+  
+  - **Every page:** `lang`, a Twitter card and a `theme-color` tag.
+  - **Home page:** WebSite JSON-LD.
+  - **Descriptions:** search-length meta descriptions.
+  - **`APP_URL`:** the pages and SEO controllers now read it through an injected `ConfigService`.
+
 ## 8.14.0
 
 ### Minor Changes
