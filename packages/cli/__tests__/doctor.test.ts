@@ -6,12 +6,14 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   checkDecoratorTsConfig,
+  checkDiCopy,
   checkEnvWiring,
   checkExpressInstalled,
   checkKickJsInstalled,
   checkReflectMetadata,
   checkRuntimeEngine,
   checkTestEnvIsolation,
+  checkTypegenInclude,
   checkUploadDriver,
   defineDoctorCheck,
   defineDoctorExtension,
@@ -139,6 +141,102 @@ describe('checkExpressInstalled', () => {
   it('skips (returns null) when there is no kickjs and no express', () => {
     const dir = tempProject({ 'package.json': JSON.stringify({ dependencies: {} }) })
     expect(checkExpressInstalled(ctx(dir))).toBeNull()
+  })
+
+  it('skips on the fastify and h3 runtimes, which do not need express', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({
+        dependencies: { '@forinda/kickjs': '^10.0.0', h3: '^2.0.0' },
+      }),
+    })
+    expect(checkExpressInstalled(ctx(dir, { runtime: 'h3' }))).toBeNull()
+    expect(checkExpressInstalled(ctx(dir, { runtime: 'fastify' }))).toBeNull()
+  })
+})
+
+describe('checkDiCopy', () => {
+  it('skips when only @forinda/kickjs is listed', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: { '@forinda/kickjs': '^10.0.0' } }),
+    })
+    expect(checkDiCopy(ctx(dir))).toBeNull()
+  })
+
+  it('warns when @forinda/kickjs-di is listed too', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({
+        dependencies: { '@forinda/kickjs': '^10.0.0', '@forinda/kickjs-di': '^0.3.0' },
+      }),
+    })
+    const r = checkDiCopy(ctx(dir))
+    expect(r?.status).toBe('warn')
+    expect(r?.fix).toContain('remove @forinda/kickjs-di')
+  })
+
+  it('fails when the installed copy differs from the one kickjs pins', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({
+        dependencies: { '@forinda/kickjs': '^10.0.0', '@forinda/kickjs-di': '^0.2.0' },
+      }),
+      'node_modules/@forinda/kickjs/package.json': JSON.stringify({
+        dependencies: { '@forinda/kickjs-di': '0.3.0' },
+      }),
+      'node_modules/@forinda/kickjs-di/package.json': JSON.stringify({ version: '0.2.0' }),
+    })
+    const r = checkDiCopy(ctx(dir))
+    expect(r?.status).toBe('fail')
+    expect(r?.message).toBe('@forinda/kickjs-di 0.2.0, @forinda/kickjs uses 0.3.0')
+  })
+})
+
+describe('checkTypegenInclude', () => {
+  const typegen = { '.kickjs/types/kick__routes.ts': '' }
+  const withTs = (tsconfig: object) => ({ tsconfig: { compilerOptions: {}, ...tsconfig } })
+
+  it('skips when typegen has never run', () => {
+    const dir = tempProject({})
+    expect(checkTypegenInclude(ctx(dir, withTs({ include: ['src'] })))).toBeNull()
+  })
+
+  it('passes with both .kickjs/types globs', () => {
+    const dir = tempProject(typegen)
+    const include = ['src', '.kickjs/types/**/*.d.ts', '.kickjs/types/**/*.ts']
+    expect(checkTypegenInclude(ctx(dir, withTs({ include })))?.status).toBe('pass')
+  })
+
+  it('warns when include leaves .kickjs out, or has only its .d.ts files', () => {
+    const dir = tempProject(typegen)
+    const missing = checkTypegenInclude(ctx(dir, withTs({ include: ['src'] })))
+    expect(missing?.status).toBe('warn')
+    expect(missing?.message).toBe('.kickjs/types is not in include')
+    const dts = checkTypegenInclude(
+      ctx(dir, withTs({ include: ['src', '.kickjs/types/**/*.d.ts'] })),
+    )
+    expect(dts?.message).toBe('only the .d.ts files of .kickjs/types are included')
+  })
+
+  it("warns on rootDir: 'src'", () => {
+    const dir = tempProject(typegen)
+    const r = checkTypegenInclude(
+      ctx(dir, {
+        tsconfig: {
+          compilerOptions: { rootDir: './src/' },
+          include: ['src', '.kickjs/types/**/*.ts'],
+        },
+      }),
+    )
+    expect(r?.message).toBe("rootDir: 'src'")
+  })
+
+  it('reads include inherited through extends', async () => {
+    const dir = tempProject({
+      ...typegen,
+      'tsconfig.base.json':
+        '{ "include": ["src", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"] }',
+      'tsconfig.json': '{ "extends": "./tsconfig.base.json" }',
+    })
+    const r = (await runChecks(dir)).find((x) => x.name === 'tsconfig includes typegen output')
+    expect(r?.status).toBe('pass')
   })
 })
 
@@ -397,6 +495,17 @@ describe('doctor tsconfig extends chain', () => {
     expect(bothPass(await decoratorResults(dir))).toBe(true)
   })
 
+  it('keeps a /* or // inside a string, such as a typegen include glob', async () => {
+    const dir = tempProject({
+      'tsconfig.json': `{
+        // the scaffolded include
+        "compilerOptions": { "experimentalDecorators": true, "emitDecoratorMetadata": true },
+        "include": ["src", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts", "http://x"],
+      }`,
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
   it('parses comments and trailing commas anywhere in the chain', async () => {
     const dir = tempProject({
       'tsconfig.base.json': `{
@@ -504,6 +613,18 @@ bootstrap({})
 `,
     })
     expect(checkEnvWiring(ctx(dir))?.status).toBe('pass')
+  })
+
+  it('detects loadEnvFromSchema(), which the templates call', () => {
+    const dir = tempProject({
+      'src/config/index.ts':
+        'import { loadEnvFromSchema } from "@forinda/kickjs/config"\nloadEnvFromSchema(envSchema)',
+      'src/index.ts': `import 'reflect-metadata'
+import { bootstrap } from '@forinda/kickjs'
+bootstrap({})
+`,
+    })
+    expect(checkEnvWiring(ctx(dir))?.status).toBe('fail')
   })
 
   it('handles src/config/index.ts variation', () => {

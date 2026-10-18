@@ -163,16 +163,28 @@ const MAX_EXTENDS_DEPTH = 16
  * right there. A formatting nicety became a phantom missing file.
  */
 function parseJsonc(raw: string): any | null {
-  const stripped = raw
-    // Block comments, but not inside strings — approximated by requiring
-    // the `/*` to not be preceded by a `:` + quote start. Good enough for
-    // config files; a full JSONC parser isn't worth the dependency here.
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:"'\\])\/\/.*$/gm, '$1')
-    // Trailing commas before } or ]
-    .replace(/,(\s*[}\]])/g, '$1')
+  // One pass that skips strings, so a glob like `".kickjs/types/**/*.ts"`
+  // isn't read as the start of a block comment.
+  let out = ''
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i]!
+    if (c === '"') {
+      const start = i
+      for (i++; i < raw.length && raw[i] !== '"'; i++) if (raw[i] === '\\') i++
+      out += raw.slice(start, i + 1)
+    } else if (c === '/' && raw[i + 1] === '/') {
+      while (i < raw.length && raw[i] !== '\n') i++
+      out += '\n'
+    } else if (c === '/' && raw[i + 1] === '*') {
+      const end = raw.indexOf('*/', i + 2)
+      i = end === -1 ? raw.length : end + 1
+    } else {
+      out += c
+    }
+  }
   try {
-    return JSON.parse(stripped)
+    // Trailing commas before } or ]. A `,}` inside a tsconfig string isn't a thing.
+    return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'))
   } catch {
     return null
   }
@@ -229,6 +241,7 @@ function loadTsConfigFrom(filePath: string, seen: Set<string>): any | null {
   // Mutating accumulator rather than re-spreading per iteration — later
   // entries override earlier ones, which is the same result.
   const inherited: Record<string, any> = {}
+  let inheritedInclude: unknown
   for (const ext of parents) {
     if (typeof ext !== 'string') continue
     const parentPath = resolveExtends(dirname(filePath), ext)
@@ -236,9 +249,12 @@ function loadTsConfigFrom(filePath: string, seen: Set<string>): any | null {
     const parent = loadTsConfigFrom(parentPath, seen)
     if (!parent) continue
     Object.assign(inherited, parent.compilerOptions)
+    if (parent.include !== undefined) inheritedInclude = parent.include
   }
 
   cfg.compilerOptions = { ...inherited, ...cfg.compilerOptions }
+  // `include`, unlike compilerOptions, is replaced, not merged.
+  if (cfg.include === undefined && inheritedInclude !== undefined) cfg.include = inheritedInclude
   return cfg
 }
 
@@ -338,7 +354,8 @@ export function checkKickJsInstalled(ctx: DoctorContext): DoctorResult {
 }
 
 export function checkExpressInstalled(ctx: DoctorContext): DoctorResult | null {
-  if (!ctx.pkg) return null
+  // An optional peer: only the Express runtime needs it.
+  if (!ctx.pkg || ctx.runtime !== 'express') return null
   const deps = {
     ...ctx.pkg.dependencies,
     ...ctx.pkg.peerDependencies,
@@ -347,7 +364,7 @@ export function checkExpressInstalled(ctx: DoctorContext): DoctorResult | null {
     return {
       name: 'express installed',
       status: 'fail',
-      fix: `\`@forinda/kickjs\` declares \`express\` as a required peer dependency, but your package.json does not include it. Install: ${detectPackageManager(ctx.cwd)} add express`,
+      fix: `This app runs on the Express runtime, but package.json does not include \`express\`. Install: ${detectPackageManager(ctx.cwd)} add express`,
     }
   }
   return deps.express ? { name: 'express installed', status: 'pass', message: deps.express } : null
@@ -542,7 +559,7 @@ export function checkDecoratorTsConfig(ctx: DoctorContext): DoctorResult[] {
 /**
  * The canonical "you forgot to wire env" footgun: an env-init file
  * (e.g. `src/env.ts`, `src/config/env.ts`, `src/config/index.ts`)
- * calls `loadEnv(envSchema)` as a side effect, but the app entry
+ * calls `loadEnvFromSchema(envSchema)` (or the older `loadEnv`) as a side effect, but the app entry
  * (`src/index.ts` / `src/main.ts`) doesn't import it. Result:
  * `ConfigService.get('X')` returns undefined while `@Value('X')`
  * works via process.env fallback, so adopters get half-broken config
@@ -562,7 +579,7 @@ export function checkEnvWiring(ctx: DoctorContext): DoctorResult | null {
   const envFiles = envCandidates
     .map((p) => join(ctx.cwd, p))
     .filter((p) => existsSync(p))
-    .filter((p) => /\bloadEnv\s*\(/.test(safeRead(p) ?? ''))
+    .filter((p) => /\bloadEnv(?:FromSchema)?\s*\(/.test(safeRead(p) ?? ''))
 
   if (envFiles.length === 0) return null
 
@@ -801,6 +818,81 @@ export function checkTestEnvIsolation(ctx: DoctorContext): DoctorResult | null {
   }
 }
 
+/**
+ * `@forinda/kickjs-di` listed next to `@forinda/kickjs`. kickjs pins its own
+ * copy and re-exports it; a second copy keeps its own container, so classes
+ * decorated against one are missing from the other, with no error.
+ */
+export function checkDiCopy(ctx: DoctorContext): DoctorResult | null {
+  const deps = { ...ctx.pkg?.dependencies, ...ctx.pkg?.devDependencies }
+  if (!deps['@forinda/kickjs'] || !deps['@forinda/kickjs-di']) return null
+  const name = 'one DI container'
+  const installed = (pkg: string) =>
+    safeReadJson(join(ctx.cwd, 'node_modules', pkg, 'package.json')) as {
+      version?: string
+      dependencies?: Record<string, string>
+    } | null
+  const pinned = installed('@forinda/kickjs')?.dependencies?.['@forinda/kickjs-di']
+  const own = installed('@forinda/kickjs-di')?.version
+  const remove = `Remove it and import from @forinda/kickjs, which re-exports it: ${detectPackageManager(ctx.cwd)} remove @forinda/kickjs-di`
+  if (pinned && own && pinned !== own) {
+    return {
+      name,
+      status: 'fail',
+      message: `@forinda/kickjs-di ${own}, @forinda/kickjs uses ${pinned}`,
+      fix: `Two copies of the DI container are installed, each with its own registrations — a class decorated against one is missing from the other.\n${remove}`,
+    }
+  }
+  return {
+    name,
+    status: 'warn',
+    message: '@forinda/kickjs-di is listed in package.json',
+    fix: `@forinda/kickjs already depends on the exact version it needs; listing it too invites a second copy on the next upgrade.\n${remove}`,
+  }
+}
+
+/**
+ * Typegen output that tsc never reads: `.kickjs/types` exists but the
+ * tsconfig doesn't include it (globs skip dot-directories), includes only
+ * its `.d.ts` files (route types are a `.ts` file), or pins `rootDir: 'src'`,
+ * which refuses files outside `src`. `Ctx<KickRoutes…>` and typed env then
+ * fall back to loose types without an error.
+ */
+export function checkTypegenInclude(ctx: DoctorContext): DoctorResult | null {
+  if (!ctx.tsconfig || !existsSync(join(ctx.cwd, '.kickjs', 'types'))) return null
+  const name = 'tsconfig includes typegen output'
+  const include: unknown[] = Array.isArray(ctx.tsconfig.include) ? ctx.tsconfig.include : []
+  const entries = include.filter((p): p is string => typeof p === 'string' && p.includes('.kickjs'))
+  const add =
+    'Add ".kickjs/types/**/*.d.ts" and ".kickjs/types/**/*.ts" to "include" in tsconfig.json.'
+  if (entries.length === 0) {
+    return {
+      name,
+      status: 'warn',
+      message: '.kickjs/types is not in include',
+      fix: `${add} Without them, the route, env and DI types from \`kick typegen\` don't apply.`,
+    }
+  }
+  if (entries.every((p) => p.endsWith('.d.ts'))) {
+    return {
+      name,
+      status: 'warn',
+      message: 'only the .d.ts files of .kickjs/types are included',
+      fix: `${add} The route types are a .ts file.`,
+    }
+  }
+  const rootDir = String(ctx.tsconfig.compilerOptions?.rootDir ?? '')
+  if (rootDir.replace(/^\.\//, '').replace(/\/$/, '') === 'src') {
+    return {
+      name,
+      status: 'warn',
+      message: "rootDir: 'src'",
+      fix: 'Remove `rootDir` from tsconfig.json — the generated types live outside src/, and tsc refuses files outside rootDir.',
+    }
+  }
+  return { name, status: 'pass' }
+}
+
 // ── Runner ────────────────────────────────────────────────────────────
 
 const BUILT_IN_CHECKS: DoctorCheck[] = [
@@ -809,8 +901,10 @@ const BUILT_IN_CHECKS: DoctorCheck[] = [
   checkExpressInstalled,
   checkRuntimeEngine,
   checkUploadDriver,
+  checkDiCopy,
   checkReflectMetadata,
   checkDecoratorTsConfig,
+  checkTypegenInclude,
   checkEnvWiring,
   checkTestEnvIsolation,
   checkTypegenFreshness,
