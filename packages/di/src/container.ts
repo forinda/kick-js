@@ -221,6 +221,16 @@ export class Container {
    */
   private isGlobal = false
 
+  /** The container a child falls back to; null for a root. */
+  private parent: Container | null = null
+  /** Children, held weakly: one never disposed can still be collected. */
+  private children: Set<WeakRef<Container>> | null = null
+  /**
+   * A child's own keys into the request store, one per token, so its
+   * REQUEST-scoped instances never share the parent's under the same token.
+   */
+  private requestKeys: Map<any, object> | null = null
+
   /**
    * Where non-fatal problems go: an async `@PostConstruct`, one that threw.
    * Default: errors to `console.error`, warnings dropped. Change it with
@@ -369,6 +379,68 @@ export class Container {
     return container
   }
 
+  /**
+   * A container that resolves its own bindings first and falls back to this
+   * one for everything else: overrides for one tenant, job or test, without
+   * touching this container.
+   *
+   * - An override reaches what the child itself builds. A class registered
+   *   only here is built here, with this container's bindings — to have the
+   *   child build it with its overrides, register the class in the child too
+   *   (`child.register(Service, Service)`).
+   * - A child's REQUEST-scoped instances are its own, apart from this
+   *   container's in the same request.
+   * - When a binding here is invalidated (HMR), what the child built on it is
+   *   rebuilt on its next resolve.
+   * - `dispose()` detaches the child. One that is never disposed is still
+   *   garbage-collected once nothing references it.
+   */
+  createChild(): Container {
+    const child = new Container()
+    child.parent = this
+    child.requestKeys = new Map()
+    ;(this.children ??= new Set()).add(new WeakRef(child))
+    return child
+  }
+
+  /** Detach a child from its parent and drop the instances it built. */
+  dispose(): void {
+    const parent = this.parent
+    parent?.forEachChild((child, ref) => {
+      if (child === this) parent.children!.delete(ref)
+    })
+    this.parent = null
+    for (const reg of this.registrations.values()) reg.instance = undefined
+    this.registrations.clear()
+    this.fallbacks.clear()
+    this.requestKeys?.clear()
+  }
+
+  private forEachChild(visit: (child: Container, ref: WeakRef<Container>) => void): void {
+    if (!this.children) return
+    for (const ref of this.children) {
+      const child = ref.deref()
+      if (child) visit(child, ref)
+      else this.children.delete(ref)
+    }
+  }
+
+  /** The request-store key for `token`: the token itself for a root, the child's own key for a child. */
+  private requestKey(token: any): any {
+    if (!this.requestKeys) return token
+    let key = this.requestKeys.get(token)
+    if (!key) this.requestKeys.set(token, (key = { token }))
+    return key
+  }
+
+  /** A parent's binding `name` changed: rebuild what this child built on it, and tell its children. */
+  private invalidateDependentsOf(name: string): void {
+    for (const [token, reg] of this.registrations) {
+      if (reg.dependencies.includes(name)) this.invalidate(token)
+    }
+    this.forEachChild((child) => child.invalidateDependentsOf(name))
+  }
+
   /** Register a class constructor under the given token */
   register(token: any, target: Constructor, scope: Scope = Scope.SINGLETON): void {
     this.assertFallbackUnused(token)
@@ -500,13 +572,26 @@ export class Container {
     }
   }
 
-  /** The binding `resolve(token)` uses: a normal registration, else the fallback. */
+  /** The binding `resolve(token)` uses: a normal registration, else the fallback — a child's, then its parent's. */
   private binding(token: any): Registration | undefined {
-    return this.registrations.get(token) ?? this.fallbacks.get(token)
+    return (
+      this.registrations.get(token) ??
+      (this.parent?.has(token) ? this.parent.binding(token) : undefined) ??
+      this.fallbacks.get(token) ??
+      this.parent?.binding(token)
+    )
   }
 
-  /** Check if a binding exists for the given token. A {@link registerFallback} alone does not count. */
+  /**
+   * Check if a binding exists for the given token — here or, for a child, in
+   * a parent. A {@link registerFallback} alone does not count.
+   */
   has(token: any): boolean {
+    return this.registrations.has(token) || (this.parent?.has(token) ?? false)
+  }
+
+  /** Check if this container itself binds the token, not a parent. */
+  hasOwn(token: any): boolean {
     return this.registrations.has(token)
   }
 
@@ -577,7 +662,10 @@ export class Container {
     if (!reg && typeof token === 'function' && token.name) {
       reg = this.registrations.get(`__hmr__${token.name}`)
     }
+    // A child: its own binding, then its parent's; its own fallback, then its parent's.
+    if (!reg && this.parent?.has(token)) return this.parent.resolve<T>(token)
     reg ??= this.fallbacks.get(token)
+    if (!reg && this.parent) return this.parent.resolve<T>(token)
     if (!reg) {
       throw hooks.errorFactory('KICK001', tokenName(token))
     }
@@ -605,12 +693,13 @@ export class Container {
         this.emit(token, 'resolved', reg.kind)
         return store.values.get(token) as T
       }
-      // Check per-request instance cache
-      if (store.instances.has(token)) {
+      // Check per-request instance cache — under this container's own key
+      const key = this.requestKey(token)
+      if (store.instances.has(key)) {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
         this.emit(token, 'resolved', reg.kind)
-        return store.instances.get(token) as T
+        return store.instances.get(key) as T
       }
       // Factory-registered binding: invoke the factory once per request
       // and cache the result alongside class-instantiated REQUEST tokens.
@@ -625,7 +714,7 @@ export class Container {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
         if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
-        store.instances.set(token, instance)
+        store.instances.set(key, instance)
         this.emit(token, 'resolved', reg.kind)
         return instance as T
       }
@@ -636,7 +725,7 @@ export class Container {
       reg.resolveCount++
       reg.lastResolvedAt = Date.now()
       if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
-      store.instances.set(token, instance)
+      store.instances.set(key, instance)
       this.emit(token, 'resolved', reg.kind)
       return instance as T
     }
@@ -757,6 +846,8 @@ export class Container {
         this.invalidate(depToken, visited)
       }
     }
+    // And whatever a child built on it.
+    this.forEachChild((child) => child.invalidateDependentsOf(name))
   }
 
   /**
