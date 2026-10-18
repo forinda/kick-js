@@ -474,6 +474,10 @@ Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.
 
 If a singleton needs request-scoped data, resolve it explicitly inside a method call rather than injecting it as a dependency.
 
+## Child containers
+
+For overrides that apply to one tenant, job or test only, `container.createChild()` gives a container that resolves its own bindings first and falls back to the app's. See [Child containers](../api/di.md#child-containers) for the rules.
+
 ## Circular Dependency Detection
 
 The container detects circular dependencies and throws with the full resolution chain:

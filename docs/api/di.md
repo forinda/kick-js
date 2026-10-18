@@ -73,6 +73,29 @@ A class constructor parameter is injected by its type; a token or an interface n
 
 `registerFallback(token, () => value, scope?)` binds a default that `resolve` uses only while none of the three above binds the token — whichever order they run in. `has(token)` is `false` for a token with only a fallback, and `getRegistrations()` marks a token its fallback serves with `fallback: true`. A later `registerFallback` replaces an earlier one; `Container.reset()` drops them all. Binding the token normally after its SINGLETON fallback was resolved throws `KICK010`. See [Fallback bindings](../guide/dependency-injection.md#fallback-bindings).
 
+## Child containers
+
+`container.createChild()` returns a container that resolves its own bindings first and falls back to its parent for everything else: overrides for one tenant, one job, or one test, without touching the parent.
+
+```ts
+const forTenant = (tenant: Tenant) => {
+  const child = root.createChild()
+  child.registerInstance(DB, tenant.db)
+  child.register(ReportService, ReportService) // built here, so it gets this tenant's DB
+  return child
+}
+
+forTenant(acme).resolve(ReportService) // reports on acme's database
+```
+
+- **An override reaches what the child builds.** A class registered only in the parent is built by the parent, with the parent's bindings, and shared. To have the child build a class with its overrides, register the class in the child too, as `ReportService` is above.
+- **Lookup order:** the child's binding, then the parent's, then the child's fallback, then the parent's. `has(token)` looks through to the parent; `hasOwn(token)` doesn't.
+- **REQUEST scope:** a child's REQUEST-scoped instances are its own, apart from the parent's in the same request, and request teardown (`@PreDestroy`) reaches both.
+- **HMR:** when the parent invalidates a binding, whatever the child built on it is rebuilt on its next resolve, and grandchildren too.
+- **Lifetime:** `child.dispose()` detaches it and drops what it built. A child you never dispose is still garbage-collected once nothing references it.
+
+Children are opt-in and resolved by your code. In KickJS, controllers keep resolving from the application's container.
+
 ## Errors
 
 Without the framework the container throws `DiError`, with a stable `code` and the token name (or env key) as `subject`:
