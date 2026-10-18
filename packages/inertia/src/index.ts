@@ -26,8 +26,10 @@ export {
 export { inertiaErrorHandler, inertiaNotFound, precognitive } from './errors'
 export { defaultTemplate, pageBody, type HtmlParts, type HtmlTemplate } from './html'
 export {
+  h,
   sitemap,
   robots,
+  type HeadTag,
   type PageMeta,
   type MetaDefaults,
   type SitemapEntry,

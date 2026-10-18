@@ -345,6 +345,35 @@ Every value is escaped; JSON-LD is written into `<script type="application/ld+js
 
 On a client-side visit nothing re-renders the `<head>` by itself. The template's `src/client/Seo.tsx`, rendered by `Layout`, reads `usePage().meta` and renders Inertia's `<Head>` with `head-key`s that match the tags the adapter wrote, so the browser's title and tags follow the page instead of piling up.
 
+### Other head tags: `h()`
+
+Anything the fields above don't cover — hreflang alternates, `theme-color`, an image preload, an RSS link — goes in `meta.head`, built with `h()`:
+
+```ts
+import { h, inertia } from '@forinda/kickjs-inertia'
+
+return inertia(
+  'Posts/Show',
+  { post },
+  {
+    meta: {
+      title: post.title,
+      head: [
+        h('link', { rel: 'alternate', hreflang: 'fr', href: `/fr/posts/${post.id}` }),
+        h('link', { rel: 'preload', as: 'image', href: post.coverPath }),
+        h('meta', { name: 'theme-color', content: '#0f172a' }),
+      ],
+    },
+  },
+)
+```
+
+`h()` takes `meta` and `link` only, and refuses `on*` attributes; values are escaped. A tag is identified by what it sets — a `meta`'s `name` / `property` / `http-equiv`, a `link`'s `rel` plus `hreflang` (or `href`) — so a page's tag replaces a default with the same one, and `Seo.tsx` swaps them on client-side visits. An `alternate` link's path is made absolute with `baseUrl`. `meta.head` in the adapter's defaults goes on every page.
+
+### Page language
+
+`meta.lang` sets `<html lang>` — `'en'` when unset. Put it in the defaults, or per page for a translated one (see the [i18n recipe](./i18n.md)); `Seo.tsx` updates the attribute on client-side visits.
+
 ### Server meta and `<Head>`
 
 A page can still use `<Head>` itself. When a server-rendered `<Head>` sets a tag — the `<title>`, a `<meta>` with the same `name` or `property`, the canonical `<link>`, JSON-LD — the adapter leaves out its own copy, so the first HTML never has two. Pick one source per tag for client-side visits too.
@@ -367,7 +396,7 @@ A page's `meta` is merged over the defaults (`og` and `twitter` key by key; `jso
 
 ### Canonical URLs come from `baseUrl`
 
-`baseUrl` makes a path absolute: `canonical`, `og:image`, `og:url`, `twitter:image`. A successful page without a `canonical` gets `baseUrl` plus its path, without the query string. The request's `Host` header is never used — the client sends it, and a spoofed one would otherwise end up in your canonical links. The template reads `baseUrl` from `APP_URL`, which must be set outside `development` and `test`.
+`baseUrl` makes a path absolute: `canonical`, `og:image`, `og:url`, `twitter:image`. A successful page without a `canonical` gets `baseUrl` plus its path, without the query string or a trailing slash — `/posts/` and `/posts` are one page. A paginated list should pass its own (`` canonical: `/posts?page=${page}` ``): without it, every page of the list points search engines at the first. The request's `Host` header is never used — the client sends it, and a spoofed one would otherwise end up in your canonical links. The template reads `baseUrl` from `APP_URL`, which must be set outside `development` and `test`.
 
 ### Keep indexable content in plain props
 
@@ -382,11 +411,16 @@ A missing record should answer 404, not a 200 page that says "not found" — thr
 Answer both from an ordinary controller, on any runtime:
 
 ```ts
-import { Controller, Get, getEnv } from '@forinda/kickjs'
+import { ConfigService, Controller, Get } from '@forinda/kickjs'
 import { robots, sitemap } from '@forinda/kickjs-inertia'
 
 @Controller()
 export class SeoController {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly posts: PostsRepository,
+  ) {}
+
   @Get('/sitemap.xml')
   async sitemap() {
     const posts = await this.posts.list()
@@ -395,13 +429,17 @@ export class SeoController {
         { loc: '/', priority: 1 },
         ...posts.map((p) => ({ loc: `/posts/${p.id}`, lastmod: p.updatedAt })),
       ],
-      { baseUrl: getEnv('APP_URL') },
+      { baseUrl: this.config.get('APP_URL') },
     )
   }
 
   @Get('/robots.txt')
   robots() {
-    return robots({ disallow: ['/admin'], sitemap: '/sitemap.xml', baseUrl: getEnv('APP_URL') })
+    return robots({
+      disallow: ['/admin'],
+      sitemap: '/sitemap.xml',
+      baseUrl: this.config.get('APP_URL'),
+    })
   }
 }
 ```
@@ -510,7 +548,7 @@ export default defineConfig(({ isSsrBuild }) => ({
 }
 ```
 
-The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. `compressAssets()` writes a `.br` and a `.gz` beside each built file; the adapter sends one of those to a browser that accepts it (see [Compressed static files](./middleware.md#compressed-static-files)). It skips the SSR build. Under `NODE_ENV` development or test a missing manifest is tolerated — pages render without their scripts and a warning says so, which is what lets tests run before the client is built. Anywhere else, including an unset `NODE_ENV`, it stops the app at startup.
+The adapter reads `dist/client/.vite/manifest.json` for the script and style tags, serves `dist/client/assets/` and `public/`, and versions assets by a hash of the manifest. The content-hashed files it lists are sent with `Cache-Control: public, max-age=31536000, immutable` — a new build gives them new names; `public/` files keep the default. `compressAssets()` writes a `.br` and a `.gz` beside each built file; the adapter sends one of those to a browser that accepts it (see [Compressed static files](./middleware.md#compressed-static-files)). It skips the SSR build. Under `NODE_ENV` development or test a missing manifest is tolerated — pages render without their scripts and a warning says so, which is what lets tests run before the client is built. Anywhere else, including an unset `NODE_ENV`, it stops the app at startup.
 
 ## Testing
 

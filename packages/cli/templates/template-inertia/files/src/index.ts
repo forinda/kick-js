@@ -30,9 +30,15 @@ export const app = await bootstrap({
       // inertia(component, props, { meta }), and src/client/Seo.tsx keeps the
       // browser's <head> in sync on client-side visits.
       meta: {
+        lang: 'en',
         titleTemplate: '%s · {{name}}',
         description: '{{name}}, built with KickJS and Inertia.',
+        // Link previews: add `image: '/og.png'` (1200×630, in public/) and
+        // switch the card to 'summary_large_image'.
         og: { site_name: '{{name}}', type: 'website' },
+        twitter: { card: 'summary' },
+        // Any other <meta> / <link>: hreflang alternates, preloads.
+        head: [h('meta', { name: 'theme-color', content: '#ffffff' })],
       },
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),

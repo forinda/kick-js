@@ -24,13 +24,14 @@ const escapeHtml = (value: string): string =>
 /**
  * The default shell. Its `<title>` is a fallback: left out when the head
  * already has one (a server-rendered `<Head>`). In the browser, Inertia drops
- * it itself once a page's `<Head>` sets a title.
+ * it itself once a page's `<Head>` sets a title. `<html lang>` is the page's
+ * `meta.lang`, else `'en'`.
  */
 export const defaultTemplate =
   (title: string): HtmlTemplate =>
-  ({ head, body }) =>
+  ({ head, body, page }) =>
     `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(page.meta?.lang ?? 'en')}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -62,14 +63,38 @@ export function devHead(entry: string): string {
 interface ManifestChunk {
   file: string
   css?: string[]
+  assets?: string[]
   imports?: string[]
+}
+
+function readManifest(clientDir: string): Record<string, ManifestChunk> {
+  return JSON.parse(readFileSync(join(clientDir, '.vite', 'manifest.json'), 'utf8')) as Record<
+    string,
+    ManifestChunk
+  >
+}
+
+/** Vite's default `[name]-[hash]`: an 8-character hash before the extension. */
+const HASHED_NAME = /[.-][\w-]{8}\.\w+$/
+
+/**
+ * URL paths of the content-hashed files in the build manifest. A name without
+ * a hash (an `entryFileNames` that leaves it out) is skipped: its content can
+ * change under the same URL.
+ */
+export function hashedFiles(clientDir: string): Set<string> {
+  const files = new Set<string>()
+  for (const chunk of Object.values(readManifest(clientDir))) {
+    for (const f of [chunk.file, ...(chunk.css ?? []), ...(chunk.assets ?? [])]) {
+      if (HASHED_NAME.test(f)) files.add(`/${f}`)
+    }
+  }
+  return files
 }
 
 /** Production: the entry's script, its CSS, and the CSS and preloads of what it imports. */
 export function manifestHead(clientDir: string, entry: string): string {
-  const manifest = JSON.parse(
-    readFileSync(join(clientDir, '.vite', 'manifest.json'), 'utf8'),
-  ) as Record<string, ManifestChunk>
+  const manifest = readManifest(clientDir)
   const chunk = manifest[entry]
   if (!chunk) {
     throw new Error(

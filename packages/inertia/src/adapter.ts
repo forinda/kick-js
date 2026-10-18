@@ -16,7 +16,14 @@ import { pathToFileURL } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineAdapter, Logger, type RequestContext } from '@forinda/kickjs'
 import { bindInertiaRuntime, requestUrl, type InertiaRuntime, type Page } from './inertia'
-import { defaultTemplate, devHead, manifestHead, pageBody, type HtmlTemplate } from './html'
+import {
+  defaultTemplate,
+  devHead,
+  hashedFiles,
+  manifestHead,
+  pageBody,
+  type HtmlTemplate,
+} from './html'
 import { dedupeHead, metaTags, type MetaDefaults } from './seo'
 
 export interface InertiaAdapterOptions {
@@ -283,6 +290,17 @@ export const InertiaAdapter = defineAdapter<ResolvedOptions>({
             next()
           }
           http.use(hideBuildFiles as never)
+          // What the manifest lists is content-hashed: a changed file gets a
+          // new name, so a browser can keep these for good. Only those — a
+          // public/ file (favicon, robots.txt) keeps its name across builds.
+          const hashed = hashedFiles(clientDir)
+          const cacheHashed: NodeMiddleware = (req, res, next) => {
+            if (hashed.has(safeDecode((req.url ?? '/').split('?')[0]!))) {
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+            }
+            next()
+          }
+          http.use(cacheHashed as never)
           http.serveStatic('/', clientDir)
         }
         if (config.version !== undefined) {
@@ -329,7 +347,8 @@ export const InertiaAdapter = defineAdapter<ResolvedOptions>({
             // A tag the server-rendered <Head> set wins over the same one from meta.
             const meta = dedupeHead(metaTags(page.meta), ssrHead)
             const html = template({
-              head: [config.head ?? '', head(page), ...styles, ...meta, ...ssrHead]
+              // Title and meta first, then the asset tags.
+              head: [...meta, ...ssrHead, config.head ?? '', head(page), ...styles]
                 .filter(Boolean)
                 .join('\n    '),
               body: rendered?.body ?? pageBody(page),
