@@ -96,8 +96,22 @@ export function registerRuntimeCommand(program: Command): void {
 
       // The files.
       const swapped = swapRuntime(readFileSync(join(cwd, entry), 'utf-8'), from, to, entry)
+      if (swapped.blocked) {
+        // Moving the config and packages without the entry would leave the app half-moved.
+        for (const note of swapped.manual) console.error(`\n  ${note}`)
+        console.error(`\n  Nothing changed. Fix that, then rerun kick runtime ${to}.\n`)
+        process.exitCode = 1
+        return
+      }
       const configSource = config ? readFileSync(join(cwd, config), 'utf-8') : undefined
-      const newConfig = configSource !== undefined ? swapConfigRuntime(configSource, to) : null
+      const newConfig =
+        configSource !== undefined ? swapConfigRuntime(configSource, to, config) : null
+      // Without it, later commands guess the engine from package.json.
+      if (newConfig === null) {
+        swapped.manual.push(
+          `Set \`runtime: '${to}'\` in ${config ?? 'kick.config.ts'} so kick commands know the engine.`,
+        )
+      }
 
       // The packages: the new engine's in; the old one's out, unless code still imports them.
       const sources = sourceFiles(join(cwd, 'src')).map((file) => ({

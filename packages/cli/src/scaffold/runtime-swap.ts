@@ -28,7 +28,15 @@ export interface RuntimeSwapResult {
   changes: string[]
   /** What it couldn't do — print for the user. */
   manual: string[]
+  /**
+   * The `runtime:` option isn't a call to the old engine's factory (a variable,
+   * a condition, shorthand): nothing was changed, and the move should stop.
+   */
+  blocked: boolean
 }
+
+/** The comment `kick new` writes above `express.json()`. */
+const BODY_PARSER_COMMENT = '// Express needs a body parser; Fastify and h3 parse bodies natively.'
 
 export function swapRuntime(
   source: string,
@@ -36,7 +44,7 @@ export function swapRuntime(
   to: AppRuntime,
   file = 'src/index.ts',
 ): RuntimeSwapResult {
-  const result: RuntimeSwapResult = { source, changes: [], manual: [] }
+  const result: RuntimeSwapResult = { source, changes: [], manual: [], blocked: false }
   const oldFactory = RUNTIME_FACTORIES[from]
   const newFactory = RUNTIME_FACTORIES[to]
 
@@ -53,7 +61,23 @@ export function swapRuntime(
   const call = `${newFactory.name}()`
   if (runtime) {
     const value = runtime.value as Node
-    const args = value.type === 'CallExpression' ? (value.arguments as Node[]) : []
+    // Only a direct call to the old factory, under whatever name this file imports it.
+    const oldLocal = importedAs(parse(file, result.source), oldFactory.from, oldFactory.name)
+    if (
+      runtime.shorthand ||
+      value.type !== 'CallExpression' ||
+      value.callee?.type !== 'Identifier' ||
+      value.callee.name !== oldLocal
+    ) {
+      const text = result.source.slice(runtime.start, runtime.end)
+      result.manual.push(
+        `\`${text}\` in ${file} isn't a call to ${oldFactory.name}(): set it to ${call} ` +
+          `(import { ${newFactory.name} } from '${newFactory.from}') yourself.`,
+      )
+      result.blocked = true
+      return result
+    }
+    const args = value.arguments as Node[]
     if (args.length > 0) {
       const text = result.source.slice(args[0]!.start, args.at(-1)!.end)
       result.manual.push(
@@ -88,7 +112,7 @@ export function swapRuntime(
         {
           import: { from: 'express', default: 'express' },
           slot: 'middleware',
-          code: '// Express needs a body parser; Fastify and h3 parse bodies natively.\nexpress.json()',
+          code: `${BODY_PARSER_COMMENT}\nexpress.json()`,
         },
       ],
       undefined,
@@ -103,10 +127,30 @@ export function swapRuntime(
   return result
 }
 
-/** `runtime: 'express'` → `runtime: 'fastify'` in kick.config.ts; null when it doesn't set one. */
-export function swapConfigRuntime(source: string, to: AppRuntime): string | null {
-  const pattern = /(\bruntime\s*:\s*)(['"])(express|fastify|h3)\2/
-  return pattern.test(source) ? source.replace(pattern, `$1$2${to}$2`) : null
+/**
+ * kick.config.ts's `runtime`, set to `to` — the property of the exported config
+ * object (`export default defineConfig({ ... })` or `export default { ... }`),
+ * added when it has none. Null when there is no such object to edit.
+ */
+export function swapConfigRuntime(
+  source: string,
+  to: AppRuntime,
+  file = 'kick.config.ts',
+): string | null {
+  const program = parse(file, source)
+  const exported = (program.body as Node[]).find((n) => n.type === 'ExportDefaultDeclaration')
+  let object = exported?.declaration as Node | undefined
+  while (object && (object.type === 'TSSatisfiesExpression' || object.type === 'TSAsExpression')) {
+    object = object.expression
+  }
+  if (object?.type === 'CallExpression') object = object.arguments?.[0]
+  if (object?.type !== 'ObjectExpression') return null
+  const runtime = property(object, 'runtime')
+  if (!runtime) return insertProperty(source, object, `runtime: '${to}'`)
+  const value = runtime.value as Node
+  if (value.type !== 'Literal' || typeof value.value !== 'string') return null
+  const quote = source[value.start] === '"' ? '"' : "'"
+  return `${source.slice(0, value.start)}${quote}${to}${quote}${source.slice(value.end)}`
 }
 
 function parse(file: string, source: string): Node {
@@ -173,16 +217,25 @@ function removeExpressJson(source: string, file: string): string {
   const lineStart = source.lastIndexOf('\n', start) + 1
   if (/^\s*$/.test(source.slice(lineStart, start))) {
     start = lineStart
-    // A comment line right above it (`// Express needs a body parser…`) goes too.
-    let above = source.lastIndexOf('\n', start - 2) + 1
-    while (above < start && /^\s*\/\//.test(source.slice(above, start - 1))) {
-      start = above
-      above = source.lastIndexOf('\n', start - 2) + 1
-    }
+    // The comment kick new writes above it goes too — no other comment.
+    const above = source.lastIndexOf('\n', start - 2) + 1
+    if (source.slice(above, start - 1).trim() === BODY_PARSER_COMMENT) start = above
     const lineEnd = source.indexOf('\n', end)
     if (lineEnd !== -1 && /^\s*$/.test(source.slice(end, lineEnd))) end = lineEnd + 1
   }
   return source.slice(0, start) + source.slice(end)
+}
+
+/** The local name this file imports `name` from `from` under; `name` when it doesn't. */
+function importedAs(program: Node, from: string, name: string): string {
+  for (const node of program.body as Node[]) {
+    if (node.type !== 'ImportDeclaration' || node.source.value !== from) continue
+    for (const specifier of node.specifiers as Node[]) {
+      const imported = specifier.imported?.name ?? specifier.imported?.value
+      if (specifier.type === 'ImportSpecifier' && imported === name) return specifier.local.name
+    }
+  }
+  return name
 }
 
 /** Drop `name` from `import { … } from 'from'` when the file no longer uses it. */

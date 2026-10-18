@@ -51,6 +51,41 @@ describe('swapRuntime', () => {
     expect(result.manual.join('\n')).toMatch(/trustProxy: true/)
   })
 
+  it('follows an aliased import of the old factory', () => {
+    const source = express
+      .replace('expressRuntime }', 'expressRuntime as er }')
+      .replace('runtime: expressRuntime()', 'runtime: er()')
+    const result = swapRuntime(source, 'express', 'h3')
+    expect(result.blocked).toBe(false)
+    expect(result.source).toContain('runtime: h3Runtime()')
+    expect(result.source).not.toMatch(/\ber\b|expressRuntime/)
+  })
+
+  it("stops, changing nothing, when runtime: isn't a call to the old factory", () => {
+    for (const value of ['runtime,', 'runtime: chooseRuntime(),', 'runtime: dev ? a() : b(),']) {
+      const source = express.replace('runtime: expressRuntime(),', value)
+      const result = swapRuntime(source, 'express', 'h3')
+      expect(result.blocked).toBe(true)
+      expect(result.source).toBe(source)
+      expect(result.manual[0]).toMatch(/isn't a call to expressRuntime/)
+    }
+  })
+
+  it("removes kick's body-parser comment with express.json(), and keeps the user's", () => {
+    const source = express.replace(
+      '    // Express needs a body parser; Fastify and h3 parse bodies natively.\n',
+      '    // TODO: rate limiter here\n    // Express needs a body parser; Fastify and h3 parse bodies natively.\n',
+    )
+    const result = swapRuntime(source, 'express', 'fastify').source
+    expect(result).toContain('// TODO: rate limiter here')
+    expect(result).not.toContain('Express needs a body parser')
+    const own = express.replace(
+      '    // Express needs a body parser; Fastify and h3 parse bodies natively.\n',
+      '    // parse JSON bodies\n',
+    )
+    expect(swapRuntime(own, 'express', 'fastify').source).toContain('// parse JSON bodies')
+  })
+
   it('adds runtime: when bootstrap() has none, and asks when there is no bootstrap()', () => {
     const bare =
       "import { bootstrap } from '@forinda/kickjs'\nexport const app = await bootstrap({\n  modules,\n})\n"
@@ -64,11 +99,22 @@ describe('swapRuntime', () => {
 })
 
 describe('swapConfigRuntime', () => {
-  it("rewrites kick.config.ts's runtime, or says it has none", () => {
-    expect(
-      swapConfigRuntime("export default defineConfig({\n  runtime: 'express',\n})", 'h3'),
-    ).toBe("export default defineConfig({\n  runtime: 'h3',\n})")
-    expect(swapConfigRuntime('export default defineConfig({})', 'h3')).toBeNull()
+  it("rewrites the exported config's runtime, not a comment that mentions one", () => {
+    const source =
+      "// was runtime: 'express' before the move\nexport default defineConfig({\n  runtime: 'express',\n})"
+    expect(swapConfigRuntime(source, 'h3')).toBe(
+      "// was runtime: 'express' before the move\nexport default defineConfig({\n  runtime: 'h3',\n})",
+    )
+  })
+
+  it('adds runtime when the config has none, and gives up without a config object', () => {
+    expect(swapConfigRuntime('export default defineConfig({\n  pattern: "rest",\n})', 'h3')).toBe(
+      'export default defineConfig({\n  runtime: \'h3\',\n  pattern: "rest",\n})',
+    )
+    expect(swapConfigRuntime('export default defineConfig({})', 'h3')).toBe(
+      "export default defineConfig({ runtime: 'h3' })",
+    )
+    expect(swapConfigRuntime('export default config', 'h3')).toBeNull()
   })
 })
 
