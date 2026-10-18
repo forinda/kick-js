@@ -64,7 +64,7 @@ Each entry shape:
 
 ### Key strategies
 
-The `keys` field controls how a file's source path becomes its manifest key — and therefore the property name on the typed `assets.<ns>` Proxy. Build, runtime dev resolver, and typegen all share one helper (`groupAssetKeys()` in `@forinda/kickjs`) so the three layers can never disagree.
+The `keys` field controls how a file's source path becomes its manifest key — and therefore the property name on the typed `assets.<ns>` Proxy.
 
 | Strategy           | Stripped on conflict-free?  | Behaviour on collisions                                  | When to pick it                                                                                                                                                       |
 | ------------------ | --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -87,24 +87,7 @@ the build emits one informational log per collision group it auto-resolved, e.g.
 
 <PmCommand exec="kick typegen" />
 
-This walks every `assetMap.*.src` directory and emits `.kickjs/types/assets.d.ts` augmenting the framework's `KickAssets` interface:
-
-```ts
-declare module '@forinda/kickjs' {
-  interface KickAssets {
-    mails: {
-      welcome: () => string
-      'password-reset': () => string
-      orders: {
-        confirmation: () => string
-      }
-    }
-    reports: {
-      monthly: () => string
-    }
-  }
-}
-```
+This walks every `assetMap.*.src` directory, so asset keys autocomplete and a missing asset is a compile error — `src/templates/mails/orders/confirmation.ejs` becomes `assets.mails.orders.confirmation()`.
 
 `kick dev` runs typegen automatically (initial pass + on-change). For one-shot CI builds, `kick build` runs it after the JS build. Adopters who hand-roll their build pipeline can call `kick typegen` themselves.
 
@@ -261,4 +244,4 @@ afterEach(() => {
 
 - [View Engines](view-engines.md) — `assets.views.dashboard()` works inside `ctx.render()` calls when you've named the views directory in `assetMap`.
 - [Configuration](configuration.md) — the full `kick.config.ts` schema.
-- [Type Generation](typegen.md) — `kick typegen` end-to-end + `KickAssets` augmentation alongside `KickEnv` / `KickJsRegistry`.
+- [Type Generation](typegen.md) — `kick typegen` end to end.

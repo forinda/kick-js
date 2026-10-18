@@ -416,9 +416,8 @@ Rules of precedence:
   explicit 200 with an empty json body.
 
 Returning values is what makes the handler's **response type statically
-inferable** — the foundation for typed-client generation. `kick typegen` fills
-`KickRoutes[...].response` with `InferHandlerResponse<Controller['method']>`,
-which reads the method's return type and nothing else:
+inferable** — the foundation for the typed client. `kick typegen` types the
+route's response from the method's return type and nothing else:
 
 | Handler style                        | Inferred `response`                                    |
 | ------------------------------------ | ------------------------------------------------------ |

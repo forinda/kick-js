@@ -38,7 +38,7 @@ Run both with `pnpm dev` at the workspace root (or `dev:server` and `dev:web` in
 
 ## 3. Point TypeScript at the route map
 
-`kick typegen` writes `server/.kickjs/types/kick__client.d.ts`: the response type of every route, resolved to plain shapes, as an ambient `KickClientApi` namespace. Nothing from the server's source enters the web app's TypeScript program.
+`kick typegen` writes `server/.kickjs/types/kick__client.d.ts`, the typed route map for the web app (`KickClientApi.Api`). Nothing from the server's source enters the web app's TypeScript program.
 
 Add it to the config that compiles `src` — in create-vite's TypeScript templates that is **`web/tsconfig.app.json`**, not the root `web/tsconfig.json`, which only references the others. **Append** to the existing `types`; replacing the list drops `vite/client`, and with it the typing for `import.meta.env` and asset imports:
 

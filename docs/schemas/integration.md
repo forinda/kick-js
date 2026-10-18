@@ -172,38 +172,20 @@ import { bootstrap } from '@forinda/kickjs'
 
 ## Type Generation
 
-`kick typegen` (also run by `kick dev`) scans your controllers without executing them. It writes `.kickjs/types/kick__routes.ts`, which declares a global `KickRoutes` namespace. Each method's entry looks like this:
-
-```ts
-declare global {
-  namespace KickRoutes {
-    interface UserController {
-      create: {
-        params: {}
-        body: import('@forinda/kickjs-schema').InferSchemaOutput<typeof _S0>
-        query: unknown
-        response: import('@forinda/kickjs').InferHandlerResponse<_C0['create']>
-        contextKeys: never
-      }
-    }
-  }
-}
-```
-
-The entry fields are filled in like this:
+`kick typegen` (also run by `kick dev`) scans your controllers without executing them and types each route for `Ctx<KickRoutes.UserController['create']>`:
 
 - **`body`, `query`, `params`**: from the schemas in the route decorator. Without a schema, `params` falls back to the URL pattern, `query` to the `@ApiQueryParams` shape or `unknown`, and `body` to `unknown`.
 - **`response`**: from a declared `response` schema, or else from the handler's return type.
 
 A schema is only resolved if typegen can find it statically: it must be a named identifier that is exported from the controller file or imported with a static specifier. Otherwise typegen warns and uses the fallback.
 
-How a schema becomes a type depends on `typegen.schemaValidator` in `kick.config.ts`:
+Which schemas are understood depends on `typegen.schemaValidator` in `kick.config.ts`:
 
-| Value             | Emitted type                                                                |
-| ----------------- | --------------------------------------------------------------------------- |
-| `'kickjs-schema'` | `InferSchemaOutput<typeof schema>`, which works for every supported library |
-| `'zod'`           | `z.infer<typeof schema>`, for Zod only                                      |
-| `false`           | no schema-driven types                                                      |
+| Value             | Types from                                                   |
+| ----------------- | ------------------------------------------------------------ |
+| `'kickjs-schema'` | `InferSchemaOutput<typeof schema>` — every supported library |
+| `'zod'`           | `z.infer<typeof schema>` — Zod only                          |
+| `false`           | no schema-driven types                                       |
 
 `kick new` and `kick g config` both write `'kickjs-schema'`. If the option is missing, it defaults to `'zod'`, so projects that use Valibot or Yup must set it.
 

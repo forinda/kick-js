@@ -38,7 +38,7 @@ The return type narrows from the inferred schema — column types from the DSL f
 
 ## Adding `with`
 
-`with` walks the relations declared in your `relations()` blocks. The keys are checked against the `KickDbRelationsRegister` augmentation that `kick typegen` emits to `.kickjs/types/kick__db.d.ts` — so misspelling a relation key is a compile error, not a runtime surprise.
+`with` walks the relations declared in your `relations()` blocks. Once `kick typegen` has run, the keys are checked — so misspelling a relation key is a compile error, not a runtime surprise.
 
 ```ts
 this.db.query.workspaces.findUnique({

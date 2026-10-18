@@ -107,7 +107,7 @@ KickJS supports four kinds of DI tokens. Pick the safest one that fits your case
 
 - **`Symbol('foo')`** — `container.resolve(SYM)` returns `any`. Discouraged. The symbol is unique per call (no collisions in practice) but the call site is untyped — you have to add a generic at every injection site, and a refactor that misses one usage site won't be caught at compile time. Note: `Symbol.for(...)` is interned and **does** collide across files; never use it for DI tokens.
 
-- **Raw string `@Inject('string')`** — high collision risk. Untyped unless `kick typegen` has populated `KickJsRegistry`. Another developer registering `'config'` somewhere else silently overrides yours. Only use this for runtime-computed token names where the literal string genuinely isn't known at compile time.
+- **Raw string `@Inject('string')`** — high collision risk. Untyped unless `kick typegen` knows the name. Another developer registering `'config'` somewhere else silently overrides yours. Only use this for runtime-computed token names where the literal string genuinely isn't known at compile time.
 
 **Recommendation: use `createToken<T>` for everything that isn't a class.** It removes both collision risk and the need for separate type annotations on every injection site. The CLI generators (`kick g module`, `kick g scaffold`) emit `createToken<T>` by default for repository tokens.
 

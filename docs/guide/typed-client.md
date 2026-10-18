@@ -50,21 +50,20 @@ Wrong path, missing `params.id`, wrong body shape — all **compile errors**.
 
 ## Frontends outside the server's TypeScript program
 
-`KickApi` above is an **ambient global**, populated by importing the server's
-generated route types. Those types infer responses by referencing controller
-classes, so the frontend's `tsc` ends up compiling the server's source graph —
-decorators, path aliases, ORM types and all. In a small repo that is free. At
-scale it is not: one measured app needed `experimentalDecorators`,
-`emitDecoratorMetadata`, a `@/*` fallback into server source and five ambient
-imports before it compiled, and its typecheck went from 1.7s / 819 MB to 10.8s
-/ 4.9 GB — per frontend, per CI run.
+`KickApi` points at your controller classes, so a frontend using it compiles
+the server's source too — decorators, path aliases, ORM types. For a separate
+frontend app, turn on the standalone client map instead. It has no imports, so
+the frontend never sees server code:
 
-`kick typegen` also emits `.kickjs/types/kick__client.d.ts`, which removes the
-reference entirely: every type resolved to a literal shape, shared shapes
-hoisted, and **no imports at all**.
+```ts
+// kick.config.ts
+export default defineConfig({
+  typegen: { client: true },
+})
+```
 
-List it in the frontend's tsconfig `types`, the same way you would `node` or
-`vitest/globals`:
+`kick new --template fullstack` sets this for you. Then list the map in the
+frontend's tsconfig `types`:
 
 ```json
 {
@@ -74,52 +73,15 @@ List it in the frontend's tsconfig `types`, the same way you would `node` or
 }
 ```
 
-The route map is then ambient — no import, no bridge file, no decorator
-settings, no path aliases:
+and use the global `KickClientApi.Api`:
 
 ```ts
 export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
 ```
 
-Only the namespace is global. The resolved shapes it references stay inside the
-file, so nothing else lands in your global scope.
-
-This is what `kick new --template fullstack` scaffolds.
-
-::: tip Off unless the project uses it
-Producing this map builds a whole TypeScript program over the server — measured
-at 1.1 GB and ~7.6s on a 1,940-route app, against ~130ms for every other
-typegen plugin combined. An API with no frontend should not pay that for a file
-nothing reads, so `kick typegen` only builds it when the project wants it:
-
-```ts
-// kick.config.ts
-export default defineConfig({
-  typegen: { client: true },
-})
-```
-
-Off unless set. `kick new --template fullstack` writes `client: true`, so its
-web app has the map from the first run; every other project opts in here.
-
-If the file is already on disk and this is unset, `kick typegen` says so rather
-than refreshing it silently — a map left to rot is how a frontend ends up
-type-checking against routes the server no longer serves.
-
-That cost is paid only when something the map depends on actually moved. Each
-run fingerprints the project's source files, its lockfile, the compiler options,
-the CLI version and the scanned route keys; when the fingerprint matches the one
-recorded beside the last map — and the map on disk is still the file that
-fingerprint produced — the program is never built and the existing file stands. On that same
-1,940-route app an unchanged run is **0.85s and 230 MB** against 7.5s and
-1.2 GB — and because the fingerprint hashes contents rather than timestamps, a
-rebuild that rewrites identical bytes does not invalidate it. Editing a single
-source file does.
-
-The record lives in `.kickjs/cache/client-map.sha1`, inside the already-ignored
-`.kickjs/` directory. Delete it to force a rebuild. `kick typegen --check`
-never writes it — that flag is read-only.
-:::
+Listing anything in `types` turns off automatic `@types/*` inclusion, so add
+what the frontend needs (`"types": ["node", "../../api/.kickjs/types/kick__client"]`).
+If you'd rather not use a global, import it: `import type { Api } from '../../api/.kickjs/types/kick__client'`.
 
 ### The map describes JSON, not the server's objects
 
@@ -142,102 +104,12 @@ This assumes the default transport: JSON over `fetch`, parsed with `JSON.parse`.
 If your client revives values (`superjson`, a `JSON.parse` reviver that rebuilds
 dates), the runtime types will be richer than the map claims.
 
-### Expansion depth
+### Keeping the map fresh
 
-Deep response types are not cut off at a fixed depth. Named types, recursive
-types, and any type nested deeper than 12 levels inline each get a declaration
-of their own (`interface __Tn` or `type __Tn`), referenced by name, so the
-emitted file stays shallow and the types stay exact.
-
-Each of those depth hoists spends from a per-route budget of 1,000 that bounds
-the work. A type that never repeats, such as a generic that yields a new type
-at every level (`type Deep<T> = { next: Deep<[T]> }`), always exhausts it, and
-a response that nests more than 1,000 distinct types beyond the depth limit
-does too. Such a route is emitted as `unknown` and named in a warning. Raising
-`maxDepth` hoists fewer types; declaring a response schema on the route gives
-an exact type either way.
-
-`maxDepth` sets how deeply types nest inline before they are hoisted:
-
-```ts
-// kick.config.ts
-export default defineConfig({
-  typegen: { client: { maxDepth: 24 } },
-})
-```
-
-It changes the shape of the file and how much of the budget a route spends,
-not the types themselves. The object form is on
-unless you say otherwise, so `{ maxDepth: 24 }` on its own also enables the
-map; `{ enabled: false }` turns it off. Changing the depth changes what is
-emitted, so it invalidates the cache and rebuilds.
-
-::: warning `types` replaces automatic `@types` inclusion
-Listing anything in `types` switches off TypeScript's automatic inclusion of
-every `@types/*` package. If your frontend relies on that, name what it needs
-alongside the map: `"types": ["node", "../../api/.kickjs/types/kick__client"]`.
-:::
-
-### The alternatives
-
-**`include`**, if you would rather not touch `types` at all:
-
-```json
-{ "include": ["src", "../../api/.kickjs/types/kick__client.d.ts"] }
-```
-
-The difference is what happens when the file has not been generated. A `types`
-entry reports `TS2688: Cannot find type definition file`, which is the useful
-failure for something your app depends on. An `include` entry tolerates it
-silently, and `KickClientApi` simply fails to resolve — better for a repo where
-the map is not always present.
-
-**An explicit import**, if you would rather have no global at all. The same file
-exports the type:
-
-```ts
-import type { Api } from '../../api/.kickjs/types/kick__client'
-
-export const api = createClient<Api>({ baseUrl: '/api/v1' })
-```
-
-Every entry that resolves carries the same type as the ambient map — it is
-produced by resolving that map, not by inferring a second time — so moving a
-frontend across changes no call sites, whichever wiring you pick.
-
-::: tip Why `KickClientApi` and not `KickApi`
-`kick__routes.ts` already declares a global `KickApi`, and both files live in
-`.kickjs/types`, which the server's own tsconfig includes. Sharing the name
-makes the **server** stop compiling with `TS2300: Duplicate identifier`. The two
-maps coexist under separate names, and a frontend only ever sees this one.
-:::
-
-`kick typegen --check` gates staleness in CI, exactly as with the other
-generated files.
-
-::: warning Read the warnings on a generation run
-A route the resolver cannot resolve is **skipped with a warning**, not guessed
-at, so a run that printed warnings produced a map that is a _subset_ of
-`KickRoutes.Api` — the types in it are still exact, but a route may be missing
-and a call to it will not compile. Treat a warning as an incomplete refresh:
-fix what it names and re-run, and keep `kick typegen --check` in CI so an
-incomplete map cannot be committed unnoticed.
-:::
-
-::: warning Not refreshed by `kick dev`
-Resolving these types builds a full TypeScript program over the server, which is
-a build-step cost rather than a per-save one — so `kick dev` leaves this one
-file alone while everything else in `.kickjs/types/` keeps updating on save.
-Re-run `kick typegen` after changing a response shape. The ambient
-`KickRoutes.Api` the server itself uses is unaffected.
-:::
-
-::: tip Needs a compiler API
-This uses TypeScript's compiler API, an optional peer dependency. TypeScript 7
-ships no JS compiler API at all, so install the compatibility package there:
-`pnpm add -D @typescript/typescript6`. Without one, `kick typegen` prints a
-warning and skips just this file.
-:::
+- **`kick dev` doesn't refresh it** — building it is slow on big apps. Run `kick typegen` after changing a response shape, and keep `kick typegen --check` in CI.
+- **Read the warnings.** A route it can't resolve is skipped with a warning, so calls to it won't compile until you fix what the warning names.
+- **Needs TypeScript's compiler API.** On TypeScript 7, `pnpm add -D @typescript/typescript6`; without it the map is skipped with a warning.
+- **Very deep or recursive response types** may come out as `unknown` (with a warning). Declare a response schema on that route, or raise the nesting limit: `typegen: { client: { maxDepth: 24 } }`.
 
 ## baseUrl and route keys
 
@@ -252,7 +124,7 @@ same client:
 
 ```ts
 import { createRpc } from '@forinda/kickjs-client'
-import { kickRpc } from './server-types' // re-export of .kickjs/types/kick__routes
+import { kickRpc } from './server-types' // re-exported from the server's generated types
 
 const rpc = createRpc(api, kickRpc)
 

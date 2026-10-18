@@ -53,7 +53,7 @@ export const RequireRole = defineHttpContextDecorator.withParams<{
 })
 
 // Usage — params are typed, ordering is topological, typos in
-// `dependsOn` keys are caught by `kick typegen`'s ContextKeys registry.
+// `dependsOn` keys are compile errors once `kick typegen` has run.
 @RequireRole({ roles: ['admin', 'manager'] })
 @Get('/dashboard')
 dashboard(ctx: RequestContext) { /* ctx.get('user') is non-null here */ }

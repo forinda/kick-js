@@ -394,7 +394,7 @@ SQLite and MySQL keep less type information than the schema had — `uuid()` com
 
 ## kick typegen
 
-With `dbCliPlugin` mounted, `kick typegen` (which `kick dev` runs on every save) also writes `.kickjs/types/kick__db.d.ts`: the row types for an injected `KickDbClient`, and the relation names `db.query … { with }` accepts. Run it after changing `relations()` if the editor doesn't see the new relation — [Schema Types](../db-schema-types.md).
+With `dbCliPlugin` mounted, `kick typegen` (which `kick dev` runs on every save) also types the rows of an injected `KickDbClient` and the relation names `db.query … { with }` accepts. Run it after changing `relations()` if the editor doesn't see the new relation — [Schema Types](../db-schema-types.md).
 
 ## Related
 

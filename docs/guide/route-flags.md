@@ -216,31 +216,16 @@ Keep predicates cheap — they run per request, per consumer.
 ## Type safety: declare your flags
 
 Flag names are plain strings by default, which means a typo is a flag that silently never matches.
-Declare them once and every use narrows — the same `ContextMeta` mechanism [context
-decorators](./context-decorators.md) use:
-
-**`kick typegen` writes this for you.** It scans every `defineRouteFlag('name')` call and emits
-the registry to `.kickjs/types/kick__route-flags.d.ts` — so declaring a flag is the only step:
+`kick typegen` (run by `kick dev` on save) picks up every `defineRouteFlag('name')` call under `src/` (or `typegen.srcDir`), so
+declaring a flag is the only step:
 
 ```ts
-// src/flags.ts — this is all you write
+// src/flags.ts
 export const Public = defineRouteFlag('auth.public')
 export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
 ```
 
-```ts
-// .kickjs/types/kick__route-flags.d.ts — generated, on every `kick dev` save
-declare module '@forinda/kickjs' {
-  interface KickRouteFlags {
-    'auth.public': true
-    'rate.limit': { rpm: number }
-  }
-}
-```
-
-A bare flag registers as `true`; one declared with an explicit value type registers that type. You
-can also hand-write the augmentation if you prefer — the generated file is a normal declaration
-merge — but there is rarely a reason to.
+A bare flag's value is `true`; one declared with a generic has that type.
 
 Three things switch on at once:
 
@@ -257,12 +242,11 @@ rateLimitGuard({ exemptWhen: 'auth.pubic' }) // tsc error, in every consumer
 call site rather than at 3am.
 
 ::: tip It stays optional
-`KickRouteFlags` is empty until you augment it, and everything falls back to plain `string` while
-it is — a project that never declares a flag keeps compiling. The narrowing switches on with the
-first declaration, and you can adopt it one flag at a time.
+A project that never declares a flag keeps compiling — names fall back to plain `string`. The
+narrowing switches on with the first declaration, and you can adopt it one flag at a time.
 :::
 
-The framework declares nothing in this registry. `auth.public` above is a name you chose — see
+The framework declares no flags itself. `auth.public` above is a name you chose — see
 [Naming](#naming).
 
 Two constraints on what a flag can be:
