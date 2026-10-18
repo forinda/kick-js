@@ -150,6 +150,8 @@ function safeRead(filepath: string): string | null {
   }
 }
 
+const FILE_LISTS = ['include', 'exclude'] as const
+
 /** Depth cap for `extends` chains — well past any real-world config. */
 const MAX_EXTENDS_DEPTH = 16
 
@@ -241,7 +243,13 @@ function loadTsConfigFrom(filePath: string, seen: Set<string>): any | null {
   // Mutating accumulator rather than re-spreading per iteration — later
   // entries override earlier ones, which is the same result.
   const inherited: Record<string, any> = {}
-  let inheritedInclude: unknown
+  // `include` / `exclude`, unlike compilerOptions, are replaced, not merged,
+  // and their patterns are relative to the config that declares them — so
+  // each carries that config's directory along (`includeBase`, `excludeBase`).
+  const lists: Record<string, any> = {}
+  for (const key of FILE_LISTS) {
+    if (cfg[key] !== undefined) cfg[`${key}Base`] = dirname(filePath)
+  }
   for (const ext of parents) {
     if (typeof ext !== 'string') continue
     const parentPath = resolveExtends(dirname(filePath), ext)
@@ -249,12 +257,19 @@ function loadTsConfigFrom(filePath: string, seen: Set<string>): any | null {
     const parent = loadTsConfigFrom(parentPath, seen)
     if (!parent) continue
     Object.assign(inherited, parent.compilerOptions)
-    if (parent.include !== undefined) inheritedInclude = parent.include
+    for (const key of FILE_LISTS) {
+      if (parent[key] === undefined) continue
+      lists[key] = parent[key]
+      lists[`${key}Base`] = parent[`${key}Base`]
+    }
   }
 
   cfg.compilerOptions = { ...inherited, ...cfg.compilerOptions }
-  // `include`, unlike compilerOptions, is replaced, not merged.
-  if (cfg.include === undefined && inheritedInclude !== undefined) cfg.include = inheritedInclude
+  for (const key of FILE_LISTS) {
+    if (cfg[key] !== undefined || lists[key] === undefined) continue
+    cfg[key] = lists[key]
+    cfg[`${key}Base`] = lists[`${key}Base`]
+  }
   return cfg
 }
 
@@ -861,8 +876,22 @@ export function checkDiCopy(ctx: DoctorContext): DoctorResult | null {
 export function checkTypegenInclude(ctx: DoctorContext): DoctorResult | null {
   if (!ctx.tsconfig || !existsSync(join(ctx.cwd, '.kickjs', 'types'))) return null
   const name = 'tsconfig includes typegen output'
-  const include: unknown[] = Array.isArray(ctx.tsconfig.include) ? ctx.tsconfig.include : []
-  const entries = include.filter((p): p is string => typeof p === 'string' && p.includes('.kickjs'))
+  // Patterns as paths from the project root: each is relative to the config
+  // that declared it, which for an inherited list is not this one.
+  const fromRoot = (key: 'include' | 'exclude'): string[] => {
+    const list: unknown = ctx.tsconfig[key]
+    const base: string = ctx.tsconfig[`${key}Base`] ?? ctx.cwd
+    if (!Array.isArray(list)) return []
+    return list
+      .filter((p): p is string => typeof p === 'string')
+      .map((p) => relative(ctx.cwd, resolve(base, p)).replace(/\\/g, '/'))
+  }
+  // A pattern under .kickjs/types, or one under .kickjs that reaches it.
+  const reaches = (p: string) => /^\.kickjs\/(types(\/|$)|\*\*)/.test(p)
+  // An exclude that drops the whole directory, not a file inside it.
+  const dropsAll = (p: string) => /^(\*\*\/)?\.kickjs(\/types)?(\/\*\*(\/\*)?|\/\*)?$/.test(p)
+  const entries = fromRoot('include').filter(reaches)
+  const excluded = fromRoot('exclude').find(dropsAll)
   const add =
     'Add ".kickjs/types/**/*.d.ts" and ".kickjs/types/**/*.ts" to "include" in tsconfig.json.'
   if (entries.length === 0) {
@@ -871,6 +900,14 @@ export function checkTypegenInclude(ctx: DoctorContext): DoctorResult | null {
       status: 'warn',
       message: '.kickjs/types is not in include',
       fix: `${add} Without them, the route, env and DI types from \`kick typegen\` don't apply.`,
+    }
+  }
+  if (excluded) {
+    return {
+      name,
+      status: 'warn',
+      message: `excluded by "${excluded}"`,
+      fix: `Remove "${excluded}" from "exclude" in tsconfig.json — it drops the types \`kick typegen\` writes.`,
     }
   }
   if (entries.every((p) => p.endsWith('.d.ts'))) {

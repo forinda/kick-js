@@ -228,6 +228,36 @@ describe('checkTypegenInclude', () => {
     expect(r?.message).toBe("rootDir: 'src'")
   })
 
+  it('only counts patterns under .kickjs/types, and warns on an exclude that drops it', () => {
+    const dir = tempProject(typegen)
+    const other = checkTypegenInclude(
+      ctx(dir, withTs({ include: ['src', '.kickjs/other/**/*.ts'] })),
+    )
+    expect(other?.message).toBe('.kickjs/types is not in include')
+    const include = ['src', '.kickjs/types/**/*.d.ts', '.kickjs/types/**/*.ts']
+    for (const exclude of ['.kickjs', '**/.kickjs/**', '.kickjs/types/**']) {
+      const r = checkTypegenInclude(ctx(dir, withTs({ include, exclude: [exclude] })))
+      expect(r?.message).toBe(`excluded by "${exclude}"`)
+    }
+    // A file inside it, not the directory.
+    const narrow = checkTypegenInclude(
+      ctx(dir, withTs({ include, exclude: ['.kickjs/types/old/**'] })),
+    )
+    expect(narrow?.status).toBe('pass')
+  })
+
+  it("resolves an inherited include against the parent config's directory", async () => {
+    const dir = tempProject({
+      ...typegen,
+      // Means config/.kickjs/types to tsc — not this app's generated types.
+      'config/tsconfig.base.json':
+        '{ "include": ["src", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"] }',
+      'tsconfig.json': '{ "extends": "./config/tsconfig.base.json" }',
+    })
+    const r = (await runChecks(dir)).find((x) => x.name === 'tsconfig includes typegen output')
+    expect(r?.message).toBe('.kickjs/types is not in include')
+  })
+
   it('reads include inherited through extends', async () => {
     const dir = tempProject({
       ...typegen,
