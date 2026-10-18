@@ -335,7 +335,7 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
             })
           } else {
             const value = String(part.value)
-            count(part.fieldname.length + value.length)
+            count(Buffer.byteLength(part.fieldname) + Buffer.byteLength(value))
             fields.push([part.fieldname, value])
           }
         }
