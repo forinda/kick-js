@@ -22,7 +22,12 @@ import { validate } from '../middleware/validate'
 import { publishMatchedRoute } from '../runtime'
 import { buildUploadMiddleware } from '../middleware/upload'
 import type { ConnectHandler } from '../connect'
-import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from '../body-policy'
+import {
+  EXPRESS_JSON_TYPES,
+  hasPrototypeKey,
+  prototypeKeyError,
+  rejectUnsupportedBody,
+} from '../body-policy'
 import { withPrecompressed } from './precompressed'
 import { EXPRESS_CAPABILITIES } from './express-lazy'
 import type {
@@ -56,9 +61,15 @@ function expressRouter(entries: RouteEntry[]): Router {
 
     // Publish the matched route first, so every later step — validation,
     // upload, middleware, contributors, handler — reads the same `ctx.route`.
-    handlers.push((req: Request, _res: Response, next: NextFunction) => {
+    // A body key that could rewrite a prototype is refused before any of the
+    // app's code sees it — here for the app's body parsers, and again after
+    // the upload step for multer's multipart fields.
+    const refusePrototypeKeys: RequestHandler = (req, _res, next) =>
+      next(hasPrototypeKey(req.body) ? prototypeKeyError() : undefined)
+
+    handlers.push((req: Request, res: Response, next: NextFunction) => {
       publishMatchedRoute(req, entry)
-      next()
+      refusePrototypeKeys(req, res, next)
     })
 
     // Context Contributor pipeline (#107) — runs, then advances the chain
@@ -88,7 +99,7 @@ function expressRouter(entries: RouteEntry[]): Router {
 
     // @FileUpload — auto-attach upload middleware from metadata.
     if (entry.meta.upload) {
-      handlers.push(buildUploadMiddleware(entry.meta.upload))
+      handlers.push(buildUploadMiddleware(entry.meta.upload), refusePrototypeKeys)
     }
 
     // Class + method middleware — wrapped as Express middleware with error catching.

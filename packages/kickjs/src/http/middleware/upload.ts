@@ -42,7 +42,19 @@ export {
   type UploadStorageEngine,
   type RawUploadPart,
 } from './upload-config'
-import { buildFileTypeFilter, type UploadStorageEngine } from './upload-config'
+import { Transform, type Writable } from 'node:stream'
+import { tooLarge } from '../body-policy'
+import {
+  MAX_UPLOAD_FIELDS,
+  UPLOAD_FIELDS_ALLOWANCE,
+  buildFileTypeFilter,
+  normalizeOriginalName,
+  serverFileName,
+  tooManyFiles,
+  uploadLimits,
+  type UploadedFile,
+  type UploadStorageEngine,
+} from './upload-config'
 
 /**
  * Upload options for the middleware.
@@ -64,10 +76,22 @@ export interface UploadOptions extends BaseUploadOptions {
  * a server fault on Express while Fastify and h3 answered 413. The message is
  * matched to `applyUploadConfig` so the response does not depend on the engine.
  */
-function translateMulterErrors(mw: RequestHandler, options: UploadOptions): RequestHandler {
+function translateMulterErrors(
+  mw: RequestHandler,
+  options: UploadOptions,
+  files?: { field: string; max: number },
+): RequestHandler {
   const maxSize = options.maxSize ?? 5 * 1024 * 1024
   return (req, res, next) => {
     mw(req, res, (err?: unknown) => {
+      // multer reports one file more than the field takes as an unexpected one.
+      if (
+        files &&
+        (err as { code?: string } | undefined)?.code === 'LIMIT_UNEXPECTED_FILE' &&
+        (err as { field?: string }).field === files.field
+      ) {
+        return next(tooManyFiles(files.max))
+      }
       if (err && (err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
         const name = (err as { field?: string }).field ?? 'file'
         return next(
@@ -77,14 +101,36 @@ function translateMulterErrors(mw: RequestHandler, options: UploadOptions): Requ
           ),
         )
       }
+      if (!err) {
+        try {
+          nameUploads(req as { file?: unknown; files?: unknown }, options)
+        } catch (error) {
+          return next(error as never)
+        }
+      }
       next(err as never)
     })
+  }
+}
+
+/**
+ * The names every engine gives an upload: the client's name normalized, and a
+ * server-side `filename` — kept when disk storage already wrote the file under one.
+ */
+function nameUploads(req: { file?: unknown; files?: unknown }, options: UploadOptions) {
+  const files = [req.file, ...(Array.isArray(req.files) ? req.files : [])]
+  for (const file of files as Array<UploadedFile | undefined>) {
+    if (!file) continue
+    file.originalname = normalizeOriginalName(file.originalname)
+    file.filename ??= serverFileName(file, options)
   }
 }
 
 function createMulter(options: UploadOptions) {
   const limits: MulterOptions['limits'] = {
     fileSize: options.maxSize ?? 5 * 1024 * 1024,
+    fields: MAX_UPLOAD_FIELDS,
+    fieldSize: UPLOAD_FIELDS_ALLOWANCE,
   }
 
   let fileFilter: MulterOptions['fileFilter'] | undefined
@@ -110,6 +156,9 @@ function createMulter(options: UploadOptions) {
 
   const multerOptions: MulterOptions = {
     limits,
+    // busboy reads a part's filename as latin1 unless told otherwise, so a
+    // UTF-8 name — 中文, an emoji — arrived as mojibake ("ä¸­æ").
+    defParamCharset: 'utf8',
     ...(fileFilter ? { fileFilter } : {}),
     ...(options.storage ? { storage: options.storage } : {}),
     ...(options.dest ? { dest: options.dest } : {}),
@@ -178,9 +227,47 @@ function bothConventions(handler: RequestHandler): RequestHandler {
   }) as RequestHandler
 }
 
+/**
+ * Hold a multipart body to `limit` bytes while multer reads it: by
+ * Content-Length up front, and counted as it streams for a body that doesn't
+ * declare one. multer has a per-file and per-field size but no total, so
+ * without this a request could carry any number of fields.
+ */
+function capBody(mw: RequestHandler, limit: number): RequestHandler {
+  return (req, res, next) => {
+    if (Number(req.headers['content-length']) > limit) return next(tooLarge(limit))
+    if (typeof req.pipe !== 'function') return mw(req, res, next)
+    const pipe = req.pipe.bind(req)
+    // multer reads the request with `req.pipe(busboy)`; count what passes.
+    req.pipe = (<T extends NodeJS.WritableStream>(destination: T): T => {
+      let received = 0
+      const counter = new Transform({
+        transform(chunk: Buffer, _encoding, done) {
+          received += chunk.length
+          if (received <= limit) return done(null, chunk)
+          // busboy's error reaches multer, which hands it to `next`.
+          if (received - chunk.length <= limit) {
+            ;(destination as unknown as Writable).destroy(tooLarge(limit))
+          }
+          done()
+        },
+      })
+      pipe(counter)
+      return counter.pipe(destination)
+    }) as typeof req.pipe
+    mw(req, res, next)
+  }
+}
+
 function single(fieldName: string, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.single(fieldName), options))
+  const { total } = uploadLimits({ mode: 'single', maxSize: options.maxSize })
+  return bothConventions(
+    capBody(
+      translateMulterErrors(m.single(fieldName), options, { field: fieldName, max: 1 }),
+      total,
+    ),
+  )
 }
 
 /**
@@ -188,7 +275,16 @@ function single(fieldName: string, options: UploadOptions = {}): RequestHandler 
  */
 function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.array(fieldName, maxCount), options))
+  const { total } = uploadLimits({ mode: 'array', maxSize: options.maxSize, maxCount })
+  return bothConventions(
+    capBody(
+      translateMulterErrors(m.array(fieldName, maxCount), options, {
+        field: fieldName,
+        max: maxCount,
+      }),
+      total,
+    ),
+  )
 }
 
 /**
@@ -196,7 +292,8 @@ function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): R
  */
 function none(options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return bothConventions(translateMulterErrors(m.none(), options))
+  const { total } = uploadLimits({ mode: 'none' })
+  return bothConventions(capBody(translateMulterErrors(m.none(), options), total))
 }
 
 /**
@@ -250,6 +347,7 @@ export function buildUploadMiddleware(config: FileUploadConfig): RequestHandler 
   if (config.maxSize) options.maxSize = config.maxSize
   if (config.allowedTypes) options.allowedTypes = config.allowedTypes
   if (config.customMimeMap) options.customMimeMap = config.customMimeMap
+  if (config.rename) options.rename = config.rename
 
   const fieldName = config.fieldName ?? 'file'
 

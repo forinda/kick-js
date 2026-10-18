@@ -200,24 +200,24 @@ export function parseByteSize(value: string | number): number {
   return Math.floor(Number(match[1]) * BYTE_UNITS[(match[2] ?? 'b').toLowerCase()])
 }
 
-function tooLarge(limit: number): HttpException {
+/** The 413 for a body past `limit` bytes. */
+export function tooLarge(limit: number): HttpException {
   return new HttpException(413, `Request body is larger than the ${limit}-byte limit`)
 }
 
 /**
- * Read a web `Request` body as text, refusing more than `limit` bytes with a
- * 413 — from `Content-Length` before reading, and while streaming for a body
- * that doesn't declare one (or declares less than it sends).
+ * Read a web `Request` body, refusing more than `limit` bytes with a 413 —
+ * from `Content-Length` before reading, and while streaming for a body that
+ * doesn't declare one (or declares less than it sends).
  */
-export async function readBodyText(request: Request, limit: number): Promise<string> {
+export async function readBodyBytes(request: Request, limit: number): Promise<Uint8Array> {
   const declared = Number(request.headers.get('content-length'))
   if (declared > limit) throw tooLarge(limit)
-  if (!request.body) return ''
+  if (!request.body) return new Uint8Array(0)
 
   const reader = request.body.getReader()
-  const decoder = new TextDecoder()
+  const chunks: Uint8Array[] = []
   let size = 0
-  let text = ''
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
@@ -226,9 +226,20 @@ export async function readBodyText(request: Request, limit: number): Promise<str
       await reader.cancel().catch(() => {})
       throw tooLarge(limit)
     }
-    text += decoder.decode(value, { stream: true })
+    chunks.push(value)
   }
-  return text + decoder.decode()
+  const bytes = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
+}
+
+/** {@link readBodyBytes}, decoded as UTF-8. */
+export async function readBodyText(request: Request, limit: number): Promise<string> {
+  return new TextDecoder().decode(await readBodyBytes(request, limit))
 }
 
 /**
@@ -237,14 +248,57 @@ export async function readBodyText(request: Request, limit: number): Promise<str
  * what Express's form parser does.
  */
 export function parseForm(raw: string): Record<string, string | string[]> {
-  // A Map, then fromEntries: assigning keys onto a plain object would let a
-  // `__proto__` field set the result's prototype.
+  return formFields(new URLSearchParams(raw))
+}
+
+/**
+ * Form fields → object, a repeated name becoming an array — urlencoded bodies
+ * and multipart fields alike. A Map, then fromEntries: assigning keys onto a
+ * plain object would let a `__proto__` field set the result's prototype, or
+ * vanish; this way it is an own key, which {@link hasPrototypeKey} refuses.
+ */
+export function formFields(
+  pairs: Iterable<readonly [string, string]>,
+): Record<string, string | string[]> {
   const fields = new Map<string, string | string[]>()
-  for (const [key, value] of new URLSearchParams(raw)) {
+  for (const [key, value] of pairs) {
     const prev = fields.get(key)
     if (prev === undefined) fields.set(key, value)
     else if (Array.isArray(prev)) prev.push(value)
     else fields.set(key, [prev, value])
   }
   return Object.fromEntries(fields)
+}
+
+/**
+ * Whether parsed input carries a key that can rewrite a prototype: `__proto__`
+ * anywhere, or `constructor.prototype`. A body with one is refused on every
+ * engine, as Fastify's parsers already do. Harmless while it sits in the body,
+ * it turns `Object.assign(target, ctx.body)` or a naive deep merge into
+ * prototype pollution.
+ */
+export function hasPrototypeKey(value: unknown): boolean {
+  const pending: unknown[] = [value]
+  const seen = new Set<object>()
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (current === null || typeof current !== 'object' || seen.has(current)) continue
+    // Bytes (a raw body) have no keys worth walking.
+    if (ArrayBuffer.isView(current)) continue
+    seen.add(current)
+    if (Object.hasOwn(current, '__proto__')) return true
+    const ctor: unknown = Object.hasOwn(current, 'constructor')
+      ? (current as { constructor: unknown }).constructor
+      : undefined
+    if (ctor !== null && typeof ctor === 'object' && Object.hasOwn(ctor, 'prototype')) return true
+    for (const key of Object.keys(current)) pending.push((current as Record<string, unknown>)[key])
+  }
+  return false
+}
+
+/** The 400 for a body {@link hasPrototypeKey} refuses. */
+export function prototypeKeyError(): HttpException {
+  return HttpException.badRequest(
+    'A body key that sets a prototype (__proto__, constructor.prototype) is not allowed',
+  )
 }
