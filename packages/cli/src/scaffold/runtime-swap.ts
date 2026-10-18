@@ -67,6 +67,7 @@ export function swapRuntime(
       runtime.shorthand ||
       value.type !== 'CallExpression' ||
       value.callee?.type !== 'Identifier' ||
+      oldLocal === undefined ||
       value.callee.name !== oldLocal
     ) {
       const text = result.source.slice(runtime.start, runtime.end)
@@ -226,8 +227,11 @@ function removeExpressJson(source: string, file: string): string {
   return source.slice(0, start) + source.slice(end)
 }
 
-/** The local name this file imports `name` from `from` under; `name` when it doesn't. */
-function importedAs(program: Node, from: string, name: string): string {
+/**
+ * The local name this file imports `name` from `from` under; undefined when it
+ * doesn't import it from there — a same-named function from elsewhere isn't it.
+ */
+function importedAs(program: Node, from: string, name: string): string | undefined {
   for (const node of program.body as Node[]) {
     if (node.type !== 'ImportDeclaration' || node.source.value !== from) continue
     for (const specifier of node.specifiers as Node[]) {
@@ -235,7 +239,7 @@ function importedAs(program: Node, from: string, name: string): string {
       if (specifier.type === 'ImportSpecifier' && imported === name) return specifier.local.name
     }
   }
-  return name
+  return undefined
 }
 
 /** Drop `name` from `import { … } from 'from'` when the file no longer uses it. */

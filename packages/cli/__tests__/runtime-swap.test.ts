@@ -61,6 +61,16 @@ describe('swapRuntime', () => {
     expect(result.source).not.toMatch(/\ber\b|expressRuntime/)
   })
 
+  it('stops for a same-named factory imported from somewhere else', () => {
+    const source = express.replace(
+      "import { bootstrap, requestId, requestLogger, helmet, cors, expressRuntime } from '@forinda/kickjs'",
+      "import { bootstrap, requestId, requestLogger, helmet, cors } from '@forinda/kickjs'\nimport { expressRuntime } from './custom-runtime'",
+    )
+    const result = swapRuntime(source, 'express', 'h3')
+    expect(result.blocked).toBe(true)
+    expect(result.source).toBe(source)
+  })
+
   it("stops, changing nothing, when runtime: isn't a call to the old factory", () => {
     for (const value of ['runtime,', 'runtime: chooseRuntime(),', 'runtime: dev ? a() : b(),']) {
       const source = express.replace('runtime: expressRuntime(),', value)
