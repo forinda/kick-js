@@ -212,8 +212,11 @@ export {
   reactive,
   isRef,
   unref,
+  toRef,
   toRefs,
+  batch,
   type Ref,
+  type RefOptions,
   type ComputedRef,
   type WatchOptions,
 } from './reactivity'
