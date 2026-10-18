@@ -141,7 +141,8 @@ export function resolveMeta(
   // alternate must be absolute, like the canonical.
   const head = new Map<string, HeadTag>()
   for (const t of [...(base.head ?? []), ...(meta.head ?? [])]) {
-    const href = t.tag === 'link' && t.attrs.rel === 'alternate' ? t.attrs.href : undefined
+    const href =
+      t.tag === 'link' && t.attrs.rel?.toLowerCase() === 'alternate' ? t.attrs.href : undefined
     head.set(t.key, href ? { ...t, attrs: { ...t.attrs, href: absolute(href, baseUrl)! } } : t)
   }
 

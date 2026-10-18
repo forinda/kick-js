@@ -330,6 +330,16 @@ describe('h()', () => {
 })
 
 describe('resolveMeta', () => {
+  it('makes an alternate link absolute whatever the case of its rel', async () => {
+    const { resolveMeta } = await import('../src/seo')
+    const meta = resolveMeta(
+      {},
+      { head: [h('link', { rel: 'Alternate', hreflang: 'fr', href: '/fr' })] },
+      { baseUrl: 'https://example.com' },
+    )
+    expect(meta!.head![0]!.attrs.href).toBe('https://example.com/fr')
+  })
+
   it('gives /posts and /posts/ one canonical, without the query', async () => {
     const { resolveMeta } = await import('../src/seo')
     const at = (path: string) =>

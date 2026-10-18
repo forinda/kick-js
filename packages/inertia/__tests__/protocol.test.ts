@@ -56,6 +56,7 @@ function clientBuild(): string {
   mkdirSync(join(dir, 'assets'))
   writeFileSync(join(dir, 'assets', 'main-abc.js'), 'console.log(1)')
   writeFileSync(join(dir, 'assets', 'logo-AbCd1234.svg'), '<svg/>')
+  writeFileSync(join(dir, 'assets', 'app-darkmode.css'), 'body{}')
   // Copied by Vite from public/.
   writeFileSync(join(dir, 'robots.txt'), 'User-agent: *')
   writeFileSync(
@@ -64,7 +65,7 @@ function clientBuild(): string {
       'src/client/main.tsx': {
         file: 'assets/main-abc.js',
         css: ['assets/main-abc.css'],
-        assets: ['assets/logo-AbCd1234.svg'],
+        assets: ['assets/logo-AbCd1234.svg', 'assets/app-darkmode.css'],
         imports: ['_vendor.js'],
       },
       '_vendor.js': { file: 'assets/vendor-def.js' },
@@ -451,6 +452,9 @@ for (const rt of RUNTIMES)
       // No hash in the name: its content can change under the same URL.
       const plain = await request(app.handle.bind(app)).get('/assets/main-abc.js').expect(200)
       expect(plain.headers['cache-control']).not.toMatch(/immutable/)
+      // Eight letters, but a word, not a hash.
+      const word = await request(app.handle.bind(app)).get('/assets/app-darkmode.css').expect(200)
+      expect(word.headers['cache-control']).not.toMatch(/immutable/)
       const robots = await request(app.handle.bind(app)).get('/robots.txt').expect(200)
       expect(robots.headers['cache-control']).not.toMatch(/immutable/)
     })

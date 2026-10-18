@@ -74,8 +74,20 @@ function readManifest(clientDir: string): Record<string, ManifestChunk> {
   >
 }
 
-/** Vite's default `[name]-[hash]`: an 8-character hash before the extension. */
-const HASHED_NAME = /[.-][\w-]{8}\.\w+$/
+/** Vite's default `[name]-[hash]`: an 8-character base64url hash before the extension. */
+const HASHED_NAME = /[.-]([\w-]{8})\.\w+$/
+
+/**
+ * Whether a build file's name carries a hash. Eight characters alone also fit
+ * a word (`app-darkmode.css`), so the segment must have a digit or a capital
+ * past its first letter, which a word rarely has and a hash almost always
+ * does. A hash that misses it only loses the long cache; a word that passes
+ * would be cached for a year.
+ */
+function isHashedName(file: string): boolean {
+  const hash = HASHED_NAME.exec(file)?.[1]
+  return !!hash && /\d|.[A-Z]/.test(hash)
+}
 
 /**
  * URL paths of the content-hashed files in the build manifest. A name without
@@ -86,7 +98,7 @@ export function hashedFiles(clientDir: string): Set<string> {
   const files = new Set<string>()
   for (const chunk of Object.values(readManifest(clientDir))) {
     for (const f of [chunk.file, ...(chunk.css ?? []), ...(chunk.assets ?? [])]) {
-      if (HASHED_NAME.test(f)) files.add(`/${f}`)
+      if (isHashedName(f)) files.add(`/${f}`)
     }
   }
   return files
