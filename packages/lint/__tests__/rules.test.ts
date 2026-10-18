@@ -111,6 +111,12 @@ describe('token-reserved-prefix', () => {
       firstParty: false,
     })
     expect(other).toEqual([])
+    const method = tokenReservedPrefix.check({
+      source: `const FOO = obj.ctn<Foo>('kick/cool/Thing')`,
+      file: 'mycorp/src/types.ts',
+      firstParty: false,
+    })
+    expect(method).toEqual([])
   })
 
   it('does not run on first-party code', () => {
