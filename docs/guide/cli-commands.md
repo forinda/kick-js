@@ -349,16 +349,21 @@ Exit code is `0` on pass-or-warn, `1` on any error.
 
 ### What it checks
 
-| Check                              | Severity if failing | Detects                                                                                                    |
-| ---------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Node version                       | error               | Node version below the framework's minimum (20+)                                                           |
-| `@forinda/kickjs` installed        | error               | Wrong directory, or fresh repo without `kick new`                                                          |
-| `express` installed                | error               | Required peer dep missing (`@forinda/kickjs`'s peer)                                                       |
-| `reflect-metadata` installed       | error               | Decorator runtime polyfill missing                                                                         |
-| tsconfig: `experimentalDecorators` | error               | Decorators won't compile                                                                                   |
-| tsconfig: `emitDecoratorMetadata`  | error               | DI container can't read constructor types                                                                  |
-| env wiring                         | error / warn        | env-init file calls `loadEnv(...)` but the app entry doesn't import it (or imports it AFTER `bootstrap()`) |
-| typegen freshness                  | warn                | `.kickjs/types/` last touched > 60 minutes ago                                                             |
+| Check                              | Severity if failing | Detects                                                                                                                                  |
+| ---------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Node version                       | error               | Node version below the framework's minimum (20+)                                                                                         |
+| `@forinda/kickjs` installed        | error               | Wrong directory, or fresh repo without `kick new`                                                                                        |
+| `express` installed                | error               | The Express runtime without `express` (Fastify and h3 apps skip this)                                                                    |
+| runtime engine                     | error               | Fastify / h3 runtime without its engine packages, or h3 v1                                                                               |
+| upload driver                      | error               | `@FileUpload` / `upload.*` used without the runtime's multipart driver                                                                   |
+| one DI container                   | error / warn        | `@forinda/kickjs-di` listed next to `@forinda/kickjs` — error when the installed copy differs from the one kickjs pins                   |
+| `reflect-metadata` installed       | error               | Decorator runtime polyfill missing                                                                                                       |
+| tsconfig: `experimentalDecorators` | error               | Decorators won't compile                                                                                                                 |
+| tsconfig: `emitDecoratorMetadata`  | error               | DI container can't read constructor types                                                                                                |
+| tsconfig includes typegen output   | warn                | `.kickjs/types` missing from `include`, only its `.d.ts` files included, or `rootDir: 'src'`                                             |
+| env wiring                         | error / warn        | env-init file calls `loadEnvFromSchema(...)` (or `loadEnv(...)`) but the app entry doesn't import it (or imports it AFTER `bootstrap()`) |
+| test env isolation                 | warn                | A `.env` and a test suite but no `.env.test`, so tests read the dev `.env`                                                               |
+| typegen freshness                  | warn                | `.kickjs/types/` last touched > 60 minutes ago                                                                                           |
 
 The env-wiring check looks at multiple common locations — `src/env.ts`, `src/env/index.ts`, `src/config/env.ts`, `src/config/index.ts` — and accepts both relative and `@/` aliased imports.
 
