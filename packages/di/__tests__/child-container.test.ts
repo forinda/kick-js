@@ -66,6 +66,21 @@ describe('Container.createChild', () => {
     expect(bare.resolve(MAILER).name).toBe('child fallback')
   })
 
+  it("keeps the parent's binding ahead of its own fallback after HMR re-creates the class", () => {
+    const make = () =>
+      class Reloaded {
+        readonly from = 'parent'
+      }
+    const Before = make()
+    const root = Container.create()
+    root.register(Before, Before)
+    // Vite re-evaluated the module: same name, new identity.
+    const After = make()
+    const child = root.createChild()
+    child.registerFallback(After, () => ({ from: 'child fallback' }))
+    expect(child.resolve(After).from).toBe('parent')
+  })
+
   it("an override reaches what the child builds; the parent's instances keep the parent's", () => {
     const root = Container.create()
     root.registerInstance(MAILER, { name: 'root' })

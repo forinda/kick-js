@@ -111,7 +111,7 @@ watch(
 
 A callback that throws doesn't break anything else. The error is logged and passed to your `onError` [observers](./observability.md), the write that triggered it still applies, and the other watchers still run. That matters for watchers on `app.status`, which changes during shutdown.
 
-A watcher that writes back to what it watches, or two that keep writing to each other, would never settle. After 100 re-runs within one update, KickJS stops the loop and reports it the same way.
+A watcher that writes back to what it watches, or two that keep writing to each other, would never settle. When an effect re-triggers itself 100 levels deep, KickJS stops the loop and reports it the same way. Long chains of updates, such as a watcher that pushes 1,000 items while another watches the length, run one after another and are never mistaken for a loop.
 
 ### `reactive(object)`
 

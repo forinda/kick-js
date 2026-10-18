@@ -575,11 +575,26 @@ export class Container {
   /** The binding `resolve(token)` uses: a normal registration, else the fallback — a child's, then its parent's. */
   private binding(token: any): Registration | undefined {
     return (
-      this.registrations.get(token) ??
-      (this.parent?.has(token) ? this.parent.binding(token) : undefined) ??
+      this.normalBinding(token) ??
+      (this.parent?.bindsNormally(token) ? this.parent.binding(token) : undefined) ??
       this.fallbacks.get(token) ??
       this.parent?.binding(token)
     )
+  }
+
+  /**
+   * This container's normal registration for `token`: by token, or — for a
+   * class Vite re-evaluated, which has a new identity — by its HMR name.
+   */
+  private normalBinding(token: any): Registration | undefined {
+    const reg = this.registrations.get(token)
+    if (reg || typeof token !== 'function' || !token.name) return reg
+    return this.registrations.get(`__hmr__${token.name}`)
+  }
+
+  /** Whether this container or a parent binds `token` normally — what outranks a child's fallback. */
+  private bindsNormally(token: any): boolean {
+    return this.normalBinding(token) !== undefined || (this.parent?.bindsNormally(token) ?? false)
   }
 
   /**
@@ -656,14 +671,12 @@ export class Container {
   resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
   resolve<T = any>(token: any): T
   resolve<T = any>(token: any): T {
-    let reg = this.registrations.get(token)
     // HMR fallback: when Vite re-evaluates a module, decorated classes get new
-    // identity. Try resolving by class name if the primary token lookup fails.
-    if (!reg && typeof token === 'function' && token.name) {
-      reg = this.registrations.get(`__hmr__${token.name}`)
-    }
-    // A child: its own binding, then its parent's; its own fallback, then its parent's.
-    if (!reg && this.parent?.has(token)) return this.parent.resolve<T>(token)
+    // identity — normalBinding() also looks the class up by name.
+    let reg = this.normalBinding(token)
+    // A child: its own binding, then its parent's (by HMR name too); its own
+    // fallback, then its parent's.
+    if (!reg && this.parent?.bindsNormally(token)) return this.parent.resolve<T>(token)
     reg ??= this.fallbacks.get(token)
     if (!reg && this.parent) return this.parent.resolve<T>(token)
     if (!reg) {

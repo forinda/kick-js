@@ -104,13 +104,15 @@ function schedule(effect: Effect): void {
 }
 
 /**
- * How many times one effect may be re-triggered within a single synchronous
- * cascade before it is stopped as a loop — a watcher that writes to what it
- * watches, or two that write to each other.
+ * How deep one effect may re-enter itself — triggered again while it is still
+ * running, as a watcher that writes to what it watches does, or two that write
+ * to each other — before it is stopped as a loop. Runs one after another
+ * (a watcher pushing 1000 items, each re-running another watcher) never nest,
+ * so they don't count.
  */
-const MAX_RERUNS = 100
-let cascadeDepth = 0
-const cascadeRuns = new Map<Effect, number>()
+const MAX_REENTRY = 100
+/** Effects running right now, by how many times each is on the stack. */
+const running = new Map<Effect, number>()
 
 const log = createLogger('Reactivity')
 
@@ -128,27 +130,24 @@ function report(err: unknown): void {
  * triggered it, and every other effect it triggered, carry on regardless.
  */
 function runEffect(effect: Effect): void {
-  const runs = (cascadeRuns.get(effect) ?? 0) + 1
-  if (runs > MAX_RERUNS) {
-    if (runs === MAX_RERUNS + 1) {
-      cascadeRuns.set(effect, runs)
-      report(
-        new Error(
-          `Reactivity loop: an effect was re-triggered ${MAX_RERUNS} times in one update — ` +
-            'a watcher that writes to what it watches, or two that write to each other. Stopped it.',
-        ),
-      )
-    }
+  const depth = (running.get(effect) ?? 0) + 1
+  if (depth > MAX_REENTRY) {
+    report(
+      new Error(
+        `Reactivity loop: an effect re-triggered itself ${MAX_REENTRY} levels deep — ` +
+          'a watcher that writes to what it watches, or two that write to each other. Stopped it.',
+      ),
+    )
     return
   }
-  cascadeRuns.set(effect, runs)
-  cascadeDepth++
+  running.set(effect, depth)
   try {
     effect()
   } catch (err) {
     report(err)
   } finally {
-    if (--cascadeDepth === 0) cascadeRuns.clear()
+    if (depth === 1) running.delete(effect)
+    else running.set(effect, depth - 1)
   }
 }
 
@@ -422,7 +421,12 @@ export function watch<T>(
   oldValue = runTracked(job, getter)
 
   if (options?.immediate) {
-    callback(oldValue, undefined as T)
+    // Reported like any other run: watch() still returns its stop function.
+    try {
+      callback(oldValue, undefined as T)
+    } catch (err) {
+      report(err)
+    }
   }
 
   return () => {

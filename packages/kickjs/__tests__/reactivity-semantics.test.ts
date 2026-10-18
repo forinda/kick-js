@@ -186,4 +186,44 @@ describe('loop detection', () => {
     for (let i = 1; i <= 150; i++) m.value = i
     expect(seen).toHaveLength(150)
   })
+
+  it('lets a long cascade through: runs one after another are not a loop', () => {
+    const capture = captureErrors()
+    release = capture.release
+    const hosts = ref<string[]>([])
+    const list = reactive<string[]>([])
+    const bag = reactive<Record<string, number>>({})
+    const lengths: number[] = []
+    watch(
+      () => list.length,
+      (n) => lengths.push(n),
+    )
+    const keyCount = computed(() => Object.keys(bag).length)
+    // A watcher whose callback makes 150 writes others depend on.
+    watch(hosts, (all) => {
+      for (const h of all) list.push(h)
+      for (const h of all) bag[h] = 1
+    })
+    hosts.value = Array.from({ length: 150 }, (_, i) => `h${i}`)
+
+    expect(capture.errors).toEqual([])
+    expect(lengths).toHaveLength(150)
+    expect(keyCount.value).toBe(150)
+  })
+
+  it('an immediate callback that throws is reported, and watch() still returns', () => {
+    const capture = captureErrors()
+    release = capture.release
+    const n = ref(1)
+    const stop = watch(
+      n,
+      () => {
+        throw new Error('immediate boom')
+      },
+      { immediate: true },
+    )
+    expect(typeof stop).toBe('function')
+    expect((capture.errors[0] as Error).message).toBe('immediate boom')
+    stop()
+  })
 })

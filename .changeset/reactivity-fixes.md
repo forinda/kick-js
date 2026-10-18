@@ -15,4 +15,4 @@ Reactivity fixes and additions.
 
 - **`batch(fn)`** groups writes, so watchers and subscribers run once, after it, with the final values. Computed values stay current inside a batch.
 - **`ref(value, { deep: true })`** makes changes inside an object value notify too.
-- **Loop detection:** an effect re-triggered 100 times within one update, such as a watcher writing to what it watches, is stopped and reported instead of overflowing the stack.
+- **Loop detection:** an effect that re-triggers itself 100 levels deep, such as a watcher writing to what it watches, is stopped and reported instead of overflowing the stack. Long chains of updates, which run one after another, are not affected.
