@@ -50,6 +50,8 @@ request unchecked: allow-list it, or accept only a same-site path (one leading `
 not `//`). Otherwise the route is an open redirect.
 :::
 
+To move an existing app to another engine, run [`kick runtime <express|fastify|h3>`](./cli-commands.md#kick-runtime). It updates the entry file, `kick.config.ts` and the packages, and lists any code that uses the old engine directly.
+
 ## Fastify
 
 Fastify ships as a **subpath** of the core package — there's no separate npm
