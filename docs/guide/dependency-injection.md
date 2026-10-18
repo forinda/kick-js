@@ -65,6 +65,8 @@ class OrderService {
 }
 ```
 
+`ctn` is a short alias of `createToken`, the same function: `const MAILER = ctn<Mailer>('app/mailer')`. kick-lint holds it to the same token-naming rules.
+
 ## Property Injection
 
 Use `@Autowired` for lazy property injection. For token-based property injection, pass the token to `@Autowired`:
@@ -471,6 +473,10 @@ Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.
 ```
 
 If a singleton needs request-scoped data, resolve it explicitly inside a method call rather than injecting it as a dependency.
+
+## Child containers
+
+For overrides that apply to one tenant, job or test only, `container.createChild()` gives a container that resolves its own bindings first and falls back to the app's. See [Child containers](../api/di.md#child-containers) for the rules.
 
 ## Circular Dependency Detection
 

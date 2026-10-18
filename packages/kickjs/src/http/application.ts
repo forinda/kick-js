@@ -904,7 +904,7 @@ export class Application {
     this.observers = setObservers([...this.adapters, ...this.plugins])
     installChannelPublisher()
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
-    Container._requestStoreProvider = () => requestStore.getStore() ?? null
+    Container.setRequestStoreProvider(() => requestStore.getStore() ?? null)
   }
 
   /**

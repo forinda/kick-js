@@ -33,7 +33,7 @@ import type { CtxHandler, RouteContributor, RouteEntry, RouteMethod } from './ru
  * empty — direct buildRouteTable()/buildRoutes() callers (mostly tests) see only
  * class + method contributors unless they pass `externalSources` explicitly.
  *
- * Same idiom as `Container._requestStoreProvider`: an internal escape hatch for
+ * Same idiom as `Container.requestStoreProvider`: an internal escape hatch for
  * cross-module wiring without inversion-of-control gymnastics.
  *
  * @internal

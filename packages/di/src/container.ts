@@ -99,21 +99,19 @@ export interface ContainerChangeEvent {
 export type ContainerChangeListener = (changes: ContainerChangeEvent[]) => void
 
 /**
- * Type-safe registry of string DI tokens. Augmented by `kick typegen` —
- * the generated `.kickjs/types/registry.d.ts` adds entries like:
+ * Type-safe registry of string DI tokens. Augment it so
+ * `container.resolve('UserService')` returns the right type instead of `any`:
  *
  * ```ts
- * declare module '@forinda/kickjs' {
+ * declare module '@forinda/kickjs-di' {
  *   interface KickJsRegistry {
- *     UserService: import('../../src/modules/users/user.service').UserService
+ *     UserService: import('./user.service').UserService
  *   }
  * }
  * ```
  *
- * Once typegen has run, `container.resolve('UserService')` returns the
- * correct type instead of `any`. Class-token resolution
- * (`container.resolve(UserService)`) is already type-safe via the
- * `Constructor<T>` overload and does not need typegen.
+ * Class tokens (`container.resolve(UserService)`) and `createToken<T>()`
+ * tokens are typed already. In KickJS, `kick typegen` writes this augmentation.
  */
 export interface KickJsRegistry {}
 
@@ -146,6 +144,55 @@ function getPersistentStore(): PersistentStore {
  * Persistent state (DB connections, Redis, etc.) is stored on globalThis so
  * it survives both Container.reset() and Vite module re-evaluation.
  */
+/** Builds an error from a stable code and its subject (a token name or env key). */
+export type ErrorFactory = (code: DiErrorCode, subject: string) => Error
+/** Resolves an env key for `@Value`. */
+export type EnvResolver = (key: string) => unknown
+/** One unit of work's REQUEST-scoped state: per-token instances, and values set up front. */
+export interface RequestStore {
+  instances: Map<unknown, unknown>
+  values: Map<unknown, unknown>
+}
+/** The current {@link RequestStore}, or null outside a unit of work. */
+export type RequestStoreProvider = () => RequestStore | null
+/** Prepares one decorated property: returns the getter its reads go through. */
+export type PropertyInjector = (config: any, prop: string) => () => unknown
+
+/**
+ * The container's process-wide hooks, set through `Container.set*`. Kept out
+ * of the class so they're not part of its public shape.
+ */
+const hooks = {
+  logger: defaultLogger as DiLogger,
+  errorFactory: diError as ErrorFactory,
+  envResolver: null as EnvResolver | null,
+  requestStoreProvider: null as RequestStoreProvider | null,
+  propertyInjectors: new Map<string, PropertyInjector>(),
+  /** The decorators module's: flush registrations queued before the container existed. */
+  onReady: null as ((container: Container) => void) | null,
+  /** The decorators module's: re-target and re-seed after a reset. */
+  onReset: null as ((container: Container) => void) | null,
+  /**
+   * The decorators module's: seed a NEWLY CREATED container with the decorator
+   * registrations, without adopting it as the global one. `onReset` does both;
+   * an isolated container must only have the first half, or it would capture
+   * every subsequent decorator registration in the process.
+   */
+  onCreate: null as ((container: Container) => void) | null,
+}
+
+/**
+ * Wire the decorators module into the container's lifecycle. Package-internal:
+ * not exported from the entry point.
+ */
+export function installDecoratorHooks(decoratorHooks: {
+  onReady: (container: Container) => void
+  onReset: (container: Container) => void
+  onCreate: (container: Container) => void
+}): void {
+  Object.assign(hooks, decoratorHooks)
+}
+
 export class Container {
   private static instance: Container
   private registrations = new Map<any, Registration>()
@@ -163,46 +210,6 @@ export class Container {
   private notifyTimer: ReturnType<typeof setTimeout> | null = null
   private static readonly DEBOUNCE_MS = 50
 
-  /** Callback set by the decorators module to flush pending registrations */
-  static _onReady: ((container: Container) => void) | null = null
-  /** Callback invoked on reset so decorators can update their container reference */
-  static _onReset: ((container: Container) => void) | null = null
-
-  /**
-   * Seeds a NEWLY CREATED container with the decorator registrations, without
-   * adopting it as the global one. `_onReset` does both; an isolated container
-   * must only have the first half, or it would capture every subsequent
-   * decorator registration in the process.
-   */
-  static _onCreate: ((container: Container) => void) | null = null
-  /**
-   * Environment resolver for @Value decorator. Set by the unified
-   * `@forinda/kickjs` config layer to return Zod-validated, type-coerced
-   * env values instead of raw process.env strings.
-   */
-  static _envResolver: ((key: string) => any) | null = null
-  /**
-   * Builds the container's errors from a stable code and the token name (or
-   * env key). The default gives a plain `DiError`; kickjs installs one that
-   * returns its catalogued `KickError`.
-   */
-  static _error: (code: DiErrorCode, subject: string) => Error = diError
-  /** Where non-fatal problems go (an async `@PostConstruct`, one that threw). Errors reach `console.error` by default. */
-  static _logger: DiLogger = defaultLogger
-  /**
-   * Extra lazy property injections, keyed by metadata key. For each property
-   * a class stores under that key (a `Map` on the prototype, as `@Value`
-   * does), `prepare(config, prop)` runs once when the class's plan is built
-   * — so it can reject a bad config up front — and returns the getter each
-   * instance's property reads through. kickjs adds `@Asset` this way.
-   */
-  static _propertyInjectors = new Map<string, (config: any, prop: string) => () => unknown>()
-  /**
-   * Request store provider for REQUEST-scoped DI. Set by the HTTP layer
-   * inside `@forinda/kickjs` to return the current request's
-   * AsyncLocalStorage store. Returns { instances: Map, values: Map } or
-   * null if outside a request.
-   */
   /**
    * Whether this container is the global singleton.
    *
@@ -214,9 +221,79 @@ export class Container {
    */
   private isGlobal = false
 
-  static _requestStoreProvider:
-    | (() => { instances: Map<any, any>; values: Map<any, any> } | null)
-    | null = null
+  /** The container a child falls back to; null for a root. */
+  private parent: Container | null = null
+  /** Children, held weakly: one never disposed can still be collected. */
+  private children: Set<WeakRef<Container>> | null = null
+  /**
+   * A child's own keys into the request store, one per token, so its
+   * REQUEST-scoped instances never share the parent's under the same token.
+   */
+  private requestKeys: Map<any, object> | null = null
+
+  /**
+   * Where non-fatal problems go: an async `@PostConstruct`, one that threw.
+   * Default: errors to `console.error`, warnings dropped. Change it with
+   * {@link Container.setLogger}.
+   */
+  static get logger(): DiLogger {
+    return hooks.logger
+  }
+
+  /** Send the container's warnings and errors to `logger`; `null` restores the default. */
+  static setLogger(logger: DiLogger | null): void {
+    hooks.logger = logger ?? defaultLogger
+  }
+
+  /**
+   * Builds the container's errors from a stable code and the token name (or
+   * env key). Default: {@link diError}, a plain `DiError`.
+   */
+  static get errorFactory(): ErrorFactory {
+    return hooks.errorFactory
+  }
+
+  /** Build the container's errors yourself, from their codes; `null` restores the default. */
+  static setErrorFactory(factory: ErrorFactory | null): void {
+    hooks.errorFactory = factory ?? diError
+  }
+
+  /**
+   * Resolves `@Value(key)`. Without one, `@Value` reads `process.env`, then
+   * the declared default.
+   */
+  static get envResolver(): EnvResolver | null {
+    return hooks.envResolver
+  }
+
+  /** Resolve `@Value(key)` through `resolver` — validated, typed config, say; `null` removes it. */
+  static setEnvResolver(resolver: EnvResolver | null): void {
+    hooks.envResolver = resolver
+  }
+
+  /**
+   * Returns the current unit of work's store for `Scope.REQUEST`, or null
+   * outside one. Without a provider, resolving a REQUEST-scoped token throws.
+   */
+  static get requestStoreProvider(): RequestStoreProvider | null {
+    return hooks.requestStoreProvider
+  }
+
+  /** Open `Scope.REQUEST` to the store `provider` returns; `null` removes it. */
+  static setRequestStoreProvider(provider: RequestStoreProvider | null): void {
+    hooks.requestStoreProvider = provider
+  }
+
+  /**
+   * A lazy property decorator of your own. For each property a class stores
+   * under `metadataKey` (a `Map` on the prototype, as `@Value` does),
+   * `prepare(config, prop)` runs once when the class's plan is built — so it
+   * can reject a bad config up front — and returns the getter each instance's
+   * property reads through. Defining a key again replaces it.
+   */
+  static definePropertyInjector(metadataKey: string, prepare: PropertyInjector): void {
+    hooks.propertyInjectors.set(metadataKey, prepare)
+  }
 
   static getInstance(): Container {
     if (!Container.instance) {
@@ -224,9 +301,10 @@ export class Container {
       Container.instance.isGlobal = true
     }
     // Flush any decorator registrations that queued before the container existed
-    if (Container._onReady) {
-      Container._onReady(Container.instance)
-      Container._onReady = null
+    if (hooks.onReady) {
+      const onReady = hooks.onReady
+      hooks.onReady = null
+      onReady(Container.instance)
     }
     return Container.instance
   }
@@ -240,7 +318,7 @@ export class Container {
     Container.instance = new Container()
     Container.instance.isGlobal = true
     // Notify decorators so they update their container reference
-    Container._onReset?.(Container.instance)
+    hooks.onReset?.(Container.instance)
     // Replay persistent registrations from globalThis store
     const store = getPersistentStore()
     for (const { token, factory, scope } of store.factories) {
@@ -297,8 +375,70 @@ export class Container {
     // every @Service / @Repository / @Controller in the process — and
     // `isolated: true` is what the generated docs recommend for test
     // isolation, so the failure reached adopters as `No provider for X`.
-    Container._onCreate?.(container)
+    hooks.onCreate?.(container)
     return container
+  }
+
+  /**
+   * A container that resolves its own bindings first and falls back to this
+   * one for everything else: overrides for one tenant, job or test, without
+   * touching this container.
+   *
+   * - An override reaches what the child itself builds. A class registered
+   *   only here is built here, with this container's bindings — to have the
+   *   child build it with its overrides, register the class in the child too
+   *   (`child.register(Service, Service)`).
+   * - A child's REQUEST-scoped instances are its own, apart from this
+   *   container's in the same request.
+   * - When a binding here is invalidated (HMR), what the child built on it is
+   *   rebuilt on its next resolve.
+   * - `dispose()` detaches the child. One that is never disposed is still
+   *   garbage-collected once nothing references it.
+   */
+  createChild(): Container {
+    const child = new Container()
+    child.parent = this
+    child.requestKeys = new Map()
+    ;(this.children ??= new Set()).add(new WeakRef(child))
+    return child
+  }
+
+  /** Detach a child from its parent and drop the instances it built. */
+  dispose(): void {
+    const parent = this.parent
+    parent?.forEachChild((child, ref) => {
+      if (child === this) parent.children!.delete(ref)
+    })
+    this.parent = null
+    for (const reg of this.registrations.values()) reg.instance = undefined
+    this.registrations.clear()
+    this.fallbacks.clear()
+    this.requestKeys?.clear()
+  }
+
+  private forEachChild(visit: (child: Container, ref: WeakRef<Container>) => void): void {
+    if (!this.children) return
+    for (const ref of this.children) {
+      const child = ref.deref()
+      if (child) visit(child, ref)
+      else this.children.delete(ref)
+    }
+  }
+
+  /** The request-store key for `token`: the token itself for a root, the child's own key for a child. */
+  private requestKey(token: any): any {
+    if (!this.requestKeys) return token
+    let key = this.requestKeys.get(token)
+    if (!key) this.requestKeys.set(token, (key = { token }))
+    return key
+  }
+
+  /** A parent's binding `name` changed: rebuild what this child built on it, and tell its children. */
+  private invalidateDependentsOf(name: string): void {
+    for (const [token, reg] of this.registrations) {
+      if (reg.dependencies.includes(name)) this.invalidate(token)
+    }
+    this.forEachChild((child) => child.invalidateDependentsOf(name))
   }
 
   /** Register a class constructor under the given token */
@@ -428,17 +568,45 @@ export class Container {
   /** A fallback whose singleton is already out there can't be replaced. */
   private assertFallbackUnused(token: any): void {
     if (this.fallbacks.get(token)?.instance !== undefined) {
-      throw Container._error('KICK010', tokenName(token))
+      throw hooks.errorFactory('KICK010', tokenName(token))
     }
   }
 
-  /** The binding `resolve(token)` uses: a normal registration, else the fallback. */
+  /** The binding `resolve(token)` uses: a normal registration, else the fallback — a child's, then its parent's. */
   private binding(token: any): Registration | undefined {
-    return this.registrations.get(token) ?? this.fallbacks.get(token)
+    return (
+      this.normalBinding(token) ??
+      (this.parent?.bindsNormally(token) ? this.parent.binding(token) : undefined) ??
+      this.fallbacks.get(token) ??
+      this.parent?.binding(token)
+    )
   }
 
-  /** Check if a binding exists for the given token. A {@link registerFallback} alone does not count. */
+  /**
+   * This container's normal registration for `token`: by token, or — for a
+   * class Vite re-evaluated, which has a new identity — by its HMR name.
+   */
+  private normalBinding(token: any): Registration | undefined {
+    const reg = this.registrations.get(token)
+    if (reg || typeof token !== 'function' || !token.name) return reg
+    return this.registrations.get(`__hmr__${token.name}`)
+  }
+
+  /** Whether this container or a parent binds `token` normally — what outranks a child's fallback. */
+  private bindsNormally(token: any): boolean {
+    return this.normalBinding(token) !== undefined || (this.parent?.bindsNormally(token) ?? false)
+  }
+
+  /**
+   * Check if a binding exists for the given token — here or, for a child, in
+   * a parent. A {@link registerFallback} alone does not count.
+   */
   has(token: any): boolean {
+    return this.registrations.has(token) || (this.parent?.has(token) ?? false)
+  }
+
+  /** Check if this container itself binds the token, not a parent. */
+  hasOwn(token: any): boolean {
     return this.registrations.has(token)
   }
 
@@ -503,15 +671,16 @@ export class Container {
   resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
   resolve<T = any>(token: any): T
   resolve<T = any>(token: any): T {
-    let reg = this.registrations.get(token)
     // HMR fallback: when Vite re-evaluates a module, decorated classes get new
-    // identity. Try resolving by class name if the primary token lookup fails.
-    if (!reg && typeof token === 'function' && token.name) {
-      reg = this.registrations.get(`__hmr__${token.name}`)
-    }
+    // identity — normalBinding() also looks the class up by name.
+    let reg = this.normalBinding(token)
+    // A child: its own binding, then its parent's (by HMR name too); its own
+    // fallback, then its parent's.
+    if (!reg && this.parent?.bindsNormally(token)) return this.parent.resolve<T>(token)
     reg ??= this.fallbacks.get(token)
+    if (!reg && this.parent) return this.parent.resolve<T>(token)
     if (!reg) {
-      throw Container._error('KICK001', tokenName(token))
+      throw hooks.errorFactory('KICK001', tokenName(token))
     }
 
     if (reg.scope === Scope.SINGLETON && reg.instance !== undefined) {
@@ -523,12 +692,12 @@ export class Container {
 
     // REQUEST scope: one instance per HTTP request, cached in AsyncLocalStorage
     if (reg.scope === Scope.REQUEST) {
-      if (!Container._requestStoreProvider) {
-        throw Container._error('KICK002', tokenName(token))
+      if (!hooks.requestStoreProvider) {
+        throw hooks.errorFactory('KICK002', tokenName(token))
       }
-      const store = Container._requestStoreProvider()
+      const store = hooks.requestStoreProvider()
       if (!store) {
-        throw Container._error('KICK003', tokenName(token))
+        throw hooks.errorFactory('KICK003', tokenName(token))
       }
       // Check for pre-registered request values (user, tenant, etc.)
       if (store.values.has(token)) {
@@ -537,12 +706,13 @@ export class Container {
         this.emit(token, 'resolved', reg.kind)
         return store.values.get(token) as T
       }
-      // Check per-request instance cache
-      if (store.instances.has(token)) {
+      // Check per-request instance cache — under this container's own key
+      const key = this.requestKey(token)
+      if (store.instances.has(key)) {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
         this.emit(token, 'resolved', reg.kind)
-        return store.instances.get(token) as T
+        return store.instances.get(key) as T
       }
       // Factory-registered binding: invoke the factory once per request
       // and cache the result alongside class-instantiated REQUEST tokens.
@@ -557,7 +727,7 @@ export class Container {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
         if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
-        store.instances.set(token, instance)
+        store.instances.set(key, instance)
         this.emit(token, 'resolved', reg.kind)
         return instance as T
       }
@@ -568,7 +738,7 @@ export class Container {
       reg.resolveCount++
       reg.lastResolvedAt = Date.now()
       if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
-      store.instances.set(token, instance)
+      store.instances.set(key, instance)
       this.emit(token, 'resolved', reg.kind)
       return instance as T
     }
@@ -689,6 +859,8 @@ export class Container {
         this.invalidate(depToken, visited)
       }
     }
+    // And whatever a child built on it.
+    this.forEachChild((child) => child.invalidateDependentsOf(name))
   }
 
   /**
@@ -835,7 +1007,7 @@ export class Container {
 
     // Properties added by host injectors (`_propertyInjectors`), e.g. `@Asset`.
     const injected: InstantiationPlan['injected'] = []
-    for (const [key, prepare] of Container._propertyInjectors) {
+    for (const [key, prepare] of hooks.propertyInjectors) {
       for (const [prop, config] of getMetaMap<string, unknown>(key, reg.target.prototype)) {
         injected.push([prop, prepare(config, prop)])
       }
@@ -876,7 +1048,7 @@ export class Container {
             .catch(() => {
               reg.postConstructStatus = 'failed'
             })
-          Container._logger.warn(
+          hooks.logger.warn(
             `@PostConstruct on ${tokenName(reg.target)}.${String(postConstruct)}() returned a Promise ` +
               `but the container is synchronous. The async operation will not be awaited.`,
           )
@@ -885,7 +1057,7 @@ export class Container {
         }
       } catch (err) {
         reg.postConstructStatus = 'failed'
-        Container._logger.error(
+        hooks.logger.error(
           err,
           `@PostConstruct on ${tokenName(reg.target)}.${String(postConstruct)}() threw an error`,
         )
@@ -960,11 +1132,10 @@ export class Container {
     for (const [prop, config] of plan.values) {
       Object.defineProperty(instance, prop, {
         get() {
-          // Use the registered env resolver if available (wired by the
-          // config layer in @forinda/kickjs). Returns Zod-validated,
-          // type-coerced values (e.g. PORT as number).
-          if (Container._envResolver) {
-            const val = Container._envResolver(config.envKey)
+          // The env resolver when one is set (a host's validated,
+          // type-coerced config, say: PORT as a number).
+          if (hooks.envResolver) {
+            const val = hooks.envResolver(config.envKey)
             if (val !== undefined) return val
           }
 
@@ -972,7 +1143,7 @@ export class Container {
           const val = process.env[config.envKey]
           if (val !== undefined) return val
           if (config.defaultValue !== undefined) return config.defaultValue
-          throw Container._error('KICK004', config.envKey)
+          throw hooks.errorFactory('KICK004', config.envKey)
         },
         enumerable: true,
         configurable: true,

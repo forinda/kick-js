@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { DI_METADATA as METADATA, Scope, type BuilderOf, type ServiceOptions } from './interfaces'
-import { Container, type KickJsRegistry } from './container'
+import { installDecoratorHooks, type KickJsRegistry } from './container'
 import { setClassMeta, setInMetaMap, setInMetaRecord } from './metadata'
 
 // ── Decorator Registration System ───────────────────────────────────────
@@ -30,9 +30,6 @@ function flushPending(container: any): void {
   pendingRegistrations.length = 0
 }
 
-// Wire up synchronously — Container._onReady is called on first getInstance()
-Container._onReady = flushPending
-
 /** Replay every decorator registration onto a container. */
 function seed(container: any): void {
   for (const [, { target, scope }] of allRegistrations) {
@@ -42,18 +39,21 @@ function seed(container: any): void {
   }
 }
 
-// On Container.reset(), update containerRef and replay ALL decorator
-// registrations on the fresh container. This handles HMR where the container
-// is wiped but not all decorated modules are re-evaluated.
-Container._onReset = (container: any) => {
-  containerRef = container
-  seed(container)
-}
-
-// On Container.create(), seed the same way but leave `containerRef` alone: an
-// isolated container should receive what has been registered so far, not
-// become the destination for everything registered next.
-Container._onCreate = seed
+installDecoratorHooks({
+  // On first getInstance(): flush what queued before the container existed.
+  onReady: flushPending,
+  // On Container.reset(), update containerRef and replay ALL decorator
+  // registrations on the fresh container. This handles HMR where the container
+  // is wiped but not all decorated modules are re-evaluated.
+  onReset: (container) => {
+    containerRef = container
+    seed(container)
+  },
+  // On Container.create(), seed the same way but leave `containerRef` alone: an
+  // isolated container should receive what has been registered so far, not
+  // become the destination for everything registered next.
+  onCreate: seed,
+})
 
 // ── Class Decorators ────────────────────────────────────────────────────
 
@@ -97,18 +97,18 @@ function warnIfInertPreDestroy(target: any, scope: Scope): void {
   preDestroyWarned.add(target)
   const name = target.name || String(target)
   console.warn(
-    `  kickjs: @PreDestroy on ${name} (${scope}) will never run — that hook fires ` +
+    `  @PreDestroy on ${name} (${scope}) will never run — that hook fires ` +
       `only when a REQUEST scope closes.\n` +
-      `  For application-lifetime resources, release them from an adapter's ` +
-      `shutdown() hook instead.`,
+      `  Release application-lifetime resources from your shutdown code instead ` +
+      `(in KickJS, an adapter's shutdown() hook).`,
   )
 }
 
 /**
- * Register a decorated class with the container. @internal — exported for
- * class decorators built outside this module (`@Controller`).
+ * Register a class the way `@Service` does — for a class decorator of your own
+ * that should also make the class injectable.
  */
-export function _registerInjectable(target: any, scope: Scope): void {
+export function registerInjectable(target: any, scope: Scope): void {
   setClassMeta(METADATA.INJECTABLE, true, target)
   setClassMeta(METADATA.SCOPE, scope, target)
   // Method decorators run before the class decorator, so PRE_DESTROY metadata
@@ -135,7 +135,7 @@ export function _registerInjectable(target: any, scope: Scope): void {
 export function Injectable(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'injectable', target)
-    _registerInjectable(target, options?.scope ?? Scope.SINGLETON)
+    registerInjectable(target, options?.scope ?? Scope.SINGLETON)
   }
 }
 
@@ -143,7 +143,7 @@ export function Injectable(options?: ServiceOptions): ClassDecorator {
 export function Service(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'service', target)
-    _registerInjectable(target, options?.scope ?? Scope.SINGLETON)
+    registerInjectable(target, options?.scope ?? Scope.SINGLETON)
   }
 }
 
@@ -151,7 +151,7 @@ export function Service(options?: ServiceOptions): ClassDecorator {
 export function Component(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'component', target)
-    _registerInjectable(target, options?.scope ?? Scope.SINGLETON)
+    registerInjectable(target, options?.scope ?? Scope.SINGLETON)
   }
 }
 
@@ -159,7 +159,7 @@ export function Component(options?: ServiceOptions): ClassDecorator {
 export function Repository(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'repository', target)
-    _registerInjectable(target, options?.scope ?? Scope.SINGLETON)
+    registerInjectable(target, options?.scope ?? Scope.SINGLETON)
   }
 }
 
@@ -281,7 +281,7 @@ export function Autowired(token?: unknown): PropertyOrParameterDecorator {
  *
  * @example
  * ```ts
- * import { Service, Inject } from '@forinda/kickjs'
+ * import { Service, Inject } from '@forinda/kickjs-di'
  * import type { PrismaClient } from '@prisma/client'
  *
  * `@Service()`
@@ -311,15 +311,10 @@ export function Inject(token?: unknown): PropertyOrParameterDecorator {
 }
 
 /**
- * Global ambient registry of typed environment variables, populated by
- * `kick typegen` from the project's env schema (typically
- * `src/env.ts`'s `export default defineEnv(...)`).
- *
- * Empty by default — declarations come from `.kickjs/types/env.ts`
- * generated alongside the rest of the typegen output. Once populated,
- * `@Value('PORT')` autocompletes the key, type-checks the default
- * value, and `process.env.PORT` is also typed via the parallel
- * `NodeJS.ProcessEnv` augmentation in the same generated file.
+ * Global ambient registry of typed environment variables. Empty by default;
+ * declare your keys to have `@Value('PORT')` autocomplete the key and
+ * type-check its default. In KickJS, `kick typegen` writes it from the env
+ * schema.
  */
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type

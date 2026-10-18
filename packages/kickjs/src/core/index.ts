@@ -10,7 +10,7 @@ export {
 } from './container'
 
 // Type-safe injection tokens
-export { createToken, isInjectionToken, INJECTION_TOKEN, type InjectionToken } from './token'
+export { createToken, ctn, isInjectionToken, INJECTION_TOKEN, type InjectionToken } from './token'
 
 // Interfaces & Constants
 export {
@@ -212,8 +212,11 @@ export {
   reactive,
   isRef,
   unref,
+  toRef,
   toRefs,
+  batch,
   type Ref,
+  type RefOptions,
   type ComputedRef,
   type WatchOptions,
 } from './reactivity'

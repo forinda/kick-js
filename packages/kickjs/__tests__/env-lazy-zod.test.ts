@@ -41,6 +41,6 @@ describe('env validation without zod (loadEnvFromSchema)', () => {
       LAZY_ZOD_PORT: Number(raw.LAZY_ZOD_PORT),
     }))
     // _envResolver is what @Value() / ConfigService read through.
-    expect(Container._envResolver?.('LAZY_ZOD_PORT')).toBe(9999)
+    expect(Container.envResolver?.('LAZY_ZOD_PORT')).toBe(9999)
   })
 })

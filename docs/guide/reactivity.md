@@ -33,6 +33,14 @@ const unsub = count.subscribe((newVal, oldVal) => {
 unsub() // cleanup
 ```
 
+A ref is shallow: replacing `.value` notifies, changing inside an object it holds doesn't. Pass `{ deep: true }` to have nested changes notify too:
+
+```ts
+const config = ref({ retries: 3, hosts: ['a'] }, { deep: true })
+config.value.retries = 5 // notifies
+config.value.hosts.push('b') // notifies
+```
+
 ### `computed(getter)`
 
 Creates a lazy, cached derived value that auto-recalculates when dependencies change.
@@ -101,9 +109,13 @@ watch(
 | ----------- | --------- | ------- | ------------------------------------------- |
 | `immediate` | `boolean` | `false` | Run callback immediately with current value |
 
+A callback that throws doesn't break anything else. The error is logged and passed to your `onError` [observers](./observability.md), the write that triggered it still applies, and the other watchers still run. That matters for watchers on `app.status`, which changes during shutdown.
+
+A watcher that writes back to what it watches, or two that keep writing to each other, would never settle. When an effect re-triggers itself 100 levels deep, KickJS stops the loop and reports it the same way. Long chains of updates, such as a watcher that pushes 1,000 items while another watches the length, run one after another and are never mistaken for a loop.
+
 ### `reactive(object)`
 
-Creates a deeply reactive proxy. Property reads are tracked, writes trigger watchers.
+Creates a deeply reactive proxy around an object or array. Property reads are tracked; writes and `delete` trigger watchers. So do nested arrays (`state.list.push(x)`) and key additions and removals, for code that iterates the keys (`Object.keys`, `for…in`, `in`).
 
 ```ts
 import { reactive, computed, watch } from '@forinda/kickjs'
@@ -123,15 +135,36 @@ watch(errorRate, (rate) => {
 metrics.requests++
 ```
 
+### `batch(fn)`
+
+Writes take effect at once, so two related writes would show watchers a half-applied state in between. Group them, and watchers and `subscribe` callbacks run once, after `fn`, with the final values:
+
+```ts
+import { batch, computed, ref, watch } from '@forinda/kickjs'
+
+const total = computed(() => a.value + b.value)
+watch(total, (v) => console.log(v))
+
+batch(() => {
+  a.value = 2
+  b.value = 2
+}) // logs 4 once, not 3 then 4
+```
+
+Computed values stay current inside the batch. Batches nest, and the outermost one runs the watchers. `batch` returns what `fn` returns.
+
 ### Utilities
 
 ```ts
-import { isRef, unref, toRefs } from '@forinda/kickjs'
+import { isRef, unref, toRef, toRefs } from '@forinda/kickjs'
 
-isRef(count) // true for refs, false for everything else
-unref(count) // unwraps ref → value, plain values pass through
-toRefs({ a: 1, b: 2 }) // { a: Ref<1>, b: Ref<2> }
+isRef(count) // true for refs and computed refs
+unref(doubled) // unwraps a ref or computed ref; plain values pass through
+toRef(state, 'count') // a ref that reads and writes state.count
+toRefs(state) // { count: Ref, … }: one live toRef per property
 ```
+
+`toRef` and `toRefs` are views, not copies. Writing the ref writes the object, and on a `reactive` object, watching the ref follows changes made either way.
 
 ## Real-World Example: Request Metrics
 
@@ -171,10 +204,11 @@ The reactivity module powers the [DevTools adapter](./devtools.md). All reactive
 
 ## Differences from Vue
 
-| Feature           | Vue 3 | KickJS                               |
-| ----------------- | ----- | ------------------------------------ |
-| DOM updates       | Yes   | No (backend)                         |
-| `watchEffect`     | Yes   | Not needed — use `watch` with getter |
-| `shallowRef`      | Yes   | Not needed — use `ref`               |
-| Template refs     | Yes   | N/A                                  |
-| `ref.subscribe()` | No    | Yes — direct subscription API        |
+| Feature           | Vue 3            | KickJS                                              |
+| ----------------- | ---------------- | --------------------------------------------------- |
+| DOM updates       | Yes              | No (backend)                                        |
+| `watchEffect`     | Yes              | Not needed — use `watch` with getter                |
+| `shallowRef`      | Yes              | `ref` is shallow; `ref(v, { deep: true })` for deep |
+| Update timing     | Batched per tick | Synchronous; `batch()` groups writes                |
+| Template refs     | Yes              | N/A                                                 |
+| `ref.subscribe()` | No               | Yes — direct subscription API                       |

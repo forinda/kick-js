@@ -143,7 +143,7 @@ describe.each(runtimes)('beforeValidation contributors on %s', (_, runtime) => {
 
 describe('beforeValidation contributors on the h3 fetch path', () => {
   function app(early: boolean) {
-    Container._requestStoreProvider = () => requestStore.getStore() ?? null
+    Container.setRequestStoreProvider(() => requestStore.getStore() ?? null)
     const entry: RouteEntry = {
       method: 'POST',
       path: '/x',

@@ -26,9 +26,9 @@ const CATALOGUE: Record<DiErrorCode, (subject: string) => Error> = {
   KICK010: fallbackAlreadyResolvedError,
 }
 
-Container._error = (code, subject) => CATALOGUE[code](subject)
-Container._logger = createLogger('Container')
-Container._propertyInjectors.set(METADATA.ASSET, ({ assetKey }: { assetKey: string }) => {
+Container.setErrorFactory((code, subject) => CATALOGUE[code](subject))
+Container.setLogger(createLogger('Container'))
+Container.definePropertyInjector(METADATA.ASSET, ({ assetKey }: { assetKey: string }) => {
   const slash = assetKey.indexOf('/')
   if (slash === -1) {
     throw new Error(
