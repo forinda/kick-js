@@ -99,6 +99,60 @@ Each clause scopes only to the inner relation — outer filters keep working ind
 
 `orderBy` returns an expression, ascending by default. Wrap it in `desc()` (or `asc()`, both from `@forinda/kickjs-db`) for a direction, and return an array to sort by several: `[desc(eb.ref('priority')), asc(eb.ref('title'))]`.
 
+## Paginating nested rows
+
+A post with thousands of comments shouldn't load them all. `limit` and `offset` inside a `with` apply **per parent**, so every row gets its own page:
+
+```ts
+const rows = await db.query.posts.findMany({
+  extras: {
+    // The total, for "show all 50 comments".
+    commentCount: (_p, eb) =>
+      eb
+        .selectFrom('comments')
+        .select(eb.fn.countAll<number>().as('n'))
+        .where('comments.postId', '=', sql.ref<number>('posts_0.id')),
+  },
+  with: {
+    comments: { orderBy: (_c, eb) => desc(eb.ref('id')), limit: 5 },
+  },
+})
+// [
+//   { title: 'Busy', commentCount: 50, comments: [/* ids 50, 49, 48, 47, 46 */] },
+//   { title: 'Quiet', commentCount: 3, comments: [/* ids 53, 52, 51 */] },
+// ]
+```
+
+`offset` skips within each parent's rows too: `{ limit: 5, offset: 5 }` gives the busy post comments 45 to 41.
+
+That covers the first page, read together with the parent. For the pages after it, query the child table directly. Its own `where` is cheaper than walking through the parent again, and it can return the total:
+
+```ts
+// Page 3 of a post's comments, 20 per page, with the total.
+const { data, total } = await db.query.comments.findManyAndCount({
+  where: (_c, eb) => eb('postId', '=', postId),
+  orderBy: (_c, eb) => desc(eb.ref('id')),
+  limit: 20,
+  offset: 40,
+})
+```
+
+`{ data, total }` is the shape [`ctx.paginate`](./query-parsing.md#paginated-responses-with-ctx-paginate) takes. `offset` reads and discards every row before the page, so deep pages slow down. For infinite scroll or a "load more" button, page by cursor instead: the client sends the last id it has, and the query continues after it.
+
+```ts
+const next = await db.query.comments.findMany({
+  where: (_c, eb) => eb.and([eb('postId', '=', postId), eb('id', '<', lastSeenId)]),
+  orderBy: (_c, eb) => desc(eb.ref('id')),
+  limit: 20,
+})
+```
+
+Either way, index the foreign key together with the sort column, so each page is read in order from the index rather than sorted: `index('comments_post_id_idx').on(t.postId, t.id)`.
+
+- **Polymorphic children** (`morphMany`) page the same way. In the direct query, filter on the pair: `eb('subjectType', '=', 'post')` and `eb('subjectId', '=', postId)`. Index `(subjectType, subjectId, id)`.
+- **On Postgres** the top-level count comes back as a string (a `bigint`). Cast it with `count(*)::int` or `Number()`; see [Choosing fields](#choosing-fields).
+- **A `morphTo` subject** takes no `limit` or `offset`: it is one row.
+
 ## Choosing fields
 
 `columns` picks which columns come back, and `extras` adds computed fields. Both work at every level of `with`:
