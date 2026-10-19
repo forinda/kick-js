@@ -1,5 +1,20 @@
 # @forinda/kickjs-cli
 
+## 8.14.2
+
+### Patch Changes
+
+- [#985](https://github.com/forinda/kick-js/pull/985) [`fc42a4a`](https://github.com/forinda/kick-js/commit/fc42a4ad51f9113911f9d927cbb377a7b127baa9) Thanks [@forinda](https://github.com/forinda)! - Fixes for `kick doctor` on current apps:
+  
+  - **`express installed`:** no longer fails Fastify and h3 apps; `express` is only needed on the Express runtime.
+  - **tsconfig parsing:** a `/*` inside a string (the scaffolded `.kickjs/types/**/*.ts` include) is no longer read as a comment. Every new app was reported as having an unreadable tsconfig, and its decorator checks were skipped.
+  - **env wiring:** the check now detects `loadEnvFromSchema(...)`, which the templates call; until now it never ran on them.
+  
+  Two new checks:
+  
+  - **One DI container:** flags `@forinda/kickjs-di` listed next to `@forinda/kickjs`. It is an error when the installed copy differs from the one kickjs pins.
+  - **Typegen include:** flags a tsconfig that leaves out `.kickjs/types`, includes only its `.d.ts` files, or sets `rootDir: 'src'`.
+
 ## 8.14.1
 
 ### Patch Changes
