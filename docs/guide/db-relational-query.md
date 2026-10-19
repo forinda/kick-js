@@ -36,6 +36,10 @@ export class WorkspacesRepository {
 
 The return type narrows from the inferred schema — column types from the DSL flow through. No `as` casts.
 
+## Choosing a relation
+
+`with` reads the relations declared with `relations()`: `one` for at most one row (many-to-one, one-to-one), `many` for any number (one-to-many), `many(…, { through })` for many-to-many, and `morphMany` / `morphOne` / `morphTo` for the same three over a type + id column pair. [Relations](./database/relations.md) walks through each one on a single schema, with the query and what it returns.
+
 ## Adding `with`
 
 `with` walks the relations declared in your `relations()` blocks. Once `kick typegen` has run, the keys are checked — so misspelling a relation key is a compile error, not a runtime surprise.
@@ -184,6 +188,8 @@ export const userRelations = relations(users, ({ many }) => ({
 
 One kind of child row belonging to several kinds of parent — comments on posts, publications and podcasts — can be modelled three ways. Pick by how much the database should guarantee.
 
+The `morph*` helpers are the type-and-id versions of `many` and `one` — see [Relations](./database/relations.md#polymorphic-one-table-several-kinds-of-parent) for which goes where.
+
 | Pattern                   | Schema                                          | Database integrity                     | Read with                            |
 | ------------------------- | ----------------------------------------------- | -------------------------------------- | ------------------------------------ |
 | Exclusive arc             | A nullable foreign key per parent, plus a CHECK | Full: FKs, cascades, exactly-one check | `one` / `many`                       |
@@ -222,7 +228,7 @@ Keep `comments` free of parent columns and join each parent through its own tabl
 
 ### Type and id columns: `morphMany`, `morphOne`, `morphTo`
 
-The Laravel `morphMany` / Django `GenericRelation` shape: the child stores which kind of parent it has and that parent's key. A new parent kind needs no migration. The database can't check the pair, though — there's no foreign key, so no cascade, and nothing stops a `subjectId` that points nowhere.
+The child stores which kind of parent it has and that parent's key. A new parent kind needs no migration. The database can't check the pair, though — there's no foreign key, so no cascade, and nothing stops a `subjectId` that points nowhere.
 
 ```ts
 import { desc, index, integer, relations, serial, table, text, varchar } from '@forinda/kickjs-db'
@@ -282,7 +288,7 @@ await db.transaction(async (tx) => {
 })
 ```
 
-`morphOne` is the same pair read as a single row — Laravel's `morphOne`, for a parent with at most one child of the shared table, like a post's cover image. It's typed like `one` (the row, or `null`); give it an `orderBy` when there can be several and you want a particular one:
+`morphOne` is the same pair read as a single row, for a parent with at most one child of the shared table, like a post's cover image. It's typed like `one` (the row, or `null`); give it an `orderBy` when there can be several and you want a particular one:
 
 ```ts
 export const postRelations = relations(posts, ({ morphMany, morphOne }) => ({
@@ -300,7 +306,7 @@ const rows = await db.query.posts.findMany({
 // rows[0].latestComment: Comment | null
 ```
 
-`morphTo` goes the other way — Laravel's `morphTo`, Django's `GenericForeignKey`: from a comment to its subject, in whichever table `subjectType` names. Declare it on the child, mapping each type value to its table:
+`morphTo` goes the other way: from a comment to its subject, in whichever table `subjectType` names. Declare it on the child, mapping each type value to its table:
 
 ```ts
 export const commentRelations = relations(comments, ({ morphTo }) => ({
