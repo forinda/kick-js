@@ -248,7 +248,7 @@ bootstrap({
 })
 ```
 
-Each gzip response gets 0–99 random bytes in its header's file-name field, which decompressors ignore — Django's "Heal The Breach" mitigation. `breachPadding({ maxBytes })` changes the range.
+Each gzip response gets 0–99 random bytes in its header's file-name field, which decompressors ignore, so the compressed length no longer gives away the content (the BREACH attack). `breachPadding({ maxBytes })` changes the range.
 
 The trade-off: the padding lives in the gzip header, which Brotli lacks, so `breachPadding()` removes `br` and `zstd` from the request's `Accept-Encoding` and browsers get gzip instead. Use it when your responses mix secrets with reflected input; most JSON APIs that keep tokens in cookies and headers don't need it.
 
