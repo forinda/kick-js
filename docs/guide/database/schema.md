@@ -458,10 +458,12 @@ export const postsRelations = relations(posts, ({ one }) => ({
 }))
 ```
 
-- `one(target, { fields, references })` — a to-one relation; `fields` are the local FK columns, `references` are the target's columns.
-- `many(target)` — a to-many relation.
-- `many(target, { through })` — a many-to-many through a junction table.
-- `morphMany(target, { type, id, as })` / `morphOne(...)` — a polymorphic to-many / to-one over a type + id column pair, and `morphTo({ type, id, targets })` from that pair back to its row, with no foreign key ([Polymorphic associations](../db-relational-query.md#polymorphic-associations)).
+- `one(target, { fields, references })` — at most one row: many-to-one from the side with the key, or either side of a one-to-one. `fields` are columns on this table, `references` the target columns they equal.
+- `many(target)` — one-to-many; the join comes from the target's matching `one` (or its foreign key).
+- `many(target, { through })` — many-to-many through a junction table.
+- `morphMany` / `morphOne` / `morphTo` — the same three over a type + id column pair instead of a foreign key.
+
+Which one for which shape — many-to-one, one-to-many, one-to-one, many-to-many and the polymorphic three — with an example and its result for each: [Relations](./relations.md).
 
 When a source table has multiple foreign keys to the same target, pair the two sides with a matching `relationName`:
 

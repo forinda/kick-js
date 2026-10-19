@@ -150,6 +150,7 @@ const guideSidebar = [
         items: [
           { text: 'Tables & Columns', link: '/guide/database/schema' },
           { text: 'Keys & Constraints', link: '/guide/database/constraints' },
+          { text: 'Relations', link: '/guide/database/relations' },
           { text: 'Schema Types', link: '/guide/db-schema-types' },
           { text: 'Table Forms', link: '/guide/db-table-forms' },
           { text: 'Validation from Tables', link: '/guide/db-table-schemas' },
