@@ -140,7 +140,7 @@
   },
   "peerDependencies": {
     "@fastify/middie": "^9.0.0",
-    "@fastify/multipart": "^10.1.3",
+    "@fastify/multipart": "^10.1.4",
     "croner": "^10.0.1",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
@@ -184,26 +184,26 @@
   },
   "devDependencies": {
     "@fastify/middie": "^9.3.5",
-    "@fastify/multipart": "^10.1.3",
-    "@swc/core": "^1.16.13",
+    "@fastify/multipart": "^10.1.4",
+    "@swc/core": "^1.16.18",
     "@types/compression": "1.8.1",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
     "@types/node": "^26.6.5",
     "@types/serve-static": "^2.2.0",
-    "@valibot/to-json-schema": "1.6.0",
-    "compression": "1.8.1",
+    "@valibot/to-json-schema": "1.8.0",
+    "compression": "1.8.2",
     "croner": "^10.0.1",
-    "fastify": "^5.12.5",
+    "fastify": "^5.12.7",
     "h3": "2.0.2",
     "multer": "^2.4.0",
     "serve-static": "^2.2.0",
     "typescript": "^7.0.2",
-    "valibot": "1.4.1",
+    "valibot": "1.5.0",
     "vite": "^8.3.4",
-    "vitest": "^5.0.3",
+    "vitest": "^5.0.5",
     "yup": "1.7.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "publishConfig": {
     "access": "public"
