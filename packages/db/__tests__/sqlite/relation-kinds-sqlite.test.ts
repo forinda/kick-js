@@ -16,6 +16,7 @@ import {
   serial,
   table,
   text,
+  unique,
   varchar,
 } from '@forinda/kickjs-db'
 import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
@@ -60,12 +61,16 @@ const comments = table(
   },
   (t) => ({ subject: index('comments_subject_idx').on(t.subjectType, t.subjectId) }),
 )
-const images = table('images', {
-  id: serial().primaryKey(),
-  subjectType: varchar(50).notNull(),
-  subjectId: integer().notNull(),
-  url: text().notNull(),
-})
+const images = table(
+  'images',
+  {
+    id: serial().primaryKey(),
+    subjectType: varchar(50).notNull(),
+    subjectId: integer().notNull(),
+    url: text().notNull(),
+  },
+  (t) => ({ subject: unique('images_subject_unique').on(t.subjectType, t.subjectId) }),
+)
 
 const userRelations = relations(users, ({ one, many }) => ({
   posts: many(posts),
@@ -233,6 +238,13 @@ describe('relation kinds, as the Relations guide shows them', () => {
       { title: 'Hello', cover: { url: '/hello.png' } },
       { title: 'Indexes', cover: null },
     ])
+    // The unique key on the pair is what keeps it one-to-one.
+    await expect(
+      db
+        .insertInto('images')
+        .values({ subjectType: 'post', subjectId: 1, url: '/again.png' })
+        .execute(),
+    ).rejects.toThrow(/Duplicate value for images/)
   })
 
   it('morphTo: each comment and its subject, of either kind', async () => {

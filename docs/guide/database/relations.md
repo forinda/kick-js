@@ -39,6 +39,7 @@ import {
   serial,
   table,
   text,
+  unique,
   varchar,
 } from '@forinda/kickjs-db'
 
@@ -94,13 +95,17 @@ export const comments = table(
   (t) => ({ subject: index('comments_subject_idx').on(t.subjectType, t.subjectId) }),
 )
 
-// At most one cover image per post, stored the same way.
-export const images = table('images', {
-  id: serial().primaryKey(),
-  subjectType: varchar(50).notNull(),
-  subjectId: integer().notNull(),
-  url: text().notNull(),
-})
+// Cover images, stored the same way: at most one per post or podcast.
+export const images = table(
+  'images',
+  {
+    id: serial().primaryKey(),
+    subjectType: varchar(50).notNull(),
+    subjectId: integer().notNull(),
+    url: text().notNull(),
+  },
+  (t) => ({ subject: unique('images_subject_unique').on(t.subjectType, t.subjectId) }),
+)
 ```
 
 The data the examples read: Ada wrote two posts, _Hello_ and _Indexes_. Linus wrote none and has no profile. _Hello_ is tagged `intro` and `sql`, has two comments and a cover image. The podcast _Weekly_ has one comment.
@@ -277,7 +282,7 @@ await db.query.posts.findMany({
 // ]
 ```
 
-The database can't stop a second image for the same post. If there may be several, add an `orderBy` to choose which one: `with: { cover: { orderBy: (_i, eb) => desc(eb.ref('id')) } }` reads the newest.
+The unique key on `(subjectType, subjectId)` makes it one-to-one: the database refuses a second cover for the same post, as `unique()` on `profiles.userId` does for profiles. If your design allows several rows per parent and you want just one of them, leave the key out and choose with `orderBy`: `with: { cover: { orderBy: (_i, eb) => desc(eb.ref('id')) } }` reads the newest.
 
 ### `morphTo`: a comment's subject, whichever kind
 
