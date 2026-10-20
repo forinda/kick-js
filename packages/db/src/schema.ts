@@ -72,6 +72,9 @@ export type InferInsert<T extends TableDecl> = Omit<
   ComputedColumns<T>
 >
 
+/** A patch, as `updateSchema()` checks it: every writable column optional. */
+export type InferUpdate<T extends TableDecl> = Partial<InferInsert<T>>
+
 /** Extra rules for one column — what a SQL type can't say. */
 export interface ColumnRule {
   /** JSON Schema `format`; `email`, `uri`, `uuid` and `date-time` are also checked. */
@@ -642,6 +645,6 @@ export function insertSchema<T extends TableDecl, const O extends keyof ColumnsO
 export function updateSchema<T extends TableDecl, const O extends keyof ColumnsOf<T> = never>(
   table: T,
   options?: TableSchemaOptions<T> & { omit?: readonly O[] },
-): TableSchema<Partial<Omit<InferInsert<T>, O>>> {
+): TableSchema<Omit<InferUpdate<T>, O>> {
   return buildSchema(table, 'update', options as TableSchemaOptions<TableDecl>)
 }

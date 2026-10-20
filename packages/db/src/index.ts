@@ -128,7 +128,17 @@ export type { ReadonlyKysely } from 'kysely/readonly'
 
 // What queries reach for from Kysely, so adopters import it all from kick/db.
 export { Kysely, sql } from 'kysely'
-export type { Expression, ExpressionBuilder, KyselyPlugin, RawBuilder, Sql, SqlBool } from 'kysely'
+export type {
+  Expression,
+  ExpressionBuilder,
+  Insertable,
+  KyselyPlugin,
+  RawBuilder,
+  Selectable,
+  Sql,
+  SqlBool,
+  Updateable,
+} from 'kysely'
 
 export {
   migrateLatest,

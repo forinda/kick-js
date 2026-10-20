@@ -1,7 +1,7 @@
 import { expectTypeOf, test } from 'vitest'
 import type { Generated, GeneratedAlways } from 'kysely'
 import { integer, numeric, serial, table, type SchemaToTypes } from '@forinda/kickjs-db'
-import type { InferInsert } from '@forinda/kickjs-db/schema'
+import type { InferInsert, InferUpdate } from '@forinda/kickjs-db/schema'
 
 const orders = table('orders', {
   id: integer().generatedAlwaysAsIdentity().primaryKey(),
@@ -25,4 +25,11 @@ test('insert rows leave out generated columns', () => {
   expectTypeOf<Insert>().not.toHaveProperty('total')
   expectTypeOf<Insert>().not.toHaveProperty('id')
   expectTypeOf<Insert>().toHaveProperty('quantity')
+})
+
+test('update patches are optional and leave out generated columns', () => {
+  type Update = InferUpdate<typeof orders>
+  expectTypeOf<{}>().toExtend<Update>()
+  expectTypeOf<Update>().not.toHaveProperty('total')
+  expectTypeOf<Update['quantity']>().toEqualTypeOf<number | undefined>()
 })
