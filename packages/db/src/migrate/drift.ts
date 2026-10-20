@@ -155,6 +155,32 @@ function canonicalFk(fk: ForeignKeySnapshot): ForeignKeySnapshot {
 
 export type DriftBehavior = 'error' | 'warn' | 'ignore'
 
+/**
+ * What the drift check leaves out, matched by name on both sides — say the
+ * indexes an app creates at runtime: `{ indexes: /^ix_e_/ }`.
+ */
+export interface DriftIgnore {
+  tables?: RegExp
+  indexes?: RegExp
+}
+
+/** The snapshot without the tables and indexes `ignore` names. */
+function withoutIgnored(snap: SchemaSnapshot, ignore: DriftIgnore): SchemaSnapshot {
+  // Copies without `g` / `y`: those keep lastIndex between test() calls, so the
+  // same name could match on one side and not the other.
+  const plain = (re?: RegExp) => re && new RegExp(re.source, re.flags.replace(/[gy]/g, ''))
+  const tablesRe = plain(ignore.tables)
+  const indexesRe = plain(ignore.indexes)
+  const tables: Record<string, TableSnapshot> = {}
+  for (const [name, t] of Object.entries(snap.tables)) {
+    if (tablesRe?.test(name)) continue
+    tables[name] = indexesRe
+      ? { ...t, indexes: t.indexes.filter((ix) => !indexesRe.test(ix.name)) }
+      : t
+  }
+  return { ...snap, tables }
+}
+
 export interface DriftLogger {
   warn: (message: string) => void
 }
@@ -164,8 +190,13 @@ export async function checkDrift(
   expectedSnapshot: SchemaSnapshot,
   behavior: DriftBehavior,
   log: DriftLogger = console,
+  ignore?: DriftIgnore,
 ): Promise<void> {
   if (behavior === 'ignore') return
+  if (ignore) {
+    liveSnapshot = withoutIgnored(liveSnapshot, ignore)
+    expectedSnapshot = withoutIgnored(expectedSnapshot, ignore)
+  }
   // diff(prev, next) reads expected as `prev` and live as `next` so 'added'
   // means "live has it but the snapshot doesn't" — i.e. someone ran DDL
   // outside the migration runner. Both sides are canonicalised first so

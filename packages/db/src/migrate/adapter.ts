@@ -27,10 +27,25 @@ export interface MigrationAdapter {
   recordApplied(row: Omit<MigrationRow, 'appliedAt'>): Promise<void>
   /** Delete an applied migration row (used by `migrate down`). */
   removeApplied(id: string): Promise<void>
-  /** Atomic lock acquire — true if we got it, false if held. Owner string is recorded for diagnostics. */
-  acquireLock(owner: string): Promise<boolean>
-  /** Release the lock (no-op if not held). */
-  releaseLock(): Promise<void>
+  /**
+   * Atomic lock acquire — true if we got it, false if held. Owner string is
+   * recorded for diagnostics. With `staleAfterSeconds`, a lock last taken or
+   * refreshed longer ago than that is taken over: its holder is presumed dead.
+   */
+  acquireLock(owner: string, staleAfterSeconds?: number): Promise<boolean>
+  /**
+   * Mark the lock as still held by `owner` — the runner calls it while it
+   * works, so a lock that stops being refreshed reads as stale. `false` when
+   * `owner` no longer holds it: another run took it over. Optional: an
+   * adapter without it never has its lock taken over.
+   */
+  refreshLock?(owner: string): Promise<boolean>
+  /**
+   * Release the lock (no-op if not held). With `owner`, only if `owner` still
+   * holds it — a run whose lock was taken over mustn't release the new
+   * holder's. Without, unconditionally (`kick db migrate unlock`).
+   */
+  releaseLock(owner?: string): Promise<void>
   /** Run arbitrary SQL inside a transaction. Used to apply up.sql / down.sql. */
   applySqlInTx(sql: string): Promise<void>
   /**

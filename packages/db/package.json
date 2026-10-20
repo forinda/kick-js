@@ -29,6 +29,10 @@
       "import": "./dist/pg.mjs",
       "types": "./dist/pg.d.mts"
     },
+    "./pglite": {
+      "import": "./dist/pglite.mjs",
+      "types": "./dist/pglite.d.mts"
+    },
     "./sqlite": {
       "import": "./dist/sqlite.mjs",
       "types": "./dist/sqlite.d.mts"
@@ -75,6 +79,7 @@
     "kysely": "0.29.6"
   },
   "peerDependencies": {
+    "@electric-sql/pglite": ">=0.5.5",
     "@forinda/kickjs": ">=8.8.0",
     "@forinda/kickjs-devtools-kit": ">=7.0.0",
     "better-sqlite3": ">=12.0.0",
@@ -82,6 +87,9 @@
     "pg": ">=8.11.0"
   },
   "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    },
     "@forinda/kickjs-devtools-kit": {
       "optional": true
     },
@@ -96,6 +104,7 @@
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@forinda/kickjs-schema": "workspace:*",

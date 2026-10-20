@@ -57,12 +57,12 @@ Schema drift detected: 1 added, 0 removed, 0 changed (added: users.bio)
 ### `Another process holds the migration lock`
 
 ```text
-Another process holds the migration lock. If none is running — a deploy was killed mid-migration — release it with `kick db migrate unlock`.
+Another process holds the migration lock and refreshed it within the last 600s. If none is running, it is taken over once that long has passed, or release it now with `kick db migrate unlock`.
 ```
 
 **Why.** The runner takes a lock so two deploys can't migrate at once, and releases it when it finishes — even when a migration fails. A process that was killed mid-run (out of memory, a deploy timeout, `SIGKILL`) never releases it.
 
-**Fix.** Make sure no migration is actually running — another deploy, a pod still starting — then:
+**Fix.** Wait: a lock nobody has refreshed for `lockStaleAfter` (default 600 seconds) is taken over by the next run. To release it now, make sure no migration is actually running — another deploy, a pod still starting — then:
 
 <PmCommand exec="kick db migrate unlock" />
 

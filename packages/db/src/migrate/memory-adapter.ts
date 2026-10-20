@@ -31,14 +31,24 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
     this.rows = this.rows.filter((r) => r.id !== id)
   }
 
-  async acquireLock(owner: string): Promise<boolean> {
-    if (this.locked) return false
+  async acquireLock(owner: string, staleAfterSeconds?: number): Promise<boolean> {
+    const stale =
+      this.locked !== null &&
+      staleAfterSeconds !== undefined &&
+      Date.now() - Date.parse(this.locked.at) > staleAfterSeconds * 1000
+    if (this.locked && !stale) return false
     this.locked = { by: owner, at: new Date().toISOString() }
     return true
   }
 
-  async releaseLock(): Promise<void> {
-    this.locked = null
+  async refreshLock(owner: string): Promise<boolean> {
+    if (this.locked?.by !== owner) return false
+    this.locked.at = new Date().toISOString()
+    return true
+  }
+
+  async releaseLock(owner?: string): Promise<void> {
+    if (owner === undefined || this.locked?.by === owner) this.locked = null
   }
 
   async applySqlInTx(sql: string): Promise<void> {

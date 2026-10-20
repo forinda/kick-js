@@ -32,6 +32,11 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'src/devtools-events.ts'),
       },
       {
+        // Before ./pg: aliases match by prefix.
+        find: '@forinda/kickjs-db/pglite',
+        replacement: path.resolve(__dirname, 'src/pglite.ts'),
+      },
+      {
         // The real subpath barrel, matching `exports['./pg']` — not just the
         // column types. Pointing this at src/dsl/columns/pg.ts made the alias
         // narrower than the published surface, so anything else exported from

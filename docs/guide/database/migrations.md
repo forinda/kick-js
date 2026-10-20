@@ -156,8 +156,8 @@ kick db migrate status
 
 ### How `migrate latest` works
 
-1. Acquire the single-row migration lock (`kick_migrations_lock`). A collision means another process is mid-migration — the command throws `MigrationLockError`.
-2. **Drift check** — introspect the live DB and compare against the last applied migration's `snapshot.json`. A mismatch throws `MigrationDriftError`. Behavior is `error` (default), `warn`, or `ignore`.
+1. Acquire the single-row migration lock (`kick_migrations_lock`). A collision means another process is mid-migration — the command throws `MigrationLockError`. The run refreshes the lock while it works; a lock nobody has refreshed for `lockStaleAfter` seconds (default 600) was left by a killed run and is taken over ([A stuck lock](./migration-recovery.md#a-stuck-lock)).
+2. **Drift check** — introspect the live DB and compare against the last applied migration's `snapshot.json`. A mismatch throws `MigrationDriftError`. Behavior is `error` (default), `warn`, or `ignore`. `driftIgnore` leaves out tables and indexes by name — ones your app creates at runtime: `driftIgnore: { indexes: /^ix_e_/ }` in the `db` block, `migrateLatest()` or `kickDbAdapter`.
 3. Compute the pending set (journal entries not yet recorded as applied).
 4. Verify each pending migration: outside development it must be reviewed, and a reviewed one must still match the hash `review` recorded.
 5. Allocate the next batch number.

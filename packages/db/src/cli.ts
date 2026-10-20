@@ -69,7 +69,7 @@ import {
 } from './index'
 import type { Dialect } from './snapshot/types'
 import type { MigrationAdapterFactory } from './cli/config'
-import type { DriftBehavior } from './migrate/drift'
+import type { DriftBehavior, DriftIgnore } from './migrate/drift'
 
 /**
  * Authoring shape for the db config — every field optional, defaults
@@ -91,6 +91,8 @@ export interface KickDbConfigInput {
    * so SQLite/MySQL's lossy introspection doesn't false-positive.
    */
   driftCheck?: DriftBehavior
+  /** Tables and indexes drift leaves out, like runtime-created ones: `{ indexes: /^ix_e_/ }`. */
+  driftIgnore?: DriftIgnore
   /** `'snake_case'`: snake_case tables and columns under camelCase keys. Match the client's `casing`. */
   casing?: 'snake_case'
   /** The table migrations are recorded in. Default `kick_migrations`. */
@@ -137,6 +139,7 @@ export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbCon
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,
     driftCheck: db.driftCheck,
+    driftIgnore: db.driftIgnore,
     casing: db.casing,
     migrationsTable: db.migrationsTable,
     migrationsDirs: db.migrationsDirs,
@@ -456,6 +459,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           concurrency: config.tenants.concurrency,
           migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          driftIgnore: config.driftIgnore,
           confirmEnumDrop: opts.confirmEnumDrop,
           onTenant: (t) =>
             console.log(
@@ -474,6 +478,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           adapter,
           migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          driftIgnore: config.driftIgnore,
           confirmEnumDrop: opts.confirmEnumDrop,
         })
         console.log(
@@ -506,6 +511,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           adapter,
           migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          driftIgnore: config.driftIgnore,
           confirmEnumDrop: opts.confirmEnumDrop,
           to: opts.to,
         })
@@ -534,6 +540,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           adapter,
           migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          driftIgnore: config.driftIgnore,
           to: opts.to,
         })
         console.log(
@@ -558,6 +565,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
           adapter,
           migrationsDir: runDirs(config),
           driftCheck: config.driftCheck,
+          driftIgnore: config.driftIgnore,
           all: opts.all,
         })
         console.log(
