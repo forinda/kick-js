@@ -566,6 +566,6 @@ await createTestApp({
 
 - **Direct and multipart uploads are bucket only.** `uploadUrl()`, `uploadForm()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
 - **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
-- **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, reads as missing (`get()` returns `null`, so a route answers 404) and is refused for writes. A link can't expose files outside the root.
+- **Disk doesn't follow symbolic links out of the root.** A key that names a link, or leads outside the root through a folder link, reads as missing (`get()` returns `null`, so a route answers 404), and writing or deleting through such a link throws. A folder link that stays inside the root is followed. A link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.
 - **Edge runtimes.** `memoryStorage` and `s3Storage` run on Workers, Bun and Deno, so a Worker can reach R2 through its S3 API with an access key. `diskStorage`, `TusAdapter` and the settings entry are Node only.

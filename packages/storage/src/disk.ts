@@ -185,8 +185,9 @@ export function diskStorage(options: DiskStorageOptions): Storage {
 
   /**
    * The path for reading `key`, or null when the file (or a folder above it)
-   * doesn't exist — or is reached through a symbolic link, which reads as
-   * missing: a link isn't followed, and a 404 is the answer a route wants.
+   * doesn't exist — or is a symbolic link, or leads outside the root through
+   * one: those read as missing, the 404 a route wants. A folder link that
+   * stays inside the root is followed.
    */
   async function readable(key: string): Promise<string | null> {
     const path = join(root, checkKey(key))

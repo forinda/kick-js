@@ -15,8 +15,8 @@ export interface Storage {
    */
   putIfAbsent(key: string, body: Body, options?: PutOptions): Promise<boolean>
   /**
-   * The bytes under `key`, or `null` when there are none. On disk, a key
-   * reached through a symbolic link reads as missing: links aren't followed.
+   * The bytes under `key`, or `null` when there are none. On disk, a key that
+   * is a symbolic link, or leads outside the root through one, reads as missing.
    */
   get(key: string): Promise<Uint8Array | null>
   /**

@@ -189,6 +189,13 @@ describe('s3Storage', () => {
     expect(calls[1].headers.get('range')).toBe('bytes=99-')
   })
 
+  it('refuses a whole file sent back for a byte range', async () => {
+    const fetch = (async () => new Response('0123456789')) as unknown as typeof globalThis.fetch
+    const files = s3Storage({ ...options, endpoint: 'http://s3.test', fetch })
+    await expect(files.getStream('f', { start: 2, end: 4 })).rejects.toThrow('whole file')
+    expect(await new Response(await files.getStream('f')).text()).toBe('0123456789')
+  })
+
   it('signs response headers into a GET URL', async () => {
     const files = s3Storage(options)
     const url = new URL(

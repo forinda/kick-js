@@ -762,6 +762,11 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         await res.body?.cancel()
         return res.status === 404 ? null : new Blob([]).stream()
       }
+      if (r && res.status === 200) {
+        // A server that ignored the Range header sent the whole file.
+        await res.body?.cancel()
+        throw new Error(`s3Storage: GET '${key}' returned the whole file for a byte range`)
+      }
       if (!res.ok) return fail(res, 'GET', key)
       return res.body ?? new Blob([]).stream()
     },
