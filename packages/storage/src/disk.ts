@@ -28,6 +28,7 @@ import {
   checkDelimiter,
   checkKey,
   checkLimit,
+  checkRange,
   isStream,
   listPage,
   publicUrl,
@@ -172,26 +173,31 @@ export function diskStorage(options: DiskStorageOptions): Storage {
    * root (`root/link -> /etc`) would otherwise let the valid key `link/passwd`
    * read, replace or delete a file outside it.
    */
-  async function assertInside(dir: string, key: string) {
+  async function inside(dir: string) {
     const [real, base] = await Promise.all([realpath(dir), realpath(root)])
-    if (real !== base && !real.startsWith(base + sep)) {
+    return real === base || real.startsWith(base + sep)
+  }
+  async function assertInside(dir: string, key: string) {
+    if (!(await inside(dir))) {
       throw new Error(`diskStorage: '${key}' leads outside the root through a symbolic link`)
     }
   }
 
-  /** The path for reading `key`, or null when the file (or a folder above it) doesn't exist. */
+  /**
+   * The path for reading `key`, or null when the file (or a folder above it)
+   * doesn't exist — or is a symbolic link, or leads outside the root through
+   * one: those read as missing, the 404 a route wants. A folder link that
+   * stays inside the root is followed.
+   */
   async function readable(key: string): Promise<string | null> {
     const path = join(root, checkKey(key))
     let info
     try {
-      await assertInside(dirname(path), key)
+      if (!(await inside(dirname(path)))) return null
       info = await lstat(path)
     } catch (err) {
       if (missing(err)) return null
       throw err
-    }
-    if (info.isSymbolicLink()) {
-      throw new Error(`diskStorage: '${key}' is a symbolic link, which isn't followed`)
     }
     return info.isFile() ? path : null
   }
@@ -268,9 +274,11 @@ export function diskStorage(options: DiskStorageOptions): Storage {
       const path = await readable(key)
       return path ? readFile(path) : null
     },
-    async getStream(key) {
+    async getStream(key, range) {
+      const r = checkRange(range)
       const path = await readable(key)
-      return path ? (Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>) : null
+      if (!path) return null
+      return Readable.toWeb(createReadStream(path, r ?? {})) as ReadableStream<Uint8Array>
     },
     stat: statOf,
     async exists(key) {

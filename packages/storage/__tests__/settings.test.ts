@@ -31,12 +31,33 @@ it('reads nothing until first use, then the value the app bound', async () => {
 })
 
 it('fails startup naming every missing variable', async () => {
-  for (const name of ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY']) vi.stubEnv(name, '')
+  vi.stubEnv('S3_BUCKET', '')
+  vi.stubEnv('S3_ACCESS_KEY_ID', 'id')
+  vi.stubEnv('S3_SECRET_ACCESS_KEY', '')
   vi.stubEnv('S3_ENDPOINT', 'not a url')
   const app = new Application({ modules: [], settings: [S3Settings] })
   await expect(app.setup()).rejects.toThrow(
-    /S3_BUCKET[\s\S]*S3_ACCESS_KEY_ID[\s\S]*S3_SECRET_ACCESS_KEY[\s\S]*S3_ENDPOINT/,
+    /S3_BUCKET[\s\S]*S3_ENDPOINT[\s\S]*S3_SECRET_ACCESS_KEY/,
   )
+})
+
+it('takes no keys at all, signing with a credentials provider', async () => {
+  const auth: string[] = []
+  const fetch = (async (_url: string, init: RequestInit) => {
+    auth.push(new Headers(init.headers).get('authorization')!)
+    return new Response(null, { status: 404 })
+  }) as unknown as typeof globalThis.fetch
+  const files = s3FromSettings(S3Settings, {
+    fetch,
+    credentials: () => ({ accessKeyId: 'role', secretAccessKey: 's' }),
+  })
+  const app = new Application({
+    modules: [],
+    settings: [S3Settings.provide({ bucket: 'b', endpoint: 'http://minio.test' })],
+  })
+  await app.setup()
+  expect(await files.exists('k')).toBe(false)
+  expect(auth[0]).toContain('Credential=role/')
 })
 
 it('reads a second bucket under its own prefix', () => {

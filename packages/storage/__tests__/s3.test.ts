@@ -138,6 +138,76 @@ describe('s3Storage', () => {
 
   it('requires its credentials', () => {
     expect(() => s3Storage({ ...options, secretAccessKey: '' })).toThrow('secretAccessKey')
+    expect(() => s3Storage({ ...options, credentials: () => options })).toThrow('not both')
+  })
+
+  it('signs with keys from a credentials provider, fetched per request', async () => {
+    const { fetch, calls } = bucket()
+    let n = 0
+    const files = s3Storage({
+      bucket: 'files',
+      endpoint: 'http://s3.test',
+      fetch,
+      credentials: async () => ({
+        accessKeyId: `role-${++n}`,
+        secretAccessKey: 'secret',
+        sessionToken: 'token',
+      }),
+    })
+    await files.put('k', 'x')
+    await files.get('k')
+    expect(
+      calls.map((c) => c.headers.get('authorization')!.match(/Credential=([^/]+)/)![1]),
+    ).toEqual(['role-1', 'role-2'])
+    expect(calls[0].headers.get('x-amz-security-token')).toBe('token')
+    const url = new URL(await files.url('k'))
+    expect(url.searchParams.get('X-Amz-Credential')).toMatch(/^role-3\//)
+    expect(url.searchParams.get('X-Amz-Security-Token')).toBe('token')
+  })
+
+  it('aborts a request the bucket does not answer within timeoutMs', async () => {
+    const fetch = ((_url: string, init: RequestInit) =>
+      new Promise((_, reject) =>
+        init.signal!.addEventListener('abort', () => reject(init.signal!.reason)),
+      )) as unknown as typeof globalThis.fetch
+    const files = s3Storage({ ...options, endpoint: 'http://s3.test', fetch, timeoutMs: 20 })
+    await expect(files.get('slow.png')).rejects.toThrow("GET 'slow.png' got no answer within 20 ms")
+    expect(() => s3Storage({ ...options, timeoutMs: 0 })).toThrow('timeoutMs')
+  })
+
+  it('sends a Range header for a byte range; 416 reads as empty', async () => {
+    const calls: Request[] = []
+    const replies = [new Response('234', { status: 206 }), new Response('', { status: 416 })]
+    const fetch = (async (input: string, init: RequestInit) => {
+      calls.push(new Request(input, init))
+      return replies.shift()!
+    }) as unknown as typeof globalThis.fetch
+    const files = s3Storage({ ...options, endpoint: 'http://s3.test', fetch })
+    expect(await new Response(await files.getStream('f', { start: 2, end: 4 })).text()).toBe('234')
+    expect(calls[0].headers.get('range')).toBe('bytes=2-4')
+    expect(await new Response(await files.getStream('f', { start: 99 })).text()).toBe('')
+    expect(calls[1].headers.get('range')).toBe('bytes=99-')
+  })
+
+  it('refuses a whole file sent back for a byte range', async () => {
+    const fetch = (async () => new Response('0123456789')) as unknown as typeof globalThis.fetch
+    const files = s3Storage({ ...options, endpoint: 'http://s3.test', fetch })
+    await expect(files.getStream('f', { start: 2, end: 4 })).rejects.toThrow('whole file')
+    expect(await new Response(await files.getStream('f')).text()).toBe('0123456789')
+  })
+
+  it('signs response headers into a GET URL', async () => {
+    const files = s3Storage(options)
+    const url = new URL(
+      await files.url('a.png', {
+        contentType: 'image/png',
+        contentDisposition: 'inline; filename="a.png"',
+        cacheControl: 'public, max-age=600',
+      }),
+    )
+    expect(url.searchParams.get('response-content-type')).toBe('image/png')
+    expect(url.searchParams.get('response-content-disposition')).toBe('inline; filename="a.png"')
+    expect(url.searchParams.get('response-cache-control')).toBe('public, max-age=600')
   })
 
   describe('responses', () => {

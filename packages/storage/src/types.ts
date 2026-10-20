@@ -14,10 +14,17 @@ export interface Storage {
    * one gets `true`. A stream is written as it arrives, as with `put()`.
    */
   putIfAbsent(key: string, body: Body, options?: PutOptions): Promise<boolean>
-  /** The bytes under `key`, or `null` when there are none. */
+  /**
+   * The bytes under `key`, or `null` when there are none. On disk, a key that
+   * is a symbolic link, or leads outside the root through one, reads as missing.
+   */
   get(key: string): Promise<Uint8Array | null>
-  /** The file as a stream, for sending it on without holding it in memory; `null` when missing. */
-  getStream(key: string): Promise<ReadableStream<Uint8Array> | null>
+  /**
+   * The file as a stream, for sending it on without holding it in memory;
+   * `null` when missing. With `range`, only those bytes — for answering an
+   * HTTP `Range` request.
+   */
+  getStream(key: string, range?: ByteRange): Promise<ReadableStream<Uint8Array> | null>
   /** Size, modification time and (buckets, memory) content type; `null` when missing. */
   stat(key: string): Promise<FileInfo | null>
   exists(key: string): Promise<boolean>
@@ -32,7 +39,8 @@ export interface Storage {
   list(options?: ListOptions): Promise<ListPage>
   /**
    * A URL a browser can load `key` from: signed and expiring for a bucket,
-   * `baseUrl` + key for disk and memory (which throw without one).
+   * `baseUrl` + key for disk and memory (which throw without one, and ignore
+   * the response-header options — the app serving `baseUrl` sets those).
    */
   url(key: string, options?: UrlOptions): Promise<string>
 }
@@ -45,6 +53,23 @@ export interface PutOptions {
 export interface UrlOptions {
   /** Seconds a signed URL stays valid. Default 3600, at most 604800 (7 days). */
   expiresIn?: number
+  /** Buckets: the `Content-Type` the file is served with through this URL. */
+  contentType?: string
+  /** Buckets: the `Content-Disposition` sent, e.g. `inline; filename="cat.png"`. */
+  contentDisposition?: string
+  /** Buckets: the `Cache-Control` sent. */
+  cacheControl?: string
+}
+
+/**
+ * Bytes `start` to `end`, both included, counted from 0 — as in an HTTP
+ * `Range: bytes=start-end` header. `start` defaults to 0, `end` to the last
+ * byte; an `end` past the file stops at its end, a `start` past it reads
+ * nothing.
+ */
+export interface ByteRange {
+  start?: number
+  end?: number
 }
 
 export interface FileInfo {

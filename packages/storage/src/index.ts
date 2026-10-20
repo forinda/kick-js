@@ -24,6 +24,7 @@ export { memoryStorage, type MemoryStorageOptions } from './memory'
 export {
   s3Storage,
   type CompletedPart,
+  type S3Credentials,
   type Multipart,
   type S3Storage,
   type S3StorageOptions,
@@ -32,4 +33,12 @@ export {
   type UploadFormOptions,
   type UploadUrlOptions,
 } from './s3'
-export type { FileInfo, ListOptions, ListPage, PutOptions, Storage, UrlOptions } from './types'
+export type {
+  ByteRange,
+  FileInfo,
+  ListOptions,
+  ListPage,
+  PutOptions,
+  Storage,
+  UrlOptions,
+} from './types'

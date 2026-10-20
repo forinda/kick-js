@@ -43,6 +43,21 @@ describe.each([
     expect(await files.getStream('nope')).toBeNull()
   })
 
+  it('streams a byte range', async () => {
+    const files = await make()
+    await files.put('r.txt', '0123456789')
+    const read = async (range: { start?: number; end?: number }) =>
+      new Response(await files.getStream('r.txt', range)).text()
+    expect(await read({ start: 2, end: 4 })).toBe('234')
+    expect(await read({ start: 7 })).toBe('789')
+    expect(await read({ end: 1 })).toBe('01')
+    expect(await read({ start: 8, end: 99 })).toBe('89')
+    expect(await read({ start: 10 })).toBe('')
+    expect(await files.getStream('nope', { start: 1 })).toBeNull()
+    await expect(files.getStream('r.txt', { start: 5, end: 4 })).rejects.toThrow('invalid range')
+    await expect(files.getStream('r.txt', { start: -1 })).rejects.toThrow('invalid range')
+  })
+
   it('writes a stream as it arrives', async () => {
     const files = await make()
     const body = Readable.from([new TextEncoder().encode('ab'), new TextEncoder().encode('cd')])
@@ -163,12 +178,15 @@ describe('diskStorage', () => {
     await symlink(join(outside, 'secret.txt'), join(root, 'file-link'))
     const files = diskStorage({ root })
 
-    await expect(files.get('link/secret.txt')).rejects.toThrow('symbolic link')
-    await expect(files.stat('link/secret.txt')).rejects.toThrow('symbolic link')
+    // Reads see a link as missing — a 404, not a 500.
+    expect(await files.get('link/secret.txt')).toBeNull()
+    expect(await files.stat('link/secret.txt')).toBeNull()
+    expect(await files.getStream('link/secret.txt')).toBeNull()
     await expect(files.put('link/secret.txt', 'pwned')).rejects.toThrow('symbolic link')
     await expect(files.put('link/new/deep.txt', 'x')).rejects.toThrow('symbolic link')
     await expect(files.delete('link/secret.txt')).rejects.toThrow('symbolic link')
-    await expect(files.get('file-link')).rejects.toThrow('symbolic link')
+    expect(await files.get('file-link')).toBeNull()
+    expect(await files.exists('file-link')).toBe(false)
     expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('secret')
     expect(await readdir(outside)).toEqual(['secret.txt'])
     expect((await files.list()).files).toEqual([])
