@@ -21,14 +21,22 @@ type S3Fields = {
   bucket: string
   region?: string
   endpoint?: string
-  accessKeyId: string
-  secretAccessKey: string
+  accessKeyId?: string
+  secretAccessKey?: string
   sessionToken?: string
   forcePathStyle?: boolean
 }
 
-const REQUIRED = ['bucket', 'accessKeyId', 'secretAccessKey']
-const OPTIONAL = ['region', 'endpoint', 'sessionToken', 'forcePathStyle']
+// The keys come as a pair, or not at all: without them, s3FromSettings needs `credentials`.
+const REQUIRED = ['bucket']
+const OPTIONAL = [
+  'accessKeyId',
+  'secretAccessKey',
+  'region',
+  'endpoint',
+  'sessionToken',
+  'forcePathStyle',
+]
 
 /** String fields, written out so the app can use any schema library or none. Empty is unset. */
 const schema: KickSchema<S3Fields> = {
@@ -54,6 +62,10 @@ const schema: KickSchema<S3Fields> = {
         out[key] = raw
       }
     }
+    if (!out.accessKeyId !== !out.secretAccessKey) {
+      const unset = out.accessKeyId ? 'secretAccessKey' : 'accessKeyId'
+      issues.push({ path: [unset], message: 'Required with the other key', code: 'required' })
+    }
     return issues.length > 0 ? { success: false, issues } : { success: true, data: out as S3Fields }
   },
   toJsonSchema: () => ({
@@ -68,7 +80,11 @@ const schema: KickSchema<S3Fields> = {
   }),
 }
 
-/** `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_SESSION_TOKEN`, `S3_FORCE_PATH_STYLE`. */
+/**
+ * `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
+ * `S3_SESSION_TOKEN`, `S3_FORCE_PATH_STYLE`. Leave both keys unset on a host
+ * with an IAM role and pass `credentials` to {@link s3FromSettings}.
+ */
 export const S3Settings = defineSettings('S3', schema)
 
 /**
@@ -88,7 +104,13 @@ export function s3FromSettings(
     const settings = section.get()
     if (!storage || settings !== built) {
       built = settings
-      storage = s3Storage({ ...options, ...settings })
+      // Keys set in env win over a `credentials` option, like every other variable.
+      const { credentials, ...rest } = options
+      storage = s3Storage({
+        ...rest,
+        ...(settings.accessKeyId ? {} : { credentials }),
+        ...settings,
+      })
     }
     return storage
   }

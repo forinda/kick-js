@@ -1,4 +1,12 @@
-import { checkDelimiter, checkKey, checkLimit, collect, listPage, publicUrl } from './keys'
+import {
+  checkDelimiter,
+  checkKey,
+  checkLimit,
+  checkRange,
+  collect,
+  listPage,
+  publicUrl,
+} from './keys'
 import type { FileInfo, Storage } from './types'
 
 export interface MemoryStorageOptions {
@@ -46,9 +54,13 @@ export function memoryStorage(options: MemoryStorageOptions = {}): Storage {
     async get(key) {
       return read(key)
     },
-    async getStream(key) {
+    async getStream(key, range) {
       const bytes = read(key)
-      return bytes ? new Blob([bytes]).stream() : null
+      if (!bytes) return null
+      const r = checkRange(range)
+      return new Blob([
+        r ? bytes.subarray(r.start, r.end === undefined ? undefined : r.end + 1) : bytes,
+      ]).stream()
     },
     async stat(key) {
       const file = files.get(checkKey(key))

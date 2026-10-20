@@ -23,12 +23,15 @@ interface Storage {
   put(key: string, body: Body, options?: { contentType?: string }): Promise<void>
   putIfAbsent(key: string, body: Body, options?: { contentType?: string }): Promise<boolean>
   get(key: string): Promise<Uint8Array | null> // null when there is no such file
-  getStream(key: string): Promise<ReadableStream<Uint8Array> | null>
+  getStream(
+    key: string,
+    range?: { start?: number; end?: number },
+  ): Promise<ReadableStream<Uint8Array> | null>
   stat(key: string): Promise<FileInfo | null> // { key, size, lastModified, contentType? }
   exists(key: string): Promise<boolean>
   delete(key: string): Promise<void> // a missing key is not an error
   list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<ListPage>
-  url(key: string, options?: { expiresIn?: number }): Promise<string>
+  url(key: string, options?: UrlOptions): Promise<string> // expiresIn, plus response headers on buckets
 }
 
 // Bytes, text, or a stream: a web ReadableStream or a Node Readable
@@ -129,6 +132,38 @@ async download(ctx: RequestContext) {
 
 For a bucket, redirecting to `await files.url(key)` is usually better: the browser downloads straight from the bucket and your server sends nothing.
 
+### Range requests
+
+Pass `{ start, end }` to `getStream()` for part of a file: both are byte offsets counted from 0, and `end` is included, as in an HTTP `Range: bytes=start-end` header. On disk that reads only those bytes; on a bucket it sends a `Range` header. An `end` past the file stops at its end, and a `start` past it reads nothing. Answer a `Range` request so PDFs open fast and video can seek:
+
+```ts
+@Get('/:id/video')
+async video(ctx: RequestContext) {
+  const key = `videos/${ctx.params.id}.mp4`
+  const info = await this.files.stat(key)
+  if (!info) return ctx.problem.notFound()
+  const headers = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes' }
+  // Single ranges only; `bytes=-500` (the last 500) is left out here.
+  const match = /^bytes=(\d+)-(\d*)$/.exec(String(ctx.headers.range ?? ''))
+  if (!match) {
+    const body = await this.files.getStream(key)
+    return ctx.sendResponse(new Response(body, { headers: { ...headers, 'content-length': String(info.size) } }))
+  }
+  const start = Number(match[1])
+  const end = Math.min(match[2] ? Number(match[2]) : info.size - 1, info.size - 1)
+  if (start > end) {
+    return ctx.sendResponse(new Response(null, { status: 416, headers: { 'content-range': `bytes */${info.size}` } }))
+  }
+  const body = await this.files.getStream(key, { start, end })
+  await ctx.sendResponse(
+    new Response(body, {
+      status: 206,
+      headers: { ...headers, 'content-range': `bytes ${start}-${end}/${info.size}`, 'content-length': String(end - start + 1) },
+    }),
+  )
+}
+```
+
 ## Listing
 
 `list()` returns files whose key starts with `prefix`, in key order, up to `limit` (default and maximum 1000) at a time. Pass the returned `cursor` back for the next page. No `cursor` means it was the last page.
@@ -190,7 +225,18 @@ A relative `root` resolves from `process.cwd()` when `diskStorage()` is called. 
 
 ## URLs
 
-- **Buckets:** `url(key, { expiresIn })` returns a presigned GET URL that works for `expiresIn` seconds. The default is 3600 and the maximum is 604800 (7 days), which is S3's limit. The bucket can stay private.
+- **Buckets:** `url(key, { expiresIn })` returns a presigned GET URL that works for `expiresIn` seconds. The default is 3600 and the maximum is 604800 (7 days), which is S3's limit. The bucket can stay private. `contentType`, `contentDisposition` and `cacheControl` are signed into the URL, and the bucket sends them as `Content-Type`, `Content-Disposition` and `Cache-Control` with the file:
+
+  ```ts
+  const link = await files.url(key, {
+    contentType: 'application/pdf',
+    contentDisposition: 'inline; filename="invoice.pdf"',
+    cacheControl: 'private, max-age=600',
+  })
+  ```
+
+  S3 has no such parameter for other headers, such as `X-Content-Type-Options`. A cache lifetime longer than the URL's `expiresIn` doesn't help: the cached URL stops working first.
+
 - **Disk and memory:** `url(key)` is `baseUrl` followed by the key, each segment URL-encoded. Without `baseUrl` it throws. Serving that directory is up to the app, for example with `express.static('./uploads')` mounted at `/uploads`, or behind a CDN. These URLs don't expire, so don't put private files under a public `baseUrl`.
 
 ## Uploads straight to the bucket
@@ -436,6 +482,24 @@ Without `endpoint`, the driver uses AWS's virtual-hosted address, `https://<buck
 
 Temporary credentials take a `sessionToken`. `fetch` replaces the global one, for a proxy or a test.
 
+### IAM roles instead of keys
+
+On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
+
+```ts
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers'
+
+s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials: fromNodeProviderChain() })
+```
+
+### Timeouts
+
+`timeoutMs` limits how long each request waits for the bucket to answer. Past it, the request is aborted and the call rejects, so a slow bucket fails the route instead of hanging it. It covers the wait for the response, not reading a body that is already arriving: a download that has started runs at the speed it gets.
+
+```ts
+s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials, timeoutMs: 5000 })
+```
+
 ## Config from the environment
 
 `@forinda/kickjs-storage/settings` has a [settings section](./configuration.md) for a bucket. It is validated when the app starts and listed by `kick env example`:
@@ -458,7 +522,9 @@ import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
 ```
 
-`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. A missing `S3_BUCKET`, `S3_ACCESS_KEY_ID` or `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. A missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+
+On a host with an IAM role, leave both keys unset and pass the provider as an option: `s3FromSettings(S3Settings, { credentials: fromNodeProviderChain(), timeoutMs: 5000 })`. Keys set in the environment win over `credentials`. With neither, the first call fails.
 
 A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Pass it as `s3FromSettings(Backups)`; the adapter that takes that storage declares it.
 
@@ -500,6 +566,6 @@ await createTestApp({
 
 - **Direct and multipart uploads are bucket only.** `uploadUrl()`, `uploadForm()` and `multipart` exist on `s3Storage` (typed `S3Storage`), not on disk or memory. In development, run MinIO, as shown in [In tests](#in-tests).
 - **Disk can't hold both `a` and `a/b`.** On disk, a key is a file and a key prefix is a folder, so `put('a/b')` after `put('a')`, or the reverse, throws a clear error. Buckets and memory allow both.
-- **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, is refused, so a link can't expose files outside the root.
+- **Disk doesn't follow symbolic links.** A key that leads through a link inside the root, or names a link, reads as missing (`get()` returns `null`, so a route answers 404) and is refused for writes. A link can't expose files outside the root.
 - **`contentType`** is kept by buckets and memory, and ignored by disk. For disk, the server serving the files picks the type from the extension.
 - **Edge runtimes.** `memoryStorage` and `s3Storage` run on Workers, Bun and Deno, so a Worker can reach R2 through its S3 API with an access key. `diskStorage`, `TusAdapter` and the settings entry are Node only.

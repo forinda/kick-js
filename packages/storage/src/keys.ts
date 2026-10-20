@@ -1,3 +1,5 @@
+import type { ByteRange } from './types'
+
 /**
  * Keys are `/`-separated paths like `avatars/42.png`. Refused: empty,
  * a leading `/`, empty / `.` / `..` segments, `\` and NUL — so a key built
@@ -133,4 +135,17 @@ export function checkDelimiter(delimiter: string | undefined) {
     throw new Error('storage: list() delimiter must be a non-empty string')
   }
   return delimiter
+}
+
+/** A {@link ByteRange} checked: whole, non-negative, `end` not before `start`. */
+export function checkRange(range: ByteRange | undefined): { start: number; end?: number } | null {
+  if (!range) return null
+  const { start = 0, end } = range
+  const whole = (n: number) => Number.isInteger(n) && n >= 0
+  if (!whole(start) || (end !== undefined && (!whole(end) || end < start))) {
+    throw new Error(
+      `storage: invalid range ${start}-${end ?? ''}: whole bytes from 0, end not before start`,
+    )
+  }
+  return { start, end }
 }

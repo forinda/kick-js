@@ -3,6 +3,7 @@ import {
   checkDelimiter,
   checkKey,
   checkLimit,
+  checkRange,
   concatBytes,
   encodeKey,
   encodeSegment,
@@ -25,10 +26,24 @@ export interface S3StorageOptions {
    * (MinIO and most self-hosted services need it), `false` for AWS.
    */
   forcePathStyle?: boolean
-  accessKeyId: string
-  secretAccessKey: string
+  /** Fixed keys. Set both, or pass {@link S3StorageOptions.credentials} instead. */
+  accessKeyId?: string
+  secretAccessKey?: string
   /** For temporary credentials (STS, an assumed role). */
   sessionToken?: string
+  /**
+   * Keys fetched as needed instead of fixed ones — an IAM role on ECS, EC2 or
+   * EKS. Called before every request and signed URL, so it should cache and
+   * refresh before expiry itself — as `fromNodeProviderChain()` from
+   * `@aws-sdk/credential-providers` does.
+   */
+  credentials?: () => S3Credentials | Promise<S3Credentials>
+  /**
+   * Milliseconds to wait for the bucket to start answering each request;
+   * past it the request is aborted and the call rejects. Covers the wait for
+   * the response, not reading a body already arriving. Default: no limit.
+   */
+  timeoutMs?: number
   /** Default the global `fetch`. */
   fetch?: typeof fetch
   /**
@@ -39,6 +54,12 @@ export interface S3StorageOptions {
   partSize?: number
   /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */
   partConcurrency?: number
+}
+
+export interface S3Credentials {
+  accessKeyId: string
+  secretAccessKey: string
+  sessionToken?: string
 }
 
 // SHA-256 of nothing.
@@ -268,8 +289,19 @@ function checkPartNumber(partNumber: number) {
  * Cloudflare R2, MinIO, and other S3 APIs. No AWS SDK.
  */
 export function s3Storage(options: S3StorageOptions): S3Storage {
-  for (const name of ['bucket', 'accessKeyId', 'secretAccessKey'] as const) {
-    if (!options[name]) throw new Error(`s3Storage: \`${name}\` is required`)
+  if (!options.bucket) throw new Error('s3Storage: `bucket` is required')
+  if (options.credentials) {
+    if (options.accessKeyId || options.secretAccessKey) {
+      throw new Error('s3Storage: pass `credentials` or fixed keys, not both')
+    }
+  } else {
+    for (const name of ['accessKeyId', 'secretAccessKey'] as const) {
+      if (!options[name]) throw new Error(`s3Storage: \`${name}\` is required (or \`credentials\`)`)
+    }
+  }
+  const { timeoutMs } = options
+  if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs < 1)) {
+    throw new Error('s3Storage: timeoutMs must be a whole number of milliseconds, at least 1')
   }
   const region = options.region ?? 'us-east-1'
   const endpoint = new URL(options.endpoint ?? `https://s3.${region}.amazonaws.com`)
@@ -287,7 +319,17 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   if (!Number.isInteger(partConcurrency) || partConcurrency < 1) {
     throw new Error('s3Storage: partConcurrency must be a whole number, at least 1')
   }
-  const signing = () => ({ ...options, region, date: new Date() })
+  /** The keys to sign with now, the region and the time. */
+  const signing = async () => {
+    const keys = options.credentials
+      ? await options.credentials()
+      : {
+          accessKeyId: options.accessKeyId!,
+          secretAccessKey: options.secretAccessKey!,
+          sessionToken: options.sessionToken,
+        }
+    return { ...keys, region, date: new Date() }
+  }
   // The bucket itself (for listing) is BUCKET, never a key: every key goes
   // through encodeKey's check, so `''` can't address the bucket.
   const urlOf = (key: string | typeof BUCKET, query: Record<string, string> = {}) => {
@@ -309,11 +351,11 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   async function send(method: string, key: string | typeof BUCKET, request: Request = {}) {
     const url = urlOf(key, request.query)
     const payloadHash = request.body ? await sha256(request.body) : EMPTY_HASH
-    const now = signing()
+    const now = await signing()
     const headers: Record<string, string> = {
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate(now.date),
-      ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
+      ...(now.sessionToken ? { 'x-amz-security-token': now.sessionToken } : {}),
       ...request.amz,
     }
     const { signature, credential, signedHeaders } = await signV4(
@@ -323,16 +365,31 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       payloadHash,
       now,
     )
-    return fetchFn(signedUrl(url), {
-      method,
-      headers: {
-        ...headers,
-        ...(request.contentType ? { 'content-type': request.contentType } : {}),
-        ...request.headers,
-        authorization: `AWS4-HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
-      },
-      body: request.body,
-    })
+    // Aborts only the wait for the response: a body already arriving is left to its reader.
+    const controller = timeoutMs ? new AbortController() : undefined
+    const timer =
+      controller &&
+      setTimeout(() => {
+        const name = String(key === BUCKET ? options.bucket : key)
+        controller.abort(
+          new Error(`s3Storage: ${method} '${name}' got no answer within ${timeoutMs} ms`),
+        )
+      }, timeoutMs)
+    try {
+      return await fetchFn(signedUrl(url), {
+        method,
+        headers: {
+          ...headers,
+          ...(request.contentType ? { 'content-type': request.contentType } : {}),
+          ...request.headers,
+          authorization: `AWS4-HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+        },
+        body: request.body,
+        signal: controller?.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   /** Send, and throw on anything but 2xx (and 404 when `missingOk`). */
@@ -354,19 +411,12 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     )
   }
 
-  const presignFor = (
+  const presignFor = async (
     method: string,
     url: URL,
     expiresIn: number,
     headers: Record<string, string> = {},
-  ) =>
-    presign(
-      url,
-      checkExpires(expiresIn),
-      { ...signing(), sessionToken: options.sessionToken },
-      method,
-      headers,
-    )
+  ) => presign(url, checkExpires(expiresIn), await signing(), method, headers)
 
   /**
    * Join an upload's parts. With `createOnly`, only if nothing is at `key`
@@ -627,15 +677,16 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       throw new Error('s3Storage: uploadForm needs whole-number sizes, 0 <= minSize <= maxSize')
     }
     const expiresIn = checkExpires(formOptions.expiresIn ?? 3600)
-    const date = new Date()
+    const keys = await signing()
+    const date = keys.date
     const stamp = amzDate(date)
-    const credential = `${options.accessKeyId}/${stamp.slice(0, 8)}/${region}/s3/aws4_request`
+    const credential = `${keys.accessKeyId}/${stamp.slice(0, 8)}/${region}/s3/aws4_request`
     const fields: Record<string, string> = {
       key,
       'x-amz-algorithm': 'AWS4-HMAC-SHA256',
       'x-amz-credential': credential,
       'x-amz-date': stamp,
-      ...(options.sessionToken ? { 'x-amz-security-token': options.sessionToken } : {}),
+      ...(keys.sessionToken ? { 'x-amz-security-token': keys.sessionToken } : {}),
     }
     if (contentType !== undefined) {
       if (!/^[\w.+-]+\/[\w.+-]+$/.test(contentType)) {
@@ -655,7 +706,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
     // Base64 without Buffer, for edge runtimes.
     const encoded = btoa(String.fromCharCode(...utf8(JSON.stringify(policy))))
-    const signingKey = await keyFor(options.secretAccessKey, stamp.slice(0, 8), region)
+    const signingKey = await keyFor(keys.secretAccessKey, stamp.slice(0, 8), region)
     return {
       url: `${base}/`,
       fields: {
@@ -699,12 +750,19 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       const res = await call('GET', key, {}, true)
       return res.status === 404 ? null : new Uint8Array(await res.arrayBuffer())
     },
-    async getStream(key) {
-      const res = await call('GET', key, {}, true)
-      if (res.status === 404) {
+    async getStream(key, range) {
+      const r = checkRange(range)
+      const res = await send(
+        'GET',
+        key,
+        r ? { headers: { range: `bytes=${r.start}-${r.end ?? ''}` } } : {},
+      )
+      // 416: the range starts past the end — nothing to read, as on disk.
+      if (res.status === 404 || res.status === 416) {
         await res.body?.cancel()
-        return null
+        return res.status === 404 ? null : new Blob([]).stream()
       }
+      if (!res.ok) return fail(res, 'GET', key)
       return res.body ?? new Blob([]).stream()
     },
     stat: statOf,
@@ -740,7 +798,13 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       }
     },
     async url(key, urlOptions = {}) {
-      return presignFor('GET', urlOf(key), urlOptions.expiresIn ?? 3600)
+      // S3's response-* parameters: the bucket sends these headers with the file.
+      const query: Record<string, string> = {}
+      if (urlOptions.contentType) query['response-content-type'] = urlOptions.contentType
+      if (urlOptions.contentDisposition)
+        query['response-content-disposition'] = urlOptions.contentDisposition
+      if (urlOptions.cacheControl) query['response-cache-control'] = urlOptions.cacheControl
+      return presignFor('GET', urlOf(key, query), urlOptions.expiresIn ?? 3600)
     },
     async uploadUrl(key, uploadOptions = {}) {
       return presignFor('PUT', urlOf(key), uploadOptions.expiresIn ?? 3600, {
