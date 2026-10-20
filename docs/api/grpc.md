@@ -113,7 +113,7 @@ A thrown `HttpException` is mapped through `codeForStatus`, so a 404 reaches the
 | Option          | Default | Description                                                                                                                                                                                                                       |
 | --------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `prefix`        | `''`    | Path prefix for all RPCs. Leave empty for native gRPC clients.                                                                                                                                                                    |
-| `grpc`          | `true`  | Enable the binary gRPC protocol (requires HTTP/2 in front)                                                                                                                                                                        |
+| `grpc`          | `true`  | Enable the native gRPC protocol (needs HTTP/2 — see below)                                                                                                                                                                        |
 | `grpcWeb`       | `true`  | Enable gRPC-Web (works over HTTP/1.1)                                                                                                                                                                                             |
 | `connect`       | `true`  | Enable the Connect protocol (JSON over HTTP, curl-able)                                                                                                                                                                           |
 | `contributors`  | `[]`    | Context Contributors applied to every RPC, at the `adapter` level of the **method > class > module > adapter > global** chain. `module` and `global` are HTTP-only and never reach an RPC — this is the way to cover all of them. |
@@ -124,13 +124,13 @@ A thrown `HttpException` is mapped through `codeForStatus`, so a 404 reaches the
 
 ## Protocol support
 
-The adapter rides the KickJS HTTP server, which speaks HTTP/1.1:
+The adapter rides the KickJS server:
 
-| Protocol    | Works | Notes                                                  |
-| ----------- | ----- | ------------------------------------------------------ |
-| Connect     | ✅    | JSON or binary over HTTP/1.1                           |
-| gRPC-Web    | ✅    | Browser clients                                        |
-| native gRPC | ❌    | Needs HTTP/2 + trailers — terminate with a proxy first |
+| Protocol    | HTTP/1.1 (default) | `server: { tls, http2: true }` | Notes                               |
+| ----------- | ------------------ | ------------------------------ | ----------------------------------- |
+| Connect     | ✅                 | ✅                             | JSON or binary over HTTP            |
+| gRPC-Web    | ✅                 | ✅                             | Browser clients                     |
+| native gRPC | ❌                 | ✅ (Fastify, h3)               | Needs HTTP/2 + trailers, or a proxy |
 
 ## Related
 
