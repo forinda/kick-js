@@ -237,23 +237,51 @@ From the first row until the loop ends, the stream occupies one connection:
 
 - **Breaking out of the loop or throwing closes the stream** and gives the connection back. Errors are translated like any other query's.
 - **On a pool (Postgres, MySQL)**, a query inside the loop takes a second connection. A slow loop over many streams at once can use up the pool.
-- **On SQLite, or inside a transaction, there is only one connection.** A query issued inside the loop waits until the stream ends, so awaiting it in the loop never returns. Collect what you need to write and run it after the loop, or stream outside the transaction.
+- **On SQLite, or inside a transaction, there is only one connection.** A query issued inside the loop waits until the stream ends, so awaiting it in the loop never returns. Inside `db.transaction()` that includes queries made through the plain client, since they [join the transaction](./pooling.md).
 
 ```ts
 // SQLite or a transaction: this loop never finishes.
 for await (const row of trx.selectFrom('events').selectAll().stream()) {
   await trx.updateTable('events').set({ exported: true }).where('id', '=', row.id).execute()
 }
+```
 
-// Instead: stream, collect the ids, then update.
-const ids: number[] = []
-for await (const row of trx.selectFrom('events').select('id').stream()) ids.push(row.id)
-await trx.updateTable('events').set({ exported: true }).where('id', 'in', ids).execute()
+So when you need to write as you read on one connection, don't stream. If the rows to change can be picked by a `where`, one set-based update does it without reading them at all:
+
+```ts
+await trx.updateTable('events').set({ exported: true }).where('exported', '=', false).execute()
+```
+
+If each row needs work first, page by cursor instead. Each batch is read, which frees the connection, then written, so memory stays bounded and no query waits on another:
+
+```ts
+let lastId = 0
+for (;;) {
+  const batch = await trx
+    .selectFrom('events')
+    .selectAll()
+    .where('id', '>', lastId)
+    .orderBy('id')
+    .limit(500)
+    .execute()
+  if (batch.length === 0) break
+  await exporter.write(batch)
+  await trx
+    .updateTable('events')
+    .set({ exported: true })
+    .where(
+      'id',
+      'in',
+      batch.map((row) => row.id),
+    )
+    .execute()
+  lastId = batch.at(-1)!.id
+}
 ```
 
 ### Streaming to an HTTP response
 
-Turn the rows into a `ReadableStream` and send it with `ctx.sendResponse()`. This works on every runtime, waits for a slow client instead of buffering, and stops reading when the client disconnects:
+Turn the rows into a `ReadableStream` and send it with `ctx.sendResponse()`, which works on the Express, Fastify and h3 runtimes. The stream below pulls a row only when the client is ready for more, and cancelling it — the client disconnecting — closes the database stream:
 
 ```ts
 import { Controller, Get, Inject, type RequestContext } from '@forinda/kickjs'
@@ -266,23 +294,33 @@ export class ExportController {
   @Get('/events.ndjson')
   async events(ctx: RequestContext) {
     const rows = this.db.selectFrom('events').selectAll().orderBy('id').stream(500)
-    const encoder = new TextEncoder()
-    const body = ReadableStream.from(
-      (async function* () {
-        for await (const row of rows) yield encoder.encode(`${JSON.stringify(row)}\n`)
-      })(),
-    )
     await ctx.sendResponse(
-      new Response(body, { headers: { 'content-type': 'application/x-ndjson' } }),
+      new Response(ndjson(rows), { headers: { 'content-type': 'application/x-ndjson' } }),
     )
   }
 }
+
+/** One JSON line per row, read from `rows` only as fast as the client takes them. */
+function ndjson(rows: AsyncIterable<unknown>): ReadableStream<Uint8Array> {
+  const it = rows[Symbol.asyncIterator]()
+  const encoder = new TextEncoder()
+  return new ReadableStream({
+    async pull(controller) {
+      const { value, done } = await it.next()
+      if (done) controller.close()
+      else controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`))
+    },
+    // The client went away: close the database stream.
+    async cancel() {
+      await it.return?.()
+    },
+  })
+}
 ```
 
-One JSON object per line (NDJSON) lets the client process rows as they arrive. For CSV, yield a header line and then one line per row. When the client disconnects, the body is cancelled, which ends the generator and closes the database stream.
+One JSON object per line (NDJSON) lets the client process rows as they arrive. For CSV, enqueue a header line first and then one line per row.
 
 - **The status is sent with the first chunk.** An error halfway through can't become a 500 anymore; the response just ends early. If the client must know the export is complete, end with a summary line (`{"done":true,"rows":1200}`) and have it check for that.
-- **`ReadableStream.from`** needs Node 20.6 or later.
 - **For a live feed** of changes rather than an export, use [server-sent events](../controllers.md#server-sent-events) (`ctx.sse()`).
 
 ## Pagination with `ctx.paginate`
