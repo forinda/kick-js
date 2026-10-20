@@ -83,7 +83,6 @@ export class UsersRpc {
 ```ts
 // services/users/src/index.ts
 import './config'
-import { readFileSync } from 'node:fs'
 import { bootstrap } from '@forinda/kickjs'
 import { fastifyRuntime } from '@forinda/kickjs/fastify'
 import { GrpcAdapter } from '@forinda/kickjs-grpc'
@@ -93,15 +92,15 @@ export const app = await bootstrap({
   modules,
   runtime: fastifyRuntime(),
   adapters: [GrpcAdapter()],
-  server: {
-    tls: { key: readFileSync('certs/key.pem'), cert: readFileSync('certs/cert.pem') },
-    http2: true,
-  },
+  // Cleartext HTTP/2: reachable only inside the private network (or from a mesh sidecar).
+  server: { http2: 'h2c' },
   management: { port: 9090 },
 })
 ```
 
-Native gRPC needs HTTP/2, so **users** runs on Fastify (or h3) with `http2`. Inside a service mesh, where the sidecar handles TLS, use `server: { http2: 'h2c' }` and drop the certificate. See [Which protocols actually work](./grpc.md#which-protocols-actually-work).
+Native gRPC needs HTTP/2, so **users** runs on Fastify (or h3) with `http2`. `'h2c'` suits a private network or a service mesh whose sidecar handles TLS; clients then use an `http://` URL.
+
+Across a network you don't trust, serve TLS instead — `server: { tls: { key, cert }, http2: true }` — and use an `https://` URL. The calling service has to trust that certificate: with a private CA, start it with `NODE_EXTRA_CA_CERTS=/certs/ca.pem`, or pass `nodeOptions: { ca }` to `createGrpcTransport`. See [Which protocols actually work](./grpc.md#which-protocols-actually-work).
 
 ## orders: calling users
 
@@ -255,12 +254,13 @@ A handler that throws doesn't acknowledge the message, so Kafka delivers it agai
 services:
   users:
     build: ./services/users
+    ports: ['3001:3000'] # only to try it from the host; drop in production
     environment: { DATABASE_URL: postgres://... }
   orders:
     build: ./services/orders
     ports: ['3000:3000']
     environment:
-      USERS_URL: https://users:3000
+      USERS_URL: http://users:3000
       KAFKA_BROKERS: kafka:9092
     depends_on: [users, kafka]
   notifications:
@@ -271,12 +271,12 @@ services:
     image: apache/kafka:3.9.0
 ```
 
-Each service builds with `kick build` and the Dockerfile `kick new` creates ([Deployment](./deployment.md)). Only **orders** publishes a port; the other two are reachable inside the network only.
+Each service builds with `kick build` and the Dockerfile `kick new` creates ([Deployment](./deployment.md)). **orders** is the public API; **users** publishes `3001` only so you can try it from the host, and **notifications** has no port at all. Inside the network, **orders** reaches **users** at `users:3000`.
 
-Check the chain without a gRPC client. The Connect protocol answers JSON over plain HTTP on the same port:
+Check **users** without a gRPC client. The Connect protocol answers JSON on the same port; the port speaks only HTTP/2, so tell curl to use it:
 
 ```bash
-curl -k -X POST https://localhost:3001/shop.users.v1.UserService/GetUser \
+curl --http2-prior-knowledge -X POST http://localhost:3001/shop.users.v1.UserService/GetUser \
   -H 'Content-Type: application/json' -d '{"id":"u_1"}'
 ```
 

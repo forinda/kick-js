@@ -51,7 +51,7 @@ gRPC clients negotiate HTTP/2; browsers, curl and Connect clients on HTTP/1.1 st
 
 Behind a service mesh whose sidecar handles TLS and speaks cleartext HTTP/2 to the app (Envoy, Linkerd, Istio), use `server: { http2: 'h2c' }` instead and drop the certificate.
 
-Otherwise terminate HTTP/2 in front of the app — Envoy, nginx, a service mesh, Cloud Run, or any HTTP/2-capable ingress — and forward to the KickJS server. RPC paths are identical either way, so service code does not change.
+A proxy or ingress in front (Envoy, nginx, Cloud Run) doesn't lift the requirement: native gRPC needs HTTP/2 on every hop, so the proxy's connection to the app has to be HTTP/2 too — `h2c` or TLS, set in the proxy's upstream config. A proxy that forwards over HTTP/1.1 breaks native gRPC. On Express, which can't serve HTTP/2, offer Connect or gRPC-Web instead. RPC paths are identical on every protocol, so service code does not change.
 
 ::: warning RPCs are mounted at the root
 Because most native gRPC clients hard-code the `/package.Service/Method` path and cannot send a prefix, `prefix` defaults to empty. RPCs therefore sit at the root (`/user.v1.UserService/GetUser`) while HTTP routes keep their `apiPrefix` + version mount (`/api/v1/users`). Set `prefix` only if native gRPC clients are out of scope.

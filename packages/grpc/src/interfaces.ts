@@ -65,7 +65,8 @@ export interface GrpcAdapterOptions {
    * Mind the transport: the gRPC protocol requires HTTP/2 and access to
    * HTTP trailers. On the default HTTP/1.1 server, gRPC-Web and Connect
    * clients work but native gRPC clients do not — run on Fastify or h3 with
-   * `server: { tls, http2: true }`, or put an HTTP/2 proxy in front.
+   * `server: { tls, http2: true }`, or with `server: { http2: 'h2c' }` behind
+   * a proxy that speaks HTTP/2 to the app.
    */
   grpc?: boolean
   /** Enable the gRPC-Web protocol (works over HTTP/1.1). Defaults to `true`. */

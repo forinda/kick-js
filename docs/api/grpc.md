@@ -133,11 +133,11 @@ A thrown `HttpException` is mapped through `codeForStatus`, so a 404 reaches the
 
 The adapter rides the KickJS server:
 
-| Protocol    | HTTP/1.1 (default) | `server: { tls, http2: true }` | Notes                               |
-| ----------- | ------------------ | ------------------------------ | ----------------------------------- |
-| Connect     | ✅                 | ✅                             | JSON or binary over HTTP            |
-| gRPC-Web    | ✅                 | ✅                             | Browser clients                     |
-| native gRPC | ❌                 | ✅ (Fastify, h3)               | Needs HTTP/2 + trailers, or a proxy |
+| Protocol    | HTTP/1.1 (default) | `server: { tls, http2: true }` | Notes                                |
+| ----------- | ------------------ | ------------------------------ | ------------------------------------ |
+| Connect     | ✅                 | ✅                             | JSON or binary over HTTP             |
+| gRPC-Web    | ✅                 | ✅                             | Browser clients                      |
+| native gRPC | ❌                 | ✅ (Fastify, h3)               | Needs HTTP/2 + trailers on every hop |
 
 Behind a service mesh that speaks cleartext HTTP/2 to the app, `server: { http2: 'h2c' }` serves native gRPC without a certificate.
 
