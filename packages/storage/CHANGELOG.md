@@ -1,5 +1,11 @@
 # @forinda/kickjs-storage
 
+## 0.3.1
+
+### Patch Changes
+
+- [#995](https://github.com/forinda/kick-js/pull/995) [`a995470`](https://github.com/forinda/kick-js/commit/a995470711a112e317ba7c086f9394a20df6d0ae) Thanks [@forinda](https://github.com/forinda)! - The `@forinda/kickjs` peer range is now `>=10.1.0` with no upper bound, so the next kickjs major installs without a peer warning and doesn't force a storage release alongside it.
+
 ## 0.3.0
 
 ### Minor Changes
