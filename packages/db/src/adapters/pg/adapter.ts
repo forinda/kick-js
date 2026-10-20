@@ -158,14 +158,30 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
       await pool.query(`DELETE FROM ${T} WHERE id = $1`, [id])
     },
 
-    async acquireLock(owner: string): Promise<boolean> {
-      const r = await pool.query(
-        `UPDATE ${L}
-         SET locked_at = CURRENT_TIMESTAMP, locked_by = $1
-         WHERE id = 1 AND locked_at IS NULL`,
+    async acquireLock(owner: string, staleAfterSeconds?: number): Promise<boolean> {
+      const r =
+        staleAfterSeconds === undefined
+          ? await pool.query(
+              `UPDATE ${L}
+               SET locked_at = CURRENT_TIMESTAMP, locked_by = $1
+               WHERE id = 1 AND locked_at IS NULL`,
+              [owner],
+            )
+          : await pool.query(
+              `UPDATE ${L}
+               SET locked_at = CURRENT_TIMESTAMP, locked_by = $1
+               WHERE id = 1 AND (locked_at IS NULL
+                 OR locked_at < CURRENT_TIMESTAMP - $2::int * INTERVAL '1 second')`,
+              [owner, staleAfterSeconds],
+            )
+      return r.rowCount === 1
+    },
+
+    async refreshLock(owner: string) {
+      await pool.query(
+        `UPDATE ${L} SET locked_at = CURRENT_TIMESTAMP WHERE id = 1 AND locked_by = $1`,
         [owner],
       )
-      return r.rowCount === 1
     },
 
     async releaseLock() {

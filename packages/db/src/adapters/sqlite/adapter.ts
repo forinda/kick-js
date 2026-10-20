@@ -133,15 +133,23 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
       database.prepare(`DELETE FROM ${T} WHERE id = ?`).run(id)
     },
 
-    async acquireLock(owner: string): Promise<boolean> {
+    async acquireLock(owner: string, staleAfterSeconds?: number): Promise<boolean> {
+      // datetime('now') text sorts as time, so a string comparison finds a
+      // stale lock. Without a limit, datetime('now', NULL) is NULL: never stale.
       const r = database
         .prepare(
           `UPDATE ${L}
            SET locked_at = datetime('now'), locked_by = ?
-           WHERE id = 1 AND locked_at IS NULL`,
+           WHERE id = 1 AND (locked_at IS NULL OR locked_at < datetime('now', ?))`,
         )
-        .run(owner)
+        .run(owner, staleAfterSeconds === undefined ? null : `-${staleAfterSeconds} seconds`)
       return r.changes === 1
+    },
+
+    async refreshLock(owner: string) {
+      database
+        .prepare(`UPDATE ${L} SET locked_at = datetime('now') WHERE id = 1 AND locked_by = ?`)
+        .run(owner)
     },
 
     async releaseLock() {

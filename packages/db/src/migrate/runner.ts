@@ -5,7 +5,7 @@ import {
   MigrationHashError,
   UnreviewedMigrationError,
 } from './errors'
-import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
+import { checkDrift, type DriftBehavior, type DriftIgnore, type DriftLogger } from './drift'
 import { enforceEnumDropGate } from './enum-drop-gate'
 import { runCodeMigration } from './code-migration'
 import { migrationFolders, type MigrationFolder, type MigrationsLocation } from './source'
@@ -24,8 +24,17 @@ export interface RunnerOptions {
   requireReviewed?: boolean
   /** Owner string written into the lock table for diagnostics. */
   owner?: string
+  /**
+   * Seconds after which a lock nobody has refreshed is taken over. The runner
+   * refreshes its lock every quarter of this while it works, so only a holder
+   * that died (killed mid-migration, OOM) stops refreshing. Default 600; `0`
+   * never takes a lock over — release one by hand with `kick db migrate unlock`.
+   */
+  lockStaleAfter?: number
   /** Drift detection mode. Default 'error'. */
   driftCheck?: DriftBehavior
+  /** Tables and indexes the drift check leaves out — ones the app creates at runtime. */
+  driftIgnore?: DriftIgnore
   /** Logger surface for drift warnings. Defaults to console. */
   log?: DriftLogger
   /**
@@ -113,16 +122,34 @@ async function folderOf(id: string, opts: RunnerOptions): Promise<MigrationFolde
 
 async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T> {
   const owner = opts.owner ?? `${process.pid}@${new Date().toISOString()}`
-  const got = await opts.adapter.acquireLock(owner)
+  const staleAfter = opts.lockStaleAfter ?? 600
+  if (!Number.isInteger(staleAfter) || staleAfter < 0) {
+    throw new Error('kickjs-db: lockStaleAfter must be a whole number of seconds, 0 or more')
+  }
+  const { adapter } = opts
+  const takeOver = staleAfter > 0 && adapter.refreshLock !== undefined
+  const got = await adapter.acquireLock(owner, takeOver ? staleAfter : undefined)
   if (!got) {
     throw new MigrationLockError(
-      'Another process holds the migration lock. If none is running — a deploy was killed mid-migration — release it with `kick db migrate unlock`.',
+      takeOver
+        ? `Another process holds the migration lock and refreshed it within the last ${staleAfter}s. If none is running, it is taken over once that long has passed, or release it now with \`kick db migrate unlock\`.`
+        : 'Another process holds the migration lock. If none is running — a deploy was killed mid-migration — release it with `kick db migrate unlock`.',
     )
   }
+  // A heartbeat, so a long migration's lock never looks stale. A refresh that
+  // fails is retried on the next beat; the migration itself carries on.
+  const beat = takeOver
+    ? setInterval(
+        () => void adapter.refreshLock!(owner).catch(() => {}),
+        Math.max(1, Math.floor(staleAfter / 4)) * 1000,
+      )
+    : undefined
+  beat?.unref?.()
   try {
     return await fn()
   } finally {
-    await opts.adapter.releaseLock()
+    clearInterval(beat)
+    await adapter.releaseLock()
   }
 }
 
@@ -257,7 +284,7 @@ async function maybeCheckDrift(opts: RunnerOptions): Promise<void> {
   }
   if (!expected) return
   const live = await opts.adapter.introspect()
-  await checkDrift(live, expected, behavior, opts.log)
+  await checkDrift(live, expected, behavior, opts.log, opts.driftIgnore)
 }
 
 export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary> {

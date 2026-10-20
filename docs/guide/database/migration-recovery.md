@@ -133,19 +133,25 @@ The message names what differs; from code, `err.diff` has the same `added` / `re
 
 Use `'warn'` while you reconcile, not as a permanent setting: the check is what tells you the next migration might not apply.
 
+If the "drift" is yours on purpose — indexes or tables your app creates at runtime — leave those out by name instead of switching the check off: `driftIgnore: { indexes: /^ix_e_/, tables: /^cache_/ }`, in the `db` block of `kick.config.ts`, on `kickDbAdapter`, or on `migrateLatest()`. Everything else is still checked.
+
 ## A stuck lock
 
 ```text
-Another process holds the migration lock. If none is running — a deploy was killed mid-migration — release it with `kick db migrate unlock`.
+Another process holds the migration lock and refreshed it within the last 600s. If none is running, it is taken over once that long has passed, or release it now with `kick db migrate unlock`.
 ```
 
-A run takes a lock in the database so two deploys can't migrate at once; it releases it when it finishes or fails. A run that was killed — out of memory, `SIGKILL`, a cancelled CI job — can't, and every later run stops here. Check nothing is migrating, then:
+A run takes a lock in the database so two deploys can't migrate at once; it releases it when it finishes or fails. A run that was killed — out of memory, `SIGKILL`, a cancelled CI job — can't. While it works, a run refreshes its lock every quarter of `lockStaleAfter` (default 600 seconds); a lock nobody has refreshed for that long belongs to a dead run, and the next run takes it over. So a killed run blocks migrations for at most ten minutes, with nothing to do by hand.
+
+To release it sooner, check nothing is migrating, then:
 
 <PmCommand exec="kick db migrate unlock" />
 
 ```text
 Released the migration lock.
 ```
+
+`lockStaleAfter: 0` (on `migrateLatest()` or `kickDbAdapter`) turns the takeover off, so only `unlock` releases a lock. A single statement that runs longer than `lockStaleAfter` can't refresh the lock on a one-connection database (SQLite, PGlite): raise it for migrations that slow.
 
 A second run is refused immediately rather than waiting for the lock, so this error also appears when two instances try to migrate at the same moment — which is why migrations belong in one release step, not in every instance's boot ([CI and Deployment](./ci-deploy.md#several-instances)).
 

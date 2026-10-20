@@ -94,7 +94,7 @@ export {
   type IntrospectMysqlOptions,
 } from './migrate/introspect-mysql'
 export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
-export { checkDrift, type DriftBehavior, type DriftLogger } from './migrate/drift'
+export { checkDrift, type DriftBehavior, type DriftIgnore, type DriftLogger } from './migrate/drift'
 
 export { kickDbAdapter, type KickDbAdapterConfig, type MigrationsOnBoot } from './adapter'
 

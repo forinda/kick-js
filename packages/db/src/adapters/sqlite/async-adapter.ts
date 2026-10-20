@@ -125,14 +125,21 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
       await driver.query(s.sql, s.params)
     },
 
-    async acquireLock(owner) {
+    async acquireLock(owner, staleAfterSeconds) {
       // RETURNING tells us whether this UPDATE took the lock (SQLite 3.35+).
       const won = await driver.query(
         `UPDATE ${L} SET locked_at = datetime('now'), locked_by = ?
-         WHERE id = 1 AND locked_at IS NULL RETURNING id`,
-        [owner],
+         WHERE id = 1 AND (locked_at IS NULL OR locked_at < datetime('now', ?)) RETURNING id`,
+        [owner, staleAfterSeconds === undefined ? null : `-${staleAfterSeconds} seconds`],
       )
       return won.length === 1
+    },
+
+    async refreshLock(owner) {
+      await driver.query(
+        `UPDATE ${L} SET locked_at = datetime('now') WHERE id = 1 AND locked_by = ?`,
+        [owner],
+      )
     },
 
     async releaseLock() {

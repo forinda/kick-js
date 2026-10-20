@@ -45,6 +45,37 @@ Postgres is the most complete dialect:
 - The `@forinda/kickjs-db/pg` subpath types are available: `pgEnum`, `tsvector`, `vector(n)`, `citext`, `money`, `inet`, `cidr`, `xml`.
 - The built-in CLI migration path uses `pgAdapter` automatically when you set `connectionString` (or `DATABASE_URL`) — no `adapter` factory needed.
 
+### PGlite — `@forinda/kickjs-db/pglite`
+
+[PGlite](https://pglite.dev) is Postgres compiled to WebAssembly, running inside your process: a real Postgres with nothing to install. `pglitePool()` wraps one database as a pool for `pgDialect` and `pgAdapter`:
+
+<PmCommand add="@forinda/kickjs-db @electric-sql/pglite" />
+
+```ts
+import { PGlite } from '@electric-sql/pglite'
+import { createDbClient } from '@forinda/kickjs-db'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+import { pglitePool } from '@forinda/kickjs-db/pglite'
+import * as schema from './schema'
+
+const pool = pglitePool(new PGlite('./data/pg')) // a folder; new PGlite() is in memory
+
+export const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+export const migrationAdapter = pgAdapter({ pool })
+```
+
+PGlite is one connection. The pool hands it to one caller at a time — a transaction keeps it until it ends, and every other query waits — so one request's statements never run inside another's transaction. Share the one pool between the client and the migration adapter, so migrations wait their turn too. Schema, migrations, drift checks and `db.query` work as on Postgres.
+
+Differences from a server:
+
+- Requests run one at a time, so a slow query holds up the rest.
+- Inside `db.transaction()`, query through `trx`: a query on `db` waits for the transaction, which waits for the query.
+- `.stream()` needs `pg-cursor`, which PGlite doesn't support; page through large results with `limit` instead.
+- `bigint` columns (`int8`) come back as numbers, not strings.
+- A data folder belongs to one process at a time: stop the app before running `kick db` against it, or migrate on boot (`migrationsOnBoot: 'apply'`).
+
+For `kick db`, return the same adapter from the `db.adapter` factory in `kick.config.ts`; `pgAdapter({ pool, endPoolOnClose: true })` closes the database when the command finishes.
+
 ## SQLite — `@forinda/kickjs-db/sqlite`
 
 <PmCommand add="@forinda/kickjs-db better-sqlite3" />

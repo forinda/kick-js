@@ -3,7 +3,7 @@ import type { InjectionToken } from '@forinda/kickjs'
 
 import { migrateLatest, migrateStatus } from './migrate/runner'
 import type { MigrationAdapter } from './migrate/adapter'
-import type { DriftBehavior } from './migrate/drift'
+import type { DriftBehavior, DriftIgnore } from './migrate/drift'
 import type { MigrationsLocation } from './migrate/source'
 
 export type MigrationsOnBoot = 'fail-if-pending' | 'apply' | 'ignore'
@@ -20,6 +20,10 @@ export interface KickDbAdapterConfig {
   migrationsOnBoot?: MigrationsOnBoot
   /** Drift detection mode. Default 'error' outside dev. */
   driftCheck?: DriftBehavior
+  /** Tables and indexes drift leaves out, like ones the app creates at runtime: `{ indexes: /^ix_e_/ }`. */
+  driftIgnore?: DriftIgnore
+  /** Seconds before a lock nobody refreshes is taken over. Default 600; `0` never. */
+  lockStaleAfter?: number
   /** Default true outside dev. */
   requireReviewed?: boolean
   /** Optional DI token to register the migrationAdapter under, for adopters who need direct access. */
@@ -83,6 +87,8 @@ export const kickDbAdapter = defineAdapter<KickDbAdapterConfig>({
             migrationsDir: config.migrationsDir,
             requireReviewed: config.requireReviewed,
             driftCheck: config.driftCheck,
+            driftIgnore: config.driftIgnore,
+            lockStaleAfter: config.lockStaleAfter,
           })
           // Republish to DevTools when a bus is wired so the panel
           // can surface "migrations ran on boot" without polling.

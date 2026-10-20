@@ -2,7 +2,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Dialect } from '../snapshot/types'
 import type { MigrationAdapter } from '../migrate/adapter'
-import type { DriftBehavior } from '../migrate/drift'
+import type { DriftBehavior, DriftIgnore } from '../migrate/drift'
 
 export type MigrationAdapterFactory = () => MigrationAdapter | Promise<MigrationAdapter>
 
@@ -20,6 +20,8 @@ export interface DbConfig {
    * doesn't false-positive.
    */
   driftCheck?: DriftBehavior
+  /** Tables and indexes drift leaves out, like runtime-created ones: `{ indexes: /^ix_e_/ }`. */
+  driftIgnore?: DriftIgnore
   /**
    * `'snake_case'`: migrations name tables and columns in snake_case while
    * the schema's keys stay camelCase. Pass the same `casing` to `createDbClient`.
@@ -75,5 +77,6 @@ export async function resolveDbConfig(opts: { configPath: string }): Promise<DbC
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,
     driftCheck: db.driftCheck,
+    driftIgnore: db.driftIgnore,
   }
 }

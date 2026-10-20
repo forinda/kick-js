@@ -307,14 +307,25 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
       await pool.query(`DELETE FROM ${T} WHERE id = ?`, [id])
     },
 
-    async acquireLock(owner: string): Promise<boolean> {
+    async acquireLock(owner: string, staleAfterSeconds?: number): Promise<boolean> {
       const [result] = await pool.query<{ affectedRows: number }>(
-        `UPDATE ${L}
-         SET locked_at = CURRENT_TIMESTAMP, locked_by = ?
-         WHERE id = 1 AND locked_at IS NULL`,
-        [owner],
+        staleAfterSeconds === undefined
+          ? `UPDATE ${L}
+             SET locked_at = CURRENT_TIMESTAMP, locked_by = ?
+             WHERE id = 1 AND locked_at IS NULL`
+          : `UPDATE ${L}
+             SET locked_at = CURRENT_TIMESTAMP, locked_by = ?
+             WHERE id = 1 AND (locked_at IS NULL OR locked_at < CURRENT_TIMESTAMP - INTERVAL ? SECOND)`,
+        staleAfterSeconds === undefined ? [owner] : [owner, staleAfterSeconds],
       )
       return result.affectedRows === 1
+    },
+
+    async refreshLock(owner: string) {
+      await pool.query(
+        `UPDATE ${L} SET locked_at = CURRENT_TIMESTAMP WHERE id = 1 AND locked_by = ?`,
+        [owner],
+      )
     },
 
     async releaseLock() {

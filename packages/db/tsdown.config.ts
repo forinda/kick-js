@@ -7,6 +7,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     pg: 'src/pg.ts',
+    pglite: 'src/pglite.ts',
     sqlite: 'src/sqlite.ts',
     mysql: 'src/mysql.ts',
     schema: 'src/schema.ts',

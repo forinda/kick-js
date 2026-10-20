@@ -169,7 +169,7 @@ kickDbAdapter({
 
 Don't use `migrationsOnBoot: 'apply'` when more than one instance starts at once. The migration lock lets one run migrate; the others don't wait for it — they fail with `Another process holds the migration lock` and, since a boot-time failure stops the app, those instances don't start. A single release step avoids the race, and `fail-if-pending` on every instance is safe to run in parallel.
 
-If a migration step is killed while holding the lock, the next deploy stops on that message; release it with `kick db migrate unlock` once you're sure nothing is migrating ([A stuck lock](./migration-recovery.md#a-stuck-lock)).
+If a migration step is killed while holding the lock, deploys in the next ten minutes stop on that message; after that, the next run takes the lock over. Release it sooner with `kick db migrate unlock` once you're sure nothing is migrating ([A stuck lock](./migration-recovery.md#a-stuck-lock)).
 
 ## Changes without downtime
 
