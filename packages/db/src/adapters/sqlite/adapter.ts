@@ -147,19 +147,20 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
     },
 
     async refreshLock(owner: string) {
-      database
+      const r = database
         .prepare(`UPDATE ${L} SET locked_at = datetime('now') WHERE id = 1 AND locked_by = ?`)
         .run(owner)
+      return r.changes === 1
     },
 
-    async releaseLock() {
+    async releaseLock(owner?: string) {
       database
         .prepare(
           `UPDATE ${L}
            SET locked_at = NULL, locked_by = NULL
-           WHERE id = 1`,
+           WHERE id = 1 AND (? IS NULL OR locked_by = ?)`,
         )
-        .run()
+        .run(owner ?? null, owner ?? null)
     },
 
     async applySqlInTx(sql: string) {

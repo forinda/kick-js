@@ -136,14 +136,19 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
     },
 
     async refreshLock(owner) {
-      await driver.query(
-        `UPDATE ${L} SET locked_at = datetime('now') WHERE id = 1 AND locked_by = ?`,
+      const held = await driver.query(
+        `UPDATE ${L} SET locked_at = datetime('now') WHERE id = 1 AND locked_by = ? RETURNING id`,
         [owner],
       )
+      return held.length === 1
     },
 
-    async releaseLock() {
-      await driver.query(`UPDATE ${L} SET locked_at = NULL, locked_by = NULL WHERE id = 1`)
+    async releaseLock(owner) {
+      await driver.query(
+        `UPDATE ${L} SET locked_at = NULL, locked_by = NULL
+         WHERE id = 1 AND (? IS NULL OR locked_by = ?)`,
+        [owner ?? null, owner ?? null],
+      )
     },
 
     async applySqlInTx(sql) {

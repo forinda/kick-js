@@ -41,12 +41,14 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
     return true
   }
 
-  async refreshLock(owner: string): Promise<void> {
-    if (this.locked?.by === owner) this.locked.at = new Date().toISOString()
+  async refreshLock(owner: string): Promise<boolean> {
+    if (this.locked?.by !== owner) return false
+    this.locked.at = new Date().toISOString()
+    return true
   }
 
-  async releaseLock(): Promise<void> {
-    this.locked = null
+  async releaseLock(owner?: string): Promise<void> {
+    if (owner === undefined || this.locked?.by === owner) this.locked = null
   }
 
   async applySqlInTx(sql: string): Promise<void> {

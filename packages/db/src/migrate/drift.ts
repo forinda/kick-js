@@ -166,11 +166,16 @@ export interface DriftIgnore {
 
 /** The snapshot without the tables and indexes `ignore` names. */
 function withoutIgnored(snap: SchemaSnapshot, ignore: DriftIgnore): SchemaSnapshot {
+  // Copies without `g` / `y`: those keep lastIndex between test() calls, so the
+  // same name could match on one side and not the other.
+  const plain = (re?: RegExp) => re && new RegExp(re.source, re.flags.replace(/[gy]/g, ''))
+  const tablesRe = plain(ignore.tables)
+  const indexesRe = plain(ignore.indexes)
   const tables: Record<string, TableSnapshot> = {}
   for (const [name, t] of Object.entries(snap.tables)) {
-    if (ignore.tables?.test(name)) continue
-    tables[name] = ignore.indexes
-      ? { ...t, indexes: t.indexes.filter((ix) => !ignore.indexes!.test(ix.name)) }
+    if (tablesRe?.test(name)) continue
+    tables[name] = indexesRe
+      ? { ...t, indexes: t.indexes.filter((ix) => !indexesRe.test(ix.name)) }
       : t
   }
   return { ...snap, tables }

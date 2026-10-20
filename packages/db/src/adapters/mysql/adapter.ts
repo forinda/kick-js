@@ -322,17 +322,20 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async refreshLock(owner: string) {
-      await pool.query(
+      // mysql2 reports matched rows (FOUND_ROWS), so a refresh in the same second still counts.
+      const [result] = await pool.query<{ affectedRows: number }>(
         `UPDATE ${L} SET locked_at = CURRENT_TIMESTAMP WHERE id = 1 AND locked_by = ?`,
         [owner],
       )
+      return result.affectedRows === 1
     },
 
-    async releaseLock() {
+    async releaseLock(owner?: string) {
       await pool.query(
         `UPDATE ${L}
          SET locked_at = NULL, locked_by = NULL
-         WHERE id = 1`,
+         WHERE id = 1 AND (? IS NULL OR locked_by = ?)`,
+        [owner ?? null, owner ?? null],
       )
     },
 

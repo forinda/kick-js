@@ -131,15 +131,30 @@ describe('migration lock on Postgres', () => {
     ).rejects.toBeInstanceOf(MigrationLockError)
   })
 
-  it('refreshLock moves only its own lock forward', async () => {
+  it('refreshLock moves only its own lock forward, and says when it lost it', async () => {
     const { pool, adapter } = await setup()
     await adapter.ensureMigrationTables()
     await holdLock(pool, '1 hour')
-    await adapter.refreshLock!('someone else')
+    expect(await adapter.refreshLock!('someone else')).toBe(false)
     expect(await adapter.acquireLock('me', 60)).toBe(true)
     await pool.query(`update kick_migrations_lock set locked_at = now() - interval '1 hour'`)
-    await adapter.refreshLock!('me')
+    expect(await adapter.refreshLock!('me')).toBe(true)
     expect(await adapter.acquireLock('other', 60)).toBe(false)
+  })
+
+  it("a run whose lock was taken over doesn't release the new holder's", async () => {
+    const { pool, adapter } = await setup()
+    await adapter.ensureMigrationTables()
+    expect(await adapter.acquireLock('a')).toBe(true)
+    // a stopped refreshing
+    await pool.query(`update kick_migrations_lock set locked_at = now() - interval '1 hour'`)
+    expect(await adapter.acquireLock('b', 60)).toBe(true)
+    await adapter.releaseLock('a')
+    expect(await adapter.acquireLock('c', 60)).toBe(false)
+    await adapter.releaseLock('b')
+    expect(await adapter.acquireLock('c')).toBe(true)
+    await adapter.releaseLock() // unlock: whoever holds it
+    expect(await adapter.acquireLock('d')).toBe(true)
   })
 })
 
@@ -153,8 +168,9 @@ describe('driftIgnore', () => {
     await expect(migrateLatest({ adapter, migrationsDir: dir })).rejects.toBeInstanceOf(
       MigrationDriftError,
     )
+    // `g` keeps lastIndex between test() calls; the check must not care.
     await expect(
-      migrateLatest({ adapter, migrationsDir: dir, driftIgnore: { indexes: /^ix_e_/ } }),
+      migrateLatest({ adapter, migrationsDir: dir, driftIgnore: { indexes: /^ix_e_/g } }),
     ).resolves.toMatchObject({ applied: ['20260102_000000_stars'] })
   })
 })

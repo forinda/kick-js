@@ -126,7 +126,8 @@ export async function pushSchema(opts: PushOptions): Promise<PushResult> {
       'kickjs-db: this database has migrations applied — change it with `kick db generate` and `kick db migrate latest`, not push',
     )
   }
-  if (!(await adapter.acquireLock(`push ${process.pid}`))) {
+  const owner = `push ${process.pid}@${new Date().toISOString()}`
+  if (!(await adapter.acquireLock(owner))) {
     throw new MigrationLockError('Another process holds the migration lock.')
   }
   try {
@@ -173,6 +174,6 @@ export async function pushSchema(opts: PushOptions): Promise<PushResult> {
     )
     return { status: 'pushed', changeCount: changes.length }
   } finally {
-    await adapter.releaseLock()
+    await adapter.releaseLock(owner)
   }
 }

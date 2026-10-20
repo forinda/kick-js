@@ -178,17 +178,19 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
     },
 
     async refreshLock(owner: string) {
-      await pool.query(
+      const r = await pool.query(
         `UPDATE ${L} SET locked_at = CURRENT_TIMESTAMP WHERE id = 1 AND locked_by = $1`,
         [owner],
       )
+      return r.rowCount === 1
     },
 
-    async releaseLock() {
+    async releaseLock(owner?: string) {
       await pool.query(
         `UPDATE ${L}
          SET locked_at = NULL, locked_by = NULL
-         WHERE id = 1`,
+         WHERE id = 1 AND ($1::text IS NULL OR locked_by = $1)`,
+        [owner ?? null],
       )
     },
 

@@ -1,10 +1,10 @@
 // `@forinda/kickjs-db/pglite` — PGlite (embedded Postgres) as a pg pool, for
-// `pgDialect()` and `pgAdapter()`. `@electric-sql/pglite` isn't a dependency:
-// pass your own instance.
+// `pgDialect()` and `pgAdapter()`. `@electric-sql/pglite` (0.5.5 or newer) is
+// an optional peer: pass your own instance.
 import type { PgClientLike, PgPoolLike } from './adapters/pg/adapter'
 
-/** PGlite's results already have pg's shape: `rows`, `rowCount`, `command`. */
-type PgResult = { rows: any[]; rowCount?: number | null; command?: string }
+/** PGlite's results have pg's shape — `rows`, `rowCount`, `command` — from 0.5.5. */
+type PgResult = { rows: any[]; rowCount?: number | null; affectedRows?: number; command?: string }
 
 /** The part of a `PGlite` instance the pool uses. */
 export interface PGliteLike {
@@ -46,8 +46,12 @@ export function pglitePool(db: PGliteLike): PgPoolLike {
   // Without parameters SQL may hold several statements (a migration's up.sql),
   // which only exec() runs; the result is the last statement's.
   async function run(sql: string, params?: readonly unknown[]): Promise<PgResult> {
-    if (params && params.length > 0) return db.query(sql, [...params])
-    return (await db.exec(sql)).at(-1) ?? { rows: [], rowCount: 0 }
+    const result =
+      params && params.length > 0
+        ? await db.query(sql, [...params])
+        : ((await db.exec(sql)).at(-1) ?? { rows: [] })
+    // A command tag without a count leaves rowCount out; pg reports null.
+    return { ...result, rowCount: result.rowCount ?? null }
   }
 
   return {

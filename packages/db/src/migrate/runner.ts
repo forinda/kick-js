@@ -137,10 +137,23 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
     )
   }
   // A heartbeat, so a long migration's lock never looks stale. A refresh that
-  // fails is retried on the next beat; the migration itself carries on.
+  // fails is retried on the next beat; the migration itself carries on. One
+  // that finds the lock gone means another run presumed this one dead.
+  let lost = false
   const beat = takeOver
     ? setInterval(
-        () => void adapter.refreshLock!(owner).catch(() => {}),
+        () => {
+          void adapter.refreshLock!(owner).then(
+            (held) => {
+              if (held || lost) return
+              lost = true
+              ;(opts.log ?? console).warn(
+                `kickjs-db: another run took over the migration lock (unrefreshed for ${staleAfter}s) while this one was still migrating. Raise lockStaleAfter if migrations run that long.`,
+              )
+            },
+            () => {},
+          )
+        },
         Math.max(1, Math.floor(staleAfter / 4)) * 1000,
       )
     : undefined
@@ -149,7 +162,8 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
     return await fn()
   } finally {
     clearInterval(beat)
-    await adapter.releaseLock()
+    // Only our own: a lock another run took over is theirs to release.
+    await adapter.releaseLock(owner)
   }
 }
 
