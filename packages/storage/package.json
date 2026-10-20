@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-storage",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "File storage for KickJS — one interface over memory, local disk, and S3-compatible buckets (AWS S3, Cloudflare R2, MinIO), with signed URLs and no SDK",
   "keywords": [
     "kickjs",
