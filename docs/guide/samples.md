@@ -14,7 +14,7 @@ The smallest useful app: a typed controller and a `bootstrap()`.
 
 ```ts
 // src/modules/users/user.controller.ts
-import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
+import { Controller, Get, Post, reply, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -25,18 +25,49 @@ const createUserSchema = z.object({
 @Controller()
 export class UserController {
   @Get('/')
-  async list(ctx: Ctx<KickRoutes.UserController['list']>) {
-    ctx.json([{ id: '1', name: 'Alice' }])
+  list(_ctx: Ctx<KickRoutes.UserController['list']>) {
+    return [{ id: '1', name: 'Alice' }] // sent as 200 JSON
   }
 
   @Post('/', { body: createUserSchema })
-  async create(ctx: Ctx<KickRoutes.UserController['create']>) {
-    ctx.created({ id: '2', ...ctx.body }) // ctx.body is typed { name; email }
+  create(ctx: Ctx<KickRoutes.UserController['create']>) {
+    return reply.created({ id: '2', ...ctx.body }) // 201; ctx.body is typed { name; email }
   }
 }
 ```
 
-**Best pattern:** type each handler with `Ctx<KickRoutes.X['method']>` — `kick typegen` infers `params` / `body` / `query` (including the Zod shape on the route decorator) so you never hand-annotate them. → [Controllers](./controllers.md), [Type Generation](./typegen.md)
+```ts
+// src/modules/users/user.module.ts
+import { defineModule } from '@forinda/kickjs'
+import { UserController } from './user.controller'
+
+export const UserModule = defineModule({
+  name: 'UserModule',
+  build: () => ({
+    routes: () => ({ path: '/users', controller: UserController }),
+  }),
+})
+```
+
+```ts
+// src/modules/index.ts
+import { defineModules } from '@forinda/kickjs'
+import { UserModule } from './users/user.module'
+
+export const modules = defineModules().mount(UserModule())
+```
+
+```ts
+// src/index.ts
+import 'reflect-metadata'
+import './config'
+import { bootstrap } from '@forinda/kickjs'
+import { modules } from './modules'
+
+export const app = await bootstrap({ modules })
+```
+
+**Best pattern:** return the payload for a plain 200, and `reply.created()` / `reply(status, body)` when the status matters — returning a `reply` keeps the body type, where `ctx.created()` leaves it `unknown`. Type each handler with `Ctx<KickRoutes.X['method']>`: `kick typegen` infers `params` / `body` / `query` from the route decorator, and the response type from what you return, which is what the [typed client](./tutorial-typed-client.md) reads. → [Controllers](./controllers.md), [Type Generation](./typegen.md)
 
 ---
 
@@ -91,7 +122,9 @@ export const TodosModule = defineModule({
 })
 ```
 
-**Best pattern:** prefer the `defineModule()` factory form with a stable `name`; do per-module DI binding in `register(container)` and mount controllers from `routes()`. → [Modules](./modules.md)
+Mount it with `defineModules().mount(TodosModule())` in `src/modules/index.ts`; `kick g module todos` writes both files and adds the `.mount()` line.
+
+**Best pattern:** prefer the `defineModule()` factory form with a stable `name`; do per-module DI binding in `register(container)` (skip it when `@Service()` / `@Repository()` already register the class) and mount controllers from `routes()`. → [Modules](./modules.md)
 
 ---
 
@@ -109,35 +142,50 @@ const envSchema = fromZod(
   z.object({
     PORT: z.coerce.number().default(3000),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.url(),
     JWT_SECRET: z.string().min(32),
+    DB_FILE: z.string().default('dev.db'), // used by section 7
   }),
 )
 
-loadEnvFromSchema(envSchema) // side effect: registers the schema; read values with getEnv('KEY')
+loadEnvFromSchema(envSchema) // side effect: registers the schema
 export default envSchema
 ```
 
-```ts
-// src/index.ts — import the schema as a side effect BEFORE bootstrap
-import 'reflect-metadata'
-import './config'
-import { bootstrap } from '@forinda/kickjs'
-
-export const app = await bootstrap({ modules })
-```
+`src/index.ts` imports `./config` before `bootstrap()` (section 1). Read values in a DI-managed class through `ConfigService`:
 
 ```ts
-// Inject a single value anywhere with @Value (lazy, typed via Env<K>):
-import { Service, Value, type Env } from '@forinda/kickjs'
+import { Autowired, ConfigService, Service } from '@forinda/kickjs'
 
 @Service()
-class MailService {
-  @Value('JWT_SECRET') private readonly secret!: Env<'JWT_SECRET'>
+class TokenService {
+  @Autowired() private readonly config!: ConfigService
+
+  sign(userId: string) {
+    const secret = this.config.get('JWT_SECRET') // string, typed from the schema
+  }
 }
 ```
 
-**Best pattern:** keep the schema in `src/config/index.ts` and import it as a side effect from `src/index.ts` _before_ `bootstrap()` — otherwise `ConfigService.get()` silently falls back to `process.env`. → [Configuration](./configuration.md)
+A concern with several settings of its own gets a section under one prefix, injected only where it's used:
+
+```ts
+// src/modules/mail/mail.settings.ts
+import { defineSettings, Inject, Service, type SettingsOf } from '@forinda/kickjs'
+import { z } from 'zod'
+
+export const MailSettings = defineSettings(
+  'MAIL',
+  z.object({ host: z.string(), port: z.coerce.number().default(587) }), // MAIL_HOST, MAIL_PORT
+)
+
+@Service()
+export class Mailer {
+  constructor(@Inject(MailSettings) private readonly mail: SettingsOf<typeof MailSettings>) {}
+}
+```
+
+**Best pattern:** keep the schema in `src/config/index.ts` and import it as a side effect from `src/index.ts` _before_ `bootstrap()` — otherwise `ConfigService.get()` returns `undefined` for your own keys. Inject `ConfigService` in classes; `getEnv('KEY')` is for plain modules outside DI. → [Configuration](./configuration.md)
 
 ---
 
@@ -224,7 +272,59 @@ if (account.balance < amount) {
 
 ---
 
-## 7. Adapters (cross-cutting lifecycle)
+## 7. Database (kick/db)
+
+Declare tables in TypeScript, generate reviewed SQL migrations, query with types inferred from the schema.
+
+```ts
+// src/db/schema.ts
+import { table, uuid, varchar, timestamp } from '@forinda/kickjs-db'
+
+export const users = table('users', {
+  id: uuid().primaryKey().defaultRandom(),
+  email: varchar(255).notNull().unique(),
+  name: varchar(120),
+  createdAt: timestamp().notNull().defaultNow(),
+})
+```
+
+```ts
+// src/db/client.ts
+import '../config' // DB_FILE is in the env schema; `kick db` loads this file without src/index.ts
+import Database from 'better-sqlite3'
+import { createToken, getEnv } from '@forinda/kickjs'
+import { createDbClient } from '@forinda/kickjs-db'
+import { sqliteDialect } from '@forinda/kickjs-db/sqlite'
+import * as schema from './schema'
+
+export const db = createDbClient({
+  schema,
+  dialect: sqliteDialect({ database: new Database(getEnv('DB_FILE')) }),
+})
+export const APP_DB = createToken<typeof db>('app/Db') // register it in a module's register()
+```
+
+```ts
+@Service()
+export class UsersService {
+  @Inject(APP_DB) private db!: typeof db
+
+  findByEmail(email: string) {
+    return this.db.selectFrom('users').selectAll().where('email', '=', email).executeTakeFirst()
+  }
+}
+```
+
+```bash
+kick db generate init    # diff the schema into up.sql / down.sql — read them
+kick db migrate latest   # apply
+```
+
+**Best pattern:** keep the client under your own token typed `typeof db`, so `@Inject` hands back the exact schema; review every generated migration before applying it. → [Database](./database/index.md), [Relations](./database/relations.md), [Queries](./database/queries.md)
+
+---
+
+## 8. Adapters (cross-cutting lifecycle)
 
 Bolt framework-wide behaviour (auth, tracing, multi-tenancy) onto the app via lifecycle hooks.
 
@@ -254,130 +354,6 @@ export const RequestLogger = defineAdapter({
 
 ---
 
-## 8. Extending the CLI — the full `defineCliPlugin` surface
-
-The `kick` CLI is itself a composition of plugins — every built-in command ships internally as a `KickCliPlugin`, and adopters extend the **same** surface from `kick.config.ts > plugins[]`. A plugin is an object (or a factory returning one); `defineCliPlugin` is the identity helper for inference.
-
-```ts
-import { defineCliPlugin } from '@forinda/kickjs-cli'
-
-export const myPlugin = defineCliPlugin({
-  name: 'my-org-cli', // required — stable id, used for de-dup + conflict errors
-  commands: [/* declarative shell commands */],
-  register(program, ctx) {
-    /* programmatic Commander commands */
-  },
-  generators: [/* `kick g <name>` scaffolders */],
-  // typegens: [ … ]  // ← `kick typegen` plugins — see Type Generation
-})
-
-// kick.config.ts
-// export default defineConfig({ plugins: [myPlugin] })
-```
-
-Everything you can put on a plugin, field by field (typegens aside — those live in [Type Generation](./typegen.md)):
-
-### `name` (required)
-
-A stable identifier. Used to de-dup plugins and to name the offender in conflict errors (two plugins shipping the same command / generator name throw `KickPluginConflictError`). Convention: the package name (`'kickjs-cli-db'`).
-
-### `commands[]` — declarative shell commands
-
-The lowest-ceremony extension: a name, a description, and shell `steps`. Each becomes a `kick <name>` command.
-
-```ts
-defineCliPlugin({
-  name: 'db-tools',
-  commands: [
-    {
-      name: 'db:migrate', // → `kick db:migrate`
-      description: 'Apply pending migrations', // shown in --help
-      steps: 'kick db migrate', // string … or string[] for sequential steps
-      aliases: ['migrate'], // optional — `kick migrate` also works
-    },
-    {
-      name: 'proto:gen',
-      description: 'Codegen protobufs',
-      steps: ['npx buf generate', 'echo done'], // runs in order; stops on first failure
-    },
-  ],
-})
-```
-
-`steps` may use `{args}` as a placeholder for trailing CLI arguments. Same shape as the top-level `kick.config.ts > commands[]` — a plugin just bundles them for reuse.
-
-### `register(program, ctx)` — programmatic Commander
-
-When declarative `commands` aren't enough (subcommands, options/flags, async actions), get the raw [Commander](https://github.com/tj/commander.js) `program`. Called once at CLI startup.
-
-```ts
-defineCliPlugin({
-  name: 'reporter',
-  register(program, ctx) {
-    program
-      .command('report <kind>')
-      .description('Emit a project report')
-      .option('--json', 'machine-readable output')
-      .action(async (kind: string, opts: { json?: boolean }) => {
-        ctx.log(`project root: ${ctx.projectRoot}`)
-        const pattern = ctx.config?.pattern ?? 'rest'
-        // … build the report; write to ctx.projectRoot
-      })
-  },
-})
-```
-
-The second arg is the **plugin context** (`KickCliPluginContext`) — so the callback never re-loads config or guesses paths:
-
-| Field         | What it is                                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `cwd`         | Directory the command was invoked from (may be a nested subdir).                                                                |
-| `projectRoot` | Resolved project root (dir owning `kick.config.*`, else nearest `package.json`, else `cwd`). **Prefer this for writing files.** |
-| `config`      | The loaded `kick.config.ts` (`KickConfig \| null`).                                                                             |
-| `log(msg)`    | Plugin-friendly logger.                                                                                                         |
-| `generators?` | Merged plugin generators (built-ins + adopter) — lets a `register()` surface them as real subcommands.                          |
-
-### `generators[]` — custom `kick g <name>` scaffolders
-
-Teach `kick g` your own scaffolds with `defineGenerator`. `kick g <name>` matches `name` (after built-ins), runs `files(ctx)`, and writes each returned `{ path, content }`.
-
-```ts
-import { defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
-
-const actionGen = defineGenerator({
-  name: 'action', // → `kick g action Order`
-  description: 'Generate a service action + handler', // shown in `kick g --list`
-  args: [{ name: 'name', required: true, description: 'Action name' }], // informational (help)
-  flags: [{ name: 'sync', description: 'Synchronous handler', takesValue: false }], // informational
-  files: (ctx) => [
-    {
-      // relative paths resolve against ctx.cwd; parent dirs auto-created
-      path: `${ctx.modulesDir}/${ctx.kebab}/create-${ctx.kebab}.action.ts`,
-      content: `export class Create${ctx.pascal}Action {}\n`,
-    },
-  ],
-})
-
-export const actionPlugin = defineCliPlugin({ name: 'my-action-plugin', generators: [actionGen] })
-```
-
-The `files(ctx)` factory receives a `GeneratorContext` with the name pre-cased + project paths + raw input:
-
-| Field                                             | Example for `kick g command UserPost extra --sync`                              |
-| ------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `name` / `pascal` / `kebab` / `camel` / `snake`   | `UserPost` / `UserPost` / `user-post` / `userPost` / `user_post`                |
-| `pluralPascal?` / `pluralKebab?` / `pluralCamel?` | `UserPosts` / `user-posts` / `userPosts` (when `pluralize` is on)               |
-| `modulesDir`                                      | `'src/modules'` (from `kick.config.ts`)                                         |
-| `cwd` / `projectRoot`                             | invocation dir / resolved project root (prefer `projectRoot` for stable writes) |
-| `args`                                            | `['extra']` (positional args after the name)                                    |
-| `flags`                                           | `{ sync: true }` (booleans for switches, strings for `--key value`)             |
-
-`files()` may be async and return a `Promise<GeneratorFile[]>`.
-
-**Best pattern:** start with `commands[]` for one-off shell steps; reach for `register()` only when you need options/subcommands/async; ship `generators[]` to standardise scaffolds across a team. Promote a one-project `kick.config.ts > commands[]` to a published `defineCliPlugin` when you want to reuse it. → [CLI Plugins](./cli-plugins.md), [Custom Commands](./custom-commands.md), [Plugin Generators](./plugin-generators.md)
-
----
-
 ## 9. Scaffolding with `kick g`
 
 Let the CLI write the boilerplate to the right place, in your project's pattern (REST / minimal).
@@ -396,12 +372,53 @@ kick g --list                                   # every built-in + plugin genera
 
 ---
 
+## 10. Extending the CLI
+
+Add your own `kick` commands and `kick g` generators from `kick.config.ts`:
+
+```ts
+// kick.config.ts
+import { defineConfig, defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
+
+const actionGen = defineGenerator({
+  name: 'action', // `kick g action CreateOrder`
+  description: 'Service action',
+  files: (ctx) => [
+    {
+      path: `${ctx.modulesDir}/${ctx.kebab}/${ctx.kebab}.action.ts`,
+      content: `export class ${ctx.pascal}Action {}\n`,
+    },
+  ],
+})
+
+export default defineConfig({
+  plugins: [
+    defineCliPlugin({
+      name: 'my-team',
+      commands: [
+        {
+          name: 'db:reset',
+          description: 'Reset the dev database',
+          steps: ['kick db migrate rollback --all', 'kick db migrate latest'],
+        },
+      ],
+      generators: [actionGen],
+    }),
+  ],
+})
+```
+
+**Best pattern:** start with `commands[]` for shell steps; use `register(program, ctx)` when you need flags or subcommands; ship `generators[]` to standardise scaffolds across a team. → [CLI Plugins](./cli-plugins.md), [Custom Commands](./custom-commands.md), [Plugin Generators](./plugin-generators.md)
+
+---
+
 ## The "bring-your-own" philosophy
 
 KickJS ships **primitives** (`defineContextDecorator`, `defineAdapter`, `definePlugin`, DI, typegen) rather than opinionated domain packages — so you compose the auth / multi-tenancy / observability layer you actually need instead of fighting one that almost fits. The [BYO Recipes](./byo-recipes.md) guide walks a complete auth layer built entirely from these primitives.
 
 ## Where to go next
 
+- **Build a whole app:** the [Taskboard tutorial](./taskboard/1-first-module.md), or browse the runnable [example apps](../examples/index.md).
 - **Step-by-step tutorials:** [REST module architecture](./tutorial-ddd-architecture.md), [JWT auth](./tutorial-jwt-auth.md), [query + pagination](./tutorial-query-pagination.md), [realtime](./tutorial-realtime.md), [typed client](./tutorial-typed-client.md), [custom CLI](./tutorial-custom-cli.md).
 - **Reference:** [Decorators](./decorators.md), [Type Generation](./typegen.md), [Project Structure](./project-structure.md).
 - **Gotchas worth reading early:** [DI gotchas](./tutorial-di-gotchas.md), [HMR + decorators](./tutorial-hmr-decorators.md).
