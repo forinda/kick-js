@@ -143,9 +143,9 @@ function https1(port: number, headers: Record<string, string> = {}) {
 }
 
 /** HTTP/2 over TLS (ALPN h2). */
-function h2(port: number, method: string, body?: string) {
+function h2(port: number, method: string, body?: string, scheme = 'https') {
   return new Promise<{ status: number; json: unknown }>((resolve, reject) => {
-    const client = http2.connect(`https://localhost:${port}`, { ca: tls.cert })
+    const client = http2.connect(`${scheme}://localhost:${port}`, { ca: tls?.cert })
     client.on('error', reject)
     const req = client.request({
       ':method': method,
@@ -207,6 +207,30 @@ describe.skipIf(!hasOpenssl)('server: { tls, http2: true }', () => {
     const err = await start(undefined, { tls, http2: true }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(KickError)
     expect((err as KickError).code).toBe('KICK007')
+    expect(app!.getHttpServer()).toBeNull()
+  })
+})
+
+describe("server: { http2: 'h2c' }", () => {
+  describe.each(ALL.slice(1))('under %s', (_name, runtime) => {
+    it('serves GET and POST over cleartext HTTP/2', async () => {
+      const port = await start(runtime, { http2: 'h2c' })
+      expect(await h2(port, 'GET', undefined, 'http')).toEqual({ status: 200, json: { ok: true } })
+      expect(await h2(port, 'POST', '{"n":1}', 'http')).toEqual({
+        status: 200,
+        json: { body: { n: 1 } },
+      })
+    })
+  })
+
+  it('fails at boot on Express with KICK007', async () => {
+    const err = await start(undefined, { http2: 'h2c' }).catch((e: unknown) => e)
+    expect((err as KickError).code).toBe('KICK007')
+  })
+
+  it.skipIf(!hasOpenssl)('fails at boot with KICK008 when tls is set too', async () => {
+    const err = await start(fastifyRuntime, { tls, http2: 'h2c' }).catch((e: unknown) => e)
+    expect((err as KickError).code).toBe('KICK008')
     expect(app!.getHttpServer()).toBeNull()
   })
 })

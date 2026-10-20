@@ -151,8 +151,12 @@ function assertUsableTls(options: tls.SecureContextOptions & tls.TlsOptions): vo
 export interface ServerOptions {
   /** TLS credentials and options (`key`, `cert`, `ca`, `pfx`, `passphrase`, …). */
   tls?: tls.SecureContextOptions & tls.TlsOptions
-  /** Serve HTTP/2 with HTTP/1.1 fallback. Requires `tls` and an HTTP/2-capable runtime. */
-  http2?: boolean
+  /**
+   * `true`: HTTP/2 with HTTP/1.1 fallback; requires `tls`. `'h2c'`: cleartext
+   * HTTP/2 only, no `tls` and no HTTP/1.1 — for a proxy or mesh that speaks
+   * HTTP/2 to the app. Both need an HTTP/2-capable runtime.
+   */
+  http2?: boolean | 'h2c'
   /**
    * Milliseconds an idle keep-alive connection stays open. Default 65000.
    * Keep it ABOVE your load balancer's idle timeout (AWS ALB: 60s): when the
@@ -241,6 +245,9 @@ export interface ApplicationOptions {
    *   HTTP/1.1 clients and WebSocket upgrades keep working. Fastify and h3
    *   only; Express fails at boot with KICK007, and `http2` without `tls`
    *   with KICK008.
+   * - `{ http2: 'h2c' }` — cleartext HTTP/2 with no HTTP/1.1 fallback, for a
+   *   proxy or service mesh that speaks HTTP/2 to the app (native gRPC behind
+   *   Envoy or Linkerd). Fastify and h3 only.
    *
    * Ignored in dev mode, where Vite owns the server. Most deploys terminate
    * TLS / HTTP/2 at a proxy and need none of this.
@@ -1879,7 +1886,8 @@ export class Application {
     if (serverOptions && g.__kickjs_httpServer) {
       log.warn('server options (tls / http2) are ignored in dev mode — Vite owns the server')
     } else if (serverOptions) {
-      if (serverOptions.http2 && !serverOptions.tls) throw http2RequiresTlsError()
+      if (serverOptions.http2 === true && !serverOptions.tls) throw http2RequiresTlsError()
+      if (serverOptions.http2 === 'h2c' && serverOptions.tls) throw http2RequiresTlsError(true)
       if (serverOptions.http2 && !this.runtime.capabilities.http2) {
         throw http2UnsupportedRuntimeError(this.runtime.name)
       }
@@ -1967,7 +1975,12 @@ export class Application {
       this.httpServer!.listen(port, async () => {
         try {
           const scheme = serverOptions?.tls ? 'https' : 'http'
-          const protocol = serverOptions?.http2 ? ' (HTTP/2)' : ''
+          const protocol =
+            serverOptions?.http2 === 'h2c'
+              ? ' (cleartext HTTP/2)'
+              : serverOptions?.http2
+                ? ' (HTTP/2)'
+                : ''
           this.timeline.mark('listen')
           log.info(`Server running on ${scheme}://localhost:${port}${protocol}`)
 
@@ -2054,7 +2067,11 @@ export class Application {
     if (useHttp2) {
       // The compat API hands the handler Http2ServerRequest/Response; runtimes
       // that declare `capabilities.http2` accept them.
-      const server = http2.createSecureServer({ ...tls, allowHTTP1: true }, handler as never)
+      // h2c has no ALPN to negotiate with, so no HTTP/1.1 fallback either.
+      const server =
+        useHttp2 === 'h2c'
+          ? http2.createServer(handler as never)
+          : http2.createSecureServer({ ...tls, allowHTTP1: true }, handler as never)
       server.on('session', (session) => {
         this.http2Sessions.add(session)
         session.once('close', () => this.http2Sessions.delete(session))

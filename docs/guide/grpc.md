@@ -20,15 +20,38 @@ bootstrap({
 
 ## Which protocols actually work
 
-The adapter mounts as middleware on the KickJS HTTP server, which speaks HTTP/1.1. That determines what reaches you:
+The adapter mounts as middleware on the KickJS server, so what reaches you depends on the server `start()` creates:
 
-| Protocol        | Over the KickJS server | Notes                                    |
-| --------------- | ---------------------- | ---------------------------------------- |
-| **Connect**     | ✅                     | JSON or binary over HTTP/1.1. Curl-able. |
-| **gRPC-Web**    | ✅                     | What browsers use. No proxy needed.      |
-| **native gRPC** | ❌                     | Needs HTTP/2 **and** HTTP trailers.      |
+| Protocol        | HTTP/1.1 (default) | `server: { tls, http2: true }` | Notes                                |
+| --------------- | ------------------ | ------------------------------ | ------------------------------------ |
+| **Connect**     | ✅                 | ✅                             | JSON or binary over HTTP. Curl-able. |
+| **gRPC-Web**    | ✅                 | ✅                             | What browsers use. No proxy needed.  |
+| **native gRPC** | ❌                 | ✅ (Fastify, h3)               | Needs HTTP/2 **and** HTTP trailers.  |
 
-To serve native gRPC clients, terminate HTTP/2 in front of the app — Envoy, nginx, a service mesh, Cloud Run, or any HTTP/2-capable ingress — and forward to the KickJS server. RPC paths are identical either way, so service code does not change.
+To serve native gRPC clients from the app itself, run on Fastify or h3 and turn on HTTP/2 (Express can't serve HTTP/2):
+
+```ts
+import { readFileSync } from 'node:fs'
+import { bootstrap } from '@forinda/kickjs'
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
+import { GrpcAdapter } from '@forinda/kickjs-grpc'
+
+bootstrap({
+  modules,
+  runtime: fastifyRuntime(),
+  adapters: [GrpcAdapter()],
+  server: {
+    tls: { key: readFileSync('key.pem'), cert: readFileSync('cert.pem') },
+    http2: true,
+  },
+})
+```
+
+gRPC clients negotiate HTTP/2; browsers, curl and Connect clients on HTTP/1.1 still reach the same port. See [HTTPS and HTTP/2](./http-runtimes.md#https-and-http-2) for the `server` option.
+
+Behind a service mesh whose sidecar handles TLS and speaks cleartext HTTP/2 to the app (Envoy, Linkerd, Istio), use `server: { http2: 'h2c' }` instead and drop the certificate.
+
+A proxy or ingress in front (Envoy, nginx, Cloud Run) doesn't lift the requirement: native gRPC needs HTTP/2 on every hop, so the proxy's connection to the app has to be HTTP/2 too — `h2c` or TLS, set in the proxy's upstream config. A proxy that forwards over HTTP/1.1 breaks native gRPC. On Express, which can't serve HTTP/2, offer Connect or gRPC-Web instead. RPC paths are identical on every protocol, so service code does not change.
 
 ::: warning RPCs are mounted at the root
 Because most native gRPC clients hard-code the `/package.Service/Method` path and cannot send a prefix, `prefix` defaults to empty. RPCs therefore sit at the root (`/user.v1.UserService/GetUser`) while HTTP routes keep their `apiPrefix` + version mount (`/api/v1/users`). Set `prefix` only if native gRPC clients are out of scope.
@@ -196,12 +219,32 @@ GrpcAdapter({
 })
 ```
 
+## Calling other services
+
+Clients come from Connect itself: `createClient` with a transport. Add `propagateCall` to its interceptors when the client is used while serving a request or an RPC:
+
+```ts
+import { createClient } from '@connectrpc/connect'
+import { createGrpcTransport } from '@connectrpc/connect-node'
+import { propagateCall } from '@forinda/kickjs-grpc'
+import { UserService } from './gen/user_pb'
+
+const users = createClient(
+  UserService,
+  createGrpcTransport({ baseUrl: 'https://users:3000', interceptors: [propagateCall] }),
+)
+```
+
+Every call then carries the current request's `x-request-id`, and `traceparent` when [`traceContext()`](./middleware.md#trace-context) ran. Inside an RPC, the outgoing call is cancelled when the incoming one is — the caller hung up or its deadline passed — so the services downstream stop working for it too. Headers set on the call win; outside a request the interceptor does nothing.
+
+Register the client in DI like any third-party client (`container.registerFactory(USERS, () => createClient(...))`). [Microservices](./microservices.md) puts it together across three services.
+
 ## Options
 
 ```ts
 GrpcAdapter({
   prefix: '', // '' by default — see the warning above
-  grpc: true, // binary gRPC (needs HTTP/2 in front)
+  grpc: true, // native gRPC (needs HTTP/2 — see above)
   grpcWeb: true,
   connect: true,
   contributors: [], // every RPC, at 'adapter' precedence (see above)

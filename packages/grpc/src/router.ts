@@ -6,6 +6,7 @@ import {
   getClassMeta,
   getClassMetaOrUndefined,
   getMethodMeta,
+  requestStore,
   runContributors,
   type Container,
   type ContributorRegistration,
@@ -17,6 +18,7 @@ import { GRPC_METADATA, grpcServiceRegistry, type GrpcServiceEntry } from './int
 import type { GrpcAdapterOptions, GrpcHandlerDefinition } from './interfaces'
 import { GrpcContext } from './grpc-context'
 import { toConnectError } from './errors'
+import { GRPC_CALL } from './propagate'
 
 const log = createLogger('GrpcAdapter')
 
@@ -189,6 +191,8 @@ export function buildConnectRoutes(
         }
 
         const invoke = async (req: unknown, ctx: GrpcContext): Promise<unknown> => {
+          // So propagateCall can forward this call's cancellation downstream.
+          requestStore.getStore()?.values.set(GRPC_CALL, ctx)
           if (runPipeline) await runPipeline(ctx)
           const instance = container.resolve(entry.serviceClass) as Record<string, any>
           return instance[handlerName](req, ctx)

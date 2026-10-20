@@ -37,7 +37,7 @@ curl -X POST http://localhost:3000/user.v1.UserService/GetUser \
   -H 'Content-Type: application/json' -d '{"id":"1"}'
 ```
 
-Connect and gRPC-Web work over the app's HTTP/1.1 server. Native gRPC needs HTTP/2 in front (Envoy, nginx, a mesh).
+Connect and gRPC-Web work over the app's HTTP/1.1 server. Native gRPC needs HTTP/2 all the way to the app: run on Fastify or h3 with `server: { tls, http2: true }`, or `server: { http2: 'h2c' }` behind a proxy or mesh that speaks HTTP/2 to it.
 
 ## Documentation
 
