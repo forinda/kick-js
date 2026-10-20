@@ -303,6 +303,7 @@ async function readColumns(
       default: isSerial ? null : normalizeDefault(r.column_default),
       primaryKey: pkSet.has(r.column_name),
     }
+    if (!isSerial && r.column_default !== null) out[r.column_name].defaultRaw = r.column_default
     if (r.is_identity === 'YES') {
       out[r.column_name].identity = r.identity_generation === 'ALWAYS' ? 'always' : 'byDefault'
     }

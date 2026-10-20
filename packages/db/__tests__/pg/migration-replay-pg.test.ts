@@ -119,8 +119,9 @@ function tablesEquivalent(a: TableSnapshot, b: TableSnapshot): { ok: boolean; re
     return { ok: false, reason: `columns set: [${aCols}] vs [${bCols}]` }
   }
   for (const c of aCols) {
-    const av = a.columns[c]
-    const bv = b.columns[c]
+    // `defaultRaw` is introspection-only: what Postgres reports, for drift.
+    const { defaultRaw: _a, ...av } = a.columns[c]!
+    const { defaultRaw: _b, ...bv } = b.columns[c]!
     if (JSON.stringify(av) !== JSON.stringify(bv)) {
       return { ok: false, reason: `column "${c}": ${JSON.stringify(av)} vs ${JSON.stringify(bv)}` }
     }

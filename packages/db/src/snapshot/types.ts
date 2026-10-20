@@ -9,6 +9,12 @@ export interface ColumnSnapshot {
   default: string | null
   /** `default` is SQL to evaluate (`.defaultSql()`), not a value. Absent means a value. */
   defaultSql?: true
+  /**
+   * Only on an introspected Postgres snapshot: `column_default` as the
+   * database reports it. `default` is normalised and can't tell the literal
+   * `'(f())'::text` from the expression `(f())::text`; the drift check can.
+   */
+  defaultRaw?: string
   primaryKey: boolean
   /** A column the database computes from others: `GENERATED ALWAYS AS (expression)`. */
   generated?: { expression: string; stored: boolean }

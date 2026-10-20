@@ -543,7 +543,7 @@ function isCast(str: string): boolean {
   )
 }
 
-function formatDefault(value: unknown, type?: string, sql?: boolean): string {
+export function formatDefault(value: unknown, type?: string, sql?: boolean): string {
   // `.defaultSql()`: SQL to evaluate, as written.
   if (sql) return String(value)
   // Defensive: a snapshot authored before defaults were normalised to
