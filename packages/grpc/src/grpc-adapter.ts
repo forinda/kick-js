@@ -37,14 +37,14 @@ const NEXT = Symbol.for('kick.grpc.next')
  *
  * ## Transport reality check
  *
- * The adapter mounts as connect-style middleware on the KickJS HTTP server,
- * which speaks HTTP/1.1. Over that transport:
+ * The adapter mounts as connect-style middleware on the KickJS server, which
+ * speaks HTTP/1.1 unless `server: { tls, http2: true }` is set:
  *
  * - **Connect protocol** — works. JSON over HTTP, curl-able.
  * - **gRPC-Web** — works. This is what browsers use.
- * - **native gRPC** — does *not*. The binary gRPC protocol needs HTTP/2 and
- *   HTTP trailers. Terminate with an HTTP/2-capable proxy (Envoy, nginx,
- *   Cloud Run, a service mesh) in front, or run a second listener.
+ * - **native gRPC** — needs HTTP/2 and HTTP trailers: run on the Fastify or
+ *   h3 runtime with `server: { tls, http2: true }`, or terminate HTTP/2 at a
+ *   proxy (Envoy, nginx, Cloud Run, a service mesh) in front.
  *
  * Because of that, the adapter leaves {@link GrpcAdapterOptions.prefix}
  * empty by default — most native gRPC clients cannot send a path prefix.
