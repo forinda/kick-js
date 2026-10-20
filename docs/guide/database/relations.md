@@ -156,7 +156,7 @@ await db.query.users.findMany({
 // ]
 ```
 
-A user with no posts gets `[]`, never `null`.
+A user with no posts gets `[]`, never `null`. When a parent can have thousands of children, read a page of them instead of all: [Paginating nested rows](../db-relational-query.md#paginating-nested-rows).
 
 ## One-to-one: `one`, on both tables
 
