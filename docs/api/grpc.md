@@ -85,6 +85,13 @@ RPCs declared in the proto but not bound to a method answer `Code.Unimplemented`
 
 A thrown `HttpException` is mapped through `codeForStatus`, so a 404 reaches the client as `Code.NotFound`, with its message and headers kept. Other errors go out as `Code.Internal` with `INTERNAL_ERROR_MESSAGE`; the original stays on `cause`.
 
+### Client
+
+| Export          | Description                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `propagateCall` | Connect `Interceptor` for outgoing calls: forwards `x-request-id` and `traceparent`, and inside an RPC cancels the call when the incoming one ends |
+| `GRPC_CALL`     | Request-store key holding the `GrpcContext` of the RPC being served                                                                                |
+
 ### Lower-level
 
 | Export                     | Description                                               |

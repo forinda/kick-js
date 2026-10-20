@@ -76,6 +76,7 @@ const guideSidebar = [
       { text: 'Server-Sent Events', link: '/guide/sse' },
       { text: 'GraphQL (BYO adapter)', link: '/guide/graphql' },
       { text: 'gRPC / Connect RPC', link: '/guide/grpc' },
+      { text: 'Microservices', link: '/guide/microservices' },
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },

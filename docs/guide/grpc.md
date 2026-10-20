@@ -49,6 +49,8 @@ bootstrap({
 
 gRPC clients negotiate HTTP/2; browsers, curl and Connect clients on HTTP/1.1 still reach the same port. See [HTTPS and HTTP/2](./http-runtimes.md#https-and-http-2) for the `server` option.
 
+Behind a service mesh whose sidecar handles TLS and speaks cleartext HTTP/2 to the app (Envoy, Linkerd, Istio), use `server: { http2: 'h2c' }` instead and drop the certificate.
+
 Otherwise terminate HTTP/2 in front of the app — Envoy, nginx, a service mesh, Cloud Run, or any HTTP/2-capable ingress — and forward to the KickJS server. RPC paths are identical either way, so service code does not change.
 
 ::: warning RPCs are mounted at the root
@@ -216,6 +218,26 @@ GrpcAdapter({
   },
 })
 ```
+
+## Calling other services
+
+Clients come from Connect itself: `createClient` with a transport. Add `propagateCall` to its interceptors when the client is used while serving a request or an RPC:
+
+```ts
+import { createClient } from '@connectrpc/connect'
+import { createGrpcTransport } from '@connectrpc/connect-node'
+import { propagateCall } from '@forinda/kickjs-grpc'
+import { UserService } from './gen/user_pb'
+
+const users = createClient(
+  UserService,
+  createGrpcTransport({ baseUrl: 'https://users:3000', interceptors: [propagateCall] }),
+)
+```
+
+Every call then carries the current request's `x-request-id`, and `traceparent` when [`traceContext()`](./middleware.md#trace-context) ran. Inside an RPC, the outgoing call is cancelled when the incoming one is — the caller hung up or its deadline passed — so the services downstream stop working for it too. Headers set on the call win; outside a request the interceptor does nothing.
+
+Register the client in DI like any third-party client (`container.registerFactory(USERS, () => createClient(...))`). [Microservices](./microservices.md) puts it together across three services.
 
 ## Options
 

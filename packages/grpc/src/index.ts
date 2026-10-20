@@ -31,6 +31,7 @@ export { GrpcService, GrpcMethod } from './decorators'
 export { GrpcContext } from './grpc-context'
 export { toConnectError, codeForStatus, INTERNAL_ERROR_MESSAGE } from './errors'
 export { collectServices, buildConnectRoutes } from './router'
+export { propagateCall, GRPC_CALL } from './propagate'
 export type { BuildConnectRoutesOptions } from './router'
 
 export {
