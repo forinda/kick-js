@@ -139,6 +139,8 @@ The adapter rides the KickJS server:
 | gRPC-Web    | ✅                 | ✅                             | Browser clients                     |
 | native gRPC | ❌                 | ✅ (Fastify, h3)               | Needs HTTP/2 + trailers, or a proxy |
 
+Behind a service mesh that speaks cleartext HTTP/2 to the app, `server: { http2: 'h2c' }` serves native gRPC without a certificate.
+
 ## Related
 
 - [gRPC guide](../guide/grpc.md)
