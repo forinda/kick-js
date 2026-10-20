@@ -424,7 +424,7 @@ function dslTypeForUdt(udt: string): string {
   return UDT_TO_DSL[udt] ?? udt
 }
 
-function normalizeDefault(raw: string | null): string | null {
+export function normalizeDefault(raw: string | null): string | null {
   if (!raw) return null
   // Strip PG's :: cast suffixes: 'true'::boolean → true, 'foo'::text → 'foo'
   const stripped = raw.replace(/::[\w" ]+(\([^)]*\))?$/, '')

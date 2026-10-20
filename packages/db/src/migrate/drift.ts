@@ -10,6 +10,7 @@ import type {
 import { sqliteType } from '../emit/sqlite'
 import { mysqlType } from '../emit/mysql'
 import { MigrationDriftError, type SchemaDiffSummary } from './errors'
+import { normalizeDefault } from './introspect-pg'
 
 /**
  * SQLite and MySQL introspection is lossy against a code-first snapshot: a
@@ -36,11 +37,18 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
     tables: Object.fromEntries(
       Object.entries(snap.tables).map(([n, table]) => {
         // Introspection can't tell a `.defaultSql()` from a `.default()`: the
-        // database holds only the expression. Compare the defaults themselves.
+        // database holds only the expression. Compare the defaults themselves,
+        // a `.defaultSql()` one read the way Postgres introspection reads it
+        // (`'{}'::jsonb` comes back as `{}`).
         const t: TableSnapshot = {
           ...table,
           columns: Object.fromEntries(
-            Object.entries(table.columns).map(([cn, { defaultSql: _sql, ...c }]) => [cn, c]),
+            Object.entries(table.columns).map(([cn, { defaultSql, ...c }]) => [
+              cn,
+              defaultSql && snap.dialect === 'postgres' && typeof c.default === 'string'
+                ? { ...c, default: normalizeDefault(c.default) }
+                : c,
+            ]),
           ),
         }
         return [

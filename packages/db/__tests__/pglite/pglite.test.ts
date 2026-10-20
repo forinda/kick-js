@@ -16,6 +16,8 @@ import {
   emitPg,
   extractSnapshot,
   integer,
+  jsonb,
+  timestamptz,
   migrateLatest,
   MigrationDriftError,
   MigrationLockError,
@@ -172,5 +174,27 @@ describe('driftIgnore', () => {
     await expect(
       migrateLatest({ adapter, migrationsDir: dir, driftIgnore: { indexes: /^ix_e_/g } }),
     ).resolves.toMatchObject({ applied: ['20260102_000000_stars'] })
+  })
+})
+
+describe('drift on .defaultSql() casts', () => {
+  it("reads '{}'::jsonb back as the same default", async () => {
+    const pool = pglitePool(new PGlite())
+    const adapter = pgAdapter({ pool })
+    const dir = await mkdtemp(path.join(tmpdir(), 'kickdb-pglite-'))
+    const cols = {
+      id: serial().primaryKey(),
+      meta: jsonb().notNull().defaultSql("'{}'::jsonb"),
+      tags: text().array().notNull().defaultSql("'{}'::text[]"),
+      at: timestamptz().notNull().defaultSql('now()'),
+    }
+    const a = extractSnapshot({ docs: table('docs', cols) }, 'postgres')
+    const b = extractSnapshot({ docs: table('docs', { ...cols, title: text() }) }, 'postgres')
+    await writeMigration(dir, '20260101_000000_init', empty, a)
+    await migrateLatest({ adapter, migrationsDir: dir })
+    await writeMigration(dir, '20260102_000000_title', a, b)
+    await expect(migrateLatest({ adapter, migrationsDir: dir })).resolves.toMatchObject({
+      applied: ['20260102_000000_title'],
+    })
   })
 })
