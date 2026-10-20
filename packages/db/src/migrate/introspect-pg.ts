@@ -303,6 +303,7 @@ async function readColumns(
       default: isSerial ? null : normalizeDefault(r.column_default),
       primaryKey: pkSet.has(r.column_name),
     }
+    if (!isSerial && r.column_default !== null) out[r.column_name].defaultRaw = r.column_default
     if (r.is_identity === 'YES') {
       out[r.column_name].identity = r.identity_generation === 'ALWAYS' ? 'always' : 'byDefault'
     }
@@ -424,7 +425,7 @@ function dslTypeForUdt(udt: string): string {
   return UDT_TO_DSL[udt] ?? udt
 }
 
-function normalizeDefault(raw: string | null): string | null {
+export function normalizeDefault(raw: string | null): string | null {
   if (!raw) return null
   // Strip PG's :: cast suffixes: 'true'::boolean → true, 'foo'::text → 'foo'
   const stripped = raw.replace(/::[\w" ]+(\([^)]*\))?$/, '')

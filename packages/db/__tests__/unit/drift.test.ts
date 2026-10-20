@@ -98,3 +98,58 @@ describe('checkDrift — primary keys', () => {
     expect((err as MigrationDriftError).diff.changed).toEqual(['m#primaryKey'])
   })
 })
+
+describe('checkDrift() on a Postgres .defaultSql()', () => {
+  const docs = (column: Record<string, unknown>): SchemaSnapshot => ({
+    version: 1,
+    dialect: 'postgres',
+    tables: {
+      docs: {
+        name: 'docs',
+        columns: {
+          v: { name: 'v', type: 'text', nullable: true, primaryKey: false, ...column } as never,
+        },
+        indexes: [],
+        foreignKeys: [],
+        checks: [],
+      },
+    },
+  })
+  // What introspection makes of column_default: `'gen_random_uuid()'::text`
+  // (a literal) reads back as `gen_random_uuid()`.
+  const liveLiteral = docs({
+    default: 'gen_random_uuid()',
+    defaultRaw: "'gen_random_uuid()'::text",
+  })
+
+  it('matches a cast literal', async () => {
+    const expected = docs({ default: "'gen_random_uuid()'::text", defaultSql: true })
+    await expect(checkDrift(liveLiteral, expected, 'error')).resolves.toBeUndefined()
+  })
+
+  it('tells a cast expression from the literal it would print as', async () => {
+    const expected = docs({ default: 'gen_random_uuid()::text', defaultSql: true })
+    await expect(checkDrift(liveLiteral, expected, 'error')).rejects.toBeInstanceOf(
+      MigrationDriftError,
+    )
+  })
+
+  it('tells a literal from the expression it reads back as', async () => {
+    // A live `gen_random_uuid()::text` is reported as `(gen_random_uuid())::text`
+    // and normalised to `(gen_random_uuid())` — the literal below, unquoted.
+    const liveExpression = docs({
+      default: '(gen_random_uuid())',
+      defaultRaw: '(gen_random_uuid())::text',
+    })
+    const expected = docs({ default: "'(gen_random_uuid())'::text", defaultSql: true })
+    await expect(checkDrift(liveExpression, expected, 'error')).rejects.toBeInstanceOf(
+      MigrationDriftError,
+    )
+  })
+
+  it('reads :: inside a quoted literal as text, not a cast', async () => {
+    const live = docs({ default: 'left::right', defaultRaw: "'left::right'::text" })
+    const expected = docs({ default: "'left::right'", defaultSql: true })
+    await expect(checkDrift(live, expected, 'error')).resolves.toBeUndefined()
+  })
+})

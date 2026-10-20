@@ -10,6 +10,8 @@ import type {
 import { sqliteType } from '../emit/sqlite'
 import { mysqlType } from '../emit/mysql'
 import { MigrationDriftError, type SchemaDiffSummary } from './errors'
+import { normalizeDefault } from './introspect-pg'
+import { formatDefault } from '../emit/pg'
 
 /**
  * SQLite and MySQL introspection is lossy against a code-first snapshot: a
@@ -40,7 +42,19 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
         const t: TableSnapshot = {
           ...table,
           columns: Object.fromEntries(
-            Object.entries(table.columns).map(([cn, { defaultSql: _sql, ...c }]) => [cn, c]),
+            Object.entries(table.columns).map(([cn, { defaultSql, defaultRaw, ...c }]) => {
+              if (snap.dialect !== 'postgres' || c.default === null) return [cn, c]
+              // The SQL each side means: what Postgres reports for the live
+              // column, what the migration emitted for the snapshot's.
+              const sql = defaultRaw ?? formatDefault(c.default, c.type, defaultSql)
+              const value =
+                defaultSql && typeof c.default === 'string'
+                  ? pgDefaultSqlForDrift(c.default)
+                  : c.default
+              // Normalised values alone can't tell the literal `'(f())'::text`
+              // from the expression `(f())::text`; the kind can.
+              return [cn, { ...c, default: `${isPgLiteral(sql) ? 'value' : 'sql'}:${value}` }]
+            }),
           ),
         }
         return [
@@ -151,6 +165,36 @@ function canonicalFk(fk: ForeignKeySnapshot): ForeignKeySnapshot {
     onDelete: fk.onDelete,
     onUpdate: fk.onUpdate,
   }
+}
+
+/**
+ * A Postgres `.defaultSql()` default, read the way introspection reads the
+ * live one where that's safe: a cast literal (`'{}'::jsonb` comes back as
+ * `{}`) and a cast-free expression (`now()` as `CURRENT_TIMESTAMP`). A cast
+ * expression stays as written — normalising `gen_random_uuid()::text` would
+ * make it equal the literal `'gen_random_uuid()'::text`, a different default.
+ * Postgres reports it as `(gen_random_uuid())::text`, so it reads as drift.
+ * ponytail: compare against the raw column_default to match cast expressions.
+ */
+function pgDefaultSqlForDrift(sql: string): string | null {
+  return isPgLiteral(sql) || !sql.includes('::') ? normalizeDefault(sql) : sql
+}
+
+/** Trailing casts: `::jsonb`, `::character varying(20)`, `::text[]`, `::"status"`. */
+const PG_CASTS = /(?:::[\w" .]+(?:\([^)]*\))?(?:\[\])*)+$/
+
+/**
+ * A default that is a constant: a quoted string (`::` inside it is text), a
+ * number, `true` / `false` / `NULL`, with or without casts. Anything else is
+ * an expression Postgres evaluates on insert.
+ */
+function isPgLiteral(sql: string): boolean {
+  const bare = /^'(?:[^']|'')*'$/.test(sql) ? sql : sql.replace(PG_CASTS, '')
+  return (
+    /^'(?:[^']|'')*'$/.test(bare) ||
+    /^\(?-?\d+(?:\.\d+)?\)?$/.test(bare) ||
+    /^(?:true|false|null)$/i.test(bare)
+  )
 }
 
 export type DriftBehavior = 'error' | 'warn' | 'ignore'
