@@ -98,3 +98,36 @@ describe('checkDrift — primary keys', () => {
     expect((err as MigrationDriftError).diff.changed).toEqual(['m#primaryKey'])
   })
 })
+
+describe('checkDrift() on a Postgres .defaultSql()', () => {
+  const docs = (column: Record<string, unknown>): SchemaSnapshot => ({
+    version: 1,
+    dialect: 'postgres',
+    tables: {
+      docs: {
+        name: 'docs',
+        columns: {
+          v: { name: 'v', type: 'text', nullable: true, primaryKey: false, ...column } as never,
+        },
+        indexes: [],
+        foreignKeys: [],
+        checks: [],
+      },
+    },
+  })
+  // What introspection makes of column_default: `'gen_random_uuid()'::text`
+  // (a literal) reads back as `gen_random_uuid()`.
+  const liveLiteral = docs({ default: 'gen_random_uuid()' })
+
+  it('matches a cast literal', async () => {
+    const expected = docs({ default: "'gen_random_uuid()'::text", defaultSql: true })
+    await expect(checkDrift(liveLiteral, expected, 'error')).resolves.toBeUndefined()
+  })
+
+  it('tells a cast expression from the literal it would print as', async () => {
+    const expected = docs({ default: 'gen_random_uuid()::text', defaultSql: true })
+    await expect(checkDrift(liveLiteral, expected, 'error')).rejects.toBeInstanceOf(
+      MigrationDriftError,
+    )
+  })
+})

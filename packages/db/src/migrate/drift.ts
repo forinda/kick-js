@@ -37,16 +37,14 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
     tables: Object.fromEntries(
       Object.entries(snap.tables).map(([n, table]) => {
         // Introspection can't tell a `.defaultSql()` from a `.default()`: the
-        // database holds only the expression. Compare the defaults themselves,
-        // a `.defaultSql()` one read the way Postgres introspection reads it
-        // (`'{}'::jsonb` comes back as `{}`).
+        // database holds only the expression. Compare the defaults themselves.
         const t: TableSnapshot = {
           ...table,
           columns: Object.fromEntries(
             Object.entries(table.columns).map(([cn, { defaultSql, ...c }]) => [
               cn,
               defaultSql && snap.dialect === 'postgres' && typeof c.default === 'string'
-                ? { ...c, default: normalizeDefault(c.default) }
+                ? { ...c, default: pgDefaultSqlForDrift(c.default) }
                 : c,
             ]),
           ),
@@ -159,6 +157,20 @@ function canonicalFk(fk: ForeignKeySnapshot): ForeignKeySnapshot {
     onDelete: fk.onDelete,
     onUpdate: fk.onUpdate,
   }
+}
+
+/**
+ * A Postgres `.defaultSql()` default, read the way introspection reads the
+ * live one where that's safe: a cast literal (`'{}'::jsonb` comes back as
+ * `{}`) and a cast-free expression (`now()` as `CURRENT_TIMESTAMP`). A cast
+ * expression stays as written — normalising `gen_random_uuid()::text` would
+ * make it equal the literal `'gen_random_uuid()'::text`, a different default.
+ * Postgres reports it as `(gen_random_uuid())::text`, so it reads as drift.
+ * ponytail: compare against the raw column_default to match cast expressions.
+ */
+function pgDefaultSqlForDrift(sql: string): string | null {
+  const castLiteral = /^'(?:[^']|'')*'(?:::[\w" ]+(?:\([^)]*\))?(?:\[\])*)+$/
+  return castLiteral.test(sql) || !sql.includes('::') ? normalizeDefault(sql) : sql
 }
 
 export type DriftBehavior = 'error' | 'warn' | 'ignore'
