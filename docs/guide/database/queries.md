@@ -300,6 +300,7 @@ export class ExportController {
   }
 }
 
+// Your own helper, defined here — KickJS doesn't export one. Copy it into your app.
 /** One JSON line per row, read from `rows` only as fast as the client takes them. */
 function ndjson(rows: AsyncIterable<unknown>): ReadableStream<Uint8Array> {
   const it = rows[Symbol.asyncIterator]()
@@ -318,7 +319,7 @@ function ndjson(rows: AsyncIterable<unknown>): ReadableStream<Uint8Array> {
 }
 ```
 
-One JSON object per line (NDJSON) lets the client process rows as they arrive. For CSV, enqueue a header line first and then one line per row.
+`ndjson()` is defined in the example itself — a few lines over the web-standard `ReadableStream`, not a KickJS API. One JSON object per line (NDJSON) lets the client process rows as they arrive. For CSV, enqueue a header line first and then one line per row.
 
 - **The status is sent with the first chunk.** An error halfway through can't become a 500 anymore; the response just ends early. If the client must know the export is complete, end with a summary line (`{"done":true,"rows":1200}`) and have it check for that.
 - **For a live feed** of changes rather than an export, use [server-sent events](../controllers.md#server-sent-events) (`ctx.sse()`).
