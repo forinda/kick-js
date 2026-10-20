@@ -1,5 +1,15 @@
 # @forinda/kickjs-grpc
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1000](https://github.com/forinda/kick-js/pull/1000) [`b5a2826`](https://github.com/forinda/kick-js/commit/b5a2826b87fcedae8f039c975dd0b56c412045aa) Thanks [@forinda](https://github.com/forinda)! - `propagateCall` — a Connect interceptor for clients that call other services while serving a request or an RPC. Each outgoing call carries the current `x-request-id` and, when `traceContext()` ran, `traceparent`; inside an RPC, the call is cancelled when the incoming one is (client cancel or deadline). The RPC being served is kept in the request store under `GRPC_CALL`. New guide: Microservices.
+
+### Patch Changes
+
+- [#1000](https://github.com/forinda/kick-js/pull/1000) [`fef6bbe`](https://github.com/forinda/kick-js/commit/fef6bbeb4bd7a6302ffe87a4fe797965aedea836) Thanks [@forinda](https://github.com/forinda)! - Docs: native gRPC works from the app itself on the Fastify and h3 runtimes with `server: { tls, http2: true }` — no proxy needed. The guide, README and JSDoc said it always needed an HTTP/2 proxy in front.
+
 ## 0.1.3
 
 ### Patch Changes
