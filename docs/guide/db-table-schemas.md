@@ -103,10 +103,20 @@ export const createUser = insertSchema(users, { omit: ['id'] }) // email checked
 ## Row types
 
 ```ts
-import type { InferInsert, InferSelect } from '@forinda/kickjs-db/schema'
+import type { InferInsert, InferSelect, InferUpdate } from '@forinda/kickjs-db/schema'
 
 type Note = InferSelect<typeof notes> // { id: string; title: string; body: string | null; … }
 type NewNote = InferInsert<typeof notes> // id, body, stars, createdAt optional
+type NotePatch = InferUpdate<typeof notes> // every writable column optional
+```
+
+These take a table. For a table type out of the client's `DB` (say, in a generic repository), use Kysely's `Selectable`, `Insertable` and `Updateable`, re-exported from `@forinda/kickjs-db`:
+
+```ts
+import type { Insertable, RegisteredDB, Selectable } from '@forinda/kickjs-db'
+
+type NoteRow = Selectable<RegisteredDB['notes']>
+type NewNoteRow = Insertable<RegisteredDB['notes']>
 ```
 
 ## Beyond KickJS

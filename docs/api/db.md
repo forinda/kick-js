@@ -24,7 +24,7 @@ pnpm add @forinda/kickjs-db pg
 | `@forinda/kickjs-db/pg`              | `pgDialect`, `pgAdapter`, `pgEnum`, `pgSchema`, `materializedView`, `pgRole`, `policy`, PG-only column types |
 | `@forinda/kickjs-db/mysql`           | `mysqlDialect`, `mysqlAdapter`, MySQL-only column types                                                      |
 | `@forinda/kickjs-db/sqlite`          | `sqliteDialect`, `sqliteAdapter`, `asyncSqliteAdapter`, `libsqlDriver`, `d1Driver`                           |
-| `@forinda/kickjs-db/schema`          | `insertSchema`, `selectSchema`, `updateSchema`, `InferSelect`, `InferInsert`                                 |
+| `@forinda/kickjs-db/schema`          | `insertSchema`, `selectSchema`, `updateSchema`, `InferSelect`, `InferInsert`, `InferUpdate`                  |
 | `@forinda/kickjs-db/testing`         | `createTestDb`, `createPgTestDb`, `rolledBack`, `captureQueries`, `expectQueries`                            |
 | `@forinda/kickjs-db/cli`             | `dbCliPlugin`, `kickDbTypegen`, `defineKickDbConfig`, `registerDbCommands`, config helpers                   |
 | `@forinda/kickjs-db/devtools-events` | Side-effect import — types the `db:*` DevTools bus events                                                    |
