@@ -278,15 +278,25 @@ requests would hang instead of being answered.`,
 }
 
 /**
- * KICK008 — `server.http2` without `server.tls`. Browsers only speak HTTP/2
- * over TLS; cleartext HTTP/2 (h2c) is not offered.
+ * KICK008 — `server.http2: true` without `server.tls`, or `http2: 'h2c'` with
+ * it. Browsers only speak HTTP/2 over TLS, so cleartext HTTP/2 is its own,
+ * explicit setting.
  */
-export function http2RequiresTlsError(): KickError {
+export function http2RequiresTlsError(h2cWithTls = false): KickError {
+  if (h2cWithTls) {
+    return new KickError({
+      code: 'KICK008',
+      summary: "server.http2: 'h2c' does not take server.tls",
+      cause: `\`http2: 'h2c'\` serves cleartext HTTP/2, but \`tls\` was set too.`,
+      fix: `Use \`http2: true\` to serve HTTP/2 over TLS, or drop \`tls\` for cleartext HTTP/2.`,
+      docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
+    })
+  }
   return new KickError({
     code: 'KICK008',
     summary: 'server.http2 requires server.tls',
     cause: `\`bootstrap({ server: { http2: true } })\` was set without \`tls\`. Browsers only
-negotiate HTTP/2 over TLS, and KickJS does not serve cleartext HTTP/2 (h2c).`,
+negotiate HTTP/2 over TLS.`,
     fix: `Pass the certificate and key alongside http2:
 
       server: {
@@ -294,7 +304,9 @@ negotiate HTTP/2 over TLS, and KickJS does not serve cleartext HTTP/2 (h2c).`,
         http2: true,
       }
 
-Or remove \`http2\` if TLS is terminated in front of the app.`,
+Behind a proxy or service mesh that speaks cleartext HTTP/2 to the app (gRPC
+through Envoy or Linkerd), use \`http2: 'h2c'\` instead. Or remove \`http2\` if
+the proxy sends HTTP/1.1.`,
     docsUrl: `${DOCS_BASE}/guide/http-runtimes#https-and-http-2`,
   })
 }

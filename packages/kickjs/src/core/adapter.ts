@@ -91,7 +91,7 @@ export interface AdapterMiddleware {
  * ```
  */
 /** The Node server behind the app — see `ApplicationOptions.server`. */
-export type KickServer = http.Server | https.Server | http2.Http2SecureServer
+export type KickServer = http.Server | https.Server | http2.Http2SecureServer | http2.Http2Server
 
 export interface AdapterContext {
   /**

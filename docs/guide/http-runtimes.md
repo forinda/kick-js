@@ -195,6 +195,7 @@ export const app = await bootstrap({
 | omitted                | `http.createServer`                                | all         |
 | `{ tls }`              | `https.createServer`                               | all         |
 | `{ tls, http2: true }` | `http2.createSecureServer` with `allowHTTP1: true` | Fastify, h3 |
+| `{ http2: 'h2c' }`     | `http2.createServer` (cleartext, HTTP/2 only)      | Fastify, h3 |
 
 - `tls` takes any Node TLS option (`key`, `cert`, `ca`, `pfx`, `passphrase`, …). It must identify the server — `key` + `cert`, `pfx`, `SNICallback`, or `pskCallback` — and is loaded once at boot, so a missing cert, an unreadable PEM, or a key that does not match its cert fails with `KICK009` instead of on every handshake.
 - With `http2`, clients that negotiate `h2` get HTTP/2 and everything else —
@@ -203,8 +204,13 @@ export const app = await bootstrap({
   receive the server in `afterStart({ server })`, typed `KickServer`.
 - **Express cannot serve HTTP/2** — it does not run on Node's HTTP/2
   compatibility layer — so `http2: true` on the Express runtime fails at boot
-  with `KICK007`. `http2` without `tls` fails with `KICK008`: browsers only
-  speak HTTP/2 over TLS, and cleartext HTTP/2 (h2c) is not offered.
+  with `KICK007`. `http2: true` without `tls` fails with `KICK008`: browsers
+  only speak HTTP/2 over TLS.
+- `http2: 'h2c'` serves cleartext HTTP/2 for a proxy or service mesh that
+  talks HTTP/2 to the app — native gRPC behind Envoy or Linkerd, say. There
+  is no HTTP/1.1 fallback on that port: curl needs `--http2-prior-knowledge`,
+  WebSockets don't connect, and an HTTP/1.1 health probe fails. Point probes
+  at the [management port](./deployment.md#a-management-port), which stays HTTP/1.1.
 - Ignored in dev mode, where Vite owns the server.
 
 Most deployments terminate TLS and HTTP/2 at a proxy or platform (nginx, Caddy,
