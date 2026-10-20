@@ -14,7 +14,7 @@ The smallest useful app: a typed controller and a `bootstrap()`.
 
 ```ts
 // src/modules/users/user.controller.ts
-import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
+import { Controller, Get, Post, reply, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -31,7 +31,7 @@ export class UserController {
 
   @Post('/', { body: createUserSchema })
   create(ctx: Ctx<KickRoutes.UserController['create']>) {
-    ctx.created({ id: '2', ...ctx.body }) // ctx.body is typed { name; email }
+    return reply.created({ id: '2', ...ctx.body }) // 201; ctx.body is typed { name; email }
   }
 }
 ```
@@ -67,7 +67,7 @@ import { modules } from './modules'
 export const app = await bootstrap({ modules })
 ```
 
-**Best pattern:** return the payload for a plain 200 and reach for `ctx.created()` / `ctx.noContent()` when the status matters. Type each handler with `Ctx<KickRoutes.X['method']>`: `kick typegen` infers `params` / `body` / `query` from the route decorator, and the response type from what you return, which is what the [typed client](./tutorial-typed-client.md) reads. → [Controllers](./controllers.md), [Type Generation](./typegen.md)
+**Best pattern:** return the payload for a plain 200, and `reply.created()` / `reply(status, body)` when the status matters — returning a `reply` keeps the body type, where `ctx.created()` leaves it `unknown`. Type each handler with `Ctx<KickRoutes.X['method']>`: `kick typegen` infers `params` / `body` / `query` from the route decorator, and the response type from what you return, which is what the [typed client](./tutorial-typed-client.md) reads. → [Controllers](./controllers.md), [Type Generation](./typegen.md)
 
 ---
 
@@ -144,6 +144,7 @@ const envSchema = fromZod(
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     DATABASE_URL: z.url(),
     JWT_SECRET: z.string().min(32),
+    DB_FILE: z.string().default('dev.db'), // used by section 7
   }),
 )
 
