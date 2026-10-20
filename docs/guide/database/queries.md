@@ -211,7 +211,7 @@ const rows = await this.db
 
 ## Streaming large results
 
-`.stream()` reads a select row by row instead of loading them all — Kysely's, through the same plugins, tenancy and error translation as `.execute()`:
+`.stream()` reads a select row by row instead of loading the whole result into memory. It works on any query-builder select and goes through the same plugins, tenancy and error translation as `.execute()`:
 
 ```ts
 for await (const row of this.db.selectFrom('events').selectAll().orderBy('id').stream(500)) {
@@ -219,7 +219,110 @@ for await (const row of this.db.selectFrom('events').selectAll().orderBy('id').s
 }
 ```
 
-On Postgres, give the dialect a cursor class — `pgDialect({ pool, cursor: Cursor })` with `pg-cursor` — or streaming throws. Breaking out of the loop closes the stream. A stream holds its connection until it ends, so keep the loop body short or copy rows out first.
+Memory stays flat whether the table has ten thousand rows or ten million. Use it for exports, backfills and reports. For a page of rows an API returns, use `limit` and [pagination](#pagination-with-ctx-paginate) instead.
+
+### How each database delivers rows
+
+| Dialect  | Rows arrive                                                                 | Setup                                                                                                                                  |
+| -------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Postgres | in chunks from a server-side cursor; the argument (`500`) is the chunk size | `pnpm add pg-cursor`, then `pgDialect({ pool, cursor: Cursor })` with `import Cursor from 'pg-cursor'`. Without it, `.stream()` throws |
+| MySQL    | one at a time, from the driver's row stream; the argument is ignored        | none                                                                                                                                   |
+| SQLite   | one at a time, from the prepared statement; the argument is ignored         | none                                                                                                                                   |
+
+Only the query builder streams. `db.query.*` builds each result as one JSON tree, so it has no `.stream()`. For a large relational read, page through it instead ([Paginating nested rows](../db-relational-query.md#paginating-nested-rows)).
+
+### A stream holds its connection
+
+From the first row until the loop ends, the stream occupies one connection:
+
+- **Breaking out of the loop or throwing closes the stream** and gives the connection back. Errors are translated like any other query's.
+- **On a pool (Postgres, MySQL)**, a query inside the loop takes a second connection. A slow loop over many streams at once can use up the pool.
+- **On SQLite, or inside a transaction, there is only one connection.** A query issued inside the loop waits until the stream ends, so awaiting it in the loop never returns. Inside `db.transaction()` that includes queries made through the plain client, since they [join the transaction](./pooling.md).
+
+```ts
+// SQLite or a transaction: this loop never finishes.
+for await (const row of trx.selectFrom('events').selectAll().stream()) {
+  await trx.updateTable('events').set({ exported: true }).where('id', '=', row.id).execute()
+}
+```
+
+So when you need to write as you read on one connection, don't stream. If the rows to change can be picked by a `where`, one set-based update does it without reading them at all:
+
+```ts
+await trx.updateTable('events').set({ exported: true }).where('exported', '=', false).execute()
+```
+
+If each row needs work first, page by cursor instead. Each batch is read, which frees the connection, then written, so memory stays bounded and no query waits on another:
+
+```ts
+let lastId = 0
+for (;;) {
+  const batch = await trx
+    .selectFrom('events')
+    .selectAll()
+    .where('id', '>', lastId)
+    .orderBy('id')
+    .limit(500)
+    .execute()
+  if (batch.length === 0) break
+  await exporter.write(batch)
+  await trx
+    .updateTable('events')
+    .set({ exported: true })
+    .where(
+      'id',
+      'in',
+      batch.map((row) => row.id),
+    )
+    .execute()
+  lastId = batch.at(-1)!.id
+}
+```
+
+### Streaming to an HTTP response
+
+Turn the rows into a `ReadableStream` and send it with `ctx.sendResponse()`, which works on the Express, Fastify and h3 runtimes. The stream below pulls a row only when the client is ready for more, and cancelling it — the client disconnecting — closes the database stream:
+
+```ts
+import { Controller, Get, Inject, type RequestContext } from '@forinda/kickjs'
+import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
+
+@Controller()
+export class ExportController {
+  constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
+
+  @Get('/events.ndjson')
+  async events(ctx: RequestContext) {
+    const rows = this.db.selectFrom('events').selectAll().orderBy('id').stream(500)
+    await ctx.sendResponse(
+      new Response(ndjson(rows), { headers: { 'content-type': 'application/x-ndjson' } }),
+    )
+  }
+}
+
+// Your own helper, defined here — KickJS doesn't export one. Copy it into your app.
+/** One JSON line per row, read from `rows` only as fast as the client takes them. */
+function ndjson(rows: AsyncIterable<unknown>): ReadableStream<Uint8Array> {
+  const it = rows[Symbol.asyncIterator]()
+  const encoder = new TextEncoder()
+  return new ReadableStream({
+    async pull(controller) {
+      const { value, done } = await it.next()
+      if (done) controller.close()
+      else controller.enqueue(encoder.encode(`${JSON.stringify(value)}\n`))
+    },
+    // The client went away: close the database stream.
+    async cancel() {
+      await it.return?.()
+    },
+  })
+}
+```
+
+`ndjson()` is defined in the example itself — a few lines over the web-standard `ReadableStream`, not a KickJS API. One JSON object per line (NDJSON) lets the client process rows as they arrive. For CSV, enqueue a header line first and then one line per row.
+
+- **The status is sent with the first chunk.** An error halfway through can't become a 500 anymore; the response just ends early. If the client must know the export is complete, end with a summary line (`{"done":true,"rows":1200}`) and have it check for that.
+- **For a live feed** of changes rather than an export, use [server-sent events](../controllers.md#server-sent-events) (`ctx.sse()`).
 
 ## Pagination with `ctx.paginate`
 
