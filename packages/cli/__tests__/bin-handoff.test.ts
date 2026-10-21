@@ -2,13 +2,24 @@
  * `kick` from outside a project (a global install) hands off to the project's
  * own CLI, so only the project's @forinda/kickjs — and DI container — loads.
  */
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+import { CLI_BIN } from './helpers'
+
 const BIN = resolve(import.meta.dirname, '../bin.js')
+
+// The cases where bin.js runs itself load the built CLI.
+beforeAll(() => {
+  if (!existsSync(CLI_BIN)) {
+    throw new Error(
+      `CLI binary not found at ${CLI_BIN}. Run \`pnpm --filter @forinda/kickjs-cli build\` first.`,
+    )
+  }
+})
 
 function project(declares = true): string {
   const root = mkdtempSync(join(tmpdir(), 'kick-handoff-'))
