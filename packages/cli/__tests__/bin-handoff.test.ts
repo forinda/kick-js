@@ -44,6 +44,15 @@ describe('bin.js', () => {
     expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/)
   })
 
+  it("doesn't look past the nearest package.json", () => {
+    const root = project()
+    const inner = join(root, 'packages/other')
+    mkdirSync(inner, { recursive: true })
+    writeFileSync(join(inner, 'package.json'), JSON.stringify({ name: 'other' }))
+    const out = execFileSync('node', [BIN, '--version'], { cwd: inner, encoding: 'utf8' })
+    expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/)
+  })
+
   it('stays put with KICK_NO_HANDOFF=1', () => {
     const root = project()
     const out = execFileSync('node', [BIN, '--version'], {
