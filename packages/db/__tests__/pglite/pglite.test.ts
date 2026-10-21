@@ -186,6 +186,9 @@ describe('drift on .defaultSql() casts', () => {
       id: serial().primaryKey(),
       meta: jsonb().notNull().defaultSql("'{}'::jsonb"),
       tags: text().array().notNull().defaultSql("'{}'::text[]"),
+      labels: text().array().notNull().default('{}'),
+      ids: integer().array().default('{1,2}'),
+      roles: text().array().notNull().defaultSql('ARRAY[]::text[]'),
       at: timestamptz().notNull().defaultSql('now()'),
       note: text().defaultSql("'left::right'"),
     }

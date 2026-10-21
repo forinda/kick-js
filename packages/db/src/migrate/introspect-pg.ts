@@ -425,10 +425,13 @@ function dslTypeForUdt(udt: string): string {
   return UDT_TO_DSL[udt] ?? udt
 }
 
+/** Trailing casts: `::jsonb`, `::character varying(20)`, `::text[]`, `::"status"`. */
+export const PG_CASTS = /(?:::[\w" .]+(?:\([^)]*\))?(?:\[\])*)+$/
+
 export function normalizeDefault(raw: string | null): string | null {
   if (!raw) return null
-  // Strip PG's :: cast suffixes: 'true'::boolean → true, 'foo'::text → 'foo'
-  const stripped = raw.replace(/::[\w" ]+(\([^)]*\))?$/, '')
+  // Strip PG's :: cast suffixes: 'true'::boolean → true, '{}'::text[] → '{}'
+  const stripped = raw.replace(PG_CASTS, '')
   // Normalize CURRENT_TIMESTAMP / now() to the DSL canonical token.
   const upper = stripped.toUpperCase()
   if (upper === 'NOW()' || upper === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
