@@ -1,5 +1,11 @@
 # @forinda/kickjs-db
 
+## 8.11.0
+
+### Minor Changes
+
+- [#1003](https://github.com/forinda/kick-js/pull/1003) [`098ea94`](https://github.com/forinda/kick-js/commit/098ea94a2284309169bffb67ca1c861f764247a1) Thanks [@forinda](https://github.com/forinda)! - Row types: `InferUpdate<typeof table>` (from `@forinda/kickjs-db/schema`) joins `InferSelect` and `InferInsert` — every writable column optional, the shape `updateSchema()` checks. `@forinda/kickjs-db` also re-exports Kysely's `Selectable`, `Insertable` and `Updateable`, for table types taken from the client's `DB` (`Selectable<RegisteredDB['notes']>`) without installing Kysely separately.
+
 ## 8.10.1
 
 ### Patch Changes
