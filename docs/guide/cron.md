@@ -8,7 +8,7 @@
 
 | Where                  | What runs the job                                                      |
 | ---------------------- | ---------------------------------------------------------------------- |
-| Node server            | `KickCronAdapter()` — opt-in, uses the optional peer `croner`          |
+| Node server            | `KickCronAdapter()` — opt-in; `croner`, or any scheduler you pass      |
 | Vercel                 | a Vercel cron that `kick build:vercel` writes, calling the app         |
 | Cloudflare Workers     | the web entry's `scheduled()` handler                                  |
 | Netlify                | nothing — `kick build:netlify` warns (use Netlify scheduled functions) |
@@ -78,6 +78,29 @@ export const app = await bootstrap({
 })
 ```
 
+### Another scheduler
+
+`croner` is only the default. Pass `schedule` to drive the jobs with any library — it starts one job's timer and returns something with `stop()`:
+
+```ts
+import cron from 'node-cron'
+
+KickCronAdapter({
+  schedule: (expression, { timezone }, tick) => cron.schedule(expression, tick, { timezone }),
+})
+```
+
+```ts
+import { CronJob } from 'cron'
+
+KickCronAdapter({
+  schedule: (expression, { timezone }, tick) =>
+    CronJob.from({ cronTime: expression, onTick: tick, timeZone: timezone, start: true }),
+})
+```
+
+The adapter keeps everything else: resolving the job's class, `enabled` and `overlap`, error reporting, one worker per cluster, and waiting for running jobs on shutdown. `croner` needn't be installed then.
+
 It's opt-in so an app that already schedules `@Cron` jobs with its own adapter doesn't run them twice. It's named `KickCronAdapter` so it never clashes with such an adapter's name or logger.
 
 Jobs stop on shutdown and on every HMR reload, and a reload replaces a class's old jobs rather than adding to them.
@@ -133,7 +156,7 @@ Filter by `name`, `scheduleId` or `expression`. It respects `enabled` and `overl
 
 ## Bring your own runner
 
-`@Cron` only records metadata, so your own adapter can schedule jobs however it likes. Read them with `listCronJobs`, and run each with `runCronJob` to keep `enabled`, `overlap`, the run context and error reporting:
+To swap only the timer, pass `KickCronAdapter({ schedule })` — see [Another scheduler](#another-scheduler). For full control, `@Cron` only records metadata, so your own adapter can schedule jobs however it likes. Read them with `listCronJobs`, and run each with `runCronJob` to keep `enabled`, `overlap`, the run context and error reporting:
 
 ```ts
 import { Cron as Croner } from 'croner'
