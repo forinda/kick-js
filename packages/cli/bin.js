@@ -13,18 +13,26 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 // one that should answer.
 //
 // Only the project the command runs in counts: the nearest folder with a
-// package.json, which has to list @forinda/kickjs-cli (as `kick new` writes it)
-// and belong to the user running kick. It never looks past that folder, so a
-// node_modules in a parent (/tmp, a shared drive) is never run.
+// package.json, which has to list @forinda/kickjs-cli (as `kick new` writes it).
+// It never looks past that folder, so a node_modules in a parent (/tmp, a
+// shared drive) is never run. The folder and the CLI package must belong to
+// the user running kick and not be writable by everyone; where there are no
+// owners to check (Windows), only the current folder counts.
 // KICK_NO_HANDOFF=1 opts out.
+function ownedByMe(path) {
+  const { uid, mode } = statSync(path)
+  return uid === process.getuid() && (mode & 0o002) === 0
+}
+
 function projectCli() {
   if (process.env.KICK_NO_HANDOFF === '1') return undefined
+  const posix = typeof process.getuid === 'function'
   let dir = process.cwd()
   while (!existsSync(join(dir, 'package.json'))) {
-    if (dirname(dir) === dir) return undefined
+    if (!posix || dirname(dir) === dir) return undefined
     dir = dirname(dir)
   }
-  if (process.getuid && statSync(dir).uid !== process.getuid()) return undefined
+  if (posix && !ownedByMe(dir)) return undefined
   const { dependencies, devDependencies } = JSON.parse(
     readFileSync(join(dir, 'package.json'), 'utf8'),
   )
@@ -33,6 +41,7 @@ function projectCli() {
   if (!existsSync(pkg)) return undefined
   const root = realpathSync(dirname(pkg))
   if (root === realpathSync(dirname(fileURLToPath(import.meta.url)))) return undefined
+  if (posix && !ownedByMe(root)) return undefined
   const bin = JSON.parse(readFileSync(pkg, 'utf8')).bin
   const file = typeof bin === 'string' ? bin : bin?.kick
   if (typeof file !== 'string') return undefined

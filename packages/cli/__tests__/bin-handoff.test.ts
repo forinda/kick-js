@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -50,6 +50,13 @@ describe('bin.js', () => {
     mkdirSync(inner, { recursive: true })
     writeFileSync(join(inner, 'package.json'), JSON.stringify({ name: 'other' }))
     const out = execFileSync('node', [BIN, '--version'], { cwd: inner, encoding: 'utf8' })
+    expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/)
+  })
+
+  it.skipIf(process.platform === 'win32')('ignores a project others can write to', () => {
+    const root = project()
+    chmodSync(root, 0o777)
+    const out = execFileSync('node', [BIN, '--version'], { cwd: root, encoding: 'utf8' })
     expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/)
   })
 
