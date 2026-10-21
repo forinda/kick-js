@@ -68,7 +68,13 @@ export {
   type ErrorSource,
   type ResponseInfo,
 } from './core/observers'
-export { KickCronAdapter, CRON_WORKER_ENV, type CronAdapterOptions } from './http/cron-adapter'
+export {
+  KickCronAdapter,
+  CRON_WORKER_ENV,
+  type CronAdapterOptions,
+  type CronSchedule,
+  type CronScheduler,
+} from './http/cron-adapter'
 export {
   HANDLER_CHANNEL,
   ERROR_CHANNEL,

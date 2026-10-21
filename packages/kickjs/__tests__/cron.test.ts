@@ -229,6 +229,28 @@ describe('KickCronAdapter', () => {
     await adapter.shutdown!()
   })
 
+  // Before the next test: its `Long` job stays registered and never finishes.
+  it('drives jobs with the scheduler it is given', async () => {
+    const { runs } = jobsService()
+    const started: Array<{ expression: string; timezone?: string; tick: () => void }> = []
+    let stopped = 0
+    const adapter = KickCronAdapter({
+      schedule: (expression, { timezone }, tick) => {
+        started.push({ expression, timezone, tick })
+        return { stop: () => stopped++ }
+      },
+    })
+    await adapter.afterStart!({ container: container() } as never)
+    expect(started.map((s) => s.expression)).toEqual(expect.arrayContaining(['0 * * * *']))
+
+    for (const s of started.filter((s) => s.expression === '0 * * * *')) s.tick()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(runs.map((r) => r.trigger)).toEqual(['schedule'])
+
+    await adapter.shutdown!()
+    expect(stopped).toBe(started.length)
+  })
+
   it('waits for running jobs on shutdown', async () => {
     let release!: () => void
     @Service()

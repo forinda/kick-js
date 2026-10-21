@@ -925,7 +925,7 @@ Simultaneous misses on one key share a single call of the method.
 
 ## Cron
 
-Declare scheduled methods with `@Cron`; `KickCronAdapter` runs them on a Node server (it needs the `croner` package). Guide: [Scheduled Tasks](../guide/cron.md).
+Declare scheduled methods with `@Cron`; `KickCronAdapter` runs them on a Node server, with `croner` or the scheduler you pass as `schedule`. Guide: [Scheduled Tasks](../guide/cron.md).
 
 ```typescript
 function Cron(expression: string, options?: CronOptions): MethodDecorator
@@ -940,7 +940,14 @@ interface CronOptions<Meta = Record<string, unknown>> {
   meta?: Meta // read from the run context as `run.meta`
 }
 
-const KickCronAdapter: AdapterFactory<{ enabled?: boolean }> // enabled defaults to true
+const KickCronAdapter: AdapterFactory<{ enabled?: boolean; schedule?: CronScheduler }> // enabled defaults to true
+
+// One job's timer: call tick on every match until stop(). Default: croner.
+type CronScheduler = (
+  expression: string,
+  options: { timezone?: string },
+  tick: () => void,
+) => { stop(): void }
 ```
 
 For custom runners and platform crons: `listCronJobs(container)`, `runCronJob(job, container, trigger)`, `runCronJobs(container, filter, trigger)`, `getCronJobs(target)`, `cronScheduleId(expression)` and `isCronJobEnabled(job)`. Under `bootstrap({ cluster })` only the worker the primary marks with `KICK_CRON_WORKER=1` (`CRON_WORKER_ENV`) schedules, so a job runs once per cluster; separate replicas each schedule every job — turn the adapter off on all but one (`KickCronAdapter({ enabled: false })`).
