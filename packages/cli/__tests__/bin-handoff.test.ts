@@ -10,8 +10,10 @@ import { join, resolve } from 'node:path'
 
 const BIN = resolve(import.meta.dirname, '../bin.js')
 
-function project(): string {
+function project(declares = true): string {
   const root = mkdtempSync(join(tmpdir(), 'kick-handoff-'))
+  const deps = declares ? { devDependencies: { '@forinda/kickjs-cli': '^8.0.0' } } : {}
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'app', ...deps }))
   const cli = join(root, 'node_modules/@forinda/kickjs-cli')
   mkdirSync(cli, { recursive: true })
   writeFileSync(
@@ -34,6 +36,22 @@ describe('bin.js', () => {
       encoding: 'utf8',
     })
     expect(out.trim()).toBe('project cli routes --json')
+  })
+
+  it("ignores a node_modules whose folder doesn't list the CLI", () => {
+    const root = project(false)
+    const out = execFileSync('node', [BIN, '--version'], { cwd: root, encoding: 'utf8' })
+    expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/)
+  })
+
+  it('stays put with KICK_NO_HANDOFF=1', () => {
+    const root = project()
+    const out = execFileSync('node', [BIN, '--version'], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, KICK_NO_HANDOFF: '1' },
+    })
+    expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/)
   })
 
   it('runs itself outside a project', () => {
