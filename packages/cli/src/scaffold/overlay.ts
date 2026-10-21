@@ -176,7 +176,11 @@ export function fillVars(
 
 const MARKER = /^([ \t]*)\/\/ @kick:([\w-]+)[ \t]*$/
 
-/** Fill one file's slot markers. */
+/**
+ * Fill one file's slot markers. `// @kick:imports` gets only the names the
+ * rendered file uses and doesn't import itself, so one shared list of imports
+ * serves every file — a test doesn't inherit the entry file's `bootstrap`.
+ */
 export function renderSlots(
   source: string,
   integrations: readonly Integration[],
@@ -187,6 +191,7 @@ export function renderSlots(
   const active = integrations.filter((i) => !i.slot || slots.has(i.slot))
 
   const out: string[] = []
+  let importsAt = -1
   for (let i = 0; i < lines.length; i++) {
     const match = MARKER.exec(lines[i]!)
     if (!match) {
@@ -194,12 +199,13 @@ export function renderSlots(
       continue
     }
     const [, indent, slot] = match as unknown as [string, string, string]
-    const rendered =
-      slot === 'imports'
-        ? renderImports(active.flatMap((entry) => (entry.import ? [entry.import] : [])))
-        : active
-            .filter((entry) => entry.slot === slot && entry.code)
-            .map((entry) => indentBlock(`${fill(entry.code!)},`, indent))
+    if (slot === 'imports') {
+      importsAt = out.length
+      continue
+    }
+    const rendered = active
+      .filter((entry) => entry.slot === slot && entry.code)
+      .map((entry) => indentBlock(`${fill(entry.code!)},`, indent))
     if (rendered.length > 0) {
       out.push(...rendered)
       continue
@@ -210,6 +216,22 @@ export function renderSlots(
       out.pop()
       i++
     }
+  }
+  if (importsAt >= 0) {
+    const word = (name: string) => new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`)
+    // Imports the file already writes itself, and the rest of its code.
+    const text = out.join('\n')
+    const statements = /^import\b[^;]*?\bfrom\s*['"][^'"]+['"]/gm
+    const own = (text.match(statements) ?? []).join('\n')
+    const body = text.replace(statements, '')
+    const used = (name: string) => word(name).test(body) && !word(name).test(own)
+    const specs = active.flatMap((entry) => {
+      if (!entry.import) return []
+      const { names, default: def, from } = entry.import
+      const kept = { from, names: names?.filter(used), default: def && used(def) ? def : undefined }
+      return kept.names?.length || kept.default ? [kept] : []
+    })
+    out.splice(importsAt, 0, ...renderImports(specs))
   }
   return out.join('\n')
 }

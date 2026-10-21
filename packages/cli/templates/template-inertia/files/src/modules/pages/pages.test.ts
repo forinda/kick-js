@@ -2,6 +2,7 @@ import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { createTestApp } from '@forinda/kickjs-testing'
 import { InertiaAdapter } from '@forinda/kickjs-inertia'
+// @kick:imports
 import { PagesModule } from './pages.module'
 
 // No client build or `kick dev` needed: without one, pages render without
@@ -9,6 +10,8 @@ import { PagesModule } from './pages.module'
 // answered 409 once the client has been built.
 async function boot() {
   const { app } = await createTestApp({
+    // The app's own engine: without one, createTestApp uses Express.
+    // @kick:runtime
     modules: [PagesModule()],
     adapters: [InertiaAdapter({ version: 'test' })],
   })

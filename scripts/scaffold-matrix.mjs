@@ -15,7 +15,7 @@
  * Third-party packages come from the registry.
  *
  * Per scenario: kick new → pnpm install → (kick add) → (kick g deploy) → kick typegen →
- * tsc --noEmit → (web build) → kick build (or the app's build script) → kick start → HTTP checks.
+ * tsc --noEmit → test → (web build) → kick build (or the app's build script) → kick start → HTTP checks.
  * With `deploy`, also build:netlify / build:vercel and serve the Vercel
  * function from a copy outside the project; with `docker`, build the
  * scaffold's Dockerfile and request the same paths from the container.
@@ -409,6 +409,8 @@ async function runScenario(name, scenario, tarballs) {
     }
     run('kick typegen', 'pnpm', ['exec', 'kick', 'typegen'], server)
     run('tsc --noEmit', 'pnpm', ['exec', 'tsc', '--noEmit'], server)
+    // The tests the scaffold ships with (`vitest run --passWithNoTests`).
+    run('test', 'pnpm', ['run', 'test'], server)
     if (scenario.fullstack) run('web build', 'pnpm', ['run', 'build'], join(root, 'web'))
     // The inertia template's build script also builds the pages and the SSR bundle.
     if (scenario.buildScript) run('build', 'pnpm', ['run', 'build'], server)
