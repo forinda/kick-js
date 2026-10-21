@@ -47,13 +47,15 @@ function normalizeForDrift(snap: SchemaSnapshot): SchemaSnapshot {
               // The SQL each side means: what Postgres reports for the live
               // column, what the migration emitted for the snapshot's.
               const sql = defaultRaw ?? formatDefault(c.default, c.type, defaultSql)
+              // A constant compares by value, casts dropped (`'{}'::jsonb` is
+              // `{}`). An expression keeps its casts: `(f())::text` and `(f())`
+              // are different defaults.
+              if (!isPgLiteral(sql)) return [cn, { ...c, default: `sql:${pgExpression(sql)}` }]
               const value =
                 defaultSql && typeof c.default === 'string'
                   ? normalizeDefault(c.default)
                   : c.default
-              // Normalised values alone can't tell the literal `'(f())'::text`
-              // from the expression `(f())::text`; the kind can.
-              return [cn, { ...c, default: `${isPgLiteral(sql) ? 'value' : 'sql'}:${value}` }]
+              return [cn, { ...c, default: `value:${value}` }]
             }),
           ),
         }
@@ -179,6 +181,29 @@ function isPgLiteral(sql: string): boolean {
     /^\(?-?\d+(?:\.\d+)?\)?$/.test(bare) ||
     /^(?:true|false|null)$/i.test(bare)
   )
+}
+
+/**
+ * An expression default the way Postgres reports it: it wraps a cast's
+ * operand in parentheses (`f()::text` becomes `(f())::text`), and `now()`
+ * reads back as itself whether written `now()` or `CURRENT_TIMESTAMP`.
+ */
+function pgExpression(sql: string): string | null {
+  const cast = sql.match(PG_CASTS)
+  if (!cast) return normalizeDefault(sql)
+  const operand = sql.slice(0, cast.index)
+  return `${wrapsWhole(operand) ? operand.slice(1, -1) : operand}${cast[0]}`
+}
+
+/** `(a)` but not `(a) + (b)`: the first parenthesis closes at the end. */
+function wrapsWhole(sql: string): boolean {
+  if (!sql.startsWith('(') || !sql.endsWith(')')) return false
+  let depth = 0
+  for (let i = 0; i < sql.length; i++) {
+    if (sql[i] === '(') depth++
+    else if (sql[i] === ')' && --depth === 0) return i === sql.length - 1
+  }
+  return false
 }
 
 export type DriftBehavior = 'error' | 'warn' | 'ignore'
