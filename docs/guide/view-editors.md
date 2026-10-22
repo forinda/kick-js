@@ -50,10 +50,15 @@ vim.lsp.enable('kick_views')
 
 ## Vim
 
-With [vim-lsp](https://github.com/prabirshrestha/vim-lsp):
+Both setups below need `.kick` files to have the `kick` filetype, in your `vimrc`:
 
 ```vim
 autocmd BufNewFile,BufRead *.kick setfiletype kick
+```
+
+With [vim-lsp](https://github.com/prabirshrestha/vim-lsp):
+
+```vim
 autocmd User lsp_setup call lsp#register_server({
   \ 'name': 'kick-views',
   \ 'cmd': {server_info -> ['npx', 'kick-view-ls', '--stdio']},
@@ -127,7 +132,9 @@ For highlighting, add the VS Code extension's TextMate grammar under **Settings 
 
 ## Zed
 
-Zed adds languages only through extensions. A `.kick` extension needs a tree-sitter grammar (Zed's `html` grammar works for the markup) and a few lines of Rust that return the server's command. See Zed's guides to [language extensions](https://zed.dev/docs/extensions/languages) and [language servers](https://zed.dev/docs/extensions/languages#language-servers). KickJS doesn't ship a Zed extension yet.
+Install the **KickJS Views** extension ([forinda/kickjs-zed](https://github.com/forinda/kickjs-zed)). It registers the `.kick` language with its own pinned HTML grammar for the markup, downloads the language server from npm, and runs it with Zed's Node. Until it's listed in Zed's extension registry, clone the repository and run **zed: install dev extension** on the folder.
+
+Pass options under `lsp.kick-views.initialization_options` in your settings, for example `{ "viewsDir": "app/views" }`. The extension always sends `trusted: false`: Zed merges a project's `.zed/settings.json` into the settings an extension reads, so it can't tell your choice from a cloned repository's.
 
 ## Building on top
 
