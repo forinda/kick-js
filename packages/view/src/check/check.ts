@@ -29,6 +29,10 @@ export interface CheckResult {
   diagnostics: Diagnostic[]
 }
 
+/** SVG animation elements can set any attribute — `href` included — to these values. */
+const ANIMATION = new Set(['animate', 'set', 'animatemotion', 'animatetransform'])
+const ANIMATION_VALUES = new Set(['values', 'to', 'from', 'by', 'attributename'])
+
 const JSON_SCRIPT_TYPES = new Set(['application/json', 'application/ld+json'])
 const LOOP_VARS: ReadonlySet<string> = new Set([
   '$index',
@@ -114,7 +118,12 @@ class Checker {
 
   // ── expressions ───────────────────────────────────────────────────────
 
-  expr(e: Expr, where: 'text' | 'attr' | 'rcdata' | 'json' = 'text'): CExpr {
+  /**
+   * `whole` is true only for the whole expression of a text `{{ }}` — the one
+   * place `raw` may appear (as its outermost pipe). Nested anywhere else, raw
+   * could smuggle markup into an attribute or another context.
+   */
+  expr(e: Expr, where: 'text' | 'attr' | 'rcdata' | 'json' = 'text', whole = false): CExpr {
     switch (e.kind) {
       case 'literal':
         return { k: 'l', v: e.value }
@@ -127,15 +136,14 @@ class Checker {
         return { k: 'c', t: this.expr(e.test), y: this.expr(e.whenTrue), n: this.expr(e.whenFalse) }
       case 'pipe': {
         if (!this.project.pipes.has(e.name)) this.err(e.span, `unknown pipe '${e.name}'`)
-        if (e.input.kind === 'pipe' && e.input.name === 'raw') {
-          this.err(e.input.span, 'raw must be the last pipe')
-        }
-        if (e.name === 'raw' && where !== 'text') {
+        if (e.name === 'raw' && !(whole && where === 'text')) {
           this.err(
             e.span,
             where === 'attr'
               ? "raw isn't allowed in an attribute: it could break out of the quotes"
-              : `raw isn't allowed inside <${where === 'rcdata' ? 'title> or <textarea' : 'script'}>`,
+              : where === 'text'
+                ? 'raw must be the last pipe of the whole {{ }}: {{ value | raw }}'
+                : `raw isn't allowed inside <${where === 'rcdata' ? 'title> or <textarea' : 'script'}>`,
           )
         }
         return { k: 'p', n: e.name, i: this.expr(e.input), a: e.args.map((a) => this.expr(a)) }
@@ -200,7 +208,8 @@ class Checker {
         out.push({
           k: 'i',
           c: 'text',
-          e: this.expr(n.expr, n.ctx === 'rcdata' ? 'rcdata' : 'text'),
+          e: this.expr(n.expr, n.ctx === 'rcdata' ? 'rcdata' : 'text', true),
+          at: at(n.span),
         })
         return
       }
@@ -256,7 +265,14 @@ class Checker {
             this.loops.pop()
           }
         })
-        const node: CNode = { k: 'for', e, it: it!, m, b: body }
+        const node: Extract<CNode, { k: 'for' }> = {
+          k: 'for',
+          e,
+          it: it!,
+          m,
+          b: body,
+          at: at(n.span),
+        }
         if (n.empty) node.em = this.scoped(() => this.nodes(n.empty!, parent))
         out.push(node)
         return
@@ -313,7 +329,7 @@ class Checker {
     const isJson = tag === 'script' && JSON_SCRIPT_TYPES.has(typeValue)
     const only = parent?.children.filter((c) => !(c.k === 'text' && !c.value.trim())).length === 1
     if (isJson && only && n.expr.kind === 'pipe' && n.expr.name === 'json') {
-      return [{ k: 'i', c: 'json', e: this.expr(n.expr, 'json') }]
+      return [{ k: 'i', c: 'json', e: this.expr(n.expr, 'json'), at: at(n.span) }]
     }
     this.err(
       n.span,
@@ -347,7 +363,7 @@ class Checker {
     const dynamic = attrs.some((a) => a.t !== 's')
     if (dynamic || el === this.rootElement) {
       out.push({ k: 's', t: `<${el.tag}` })
-      const node: CNode = { k: 'A', tag: el.tag, a: attrs }
+      const node: Extract<CNode, { k: 'A' }> = { k: 'A', tag: el.tag, a: attrs, at: at(el.span) }
       if (el === this.rootElement) node.f = 1
       out.push(node)
     } else {
@@ -402,6 +418,13 @@ class Checker {
           this.err(
             a.span,
             'class can\'t be interpolated — add classes with [class.name]="condition"',
+          )
+          continue
+        }
+        if (ANIMATION.has(tag.toLowerCase()) && ANIMATION_VALUES.has(lower)) {
+          this.err(
+            a.span,
+            `${a.name} can't be interpolated on <${tag}>: an animation can set href to a javascript: URL`,
           )
           continue
         }
@@ -568,7 +591,7 @@ class Checker {
       }
     }
     const fa = this.attrs({ ...el, attrs: fallthrough })
-    out.push({ k: 'cmp', n: name, in: inputs, fa, f: fills })
+    out.push({ k: 'cmp', n: name, in: inputs, fa, f: fills, at: at(el.span) })
   }
 
   // ── layouts ───────────────────────────────────────────────────────────
@@ -616,6 +639,8 @@ function staticAttr(a: Extract<CAttr, { t: 's' }>): string {
     ? ` ${a.n}`
     : ` ${a.n}="${a.v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
 }
+
+const at = (span: Span): [number, number] => [span.start.line, span.start.column]
 
 const zero: Span = {
   start: { offset: 0, line: 1, column: 1 },

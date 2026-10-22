@@ -54,6 +54,14 @@ describe('check', () => {
       '<a [href]="x | raw">x</a>',
       '<p [onclick]="x">x</p>',
       '<p>{{ x | raw | uppercase }}</p>',
+      '<a href="{{ a ? (x | raw) : y }}">x</a>',
+      '<p>{{ a ? (x | raw) : y }}</p>',
+      '<p>{{ (x | raw) + y }}</p>',
+      '<p [title]="(x | raw) ?? y">x</p>',
+      '<svg><set attributeName="href" to="{{ u }}" /></svg>',
+      '<svg><animate attributeName="href" values="{{ u }}" /></svg>',
+      '<svg><animate [attributeName]="n" values="a" /></svg>',
+      '<svg><animateMotion [from]="u" /></svg>',
     ]
     for (const src of bad) expect(errs({ page: src }).length, src).toBeGreaterThan(0)
     expect(errs({ page: '<script type="application/json">{{ x | json }}</script>' })).toEqual([])
@@ -164,7 +172,7 @@ describe('check', () => {
     expect(clean({ page: '<p>a</p><p>b</p>' }).body).toEqual([{ k: 's', t: '<p>a</p><p>b</p>' }])
     expect(clean({ page: '<p class="a">x{{ y }}</p>' }).body).toEqual([
       { k: 's', t: '<p class="a">x' },
-      { k: 'i', c: 'text', e: { k: 'd', n: 'y', p: [] } },
+      { k: 'i', c: 'text', e: { k: 'd', n: 'y', p: [] }, at: [1, 15] },
       { k: 's', t: '</p>' },
     ])
   })

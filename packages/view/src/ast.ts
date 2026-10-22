@@ -115,6 +115,9 @@ export interface TemplateAst {
   body: Node[]
 }
 
+/** `[line, column]` of a node in its template, for render errors. */
+export type At = [number, number]
+
 // ── Checked templates: what `check` produces and `render` walks. Plain JSON,
 // so a build can ship them as data. Short keys keep edge bundles small.
 
@@ -154,11 +157,19 @@ export type CNode =
   /** static output */
   | { k: 's'; t: string }
   /** `{{ e }}`: `text` escapes HTML, `json` is the one value of a JSON script */
-  | { k: 'i'; c: 'text' | 'json'; e: CExpr }
+  | { k: 'i'; c: 'text' | 'json'; e: CExpr; at: At }
   /** the attributes of an element (between `<tag` and `>`); `f` takes a component caller's fallthrough attributes */
-  | { k: 'A'; tag: string; a: CAttr[]; f?: 1 }
+  | { k: 'A'; tag: string; a: CAttr[]; f?: 1; at: At }
   | { k: 'if'; br: Array<{ c?: CExpr; a?: number; b: CNode[] }> }
-  | { k: 'for'; e: CExpr; it: number | [number, number]; m: number; b: CNode[]; em?: CNode[] }
+  | {
+      k: 'for'
+      e: CExpr
+      it: number | [number, number]
+      m: number
+      b: CNode[]
+      em?: CNode[]
+      at: At
+    }
   | { k: 'sw'; e: CExpr; cs: Array<{ e: CExpr; b: CNode[] }>; d?: CNode[] }
   | { k: 'let'; s: number; e: CExpr }
   /** a component: inputs into its slots, fallthrough attributes, slot fills (`''` is the default) */
@@ -168,6 +179,7 @@ export type CNode =
       in: Array<{ s: number; e: CExpr }>
       fa: CAttr[]
       f: Record<string, CNode[]>
+      at: At
     }
   /** `<slot name="n">fallback</slot>` */
   | { k: 'o'; n: string; fb: CNode[] }
