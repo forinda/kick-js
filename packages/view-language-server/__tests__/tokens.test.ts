@@ -111,6 +111,15 @@ describe('kickTokens', () => {
       ['user-card', 'class'],
     ])
   })
+  it('@error is a keyword with a string', () => {
+    expect(t("@error('title') {\n{{ $message }}\n}")).toEqual([
+      ['@error', 'keyword'],
+      ["'title'", 'string'],
+      ['{{', 'operator'],
+      ['$message', 'variable'],
+      ['}}', 'operator'],
+    ])
+  })
   it('leaves @verbatim, script and style content alone, and e-mail @s', () => {
     expect(t('@verbatim {\n{{ x }} @if\n}\n<script>if (a) {}</script>me@if.com')).toEqual([
       ['@verbatim', 'keyword'],

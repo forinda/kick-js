@@ -3,6 +3,7 @@
  * pipes, components, slots and layouts verified, and every interpolation's
  * context enforced (spec §4). What passes here is safe to render.
  */
+import { FORM_GLOBALS, SECRET_FIELD } from '../form-state'
 import {
   AST_FORMAT_VERSION,
   type Attr,
@@ -42,6 +43,19 @@ const ANIMATION = new Set(['animate', 'set', 'animatemotion', 'animatetransform'
 const ANIMATION_VALUES = new Set(['values', 'to', 'from', 'by', 'attributename'])
 
 const JSON_SCRIPT_TYPES = new Set(['application/json', 'application/ld+json'])
+/** Input types that never refill. */
+const NO_REFILL = new Set(['password', 'file', 'hidden', 'submit', 'button', 'reset', 'image'])
+
+/** `$old?.[name]` */
+function oldOf(name: string): CExpr {
+  return { k: 'd', n: '$old', p: [{ e: { k: 'l', v: name }, o: 1 }] }
+}
+
+/** `e == value` */
+function equals(e: CExpr, value: CExpr): CExpr {
+  return { k: 'b', o: '==', l: e, r: value }
+}
+
 const LOOP_VARS: ReadonlySet<string> = new Set([
   '$index',
   '$first',
@@ -173,6 +187,8 @@ class Checker {
         const b = this.lookup(e.root)
         if (b?.kind === 'meta') return { k: 'm', s: b.s, w: b.w! }
         if (b) return { k: 'v', s: b.s, p }
+        // Form state is request-wide: a form field component reads it too.
+        if (FORM_GLOBALS.has(e.root)) return { k: 'd', n: e.root, p }
         if (this.component) {
           if (!this.warned.has(e.root)) {
             this.warned.add(e.root)
@@ -201,6 +217,8 @@ class Checker {
       const f = stack[stack.length - 1]!
       if (f.i >= f.list.length) {
         stack.pop()
+        // The <select>'s own frame, not a block's walk of its children.
+        if (f.close && f.parent?.tag.toLowerCase() === 'select') this.select = undefined
         if (f.close) out.push({ k: 's', t: f.close })
         continue
       }
@@ -390,6 +408,7 @@ class Checker {
       )
     }
     const attrs = this.attrs(el)
+    const refill = this.refill(el, attrs)
     const dynamic = attrs.some((a) => a.t !== 's')
     if (dynamic || el === this.rootElement) {
       out.push({ k: 's', t: `<${el.tag}` })
@@ -407,7 +426,69 @@ class Checker {
       return undefined
     }
     out.push({ k: 's', t: '>' })
+    // An empty <textarea name> refills from `$old`.
+    // The leading newline is the parser's to drop, so a value starting with
+    // one keeps it.
+    if (refill && lower === 'textarea' && el.children.length === 0)
+      out.push({ k: 's', t: '\n' }, { k: 'i', c: 'rcdata', e: oldOf(refill), at: at(el.span) })
     return el
+  }
+
+  /** The `<select name>` being walked, for its options' refill. */
+  private select?: string
+
+  /**
+   * Refill from `$old` — what a failed submit sent — for a named form control
+   * the template doesn't set itself: `value`, `checked`, `selected`, or an
+   * empty `<textarea>`'s text. Never for secrets, files or hidden fields.
+   * Returns the field name when the control refills.
+   */
+  private refill(el: Element, attrs: CAttr[]): string | undefined {
+    if (el.foreign) return undefined
+    const tag = el.tag.toLowerCase()
+    const has = (n: string) => el.attrs.some((a) => a.name.toLowerCase() === n)
+    const stat = (n: string) => {
+      const a = el.attrs.find((x) => x.name.toLowerCase() === n && x.kind === 'static')
+      return a ? String(a.parts?.[0] ?? '') : undefined
+    }
+    /** `value="x"` or `value="{{ x }}"`, as an expression to compare `$old` with. */
+    const valueExpr = (): CExpr | undefined => {
+      const a = el.attrs.find((x) => x.name.toLowerCase() === 'value')
+      // What the browser submits: character references decoded.
+      if (a?.kind === 'static') return { k: 'l', v: decodeEntities(String(a.parts?.[0] ?? '')) }
+      // `'' + x`: the attribute prints as text, and `$old` holds the text a browser sent.
+      if (a?.kind === 'interp' && a.parts?.length === 1 && typeof a.parts[0] !== 'string')
+        return { k: 'b', o: '+', l: { k: 'l', v: '' }, r: this.expr(a.parts[0]!, 'attr') }
+      return undefined
+    }
+    if (tag === 'option') {
+      const value = valueExpr()
+      if (this.select === undefined || value === undefined || has('selected')) return undefined
+      attrs.push({ t: 'b', n: 'selected', e: equals(oldOf(this.select), value) })
+      return undefined
+    }
+    if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return undefined
+    const name = stat('name')
+    if (!name || SECRET_FIELD.test(name)) return undefined
+    if (tag === 'select') {
+      this.select = name
+      return name
+    }
+    if (tag === 'textarea') return name
+    // A bound type could be `password`: never refill what can't be read here.
+    if (has('type') && stat('type') === undefined) return undefined
+    const type = (stat('type') ?? 'text').toLowerCase()
+    if (NO_REFILL.has(type)) return undefined
+    if (type === 'checkbox' || type === 'radio') {
+      if (has('checked')) return undefined
+      const value = has('value') ? valueExpr() : { k: 'l' as const, v: 'on' }
+      if (!value) return undefined
+      attrs.push({ t: 'b', n: 'checked', e: equals(oldOf(name), value) })
+      return name
+    }
+    if (has('value')) return undefined
+    attrs.push({ t: 'b', n: 'value', e: oldOf(name) })
+    return name
   }
 
   /** The single root element of a component, which takes fallthrough attributes. */

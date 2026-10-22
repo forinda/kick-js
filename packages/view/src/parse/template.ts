@@ -35,7 +35,7 @@ const RCDATA = new Set(['title', 'textarea'])
  */
 const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml'])
 const KEYWORDS =
-  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|verbatim|assets)(?![\w$-])/
+  /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|error|verbatim|assets)(?![\w$-])/
 const LOOP_VARS = new Set<LoopVar>(['$index', '$first', '$last', '$even', '$odd', '$count'])
 
 type Frame =
@@ -553,6 +553,7 @@ class TemplateParser {
       case 'for':
       case 'switch':
       case 'slot':
+      case 'error':
       case 'layout':
       case 'assets':
         if (ch !== '(') return false
@@ -614,6 +615,20 @@ class TemplateParser {
         keyword: 'for',
         start: i,
       })
+    } else if (kw === 'error') {
+      // `@error('title') { … }` is `@if ($errors?.['title']; as $message) { … }`.
+      const field = this.stringArg(p.src, p.at, '@error')
+      const at = this.span(p.at, p.at + p.src.length)
+      const cond: Expr = {
+        kind: 'path',
+        root: '$errors',
+        segments: [{ computed: { kind: 'literal', value: field, span: at }, optional: true }],
+        span: at,
+      }
+      const branch: IfBranch = { cond, alias: '$message', body: [] }
+      const node: Node = { k: 'if', branches: [branch], span: this.span(i, brace) }
+      this.emit(node)
+      this.frames.push({ type: 'block', children: branch.body, node, keyword: 'error', start: i })
     } else if (kw === 'switch') {
       const on = this.expr(p.src, p.at)
       const node: Extract<Node, { k: 'switch' }> = {

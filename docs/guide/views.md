@@ -322,6 +322,63 @@ Some rules, because the build and the editor read this file without running it:
 - A pipe can't reuse a built-in's name.
 - Pipes are synchronous. Load data in the controller.
 
+## Forms
+
+A form post that fails validation goes back to the form with each field's error and what was typed, and a controller can leave a message for the next page:
+
+```ts
+// src/index.ts
+import { bootstrap, formErrorHandler, session } from '@forinda/kickjs'
+
+export const app = await bootstrap({
+  modules,
+  middlewares: [session({ secret: env.SESSION_SECRET, store: 'cookie' })],
+  adapters: [KickView({ views })],
+  onError: formErrorHandler(), // with Inertia: formErrorHandler(inertiaErrorHandler())
+})
+```
+
+```ts
+import { flash } from '@forinda/kickjs'
+
+@Post('/products', { body: createProductSchema })
+async create(ctx: RequestContext) {
+  await this.products.create(ctx.body)
+  flash(ctx, { success: 'Product saved' })
+  ctx.redirect('/products')
+}
+```
+
+```kick
+@if ($flash.success) {
+  <p class="notice">{{ $flash.success }}</p>
+}
+<form method="post" action="/products">
+  <input name="title">
+  @error('title') {
+    <p class="field-error">{{ $message }}</p>
+  }
+  <textarea name="description"></textarea>
+  <button>Save</button>
+</form>
+```
+
+- **Going back.** When route validation fails on a browser form submit (urlencoded or multipart, asking for HTML, not an Inertia visit), `formErrorHandler()` stores the errors and the submitted values in the session and redirects (303) to the page the form was on: the last full page a GET rendered in this session, else the `Referer` when it's this site, else `formErrorHandler(fallback, { fallbackUrl })` (default `/`). `fetch()` posting `FormData`, API calls and everything else go to the usual error handler. It needs `session()`; without it a failed form post gets the usual 422. With Inertia, put Inertia's handler inside: `formErrorHandler(inertiaErrorHandler())`.
+- **In templates.** Every template, components included, has `$errors` (field → first message, `form` for the body as a whole), `$old` (what was submitted) and `$flash` (what `flash()` set). Each shows on the next page only. `@error('field') { … }` renders when that field has an error, with the message as `$message`.
+- **Refilling.** A named `<input>`, `<textarea>`, `<select>` (its `<option>`s), checkbox or radio takes its value back from `$old` by itself. It's left alone when the template sets `value`, `checked` or `selected`, and never refilled for passwords, files, hidden fields, a bound `[type]`, or names that look like secrets (`password`, `pwd`, `pin`, `otp`, `token`, `secret`, `card`, `cvv`, `csrf`). Options and checkboxes compare with their `value`, written or interpolated (`value="{{ c.id }}"`). The values ride in the session, so they're capped: a field over 1,000 bytes isn't kept, and over 1,500 bytes in all nothing is (the errors still are), so a cookie session can't overflow.
+- **Re-rendering instead.** A controller can answer with the form itself; its own `$errors` and `$old` win over the session's:
+
+  ```ts
+  import { fieldErrors } from '@forinda/kickjs'
+
+  // issues: [{ field: 'title', message: 'Too short' }], the shape route validation uses
+  const issues = await this.products.check(ctx.body)
+  if (issues.length)
+    return ctx.render('products/new', { $errors: fieldErrors(issues), $old: ctx.body })
+  ```
+
+- **Field names are flat** (`title`, `email`) for now. Nested names (`items[0][name]`) and lists of values (a group of checkboxes with one name) aren't refilled yet.
+
 ## Shared data
 
 ```ts
