@@ -125,6 +125,11 @@ export {
 } from './middleware/session'
 export { flash, fieldErrors, oldInput, FLASH_KEY, FORM_ERRORS_KEY, OLD_INPUT_KEY } from './form'
 export {
+  formErrorHandler,
+  type FormErrorHandler,
+  type FormErrorHandlerOptions,
+} from './middleware/form-errors'
+export {
   upload,
   cleanupFiles,
   resolveMimeTypes,

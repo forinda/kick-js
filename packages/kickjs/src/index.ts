@@ -242,6 +242,11 @@ export {
   OLD_INPUT_KEY,
 } from './http/form'
 export {
+  formErrorHandler,
+  type FormErrorHandler,
+  type FormErrorHandlerOptions,
+} from './http/middleware/form-errors'
+export {
   upload,
   cleanupFiles,
   resolveMimeTypes,
