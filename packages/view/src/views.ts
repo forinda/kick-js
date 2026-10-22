@@ -60,7 +60,7 @@ export interface ViewsOptions {
   loader?: Loader
   /** Checked templates from the build (`virtual:kick-views`); `null` in dev. */
   bundle?: ViewsBundle | null
-  /** Re-check templates whose source changed, on every render. */
+  /** Re-check templates whose source changed, on every render. Default: on when `bundle` is `null` (`kick dev`). */
   dev?: boolean
   /**
    * `@assets('entry')`: usually `(entry, data) => assetTags(entry, mode, data.cspNonce)`.
@@ -122,6 +122,8 @@ function fileLoaders(): Promise<FileLoaderModule> {
 
 export function createViews(options: ViewsOptions = {}): Views {
   const bundle = options.bundle ?? undefined
+  // `kick dev` hands over `bundle: null`: the sources change under us there.
+  const dev = options.dev ?? options.bundle === null
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
   const layoutFor = layoutResolver(options.layout)
@@ -174,7 +176,7 @@ export function createViews(options: ViewsOptions = {}): Views {
         templates.set(name, r.ast)
         const first = r.diagnostics.find((d) => d.severity === 'error')
         if (first) parseErrors.set(name, first)
-        if (options.dev && l.version) versions.set(name, await l.version(name))
+        if (dev && l.version) versions.set(name, await l.version(name))
       }),
     )
     return {
@@ -195,7 +197,7 @@ export function createViews(options: ViewsOptions = {}): Views {
   async function current(): Promise<State> {
     if (options.cache === false) return reload()
     const s = await (state ?? reload())
-    if (!options.dev) return s
+    if (!dev) return s
     const l = await getLoader()
     if (!l.version) return s
     const names = await l.list()
