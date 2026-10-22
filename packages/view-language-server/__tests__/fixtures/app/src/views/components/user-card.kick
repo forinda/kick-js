@@ -1,0 +1,3 @@
+@input user
+@input compact = false
+<div class="card">{{ user.name | initials }}</div>

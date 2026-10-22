@@ -101,6 +101,23 @@ export const workspace: Record<string, any> = {
   })),
   workspaceFolders: undefined,
   onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
+  createFileSystemWatcher: vi.fn((glob: string) => ({ glob, dispose: vi.fn() })),
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const languages: Record<string, any> = {
+  registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
+}
+
+export enum CompletionItemKind {
+  File = 16,
+}
+
+export class CompletionItem {
+  constructor(
+    public label: string,
+    public kind?: number,
+  ) {}
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -5,7 +5,6 @@
  * have what the editor calls).
  */
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as bundled from '@forinda/kickjs-view'
@@ -27,33 +26,46 @@ const REQUIRED = [
 
 let warned = false
 
-/** The `version` in the package.json above the resolved entry. */
-function versionAbove(file: string): string {
-  for (let dir = dirname(file); dir !== dirname(dir); dir = dirname(dir)) {
+/**
+ * The project's `@forinda/kickjs-view` entry and version. Its exports map
+ * only has `import`, which `require.resolve` can't see — so find the
+ * package folder and read the entry from its exports.
+ */
+function findProjectView(root: string): { entry: string; version: string } | undefined {
+  // node_modules at and above the root only — not NODE_PATH or global folders.
+  for (let dir = root; ; dir = dirname(dir)) {
+    const pkgDir = join(dir, 'node_modules/@forinda/kickjs-view')
+    let pkg
     try {
-      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-      if (pkg.name === '@forinda/kickjs-view') return pkg.version
-    } catch {}
+      pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+    } catch {
+      if (dir === dirname(dir)) return undefined
+      continue
+    }
+    const dot = typeof pkg.exports === 'string' ? pkg.exports : pkg.exports?.['.']
+    const rel =
+      typeof dot === 'string' ? dot : (dot?.node ?? dot?.import ?? dot?.default ?? pkg.main)
+    return { entry: join(pkgDir, typeof rel === 'string' ? rel : 'index.js'), version: pkg.version }
   }
-  return 'unknown'
 }
 
 export async function loadViewModule(
   root: string,
   warn: (message: string) => void,
 ): Promise<{ view: ViewModule; source: 'project' | 'bundled'; version: string }> {
+  const found = findProjectView(root)
   let reason = 'the project has no @forinda/kickjs-view'
-  try {
-    const entry = createRequire(join(root, 'package.json')).resolve('@forinda/kickjs-view')
-    reason = `the project's @forinda/kickjs-view ${versionAbove(entry)}`
-    const mod = await import(pathToFileURL(entry).href)
-    const missing = REQUIRED.filter((k) => !(k in mod))
-    if (!missing.length)
-      return { view: mod as ViewModule, source: 'project', version: versionAbove(entry) }
-    reason += ` lacks ${missing.join(', ')}`
-  } catch (err) {
-    if ((err as { code?: string }).code !== 'MODULE_NOT_FOUND')
+  if (found) {
+    reason = `the project's @forinda/kickjs-view ${found.version}`
+    try {
+      const mod = await import(pathToFileURL(found.entry).href)
+      const missing = REQUIRED.filter((k) => !(k in mod))
+      if (!missing.length)
+        return { view: mod as ViewModule, source: 'project', version: found.version }
+      reason += ` lacks ${missing.join(', ')}`
+    } catch (err) {
       reason += ` failed to load: ${(err as Error).message}`
+    }
   }
   if (!warned) {
     warned = true

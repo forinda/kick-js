@@ -354,6 +354,31 @@
           "default": "",
           "markdownDeprecationMessage": "The token is now stored securely in VS Code SecretStorage. Run **KickJS: Set DevTools Token…** from the palette instead. Any value here is migrated to SecretStorage and cleared automatically.",
           "description": "Deprecated — use `KickJS: Set DevTools Token…`. The token now lives in SecretStorage, not settings.json. A value left here is migrated once, then removed."
+        },
+        "kickjs.views.dir": {
+          "type": "string",
+          "default": "src/views",
+          "description": "Views folder, relative to the workspace folder."
+        },
+        "kickjs.views.components": {
+          "type": "string",
+          "default": "components",
+          "description": "Components folder inside the views folder."
+        },
+        "kickjs.views.pipes": {
+          "type": "string",
+          "default": "",
+          "description": "Pipes file, relative to the workspace folder. Default `<views dir>/pipes.ts`."
+        },
+        "kickjs.views.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the communication between VS Code and the .kick language server."
         }
       }
     },
@@ -412,7 +437,11 @@
           "Kick",
           "kick"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./resources/kick-file.svg",
+          "dark": "./resources/kick-file.svg"
+        }
       }
     ],
     "grammars": [
@@ -471,6 +500,7 @@
     "package": "pnpm build && vsce package --no-dependencies"
   },
   "devDependencies": {
+    "@forinda/kickjs-view-language-server": "workspace:*",
     "@types/node": "^26.6.5",
     "@types/vscode": "^1.140.0",
     "@vscode/vsce": "^4.0.0",
@@ -480,5 +510,8 @@
     "vitest": "^5.0.5",
     "vscode-tmlanguage-snapshot": "^2.0.0"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
 }

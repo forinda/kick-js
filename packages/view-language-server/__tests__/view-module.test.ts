@@ -12,7 +12,8 @@ function project(body?: string) {
     mkdirSync(dir, { recursive: true })
     writeFileSync(
       join(dir, 'package.json'),
-      '{"name":"@forinda/kickjs-view","version":"9.9.9","type":"module","exports":{".":"./index.js"}}',
+      // Import-only exports, like the real package: require.resolve can't see it.
+      '{"name":"@forinda/kickjs-view","version":"9.9.9","type":"module","exports":{".":{"types":"./index.d.ts","import":"./index.js"}}}',
     )
     writeFileSync(join(dir, 'index.js'), body)
   }

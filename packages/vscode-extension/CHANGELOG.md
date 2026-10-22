@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`.kick` views:** highlighting, errors as you type, completion (keywords, pipes, components, HTML, CSS, Emmet), hover, go to definition and Format Document, through a bundled language server. `.kick` files get their own icon, and `ctx.render('…')` completes template names. Settings live under `kickjs.views.*`.
 - **Open Handler:** click a route in the Routes view (or its inline button) to open the handler at its line. The path comes from the app's devtools `/source` endpoint; when it doesn't exist locally, the extension maps the project-relative path into the workspace.
 
 ## 5.3.0

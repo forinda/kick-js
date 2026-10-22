@@ -5,6 +5,7 @@ import { ContainerTreeProvider } from './providers/container'
 import { DashboardPanel } from './panels/dashboard'
 import { registerConnectCommand } from './commands/connect'
 import { registerKickCommands } from './commands/kick'
+import { activateKickLanguage, deactivateKickLanguage } from './kick-language'
 import {
   DEFAULT_DEBUG_PATH,
   autoDetect,
@@ -53,6 +54,9 @@ async function getToken(context: vscode.ExtensionContext): Promise<string | unde
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  // `.kick` editing works in any folder, KickJS project or not.
+  activateKickLanguage(context)
+
   // Gate every contribution on `kickjs.isKickProject` — the views +
   // command-palette entries in package.json declare
   // `when: kickjs.isKickProject`, so when this context is false the
@@ -343,4 +347,5 @@ async function offerSetToken(message: string): Promise<void> {
 
 export function deactivate() {
   disposeProviders()
+  return deactivateKickLanguage()
 }
