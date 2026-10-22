@@ -99,6 +99,36 @@ describe('render', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
+  it('trusted HTML is escaped inside title and textarea', () => {
+    const trusted = { trusted: (v: unknown) => new SafeHtml(String(v)) }
+    const s = setup(
+      {
+        page: '<title>{{ x | trusted }}</title><textarea>{{ x | trusted }}</textarea><p>{{ x | trusted }}</p>',
+      },
+      { pipes: { ...PIPES, ...trusted } },
+    )
+    const out = render(
+      check('page', {
+        templates: new Map([
+          [
+            'page',
+            parse(
+              '<title>{{ x | trusted }}</title><textarea>{{ x | trusted }}</textarea><p>{{ x | trusted }}</p>',
+              'page.kick',
+            ).ast,
+          ],
+        ]),
+        pipes: new Set(['trusted']),
+        componentsDir: 'components',
+      }).template!,
+      { x: '</title><b>' },
+      s.env,
+    )
+    expect(out).toBe(
+      '<title>&lt;/title&gt;&lt;b&gt;</title><textarea>&lt;/title&gt;&lt;b&gt;</textarea><p></title><b></p>',
+    )
+  })
+
   it('json script', () => {
     const out = html('<script type="application/json">{{ d | json }}</script>', {
       d: { s: '</script>' },

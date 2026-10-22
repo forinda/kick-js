@@ -134,6 +134,12 @@ describe('check', () => {
     expect(
       warns({ page: '<user-card [user]="u" compact="false" />', 'components/user-card': card })[0],
     ).toContain('"false"')
+    // Only class/id/style/role/aria-*/data-* fall through; a URL or event attribute is an unknown input.
+    for (const attr of ['href="{{ u }}"', '[href]="u"', 'onclick="x"', 'src="a"', 'data="x"']) {
+      expect(errs({ page: `<x-a ${attr} />`, 'components/x-a': '<a>x</a>' })[0], attr).toContain(
+        'unknown input',
+      )
+    }
     // kebab-case binds the camelCase input
     expect(
       errs({ page: '<x-y user-id="1" />', 'components/x-y': '@input userId\n<p>{{ userId }}</p>' }),

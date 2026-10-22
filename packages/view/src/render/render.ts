@@ -217,10 +217,12 @@ class Renderer {
           this.out.push(
             escapeJsonForScript(typeof v === 'string' ? v : (JSON.stringify(v) ?? 'null')),
           )
-        } else if (v instanceof SafeHtml) {
+        } else if (v instanceof SafeHtml && n.c === 'text') {
+          // Trusted HTML prints as is in text — never in <title>/<textarea>,
+          // where it could close the element.
           this.out.push(v.html)
         } else {
-          this.out.push(escapeHtml(this.text(v, inst)))
+          this.out.push(escapeHtml(v instanceof SafeHtml ? v.html : this.text(v, inst)))
         }
         return
       }

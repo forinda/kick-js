@@ -207,7 +207,7 @@ class Checker {
         }
         out.push({
           k: 'i',
-          c: 'text',
+          c: n.ctx === 'rcdata' ? 'rcdata' : 'text',
           e: this.expr(n.expr, n.ctx === 'rcdata' ? 'rcdata' : 'text', true),
           at: at(n.span),
         })
