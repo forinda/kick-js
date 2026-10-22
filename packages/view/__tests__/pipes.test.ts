@@ -71,7 +71,10 @@ describe('pipes', () => {
     for (let i = 0; i < FORMATTER_CACHE_LIMIT * 3; i++) {
       p.number!(1, `1.0-${i % 20}`)
       p.currency!(i, 'KES', `${(i % 20) + 1}.0-0`)
-      builtinPipes({ locale: i % 2 ? 'en-US' : 'en-GB', timeZone: 'UTC' }).percent!(0.5, `1.0-${i}`)
+      builtinPipes({ locale: i % 2 ? 'en-US' : 'en-GB', timeZone: 'UTC' }).percent!(
+        0.5,
+        `${(i % 20) + 1}.0-${i % 20}`,
+      )
     }
     for (let i = 0; i < 400; i++)
       builtinPipes({ locale: 'en-US', timeZone: 'UTC' }).date!(
