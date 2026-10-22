@@ -146,11 +146,21 @@ function settleOrFail(reply: FastifyReplyLike, returned: unknown): void {
     }
   })
 }
-/** Run `fn` in the store the matched route opened, if there was one. */
-function inRouteStore(raw: unknown, fn: () => void): void {
-  const store = (raw as { [STORE]?: RequestStore })[STORE]
-  if (store) requestStore.run(store, fn)
-  else fn()
+/**
+ * Run `fn` in the store the matched route opened. An error before any route
+ * ran (a body Fastify couldn't parse) uses the store already active, or one
+ * of its own, disposed when the response closes.
+ */
+function inRouteStore(raw: IncomingMessage, res: ServerResponse, fn: () => void): void {
+  const own = (raw as { [STORE]?: RequestStore })[STORE]
+  if (own) return void requestStore.run(own, fn)
+  if (requestStore.getStore()) return fn()
+  const header = raw.headers['x-request-id']
+  const store = createRequestStore(
+    (raw as { requestId?: string }).requestId || (Array.isArray(header) ? header[0] : header),
+  )
+  res.once('close', () => disposeRequestStore(store))
+  requestStore.run(store, fn)
 }
 
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
@@ -626,7 +636,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         // Pass the reply DRIVER (not raw res) so the connect-style
         // notFoundHandler's `res.status().json()` lands on the Fastify reply.
         // In the route's store when a route handed over (`callNotFound()`).
-        inRouteStore(request.raw, () =>
+        inRouteStore(request.raw, reply.raw, () =>
           settleOrFail(
             reply,
             (mw as (req: unknown, res: unknown, next: () => void) => unknown)(
@@ -645,7 +655,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         // `res.status().json()` / `setHeader` land on the Fastify reply.
         // In the route's store: Fastify calls this outside it, and an error
         // page should see the handler's ctx values and REQUEST-scoped instances.
-        inRouteStore(request.raw, () =>
+        inRouteStore(request.raw, reply.raw, () =>
           settleOrFail(
             reply,
             (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(

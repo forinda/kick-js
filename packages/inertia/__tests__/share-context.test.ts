@@ -1,9 +1,11 @@
 /**
  * `share` runs inside the request: it can read and write the RequestContext
  * and resolve REQUEST-scoped services on every path that renders a page — a
- * route, an Inertia visit, an unknown URL and a handler that throws.
+ * route, an Inertia visit, an unknown URL, a handler that throws and a body
+ * that doesn't parse.
  */
 import 'reflect-metadata'
+import express from 'express'
 import request from 'supertest'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fastifyRuntime } from '@forinda/kickjs/fastify'
@@ -13,6 +15,7 @@ import {
   Container,
   Controller,
   Get,
+  Post,
   Scope,
   createToken,
   expressRuntime,
@@ -33,7 +36,7 @@ const RUNTIMES = [
   { name: 'h3', make: () => h3Runtime() },
 ] as const
 
-async function makeApp(make: () => unknown) {
+async function makeApp(rt: (typeof RUNTIMES)[number], contextStore: 'auto' | 'manual' = 'auto') {
   @Controller()
   class PagesController {
     @Get('/dashboard')
@@ -48,13 +51,21 @@ async function makeApp(make: () => unknown) {
       ctx.set('handlerViewer', Container.getInstance().resolve(VIEWER))
       throw new Error('boom')
     }
+
+    @Post('/save')
+    save() {
+      return inertia('Saved')
+    }
   }
 
   let viewers = 0
   Container.getInstance().registerFactory(VIEWER, () => ({ id: ++viewers }), Scope.REQUEST)
 
   const app = new Application({
-    runtime: make() as never,
+    runtime: rt.make() as never,
+    contextStore,
+    // Express needs a body parser; Fastify and h3 parse bodies natively.
+    middlewares: rt.name === 'express' ? [express.json()] : [],
     modules: [
       class {
         routes() {
@@ -98,7 +109,7 @@ for (const rt of RUNTIMES)
     beforeEach(() => Container.reset())
 
     it('on a first visit', async () => {
-      const app = await makeApp(rt.make)
+      const app = await makeApp(rt)
       const res = await request(app.handle.bind(app)).get('/dashboard').expect(200)
       expect(pageOf(res.text).props).toMatchObject({
         viewer: { id: 1 },
@@ -109,14 +120,14 @@ for (const rt of RUNTIMES)
     })
 
     it('on an Inertia visit, with a fresh instance per request', async () => {
-      const app = await makeApp(rt.make)
+      const app = await makeApp(rt)
       await request(app.handle.bind(app)).get('/dashboard').set(X).expect(200)
       const res = await request(app.handle.bind(app)).get('/dashboard').set(X).expect(200)
       expect(res.body.props).toMatchObject({ viewer: { id: 2 }, sameViewer: true })
     })
 
     it('on the error page for an unknown URL', async () => {
-      const app = await makeApp(rt.make)
+      const app = await makeApp(rt)
       const res = await request(app.handle.bind(app))
         .get('/nowhere')
         .set('Accept', 'text/html')
@@ -130,7 +141,7 @@ for (const rt of RUNTIMES)
     })
 
     it('on the error page for a handler that throws', async () => {
-      const app = await makeApp(rt.make)
+      const app = await makeApp(rt)
       const res = await request(app.handle.bind(app)).get('/broken').set(X).expect(500)
       expect(res.body.component).toBe('Error')
       expect(res.body.props).toMatchObject({
@@ -138,6 +149,34 @@ for (const rt of RUNTIMES)
         sameViewer: true,
         fromHandler: 'yes',
         sameAsHandler: true,
+      })
+    })
+  })
+
+// A body Fastify can't parse fails before any route runs, so before a route
+// store exists. The error page still runs in one, with or without the
+// auto-mounted request scope. (The status is a separate matter: Fastify's
+// own errors aren't HttpExceptions, so the page reports 500.)
+for (const [rt, contextStore] of [
+  [RUNTIMES[1], 'auto'],
+  [RUNTIMES[1], 'manual'],
+  [RUNTIMES[2], 'auto'],
+] as const)
+  describe(`share() inside the request — ${rt.name}, contextStore: '${contextStore}'`, () => {
+    beforeEach(() => Container.reset())
+
+    it('on the error page for a body that does not parse', async () => {
+      const app = await makeApp(rt, contextStore)
+      const res = await request(app.handle.bind(app))
+        .post('/save')
+        .set(X)
+        .set('Content-Type', 'application/json')
+        .send('{"broken"')
+      expect(res.body.component).toBe('Error')
+      expect(res.body.props).toMatchObject({
+        viewer: { id: 1 },
+        sameViewer: true,
+        sharedAt: 'share',
       })
     })
   })

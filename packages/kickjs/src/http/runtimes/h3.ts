@@ -123,8 +123,10 @@ async function runConnectTerminal(
   )
   const work = requestStore.run(store, () => answerTerminal(mw, req, driver, err))
   // After the handler finishes too: a streamed answer settles `ready` while
-  // the handler may still be using its REQUEST-scoped instances.
-  void Promise.allSettled([work, driver.ready]).then(() => disposeRequestStore(store))
+  // the handler may still be using its REQUEST-scoped instances. A handler
+  // that fails may never answer, so its failure disposes at once.
+  const dispose = () => disposeRequestStore(store)
+  work.then(() => driver.ready).then(dispose, dispose)
   await work
   return driver.ready
 }
