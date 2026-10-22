@@ -1,0 +1,18 @@
+@layout('layouts/main')
+@if (user.isAdmin; as admin) {
+  <admin-bar />
+} @else if (user) {
+  <p>Signed in</p>
+} @else {
+  <a href="/login">Sign in</a>
+}
+@for (item of items; track item.id; let i = $index) {
+  <li>{{ i }}</li>
+} @empty {
+  <li>none</li>
+}
+@switch (s) {
+  @case ('a') { A }
+  @default { D }
+}
+@let total = a + b;

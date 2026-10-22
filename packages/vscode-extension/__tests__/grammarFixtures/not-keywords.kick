@@ -1,0 +1,2 @@
+<p>Mail hi@example.com or @someone</p>
+<button @click="go()" :class="{ on: x }">Go</button>

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "kick.control-flow",
+  "fileTypes": [],
+  "injectionSelector": "L:text.html.kick -comment -meta.tag -meta.verbatim.kick -meta.interpolation.kick -meta.embedded",
+  "patterns": [
+    {
+      "include": "text.html.kick#control-flow"
+    }
+  ]
+}

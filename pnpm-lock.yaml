@@ -885,12 +885,18 @@ importers:
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@26.6.5)
+      tm-grammars:
+        specifier: ^1.32.22
+        version: 1.32.22
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.1))
+      vscode-tmlanguage-snapshot:
+        specifier: ^2.0.0
+        version: 2.0.0
 
   packages/ws:
     dependencies:
@@ -3506,6 +3512,9 @@ packages:
   '@vitest/spy@5.0.5':
     resolution: {integrity: sha512-lwJRExuH417257Q5wv9QYugN9IMJkoxcrKrYxGPQkBzl7wlNpTUxD/5yNX4ESKVUIShKPgkGchYPFMWOOk0wzw==}
 
+  '@vscode-tmlanguage-snapshot/core@2.0.0':
+    resolution: {integrity: sha512-9jrkEZuhcs71fEVmbkQ7H2z/4pqTVQEOiauhNA8oYDggPKesGB9VfEQnH6CV3DOFm7kbjfbmefRXMK6sgHMxjw==}
+
   '@vscode/vsce-sign-alpine-arm64@2.0.6':
     resolution: {integrity: sha512-wKkJBsvKF+f0GfsUuGT0tSW0kZL87QggEiqNqK6/8hvqsXvpx8OsTEc3mnE1kejkh5r+qUyQ7PtF8jZYN0mo8Q==}
     cpu: [arm64]
@@ -6109,6 +6118,9 @@ packages:
     resolution: {integrity: sha512-jBrmx4lYmaC9k/mgPbylxs7kBUxHtD8256up+HjLaDFfXScKJQyil+SWXSvhAtT7XHo+yTVlpB81PGmHP8oLSQ==}
     engines: {node: ^20.0.0 || >=22.0.0}
 
+  tm-grammars@1.32.22:
+    resolution: {integrity: sha512-VKWL+UiqlGqbGHonRbrBc0kkqDIHUUiVO/A2rBTBz5LBXKA8Fe2f34O1YiBI7ED37tTUlT3MGmLf9+0F/H4/Ww==}
+
   tmp@0.2.7:
     resolution: {integrity: sha512-e0votIpp4Uo2AJYSzVHV6xCcawuiez3DzqDAbrTc3YxBkplN6e+dM13ZeIcZnDg/QpSuU2zfZ3rzwY8ukEnaXw==}
     engines: {node: '>=14.14'}
@@ -6516,6 +6528,15 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  vscode-oniguruma@2.0.1:
+    resolution: {integrity: sha512-poJU8iHIWnC3vgphJnrLZyI3YdqRlR27xzqDmpPXYzA93R4Gk8z7T6oqDzDoHjoikA2aS82crdXFkjELCdJsjQ==}
+
+  vscode-textmate@9.3.2:
+    resolution: {integrity: sha512-n2uGbUcrjhUEBH16uGA0TvUfhWwliFZ1e3+pTjrkim1Mt7ydB41lV08aUvsi70OlzDWp6X7Bx3w/x3fAXIsN0Q==}
+
+  vscode-tmlanguage-snapshot@2.0.0:
+    resolution: {integrity: sha512-vOvLCu2b8P7VafTf62oYm5HpIzxuZaCqoqfWejup9bse/nsr2eWWM8pRPCwaRPJyVfiQLpW3T+f6dRErDgxLmg==}
 
   vue@3.5.44:
     resolution: {integrity: sha512-dvvmaOCG7lAMkJTPqPwWeGMsPS6DIsFsfZDUgBp9V6mHf9b3+/wyVwYR4Es+WV6uJC0FKRxp81Obcq0ZwUcGFQ==}
@@ -8897,6 +8918,8 @@ snapshots:
       vite: 8.3.4(@types/node@26.6.5)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.1)
 
   '@vitest/spy@5.0.5': {}
+
+  '@vscode-tmlanguage-snapshot/core@2.0.0': {}
 
   '@vscode/vsce-sign-alpine-arm64@2.0.6':
     optional: true
@@ -11772,6 +11795,8 @@ snapshots:
 
   tinypool@2.2.0: {}
 
+  tm-grammars@1.32.22: {}
+
   tmp@0.2.7: {}
 
   toad-cache@3.7.4: {}
@@ -12131,6 +12156,16 @@ snapshots:
       '@types/node': 26.6.5
     transitivePeerDependencies:
       - msw
+
+  vscode-oniguruma@2.0.1: {}
+
+  vscode-textmate@9.3.2: {}
+
+  vscode-tmlanguage-snapshot@2.0.0:
+    dependencies:
+      '@vscode-tmlanguage-snapshot/core': 2.0.0
+      vscode-oniguruma: 2.0.1
+      vscode-textmate: 9.3.2
 
   vue@3.5.44(typescript@7.0.2):
     dependencies:

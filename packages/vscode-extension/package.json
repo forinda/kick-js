@@ -27,7 +27,8 @@
     "workspaceContains:**/kick.config.ts",
     "workspaceContains:**/kick.config.js",
     "workspaceContains:**/kick.config.json",
-    "workspaceContains:**/node_modules/@forinda/kickjs/package.json"
+    "workspaceContains:**/node_modules/@forinda/kickjs/package.json",
+    "onLanguage:kick"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -400,7 +401,57 @@
         "contents": "No KickJS app connected.\n\n[$(plug) Connect to App](command:kickjs.connect)",
         "when": "!kickjs.connected"
       }
-    ]
+    ],
+    "languages": [
+      {
+        "id": "kick",
+        "extensions": [
+          ".kick"
+        ],
+        "aliases": [
+          "Kick",
+          "kick"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kick",
+        "scopeName": "text.html.kick",
+        "path": "./syntaxes/kick.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.css": "css",
+          "source.js": "javascript"
+        }
+      },
+      {
+        "scopeName": "kick.interpolations",
+        "path": "./syntaxes/kick-interpolations.json",
+        "injectTo": [
+          "text.html.kick"
+        ]
+      },
+      {
+        "scopeName": "kick.control-flow",
+        "path": "./syntaxes/kick-control-flow.json",
+        "injectTo": [
+          "text.html.kick"
+        ]
+      },
+      {
+        "scopeName": "kick.bindings",
+        "path": "./syntaxes/kick-bindings.json",
+        "injectTo": [
+          "text.html.kick"
+        ]
+      }
+    ],
+    "configurationDefaults": {
+      "emmet.includeLanguages": {
+        "kick": "html"
+      }
+    }
   },
   "repository": {
     "type": "git",
@@ -424,8 +475,10 @@
     "@types/vscode": "^1.140.0",
     "@vscode/vsce": "^4.0.0",
     "sharp": "^0.35.5",
+    "tm-grammars": "^1.32.22",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "vscode-tmlanguage-snapshot": "^2.0.0"
   },
   "private": true
 }

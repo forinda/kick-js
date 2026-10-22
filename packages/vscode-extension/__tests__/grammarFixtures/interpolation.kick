@@ -1,0 +1,2 @@
+<h1 title="{{ t }}">{{ user.name | titlecase }}</h1>
+<p>{{ price | currency:'KES':'1.2-2' }} {{ a ?? 'none' }}</p>

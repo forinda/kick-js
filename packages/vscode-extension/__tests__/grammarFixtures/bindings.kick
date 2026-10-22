@@ -1,0 +1,2 @@
+<button [disabled]="!ok" [class.active]="on" [style.width.px]="w">Save</button>
+<user-card [user]="u" compact />
