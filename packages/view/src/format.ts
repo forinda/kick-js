@@ -1,5 +1,5 @@
 /**
- * `format`: tidy a `.kick` source — `{{ x }}` and `@if (x) {` spacing, and
+ * `format`: tidy a `.kick` source — `{{ x | pipe }}` and `@if (x) {` spacing, and
  * indentation by block and element nesting. Raw regions (`<pre>`,
  * `<textarea>`, `<script>`, `<style>`, `@verbatim`, comments) are left
  * byte-exact. The result is re-parsed and compared with the original;
@@ -52,9 +52,36 @@ function rawRanges(source: string, body: Node[]): Range[] {
   return ranges.toSorted((a, b) => a[0] - b[0])
 }
 
-/** `{{x}}` → `{{ x }}`, `@if(a){` → `@if (a) {`, `}@else{` → `} @else {`. */
+/** `a|b` → `a | b` in an expression; `||` and quoted text are left alone. */
+function spacePipes(expr: string): string {
+  let out = ''
+  let quote = ''
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i]!
+    if (quote) {
+      out += c
+      if (c === '\\') out += expr[++i] ?? ''
+      else if (c === quote) quote = ''
+    } else if (c === "'" || c === '"' || c === '`') {
+      quote = c
+      out += c
+    } else if (c === '|' && expr[i + 1] === '|') {
+      out += '||'
+      i++
+    } else if (c === '|') {
+      out = `${out.trimEnd()} | `
+      while (/[ \t]/.test(expr[i + 1] ?? '')) i++
+    } else out += c
+  }
+  return out
+}
+
+/** `{{x|p}}` → `{{ x | p }}`, `@if(a){` → `@if (a) {`, `}@else{` → `} @else {`. */
 function normalise(text: string): string {
-  let s = text.replace(/\{\{(?!--)([\s\S]*?)\}\}/g, (_, inner: string) => `{{ ${inner.trim()} }}`)
+  let s = text.replace(
+    /\{\{(?!--)([\s\S]*?)\}\}/g,
+    (_, inner: string) => `{{ ${spacePipes(inner.trim())} }}`,
+  )
   s = s.replace(/\}[ \t]*@(else|empty)\b/g, '} @$1')
   s = s.replace(/@(else|empty|default)[ \t]*\{/g, '@$1 {')
   // `@kw(` → `@kw (`, and `) {` after the balanced header.
@@ -86,7 +113,8 @@ function normalise(text: string): string {
       else if (c === ')') depth--
     }
     // The header's own text, trimmed inside the parentheses.
-    out += `${s.slice(at + m[0].length, j - 1).trim()})`
+    const header = s.slice(at + m[0].length, j - 1).trim()
+    out += `${DIRECTIVES.has(kw) ? header : spacePipes(header)})`
     const brace = /^[ \t]*\{/.exec(s.slice(j))
     if (brace) {
       out += ' {'
@@ -112,13 +140,20 @@ function outside(source: string, ranges: Range[], fn: (s: string) => string): st
 const TOKENS =
   /<\/([A-Za-z][\w:.-]*)\s*>|<([A-Za-z][\w:.-]*)(?:[^>"']|"[^"]*"|'[^']*')*?(\/?)>|@(?:if|for|switch|case|slot|else|empty|default)\b[^{}\n]*\{|\}/g
 
-/** Re-indent lines by the blocks and elements open at their start. */
+/**
+ * Re-indent lines by the blocks and elements open at their start. A closer
+ * after content (`<b>x</b></slot>`, `x }`) whose opener is on an earlier line
+ * moves to its own line.
+ */
 function reindent(source: string, ranges: Range[], unit: string): string {
-  const stack: string[] = []
-  const lines = source.split('\n')
-  let offset = 0
+  /** Open blocks and elements, with the line each opened on. */
+  const stack: Array<{ key: string; line: number }> = []
+  const lastIndex = (key: string) => stack.findLastIndex((e) => e.key === key)
   const out: string[] = []
-  for (const raw of lines) {
+  const queue = source.split('\n')
+  let offset = 0
+  for (let n = 0; n < queue.length; n++) {
+    const raw = queue[n]!
     const start = offset
     offset += raw.length + 1
     const inside = ranges.some(([a, b]) => start > a && start < b)
@@ -144,33 +179,36 @@ function reindent(source: string, ranges: Range[], unit: string): string {
     TOKENS.lastIndex = 0
     let m: RegExpExecArray | null
     let last = 0
+    let split = -1
     while ((m = TOKENS.exec(line))) {
       if (line.slice(last, m.index).trim()) leading = false
       last = m.index + m[0].length
       const [tok, closeTag, openTag, selfClose] = m
-      let closed = false
-      if (tok === '}') {
-        const i = stack.lastIndexOf('{')
-        if (i >= 0) {
-          stack.length = i
-          closed = true
-        }
-      } else if (closeTag) {
-        const i = stack.lastIndexOf(`<${closeTag.toLowerCase()}`)
-        if (i >= 0) {
-          stack.length = i
-          closed = true
-        }
-      } else if (openTag) {
-        const tag = openTag.toLowerCase()
-        if (!selfClose && !VOID.has(tag) && !RAW.has(tag)) stack.push(`<${tag}`)
-      } else {
-        stack.push('{')
+      const i =
+        tok === '}' ? lastIndex('{') : closeTag ? lastIndex(`<${closeTag.toLowerCase()}`) : -1
+      if (i >= 0 && !leading && stack[i]!.line < n) {
+        split = m.index
+        break
       }
-      if (leading && closed) depthForLine = stack.length
-      if (!closed) leading = false
+      if (i >= 0) {
+        stack.length = i
+        if (leading) depthForLine = stack.length
+        continue
+      }
+      if (openTag) {
+        const tag = openTag.toLowerCase()
+        if (!selfClose && !VOID.has(tag) && !RAW.has(tag)) stack.push({ key: `<${tag}`, line: n })
+      } else if (!closeTag && tok !== '}') stack.push({ key: '{', line: n })
+      leading = false
     }
-    out.push(unit.repeat(Math.max(0, depthForLine)) + content)
+    if (split < 0) {
+      out.push(unit.repeat(Math.max(0, depthForLine)) + content)
+      continue
+    }
+    // The closer and what follows become the next line.
+    out.push(unit.repeat(Math.max(0, depthForLine)) + raw.slice(0, split).trim())
+    queue.splice(n + 1, 0, raw.slice(split))
+    offset = start + split
   }
   return out.join('\n')
 }
