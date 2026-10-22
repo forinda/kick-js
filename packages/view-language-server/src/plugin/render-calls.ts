@@ -36,7 +36,7 @@ export function renderCompletions(
 }
 
 /** Calls whose name is a plain literal (not a template string with `${…}`). */
-function calls(text: string): Array<{ name: string; offset: number }> {
+export function calls(text: string): Array<{ name: string; offset: number }> {
   return [...text.matchAll(CALLS)]
     .filter((m) => !m[2]!.includes('${'))
     .map((m) => ({ name: m[2]!, offset: m.index + m[0].length - m[2]!.length - 1 }))

@@ -8,6 +8,7 @@ import { URI } from 'vscode-uri'
 import type { Workspace } from '../workspace'
 import { componentOf } from './completion'
 import { posOf } from './hover'
+import { calls } from './render-calls'
 import { kickTokens } from './tokens'
 
 type Target =
@@ -204,13 +205,14 @@ export function renameEdits(
 
 /**
  * Edits that keep uses pointing at renamed templates: a component's tags, a
- * layout's `@layout('…')`. `oldUri` / `newUri` can be a file or a folder.
+ * layout's `@layout('…')`, a page's `ctx.render('…')`. `oldUri` / `newUri`
+ * can be a file or a folder.
  */
-export function fileRenameEdits(
+export async function fileRenameEdits(
   ws: Workspace,
   oldUri: string,
   newUri: string,
-): WorkspaceEdit | undefined {
+): Promise<WorkspaceEdit | undefined> {
   const from = ws.relOf(oldUri)?.replace(/\.kick$/, '')
   const to = ws.relOf(newUri)?.replace(/\.kick$/, '')
   if (from === undefined || to === undefined || from === to) return undefined
@@ -234,6 +236,20 @@ export function fileRenameEdits(
     for (const [target, newText] of targets)
       for (const u of usesOf(ws, target))
         (changes[u.uri] ??= []).push({ range: rangeOf(u.text, u.offset, u.length), newText })
+  }
+  // Pages named in `ctx.render('…')` / `views.render('…')`.
+  const pages = [...renamed].filter(([n]) => !n.startsWith(`${dir}/`))
+  if (pages.length) {
+    const to = new Map(pages)
+    for (const script of await ws.scripts())
+      for (const c of calls(script.text)) {
+        const newName = to.get(c.name)
+        if (newName !== undefined)
+          (changes[script.uri] ??= []).push({
+            range: rangeOf(script.text, c.offset, c.name.length),
+            newText: newName,
+          })
+      }
   }
   return Object.keys(changes).length ? { changes } : undefined
 }

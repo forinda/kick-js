@@ -7,7 +7,7 @@ export const uri = (name: string) => `file://${ROOT}/src/views/${name}.kick`
 /** A workspace over in-memory files (paths relative to ROOT). */
 export async function workspaceOf(
   files: Record<string, string>,
-  layouts: Pick<WorkspaceOptions, 'layout' | 'baseLayout'> = {},
+  layouts: Pick<WorkspaceOptions, 'layout' | 'baseLayout' | 'scripts'> = {},
 ) {
   const disk = new Map(Object.entries(files).map(([p, s]) => [`${ROOT}/${p}`, s]))
   const ws = new Workspace({

@@ -6,7 +6,7 @@ A language server for KickJS `.kick` views, built on [Volar](https://volarjs.dev
 - Completion for `@` keywords, pipes, components and their inputs, layout and slot names, and names in scope.
 - HTML, CSS and Emmet inside templates.
 - Hover, go to definition, find references and formatting.
-- Rename pipes, components and layouts across templates; renaming a template file updates its uses.
+- Rename pipes, components and layouts across templates; renaming a template file updates its uses, `ctx.render('…')` calls in TS / JS included.
 - Semantic tokens, so any LSP editor highlights the template syntax.
 - In TypeScript and JavaScript files, template names in `ctx.render('…')` and `views.render('…')`: completion, go to definition, and a warning for a name with no template. Nothing else in those files is touched.
 
