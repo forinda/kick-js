@@ -28,7 +28,7 @@ const ALL: CodeInformation = {
 /** Embedded documents never format: the kick formatter owns the whole file. */
 const EMBEDDED: CodeInformation = { ...ALL, format: false }
 
-const KEYWORD =
+export const KEYWORD =
   /^@(else\s+if|if|for|switch|case|slot|layout|assets|verbatim|let|input|else|empty|default)(?![\w$-])/
 
 const snapshotOf = (text: string): IScriptSnapshot => ({
@@ -46,7 +46,7 @@ interface Scan {
 }
 
 /** The end of a `(`…`)` group starting at `i` (at `(`); the text's end when unclosed. */
-function closeParen(s: string, i: number): number {
+export function closeParen(s: string, i: number): number {
   let depth = 0
   let quote = ''
   for (let j = i; j < s.length; j++) {
@@ -62,7 +62,7 @@ function closeParen(s: string, i: number): number {
 }
 
 /** The end of a `{{ … }}` starting at `i`; the text's end when unclosed. */
-function closeInterp(s: string, i: number): number {
+export function closeInterp(s: string, i: number): number {
   let quote = ''
   for (let j = i + 2; j < s.length; j++) {
     const c = s[j]!

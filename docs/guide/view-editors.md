@@ -13,6 +13,15 @@ npx kick-view-ls --stdio
 - It treats any file ending in `.kick` as a template, whatever language ID the editor sends. Send `kick` when your editor lets you choose.
 - It watches templates and the pipes file itself (`workspace/didChangeWatchedFiles`), so saving a component re-checks the pages that use it.
 
+### Highlighting
+
+The server sends semantic tokens for the template syntax: `@if` and the other keywords, `{{ }}` and `|`, names and properties, pipes, component tags, `@input` names, strings, numbers and `{{-- --}}` comments. They use standard token types, so your theme colours them. Editors that show semantic tokens highlight templates without a grammar:
+
+- **Neovim:** on by default.
+- **JetBrains IDEs (LSP4IJ):** on by default.
+- **Zed:** off by default. Turn it on for `.kick` files in your settings: `"languages": { "Kick": { "semantic_tokens": "combined" } }`.
+- **Helix:** doesn't support semantic tokens, so only the HTML grammar applies.
+
 ### Initialization options
 
 Every editor below passes these as `initializationOptions`. Paths are relative to the workspace folder.

@@ -3,13 +3,14 @@
  * and formatting on the root `.kick` document. The embedded HTML / CSS / JS
  * codes are left to their own services.
  */
-import type { LanguageServicePlugin } from '@volar/language-service'
+import type { LanguageServicePlugin, SemanticToken } from '@volar/language-service'
 import type { Workspace } from '../workspace'
-import { completions } from './completion'
+import { completions, componentOf } from './completion'
 import { definition } from './definition'
 import { createDiagnosticsPlugin, sourceUri } from './diagnostics'
 import { formatEdits } from './format'
 import { hover } from './hover'
+import { kickTokens, TOKEN_TYPES } from './tokens'
 
 export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
   const diagnostics = createDiagnosticsPlugin(ws)
@@ -21,6 +22,7 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
       hoverProvider: true,
       definitionProvider: true,
       documentFormattingProvider: true,
+      semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [] } },
     },
     create(context) {
       /** The source file's uri and text, with the workspace synced to the buffer. */
@@ -49,6 +51,24 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
           const d = open(document)
           const link = d && definition(ws, d.uri, d.text, document.offsetAt(position))
           return link ? [link] : undefined
+        },
+        provideDocumentSemanticTokens(document, range, legend) {
+          const d = open(document)
+          if (!d) return undefined
+          const tokens: SemanticToken[] = []
+          for (const t of kickTokens(d.text, (tag) => componentOf(ws, tag) !== undefined)) {
+            const type = legend.tokenTypes.indexOf(t.type)
+            if (type < 0) continue
+            // One token per line: not every client takes multi-line tokens.
+            let at = t.offset
+            for (const part of d.text.slice(t.offset, t.offset + t.length).split('\n')) {
+              const p = document.positionAt(at)
+              if (part && p.line >= range.start.line && p.line <= range.end.line)
+                tokens.push([p.line, p.character, part.length, type, 0])
+              at += part.length + 1
+            }
+          }
+          return tokens
         },
         provideDocumentFormattingEdits(document, _range, options) {
           const d = open(document)

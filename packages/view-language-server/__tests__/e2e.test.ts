@@ -93,6 +93,12 @@ describe('language server', () => {
     })
     expect(edits!.map((e) => e.newText).join('')).toContain('@if (a) {\n  <p>x</p>\n}')
   })
+  it('highlights template syntax with semantic tokens', async () => {
+    await open('k8', '<p>{{ user.name | titlecase }}</p>')
+    const tokens = await server.sendSemanticTokensRequest(views('k8'))
+    // Five numbers per token: `{{`, user, name, |, titlecase, `}}`.
+    expect(tokens!.data.length).toBe(6 * 5)
+  })
   it('lists template names for ctx.render', async () => {
     const names = await server.connection.sendRequest<string[]>('kick/templateNames')
     expect(names).toEqual(expect.arrayContaining(['home', 'layouts/main']))
