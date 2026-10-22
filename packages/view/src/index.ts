@@ -18,3 +18,4 @@ export {
   escapeJsonForScript,
   SafeHtml,
 } from './render/safe'
+export { render, RenderError, MAX_DEPTH, type RenderEnv, type Pipe } from './render/render'
