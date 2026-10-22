@@ -8,6 +8,7 @@
 // Edge-safe: no node imports — shared by all four runtimes including the
 // `@forinda/kickjs/web` entry.
 
+import { pendingResponse } from './view-renderer'
 import type { RequestContext } from './context'
 import type { RuntimeResponse } from './runtime'
 
@@ -168,7 +169,12 @@ export function applyHandlerResult(
   ctx: RequestContext,
   result: unknown,
 ): boolean | Promise<boolean> {
-  if (result === undefined) return false
+  if (result === undefined) {
+    // An unawaited `ctx.render()`: wait for it, so its errors reach the error
+    // handler and the runtime doesn't answer 404 first.
+    const pending = pendingResponse(ctx)
+    return pending ? pending.then(() => true) : false
+  }
   if (isRespondable(result)) {
     const sent: unknown = result[RESPOND](ctx)
     // Any thenable, not `instanceof Promise` — a promise from another realm

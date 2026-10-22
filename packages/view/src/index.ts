@@ -38,3 +38,4 @@ export {
   type ViewsBundle,
   type ViewsOptions,
 } from './views'
+export { KickView, viewsMiddleware, type KickViewOptions } from './adapter'

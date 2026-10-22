@@ -13,6 +13,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      '@forinda/kickjs/fastify': path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/fastify.ts'),
+      '@forinda/kickjs/h3': path.resolve(import.meta.dirname, '../kickjs/src/http/runtimes/h3.ts'),
+      '@forinda/kickjs/web': path.resolve(import.meta.dirname, '../kickjs/src/web.ts'),
+      '@forinda/kickjs': path.resolve(import.meta.dirname, '../kickjs/src/index.ts'),
       '@forinda/kickjs-view': path.resolve(import.meta.dirname, 'src/index.ts'),
     },
   },
