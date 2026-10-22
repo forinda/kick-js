@@ -528,6 +528,8 @@ describe('redocHtml', () => {
     expect(html).toContain('<!DOCTYPE html>')
     expect(html).toContain('<redoc spec-url="/openapi.json"></redoc>')
     expect(html).toContain('redoc.standalone.js')
+    // Redoc 3's standalone bundle uses import.meta and breaks as a classic script.
+    expect(html).toContain('https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js')
     expect(html).toContain('API Docs')
   })
 

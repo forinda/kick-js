@@ -190,15 +190,13 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
         // need. The default Swagger UI renderer needs unpkg.com for
         // CDN fallback (when swagger-ui-dist isn't installed) AND for
         // the inline script. The default ReDoc renderer needs
-        // cdn.redoc.ly for the standalone bundle. Custom renderers
+        // cdn.jsdelivr.net for the standalone bundle. Custom renderers
         // (renderSwaggerUI / renderReDoc overrides) get only the
         // baseline policy — adopters set their own headers there.
         const customSwaggerRenderer = Boolean(config.renderSwaggerUI)
         const customReDocRenderer = Boolean(config.renderReDoc)
         const swaggerOrigins = uiDistAvailable || customSwaggerRenderer ? [] : ['https://unpkg.com']
-        const redocOrigins = customReDocRenderer
-          ? []
-          : ['https://cdn.redoc.ly', 'https://cdn.jsdelivr.net']
+        const redocOrigins = customReDocRenderer ? [] : ['https://cdn.jsdelivr.net']
         const scriptOrigins = [...swaggerOrigins, ...redocOrigins]
         const styleOrigins =
           uiDistAvailable || customSwaggerRenderer
@@ -242,6 +240,8 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
               "font-src 'self' https://fonts.gstatic.com",
               `img-src 'self' data:${imgOrigins.length ? ' ' + imgOrigins.join(' ') : ''}`,
               `connect-src ${connectSrc}`,
+              // ReDoc runs its search index in a blob: worker.
+              ...(customReDocRenderer ? [] : ["worker-src 'self' blob:"]),
             ].join('; '),
           )
           next()
