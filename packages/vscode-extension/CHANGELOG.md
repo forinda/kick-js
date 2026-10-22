@@ -1,5 +1,9 @@
 # kickjs-devtools
 
+## Unreleased
+
+- `.kick` templates: `@error('field')` is highlighted and completed, with `$message` inside it; `$errors`, `$old` and `$flash` complete everywhere.
+
 ## 5.5.0
 
 - Renaming a page's `.kick` file (or its folder) updates the `ctx.render('…')` and `views.render('…')` calls that name it.
