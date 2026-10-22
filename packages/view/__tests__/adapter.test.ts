@@ -182,3 +182,15 @@ describe('KickView — mixing with ViewAdapter (express)', () => {
     expect((await agent.get('/home')).text).toBe('<h1>Hi Ada</h1>')
   })
 })
+
+describe('KickView dev mode', () => {
+  it('is on only in development or with a dev bundle (null)', async () => {
+    const { kickViewDev } = await import('../src/adapter')
+    expect(kickViewDev({}, 'development')).toBe(true)
+    expect(kickViewDev({ bundle: null }, undefined)).toBe(true)
+    expect(kickViewDev({}, undefined)).toBe(false)
+    expect(kickViewDev({}, 'production')).toBe(false)
+    expect(kickViewDev({}, 'staging')).toBe(false)
+    expect(kickViewDev({ dev: true }, 'production')).toBe(true)
+  })
+})

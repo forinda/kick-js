@@ -39,3 +39,42 @@ describe('view renderer slot', () => {
     expect(res.text).toContain('not supported on the Fastify runtime')
   })
 })
+
+describe('a pending render and a returned value', () => {
+  it('waits for the render; the returned value is not sent over it', async () => {
+    const { applyHandlerResult } = await import('../src/http/reply')
+    const { setPendingResponse } = await import('../src/http/view-renderer')
+    const calls: string[] = []
+    const ctx = {
+      json: () => calls.push('json'),
+    } as never
+    let finish!: () => void
+    setPendingResponse(
+      ctx,
+      new Promise<void>((r) => (finish = r)).then(() => void calls.push('html')),
+    )
+    const done = applyHandlerResult(ctx, { a: 1 })
+    finish()
+    await done
+    expect(calls).toEqual(['html'])
+  })
+})
+
+describe('headFromGet', () => {
+  it('cancels a streaming body', async () => {
+    const { headFromGet } = await import('../src/http/web/handler')
+    let cancelled = false
+    const body = new ReadableStream({
+      pull() {},
+      cancel() {
+        cancelled = true
+      },
+    })
+    const res = await headFromGet(
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } }),
+    )
+    expect(res.body).toBeNull()
+    expect(res.headers.get('content-type')).toBe('text/event-stream')
+    expect(cancelled).toBe(true)
+  })
+})

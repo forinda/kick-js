@@ -169,12 +169,12 @@ export function applyHandlerResult(
   ctx: RequestContext,
   result: unknown,
 ): boolean | Promise<boolean> {
-  if (result === undefined) {
-    // An unawaited `ctx.render()`: wait for it, so its errors reach the error
-    // handler and the runtime doesn't answer 404 first.
-    const pending = pendingResponse(ctx)
-    return pending ? pending.then(() => true) : false
-  }
+  // An unawaited `ctx.render()` owns the response: wait for it, so its errors
+  // reach the error handler, the runtime doesn't answer 404 first, and a
+  // value the handler also returned isn't sent over it.
+  const pending = pendingResponse(ctx)
+  if (pending) return pending.then(() => true)
+  if (result === undefined) return false
   if (isRespondable(result)) {
     const sent: unknown = result[RESPOND](ctx)
     // Any thenable, not `instanceof Promise` — a promise from another realm

@@ -228,7 +228,7 @@ export function createViews(options: ViewsOptions = {}): Views {
 
   async function has(name: string): Promise<boolean> {
     if (!templateName(name)) return false
-    if (bundle) return name in bundle.templates
+    if (bundle) return Object.hasOwn(bundle.templates, name)
     return (await current()).project.templates.has(name)
   }
 
@@ -239,7 +239,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       if (!(await has(name))) throw new Error(`template '${name}' not found`)
       const resolve = bundle
         ? (n: string) => {
-            const t = bundle.templates[n]
+            const t = Object.hasOwn(bundle.templates, n) ? bundle.templates[n] : undefined
             if (!t) throw new RenderError(error(`${n}.kick`, zeroSpan, `template '${n}' not found`))
             return t
           }

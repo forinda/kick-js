@@ -109,6 +109,12 @@ describe('parseExpression', () => {
     expect(ok("a['constructor']")).toBe('a["constructor"]')
   })
 
+  it('Object.prototype names are ordinary identifiers', () => {
+    expect(ok('valueOf')).toBe('valueOf')
+    expect(ok('toString')).toBe('toString')
+    expect(ok('hasOwnProperty')).toBe('hasOwnProperty')
+  })
+
   it('reports positions relative to the base', () => {
     const { diagnostics } = parseExpression('a()', 't.kick', { offset: 10, line: 3, column: 5 })
     expect(diagnostics[0]!.span.start).toEqual({ offset: 11, line: 3, column: 6 })

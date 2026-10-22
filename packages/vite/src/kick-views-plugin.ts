@@ -29,7 +29,10 @@ async function kickFiles(dir: string): Promise<string[]> {
   return entries
     .filter((e) => e.isFile() && e.name.endsWith('.kick'))
     .map((e) =>
-      relative(dir, join(e.parentPath, e.name)).slice(0, -'.kick'.length).split(sep).join('/'),
+      relative(dir, join(direntDir(e), e.name))
+        .slice(0, -'.kick'.length)
+        .split(sep)
+        .join('/'),
     )
     .toSorted()
 }
@@ -38,6 +41,58 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let viewsDir = ''
   let pipesFile = ''
   let build = true
+  let checked: string | undefined
+
+  /** Parse and check every template; the bundle as JSON, or a build error listing every problem. */
+  async function checkTemplates(ctx: {
+    addWatchFile(id: string): void
+    warn(message: string): void
+    error(message: string): never
+  }): Promise<string> {
+    const hasPipes = existsSync(pipesFile)
+    // The view package is optional: only apps that import this module need it.
+    const view = await import('@forinda/kickjs-view')
+    const names = await kickFiles(viewsDir)
+    const errors: string[] = []
+    const pipeNames = [...view.BUILTIN_PIPES]
+    if (hasPipes) {
+      const read = view.readPipeExports(await readFile(pipesFile, 'utf8'), pipesFile)
+      pipeNames.push(...read.names)
+      for (const d of read.diagnostics) {
+        errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
+      }
+    }
+    const templates = new Map()
+    for (const name of names) {
+      const file = join(viewsDir, `${name}.kick`)
+      ctx.addWatchFile(file)
+      const parsed = view.parse(await readFile(file, 'utf8'), `${name}.kick`)
+      templates.set(name, parsed.ast)
+      for (const d of parsed.diagnostics) {
+        if (d.severity === 'error')
+          errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
+      }
+    }
+    const project = {
+      templates,
+      pipes: new Set(pipeNames),
+      componentsDir: options.componentsDir ?? 'components',
+    }
+    const checked: Record<string, unknown> = {}
+    for (const name of names) {
+      const r = view.check(name, project)
+      for (const d of r.diagnostics) {
+        const line = `${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`
+        if (d.severity === 'error') errors.push(line)
+        else ctx.warn(line)
+      }
+      if (r.template) checked[name] = r.template
+    }
+    if (errors.length)
+      ctx.error(`.kick templates have errors:\n  ${[...new Set(errors)].join('\n  ')}`)
+    return JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked }, null, 1)
+  }
+
   return {
     name: 'kickjs:views',
     configResolved(config) {
@@ -48,6 +103,13 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     resolveId(id) {
       return id === ID ? RESOLVED : undefined
     },
+    // In a build the templates are checked up front, whether or not the app
+    // imports the virtual module: a broken template always fails `kick build`.
+    async buildStart() {
+      // Apps without templates skip it, so they needn't install the view package.
+      if (!build || !(await kickFiles(viewsDir)).length) return
+      checked = await checkTemplates(this)
+    },
     async load(id) {
       if (id !== RESOLVED) return undefined
       const hasPipes = existsSync(pipesFile)
@@ -56,47 +118,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         : 'const pipes = {}'
       let bundle = 'null'
       if (build) {
-        // The view package is optional: only apps that import this module need it.
-        const view = await import('@forinda/kickjs-view')
-        const names = await kickFiles(viewsDir)
-        const errors: string[] = []
-        const pipeNames = [...view.BUILTIN_PIPES]
-        if (hasPipes) {
-          const read = view.readPipeExports(await readFile(pipesFile, 'utf8'), pipesFile)
-          pipeNames.push(...read.names)
-          for (const d of read.diagnostics) {
-            errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
-          }
-        }
-        const templates = new Map()
-        for (const name of names) {
-          const file = join(viewsDir, `${name}.kick`)
-          this.addWatchFile(file)
-          const parsed = view.parse(await readFile(file, 'utf8'), `${name}.kick`)
-          templates.set(name, parsed.ast)
-          for (const d of parsed.diagnostics) {
-            if (d.severity === 'error')
-              errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
-          }
-        }
-        const project = {
-          templates,
-          pipes: new Set(pipeNames),
-          componentsDir: options.componentsDir ?? 'components',
-        }
-        const checked: Record<string, unknown> = {}
-        for (const name of names) {
-          const r = view.check(name, project)
-          for (const d of r.diagnostics) {
-            const line = `${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`
-            if (d.severity === 'error') errors.push(line)
-            else this.warn(line)
-          }
-          if (r.template) checked[name] = r.template
-        }
-        if (errors.length)
-          this.error(`.kick templates have errors:\n  ${[...new Set(errors)].join('\n  ')}`)
-        bundle = JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked }, null, 1)
+        checked ??= await checkTemplates(this)
+        bundle = checked
       }
       return [
         pipes,
@@ -106,4 +129,9 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       ].join('\n')
     },
   }
+}
+
+/** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */
+function direntDir(e: { parentPath?: string; path?: string }): string {
+  return e.parentPath ?? e.path ?? ''
 }

@@ -15,7 +15,10 @@ export function fileLoader(viewsDir: string): Loader {
       return entries
         .filter((e) => e.isFile() && e.name.endsWith('.kick'))
         .map((e) =>
-          relative(root, join(e.parentPath, e.name)).slice(0, -'.kick'.length).split(sep).join('/'),
+          relative(root, join(direntDir(e), e.name))
+            .slice(0, -'.kick'.length)
+            .split(sep)
+            .join('/'),
         )
         .toSorted()
     },
@@ -34,4 +37,9 @@ export async function loadPipesFile(file: string): Promise<Record<string, unknow
   }
   const { pathToFileURL } = await import('node:url')
   return (await import(/* @vite-ignore */ pathToFileURL(path).href)) as Record<string, unknown>
+}
+
+/** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */
+function direntDir(e: { parentPath?: string; path?: string }): string {
+  return e.parentPath ?? e.path ?? ''
 }

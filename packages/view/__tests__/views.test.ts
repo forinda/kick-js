@@ -74,6 +74,14 @@ describe('createViews', () => {
     )
   })
 
+  it('bundle lookups ignore Object.prototype names', async () => {
+    const views = createViews({ bundle: { v: AST_FORMAT_VERSION, templates: {} } })
+    for (const name of ['toString', 'valueOf', 'hasOwnProperty', 'constructor']) {
+      expect(await views.has(name), name).toBe(false)
+      await expect(views.render(name)).rejects.toThrow(`template '${name}' not found`)
+    }
+  })
+
   it('share merges under page data', async () => {
     const views = createViews({
       viewsDir: dir({ p: '{{ a }}{{ b }}' }),

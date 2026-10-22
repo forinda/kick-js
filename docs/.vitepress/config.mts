@@ -417,6 +417,9 @@ function truncate(text: string): string {
 }
 
 export default defineConfig({
+  // `.kick` example templates highlight as HTML; the fence language keeps
+  // oxfmt from reflowing them (it reformats `html` fences).
+  markdown: { languageAlias: { kick: 'html' } },
   title: 'KickJS',
   description:
     'A modern type-safe backend framework for TypeScript, powered by Vite. Built for developer experience and pluggable as you need: database, jobs, real-time, AI and a typed client, on Express, Fastify or h3.',

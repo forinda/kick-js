@@ -76,10 +76,19 @@ export interface KickViewOptions extends ViewsOptions {
  * await ctx.render('users/show', { user })
  * ```
  */
+/**
+ * Re-check templates on every render only in development: NODE_ENV is
+ * `development`, or the views come from `kick dev` (the virtual module hands
+ * over `bundle: null` there). An unset NODE_ENV in production stays fast.
+ */
+export function kickViewDev(options: KickViewOptions, nodeEnv: string | undefined): boolean {
+  return options.dev ?? (nodeEnv === 'development' || options.bundle === null)
+}
+
 export function KickView(options: KickViewOptions = {}) {
   const views =
     options.views ??
-    createViews({ dev: globalThis.process?.env?.NODE_ENV !== 'production', ...options })
+    createViews({ ...options, dev: kickViewDev(options, globalThis.process?.env?.NODE_ENV) })
   const handler = bindViews(views)
   return {
     name: 'KickView',

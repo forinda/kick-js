@@ -45,7 +45,10 @@ async function templates(viewsDir: string, root: string, paths?: string[]): Prom
   return entries
     .filter((e) => e.isFile() && e.name.endsWith('.kick'))
     .map((e) =>
-      relative(viewsDir, join(e.parentPath, e.name)).slice(0, -'.kick'.length).split(sep).join('/'),
+      relative(viewsDir, join(direntDir(e), e.name))
+        .slice(0, -'.kick'.length)
+        .split(sep)
+        .join('/'),
     )
     .toSorted()
 }
@@ -159,4 +162,9 @@ export const viewCliPlugin: KickCliPlugin = {
         })
       })
   },
+}
+
+/** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */
+function direntDir(e: { parentPath?: string; path?: string }): string {
+  return e.parentPath ?? e.path ?? ''
 }

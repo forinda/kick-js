@@ -10,18 +10,18 @@ The first releases are `0.x`. The template syntax is settled; the format the bui
 
 :::: v-pre
 
-```html
-<!-- src/views/users/show.kick -->
+```kick
+{{-- src/views/users/show.kick --}}
 @layout('layouts/main')
 <h1>{{ user.name | titlecase }}</h1>
 @if (user.isAdmin) {
-<admin-badge />
+  <admin-badge />
 }
 <ul>
   @for (post of posts; let i = $index) {
-  <li>{{ i + 1 }}. <a href="/posts/{{ post.id }}">{{ post.title }}</a></li>
+    <li>{{ i + 1 }}. <a href="/posts/{{ post.id }}">{{ post.title }}</a></li>
   } @empty {
-  <li>No posts yet</li>
+    <li>No posts yet</li>
   }
 </ul>
 ```
@@ -117,11 +117,34 @@ A name the data doesn't have prints nothing and logs a warning in dev. With `str
 
 ### Control flow
 
-```html
-@if (user.isAdmin) { … } @else if (user; as u) { Hi {{ u.name }} } @else { … } @for (item of items;
-track item.id; let i = $index, last = $last) { … } @empty { … } @switch (order.status) { @case
-('paid') { Paid } @case ('due') { Due } @default { Unknown } } @let total = order.subtotal +
-order.shipping;
+```kick
+@if (user.isAdmin) {
+  …
+} @else if (user; as u) {
+  Hi {{ u.name }}
+} @else {
+  …
+}
+
+@for (item of items; track item.id; let i = $index, last = $last) {
+  …
+} @empty {
+  …
+}
+
+@switch (order.status) {
+  @case ('paid') {
+    Paid
+  }
+  @case ('due') {
+    Due
+  }
+  @default {
+    Unknown
+  }
+}
+
+@let total = order.subtotal + order.shipping;
 ```
 
 - `@for` loops over arrays, `Set`s, strings, and `Map`s (`@for ([key, value] of map)`). A plain object needs `| entries`. `null` shows `@empty`.
@@ -138,7 +161,7 @@ order.shipping;
 
 ## Attributes and bindings
 
-```html
+```kick
 <a href="/users/{{ user.id }}">profile</a>
 <button [disabled]="!canEdit">Save</button>
 <li class="item" [class.active]="item.id == current">…</li>
@@ -164,8 +187,8 @@ order.shipping;
 
 ## Layouts
 
-```html
-<!-- src/views/layouts/main.kick -->
+```kick
+{{-- src/views/layouts/main.kick --}}
 <!doctype html>
 <html>
   <head>
@@ -175,9 +198,14 @@ order.shipping;
     <slot />
   </body>
 </html>
+```
 
-<!-- src/views/about.kick -->
-@layout('layouts/main') @slot('head') { <title>About</title> }
+```kick
+{{-- src/views/about.kick --}}
+@layout('layouts/main')
+@slot('head') {
+  <title>About</title>
+}
 <h1>About us</h1>
 ```
 
@@ -210,23 +238,27 @@ createViews({
 
 ## Components
 
-```html
-<!-- src/views/components/user-card.kick -->
-@input user @input compact = false
+```kick
+{{-- src/views/components/user-card.kick --}}
+@input user
+@input compact = false
 <div class="card">
   <strong>{{ user.name }}</strong>
   @if (!compact) {
-  <p>{{ user.email }}</p>
+    <p>{{ user.email }}</p>
   }
   <slot>No details</slot>
   <footer><slot name="footer" /></footer>
 </div>
 
-<!-- in a page -->
+{{-- in a page --}}
 @for (u of users; track u.id) {
-<user-card [user]="u" compact class="mb-2">
-  Joined {{ u.joined | date:'mediumDate' }} @slot('footer') { <a href="/users/{{ u.id }}">Open</a> }
-</user-card>
+  <user-card [user]="u" compact class="mb-2">
+    Joined {{ u.joined | date:'mediumDate' }}
+    @slot('footer') {
+      <a href="/users/{{ u.id }}">Open</a>
+    }
+  </user-card>
 }
 ```
 
@@ -305,8 +337,8 @@ createViews({
 
 `share` runs for every `ctx.render`, inside the request, and its values sit under the page's own data. Set a CSP nonce and a CSRF token in middleware with `ctx.set`, then use them in the base layout:
 
-```html
-<meta name="csrf-token" content="{{ csrfToken }}" />
+```kick
+<meta name="csrf-token" content="{{ csrfToken }}">
 <script nonce="{{ cspNonce }}" src="/app.js"></script>
 ```
 

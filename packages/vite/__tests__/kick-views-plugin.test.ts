@@ -33,6 +33,12 @@ describe('kickViewsPlugin', () => {
     await expect(bundle(root)).rejects.toThrow(/bad\.kick:1:\d+.*calls aren't allowed/s)
   })
 
+  it('build fails on a broken template even when nothing imports the virtual module', async () => {
+    const root = project({ 'src/views/bad.kick': '{{ a() }}' })
+    writeFileSync(join(root, 'entry.ts'), 'export const x = 1')
+    await expect(bundle(root)).rejects.toThrow(/bad\.kick:1:\d+.*calls aren't allowed/s)
+  })
+
   it('emits data, not code', async () => {
     const root = project({
       'src/views/home.kick': "@layout('layouts/main')\n<h1>{{ t | initials }}</h1>",

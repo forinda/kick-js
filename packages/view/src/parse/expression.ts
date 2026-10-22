@@ -243,7 +243,10 @@ class Parser {
     const e = this.expr(0)
     const t = this.peek()
     if (t.t !== 'eof') {
-      if ((t.t === 'punct' && t.v in FORBIDDEN_PUNCT) || (t.t === 'ident' && t.v in KEYWORDS)) {
+      if (
+        (t.t === 'punct' && Object.hasOwn(FORBIDDEN_PUNCT, t.v)) ||
+        (t.t === 'ident' && Object.hasOwn(KEYWORDS, t.v))
+      ) {
         this.forbidden(t)
       }
       throw new Fail(t.start, t.end, `unexpected '${this.text(t)}'`)
@@ -298,7 +301,7 @@ class Parser {
         left = { kind, op: t.v, left, right, span: this.joinExpr(left, right) } as Expr
         continue
       }
-      if (t.v in FORBIDDEN_PUNCT) this.forbidden(t)
+      if (Object.hasOwn(FORBIDDEN_PUNCT, t.v)) this.forbidden(t)
       break
     }
     return left
@@ -319,7 +322,7 @@ class Parser {
       case 'str':
         return { kind: 'literal', value: t.v, span: this.span(t.start, t.end) }
       case 'ident': {
-        if (t.v in KEYWORDS) this.forbidden(t)
+        if (Object.hasOwn(KEYWORDS, t.v)) this.forbidden(t)
         if (t.v === 'true' || t.v === 'false') {
           return { kind: 'literal', value: t.v === 'true', span: this.span(t.start, t.end) }
         }
@@ -353,7 +356,7 @@ class Parser {
         }
         if (t.v === '[')
           throw new Fail(t.start, t.end, "array literals aren't allowed in templates")
-        if (t.v in FORBIDDEN_PUNCT) this.forbidden(t)
+        if (Object.hasOwn(FORBIDDEN_PUNCT, t.v)) this.forbidden(t)
         throw new Fail(t.start, t.end, `unexpected '${t.v}'`)
       }
       case 'eof':

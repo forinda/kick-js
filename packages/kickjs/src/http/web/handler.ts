@@ -313,6 +313,8 @@ export function compileWebRoute(
  */
 export async function headFromGet(response: Promise<Response> | Response): Promise<Response> {
   const res = await response
+  // A streamed GET (SSE) would otherwise keep producing for nobody.
+  res.body?.cancel().catch(() => {})
   return new Response(null, {
     status: res.status,
     statusText: res.statusText,
