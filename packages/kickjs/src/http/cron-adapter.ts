@@ -12,7 +12,8 @@
  * bootstrap({ modules, adapters: [KickCronAdapter()] })
  * ```
  *
- * Timing comes from the optional peer `croner` (`pnpm add croner`), loaded
+ * Timing comes from `schedule` — any scheduler library, a few lines to wire —
+ * or, without one, from the optional peer `croner` (`pnpm add croner`), loaded
  * only when there is a job to schedule. Each tick resolves the job's class
  * from the container (the same singletons a request gets) and calls
  * `runCronJob`, which applies `enabled` / `overlap` and reports failures to
@@ -39,20 +40,53 @@ const peerRequire = createRequire(import.meta.url)
 /** Set by the cluster primary on the one worker that runs `KickCronAdapter` jobs. */
 export const CRON_WORKER_ENV = 'KICK_CRON_WORKER'
 
-export interface CronAdapterOptions {
-  /** Off for processes that should run no jobs (replicas, one-off scripts). Default `true`. */
-  enabled?: boolean
-}
-
-interface Schedule {
+/** A running schedule, as {@link CronScheduler} returns it. */
+export interface CronSchedule {
   stop(): void
 }
 
+/**
+ * Starts one job's timer: call `tick` on every match of `expression` (in
+ * `timezone` when set) until `stop()`. The adapter does the rest — resolving
+ * the job, `enabled`, `overlap`, error reporting, waiting on shutdown.
+ *
+ * @example
+ * ```ts
+ * import cron from 'node-cron'
+ *
+ * KickCronAdapter({
+ *   schedule: (expression, { timezone }, tick) => {
+ *     const task = cron.schedule(expression, tick, { timezone })
+ *     // destroy(), not stop(): node-cron keeps stopped tasks.
+ *     return { stop: () => task.destroy() }
+ *   },
+ * })
+ * ```
+ */
+export type CronScheduler = (
+  expression: string,
+  options: { timezone?: string },
+  tick: () => void,
+) => CronSchedule
+
+export interface CronAdapterOptions {
+  /** Off for processes that should run no jobs (replicas, one-off scripts). Default `true`. */
+  enabled?: boolean
+  /** The scheduler that drives the jobs. Default: `croner`, which must then be installed. */
+  schedule?: CronScheduler
+}
+
+type Schedule = CronSchedule
+
 type CronerCtor = new (pattern: string, options: { timezone?: string }, fn: () => void) => Schedule
 
-function loadCroner(): CronerCtor | undefined {
+function croner(): CronScheduler | undefined {
   try {
-    return (peerRequire('croner') as { Cron: CronerCtor }).Cron
+    const Croner = (peerRequire('croner') as { Cron: CronerCtor }).Cron
+    // No croner `name`: croner keeps names in a process-wide registry and
+    // throws on a duplicate.
+    return (expression, { timezone }, tick) =>
+      new Croner(expression, timezone ? { timezone } : {}, tick)
   } catch {
     return undefined
   }
@@ -77,11 +111,11 @@ export const KickCronAdapter = defineAdapter<CronAdapterOptions>({
         jobs = listCronJobs(container)
         if (jobs.length === 0) return
 
-        const Croner = loadCroner()
-        if (!Croner) {
+        const schedule = options.schedule ?? croner()
+        if (!schedule) {
           log.warn(
             `${jobs.length} @Cron job(s) found but "croner" is not installed, so none will run. ` +
-              'Install it: pnpm add croner',
+              'Install it (pnpm add croner), or pass KickCronAdapter({ schedule }).',
           )
           return
         }
@@ -95,12 +129,8 @@ export const KickCronAdapter = defineAdapter<CronAdapterOptions>({
 
         for (const job of jobs) {
           schedules.push(
-            new Croner(
-              job.expression,
-              // No croner `name`: croner keeps names in a process-wide registry
-              // and throws on a duplicate.
-              job.timezone ? { timezone: job.timezone } : {},
-              () => run(job, 'schedule'),
+            schedule(job.expression, job.timezone ? { timezone: job.timezone } : {}, () =>
+              run(job, 'schedule'),
             ),
           )
           if (job.runOnInit) run(job, 'init')

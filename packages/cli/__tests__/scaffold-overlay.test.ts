@@ -127,6 +127,35 @@ describe('renderSlots', () => {
     )
   })
 
+  it('imports only the names the rendered file uses', () => {
+    const test = [
+      "import { Adapter } from 'k'",
+      '// @kick:imports',
+      'createTestApp({',
+      '  // @kick:runtime',
+      '  adapters: [Adapter()],',
+      '})',
+    ].join('\n')
+    const out = renderSlots(test, [
+      { import: { from: 'k', names: ['boot', 'getEnv', 'Adapter'] } },
+      {
+        import: { from: 'k/h3', names: ['h3Runtime'] },
+        slot: 'runtime',
+        code: 'runtime: h3Runtime()',
+      },
+    ])
+    expect(out).toBe(
+      [
+        "import { Adapter } from 'k'",
+        "import { h3Runtime } from 'k/h3'",
+        'createTestApp({',
+        '  runtime: h3Runtime(),',
+        '  adapters: [Adapter()],',
+        '})',
+      ].join('\n'),
+    )
+  })
+
   it('indents multi-line entries and keeps their order', () => {
     const out = renderSlots(file, [
       { slot: 'adapter', code: '// first\nA()' },

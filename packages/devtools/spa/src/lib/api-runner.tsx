@@ -190,6 +190,8 @@ function save(storage: () => Storage, key: string, value: unknown): void {
 }
 
 interface RunResult {
+  /** Where the request went — the base for a previewed page's relative links. */
+  url: string
   /** The body as received, for "Save to variable". */
   raw: string
   status: number
@@ -236,6 +238,7 @@ export const ApiRunnerPanel: Component = () => {
   const [armed, setArmed] = createSignal(false)
   const [sending, setSending] = createSignal(false)
   const [result, setResult] = createSignal<RunResult | null>(null)
+  const [preview, setPreview] = createSignal(true)
   const [error, setError] = createSignal<string | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
   const [snippetKind, setSnippetKind] = createSignal<'curl' | 'fetch'>('curl')
@@ -391,6 +394,8 @@ export const ApiRunnerPanel: Component = () => {
       record({ status: res.status })
       if (sentIn !== generation) return
       setResult({
+        // After redirects: the page's relative links resolve against where it came from.
+        url: res.url || new URL(req.url, location.href).href,
         status: res.status,
         statusText: res.statusText,
         ms: Math.round(performance.now() - started),
@@ -1057,10 +1062,46 @@ export const ApiRunnerPanel: Component = () => {
                         </tbody>
                       </table>
                     </details>
+                    <Show when={isHtml(res())}>
+                      <div class="flex gap-1 mb-2" role="group" aria-label="Response view">
+                        <For each={[true, false]}>
+                          {(on) => (
+                            <button
+                              type="button"
+                              aria-pressed={preview() === on}
+                              onClick={() => setPreview(on)}
+                              class={`px-2 py-0.5 text-[0.68rem] font-semibold rounded-md border ${
+                                preview() === on
+                                  ? 'bg-kick-500/15 text-text-body border-kick-500'
+                                  : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+                              }`}
+                            >
+                              {on ? 'Preview' : 'Raw'}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
                     <div class="group relative">
-                      <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
-                        {res().body || '(empty body)'}
-                      </pre>
+                      <Show
+                        when={isHtml(res()) && preview()}
+                        fallback={
+                          <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto max-h-[50vh] whitespace-pre-wrap break-all">
+                            {res().body || '(empty body)'}
+                          </pre>
+                        }
+                      >
+                        {/* No sandbox permissions: the page's scripts don't run, and it
+                            can't reach DevTools or the app's cookies. Its CSS and images
+                            load, relative to the URL it came from. Truncated like Raw, so a
+                            huge page can't stall the runner. */}
+                        <iframe
+                          title="Response preview"
+                          sandbox=""
+                          srcdoc={`<base href="${escapeAttr(res().url)}">${res().raw.slice(0, MAX_BODY_CHARS)}`}
+                          class="w-full h-[50vh] bg-white border border-border rounded-lg"
+                        />
+                      </Show>
                       <Show when={res().raw}>
                         <HoverActions>
                           {/* The whole body, formatted — not the on-screen copy, which may be truncated. */}
@@ -1705,3 +1746,8 @@ const CopyButton: Component<{ text: () => string; label: string }> = (props) => 
 
 const secondaryButton =
   'px-3 py-2 text-xs font-semibold rounded-lg border bg-surface-2 text-text-secondary border-border-strong hover:text-text-body disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-text-secondary'
+
+const isHtml = (res: RunResult) =>
+  /^text\/html\b/i.test(res.headers.find(([k]) => k === 'content-type')?.[1] ?? '')
+
+const escapeAttr = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
