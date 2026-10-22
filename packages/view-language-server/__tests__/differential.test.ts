@@ -49,6 +49,7 @@ function direct(name: string, src: string) {
   for (const f of readdirSync(VIEWS, { recursive: true }) as string[]) {
     if (!f.endsWith('.kick')) continue
     const n = view.templateName(relative(VIEWS, join(VIEWS, f)).slice(0, -5))
+    if (!n) continue
     templates.set(n, view.parse(readFileSync(join(VIEWS, f), 'utf8'), `${n}.kick`).ast)
   }
   const parsed = view.parse(src, `${name}.kick`)

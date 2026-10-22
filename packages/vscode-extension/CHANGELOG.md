@@ -1,5 +1,10 @@
 # kickjs-devtools
 
+## Unreleased
+
+- The `.kick` language server starts with the first `.kick` file, one in the workspace or the first you open, instead of in every KickJS workspace.
+- Pages re-check as soon as you open or edit a component's buffer, and again when you close it without saving.
+
 ## 5.4.0
 
 - **`.kick` views:** highlighting, errors as you type, completion (keywords, pipes, components, HTML, CSS, Emmet), hover, go to definition and Format Document, through a bundled language server. `.kick` files get their own icon, and `ctx.render('…')` completes template names. Settings live under `kickjs.views.*`.

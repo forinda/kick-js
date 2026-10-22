@@ -24,6 +24,16 @@ const FULL = `export const marker = 'project'
 export const parse = () => {}, check = () => {}, format = () => {}, readPipeExports = () => {}
 export const templateName = () => {}, componentTag = () => {}, BUILTIN_PIPES = []`
 
+describe('packageVersion', () => {
+  it('reads the version of the package holding an entry file', async () => {
+    const { packageVersion } = await import('../src/view-module')
+    const root = project(FULL)
+    const entry = join(root, 'node_modules/@forinda/kickjs-view/index.js')
+    expect(packageVersion(entry)).toBe('9.9.9')
+    expect(packageVersion(join(tmpdir(), 'nowhere/index.js'))).toBeUndefined()
+  })
+})
+
 describe('loadViewModule', () => {
   let load: typeof import('../src/view-module').loadViewModule
   beforeEach(async () => {
@@ -68,6 +78,27 @@ describe('loadViewModule', () => {
     expect(got.source).toBe('bundled')
     expect((globalThis as { __ran?: boolean }).__ran).toBeUndefined()
     expect(warn).not.toHaveBeenCalled()
+  })
+  it('follows nested conditions in the exports map', async () => {
+    const root = project("throw new Error('wrong entry')")
+    const dir = join(root, 'node_modules/@forinda/kickjs-view')
+    mkdirSync(join(dir, 'dist'))
+    writeFileSync(join(dir, 'dist/main.js'), FULL)
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"name":"@forinda/kickjs-view","version":"9.9.9","type":"module","exports":{".":{"import":{"types":"./dist/main.d.ts","default":"./dist/main.js"}}}}',
+    )
+    expect((await load(root, vi.fn(), true)).source).toBe('project')
+  })
+  it('takes conditions in the order the package declares them, as Node does', async () => {
+    const root = project(FULL)
+    const dir = join(root, 'node_modules/@forinda/kickjs-view')
+    writeFileSync(join(dir, 'node.js'), "throw new Error('node entry')")
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"name":"@forinda/kickjs-view","version":"9.9.9","type":"module","exports":{".":{"types":"./index.d.ts","import":"./index.js","node":"./node.js"}}}',
+    )
+    expect((await load(root, vi.fn(), true)).source).toBe('project')
   })
   it('refuses an entry outside the package folder', async () => {
     const root = project(FULL)

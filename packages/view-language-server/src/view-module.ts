@@ -6,13 +6,55 @@
  */
 import { readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as bundled from '@forinda/kickjs-view'
 import type { ViewModule } from './workspace'
 
 declare const __KICK_VIEW_VERSION__: string | undefined
+
+/** The version of the `@forinda/kickjs-view` package holding `entry`. */
+export function packageVersion(entry: string): string | undefined {
+  for (let dir = dirname(entry); dir !== dirname(dir); dir = dirname(dir)) {
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+      if (pkg.name === '@forinda/kickjs-view') return pkg.version
+    } catch {}
+  }
+  return undefined
+}
+
+/**
+ * Inlined into the editor extension's bundle at build time. The standalone
+ * server imports whichever copy npm installed beside it, so read that one.
+ */
 const BUNDLED_VERSION =
-  typeof __KICK_VIEW_VERSION__ === 'string' ? __KICK_VIEW_VERSION__ : 'unknown'
+  typeof __KICK_VIEW_VERSION__ === 'string'
+    ? __KICK_VIEW_VERSION__
+    : ((() => {
+        try {
+          return packageVersion(fileURLToPath(import.meta.resolve('@forinda/kickjs-view')))
+        } catch {
+          return undefined
+        }
+      })() ?? 'unknown')
+
+/** Conditions active for a Node `import`. */
+const CONDITIONS = new Set(['node', 'import', 'default'])
+
+/**
+ * The entry an exports target resolves to, as Node picks it: the first active
+ * condition in the order the package declares them, following nested ones.
+ */
+function pick(target: unknown): string | undefined {
+  if (typeof target === 'string') return target
+  if (!target || typeof target !== 'object') return undefined
+  for (const [key, value] of Object.entries(target)) {
+    if (!CONDITIONS.has(key)) continue
+    const found = pick(value)
+    if (found) return found
+  }
+  return undefined
+}
 
 const REQUIRED = [
   'parse',
@@ -43,8 +85,7 @@ function findProjectView(root: string): { entry: string; version: string } | und
       continue
     }
     const dot = typeof pkg.exports === 'string' ? pkg.exports : pkg.exports?.['.']
-    const rel =
-      typeof dot === 'string' ? dot : (dot?.node ?? dot?.import ?? dot?.default ?? pkg.main)
+    const rel = pick(dot) ?? pkg.main
     const entry = resolve(pkgDir, typeof rel === 'string' ? rel : 'index.js')
     // An exports map pointing outside the package isn't followed.
     if (relative(pkgDir, entry).startsWith('..') || isAbsolute(relative(pkgDir, entry)))

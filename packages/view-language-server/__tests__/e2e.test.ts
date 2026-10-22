@@ -3,7 +3,11 @@
  * Turbo builds the package before its tests run.
  */
 import { join, resolve } from 'node:path'
-import { LogMessageNotification, MessageType } from '@volar/language-server/node.js'
+import {
+  LogMessageNotification,
+  MessageType,
+  PublishDiagnosticsNotification,
+} from '@volar/language-server/node.js'
 import { startLanguageServer, type LanguageServerHandle } from '@volar/test-utils'
 import { URI } from 'vscode-uri'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -17,9 +21,16 @@ const views = (name: string) => URI.file(join(APP, 'src/views', `${name}.kick`))
 async function start(root: string) {
   const server = startLanguageServer(BIN, root)
   const logs: { type: number; message: string }[] = []
+  const published = new Map<string, string[]>()
   server.connection.onNotification(LogMessageNotification.type, (m) => void logs.push(m))
+  server.connection.onNotification(PublishDiagnosticsNotification.type, (p) =>
+    published.set(
+      p.uri,
+      p.diagnostics.map((d) => d.message),
+    ),
+  )
   await server.initialize(URI.file(root).toString(), {}, { workspace: { configuration: true } })
-  return { server, logs }
+  return { server, logs, published }
 }
 
 describe('language server', () => {
@@ -87,6 +98,28 @@ describe('language server', () => {
     expect(names).toEqual(expect.arrayContaining(['home', 'layouts/main']))
     expect(names).not.toContain('components/user-card')
   })
+})
+
+describe('closing a buffer', () => {
+  it('re-checks the open templates that used it', async () => {
+    const { server, published } = await start(APP)
+    // An unsaved component with a required input, and a page that leaves it out.
+    await server.openInMemoryDocument(
+      views('components/scratch-card'),
+      'kick',
+      '@input x\n<p></p>\n',
+    )
+    await server.openInMemoryDocument(views('scratch-page'), 'kick', '<scratch-card />\n')
+    await expect
+      .poll(() => published.get(views('scratch-page'))?.join('\n'), { timeout: 10_000 })
+      .toContain("missing input 'x'")
+    // Closed without saving: the component is gone, so is the error.
+    await server.closeTextDocument(views('components/scratch-card'))
+    await expect
+      .poll(() => published.get(views('scratch-page'))?.join('\n'), { timeout: 10_000 })
+      .not.toContain("missing input 'x'")
+    await server.shutdown()
+  }, 30_000)
 })
 
 describe('idle without templates', () => {
