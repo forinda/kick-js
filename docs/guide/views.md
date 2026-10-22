@@ -321,7 +321,7 @@ A toast for flash messages, built as a component with a script. Copy it into you
 @input kind = 'info'
 @input position = 'top-right'
 @input timeout = 5000
-<kick-toast popover="manual" role="status" aria-live="polite" kind="{{ kind }}" position="{{ position }}" timeout="{{ timeout }}">
+<kick-toast popover="manual" role="status" kind="{{ kind }}" position="{{ position }}" timeout="{{ timeout }}">
   <p>{{ message }}</p>
   <button type="button" data-close aria-label="Dismiss">×</button>
 </kick-toast>
@@ -336,8 +336,12 @@ A toast for flash messages, built as a component with a script. Copy it into you
       this.querySelector('[data-close]')?.addEventListener('click', () => this.remove())
       const ms = Number(this.getAttribute('timeout'))
       if (ms > 0) {
-        const start = () => (this.timer = window.setTimeout(() => this.remove(), ms))
         const pause = () => window.clearTimeout(this.timer)
+        // One timer at a time: hover and focus can resume it twice in a row.
+        const start = () => {
+          pause()
+          this.timer = window.setTimeout(() => this.remove(), ms)
+        }
         // Readers get time: hovering or focusing it holds the toast.
         this.addEventListener('mouseenter', pause)
         this.addEventListener('mouseleave', start)
@@ -384,6 +388,8 @@ kick-toast[kind='error'] {
 - **Position and kind** are attributes, so CSS places and colours each toast; add the corners you use.
 - **The timeout** is in milliseconds; `[timeout]="0"` keeps a toast until it's dismissed. Hover and focus pause it.
 - **Several toasts** stack in the order they render; give later ones an offset in CSS if they share a corner.
+- **Screen readers** announce what changes in a `role="status"` region; a toast already in the page when it loads usually isn't read out. For flash messages after a redirect, fill the `<p>` from the script after `showPopover()` (keep the text in an attribute) if announcements matter.
+- **Without JavaScript** a `popover` element stays hidden. Leave `popover` off and position the toast with CSS alone if the message must show without scripts.
 
 ## Pipes
 
