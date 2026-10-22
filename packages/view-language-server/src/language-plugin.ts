@@ -287,8 +287,9 @@ export const kickLanguagePlugin: LanguagePlugin<URI> = {
   getLanguageId(uri) {
     return uri.path.endsWith('.kick') ? 'kick' : undefined
   },
-  createVirtualCode(_uri, languageId, snapshot) {
-    return languageId === 'kick'
+  // By the file name too: not every editor sends the `kick` languageId.
+  createVirtualCode(uri, languageId, snapshot) {
+    return languageId === 'kick' || uri.path.endsWith('.kick')
       ? new KickVirtualCode(snapshot.getText(0, snapshot.getLength()))
       : undefined
   },

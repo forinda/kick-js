@@ -122,6 +122,18 @@ describe('closing a buffer', () => {
   }, 30_000)
 })
 
+describe('editors that send another languageId', () => {
+  it('still treats .kick files as templates', async () => {
+    const { server, published } = await start(APP)
+    await server.openInMemoryDocument(views('components/plain-card'), 'html', '@input x\n<p></p>\n')
+    await server.openInMemoryDocument(views('plain-page'), 'plaintext', '<plain-card />\n')
+    await expect
+      .poll(() => published.get(views('plain-page'))?.join('\n'), { timeout: 10_000 })
+      .toContain("missing input 'x'")
+    await server.shutdown()
+  }, 30_000)
+})
+
 describe('idle without templates', () => {
   it('stays quiet', async () => {
     const { server, logs } = await start(EMPTY)

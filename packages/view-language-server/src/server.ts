@@ -112,7 +112,7 @@ export function startServer(): void {
   // touches them: a page checked before its new component's buffer synced
   // would keep a stale error.
   server.documents.onDidChangeContent(({ document }) => {
-    if (document.languageId === 'kick') ws?.sync(document.uri, document.getText())
+    if (document.uri.endsWith('.kick')) ws?.sync(document.uri, document.getText())
   })
 
   // A closed buffer that was never saved stops counting: re-check what used it.
