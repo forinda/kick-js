@@ -135,7 +135,11 @@ export class Workspace {
       return
     }
     const name = this.nameOfPath(path)
-    if (name && !this.entries.get(name)?.buffer) this.remove(name)
+    if (!name) return
+    const buffer = this.entries.get(name)?.buffer
+    // Still open in an editor: keep the buffer, but closing it now removes the template.
+    if (buffer !== undefined) this.update(name, { buffer })
+    else this.remove(name)
   }
 
   private async loadPipes(): Promise<void> {
@@ -198,13 +202,12 @@ export class Workspace {
     }
   }
 
-  /** Templates that use `name` as a component or a layout. */
+  /** Templates that use `name` as a component or a layout — a layout even after it's gone. */
   dependentsOf(name: string): Set<string> {
     const out = new Set<string>()
     const tag = name.startsWith(`${this.opts.componentsDir}/`)
       ? this.opts.view.componentTag(name, this.opts.componentsDir)
       : undefined
-    if (!this.entries.has(name) && tag === undefined) return out
     for (const [n, e] of this.entries) {
       if (n === name) continue
       if ((tag && e.tags.has(tag) && this.entries.has(name)) || e.layouts.has(name)) out.add(n)

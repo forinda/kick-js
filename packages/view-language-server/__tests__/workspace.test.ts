@@ -59,6 +59,40 @@ describe('Workspace', () => {
     expect(ws.dependentsOf('components/x-card')).toEqual(new Set())
   })
 
+  it('re-checks pages when their layout disappears', async () => {
+    const { ws, disk, uri } = workspace({
+      'src/views/page.kick': "@layout('layouts/main')\n<p>x</p>",
+      'src/views/layouts/main.kick': '<main><slot /></main>',
+    })
+    await ws.load()
+    expect(ws.diagnosticsFor(uri('page'))).toEqual([])
+    disk.delete(`${ROOT}/src/views/layouts/main.kick`)
+    await ws.fileDeleted(`${ROOT}/src/views/layouts/main.kick`)
+    expect(
+      ws
+        .diagnosticsFor(uri('page'))
+        .map((d) => d.message)
+        .join(),
+    ).toContain('layouts/main')
+  })
+
+  it('forgets a file deleted while open once its editor closes', async () => {
+    const { ws, disk, uri } = workspace({
+      'src/views/page.kick': '<x-card />',
+      'src/views/components/x-card.kick': '<b>card</b>',
+    })
+    await ws.load()
+    ws.setBuffer(uri('components/x-card'), '<b>edited</b>')
+    disk.delete(`${ROOT}/src/views/components/x-card.kick`)
+    await ws.fileDeleted(`${ROOT}/src/views/components/x-card.kick`)
+    expect(ws.names()).toContain('components/x-card')
+    ws.setBuffer(uri('components/x-card'), undefined)
+    expect(ws.names()).not.toContain('components/x-card')
+    expect(ws.diagnosticsFor(uri('page')).map((d) => d.message)[0]).toContain(
+      "<x-card> isn't a component",
+    )
+  })
+
   it('checks only the changed file and its dependents', async () => {
     const files: Record<string, string> = { 'src/views/layouts/main.kick': '<main><slot /></main>' }
     for (let i = 0; i < 50; i++)
