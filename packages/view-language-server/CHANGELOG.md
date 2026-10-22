@@ -1,5 +1,13 @@
 # @forinda/kickjs-view-language-server
 
+## 0.1.1
+
+### Patch Changes
+
+- [#1022](https://github.com/forinda/kick-js/pull/1022) [`2ad46ed`](https://github.com/forinda/kick-js/commit/2ad46ed94ecffe121ca0fa117fc6c9144cfbdb71) Thanks [@forinda](https://github.com/forinda)! - - Open and edited buffers count from the moment they change, and closing one without saving re-checks the open templates that used it. Before, a page could keep an error about a component whose buffer hadn't synced yet, or about one that was gone.
+  - The project's `@forinda/kickjs-view` is found through nested conditions in its exports map (`"import": { "default": "./dist/index.js" }`).
+  - The standalone server's fallback warning names the version of the `@forinda/kickjs-view` installed beside it, not the one it was built against.
+
 ## 0.1.0
 
 ### Minor Changes
