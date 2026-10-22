@@ -42,3 +42,44 @@ describe('formatting', () => {
     expect(edits![0]!.newText).toBe('@if (a) {\n    <p>x</p>\n}\n')
   })
 })
+
+describe('semantic tokens', () => {
+  const legend = {
+    tokenTypes: ['namespace', 'keyword', 'comment', 'operator', 'function', 'variable'],
+    tokenModifiers: [],
+  }
+  const tokens = async (
+    text: string,
+    range = { start: { line: 0, character: 0 }, end: { line: 99, character: 0 } },
+  ) => {
+    const ws = await workspaceOf({ 'src/views/page.kick': '' })
+    const service = createKickServicePlugin(ws).create({} as never)
+    return service.provideDocumentSemanticTokens!(
+      doc(uri('page'), text),
+      range,
+      legend,
+      {} as never,
+    )
+  }
+  it('gives lines, columns and legend indexes', async () => {
+    expect(await tokens('<p>\n  {{ a }}</p>')).toEqual([
+      [1, 2, 2, 3, 0],
+      [1, 5, 1, 5, 0],
+      [1, 7, 2, 3, 0],
+    ])
+  })
+  it('splits a token over lines into one per line', async () => {
+    expect(await tokens('{{-- one\ntwo --}}')).toEqual([
+      [0, 0, 8, 2, 0],
+      [1, 0, 8, 2, 0],
+    ])
+  })
+  it('keeps to the requested range', async () => {
+    const r = { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } }
+    expect(await tokens('@if (a) {\n{{ b }}\n}', r)).toEqual([
+      [1, 0, 2, 3, 0],
+      [1, 3, 1, 5, 0],
+      [1, 5, 2, 3, 0],
+    ])
+  })
+})

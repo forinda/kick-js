@@ -13,6 +13,7 @@ import { create as createHtmlService } from 'volar-service-html'
 import { URI } from 'vscode-uri'
 import { kickLanguagePlugin } from './language-plugin'
 import { createKickServicePlugin } from './plugin/index'
+import { renderDefinition, renderDiagnostics } from './plugin/render-calls'
 import { loadViewModule } from './view-module'
 import { Workspace } from './workspace'
 
@@ -24,6 +25,10 @@ export interface ServerOptions {
   componentsDir?: string
   /** Default `<viewsDir>/pipes.ts`. */
   pipesFile?: string
+  /** `createViews({ layout })`: a page's layout when it declares none; one name, or folder prefix → layout. */
+  layout?: string | Record<string, string>
+  /** `createViews({ baseLayout })`. */
+  baseLayout?: string
   /**
    * The editor trusts the workspace, so the project's own `@forinda/kickjs-view`
    * may be imported. Otherwise the bundled copy is used. Default `false`.
@@ -40,6 +45,48 @@ export async function listKick(dir: string): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+const SKIP = new Set(['node_modules', 'dist', 'build', 'coverage', 'out'])
+const SCRIPT = /\.(?:[cm]?[jt]s|[jt]sx)$/
+
+/** TS / JS files under `root`, for `ctx.render('…')` names: no dependencies, build output, dot folders or `.d.ts`. */
+export async function listScripts(root: string): Promise<string[]> {
+  const out: string[] = []
+  const walk = async (dir: string) => {
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || SKIP.has(e.name)) continue
+      const p = join(dir, e.name)
+      if (e.isDirectory()) await walk(p)
+      else if (SCRIPT.test(e.name) && !e.name.endsWith('.d.ts')) out.push(p)
+    }
+  }
+  await walk(root)
+  return out
+}
+
+/** `fn` over `items` with at most `limit` running at once, results in order. */
+export async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = Array.from({ length: items.length })
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
 }
 
 /** What the server watches: every template, and the pipes file wherever it's configured. */
@@ -82,13 +129,26 @@ export function startServer(): void {
       view,
       read: (p) => readFile(p, 'utf8').catch(() => undefined),
       list: listKick,
+      layout: opts.layout || undefined,
+      baseLayout: opts.baseLayout || undefined,
+      // Read when a template is renamed: an open buffer's text, else the file's.
+      // A bounded number of reads at once: a big project would otherwise run
+      // out of file handles, and the failed reads would skip their calls.
+      scripts: async () =>
+        mapLimit(await listScripts(root), 64, async (p) => {
+          const uri = URI.file(p).toString()
+          const open = server.documents.get(URI.parse(uri))
+          return { uri, text: open?.getText() ?? (await readFile(p, 'utf8').catch(() => '')) }
+        }),
     })
     await ws.load()
+    // Kick first: where a single answer wins (rename, hover), a component tag
+    // is ours, not the HTML service's plain tag.
     return server.initialize(params, createSimpleProject([kickLanguagePlugin]), [
+      createKickServicePlugin(ws),
       createHtmlService(),
       createCssService(),
       createEmmetService(),
-      createKickServicePlugin(ws),
     ])
   })
 
@@ -127,6 +187,19 @@ export function startServer(): void {
     const dir = `${ws.componentsDir()}/`
     return ws.names().filter((n) => !n.startsWith(dir))
   })
+
+  // For clients that keep TS / JS files to themselves (the VS Code extension):
+  // the same render-call answers, over requests instead of document features.
+  connection.onRequest(
+    'kick/renderDefinition',
+    ({ text, offset }: { text: string; offset: number }) => {
+      const link = ws && renderDefinition(ws, text, offset)
+      return link ? { uri: link.targetUri, range: link.originSelectionRange } : null
+    },
+  )
+  connection.onRequest('kick/renderDiagnostics', ({ text }: { text: string }) =>
+    ws ? renderDiagnostics(ws, text) : [],
+  )
 
   connection.onShutdown(() => server.shutdown())
 }

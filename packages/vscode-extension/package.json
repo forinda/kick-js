@@ -370,6 +370,22 @@
           "default": "",
           "description": "Pipes file, relative to the workspace folder. Default `<views dir>/pipes.ts`."
         },
+        "kickjs.views.layout": {
+          "type": [
+            "string",
+            "object"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": "",
+          "markdownDescription": "Same as `createViews({ layout })`: a page's layout when it declares none. One layout name, or folder prefix → layout name, e.g. `{ \"admin\": \"layouts/admin\", \"\": \"layouts/main\" }`."
+        },
+        "kickjs.views.baseLayout": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Same as `createViews({ baseLayout })`: the shell around every page's outermost layout."
+        },
         "kickjs.views.trace.server": {
           "type": "string",
           "enum": [

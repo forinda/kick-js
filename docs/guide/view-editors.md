@@ -13,6 +13,17 @@ npx kick-view-ls --stdio
 - It treats any file ending in `.kick` as a template, whatever language ID the editor sends. Send `kick` when your editor lets you choose.
 - It watches templates and the pipes file itself (`workspace/didChangeWatchedFiles`), so saving a component re-checks the pages that use it.
 
+### Highlighting
+
+::: v-pre
+The server sends semantic tokens for the template syntax: `@if` and the other keywords, `{{ }}` and `|`, names and properties, pipes, component tags, `@input` names, strings, numbers and `{{-- --}}` comments. They use standard token types, so your theme colours them. Editors that show semantic tokens highlight templates without a grammar:
+:::
+
+- **Neovim:** on by default.
+- **JetBrains IDEs (LSP4IJ):** on by default.
+- **Zed:** off by default. Turn it on for `.kick` files in your settings: `"languages": { "Kick": { "semantic_tokens": "combined" } }`.
+- **Helix:** doesn't support semantic tokens, so only the HTML grammar applies.
+
 ### Initialization options
 
 Every editor below passes these as `initializationOptions`. Paths are relative to the workspace folder.
@@ -22,6 +33,8 @@ Every editor below passes these as `initializationOptions`. Paths are relative t
 | `viewsDir`      | `src/views`           |                                                                                        |
 | `componentsDir` | `components`          | inside `viewsDir`                                                                      |
 | `pipesFile`     | `<viewsDir>/pipes.ts` |                                                                                        |
+| `layout`        | none                  | the same as `createViews({ layout })`: one name, or folder prefix → layout             |
+| `baseLayout`    | none                  | the same as `createViews({ baseLayout })`                                              |
 | `trusted`       | `false`               | `true` loads the project's own `@forinda/kickjs-view`, which runs its code. See below. |
 
 **`trusted`:** with `true`, the server imports your installed `@forinda/kickjs-view`, so the editor checks and formats exactly as your build does. With `false`, it uses the copy bundled with the server, which may be a different version. Set `true` only for projects whose dependencies you trust: the VS Code extension sends it only for trusted workspaces.
@@ -30,18 +43,23 @@ Every editor below passes these as `initializationOptions`. Paths are relative t
 Set `trusted` only in your own editor config: `init.lua`, `~/.config/helix/languages.toml`, your global `coc-settings.json` and so on. Some editors also read config from the project, like `.helix/languages.toml` or `.vim/coc-settings.json`. A repository you clone could ship one with `trusted: true` and run its code when you open a `.kick` file.
 :::
 
+### Template names in controllers
+
+The server also reads TypeScript and JavaScript files, for the names in `ctx.render('…')` and `views.render('…')`: it completes template names, goes to the template, and warns when a name has no template. It leaves the rest of the file to your TypeScript tooling, with no formatting and no highlighting. To use it, attach the server to TS and JS files as well as `.kick`, as each editor section below shows.
+
 ## Neovim
 
 Neovim 0.11 or later, no plugins:
 
 ```lua
 vim.filetype.add({ extension = { kick = 'kick' } })
--- HTML highlighting for the markup; the template syntax isn't highlighted.
+-- HTML highlighting for the markup; the server colours the template syntax with semantic tokens.
 vim.treesitter.language.register('html', 'kick')
 
 vim.lsp.config('kick_views', {
   cmd = { 'npx', 'kick-view-ls', '--stdio' },
-  filetypes = { 'kick' },
+  -- TS / JS too, for template names in ctx.render('…')
+  filetypes = { 'kick', 'typescript', 'javascript', 'typescriptreact', 'javascriptreact' },
   root_markers = { 'kick.config.ts', 'package.json' },
   init_options = { trusted = true },
 })
@@ -62,7 +80,7 @@ With [vim-lsp](https://github.com/prabirshrestha/vim-lsp):
 autocmd User lsp_setup call lsp#register_server({
   \ 'name': 'kick-views',
   \ 'cmd': {server_info -> ['npx', 'kick-view-ls', '--stdio']},
-  \ 'allowlist': ['kick'],
+  \ 'allowlist': ['kick', 'typescript', 'javascript'],
   \ 'initialization_options': {'trusted': v:true},
   \ })
 ```
@@ -75,7 +93,7 @@ With [coc.nvim](https://github.com/neoclide/coc.nvim), in `coc-settings.json`:
     "kick-views": {
       "command": "npx",
       "args": ["kick-view-ls", "--stdio"],
-      "filetypes": ["kick"],
+      "filetypes": ["kick", "typescript", "javascript"],
       "rootPatterns": ["kick.config.ts", "package.json"],
       "initializationOptions": { "trusted": true }
     }
@@ -103,6 +121,14 @@ grammar = "html"
 language-servers = ["kick-views"]
 ```
 
+For template names in controllers, add `kick-views` to TypeScript's servers. List the ones it already uses too, because this setting replaces Helix's default list:
+
+```toml
+[[language]]
+name = "typescript"
+language-servers = ["typescript-language-server", "kick-views"]
+```
+
 ## Emacs
 
 With Eglot (built in since Emacs 29):
@@ -119,16 +145,18 @@ With Eglot (built in since Emacs 29):
 
 Run `M-x eglot` in a `.kick` file, or add `eglot-ensure` to `kick-mode-hook`.
 
+Eglot runs one server per buffer, so it can't add this one to TypeScript files next to your TypeScript server. Template names in controllers aren't available with it.
+
 ## JetBrains IDEs
 
 With the free [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin, which works in Community editions too:
 
 1. Open **Settings → Languages & Frameworks → Language Servers** and click **+**.
 2. **Server:** name it `KickJS Views`, with the command `npx kick-view-ls --stdio`. If `npx` isn't found, use `sh -c "npx kick-view-ls --stdio"`, or `cmd /c npx kick-view-ls --stdio` on Windows.
-3. **Mappings → File name patterns:** add `*.kick`, with the language ID `kick`.
+3. **Mappings → File name patterns:** add `*.kick`, with the language ID `kick`. For template names in controllers, also add `*.ts` and `*.js`, with the language IDs `typescript` and `javascript`.
 4. **Configuration → Initialization options:** `{ "trusted": true }`.
 
-For highlighting, add the VS Code extension's TextMate grammar under **Settings → Editor → TextMate Bundles**: point it at the `extension` folder inside the extension's `.vsix`, which is a zip file.
+LSP4IJ shows the server's semantic tokens, so the template syntax is coloured without anything else. Optionally, for highlighting before the server starts or in files it hasn't checked yet, add the VS Code extension's TextMate grammar under **Settings → Editor → TextMate Bundles**: point it at the `extension` folder inside the extension's `.vsix`, which is a zip file.
 
 ## Zed
 
@@ -139,6 +167,7 @@ Pass options under `lsp.kick-views.initialization_options` in your settings, for
 ## Building on top
 
 - **`kick/templateNames`:** a custom request that returns every template name except components. The VS Code extension uses it to complete `ctx.render('…')` in TypeScript.
+- **`kick/renderDefinition`** (`{ text, offset }` → `{ uri, range }` or `null`) and **`kick/renderDiagnostics`** (`{ text }` → diagnostics): the template-name features for a TS / JS file's text, for clients that don't send those files to the server. The VS Code extension uses them, so the server isn't registered as a TypeScript formatter.
 - **The package as a library:** `@forinda/kickjs-view-language-server` exports the Volar language plugin (`kickLanguagePlugin`), the service plugin (`createKickServicePlugin`), the `Workspace` that tracks templates, components and pipes, and `startServer`. Use them to run the server in-process or to add `.kick` support to another Volar-based server.
 - **Highlighting:** the TextMate grammar, scope `text.html.kick`, lives in [`packages/vscode-extension/syntaxes`](https://github.com/forinda/kick-js/tree/main/packages/vscode-extension/syntaxes). `kick.tmLanguage.json` is the base, and three injection grammars add interpolations, control flow and bindings.
 
