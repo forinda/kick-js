@@ -427,8 +427,10 @@ class Checker {
     }
     out.push({ k: 's', t: '>' })
     // An empty <textarea name> refills from `$old`.
+    // The leading newline is the parser's to drop, so a value starting with
+    // one keeps it.
     if (refill && lower === 'textarea' && el.children.length === 0)
-      out.push({ k: 'i', c: 'rcdata', e: oldOf(refill), at: at(el.span) })
+      out.push({ k: 's', t: '\n' }, { k: 'i', c: 'rcdata', e: oldOf(refill), at: at(el.span) })
     return el
   }
 
@@ -452,7 +454,8 @@ class Checker {
     /** `value="x"` or `value="{{ x }}"`, as an expression to compare `$old` with. */
     const valueExpr = (): CExpr | undefined => {
       const a = el.attrs.find((x) => x.name.toLowerCase() === 'value')
-      if (a?.kind === 'static') return { k: 'l', v: String(a.parts?.[0] ?? '') }
+      // What the browser submits: character references decoded.
+      if (a?.kind === 'static') return { k: 'l', v: decodeEntities(String(a.parts?.[0] ?? '')) }
       // `'' + x`: the attribute prints as text, and `$old` holds the text a browser sent.
       if (a?.kind === 'interp' && a.parts?.length === 1 && typeof a.parts[0] !== 'string')
         return { k: 'b', o: '+', l: { k: 'l', v: '' }, r: this.expr(a.parts[0]!, 'attr') }

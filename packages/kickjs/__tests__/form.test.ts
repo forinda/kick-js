@@ -57,3 +57,12 @@ describe('oldInput limits', () => {
     expect(SECRET_FIELD.test('pwd')).toBe(true)
   })
 })
+
+describe('review: field names', () => {
+  it('keeps fields named like object properties', () => {
+    expect(fieldErrors([{ field: 'constructor', message: 'Required' }])?.constructor).toBe(
+      'Required',
+    )
+    expect(oldInput({ toString: 'x' })?.toString).toBe('x')
+  })
+})

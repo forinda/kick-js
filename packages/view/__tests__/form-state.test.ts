@@ -126,7 +126,7 @@ describe('refill from $old', () => {
       $old: { title: 'Hi', bio: 'Me', kind: 'b', agree: 'on', size: 'm' },
     })
     expect(html).toContain('value="Hi"')
-    expect(html).toContain('>Me</textarea>')
+    expect(html).toContain('>\nMe</textarea>')
     expect(html).toContain('<option value="b" selected>')
     expect(html).toContain('name="agree" checked')
     expect(html).toContain('value="m" checked')
@@ -245,5 +245,38 @@ describe('review fixes', () => {
     expect(numeric).toContain('<option value="2" selected>')
     const other = await views.render('page', { cats: [], tags: [], $old: { cat: 'other' } })
     expect(other).toContain('<option value="other" selected>')
+  })
+})
+
+describe('review: refill details', () => {
+  const page = (src: string, opts = {}) =>
+    createViews({ viewsDir: dir({ page: src }), warn: vi.fn(), ...opts })
+
+  it("keeps a refilled textarea's leading newline", async () => {
+    const html = await page('<textarea name="bio"></textarea>').render('page', {
+      $old: { bio: '\nindented' },
+    })
+    // The parser drops one newline after <textarea>: ours, not the value's.
+    expect(html).toBe('<textarea name="bio">\n\nindented</textarea>')
+  })
+
+  it('compares written values the way the browser sends them', async () => {
+    const html = await page(
+      '<select name="v"><option value="a&amp;b">A</option></select><input type="checkbox" name="c" value="x&lt;y">',
+    ).render('page', { $old: { v: 'a&b', c: 'x<y' } })
+    expect(html).toContain('<option value="a&amp;b" selected>')
+    expect(html).toContain('checked')
+  })
+
+  it('keeps form values share() gives when the session has none', async () => {
+    const views = page('{{ $flash.info }}', { share: () => ({ $flash: { info: 'From share' } }) })
+    expect(await views.render('page', {}, { ctx: { session: { data: {} } } })).toBe('From share')
+    expect(
+      await views.render(
+        'page',
+        {},
+        { ctx: { session: { data: { __inertia_flash: { info: 'From session' } } } } },
+      ),
+    ).toBe('From session')
   })
 })

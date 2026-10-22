@@ -2,7 +2,7 @@
  * `createViews`: templates from a loader or a build's bundle, checked once
  * and cached, rendered with the app's pipes and shared data.
  */
-import { rememberPage, takeFormState } from './form-state'
+import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
@@ -255,7 +255,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       return render(
         template,
         // A controller's own `$errors` / `$old` (a re-render) win over the session's.
-        { ...shared, ...takeFormState(opts.ctx), ...data },
+        { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data },
         {
           locale,
           timeZone,

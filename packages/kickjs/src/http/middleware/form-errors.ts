@@ -43,7 +43,10 @@ function isFormPost(req: any): boolean {
   if (!/application\/x-www-form-urlencoded|multipart\/form-data/i.test(type)) return false
   // A browser submitting a form asks for HTML and navigates; fetch() with
   // FormData sends `*/*` and wants the usual JSON answer.
-  return /text\/html/i.test(header(req, 'accept')) || header(req, 'sec-fetch-mode') === 'navigate'
+  // Browsers that send Sec-Fetch-Mode say which: only `navigate` is a form.
+  const mode = header(req, 'sec-fetch-mode')
+  if (mode) return mode === 'navigate'
+  return /text\/html/i.test(header(req, 'accept'))
 }
 
 /** A path on this site: one leading `/`, not `//` or `/\`. */

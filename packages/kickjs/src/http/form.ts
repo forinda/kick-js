@@ -27,9 +27,11 @@ export function flash(ctx: WithSession, data: Record<string, unknown>): void {
 /** `[{ field, message }]` from route validation → `{ field: firstMessage }`; `'form'` for the body as a whole. */
 export function fieldErrors(details: unknown): Record<string, string> | null {
   if (!Array.isArray(details)) return null
-  const errors: Record<string, string> = {}
+  // No prototype: a field named `constructor` or `__proto__` is just a field.
+  const errors: Record<string, string> = Object.create(null)
   for (const d of details as Array<{ field?: string; message?: string }>) {
-    errors[d.field || 'form'] ??= d.message ?? 'Invalid value'
+    const field = d.field || 'form'
+    if (!Object.hasOwn(errors, field)) errors[field] = d.message ?? 'Invalid value'
   }
   return errors
 }
@@ -58,7 +60,7 @@ export function oldInput(
   // Bytes of UTF-8, before the session encrypts and encodes it (a third
   // more): leaves room in a 4 KB cookie for the errors and the rest.
   const total = limits.total ?? 1500
-  const out: Record<string, string | string[]> = {}
+  const out: Record<string, string | string[]> = Object.create(null)
   if (!body || typeof body !== 'object') return out
   for (const [name, value] of Object.entries(body)) {
     if (SECRET_FIELD.test(name)) continue

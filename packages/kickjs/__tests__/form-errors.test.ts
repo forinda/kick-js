@@ -119,6 +119,17 @@ describe('formErrorHandler', () => {
     expect(nav.status).toBe(303)
   })
 
+  it('leaves fetch() asking for HTML to the fallback', async () => {
+    const fallback = spyFallback()
+    const res = await request(app({ fallback }))
+      .post('/products')
+      .type('form')
+      .set('Accept', 'text/html')
+      .set('Sec-Fetch-Mode', 'cors')
+      .send('title=a')
+    expect(res.status).toBe(422)
+  })
+
   it('goes back to the last page the session rendered, before the Referer', async () => {
     const agent = request.agent(app())
     await agent.get('/remember?url=/products/new')

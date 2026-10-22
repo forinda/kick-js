@@ -38,18 +38,27 @@ export function rememberPage(ctx: unknown, layout: boolean | string | undefined)
 /** Names every template sees, components included. */
 export const FORM_GLOBALS: ReadonlySet<string> = new Set(['$errors', '$old', '$flash'])
 
-/** The form state for this render, taken from the session so it shows once. */
-export function takeFormState(ctx: unknown): { $errors: Bag; $old: Bag; $flash: Bag } {
+type FormName = '$errors' | '$old' | '$flash'
+
+/** Empty form state: what a template sees when nothing was set. */
+export const emptyFormState = (): Record<FormName, Bag> => ({ $errors: {}, $old: {}, $flash: {} })
+
+/**
+ * The form state the session holds for this render, taken so it shows once.
+ * Only the keys the session has: a value from `share()` stays when it has none.
+ */
+export function takeFormState(ctx: unknown): Partial<Record<FormName, Bag>> {
   const data = (ctx as { session?: { data?: Bag } } | undefined)?.session?.data
-  const take = (key: string): Bag => {
-    if (!data || data[key] === undefined) return {}
+  const out: Partial<Record<FormName, Bag>> = {}
+  if (!data) return out
+  const take = (name: FormName, key: string) => {
+    if (data[key] === undefined) return
     const value = data[key]
     delete data[key]
-    return value && typeof value === 'object' ? (value as Bag) : {}
+    out[name] = value && typeof value === 'object' ? (value as Bag) : {}
   }
-  return {
-    $errors: take(FORM_STATE_KEYS.errors),
-    $old: take(FORM_STATE_KEYS.old),
-    $flash: take(FORM_STATE_KEYS.flash),
-  }
+  take('$errors', FORM_STATE_KEYS.errors)
+  take('$old', FORM_STATE_KEYS.old)
+  take('$flash', FORM_STATE_KEYS.flash)
+  return out
 }
