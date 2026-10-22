@@ -3,6 +3,7 @@
  * pipes, components, slots and layouts verified, and every interpolation's
  * context enforced (spec §4). What passes here is safe to render.
  */
+import { FORM_GLOBALS } from '../form-state'
 import {
   AST_FORMAT_VERSION,
   type Attr,
@@ -173,6 +174,8 @@ class Checker {
         const b = this.lookup(e.root)
         if (b?.kind === 'meta') return { k: 'm', s: b.s, w: b.w! }
         if (b) return { k: 'v', s: b.s, p }
+        // Form state is request-wide: a form field component reads it too.
+        if (FORM_GLOBALS.has(e.root)) return { k: 'd', n: e.root, p }
         if (this.component) {
           if (!this.warned.has(e.root)) {
             this.warned.add(e.root)

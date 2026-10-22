@@ -3,6 +3,7 @@
  * Synchronous, no `eval` — every value goes through `read` and the escaper
  * for where it lands.
  */
+import { FORM_GLOBALS } from '../form-state'
 import type { At, CAttr, CExpr, CNode, CheckedTemplate, CSeg, LoopVar } from '../ast'
 import { error, type Diagnostic } from '../diagnostics'
 import {
@@ -76,6 +77,9 @@ class Renderer {
 
   constructor(private readonly env: RenderEnv) {}
 
+  /** The page's data, for the request-wide names. */
+  rootData: Record<string, unknown> = Object.create(null)
+
   html(): string {
     return this.out.join('')
   }
@@ -105,8 +109,10 @@ class Renderer {
       case 'x':
         return undefined
       case 'd': {
-        if (!(e.n in inst.data)) this.unresolved(e.n, inst)
-        return this.path(read(inst.data, e.n), e.p, inst)
+        // `$errors`, `$old`, `$flash` are request-wide: components read the page's.
+        const data = FORM_GLOBALS.has(e.n) && !(e.n in inst.data) ? this.rootData : inst.data
+        if (!(e.n in data)) this.unresolved(e.n, inst)
+        return this.path(read(data, e.n), e.p, inst)
       }
       case 'v':
         return this.path(inst.slots[e.s], e.p, inst)
@@ -466,6 +472,7 @@ export function render(
   opts: { layout?: boolean | string } = {},
 ): string {
   const r = new Renderer(env)
+  r.rootData = data as Record<string, unknown>
   const page: Inst = {
     t: template,
     data: data as Record<string, unknown>,
