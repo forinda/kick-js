@@ -174,6 +174,32 @@ describe('parse', () => {
     expect(errors('@if (a) { x').length).toBe(1)
   })
 
+  it('script and style stay raw text inside svg and math', () => {
+    expect(flat(ok('<svg><script>{{ x }}</script><style>{{ y }}</style></svg>').ast.body)).toBe(
+      '<svg><script>{raw-text:x}</script><style>{raw-text:y}</style></svg>',
+    )
+    expect(flat(ok('<math><script>{{ x }}</script></math>').ast.body)).toBe(
+      '<math><script>{raw-text:x}</script></math>',
+    )
+  })
+
+  it('HTML rules resume at svg and math integration points', () => {
+    const svg = ok(
+      '<svg><foreignObject><textarea>{{ x }}</textarea><DIV></DIV></foreignObject></svg>',
+    ).ast.body[0] as Element
+    const fo = svg.children[0] as Element
+    const [ta, div] = fo.children as Element[]
+    expect([fo.foreign, ta!.foreign, div!.foreign]).toEqual([true, false, false])
+    expect(flat([ta!])).toBe('<textarea>{rcdata:x}</textarea>')
+    const desc = (ok('<svg><desc><b>x</b></desc></svg>').ast.body[0] as Element)
+      .children[0] as Element
+    expect((desc.children[0] as Element).foreign).toBe(false)
+    const ann = (
+      ok('<math><annotation-xml><p>x</p></annotation-xml></math>').ast.body[0] as Element
+    ).children[0] as Element
+    expect((ann.children[0] as Element).foreign).toBe(false)
+  })
+
   it('positions survive CRLF and BOM', () => {
     const crlf = errors('﻿<p>\r\n{{ a() }}')[0]!
     const lf = errors('<p>\n{{ a() }}')[0]!

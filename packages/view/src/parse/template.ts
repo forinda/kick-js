@@ -29,6 +29,11 @@ const VOID = new Set(
 )
 const RAW_TEXT = new Set(['script', 'style'])
 const RCDATA = new Set(['title', 'textarea'])
+/**
+ * Inside SVG and MathML, these elements' children follow HTML rules again
+ * (HTML integration points), so `<textarea>` under `<foreignObject>` is RCDATA.
+ */
+const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'annotation-xml'])
 const KEYWORDS =
   /^@(if|else|for|empty|switch|case|default|let|layout|input|slot|verbatim|assets)(?![\w$-])/
 const LOOP_VARS = new Set<LoopVar>(['$index', '$first', '$last', '$even', '$odd', '$count'])
@@ -291,7 +296,8 @@ class TemplateParser {
       | Extract<Frame, { type: 'element' }>
       | undefined
     const lower = tag.toLowerCase()
-    const foreign = !!parent?.el.foreign || lower === 'svg' || lower === 'math'
+    const inForeign = !!parent?.el.foreign && !INTEGRATION_POINTS.has(parent.el.tag.toLowerCase())
+    const foreign = inForeign || lower === 'svg' || lower === 'math'
     const attrs: Attr[] = []
     let selfClosing = false
     for (;;) {
@@ -337,7 +343,9 @@ class TemplateParser {
     }
     this.emit(el)
     if (el.void || selfClosing) return
-    if (!foreign && (RAW_TEXT.has(lower) || RCDATA.has(lower))) {
+    // `<script>` and `<style>` are raw text everywhere: a browser runs an SVG
+    // `<script>` too, and HTML-escaping means nothing inside one.
+    if (RAW_TEXT.has(lower) || (!foreign && RCDATA.has(lower))) {
       const close = s.toLowerCase().indexOf(`</${lower}`, j)
       const stop = close < 0 ? s.length : close
       el.children = this.textWithInterps(j, stop, RAW_TEXT.has(lower) ? 'raw-text' : 'rcdata')
