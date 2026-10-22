@@ -140,7 +140,7 @@ describe('rename', () => {
 })
 
 describe('file rename', () => {
-  const edits = (e: ReturnType<typeof fileRenameEdits>) =>
+  const edits = (e: Awaited<ReturnType<typeof fileRenameEdits>>) =>
     Object.entries(e?.changes ?? {})
       .flatMap(([u, es]) =>
         es.map(
@@ -153,7 +153,7 @@ describe('file rename', () => {
   it('renaming a component updates its tags', async () => {
     const ws = await app()
     expect(
-      edits(fileRenameEdits(ws, uri('components/user-card'), uri('components/user-badge'))),
+      edits(await fileRenameEdits(ws, uri('components/user-card'), uri('components/user-badge'))),
     ).toEqual([
       'about.kick:1:1=user-badge',
       'about.kick:1:25=user-badge',
@@ -162,7 +162,7 @@ describe('file rename', () => {
   })
   it('renaming a layout updates @layout', async () => {
     const ws = await app()
-    expect(edits(fileRenameEdits(ws, uri('layouts/main'), uri('layouts/site')))).toEqual([
+    expect(edits(await fileRenameEdits(ws, uri('layouts/main'), uri('layouts/site')))).toEqual([
       'about.kick:0:9=layouts/site',
       'home.kick:0:9=layouts/site',
     ])
@@ -170,15 +170,44 @@ describe('file rename', () => {
   it('renaming a folder updates what is inside it', async () => {
     const ws = await app()
     const dir = (p: string) => `file://${ROOT}/src/views/${p}`
-    expect(edits(fileRenameEdits(ws, dir('layouts'), dir('shells')))).toEqual([
+    expect(edits(await fileRenameEdits(ws, dir('layouts'), dir('shells')))).toEqual([
       'about.kick:0:9=shells/main',
       'home.kick:0:9=shells/main',
     ])
   })
+  it("renaming a page updates ctx.render('…') in controllers", async () => {
+    const controller = `file://${ROOT}/src/home.controller.ts`
+    const ws = await workspaceOf(
+      {
+        'src/views/home.kick': '<p></p>',
+        'src/views/users/show.kick': '<p></p>',
+      },
+      {
+        scripts: async () => [
+          {
+            uri: controller,
+            text: "ctx.render('home')\nviews.render(\"users/show\", {})\nctx.render('other')",
+          },
+        ],
+      },
+    )
+    const all = async (from: string, to: string) =>
+      Object.entries((await fileRenameEdits(ws, from, to))?.changes ?? {}).flatMap(([u, es]) =>
+        es.map(
+          (x) =>
+            `${u.split('/src/')[1]}:${x.range.start.line}:${x.range.start.character}=${x.newText}`,
+        ),
+      )
+    expect(await all(uri('home'), uri('pages/home'))).toEqual([
+      'home.controller.ts:0:12=pages/home',
+    ])
+    const dir = (p: string) => `file://${ROOT}/src/views/${p}`
+    expect(await all(dir('users'), dir('people'))).toEqual(['home.controller.ts:1:14=people/show'])
+  })
   it('ignores renames out of the views folder', async () => {
     const ws = await app()
     expect(
-      fileRenameEdits(ws, uri('layouts/main'), `file://${ROOT}/elsewhere/main.kick`),
+      await fileRenameEdits(ws, uri('layouts/main'), `file://${ROOT}/elsewhere/main.kick`),
     ).toBeUndefined()
   })
   void PIPES

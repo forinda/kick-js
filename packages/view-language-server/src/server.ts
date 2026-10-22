@@ -47,6 +47,30 @@ export async function listKick(dir: string): Promise<string[]> {
   }
 }
 
+const SKIP = new Set(['node_modules', 'dist', 'build', 'coverage', 'out'])
+const SCRIPT = /\.(?:[cm]?[jt]s|[jt]sx)$/
+
+/** TS / JS files under `root`, for `ctx.render('…')` names: no dependencies, build output, dot folders or `.d.ts`. */
+export async function listScripts(root: string): Promise<string[]> {
+  const out: string[] = []
+  const walk = async (dir: string) => {
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || SKIP.has(e.name)) continue
+      const p = join(dir, e.name)
+      if (e.isDirectory()) await walk(p)
+      else if (SCRIPT.test(e.name) && !e.name.endsWith('.d.ts')) out.push(p)
+    }
+  }
+  await walk(root)
+  return out
+}
+
 /** What the server watches: every template, and the pipes file wherever it's configured. */
 export function watchPatterns(root: string, pipesFile: string): string[] {
   const patterns = ['**/*.kick', '**/pipes.{ts,js}']
@@ -89,6 +113,15 @@ export function startServer(): void {
       list: listKick,
       layout: opts.layout || undefined,
       baseLayout: opts.baseLayout || undefined,
+      // Read when a template is renamed: an open buffer's text, else the file's.
+      scripts: async () =>
+        Promise.all(
+          (await listScripts(root)).map(async (p) => {
+            const uri = URI.file(p).toString()
+            const open = server.documents.get(URI.parse(uri))
+            return { uri, text: open?.getText() ?? (await readFile(p, 'utf8').catch(() => '')) }
+          }),
+        ),
     })
     await ws.load()
     // Kick first: where a single answer wins (rename, hover), a component tag

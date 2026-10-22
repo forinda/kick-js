@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Renaming a page's `.kick` file (or its folder) updates the `ctx.render('…')` and `views.render('…')` calls that name it.
 - In TypeScript and JavaScript, `ctx.render('…')` names go to their template (Go to Definition) and get a warning when no template has that name. Templates you save re-check open controllers.
 - `.kick` templates: Find All References and Rename for pipes, components and layouts. Renaming a component or layout renames its file, and renaming a template file in the explorer updates its tags and `@layout('…')` uses.
 - The language server colours the template syntax with semantic tokens, alongside the TextMate grammar.
