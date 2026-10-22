@@ -74,6 +74,28 @@ describe('check', () => {
     expect(errs({ page: '<p>{{ x | raw }}</p><title>{{ t }}</title>' })).toEqual([])
   })
 
+  it('a binding whose expression fails to parse is reported, not a crash', () => {
+    for (const src of [
+      '<li [class.on]="i == ==={= 0">x</li>',
+      '<a [href]="(">x</a>',
+      '<x-y [v]="a(" />',
+    ]) {
+      const files: Record<string, string> = { page: src, 'components/x-y': '@input v\n<p></p>' }
+      const templates = new Map(Object.entries(files).map(([n, s]) => [n, parse(s, `${n}.kick`)]))
+      expect(() =>
+        check('page', {
+          templates: new Map([...templates].map(([n, r]) => [n, r.ast])),
+          pipes: new Set(BUILTINS),
+          componentsDir: 'components',
+        }),
+      ).not.toThrow()
+      expect(
+        templates.get('page')!.diagnostics.some((d) => d.severity === 'error'),
+        src,
+      ).toBe(true)
+    }
+  })
+
   it('script attributes interpolate', () => {
     expect(run({ page: '<script src="{{ cdn }}" nonce="{{ n }}"></script>' }).diagnostics).toEqual(
       [],

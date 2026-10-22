@@ -51,6 +51,21 @@ function digits(info: unknown): Intl.NumberFormatOptions {
   }
 }
 
+/** Intl formatters are costly to build: one per locale and options, reused. */
+const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>()
+function numberFormat(locale: string, opts: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `n|${locale}|${JSON.stringify(opts)}`
+  let f = formatters.get(key) as Intl.NumberFormat | undefined
+  if (!f) formatters.set(key, (f = new Intl.NumberFormat(locale, opts)))
+  return f
+}
+function dateFormat(locale: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `d|${locale}|${JSON.stringify(opts)}`
+  let f = formatters.get(key) as Intl.DateTimeFormat | undefined
+  if (!f) formatters.set(key, (f = new Intl.DateTimeFormat(locale, opts)))
+  return f
+}
+
 const toNumber = (v: unknown): number | undefined => {
   if (v === null || v === undefined || v === '') return undefined
   const n = Number(v)
@@ -81,19 +96,19 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
       if (Number.isNaN(d.getTime())) return ''
       const preset = DATE_FORMATS[String(format)]
       if (!preset) throw new Error(`unknown date format '${String(format)}'`)
-      return new Intl.DateTimeFormat(env.locale, {
+      return dateFormat(env.locale, {
         ...preset,
         timeZone: (timeZone as string | undefined) ?? env.timeZone,
       }).format(d)
     },
     number: (v, info) => {
       const n = toNumber(v)
-      return n === undefined ? '' : new Intl.NumberFormat(env.locale, digits(info)).format(n)
+      return n === undefined ? '' : numberFormat(env.locale, digits(info)).format(n)
     },
     currency: (v, code, info) => {
       const n = toNumber(v)
       if (n === undefined) return ''
-      return new Intl.NumberFormat(env.locale, {
+      return numberFormat(env.locale, {
         style: 'currency',
         currency: String(code ?? 'USD'),
         ...digits(info),
@@ -103,7 +118,7 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
       const n = toNumber(v)
       return n === undefined
         ? ''
-        : new Intl.NumberFormat(env.locale, { style: 'percent', ...digits(info) }).format(n)
+        : numberFormat(env.locale, { style: 'percent', ...digits(info) }).format(n)
     },
   }
 }

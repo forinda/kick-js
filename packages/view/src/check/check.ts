@@ -444,6 +444,8 @@ class Checker {
         }
       }
       const url = isUrlAttr(tag, a.name) ? (lower === 'srcset' ? 'srcset' : 'url') : undefined
+      // A binding whose expression didn't parse: the parser already reported it.
+      if ((a.kind === 'bind' || a.kind === 'class' || a.kind === 'style') && !a.expr) continue
       switch (a.kind) {
         case 'bare':
           out.push({ t: 's', n: a.name, v: true })
@@ -538,6 +540,7 @@ class Checker {
         )
         continue
       }
+      if (a.kind === 'bind' && !a.expr) continue
       given.add(input)
       let e: CExpr
       if (a.kind === 'bind') e = this.expr(a.expr!)

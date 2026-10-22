@@ -38,7 +38,8 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .wireit"
+    "clean": "rm -rf dist .wireit",
+    "bench": "vitest run --config vitest.bench.config.ts"
   },
   "dependencies": {},
   "peerDependencies": {
