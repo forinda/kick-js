@@ -1,5 +1,20 @@
 # @forinda/kickjs-devtools
 
+## 7.17.0
+
+### Minor Changes
+
+- [#1012](https://github.com/forinda/kick-js/pull/1012) [`667eb02`](https://github.com/forinda/kick-js/commit/667eb02470ef3a2d1dbb2a979069f3229192c320) Thanks [@forinda](https://github.com/forinda)! - Routes and the API runner:
+  
+  - **Routes list:** each route shows one compact pill (`2 flags · ctx 1`) instead of the flag values, so paths stay readable. Search also matches flag names (`auth.public`) and contributor keys.
+  - **API runner:** now tabbed — **Request** (params, query, headers, body, save to variable), **Meta** (the route's flags and context contributors), **Snippet**, **History** and **Settings**. The response stays below whichever tab is open.
+  - **Flag values in Meta:** an object reads as key/value rows, and a list (a long `permissions` list, say) as chips that fold after eight.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.16.0
 
 ### Minor Changes

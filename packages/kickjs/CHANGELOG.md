@@ -1,5 +1,19 @@
 # @forinda/kickjs
 
+## 10.11.0
+
+### Minor Changes
+
+- [#1011](https://github.com/forinda/kick-js/pull/1011) [`5bffa66`](https://github.com/forinda/kick-js/commit/5bffa66befe08d3e2385e5dad989c0b85fad6434) Thanks [@forinda](https://github.com/forinda)! - `ctx.render(name, data, opts)` uses a view engine bound to the request (`KickView` from `@forinda/kickjs-view`) on every runtime, and falls back to `ViewAdapter` on Express.
+  
+  - With a bound engine it returns a promise; `opts` takes `status`, `headers`, `layout` (a name, or `false` for none) and `locale` / `timeZone`.
+  - A render the handler doesn't await is still waited for, and its errors reach the error handler.
+  - New exports `bindViewRenderer`, `viewRendererFor`, `VIEW_RENDERER` and `ViewRenderer` let other engines plug in.
+
+### Patch Changes
+
+- [#1011](https://github.com/forinda/kick-js/pull/1011) [`c81c083`](https://github.com/forinda/kick-js/commit/c81c083e3ad7192b3d08a24cbf89894409d99a82) Thanks [@forinda](https://github.com/forinda)! - On h3 and the web entry, `HEAD` answers every `GET` route with its status and headers and no body, as on Express and Fastify (it was 404/405). The web entry also honours a module route's `prefix: false`, mounting it at the root instead of under `apiPrefix`.
+
 ## 10.10.0
 
 ### Minor Changes
