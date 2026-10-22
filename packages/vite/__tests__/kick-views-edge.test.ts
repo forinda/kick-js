@@ -17,11 +17,20 @@ const VIEW_PKG = dirname(dirname(fileURLToPath(import.meta.resolve('@forinda/kic
 
 const WORKER = `
 import kickViews from 'virtual:kick-views'
-import { createViews } from '@forinda/kickjs-view'
-const views = createViews({ ...kickViews, layout: 'layouts/main' })
+import { clientScriptResponse, createViews } from '@forinda/kickjs-view'
+const views = createViews({
+  ...kickViews,
+  layout: 'layouts/main',
+  // A built bundle carries plain JS: nothing should strip on the edge.
+  stripTypes: () => { throw new Error('should not strip') },
+})
 export default {
   async fetch(request) {
-    const html = await views.render('home', { name: new URL(request.url).searchParams.get('name') })
+    const script = await clientScriptResponse(views, request)
+    if (script) return script
+    const url = new URL(request.url)
+    const page = url.pathname === '/island' ? 'island' : 'home'
+    const html = await views.render(page, { name: url.searchParams.get('name') })
     return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } })
   },
 }
@@ -35,6 +44,9 @@ describe('kick views on workerd', () => {
       'src/views/home.kick': '<h1>Hi {{ name | shout }}</h1>',
       'src/views/layouts/main.kick': '<main><slot /></main>',
       'src/views/pipes.ts': 'export const shout = (v: string) => `${v}!`',
+      'src/views/components/flash-toast.kick':
+        "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
+      'src/views/island.kick': '<flash-toast />',
     }
     mkdirSync(join(root, 'node_modules/@forinda'), { recursive: true })
     symlinkSync(VIEW_PKG, join(root, 'node_modules/@forinda/kickjs-view'), 'dir')
@@ -67,6 +79,11 @@ describe('kick views on workerd', () => {
       const res = await mf.dispatchFetch('http://edge/?name=<Ada>')
       expect(res.status).toBe(200)
       expect(await res.text()).toBe('<main><h1>Hi &lt;Ada&gt;!</h1></main>')
+      const island = await (await mf.dispatchFetch('http://edge/island')).text()
+      const src = /src="([^"]+)"/.exec(island)![1]!
+      const js = await mf.dispatchFetch(`http://edge${src}`)
+      expect(js.status).toBe(200)
+      expect(await js.text()).toMatch(/customElements\.define\(["']kick-toast/)
     } finally {
       await mf.dispose()
     }

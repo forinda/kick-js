@@ -9,7 +9,7 @@
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
-import type { Plugin } from 'vite'
+import { transformWithOxc, type Plugin } from 'vite'
 
 export interface KickViewsPluginOptions {
   /** Default `src/views`. */
@@ -87,6 +87,18 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         else ctx.warn(line)
       }
       if (r.template) checked[name] = r.template
+    }
+    // `<script client>` ships as plain JS: the edge never strips types.
+    for (const [name, t] of Object.entries(checked) as Array<
+      [string, { client?: { code: string; js: boolean } }]
+    >) {
+      if (!t.client || t.client.js) continue
+      try {
+        const out = await transformWithOxc(t.client.code, `${name}.ts`, { lang: 'ts' })
+        t.client = { code: out.code, js: true }
+      } catch (err) {
+        errors.push(`${name}.kick — <script client>: ${(err as Error).message}`)
+      }
     }
     if (errors.length)
       ctx.error(`.kick templates have errors:\n  ${[...new Set(errors)].join('\n  ')}`)

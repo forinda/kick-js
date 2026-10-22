@@ -7,7 +7,7 @@ import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './as
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import { componentTag, layoutResolver, templateName, type Project } from './check/project'
-import { CLIENT_SCRIPT_FILE, defaultStripTypes, fnv1a, injectScripts } from './client-scripts'
+import { CLIENT_SCRIPT_FILE, NO_STRIPPER, fnv1a, injectScripts } from './client-scripts'
 import { parse } from './parse/template'
 import { BUILTIN_PIPES } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
@@ -70,7 +70,7 @@ export interface ViewsOptions {
    */
   assets?: (entry: string, data: Record<string, unknown>) => string
   warn?: (message: string) => void
-  /** Strips a `<script client>`'s TypeScript when a build hasn't. Default: Node's `stripTypeScriptTypes` (22.13+). */
+  /** Strips a `<script client>`'s TypeScript when a build hasn't. Default: Node's `stripTypeScriptTypes` (22.13+), on the Node entry. */
   stripTypes?: (code: string) => string | Promise<string>
   /** Where component scripts are served. Default `'/_kick/c'`. */
   clientScriptPath?: string
@@ -119,6 +119,13 @@ export function useFileLoader(load: () => Promise<FileLoaderModule>): void {
   fileLoaderModule = load
 }
 
+/** The TypeScript stripper for `<script client>`; the Node entry sets it. */
+let typeStripper: ((code: string) => string) | undefined
+
+export function useStripTypes(strip: (code: string) => string): void {
+  typeStripper = strip
+}
+
 function fileLoaders(): Promise<FileLoaderModule> {
   if (!fileLoaderModule) {
     return Promise.reject(
@@ -137,7 +144,12 @@ export function createViews(options: ViewsOptions = {}): Views {
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
   const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
-  const stripTypes = options.stripTypes ?? defaultStripTypes
+  const stripTypes =
+    options.stripTypes ??
+    ((code: string) => {
+      if (!typeStripper) throw new Error(NO_STRIPPER)
+      return typeStripper(code)
+    })
   /** Each component's served script, kept while its source stays the same. */
   const scripts = new Map<string, { code: string; js: Promise<{ js: string; hash: string }> }>()
   const scriptFor = (t: CheckedTemplate) => {

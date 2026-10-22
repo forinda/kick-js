@@ -28,6 +28,20 @@ async function bundle(root: string): Promise<string> {
 }
 
 describe('kickViewsPlugin', () => {
+  it('build ships plain JavaScript', async () => {
+    const code = await bundle(
+      project({
+        'src/views/components/flash-toast.kick':
+          "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
+        'src/views/home.kick': '<flash-toast />',
+      }),
+    )
+    expect(code).toMatch(/"js": ?true/)
+    expect(code).toContain('customElements.define(')
+    expect(code).toContain('kick-toast')
+    expect(code).not.toContain(': number')
+  })
+
   it('build fails on a broken template', async () => {
     const root = project({ 'src/views/bad.kick': '{{ a() }}', 'src/views/ok.kick': 'ok' })
     await expect(bundle(root)).rejects.toThrow(/bad\.kick:1:\d+.*calls aren't allowed/s)
