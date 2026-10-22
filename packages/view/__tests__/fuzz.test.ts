@@ -49,6 +49,7 @@ function mutate(src: string, rand: () => number): string {
 }
 
 describe('fuzz', () => {
+  // 5,000 parse + check + format runs: well over the default timeout on shared CI runners.
   it('parse and check never throw', () => {
     const rand = rng(20261022)
     const card = parse(
@@ -79,5 +80,5 @@ describe('fuzz', () => {
       const once = format(src, 'p.kick').output
       if (once !== undefined) expect(format(once, 'p.kick').output, JSON.stringify(src)).toBe(once)
     }
-  })
+  }, 60_000)
 })

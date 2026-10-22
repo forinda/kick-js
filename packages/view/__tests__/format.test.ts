@@ -88,12 +88,13 @@ describe('format', () => {
     }
   })
 
+  // 3,000 levels indent to ~18 MB of output that is re-parsed: slow on shared CI runners.
   it('formats deeply nested markup without overflowing', () => {
     const deep = '<div>\n'.repeat(3000) + '{{x}}\n' + '</div>\n'.repeat(3000)
     const r = format(deep, 't.kick')
     expect(r.output).toBeDefined()
     expect(r.output!).toContain('{{ x }}')
-  })
+  }, 60_000)
 
   it('returns a file with parse errors unchanged', () => {
     const r = format('<p>{{ a() }}</p>', 't.kick')
