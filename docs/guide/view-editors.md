@@ -167,6 +167,7 @@ Pass options under `lsp.kick-views.initialization_options` in your settings, for
 ## Building on top
 
 - **`kick/templateNames`:** a custom request that returns every template name except components. The VS Code extension uses it to complete `ctx.render('…')` in TypeScript.
+- **`kick/renderDefinition`** (`{ text, offset }` → `{ uri, range }` or `null`) and **`kick/renderDiagnostics`** (`{ text }` → diagnostics): the template-name features for a TS / JS file's text, for clients that don't send those files to the server. The VS Code extension uses them, so the server isn't registered as a TypeScript formatter.
 - **The package as a library:** `@forinda/kickjs-view-language-server` exports the Volar language plugin (`kickLanguagePlugin`), the service plugin (`createKickServicePlugin`), the `Workspace` that tracks templates, components and pipes, and `startServer`. Use them to run the server in-process or to add `.kick` support to another Volar-based server.
 - **Highlighting:** the TextMate grammar, scope `text.html.kick`, lives in [`packages/vscode-extension/syntaxes`](https://github.com/forinda/kick-js/tree/main/packages/vscode-extension/syntaxes). `kick.tmLanguage.json` is the base, and three injection grammars add interpolations, control flow and bindings.
 

@@ -13,6 +13,7 @@ import { create as createHtmlService } from 'volar-service-html'
 import { URI } from 'vscode-uri'
 import { kickLanguagePlugin } from './language-plugin'
 import { createKickServicePlugin } from './plugin/index'
+import { renderDefinition, renderDiagnostics } from './plugin/render-calls'
 import { loadViewModule } from './view-module'
 import { Workspace } from './workspace'
 
@@ -135,6 +136,19 @@ export function startServer(): void {
     const dir = `${ws.componentsDir()}/`
     return ws.names().filter((n) => !n.startsWith(dir))
   })
+
+  // For clients that keep TS / JS files to themselves (the VS Code extension):
+  // the same render-call answers, over requests instead of document features.
+  connection.onRequest(
+    'kick/renderDefinition',
+    ({ text, offset }: { text: string; offset: number }) => {
+      const link = ws && renderDefinition(ws, text, offset)
+      return link ? { uri: link.targetUri, range: link.originSelectionRange } : null
+    },
+  )
+  connection.onRequest('kick/renderDiagnostics', ({ text }: { text: string }) =>
+    ws ? renderDiagnostics(ws, text) : [],
+  )
 
   connection.onShutdown(() => server.shutdown())
 }

@@ -149,6 +149,19 @@ describe('language server', () => {
     )
     expect(Object.keys(edit!.changes!)).toContain(views('home'))
   })
+  it('answers render-call requests for clients that keep TS to themselves', async () => {
+    const text = "ctx.render('home')\nctx.render('nope')"
+    const link = await server.connection.sendRequest<{ uri: string } | null>(
+      'kick/renderDefinition',
+      { text, offset: 13 },
+    )
+    expect(link?.uri).toBe(views('home'))
+    const diagnostics = await server.connection.sendRequest<{ message: string }[]>(
+      'kick/renderDiagnostics',
+      { text },
+    )
+    expect(diagnostics.map((d) => d.message)).toEqual(["template 'nope' not found"])
+  })
   it('lists template names for ctx.render', async () => {
     const names = await server.connection.sendRequest<string[]>('kick/templateNames')
     expect(names).toEqual(expect.arrayContaining(['home', 'layouts/main']))
