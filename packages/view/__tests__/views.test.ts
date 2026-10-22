@@ -57,6 +57,16 @@ describe('createViews', () => {
     expect(await prod.render('a')).toBe('one')
   })
 
+  it('re-checks under kick dev (bundle: null) without dev set', async () => {
+    const root = dir({ a: 'one' })
+    const views = createViews({ viewsDir: root, bundle: null })
+    expect(await views.render('a')).toBe('one')
+    writeFileSync(join(root, 'a.kick'), 'two')
+    const later = new Date(Date.now() + 5000)
+    utimesSync(join(root, 'a.kick'), later, later)
+    expect(await views.render('a')).toBe('two')
+  })
+
   it('bundle loader', async () => {
     const project = {
       templates: new Map([['home', parse('<h1>{{ t | uppercase }}</h1>', 'home.kick').ast]]),
