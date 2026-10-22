@@ -1,6 +1,6 @@
 # kickjs-devtools
 
-## Unreleased
+## 5.5.0
 
 - Renaming a page's `.kick` file (or its folder) updates the `ctx.render('…')` and `views.render('…')` calls that name it.
 - In TypeScript and JavaScript, `ctx.render('…')` names go to their template (Go to Definition) and get a warning when no template has that name. Templates you save re-check open controllers.
