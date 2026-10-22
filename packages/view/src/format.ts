@@ -15,6 +15,8 @@ export interface FormatOptions {
 }
 
 const RAW = new Set(['pre', 'textarea', 'script', 'style'])
+/** Text up to its own closing tag: tag-like text inside isn't structure. */
+const RCDATA = new Set(['<title', '<textarea'])
 const VOID = new Set(
   'area base br col embed hr img input link meta param source track wbr'.split(' '),
 )
@@ -184,6 +186,8 @@ function reindent(source: string, ranges: Range[], unit: string): string {
       if (line.slice(last, m.index).trim()) leading = false
       last = m.index + m[0].length
       const [tok, closeTag, openTag, selfClose] = m
+      const top = stack.at(-1)?.key
+      if (top && RCDATA.has(top) && `<${closeTag?.toLowerCase()}` !== top) continue
       const i =
         tok === '}' ? lastIndex('{') : closeTag ? lastIndex(`<${closeTag.toLowerCase()}`) : -1
       if (i >= 0 && !leading && stack[i]!.line < n) {

@@ -35,6 +35,10 @@ describe('format', () => {
       '<head>\n  <slot name="head">\n    <title>t</title>\n  </slot>\n</head>\n',
     )
     expect(fmt('@if (a) {\n<p>a</p> }\n')).toBe('@if (a) {\n  <p>a</p>\n}\n')
+    // Tag-like text inside <title> (RCDATA) is text, not a closer.
+    expect(fmt('<x>\n<title>text </x> more</title>\n</x>\n')).toBe(
+      '<x>\n  <title>text </x> more</title>\n</x>\n',
+    )
     // Opened and closed on one line: left alone.
     expect(fmt('<p><b>x</b></p>\n')).toBe('<p><b>x</b></p>\n')
   })
