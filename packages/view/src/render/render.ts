@@ -35,6 +35,8 @@ export interface RenderEnv {
   assets?(entry: string, data: Record<string, unknown>): string
   /** A component with a `<script client>` rendered: the page ships its script. */
   clientScript?(t: CheckedTemplate): void
+  /** A template with a `validate` field rendered: the page ships the validator script. */
+  validation?(): void
 }
 
 export class RenderError extends Error {
@@ -431,6 +433,7 @@ class Renderer {
     }
     const t = this.env.resolve(n.n)
     if (t.client) this.env.clientScript?.(t)
+    if (t.validates) this.env.validation?.()
     const slots: unknown[] = Array.from({ length: t.slots })
     for (const i of t.inputs) if (i.d !== undefined) slots[i.s] = i.d
     for (const i of n.in) slots[i.s] = this.value(i.e, caller)
@@ -504,6 +507,8 @@ export function render(
     if (base && base !== template.name && !chain.some((t) => t.name === base))
       chain.push(env.resolve(base))
   }
+  // The page and its layouts always render; components report as they do.
+  if (template.validates || chain.some((t) => t.validates)) env.validation?.()
   if (!chain.length) {
     r.nodes(template.body, page)
     return r.html()

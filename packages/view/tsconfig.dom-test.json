@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  // Tests that run in happy-dom. Kept apart: DOM types clash with Node's in core's sources.
+  "include": ["__tests__/validate-runtime.test.ts", "__tests__/toast-guide.test.ts"]
+}

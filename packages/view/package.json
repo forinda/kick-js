@@ -45,7 +45,6 @@
     "clean": "rm -rf dist .wireit",
     "bench": "vitest run --config vitest.bench.config.ts"
   },
-  "dependencies": {},
   "peerDependencies": {
     "@forinda/kickjs": "workspace:^"
   },
@@ -67,6 +66,7 @@
     "express": "^5.3.0",
     "fastify": "^5.12.7",
     "h3": "2.0.2",
+    "happy-dom": "^21.0.4",
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.3.1",
     "typescript": "^7.0.2",

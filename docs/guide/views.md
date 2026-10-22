@@ -311,6 +311,86 @@ A component can carry its own browser code. Pages that render it get one small s
 - **Serving.** `KickView` serves the scripts on Express, Fastify and h3. On the web fetch entry, call `clientScriptResponse` ahead of the app: `fetch: async (req) => (await clientScriptResponse(views, req)) ?? web.fetch(req)`. The path is `clientScriptPath` (default `/_kick/c`).
 - **Swapped HTML.** A custom element starts whenever it lands in the page, so components inside HTML swapped in by htmx or Turbo work without extra code.
 
+### Toast messages
+
+A toast for flash messages, built as a component with a script. Copy it into your app and style it as you like; KickJS doesn't ship UI components.
+
+```kick
+{{-- src/views/components/flash-toast.kick --}}
+@input message
+@input kind = 'info'
+@input position = 'top-right'
+@input timeout = 5000
+<kick-toast popover="manual" role="status" kind="{{ kind }}" position="{{ position }}" timeout="{{ timeout }}">
+  <p>{{ message }}</p>
+  <button type="button" data-close aria-label="Dismiss">×</button>
+</kick-toast>
+
+<script client>
+  class KickToast extends HTMLElement {
+    private timer = 0
+
+    connectedCallback(): void {
+      // The popover top layer: above everything, no z-index needed.
+      this.showPopover?.()
+      this.querySelector('[data-close]')?.addEventListener('click', () => this.remove())
+      const ms = Number(this.getAttribute('timeout'))
+      if (ms > 0) {
+        const pause = () => window.clearTimeout(this.timer)
+        // One timer at a time: hover and focus can resume it twice in a row.
+        const start = () => {
+          pause()
+          this.timer = window.setTimeout(() => this.remove(), ms)
+        }
+        // Readers get time: hovering or focusing it holds the toast.
+        this.addEventListener('mouseenter', pause)
+        this.addEventListener('mouseleave', start)
+        this.addEventListener('focusin', pause)
+        this.addEventListener('focusout', start)
+        start()
+      }
+    }
+  }
+  customElements.get('kick-toast') || customElements.define('kick-toast', KickToast)
+</script>
+```
+
+In the layout, one toast per flash kind (`info`, `success`, `warn`, `error`):
+
+```kick
+@for ([kind, message] of $flash | entries; track kind) {
+  <flash-toast [kind]="kind" [message]="message" />
+}
+```
+
+```css
+kick-toast {
+  position: fixed;
+  margin: 0;
+  inset: auto;
+}
+kick-toast[position='top-right'] {
+  top: 1rem;
+  right: 1rem;
+}
+kick-toast[position='bottom-left'] {
+  bottom: 1rem;
+  left: 1rem;
+}
+kick-toast[kind='success'] {
+  border-left: 4px solid green;
+}
+kick-toast[kind='error'] {
+  border-left: 4px solid crimson;
+}
+```
+
+- **Position and kind** are attributes, so CSS places and colours each toast; add the corners you use.
+- **The timeout** is in milliseconds; `[timeout]="0"` keeps a toast until it's dismissed. Hover and focus pause it.
+- **Several toasts** stack in the order they render; give later ones an offset in CSS if they share a corner.
+- **Screen readers** announce what changes in a `role="status"` region; a toast already in the page when it loads usually isn't read out. For flash messages after a redirect, fill the `<p>` from the script after `showPopover()` (keep the text in an attribute) if announcements matter.
+- **Without JavaScript** a `popover` element stays hidden. Leave `popover` off and position the toast with CSS alone if the message must show without scripts.
+
 ## Pipes
 
 | pipe                                  | example                                                                                                                                      |
@@ -395,7 +475,7 @@ async create(ctx: RequestContext) {
 <form method="post" action="/products">
   <input name="title">
   @error('title') {
-    <p class="field-error">{{ $message }}</p>
+    <b class="field-error">{{ $message }}</b>
   }
   <textarea name="description"></textarea>
   <button>Save</button>
@@ -417,6 +497,27 @@ async create(ctx: RequestContext) {
   ```
 
 - **Field names are flat** (`title`, `email`) for now. Nested names (`items[0][name]`) and lists of values (a group of checkboxes with one name) aren't refilled yet.
+
+### Checking in the browser
+
+Add `validate` to a field for instant feedback, before the form is sent. It writes into the same `@error` spot the server's message uses:
+
+```kick
+<input name="email" validate="required | email">
+@error('email') {
+  <b>{{ $message }}</b>
+}
+<input name="title" validate="required | minLength:3 | maxLength:120">
+@error('title') {
+  <b>{{ $message }}</b>
+}
+```
+
+- **Validators:** `required`, `email`, `url` (http or https), `minLength:n` and `maxLength:n` (characters), `min:n` and `max:n` (numbers), `pattern:'regex'` (the whole value), `in:'a, b, c'`. An empty field passes everything except `required`. An unknown validator or a wrong argument fails the check.
+- **When it runs:** when the field loses focus, then as it changes once it has been checked, and on submit. A submit with an invalid field is stopped and the first one gets focus. `required` on a radio or checkbox passes when any one in the group with that name is checked. The browser's own checks on the same form (a plain `required`, `type="email"`) still run after these pass; forms without a `validate` field are left entirely to the browser.
+- **Where messages go:** `@error('field')` always renders a `<span data-kick-error="field" aria-live="polite">` spot, hidden while there's no error: the server's message in it after a failed submit, the browser's while typing. Because it's a `<span>`, keep the body inline (text, `<b>`, `<small>`); a `<p>`, `<li>` or `<tr>` inside it is invalid HTML, and in a table the browser moves it out. Style it with `[data-kick-error]:not([hidden])`, so empty spots stay hidden. The field gets `aria-invalid` and `aria-describedby` pointing at its message, and `setCustomValidity`, so `:user-invalid` works in CSS.
+- **What ships:** a page with a `validate` field gets one small validator script (`/_kick/c/kick-validate.<hash>.js`); pages without one get none.
+- **The server still decides.** These checks are for quick feedback; route validation in the controller is what counts, and its messages can differ.
 
 ## Shared data
 
