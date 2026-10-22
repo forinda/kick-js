@@ -1,6 +1,6 @@
 # kickjs-devtools
 
-## Unreleased
+## 5.4.1
 
 - The `.kick` language server starts with the first `.kick` file, one in the workspace or the first you open, instead of in every KickJS workspace.
 - Pages re-check as soon as you open or edit a component's buffer, and again when you close it without saving.
