@@ -27,3 +27,18 @@ describe('createKickServicePlugin', () => {
     ).toBeUndefined()
   })
 })
+
+describe('formatting', () => {
+  it('formats the root document with the editor tab size', async () => {
+    const ws = await workspaceOf({ 'src/views/page.kick': '' })
+    const service = createKickServicePlugin(ws).create({} as never)
+    const edits = await service.provideDocumentFormattingEdits!(
+      doc(uri('page'), '@if(a){\n<p>x</p>\n}'),
+      {} as never,
+      { tabSize: 4, insertSpaces: true },
+      undefined,
+      {} as never,
+    )
+    expect(edits![0]!.newText).toBe('@if (a) {\n    <p>x</p>\n}\n')
+  })
+})

@@ -1,12 +1,13 @@
 /**
- * The kick service plugin: diagnostics, completion, hover and go to
- * definition on the root `.kick` document. The embedded HTML / CSS / JS
+ * The kick service plugin: diagnostics, completion, hover, go to definition
+ * and formatting on the root `.kick` document. The embedded HTML / CSS / JS
  * codes are left to their own services.
  */
 import type { LanguageServicePlugin } from '@volar/language-service'
 import type { Workspace } from '../workspace'
 import { completions } from './completion'
 import { definition } from './definition'
+import { formatEdits } from './format'
 import { createDiagnosticsPlugin } from './diagnostics'
 import { hover } from './hover'
 
@@ -19,6 +20,7 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
       completionProvider: { triggerCharacters: ['@', '|', '<', '[', "'", '"'] },
       hoverProvider: true,
       definitionProvider: true,
+      documentFormattingProvider: true,
     },
     create(context) {
       return {
@@ -42,6 +44,11 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
           ws.sync(document.uri, document.getText())
           const link = definition(ws, document.uri, document.getText(), document.offsetAt(position))
           return link ? [link] : undefined
+        },
+        provideDocumentFormattingEdits(document, _range, options) {
+          if (document.languageId !== 'kick') return undefined
+          const file = `${ws.nameOf(document.uri) ?? 'template'}.kick`
+          return formatEdits(ws.view, document.getText(), file, options.tabSize)
         },
       }
     },

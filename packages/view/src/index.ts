@@ -7,3 +7,4 @@ import { useFileLoader } from './views'
 useFileLoader(() => import('./loaders/file'))
 
 export * from './exports'
+export { format, type FormatOptions } from './format'
