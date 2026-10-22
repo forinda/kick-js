@@ -392,6 +392,10 @@ class Checker {
   /** Write an element's opening tag; returns it when its children and closing tag follow. */
   private element(el: Element, out: CNode[]): Element | undefined {
     const lower = el.tag.toLowerCase()
+    if (isClientScript(el)) {
+      this.err(el.span, '<script client> must be at the top level of the component')
+      return undefined
+    }
     if (!el.foreign && lower.includes('-')) {
       const names = this.tags.get(lower)
       if (names && names.length > 1) {
@@ -402,10 +406,12 @@ class Checker {
         this.call(el, names[0]!, out)
         return undefined
       }
-      this.warn(
-        el.span,
-        `<${lower}> isn't a component (no ${this.project.componentsDir}/…/${lower}.kick) — it's output as a custom element`,
-      )
+      // A component with a client script renders the custom elements it defines.
+      if (!this.hasClientScript)
+        this.warn(
+          el.span,
+          `<${lower}> isn't a component (no ${this.project.componentsDir}/…/${lower}.kick) — it's output as a custom element`,
+        )
     }
     const attrs = this.attrs(el)
     const refill = this.refill(el, attrs)
@@ -493,6 +499,9 @@ class Checker {
 
   /** The single root element of a component, which takes fallthrough attributes. */
   rootElement?: Element
+
+  /** The component has a `<script client>`: its custom elements are expected. */
+  hasClientScript = false
 
   private attrs(el: Element): CAttr[] {
     const tag = el.tag
@@ -735,6 +744,17 @@ class Checker {
 }
 
 /** Top-level elements, or -1 per other non-whitespace output (text, blocks). */
+/** `import … from`, `export … from` or `import(`: a client script needs bundling for those. */
+const IMPORTS = /(^|[\n;])\s*import[\s{*'"]|\bimport\s*\(|(^|[\n;])\s*export\s[^\n;]*\bfrom\s*['"]/
+
+function isClientScript(n: Node): boolean {
+  return (
+    n.k === 'element' &&
+    n.tag.toLowerCase() === 'script' &&
+    n.attrs.some((a) => a.name.toLowerCase() === 'client' && a.kind === 'bare')
+  )
+}
+
 function rootElements(body: Node[]): Array<Element | null> {
   const roots: Array<Element | null> = []
   for (const n of body) {
@@ -780,8 +800,48 @@ export function check(name: string, project: Project): CheckResult {
   c.slots = inputs.length
   for (const i of inputs) c.bind(i.n, { kind: 'slot', s: i.s })
 
+  // `<script client>`: the component's browser code, shipped as a module of
+  // its own — lifted out of the template before anything else looks at it.
+  const top: Node[] = []
+  let client: CheckedTemplate['client']
+  for (const n of ast.body) {
+    if (n.k !== 'element' || !isClientScript(n)) {
+      top.push(n)
+      continue
+    }
+    if (!component) {
+      c.diagnostics.push(
+        error(
+          ast.file,
+          n.span,
+          `<script client> is only for components (src/views/${project.componentsDir}/…)`,
+        ),
+      )
+      continue
+    }
+    if (client) {
+      c.diagnostics.push(error(ast.file, n.span, 'a component has one <script client>'))
+      continue
+    }
+    if (n.children.some((ch) => ch.k !== 'text')) {
+      c.diagnostics.push(
+        error(ast.file, n.span, "<script client> can't use {{ }} — pass data through attributes"),
+      )
+      continue
+    }
+    const code = n.children.map((ch) => (ch.k === 'text' ? ch.value : '')).join('')
+    if (IMPORTS.test(code)) {
+      c.diagnostics.push(
+        error(ast.file, n.span, "client scripts can't import yet — keep the script self-contained"),
+      )
+      continue
+    }
+    client = { code, js: false }
+  }
+
+  c.hasClientScript = client !== undefined
   if (component) {
-    const roots = rootElements(ast.body)
+    const roots = rootElements(top)
     if (roots.length === 1 && roots[0]) c.rootElement = roots[0]
   }
 
@@ -789,7 +849,7 @@ export function check(name: string, project: Project): CheckResult {
   const fills: Record<string, CNode[]> = {}
   const body: Node[] = []
   const fillNodes: Array<Extract<Node, { k: 'slot-fill' }>> = []
-  for (const n of ast.body) {
+  for (const n of top) {
     if (n.k === 'slot-fill' && !component) fillNodes.push(n)
     else body.push(n)
   }
@@ -848,6 +908,7 @@ export function check(name: string, project: Project): CheckResult {
   }
   template.slots = c.slots
   if (ast.layout !== undefined) template.layout = ast.layout
+  if (client) template.client = client
   const failed = c.diagnostics.some((d) => d.severity === 'error')
   return failed ? { diagnostics: c.diagnostics } : { template, diagnostics: c.diagnostics }
 }
