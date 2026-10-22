@@ -51,19 +51,22 @@ function digits(info: unknown): Intl.NumberFormatOptions {
   }
 }
 
-/** Intl formatters are costly to build: one per locale and options, reused. */
+/**
+ * Intl formatters are costly to build: one per locale and options, reused.
+ * Locales and pipe arguments can come from a request or data, so the cache
+ * is capped — past the limit it starts over rather than growing.
+ */
+export const FORMATTER_CACHE_LIMIT = 256
 const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>()
-function numberFormat(locale: string, opts: Intl.NumberFormatOptions): Intl.NumberFormat {
-  const key = `n|${locale}|${JSON.stringify(opts)}`
-  let f = formatters.get(key) as Intl.NumberFormat | undefined
-  if (!f) formatters.set(key, (f = new Intl.NumberFormat(locale, opts)))
+export const formatterCacheSize = (): number => formatters.size
+function remember<T extends Intl.NumberFormat | Intl.DateTimeFormat>(key: string, f: T): T {
+  if (formatters.size >= FORMATTER_CACHE_LIMIT) formatters.clear()
+  formatters.set(key, f)
   return f
 }
-function dateFormat(locale: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  const key = `d|${locale}|${JSON.stringify(opts)}`
-  let f = formatters.get(key) as Intl.DateTimeFormat | undefined
-  if (!f) formatters.set(key, (f = new Intl.DateTimeFormat(locale, opts)))
-  return f
+/** The formatter cached under `key`, built by `make` on a miss. Keys are cheap strings, not serialised options. */
+function cached<T extends Intl.NumberFormat | Intl.DateTimeFormat>(key: string, make: () => T): T {
+  return (formatters.get(key) as T | undefined) ?? remember(key, make())
 }
 
 const toNumber = (v: unknown): number | undefined => {
@@ -96,29 +99,40 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
       if (Number.isNaN(d.getTime())) return ''
       const preset = DATE_FORMATS[String(format)]
       if (!preset) throw new Error(`unknown date format '${String(format)}'`)
-      return dateFormat(env.locale, {
-        ...preset,
-        timeZone: (timeZone as string | undefined) ?? env.timeZone,
-      }).format(d)
+      const tz = (timeZone as string | undefined) ?? env.timeZone
+      return cached(
+        `d|${env.locale}|${String(format)}|${tz}`,
+        () => new Intl.DateTimeFormat(env.locale, { ...preset, timeZone: tz }),
+      ).format(d)
     },
     number: (v, info) => {
       const n = toNumber(v)
-      return n === undefined ? '' : numberFormat(env.locale, digits(info)).format(n)
+      if (n === undefined) return ''
+      return cached(
+        `n|${env.locale}|${String(info)}`,
+        () => new Intl.NumberFormat(env.locale, digits(info)),
+      ).format(n)
     },
     currency: (v, code, info) => {
       const n = toNumber(v)
       if (n === undefined) return ''
-      return numberFormat(env.locale, {
-        style: 'currency',
-        currency: String(code ?? 'USD'),
-        ...digits(info),
-      }).format(n)
+      return cached(
+        `c|${env.locale}|${String(code)}|${String(info)}`,
+        () =>
+          new Intl.NumberFormat(env.locale, {
+            style: 'currency',
+            currency: String(code ?? 'USD'),
+            ...digits(info),
+          }),
+      ).format(n)
     },
     percent: (v, info) => {
       const n = toNumber(v)
-      return n === undefined
-        ? ''
-        : numberFormat(env.locale, { style: 'percent', ...digits(info) }).format(n)
+      if (n === undefined) return ''
+      return cached(
+        `p|${env.locale}|${String(info)}`,
+        () => new Intl.NumberFormat(env.locale, { style: 'percent', ...digits(info) }),
+      ).format(n)
     },
   }
 }

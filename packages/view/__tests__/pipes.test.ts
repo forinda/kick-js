@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { BUILTIN_PIPES, builtinPipes, pipesFor, safeHtml, withEnv } from '../src/pipes/env'
+import { FORMATTER_CACHE_LIMIT, formatterCacheSize } from '../src/pipes/builtins'
 import { readPipeExports } from '../src/pipes/read-exports'
 import { parse } from '../src/parse/template'
 import { check } from '../src/check/check'
@@ -63,6 +64,22 @@ describe('pipes', () => {
     expect(p.number!(5, '3.2-2')).toBe('005.00')
     expect(p.number!(1234.5)).toBe('1,234.5')
     expect(builtinPipes({ ...env, locale: 'de-DE' }).number!(1234.5, '1.2-2')).toBe('1.234,50')
+  })
+
+  it('the formatter cache stays bounded', () => {
+    // Pipe arguments and locales can come from data or a request.
+    for (let i = 0; i < FORMATTER_CACHE_LIMIT * 3; i++) {
+      p.number!(1, `1.0-${i % 20}`)
+      p.currency!(i, 'KES', `${(i % 20) + 1}.0-0`)
+      builtinPipes({ locale: i % 2 ? 'en-US' : 'en-GB', timeZone: 'UTC' }).percent!(0.5, `1.0-${i}`)
+    }
+    for (let i = 0; i < 400; i++)
+      builtinPipes({ locale: 'en-US', timeZone: 'UTC' }).date!(
+        new Date(0),
+        'short',
+        `Etc/GMT${i % 2 ? '+' : '-'}${i % 12}`,
+      )
+    expect(formatterCacheSize()).toBeLessThanOrEqual(FORMATTER_CACHE_LIMIT)
   })
 
   it('formats and slices', () => {
