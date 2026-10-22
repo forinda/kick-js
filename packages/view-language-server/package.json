@@ -1,0 +1,66 @@
+{
+  "name": "@forinda/kickjs-view-language-server",
+  "version": "0.0.0",
+  "description": "Language server for KickJS .kick views — diagnostics, completion, hover, definition and formatting from the runtime's own parser and checker",
+  "keywords": [
+    "kickjs",
+    "views",
+    "language-server",
+    "lsp",
+    "volar"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "kick-view-ls": "./bin/kick-view-ls.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@volar/test-utils": "~2.4.28",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://kickjs.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/view-language-server"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  },
+  "dependencies": {
+    "@forinda/kickjs-view": "workspace:^",
+    "@volar/language-core": "~2.4.28",
+    "@volar/language-server": "~2.4.28",
+    "@volar/language-service": "~2.4.28",
+    "volar-service-css": "~0.0.71",
+    "volar-service-emmet": "~0.0.71",
+    "volar-service-html": "~0.0.71",
+    "vscode-uri": "^3.2.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@forinda/kickjs-view": ["../view/src/index.ts"],
+      "@forinda/kickjs-view/*": ["../view/src/*"],
+      "@forinda/kickjs": ["../kickjs/src/index.ts"],
+      "@forinda/kickjs/fastify": ["../kickjs/src/http/runtimes/fastify.ts"],
+      "@forinda/kickjs/h3": ["../kickjs/src/http/runtimes/h3.ts"],
+      "@forinda/kickjs/web": ["../kickjs/src/web.ts"]
+    }
+  },
+  "include": ["src", "__tests__"]
+}
