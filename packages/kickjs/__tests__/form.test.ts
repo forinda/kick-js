@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest'
+import { fieldErrors, flash, oldInput } from '../src/http/form'
+
+describe('flash', () => {
+  it('flash merges into the session and throws without one', () => {
+    const ctx = { session: { data: {} as Record<string, unknown> } }
+    flash(ctx, { success: 'a' })
+    flash(ctx, { info: 'b' })
+    expect(ctx.session.data.__inertia_flash).toEqual({ success: 'a', info: 'b' })
+    expect(() => flash({}, {})).toThrow('flash() needs the session() middleware.')
+  })
+})
+
+describe('fieldErrors', () => {
+  it('fieldErrors keeps the first message per field', () => {
+    expect(
+      fieldErrors([
+        { field: 'title', message: 'Too short' },
+        { field: 'title', message: 'x' },
+        { field: '', message: 'Bad form' },
+      ]),
+    ).toEqual({ title: 'Too short', form: 'Bad form' })
+    expect(fieldErrors('x')).toBeNull()
+  })
+})
+
+describe('oldInput', () => {
+  it('oldInput keeps strings, leaves out secrets, files and long fields', () => {
+    expect(
+      oldInput({
+        title: 'Hi',
+        tags: ['a', 'b'],
+        password: 'p',
+        api_token: 't',
+        card_number: '4',
+        _csrf: 'c',
+        photo: { name: 'f.png' },
+        bio: 'x'.repeat(1001),
+      }),
+    ).toEqual({ title: 'Hi', tags: ['a', 'b'] })
+  })
+  it('drops all old input over the total cap', () => {
+    expect(oldInput({ a: 'x'.repeat(900), b: 'y'.repeat(900), c: 'z'.repeat(900) })).toBeUndefined()
+  })
+})
