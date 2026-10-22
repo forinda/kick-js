@@ -57,6 +57,16 @@ describe('KickVirtualCode', () => {
     expect(h.mappings.some((x) => x.sourceOffsets[0] === 0)).toBe(false)
   })
 
+  it('client scripts embed as TypeScript', () => {
+    const codes = code(
+      '<script client>const a: number = 1</script><script>let b</script>',
+    ).embeddedCodes
+    expect(codes.filter((c) => c.id.startsWith('js_')).map((c) => c.languageId)).toEqual([
+      'typescript',
+      'javascript',
+    ])
+  })
+
   it('styles and scripts are embedded', () => {
     const c = code(
       '<style>a{color:red}</style><script>go()</script><script type="application/json">{{ d | json }}</script>',

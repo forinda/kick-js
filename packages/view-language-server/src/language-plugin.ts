@@ -42,7 +42,8 @@ type Range = [number, number]
 interface Scan {
   blank: Range[]
   styles: Range[]
-  scripts: Range[]
+  /** A script's range, and whether it's a `<script client>` (TypeScript). */
+  scripts: Array<{ range: Range; ts: boolean }>
 }
 
 /** The end of a `(`…`)` group starting at `i` (at `(`); the text's end when unclosed. */
@@ -248,7 +249,9 @@ function tag(s: string, i: number, out: Scan): number {
     }
   }
   if (name === 'style') out.styles.push([j, end])
-  else if (type !== 'application/json' && type !== 'application/ld+json') out.scripts.push([j, end])
+  else if (type !== 'application/json' && type !== 'application/ld+json')
+    // `<script client>`: a component's browser code, written in TypeScript.
+    out.scripts.push({ range: [j, end], ts: /\sclient(?=[\s/>=]|$)/i.test(s.slice(i, j)) })
   return end
 }
 
@@ -307,7 +310,9 @@ export class KickVirtualCode implements VirtualCode {
     this.embeddedCodes = [
       { id: 'html', languageId: 'html', snapshot: snapshotOf(html), mappings: htmlMappings },
       ...styles.map((r, n) => embedded(`css_${n}`, 'css', text, r)),
-      ...scripts.map((r, n) => embedded(`js_${n}`, 'javascript', text, r)),
+      ...scripts.map((c, n) =>
+        embedded(`js_${n}`, c.ts ? 'typescript' : 'javascript', text, c.range),
+      ),
     ]
   }
 }
