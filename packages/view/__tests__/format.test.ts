@@ -26,7 +26,33 @@ describe('format', () => {
       '<ul>\n  @for (x of xs) {\n    <li>{{ x }}</li>\n  }\n</ul>\n',
     )
     expect(fmt('@if(a){\n<p>{{ a|uppercase }}</p>\n}@else{\n<p>c</p>\n}\n')).toBe(
-      '@if (a) {\n  <p>{{ a|uppercase }}</p>\n} @else {\n  <p>c</p>\n}\n',
+      '@if (a) {\n  <p>{{ a | uppercase }}</p>\n} @else {\n  <p>c</p>\n}\n',
+    )
+  })
+
+  it('puts a closer on its own line when its opener is on an earlier one', () => {
+    expect(fmt('<head>\n<slot name="head">\n<title>t</title></slot>\n</head>\n')).toBe(
+      '<head>\n  <slot name="head">\n    <title>t</title>\n  </slot>\n</head>\n',
+    )
+    expect(fmt('@if (a) {\n<p>a</p> }\n')).toBe('@if (a) {\n  <p>a</p>\n}\n')
+    // Tag-like text inside <title> (RCDATA) is text, not a closer.
+    expect(fmt('<x>\n<title>text </x> more</title>\n</x>\n')).toBe(
+      '<x>\n  <title>text </x> more</title>\n</x>\n',
+    )
+    // Opened and closed on one line: left alone.
+    expect(fmt('<p><b>x</b></p>\n')).toBe('<p><b>x</b></p>\n')
+  })
+
+  it('spaces pipes in interpolations and block headers', () => {
+    expect(fmt("<p>{{title|titlecase}} {{ at  |date:'short'| uppercase }}</p>\n")).toBe(
+      "<p>{{ title | titlecase }} {{ at | date:'short' | uppercase }}</p>\n",
+    )
+    expect(fmt('@for([k, v] of obj|entries){\n{{ k }}\n}\n')).toBe(
+      '@for ([k, v] of obj | entries) {\n  {{ k }}\n}\n',
+    )
+    // `||` and a `|` inside a string stay as written.
+    expect(fmt("<p>{{ a||b }} {{ 'x|y'|uppercase }}</p>\n")).toBe(
+      "<p>{{ a||b }} {{ 'x|y' | uppercase }}</p>\n",
     )
   })
 
