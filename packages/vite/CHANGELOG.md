@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.2.0
+
+### Minor Changes
+
+- [#1011](https://github.com/forinda/kick-js/pull/1011) [`5bffa66`](https://github.com/forinda/kick-js/commit/5bffa66befe08d3e2385e5dad989c0b85fad6434) Thanks [@forinda](https://github.com/forinda)! - `virtual:kick-views`, for `.kick` templates. `kick build` checks every template and ships them in the build, and a broken template fails the build. In dev, templates are read from disk and the pipes file loads through Vite. Pass `views: false` to `kickjsVitePlugin` to leave it out.
+
 ## 8.1.2
 
 ### Patch Changes
