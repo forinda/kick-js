@@ -15,7 +15,9 @@ npx kick-view-ls --stdio
 
 ### Highlighting
 
+::: v-pre
 The server sends semantic tokens for the template syntax: `@if` and the other keywords, `{{ }}` and `|`, names and properties, pipes, component tags, `@input` names, strings, numbers and `{{-- --}}` comments. They use standard token types, so your theme colours them. Editors that show semantic tokens highlight templates without a grammar:
+:::
 
 - **Neovim:** on by default.
 - **JetBrains IDEs (LSP4IJ):** on by default.
