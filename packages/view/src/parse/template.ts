@@ -625,10 +625,38 @@ class TemplateParser {
         segments: [{ computed: { kind: 'literal', value: field, span: at }, optional: true }],
         span: at,
       }
-      const branch: IfBranch = { cond, alias: '$message', body: [] }
-      const node: Node = { k: 'if', branches: [branch], span: this.span(i, brace) }
+      // Either way a `<span data-kick-error>` spot, so the validator script
+      // has somewhere to write when the server sent no error.
+      const spot = (hidden: boolean): Element => ({
+        k: 'element',
+        tag: 'span',
+        attrs: [
+          { name: 'data-kick-error', kind: 'static', parts: [field], quoted: true, span: at },
+          // A live region from the first render: screen readers announce what lands in it.
+          { name: 'aria-live', kind: 'static', parts: ['polite'], quoted: true, span: at },
+          ...(hidden ? [{ name: 'hidden', kind: 'bare' as const, quoted: false, span: at }] : []),
+        ],
+        children: [],
+        foreign: false,
+        void: false,
+        selfClosing: false,
+        span: at,
+      })
+      const shown = spot(false)
+      const branch: IfBranch = { cond, alias: '$message', body: [shown] }
+      const node: Node = {
+        k: 'if',
+        branches: [branch, { body: [spot(true)] }],
+        span: this.span(i, brace),
+      }
       this.emit(node)
-      this.frames.push({ type: 'block', children: branch.body, node, keyword: 'error', start: i })
+      this.frames.push({
+        type: 'block',
+        children: shown.children,
+        node,
+        keyword: 'error',
+        start: i,
+      })
     } else if (kw === 'switch') {
       const on = this.expr(p.src, p.at)
       const node: Extract<Node, { k: 'switch' }> = {

@@ -4,6 +4,7 @@
  * (`Symbol.for('kickjs.viewRenderer')`), so this module never imports
  * `@forinda/kickjs` at runtime — it stays edge-safe.
  */
+import { CLIENT_SCRIPT_HEADERS, clientScriptFile } from './serve'
 import { createViews, type Views, type ViewsOptions } from './views'
 
 const VIEW_RENDERER = Symbol.for('kickjs.viewRenderer')
@@ -38,12 +39,39 @@ function rendererFor(views: Views): Renderer {
       : undefined
 }
 
-/** Connect middleware binding `views` to each request (what the adapter mounts). */
+/** Node's response, which every runtime's middleware gets (Express's adds to it). */
+interface ScriptResponse {
+  statusCode: number
+  setHeader(name: string, value: string): unknown
+  end(body?: string): unknown
+}
+
+/**
+ * Connect middleware binding `views` to each request (what the adapter
+ * mounts), and answering component script requests.
+ */
 function bindViews(views: Views): (req: object, res: unknown, next: Next) => void {
   const renderer = rendererFor(views)
-  return (req, _res, next) => {
-    ;(req as Record<symbol, unknown>)[VIEW_RENDERER] = renderer
-    next()
+  return (req, res, next) => {
+    const r = req as { method?: string; url?: string } & Record<symbol, unknown>
+    const file = clientScriptFile(views, r.method, r.url ?? '/')
+    if (!file) {
+      r[VIEW_RENDERER] = renderer
+      return next()
+    }
+    views.clientScript(file).then(
+      (js) => {
+        if (js === undefined) {
+          r[VIEW_RENDERER] = renderer
+          return next()
+        }
+        const out = res as ScriptResponse
+        out.statusCode = 200
+        for (const [k, v] of Object.entries(CLIENT_SCRIPT_HEADERS)) out.setHeader(k, v)
+        out.end(String(r.method).toUpperCase() === 'HEAD' ? undefined : js)
+      },
+      (err: unknown) => next(err),
+    )
   }
 }
 

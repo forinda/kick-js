@@ -198,4 +198,8 @@ export interface CheckedTemplate {
   /** `@slot('name') { }` fills a page passes to its layout */
   fills: Record<string, CNode[]>
   body: CNode[]
+  /** a component's `<script client>`: TypeScript as written (`js: false`), or plain JS once a build stripped it */
+  client?: { code: string; js: boolean }
+  /** a field in it has `validate`: pages rendering it ship the validator script */
+  validates?: true
 }

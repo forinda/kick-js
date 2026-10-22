@@ -32,6 +32,7 @@ export { readPipeExports } from './pipes/read-exports'
 export {
   createViews,
   useFileLoader,
+  useStripTypes,
   bundleLoader,
   type Loader,
   type RenderOptions,
@@ -41,3 +42,4 @@ export {
 } from './views'
 export { KickView, viewsMiddleware, type KickViewOptions } from './adapter'
 export { assetTags, type AssetsMode, type ViteManifest, type ViteManifestChunk } from './assets'
+export { clientScriptResponse } from './serve'

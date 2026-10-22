@@ -88,6 +88,17 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       }
       if (r.template) checked[name] = r.template
     }
+    // `<script client>` ships as plain JS: the edge never strips types.
+    for (const [name, t] of Object.entries(checked) as Array<
+      [string, { client?: { code: string; js: boolean } }]
+    >) {
+      if (!t.client || t.client.js) continue
+      try {
+        t.client = { code: await stripTs(t.client.code, `${name}.ts`), js: true }
+      } catch (err) {
+        errors.push(`${name}.kick — <script client>: ${(err as Error).message}`)
+      }
+    }
     if (errors.length)
       ctx.error(`.kick templates have errors:\n  ${[...new Set(errors)].join('\n  ')}`)
     return JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked }, null, 1)
@@ -129,6 +140,19 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       ].join('\n')
     },
   }
+}
+
+/**
+ * TypeScript to JS with the running Vite: `transformWithOxc` from Vite 8,
+ * `transformWithEsbuild` before it (the plugin supports Vite 6 and up).
+ */
+async function stripTs(code: string, file: string): Promise<string> {
+  const vite = (await import('vite')) as typeof import('vite') & {
+    transformWithOxc?: typeof import('vite').transformWithOxc
+  }
+  if ('transformWithOxc' in vite && vite.transformWithOxc)
+    return (await vite.transformWithOxc(code, file, { lang: 'ts' })).code
+  return (await vite.transformWithEsbuild(code, file, { loader: 'ts' })).code
 }
 
 /** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */

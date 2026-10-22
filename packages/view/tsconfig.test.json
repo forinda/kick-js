@@ -12,5 +12,7 @@
       "@forinda/kickjs/web": ["../kickjs/src/web.ts"]
     }
   },
-  "include": ["src", "__tests__"]
+  "include": ["src", "__tests__"],
+  // Browser tests: checked by tsconfig.dom-test.json, with DOM types.
+  "exclude": ["__tests__/validate-runtime.test.ts", "__tests__/toast-guide.test.ts"]
 }
