@@ -6,7 +6,8 @@ import { emptyFormState, rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
-import { layoutResolver, templateName, type Project } from './check/project'
+import { componentTag, layoutResolver, templateName, type Project } from './check/project'
+import { CLIENT_SCRIPT_FILE, defaultStripTypes, fnv1a, injectScripts } from './client-scripts'
 import { parse } from './parse/template'
 import { BUILTIN_PIPES } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
@@ -69,10 +70,18 @@ export interface ViewsOptions {
    */
   assets?: (entry: string, data: Record<string, unknown>) => string
   warn?: (message: string) => void
+  /** Strips a `<script client>`'s TypeScript when a build hasn't. Default: Node's `stripTypeScriptTypes` (22.13+). */
+  stripTypes?: (code: string) => string | Promise<string>
+  /** Where component scripts are served. Default `'/_kick/c'`. */
+  clientScriptPath?: string
 }
 
 export interface Views {
   render(name: string, data?: object, opts?: RenderOptions & { ctx?: unknown }): Promise<string>
+  /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
+  clientScript(file: string): Promise<string | undefined>
+  /** The path component scripts are served under (`clientScriptPath`). */
+  readonly clientScriptPath: string
   /** Whether `name` is one of these views — `ctx.render` falls through to another engine when not. */
   has(name: string): Promise<boolean>
 }
@@ -127,6 +136,23 @@ export function createViews(options: ViewsOptions = {}): Views {
   const dev = options.dev ?? options.bundle === null
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
+  const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
+  const stripTypes = options.stripTypes ?? defaultStripTypes
+  /** Each component's served script, kept while its source stays the same. */
+  const scripts = new Map<string, { code: string; js: Promise<{ js: string; hash: string }> }>()
+  const scriptFor = (t: CheckedTemplate) => {
+    const client = t.client!
+    const hit = scripts.get(t.name)
+    if (hit?.code === client.code) return hit.js
+    const js = Promise.resolve(client.js ? client.code : stripTypes(client.code)).then((code) => ({
+      js: code,
+      hash: fnv1a(code),
+    }))
+    // A failed strip isn't kept: the next render tries again.
+    js.catch(() => scripts.get(t.name)?.js === js && scripts.delete(t.name))
+    scripts.set(t.name, { code: client.code, js })
+    return js
+  }
   const layoutFor = layoutResolver(options.layout)
   const warn = options.warn ?? ((m: string) => console.warn(`[kick/view] ${m}`))
   let loader: Promise<Loader> | undefined
@@ -252,7 +278,8 @@ export function createViews(options: ViewsOptions = {}): Views {
       const shared = options.share ? await options.share(opts.ctx) : {}
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
-      return render(
+      const used = new Map<string, CheckedTemplate>()
+      const html = render(
         template,
         // A controller's own `$errors` / `$old` (a re-render) win over the session's.
         { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data },
@@ -266,9 +293,37 @@ export function createViews(options: ViewsOptions = {}): Views {
           layoutFor,
           baseLayout: options.baseLayout,
           assets: options.assets,
+          clientScript: (t) => used.set(t.name, t),
         },
         { layout: opts.layout },
       )
+      if (!used.size) return html
+      const nonce = (data as { cspNonce?: unknown }).cspNonce
+      const nonceAttr = typeof nonce === 'string' ? ` nonce="${nonce.replace(/"/g, '&quot;')}"` : ''
+      const tags = await Promise.all(
+        [...used.values()].map(async (t) => {
+          const { hash } = await scriptFor(t)
+          const file = `${componentTag(t.name, componentsDir)}.${hash}.js`
+          return `<script type="module" src="${scriptPath}/${file}"${nonceAttr}></script>`
+        }),
+      )
+      return injectScripts(html, tags.join(''))
+    },
+    clientScriptPath: scriptPath,
+    async clientScript(file) {
+      const m = CLIENT_SCRIPT_FILE.exec(file)
+      if (!m) return undefined
+      const names = bundle
+        ? Object.keys(bundle.templates)
+        : [...(await current()).project.templates.keys()]
+      const name = names.find(
+        (n) => n.startsWith(`${componentsDir}/`) && componentTag(n, componentsDir) === m[1],
+      )
+      if (!name) return undefined
+      const t = bundle ? bundle.templates[name]! : checked(await current(), name)
+      if (!t.client) return undefined
+      const { js, hash } = await scriptFor(t)
+      return hash === m[2] ? js : undefined
     },
   }
 }

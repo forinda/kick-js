@@ -33,6 +33,8 @@ export interface RenderEnv {
   baseLayout?: string
   /** `@assets('entry')`: the tags for a Vite entry; `data` is the page's (for a CSP nonce). */
   assets?(entry: string, data: Record<string, unknown>): string
+  /** A component with a `<script client>` rendered: the page ships its script. */
+  clientScript?(t: CheckedTemplate): void
 }
 
 export class RenderError extends Error {
@@ -428,6 +430,7 @@ class Renderer {
       this.fail(caller, `components nest more than ${MAX_DEPTH} deep — is ${n.n} including itself?`)
     }
     const t = this.env.resolve(n.n)
+    if (t.client) this.env.clientScript?.(t)
     const slots: unknown[] = Array.from({ length: t.slots })
     for (const i of t.inputs) if (i.d !== undefined) slots[i.s] = i.d
     for (const i of n.in) slots[i.s] = this.value(i.e, caller)
