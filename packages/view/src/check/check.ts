@@ -43,6 +43,21 @@ const ANIMATION = new Set(['animate', 'set', 'animatemotion', 'animatetransform'
 const ANIMATION_VALUES = new Set(['values', 'to', 'from', 'by', 'attributename'])
 
 const JSON_SCRIPT_TYPES = new Set(['application/json', 'application/ld+json'])
+/** Names never refilled: the same rule `@forinda/kickjs`'s `oldInput` uses to leave them out. */
+const SECRET_FIELD = /pass(word)?|passwd|secret|token|card|cvv|cvc|csrf/i
+/** Input types that never refill. */
+const NO_REFILL = new Set(['password', 'file', 'hidden', 'submit', 'button', 'reset', 'image'])
+
+/** `$old?.[name]` */
+function oldOf(name: string): CExpr {
+  return { k: 'd', n: '$old', p: [{ e: { k: 'l', v: name }, o: 1 }] }
+}
+
+/** `e == value` */
+function equals(e: CExpr, value: string): CExpr {
+  return { k: 'b', o: '==', l: e, r: { k: 'l', v: value } }
+}
+
 const LOOP_VARS: ReadonlySet<string> = new Set([
   '$index',
   '$first',
@@ -204,6 +219,7 @@ class Checker {
       const f = stack[stack.length - 1]!
       if (f.i >= f.list.length) {
         stack.pop()
+        if (f.parent?.tag.toLowerCase() === 'select') this.select = undefined
         if (f.close) out.push({ k: 's', t: f.close })
         continue
       }
@@ -393,6 +409,7 @@ class Checker {
       )
     }
     const attrs = this.attrs(el)
+    const refill = this.refill(el, attrs)
     const dynamic = attrs.some((a) => a.t !== 's')
     if (dynamic || el === this.rootElement) {
       out.push({ k: 's', t: `<${el.tag}` })
@@ -410,7 +427,53 @@ class Checker {
       return undefined
     }
     out.push({ k: 's', t: '>' })
+    // An empty <textarea name> refills from `$old`.
+    if (refill && lower === 'textarea' && el.children.length === 0)
+      out.push({ k: 'i', c: 'rcdata', e: oldOf(refill), at: at(el.span) })
     return el
+  }
+
+  /** The `<select name>` being walked, for its options' refill. */
+  private select?: string
+
+  /**
+   * Refill from `$old` — what a failed submit sent — for a named form control
+   * the template doesn't set itself: `value`, `checked`, `selected`, or an
+   * empty `<textarea>`'s text. Never for secrets, files or hidden fields.
+   * Returns the field name when the control refills.
+   */
+  private refill(el: Element, attrs: CAttr[]): string | undefined {
+    if (el.foreign) return undefined
+    const tag = el.tag.toLowerCase()
+    const has = (n: string) => el.attrs.some((a) => a.name.toLowerCase() === n)
+    const stat = (n: string) => {
+      const a = el.attrs.find((x) => x.name.toLowerCase() === n && x.kind === 'static')
+      return a ? String(a.parts?.[0] ?? '') : undefined
+    }
+    if (tag === 'option') {
+      const value = stat('value')
+      if (this.select === undefined || value === undefined || has('selected')) return undefined
+      attrs.push({ t: 'b', n: 'selected', e: equals(oldOf(this.select), value) })
+      return undefined
+    }
+    if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return undefined
+    const name = stat('name')
+    if (!name || SECRET_FIELD.test(name)) return undefined
+    if (tag === 'select') {
+      this.select = name
+      return name
+    }
+    if (tag === 'textarea') return name
+    const type = (stat('type') ?? 'text').toLowerCase()
+    if (NO_REFILL.has(type)) return undefined
+    if (type === 'checkbox' || type === 'radio') {
+      if (has('checked')) return undefined
+      attrs.push({ t: 'b', n: 'checked', e: equals(oldOf(name), stat('value') ?? 'on') })
+      return name
+    }
+    if (has('value')) return undefined
+    attrs.push({ t: 'b', n: 'value', e: oldOf(name) })
+    return name
   }
 
   /** The single root element of a component, which takes fallthrough attributes. */

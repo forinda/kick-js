@@ -99,3 +99,51 @@ describe('@error', () => {
     expect(r.diagnostics.map((d) => d.message).join('\n')).toContain('@error')
   })
 })
+
+describe('refill from $old', () => {
+  const FORM = [
+    '<input name="title">',
+    '<textarea name="bio"></textarea>',
+    '<select name="kind"><option value="a">A</option><option value="b">B</option></select>',
+    '<input type="checkbox" name="agree">',
+    '<input type="radio" name="size" value="m">',
+  ].join('\n')
+  const page = (src: string) => createViews({ viewsDir: dir({ page: src }), warn: vi.fn() })
+
+  it('refills inputs, textareas, selects, checkboxes and radios', async () => {
+    const views = page(FORM)
+    const html = await views.render('page', {
+      $old: { title: 'Hi', bio: 'Me', kind: 'b', agree: 'on', size: 'm' },
+    })
+    expect(html).toContain('value="Hi"')
+    expect(html).toContain('>Me</textarea>')
+    expect(html).toContain('<option value="b" selected>')
+    expect(html).toContain('name="agree" checked')
+    expect(html).toContain('value="m" checked')
+    const empty = await views.render('page', { $old: {} })
+    for (const s of ['selected', 'checked', 'value="Hi"']) expect(empty).not.toContain(s)
+  })
+
+  it('escapes refilled values', async () => {
+    const html = await page('<input name="title">').render('page', {
+      $old: { title: '"><script>' },
+    })
+    expect(html).toContain('value="&quot;&gt;&lt;script&gt;"')
+  })
+
+  it('never overrides an explicit value or fills secrets', async () => {
+    const html = await page(
+      [
+        '<input name="title" value="Fixed">',
+        '<input type="password" name="pw">',
+        '<input name="api_token">',
+        '<input type="hidden" name="id" value="7">',
+      ].join('\n'),
+    ).render('page', { $old: { title: 'x', pw: 'p', api_token: 't', id: '9' } })
+    expect(html).toContain('value="Fixed"')
+    expect(html).toContain('<input type="password" name="pw">')
+    expect(html).toContain('<input name="api_token">')
+    expect(html).toContain('value="7"')
+    expect(html).not.toContain('value="9"')
+  })
+})
