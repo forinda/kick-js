@@ -313,6 +313,30 @@ describe('render', () => {
     expect(html('@for (r of rows) {<li>{{ r }}</li>}', { rows })).toContain('<li>9999</li>')
   })
 
+  it('entities in static attribute text are escaped once', () => {
+    expect(html('<a href="/x?a=1&amp;b={{ id }}">x</a>', { id: 2 })).toBe(
+      '<a href="/x?a=1&amp;b=2">x</a>',
+    )
+    expect(html('<p title="Tom &amp; Jerry" [class.on]="on">x</p>', { on: true })).toBe(
+      '<p title="Tom &amp; Jerry" class="on">x</p>',
+    )
+    expect(html('<p title="Tom &amp; Jerry">x</p>')).toBe('<p title="Tom &amp; Jerry">x</p>')
+    // Decoded before the scheme check: an encoded colon can't hide a javascript: URL.
+    for (const src of [
+      '<a href="{{ s }}&#58;alert(1)">x</a>',
+      '<a href="{{ s }}&#x3A;alert(1)">x</a>',
+      '<a href="{{ s }}&colon;alert(1)">x</a>',
+    ]) {
+      expect(html(src, { s: 'javascript' }), src).toBe('<a href="#">x</a>')
+    }
+    expect(
+      r({
+        page: '<x-t name="Tom &amp; Jerry" />',
+        'components/x-t': '@input name\n<b>{{ name }}</b>',
+      }).html,
+    ).toBe('<b>Tom &amp; Jerry</b>')
+  })
+
   it('errors carry the template position', () => {
     try {
       html('<p>\n  {{ x | upper2 }}</p>')

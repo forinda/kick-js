@@ -200,6 +200,17 @@ describe('parse', () => {
     expect((ann.children[0] as Element).foreign).toBe(false)
   })
 
+  it('ends raw text where a browser does', () => {
+    // `</scriptx` doesn't close a script; the {{ }} after it is still script.
+    expect(flat(ok('<script>a = "</scriptx>"; {{ x }}</script>').ast.body)).toBe(
+      '<script>a = "</scriptx>"; {raw-text:x}</script>',
+    )
+    expect(flat(ok('<script>a</script >b').ast.body)).toBe('<script>a</script>b')
+    // Content a browser parses differently from us is refused.
+    expect(errors('<script>s = "<!--<script>"</script><p>{{ x }}</p>').length).toBeGreaterThan(0)
+    expect(errors('<svg><script><![CDATA[ x ]]></script></svg>').length).toBeGreaterThan(0)
+  })
+
   it('positions survive CRLF and BOM', () => {
     const crlf = errors('﻿<p>\r\n{{ a() }}')[0]!
     const lf = errors('<p>\n{{ a() }}')[0]!

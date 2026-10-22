@@ -129,19 +129,37 @@ export function createViews(options: ViewsOptions = {}): Views {
   let loader: Promise<Loader> | undefined
   let appPipes: Promise<Record<string, Pipe | EnvPipe>> | undefined
   let state: Promise<State> | undefined
+  /**
+   * A memoised promise forgets itself when it rejects: a load that failed
+   * once (a file mid-save, too many open files) is retried on the next
+   * render rather than failing every render after it.
+   */
+  const settle = <T>(p: Promise<T>, forget: () => void): Promise<T> =>
+    p.catch((err: unknown) => {
+      forget()
+      throw err
+    })
 
   const getLoader = (): Promise<Loader> =>
-    (loader ??= options.loader
-      ? Promise.resolve(options.loader)
-      : fileLoaders().then((m) => m.fileLoader(options.viewsDir ?? 'src/views')))
+    (loader ??= settle(
+      options.loader
+        ? Promise.resolve(options.loader)
+        : fileLoaders().then((m) => m.fileLoader(options.viewsDir ?? 'src/views')),
+      () => (loader = undefined),
+    ))
 
   const getPipes = (): Promise<Record<string, Pipe | EnvPipe>> =>
-    (appPipes ??=
+    (appPipes ??= settle(
       options.pipes || bundle
         ? Promise.resolve(options.pipes ?? {})
         : fileLoaders()
             .then((m) => m.loadPipesFile(options.pipesFile ?? 'src/views/pipes.ts'))
-            .then((mod) => (mod ?? {}) as Record<string, Pipe | EnvPipe>))
+            .then((mod) => (mod ?? {}) as Record<string, Pipe | EnvPipe>),
+      () => (appPipes = undefined),
+    ))
+
+  /** A fresh load, forgotten if it fails. */
+  const reload = (): Promise<State> => (state = settle(load(), () => (state = undefined)))
 
   async function load(): Promise<State> {
     const l = await getLoader()
@@ -175,8 +193,8 @@ export function createViews(options: ViewsOptions = {}): Views {
 
   /** The current state, reloaded in dev when a source changed. */
   async function current(): Promise<State> {
-    if (options.cache === false) return (state = load())
-    const s = await (state ??= load())
+    if (options.cache === false) return reload()
+    const s = await (state ?? reload())
     if (!options.dev) return s
     const l = await getLoader()
     if (!l.version) return s
@@ -187,8 +205,7 @@ export function createViews(options: ViewsOptions = {}): Views {
         Boolean,
       )
     if (!stale) return s
-    state = load()
-    return state
+    return reload()
   }
 
   function checked(s: State, name: string): CheckedTemplate {

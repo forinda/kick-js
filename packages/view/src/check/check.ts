@@ -18,6 +18,7 @@ import {
   type TemplateAst,
 } from '../ast'
 import { error, warning, type Diagnostic, type Span } from '../diagnostics'
+import { decodeEntities } from '../entities'
 import { isUrlAttr } from '../urls'
 import {
   componentTag,
@@ -191,7 +192,26 @@ class Checker {
 
   nodes(list: Node[], parent?: Element): CNode[] {
     const out: CNode[] = []
-    for (const n of list) this.node(n, out, parent)
+    // Elements are walked with an explicit stack, so deeply nested markup
+    // can't overflow the call stack; blocks and components still recurse.
+    const stack: Array<{ list: Node[]; i: number; parent?: Element; close?: string }> = [
+      { list, i: 0, parent },
+    ]
+    while (stack.length) {
+      const f = stack[stack.length - 1]!
+      if (f.i >= f.list.length) {
+        stack.pop()
+        if (f.close) out.push({ k: 's', t: f.close })
+        continue
+      }
+      const n = f.list[f.i++]!
+      if (n.k !== 'element') {
+        this.node(n, out, f.parent)
+        continue
+      }
+      const open = this.element(n, out)
+      if (open) stack.push({ list: open.children, i: 0, parent: open, close: `</${open.tag}>` })
+    }
     return out
   }
 
@@ -229,9 +249,11 @@ class Checker {
           t: `<!--${n.children.map((c) => (c.k === 'text' ? c.value : '')).join('')}-->`,
         })
         return
-      case 'element':
-        this.element(n, out)
+      case 'element': {
+        const open = this.element(n, out)
+        if (open) out.push(...this.nodes(open.children, open), { k: 's', t: `</${open.tag}>` })
         return
+      }
       case 'if':
         out.push({
           k: 'if',
@@ -349,17 +371,18 @@ class Checker {
 
   // ── elements and attributes ───────────────────────────────────────────
 
-  private element(el: Element, out: CNode[]): void {
+  /** Write an element's opening tag; returns it when its children and closing tag follow. */
+  private element(el: Element, out: CNode[]): Element | undefined {
     const lower = el.tag.toLowerCase()
     if (!el.foreign && lower.includes('-')) {
       const names = this.tags.get(lower)
       if (names && names.length > 1) {
         this.err(el.span, `<${lower}> matches more than one component: ${names.join(', ')}`)
-        return
+        return undefined
       }
       if (names) {
         this.call(el, names[0]!, out)
-        return
+        return undefined
       }
       this.warn(
         el.span,
@@ -381,11 +404,10 @@ class Checker {
     }
     if (el.void || (el.selfClosing && el.foreign)) {
       out.push({ k: 's', t: el.selfClosing ? ' />' : '>' })
-      return
+      return undefined
     }
     out.push({ k: 's', t: '>' })
-    out.push(...this.nodes(el.children, el))
-    out.push({ k: 's', t: `</${el.tag}>` })
+    return el
   }
 
   /** The single root element of a component, which takes fallthrough attributes. */
@@ -490,23 +512,19 @@ class Checker {
     if (cached) return cached
     const ast = this.project.templates.get(name)!
     const outlets = new Set<string>()
-    const walk = (nodes: Node[]) => {
-      for (const n of nodes) {
+    const stack: Node[][] = [ast.body]
+    while (stack.length) {
+      for (const n of stack.pop()!) {
         if (n.k === 'slot-outlet') {
           outlets.add(n.name ?? '')
-          walk(n.fallback)
-        } else if (n.k === 'element' || n.k === 'comment') walk(n.children)
-        else if (n.k === 'if') n.branches.forEach((b) => walk(b.body))
-        else if (n.k === 'for') {
-          walk(n.body)
-          if (n.empty) walk(n.empty)
-        } else if (n.k === 'switch') {
-          n.cases.forEach((c) => walk(c.body))
-          if (n.default) walk(n.default)
-        } else if (n.k === 'slot-fill') walk(n.body)
+          stack.push(n.fallback)
+        } else if (n.k === 'element' || n.k === 'comment') stack.push(n.children)
+        else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
+        else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
+        else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
+        else if (n.k === 'slot-fill') stack.push(n.body)
       }
     }
-    walk(ast.body)
     const sig: Signature = {
       name,
       inputs: new Map(
@@ -553,14 +571,16 @@ class Checker {
             `${a.name}="${v}" passes the string "${v}", which is truthy — write [${a.name}]="${v}"`,
           )
         }
-        e = { k: 'l', v }
+        // Text passed to an input is data: entities decoded here, the value
+        // escaped wherever it's printed.
+        e = { k: 'l', v: decodeEntities(v) }
       } else if (a.kind === 'interp') {
         e = a.parts!.reduce<CExpr>(
           (acc, p) => ({
             k: 'b',
             o: '+',
             l: acc,
-            r: typeof p === 'string' ? { k: 'l', v: p } : this.expr(p),
+            r: typeof p === 'string' ? { k: 'l', v: decodeEntities(p) } : this.expr(p),
           }),
           { k: 'l', v: '' },
         )
@@ -644,10 +664,9 @@ function rootElements(body: Node[]): Array<Element | null> {
   return roots
 }
 
+/** An attribute as the author wrote it (entities kept), double-quoted. */
 function staticAttr(a: Extract<CAttr, { t: 's' }>): string {
-  return a.v === true
-    ? ` ${a.n}`
-    : ` ${a.n}="${a.v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
+  return a.v === true ? ` ${a.n}` : ` ${a.n}="${a.v.replace(/"/g, '&quot;')}"`
 }
 
 const at = (span: Span): [number, number] => [span.start.line, span.start.column]

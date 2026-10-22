@@ -346,8 +346,29 @@ class TemplateParser {
     // `<script>` and `<style>` are raw text everywhere: a browser runs an SVG
     // `<script>` too, and HTML-escaping means nothing inside one.
     if (RAW_TEXT.has(lower) || (!foreign && RCDATA.has(lower))) {
-      const close = s.toLowerCase().indexOf(`</${lower}`, j)
+      // Where a browser ends it: `</script` followed by whitespace, `/` or `>`
+      // — `</scriptx` doesn't.
+      const end = new RegExp(`</${lower}(?=[\\s/>])`, 'i')
+      end.lastIndex = 0
+      const found = end.exec(s.slice(j))
+      const close = found ? j + found.index : -1
       const stop = close < 0 ? s.length : close
+      if (RAW_TEXT.has(lower)) {
+        // Content a browser reads differently from a plain scan: `<!--` with
+        // `<script` inside a script keeps it open past `</script>`, and CDATA
+        // in SVG hides a close tag. Refused rather than guessed.
+        const content = s.slice(j, stop)
+        if (
+          /<!\[CDATA\[/i.test(content) ||
+          (lower === 'script' && /<!--/.test(content) && /<script/i.test(content))
+        ) {
+          this.err(
+            j,
+            stop,
+            `this <${lower}> content (<!-- with <script, or CDATA) is read differently by browsers — move it to a separate file`,
+          )
+        }
+      }
       el.children = this.textWithInterps(j, stop, RAW_TEXT.has(lower) ? 'raw-text' : 'rcdata')
       if (close < 0) {
         this.i = s.length

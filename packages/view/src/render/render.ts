@@ -14,6 +14,7 @@ import {
   sanitizeSrcset,
   sanitizeUrl,
 } from './safe'
+import { decodeEntities } from '../entities'
 
 export type Pipe = (value: unknown, ...args: unknown[]) => unknown
 
@@ -305,14 +306,21 @@ class Renderer {
 
   // ── attributes ────────────────────────────────────────────────────────
 
+  /** A value for an attribute: text form, HTML-escaped. */
   private attrValue(v: unknown, inst: Inst): string {
+    return escapeHtml(this.plain(v, inst))
+  }
+
+  /** A value's text, unescaped (trusted HTML as its source). */
+  private plain(v: unknown, inst: Inst): string {
     return v instanceof SafeHtml ? v.html : this.text(v, inst)
   }
 
-  private url(value: string, u: 'url' | 'srcset' | undefined): string {
-    return u === 'url' ? sanitizeUrl(value) : u === 'srcset' ? sanitizeSrcset(value) : value
-  }
-
+  /**
+   * Values in `Resolved` are ready to write between double quotes: the
+   * author's static text as written (entities kept), interpolated values
+   * escaped once.
+   */
   resolve(list: CAttr[], inst: Inst): Resolved {
     const r: Resolved = { attrs: [], cls: [], style: [] }
     const put = (name: string, value: string | true) => {
@@ -328,39 +336,60 @@ class Renderer {
     for (const a of list) {
       switch (a.t) {
         case 's':
-          put(a.n, a.v)
+          put(a.n, a.v === true ? true : a.v.replace(/"/g, '&quot;'))
           break
-        case 'i':
-          put(
-            a.n,
-            this.url(
-              a.p
-                .map((p) => (typeof p === 'string' ? p : this.attrValue(this.value(p, inst), inst)))
-                .join(''),
-              a.u,
-            ),
-          )
+        case 'i': {
+          const values = a.p.map((p) => (typeof p === 'string' ? undefined : this.value(p, inst)))
+          const html = a.p
+            .map((p, i) =>
+              typeof p === 'string' ? p.replace(/"/g, '&quot;') : this.attrValue(values[i], inst),
+            )
+            .join('')
+          if (!a.u) {
+            put(a.n, html)
+            break
+          }
+          // The scheme check reads what the browser will: static text with
+          // its entities decoded, interpolated values as they are.
+          const plain = a.p
+            .map((p, i) =>
+              typeof p === 'string' ? decodeEntities(p) : this.plain(values[i], inst),
+            )
+            .join('')
+          const safe = a.u === 'url' ? sanitizeUrl(plain) : sanitizeSrcset(plain)
+          put(a.n, safe === plain ? html : escapeHtml(safe))
           break
+        }
         case 'b': {
           const v = this.value(a.e, inst)
           if (v === null || v === undefined || v === false) break
-          put(a.n, v === true ? true : this.url(this.attrValue(v, inst), a.u))
+          if (v === true) {
+            put(a.n, true)
+            break
+          }
+          const plain = this.plain(v, inst)
+          put(
+            a.n,
+            escapeHtml(
+              a.u === 'url' ? sanitizeUrl(plain) : a.u === 'srcset' ? sanitizeSrcset(plain) : plain,
+            ),
+          )
           break
         }
         case 'c':
-          if (this.value(a.e, inst)) r.cls.push(a.n)
+          if (this.value(a.e, inst)) r.cls.push(escapeHtml(a.n))
           break
         case 'y': {
           const v = this.value(a.e, inst)
           if (v === null || v === undefined || v === false) break
-          const value = safeStyleValue(`${this.attrValue(v, inst)}${a.x ?? ''}`)
+          const value = safeStyleValue(`${this.text(v, inst)}${a.x ?? ''}`)
           if (value === undefined) {
             this.env.warn(
               `${inst.t.file}:${inst.at?.[0] ?? 1}: dropped an unsafe value for [style.${a.n}]`,
             )
             break
           }
-          r.style.push(`${a.n}:${value}`)
+          r.style.push(`${escapeHtml(a.n)}:${escapeHtml(value)}`)
           break
         }
       }
@@ -380,9 +409,9 @@ class Renderer {
       cls = [...cls, ...fall.cls]
       style = [...style, ...fall.style]
     }
-    for (const [n, v] of attrs) this.out.push(v === true ? ` ${n}` : ` ${n}="${escapeHtml(v)}"`)
-    if (cls.length) this.out.push(` class="${escapeHtml(cls.join(' '))}"`)
-    if (style.length) this.out.push(` style="${escapeHtml(style.join(';'))}"`)
+    for (const [n, v] of attrs) this.out.push(v === true ? ` ${n}` : ` ${n}="${v}"`)
+    if (cls.length) this.out.push(` class="${cls.join(' ')}"`)
+    if (style.length) this.out.push(` style="${style.join(';')}"`)
   }
 
   // ── components and layouts ────────────────────────────────────────────

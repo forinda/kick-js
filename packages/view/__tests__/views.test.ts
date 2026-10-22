@@ -119,6 +119,22 @@ describe('createViews', () => {
     expect(await views.render('about', {}, { layout: false })).toBe('A')
   })
 
+  it('recovers after a failed load', async () => {
+    const loader = fileLoader(dir({ a: 'ok' }))
+    const read = loader.read
+    let fail = true
+    loader.read = async (name) => {
+      if (fail) {
+        fail = false
+        throw new Error('EMFILE: too many open files')
+      }
+      return read(name)
+    }
+    const views = createViews({ loader })
+    await expect(views.render('a')).rejects.toThrow('EMFILE')
+    expect(await views.render('a')).toBe('ok')
+  })
+
   it('concurrent renders keep their own env', async () => {
     const views = createViews({ viewsDir: dir({ n: "{{ x | number:'1.2-2' }}" }) })
     const [en, de] = await Promise.all([

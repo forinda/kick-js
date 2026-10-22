@@ -31,6 +31,7 @@ export default defineConfig({
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
     globals: false,
-    pool: 'threads',
+    // Forks: a real process's stack, so deep-nesting tests mean what they say.
+    pool: 'forks',
   },
 })

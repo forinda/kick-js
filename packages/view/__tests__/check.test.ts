@@ -229,6 +229,15 @@ describe('check', () => {
     expect(errs({ page: '@for (x of xs) { {{ $index }} {{ x }} }' })).toEqual([])
   })
 
+  it('checks deeply nested markup without overflowing', () => {
+    const deep = '<div>'.repeat(5000) + '{{ x }}' + '</div>'.repeat(5000)
+    const r = run({ page: deep })
+    expect(r.diagnostics).toEqual([])
+    expect(r.template!.body.length).toBe(3)
+    const comp = '<i>'.repeat(5000) + '<slot />' + '</i>'.repeat(5000)
+    expect(errs({ page: '<x-d>a</x-d>', 'components/x-d': comp })).toEqual([])
+  })
+
   it('optimize', () => {
     expect(clean({ page: '<p>a</p><p>b</p>' }).body).toEqual([{ k: 's', t: '<p>a</p><p>b</p>' }])
     expect(clean({ page: '<p class="a">x{{ y }}</p>' }).body).toEqual([

@@ -27,8 +27,9 @@ type Range = [number, number]
 /** Source ranges formatting must not touch. */
 function rawRanges(source: string, body: Node[]): Range[] {
   const ranges: Range[] = []
-  const walk = (nodes: Node[]) => {
-    for (const n of nodes) {
+  const stack: Node[][] = [body]
+  while (stack.length) {
+    for (const n of stack.pop()!) {
       if (n.k === 'verbatim' || n.k === 'comment') {
         ranges.push([n.span.start.offset, n.span.end.offset])
       } else if (n.k === 'element') {
@@ -38,19 +39,14 @@ function rawRanges(source: string, body: Node[]): Range[] {
           const close = source.toLowerCase().indexOf(`</${tag}`, from)
           const end = close < 0 ? source.length : source.indexOf('>', close) + 1
           ranges.push([n.span.start.offset, end])
-        } else walk(n.children)
-      } else if (n.k === 'if') n.branches.forEach((b) => walk(b.body))
-      else if (n.k === 'for') {
-        walk(n.body)
-        if (n.empty) walk(n.empty)
-      } else if (n.k === 'switch') {
-        n.cases.forEach((c) => walk(c.body))
-        if (n.default) walk(n.default)
-      } else if (n.k === 'slot-outlet') walk(n.fallback)
-      else if (n.k === 'slot-fill') walk(n.body)
+        } else stack.push(n.children)
+      } else if (n.k === 'if') for (const b of n.branches) stack.push(b.body)
+      else if (n.k === 'for') stack.push(n.body, n.empty ?? [])
+      else if (n.k === 'switch') stack.push(...n.cases.map((c) => c.body), n.default ?? [])
+      else if (n.k === 'slot-outlet') stack.push(n.fallback)
+      else if (n.k === 'slot-fill') stack.push(n.body)
     }
   }
-  walk(body)
   for (const m of source.matchAll(/\{\{--[\s\S]*?--\}\}/g))
     ranges.push([m.index, m.index + m[0].length])
   return ranges.toSorted((a, b) => a[0] - b[0])
@@ -179,34 +175,54 @@ function reindent(source: string, ranges: Range[], unit: string): string {
   return out.join('\n')
 }
 
-/** The tree with whitespace-only differences removed, for comparing before and after. */
-function shape(nodes: Node[]): unknown {
-  const strip = (v: unknown): unknown => {
-    if (Array.isArray(v)) {
-      return v
-        .map(strip)
-        .filter(
-          (x) =>
-            !(
-              x &&
-              typeof x === 'object' &&
-              (x as { k?: string }).k === 'text' &&
-              !(x as { value: string }).value
-            ),
-        )
-    }
-    if (v && typeof v === 'object') {
-      const o: Record<string, unknown> = {}
-      for (const [k, x] of Object.entries(v)) {
-        if (k === 'span' || k === 'layoutSpan') continue
-        o[k] = strip(x)
-      }
-      if (o.k === 'text') o.value = String(o.value).replace(/\s+/g, ' ').trim()
-      return o
-    }
-    return v
+/** Keys holding child nodes: walked separately, so the shape is built without recursion. */
+const CHILD_KEYS = new Set(['children', 'body', 'empty', 'default', 'fallback'])
+
+function childLists(n: Node): Node[][] {
+  switch (n.k) {
+    case 'element':
+    case 'comment':
+      return [n.children]
+    case 'if':
+      return n.branches.map((b) => b.body)
+    case 'for':
+      return [n.body, n.empty ?? []]
+    case 'switch':
+      return [...n.cases.map((c) => c.body), n.default ?? []]
+    case 'slot-outlet':
+      return [n.fallback]
+    case 'slot-fill':
+      return [n.body]
+    default:
+      return []
   }
-  return strip(nodes)
+}
+
+/** The tree as a flat token list, with whitespace-only text differences removed. */
+function shape(nodes: Node[]): string[] {
+  const out: string[] = []
+  const stack: Array<Node | string> = nodes.toReversed()
+  while (stack.length) {
+    const n = stack.pop()!
+    if (typeof n === 'string') {
+      out.push(n)
+      continue
+    }
+    if (n.k === 'text') {
+      const v = n.value.replace(/\s+/g, ' ').trim()
+      if (v) out.push(`t:${v}`)
+      continue
+    }
+    out.push(
+      JSON.stringify(n, (k, v: unknown) => (k === 'span' || CHILD_KEYS.has(k) ? undefined : v)),
+    )
+    for (const list of childLists(n).toReversed()) {
+      stack.push(')')
+      for (const c of list.toReversed()) stack.push(c)
+      stack.push('(')
+    }
+  }
+  return out
 }
 
 export function format(
@@ -228,7 +244,7 @@ export function format(
   const after = parse(output, file)
   const same =
     !after.diagnostics.some((d) => d.severity === 'error') &&
-    JSON.stringify(shape(after.ast.body)) === JSON.stringify(shape(before.ast.body)) &&
+    shape(after.ast.body).join('\n') === shape(before.ast.body).join('\n') &&
     after.ast.layout === before.ast.layout
   if (!same) {
     const pos = { offset: 0, line: 1, column: 1 }
