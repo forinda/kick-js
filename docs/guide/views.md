@@ -469,7 +469,7 @@ async create(ctx: RequestContext) {
 <form method="post" action="/products">
   <input name="title">
   @error('title') {
-    <p class="field-error">{{ $message }}</p>
+    <b class="field-error">{{ $message }}</b>
   }
   <textarea name="description"></textarea>
   <button>Save</button>
@@ -508,8 +508,8 @@ Add `validate` to a field for instant feedback, before the form is sent. It writ
 ```
 
 - **Validators:** `required`, `email`, `url` (http or https), `minLength:n` and `maxLength:n` (characters), `min:n` and `max:n` (numbers), `pattern:'regex'` (the whole value), `in:'a, b, c'`. An empty field passes everything except `required`. An unknown validator or a wrong argument fails the check.
-- **When it runs:** when the field loses focus, then as it changes once it has been checked, and on submit. A submit with an invalid field is stopped and the first one gets focus.
-- **Where messages go:** `@error('field')` always renders a `<span data-kick-error="field">` spot, hidden while there's no error: the server's message in it after a failed submit, the browser's while typing. Style it with `[data-kick-error]`. Fields also get `setCustomValidity`, so `:user-invalid` works in CSS.
+- **When it runs:** when the field loses focus, then as it changes once it has been checked, and on submit. A submit with an invalid field is stopped and the first one gets focus. `required` on a radio or checkbox passes when any one in the group with that name is checked. The browser's own checks on the same form (a plain `required`, `type="email"`) still run after these pass; forms without a `validate` field are left entirely to the browser.
+- **Where messages go:** `@error('field')` always renders a `<span data-kick-error="field" aria-live="polite">` spot, hidden while there's no error: the server's message in it after a failed submit, the browser's while typing. Because it's a `<span>`, keep the body inline (text, `<b>`, `<small>`); a `<p>`, `<li>` or `<tr>` inside it is invalid HTML, and in a table the browser moves it out. Style it with `[data-kick-error]:not([hidden])`, so empty spots stay hidden. The field gets `aria-invalid` and `aria-describedby` pointing at its message, and `setCustomValidity`, so `:user-invalid` works in CSS.
 - **What ships:** a page with a `validate` field gets one small validator script (`/_kick/c/kick-validate.<hash>.js`); pages without one get none.
 - **The server still decides.** These checks are for quick feedback; route validation in the controller is what counts, and its messages can differ.
 

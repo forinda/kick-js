@@ -632,6 +632,8 @@ class TemplateParser {
         tag: 'span',
         attrs: [
           { name: 'data-kick-error', kind: 'static', parts: [field], quoted: true, span: at },
+          // A live region from the first render: screen readers announce what lands in it.
+          { name: 'aria-live', kind: 'static', parts: ['polite'], quoted: true, span: at },
           ...(hidden ? [{ name: 'hidden', kind: 'bare' as const, quoted: false, span: at }] : []),
         ],
         children: [],

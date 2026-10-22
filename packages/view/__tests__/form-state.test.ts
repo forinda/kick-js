@@ -103,7 +103,7 @@ describe('@error', () => {
   it("@error('form') shows a form-level error", async () => {
     const views = page("@error('form') {{{ $message }}}")
     expect(await views.render('page', { $errors: { form: 'Bad' } })).toBe(
-      '<span data-kick-error="form">Bad</span>',
+      '<span data-kick-error="form" aria-live="polite">Bad</span>',
     )
   })
   it('@error needs a string', () => {

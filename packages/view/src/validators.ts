@@ -62,7 +62,8 @@ export function parseValidate(src: string): { rules: Rule[] } | { error: string 
       } else {
         const m = /^(['"])([\s\S]*)\1$/.exec(a)
         if (!m) return { error: `${name} takes a quoted string` }
-        args.push(m[2]!.replace(/\\(.)/g, '$1'))
+        // Only an escaped quote is unescaped: `\d` stays a regex escape.
+        args.push(m[2]!.split(`\\${m[1]}`).join(m[1]!))
       }
     }
     if (name === 'pattern') {

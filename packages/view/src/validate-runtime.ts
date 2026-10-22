@@ -16,12 +16,18 @@ function runtime(messages: Record<string, string>, doc: any): void {
   const say = (name: string, args: Array<string | number>) =>
     messages[name]!.replace(/\{(\d+)\}/g, (_m: string, i: string) => String(args[Number(i)]))
 
-  const valueOf = (el: El): string =>
-    el.type === 'checkbox' || el.type === 'radio'
-      ? el.checked
-        ? String(el.value || 'on')
-        : ''
-      : String(el.value ?? '')
+  /** A field's value; for a radio or checkbox, its group's: any checked one with the same name. */
+  const valueOf = (el: El): string => {
+    if (el.type !== 'checkbox' && el.type !== 'radio') return String(el.value ?? '')
+    for (const other of (el.form || doc).querySelectorAll('input'))
+      if (
+        (other.type === 'checkbox' || other.type === 'radio') &&
+        other.name === el.name &&
+        other.checked
+      )
+        return String(other.value || 'on')
+    return ''
+  }
 
   /** The first failing rule's message, or ''. */
   function message(el: El): string {
@@ -48,8 +54,9 @@ function runtime(messages: Record<string, string>, doc: any): void {
         } catch {
           ok = false
         }
-      } else if (name === 'minLength') ok = [...value].length >= Number(args[0])
-      else if (name === 'maxLength') ok = [...value].length <= Number(args[0])
+        // UTF-16 units, as server schemas count: never refuse what the server accepts.
+      } else if (name === 'minLength') ok = value.length >= Number(args[0])
+      else if (name === 'maxLength') ok = value.length <= Number(args[0])
       else if (name === 'min') ok = !Number.isNaN(n) && n >= Number(args[0])
       else if (name === 'max') ok = !Number.isNaN(n) && n <= Number(args[0])
       else if (name === 'pattern') {
@@ -77,6 +84,8 @@ function runtime(messages: Record<string, string>, doc: any): void {
     return null
   }
 
+  let ids = 0
+
   /** Check `el`, show or clear its message; true when it passes. */
   function run(el: El): boolean {
     const msg = message(el)
@@ -86,7 +95,14 @@ function runtime(messages: Record<string, string>, doc: any): void {
     if (spot) {
       spot.textContent = msg
       spot.hidden = msg === ''
+      // Screen readers read the message with the field.
+      if (!spot.id) spot.id = `kick-error-${++ids}`
+      const described = (el.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean)
+      if (!described.includes(spot.id))
+        el.setAttribute('aria-describedby', [...described, spot.id].join(' '))
     }
+    if (msg) el.setAttribute('aria-invalid', 'true')
+    else el.removeAttribute('aria-invalid')
     return msg === ''
   }
 
@@ -115,14 +131,19 @@ function runtime(messages: Record<string, string>, doc: any): void {
     'submit',
     (e: El) => {
       const form = e.target
+      const fields = form.querySelectorAll('[data-kick-validate]')
+      // Forms without validate fields are the browser's to check.
+      if (!fields.length) return
       form.noValidate = true
       let first: El = null
-      for (const el of form.querySelectorAll('[data-kick-validate]'))
-        if (!run(el) && !first) first = el
+      for (const el of fields) if (!run(el) && !first) first = el
       if (first) {
         e.preventDefault()
         first.focus()
+        return
       }
+      // The browser's own checks (a plain `required`, `type=email`) still apply.
+      if (form.reportValidity && !form.reportValidity()) e.preventDefault()
     },
     true,
   )

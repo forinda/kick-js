@@ -44,9 +44,11 @@ describe('validator runtime', () => {
   it('optional empty passes', () => {
     expect(check([['email'], ['minLength', 3]], '')).toBe('')
   })
-  it('minLength counts characters', () => {
+  it('minLength counts like the server (UTF-16 units)', () => {
     expect(check([['minLength', 3]], '漢字')).toBe('Use at least 3 characters')
     expect(check([['minLength', 3]], '漢字字')).toBe('')
+    // Two emoji are four units, as Zod counts them: the browser mustn't refuse what the server accepts.
+    expect(check([['minLength', 3]], '😀😀')).toBe('')
     expect(check([['maxLength', 2]], 'abc')).toBe('Use at most 2 characters')
   })
   it('min/max compare numbers', () => {
@@ -103,5 +105,47 @@ describe('validator runtime', () => {
     f.input.value = 'ab'
     f.input.dispatchEvent(new Event('input', { bubbles: true }))
     expect(f.spot.hidden).toBe(true)
+  })
+})
+
+describe('review fixes', () => {
+  const submit = (f: HTMLFormElement) => {
+    const event = new SubmitEvent('submit', { bubbles: true, cancelable: true })
+    f.dispatchEvent(event)
+    return event
+  }
+
+  it('required on a radio group passes when any radio is checked', () => {
+    document.body.innerHTML = `<form>
+      <input type="radio" name="f" value="a" data-kick-validate="[[&quot;required&quot;]]">
+      <input type="radio" name="f" value="b" checked>
+      <span data-kick-error="f" hidden></span></form>`
+    expect(submit(document.querySelector('form')!).defaultPrevented).toBe(false)
+  })
+
+  it('required on a checkbox group passes when any box is ticked', () => {
+    document.body.innerHTML = `<form>
+      <input type="checkbox" name="f" value="a" data-kick-validate="[[&quot;required&quot;]]">
+      <input type="checkbox" name="f" value="b" checked>
+      <span data-kick-error="f" hidden></span></form>`
+    expect(submit(document.querySelector('form')!).defaultPrevented).toBe(false)
+  })
+
+  it("leaves forms without validate fields to the browser's own checks", () => {
+    document.body.innerHTML = '<form id="plain"><input type="email" required></form>'
+    const plain = document.querySelector('form')!
+    submit(plain)
+    expect(plain.noValidate).toBe(false)
+  })
+
+  it('marks the field invalid and links it to its message', () => {
+    const f = form('<input name="f" data-kick-validate="RULES">', [['required']])
+    blur(f.input)
+    expect(f.input.getAttribute('aria-invalid')).toBe('true')
+    expect(f.spot.id).not.toBe('')
+    expect(f.input.getAttribute('aria-describedby')).toContain(f.spot.id)
+    f.input.value = 'ok'
+    blur(f.input)
+    expect(f.input.hasAttribute('aria-invalid')).toBe(false)
   })
 })

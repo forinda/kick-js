@@ -34,6 +34,11 @@ describe('validate', () => {
     })
   })
 
+  it('keeps regex backslashes; unescapes only the quote', () => {
+    expect(parseValidate("pattern:'^\\d+$'")).toEqual({ rules: [['pattern', '^\\d+$']] })
+    expect(parseValidate("pattern:'it\\'s'")).toEqual({ rules: [['pattern', "it's"]] })
+  })
+
   it('refuses unknown or malformed rules', () => {
     for (const [src, part] of [
       ['requird', "unknown validator 'requird'"],
@@ -68,10 +73,10 @@ describe('validate', () => {
   it('@error renders its spot either way', async () => {
     const v = page('<input name="t">@error(\'t\') {<b>{{ $message }}</b>}')
     expect(await v.render('page', { $errors: { t: 'Too short' } })).toContain(
-      '<span data-kick-error="t"><b>Too short</b></span>',
+      '<span data-kick-error="t" aria-live="polite"><b>Too short</b></span>',
     )
     expect(await v.render('page', { $errors: {} })).toContain(
-      '<span data-kick-error="t" hidden></span>',
+      '<span data-kick-error="t" aria-live="polite" hidden></span>',
     )
   })
 })
