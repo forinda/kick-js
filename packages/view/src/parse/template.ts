@@ -780,6 +780,7 @@ class TemplateParser {
       this.err(i, p.end, 'a template has one @layout')
     } else {
       this.ast.layout = /^\s*none\s*$/.test(p.src) ? null : this.stringArg(p.src, p.at, '@layout')
+      this.ast.layoutSpan = this.span(i, p.end)
     }
     this.i = this.standalone(i, p.end)
     return true
