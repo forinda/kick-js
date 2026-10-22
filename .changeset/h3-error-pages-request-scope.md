@@ -2,4 +2,7 @@
 '@forinda/kickjs': patch
 ---
 
-On h3 and the web fetch entry, the error and not-found handlers run inside the request's AsyncLocalStorage, as on Express and Fastify. An error page whose code uses the request — Inertia's `share()` calling `ctx.set()` or resolving a REQUEST-scoped service — threw `RequestContext.set called outside an AsyncLocalStorage frame` for an unknown URL or a handler that threw.
+Error and not-found handlers run in the request's AsyncLocalStorage store on every engine, so an error page's code (Inertia's `share()`, say) can use the request.
+
+- **h3 and the web fetch entry:** they ran outside any store and threw `RequestContext.set called outside an AsyncLocalStorage frame` for an unknown URL or a handler that threw.
+- **Fastify:** a handler's error ran in an outer store. Its `ctx` values were missing there, and REQUEST-scoped services resolved to new instances.

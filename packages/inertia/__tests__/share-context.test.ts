@@ -43,7 +43,9 @@ async function makeApp(make: () => unknown) {
     }
 
     @Get('/broken')
-    broken() {
+    broken(ctx: RequestContext) {
+      ctx.set('fromHandler', 'yes')
+      ctx.set('handlerViewer', Container.getInstance().resolve(VIEWER))
       throw new Error('boom')
     }
   }
@@ -73,6 +75,8 @@ async function makeApp(make: () => unknown) {
             // The same instance within the request.
             sameViewer: Container.getInstance().resolve(VIEWER) === viewer,
             fromHandler: ctx.get('fromHandler') ?? null,
+            // The error page for a throwing handler sees the handler's request.
+            sameAsHandler: (ctx.get('handlerViewer') ?? viewer) === viewer,
             sharedAt: ctx.get('sharedAt'),
           }
         },
@@ -129,6 +133,11 @@ for (const rt of RUNTIMES)
       const app = await makeApp(rt.make)
       const res = await request(app.handle.bind(app)).get('/broken').set(X).expect(500)
       expect(res.body.component).toBe('Error')
-      expect(res.body.props).toMatchObject({ viewer: { id: 1 }, sameViewer: true })
+      expect(res.body.props).toMatchObject({
+        viewer: { id: 1 },
+        sameViewer: true,
+        fromHandler: 'yes',
+        sameAsHandler: true,
+      })
     })
   })
