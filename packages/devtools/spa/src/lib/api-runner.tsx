@@ -14,6 +14,8 @@
  * hold credentials) in `sessionStorage`, so they are gone when the tab closes.
  */
 
+import { flagEntries, metaSummary } from './route-meta'
+import { FlagValue } from './flag-value'
 import {
   createEffect,
   on,
@@ -242,6 +244,31 @@ export const ApiRunnerPanel: Component = () => {
   const [error, setError] = createSignal<string | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
   const [snippetKind, setSnippetKind] = createSignal<'curl' | 'fetch'>('curl')
+  type SheetTab = 'request' | 'meta' | 'snippet' | 'history' | 'settings'
+  const [sheetTab, setSheetTab] = createSignal<SheetTab>('request')
+  /** The open tab — Meta falls back to Request on a route without meta. */
+  const tab = (): SheetTab =>
+    sheetTab() === 'meta' && !(activeRoute() && metaSummary(activeRoute()!))
+      ? 'request'
+      : sheetTab()
+  const sheetTabs = (): Array<{ id: SheetTab; label: string; count?: number }> => {
+    const r = activeRoute()
+    return [
+      { id: 'request', label: 'Request' },
+      ...(r && metaSummary(r)
+        ? [
+            {
+              id: 'meta' as const,
+              label: 'Meta',
+              count: flagEntries(r.flags).length + (r.contributors?.length ?? 0),
+            },
+          ]
+        : []),
+      { id: 'snippet', label: 'Snippet' },
+      { id: 'history', label: 'History', count: history().length },
+      { id: 'settings', label: 'Settings' },
+    ]
+  }
   const [history, setHistory] = createSignal<HistoryEntry[]>(
     (() => {
       try {
@@ -646,384 +673,495 @@ export const ApiRunnerPanel: Component = () => {
 
             {/* Sections */}
             <div class="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2">
-              {/* The route's context contributors, in the order a request runs
-                  them — however many there are, one row each. */}
-              <Show when={route().contributors?.length}>
-                <Section title="Context contributors" count={route().contributors!.length}>
-                  <ol class="flex flex-col gap-1 text-xs">
-                    <For each={route().contributors}>
-                      {(c, i) => (
-                        <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border/40 py-1 last:border-0">
-                          <span class="w-5 shrink-0 text-right text-text-muted">{i() + 1}.</span>
-                          <span class="font-mono font-semibold text-text-body">{c.key}</span>
-                          <span class="rounded bg-surface-2 px-1.5 text-[0.66rem] text-text-muted">
-                            {c.source}
-                          </span>
-                          <Show when={c.beforeValidation}>
-                            <span
-                              class="rounded bg-kick-500/15 px-1.5 text-[0.66rem] text-kick-500"
-                              title="Runs before request validation"
-                            >
-                              before validation
-                            </span>
-                          </Show>
-                          <Show when={c.dependsOn.length}>
-                            <span class="text-text-muted">needs {c.dependsOn.join(', ')}</span>
-                          </Show>
-                          <Show when={c.overrides.length}>
-                            <span class="text-text-muted">
-                              overrides {c.overrides.map((o) => o.source).join(', ')}
-                            </span>
-                          </Show>
-                          <Show when={c.label}>
-                            <span class="basis-full pl-7 font-mono text-[0.66rem] text-text-muted break-all">
-                              {c.label}
-                            </span>
-                          </Show>
-                        </li>
-                      )}
-                    </For>
-                  </ol>
-                </Section>
-              </Show>
-              <Show when={inputs()}>
-                {(current) => (
-                  <>
-                    <Show when={pathParams(route().path).length > 0}>
-                      <Section title="Path params" open>
-                        <div class="flex flex-col gap-2">
-                          <For each={pathParams(route().path)}>
-                            {(name) => (
-                              <label class="flex items-center gap-3 text-sm">
-                                <span class="font-mono text-text-secondary w-28 shrink-0">
-                                  :{name}
-                                </span>
-                                <input
-                                  class={inputClass}
-                                  placeholder={hints()?.params[name]}
-                                  value={current().params[name] ?? ''}
-                                  onInput={(e) =>
-                                    update({
-                                      params: {
-                                        ...current().params,
-                                        [name]: e.currentTarget.value,
-                                      },
-                                    })
-                                  }
-                                />
-                              </label>
-                            )}
-                          </For>
-                        </div>
-                      </Section>
-                    </Show>
-
-                    <Section title="Query" count={enabledCount(current().query)}>
-                      <RowsEditor
-                        rows={current().query}
-                        onChange={(query) => update({ query })}
-                        context={routeKey(route())}
-                      />
-                      <Show when={hints()?.query.length}>
-                        <ul class="text-xs text-text-muted mt-2 flex flex-col gap-0.5">
-                          <For each={hints()!.query}>
-                            {(q) => (
-                              <li>
-                                <code>{q.name}</code>
-                                {q.required ? ' (required)' : ''}
-                                {q.description ? ` — ${q.description}` : ''}
-                              </li>
-                            )}
-                          </For>
-                        </ul>
-                      </Show>
-                    </Section>
-
-                    <Section title="Headers" count={enabledCount(current().headers)}>
-                      <RowsEditor
-                        rows={current().headers}
-                        onChange={(headers) => update({ headers })}
-                        context={routeKey(route())}
-                      />
-                      <Show when={env().headers.some((h) => h.enabled && h.key)}>
-                        <div class="mt-3 text-xs">
-                          <p class="text-text-muted mb-1">
-                            From <strong>{env().name}</strong> — untick to leave one off this route
-                            only:
-                          </p>
-                          <For each={env().headers.filter((h) => h.enabled && h.key)}>
-                            {(h) => {
-                              const name = h.key.toLowerCase()
-                              const sent = () => sendsDefault(route(), current(), settings(), name)
-                              return (
-                                <label class="flex items-center gap-2 font-mono text-text-secondary">
-                                  <input
-                                    type="checkbox"
-                                    checked={sent()}
-                                    onChange={(e) =>
-                                      update({
-                                        defaultHeaders: {
-                                          ...current().defaultHeaders,
-                                          [name]: e.currentTarget.checked,
-                                        },
-                                      })
-                                    }
-                                  />
-                                  <span class={sent() ? '' : 'line-through text-text-muted'}>
-                                    {h.key}: {h.secret ? '••••••' : h.value}
-                                  </span>
-                                  <Show
-                                    when={
-                                      name === 'authorization' &&
-                                      isPublic() &&
-                                      current().defaultHeaders?.[name] === undefined
-                                    }
-                                  >
-                                    <span class="font-sans text-text-muted">
-                                      (off by default: public route)
-                                    </span>
-                                  </Show>
-                                </label>
-                              )
-                            }}
-                          </For>
-                        </div>
-                      </Show>
-                    </Section>
-
-                    <Show when={acceptsBody(route().method)}>
-                      <Section title="Body" open>
-                        <div class="flex items-center gap-1 mb-2">
-                          <For
-                            each={
-                              [
-                                ['raw', 'Raw'],
-                                ['form', 'Form data'],
-                              ] as const
-                            }
-                          >
-                            {([mode, label]) => (
-                              <button
-                                type="button"
-                                aria-pressed={(current().bodyMode ?? 'raw') === mode}
-                                onClick={() => update({ bodyMode: mode })}
-                                class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
-                                  (current().bodyMode ?? 'raw') === mode
-                                    ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
-                                    : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
-                                }`}
-                              >
-                                {label}
-                              </button>
-                            )}
-                          </For>
-                          <Show when={route().upload && route().upload!.mode !== 'none'}>
-                            <span class="text-xs text-text-muted ml-2">
-                              @FileUpload: field <code>{route().upload!.fieldName ?? 'file'}</code>
-                              {route().upload!.mode === 'array'
-                                ? `, up to ${route().upload!.maxCount ?? 10} files`
-                                : ', one file'}
-                            </span>
-                          </Show>
-                        </div>
-                        <Show
-                          when={current().bodyMode === 'form'}
-                          fallback={
-                            <div class="group relative">
-                              <textarea
-                                class={`${inputClass} font-mono min-h-40`}
-                                placeholder='{ "name": "value" }'
-                                value={current().body}
-                                onInput={(e) => update({ body: e.currentTarget.value })}
-                              />
-                              <HoverActions>
-                                <Show when={current().body.trim()}>
-                                  <FormatButton
-                                    text={() => current().body}
-                                    onFormat={(body) => update({ body })}
-                                  />
-                                  <CopyButton text={() => current().body} label="Copy body" />
-                                </Show>
-                              </HoverActions>
-                            </div>
-                          }
-                        >
-                          <FormEditor
-                            rows={current().form ?? []}
-                            multiple={route().upload?.mode === 'array'}
-                            onChange={(form) => update({ form })}
-                          />
-                          <p class="text-xs text-text-muted mt-2">
-                            Sent as multipart/form-data. Picked files aren't saved — pick them again
-                            after reopening.
-                          </p>
-                        </Show>
-                      </Section>
-                    </Show>
-                  </>
-                )}
-              </Show>
-
-              <Section
-                title="Save to variable"
-                open={!!(capture().path || capture().name)}
-                count={capture().path && capture().name ? 1 : undefined}
+              {/* Postman-style: tabs for the request's parts; the response stays
+                  stacked below whichever tab is open. */}
+              <div
+                role="tablist"
+                aria-label="Request sheet"
+                class="sticky top-0 z-1 -mx-5 -mt-3 mb-1 flex items-center gap-1 border-b border-border bg-surface-1 px-5 pt-2"
               >
-                <p class="text-xs text-text-muted mb-2">
-                  Set this up before you send. With both filled in, every 2xx response from this
-                  route copies the value at the JSON path into that variable of the environment it
-                  was sent with — log in once and routes using <code>{'{{token}}'}</code> pick it
-                  up. New variables start masked. Saved for this route only.
-                </p>
-                <div class="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
-                  <input
-                    class={inputClass}
-                    aria-label="JSON path"
-                    placeholder="JSON path, e.g. data.accessToken"
-                    value={capture().path}
-                    onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
-                  />
-                  <input
-                    class={inputClass}
-                    aria-label="Variable name"
-                    placeholder="variable, e.g. token"
-                    value={capture().name}
-                    onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
-                  />
-                  <button
-                    type="button"
-                    class={`${secondaryButton} shrink-0`}
-                    disabled={!result()}
-                    title={result() ? 'Copy from the response shown now' : 'Send the request first'}
-                    onClick={captureVariable}
-                  >
-                    Save now
-                  </button>
-                </div>
-                <Show when={captureNote()}>
-                  <p class="text-xs text-text-muted mt-1" role="status">
-                    {captureNote()}
-                  </p>
-                </Show>
-              </Section>
-
-              <Section title="Settings">
-                <p class="text-xs text-text-muted mb-3">
-                  These apply to every route, not just this one, and save as you type in this
-                  browser (kept after the tab closes).
-                </p>
-                <Show when={hints()}>
-                  {(h) => (
-                    <div class="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        class={secondaryButton}
-                        onClick={() => update(applyHints(inputs()!, h()))}
-                      >
-                        Fill empty inputs from OpenAPI
-                      </button>
-                      <span class="text-[0.7rem] text-text-muted">
-                        This route only: adds the query params the spec lists and an example body if
-                        the body is empty. Never overwrites what you typed.
-                      </span>
-                    </div>
+                <For each={sheetTabs()}>
+                  {(t) => (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={tab() === t.id}
+                      onClick={() => setSheetTab(t.id)}
+                      class={`-mb-px border-b-2 px-3 py-1.5 text-xs font-semibold ${
+                        tab() === t.id
+                          ? 'border-kick-500 text-text-body'
+                          : 'border-transparent text-text-muted hover:text-text-body'
+                      }`}
+                    >
+                      {t.label}
+                      <Show when={t.count}>
+                        <span class="ml-1 font-normal text-text-muted">({t.count})</span>
+                      </Show>
+                    </button>
                   )}
-                </Show>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                  <label class="flex flex-col gap-1 text-xs text-text-muted">
-                    Public route flags (comma-separated)
-                    <span class="text-[0.7rem]">
-                      On routes carrying one of these flags (e.g. <code>auth.public</code> from your
-                      auth setup), the environment's default Authorization header starts unticked —
-                      a login route needs no token — and is sent only if you tick it under the
-                      route's Headers. Names your app uses; the runner adds no flags to the request.
-                    </span>
-                    <input
-                      class={inputClass}
-                      value={publicFlagNames(settings().publicFlag).join(', ')}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings(),
-                          publicFlag: publicFlagNames(e.currentTarget.value),
-                        })
-                      }
-                    />
-                  </label>
-                  <For
-                    each={
-                      [
-                        [
-                          'csrfCookie',
-                          'CSRF cookie',
-                          'For csrf() / csrfGuard(): on POST, PUT, PATCH and DELETE the runner reads this cookie…',
-                        ],
-                        [
-                          'csrfHeader',
-                          'CSRF header',
-                          '…and sends its value in this header, unless the route already sets it.',
-                        ],
-                        [
-                          'openApiUrl',
-                          'OpenAPI spec URL',
-                          'Where the Swagger adapter serves the spec. A route with nothing saved starts from its examples.',
-                        ],
-                        [
-                          'editorUrl',
-                          'Editor link ({file}, {line})',
-                          "What the handler link under the route's title opens; {file} and {line} are filled in.",
-                        ],
-                      ] as const
-                    }
-                  >
-                    {([key, label, help]) => (
-                      <label class="flex flex-col gap-1 text-xs text-text-muted">
-                        {label}
-                        <span class="text-[0.7rem]">{help}</span>
-                        <input
-                          class={inputClass}
-                          value={settings()[key]}
-                          onInput={(e) =>
-                            setSettings({ ...settings(), [key]: e.currentTarget.value })
-                          }
-                        />
-                      </label>
-                    )}
-                  </For>
-                </div>
-              </Section>
-
-              <Section title="Code snippet">
-                <div class="flex items-center gap-1 mb-2">
-                  <For each={['curl', 'fetch'] as const}>
-                    {(kind) => (
-                      <button
-                        type="button"
-                        aria-pressed={snippetKind() === kind}
-                        onClick={() => setSnippetKind(kind)}
-                        class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
-                          snippetKind() === kind
-                            ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
-                            : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
-                        }`}
-                      >
-                        {kind}
-                      </button>
-                    )}
-                  </For>
-                  <button type="button" class={`${secondaryButton} ml-auto`} onClick={copySnippet}>
-                    Copy
-                  </button>
-                  <Show when={copied()}>
-                    <span class="text-xs text-text-muted" role="status">
-                      {copied()}
-                    </span>
+                </For>
+              </div>
+              <Show when={tab() === 'meta'}>
+                <div class="flex flex-col gap-1 py-1">
+                  <Show when={flagEntries(route().flags).length}>
+                    <h4 class="mb-1 text-[0.66rem] font-bold uppercase tracking-wide text-text-muted">
+                      Flags
+                    </h4>
+                    <ul class="mb-2 flex flex-col gap-1 text-xs">
+                      <For each={flagEntries(route().flags)}>
+                        {(f) => (
+                          <li class="border-b border-border/40 py-1 last:border-0">
+                            <span class="font-mono font-semibold text-text-body">{f.name}</span>
+                            <Show when={f.raw !== undefined}>
+                              <div class="mt-1 pl-2">
+                                <FlagValue value={f.raw} />
+                              </div>
+                            </Show>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                  <Show when={route().contributors?.length}>
+                    <h4 class="mb-1 text-[0.66rem] font-bold uppercase tracking-wide text-text-muted">
+                      Context contributors
+                    </h4>
+                    <ol class="flex flex-col gap-1 text-xs">
+                      <For each={route().contributors}>
+                        {(c, i) => (
+                          <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-border/40 py-1 last:border-0">
+                            <span class="w-5 shrink-0 text-right text-text-muted">{i() + 1}.</span>
+                            <span class="font-mono font-semibold text-text-body">{c.key}</span>
+                            <span class="rounded bg-surface-2 px-1.5 text-[0.66rem] text-text-muted">
+                              {c.source}
+                            </span>
+                            <Show when={c.beforeValidation}>
+                              <span
+                                class="rounded bg-kick-500/15 px-1.5 text-[0.66rem] text-kick-500"
+                                title="Runs before request validation"
+                              >
+                                before validation
+                              </span>
+                            </Show>
+                            <Show when={c.dependsOn.length}>
+                              <span class="text-text-muted">needs {c.dependsOn.join(', ')}</span>
+                            </Show>
+                            <Show when={c.overrides.length}>
+                              <span class="text-text-muted">
+                                overrides {c.overrides.map((o) => o.source).join(', ')}
+                              </span>
+                            </Show>
+                            <Show when={c.label}>
+                              <span class="basis-full pl-7 font-mono text-[0.66rem] text-text-muted break-all">
+                                {c.label}
+                              </span>
+                            </Show>
+                          </li>
+                        )}
+                      </For>
+                    </ol>
                   </Show>
                 </div>
-                <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all select-text">
-                  {snippet()}
-                </pre>
-              </Section>
+              </Show>
+              <Show when={tab() === 'request'}>
+                <>
+                  <Show when={inputs()}>
+                    {(current) => (
+                      <>
+                        <Show when={pathParams(route().path).length > 0}>
+                          <Section title="Path params" open>
+                            <div class="flex flex-col gap-2">
+                              <For each={pathParams(route().path)}>
+                                {(name) => (
+                                  <label class="flex items-center gap-3 text-sm">
+                                    <span class="font-mono text-text-secondary w-28 shrink-0">
+                                      :{name}
+                                    </span>
+                                    <input
+                                      class={inputClass}
+                                      placeholder={hints()?.params[name]}
+                                      value={current().params[name] ?? ''}
+                                      onInput={(e) =>
+                                        update({
+                                          params: {
+                                            ...current().params,
+                                            [name]: e.currentTarget.value,
+                                          },
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                )}
+                              </For>
+                            </div>
+                          </Section>
+                        </Show>
+
+                        <Section title="Query" count={enabledCount(current().query)}>
+                          <RowsEditor
+                            rows={current().query}
+                            onChange={(query) => update({ query })}
+                            context={routeKey(route())}
+                          />
+                          <Show when={hints()?.query.length}>
+                            <ul class="text-xs text-text-muted mt-2 flex flex-col gap-0.5">
+                              <For each={hints()!.query}>
+                                {(q) => (
+                                  <li>
+                                    <code>{q.name}</code>
+                                    {q.required ? ' (required)' : ''}
+                                    {q.description ? ` — ${q.description}` : ''}
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </Show>
+                        </Section>
+
+                        <Section title="Headers" count={enabledCount(current().headers)}>
+                          <RowsEditor
+                            rows={current().headers}
+                            onChange={(headers) => update({ headers })}
+                            context={routeKey(route())}
+                          />
+                          <Show when={env().headers.some((h) => h.enabled && h.key)}>
+                            <div class="mt-3 text-xs">
+                              <p class="text-text-muted mb-1">
+                                From <strong>{env().name}</strong> — untick to leave one off this
+                                route only:
+                              </p>
+                              <For each={env().headers.filter((h) => h.enabled && h.key)}>
+                                {(h) => {
+                                  const name = h.key.toLowerCase()
+                                  const sent = () =>
+                                    sendsDefault(route(), current(), settings(), name)
+                                  return (
+                                    <label class="flex items-center gap-2 font-mono text-text-secondary">
+                                      <input
+                                        type="checkbox"
+                                        checked={sent()}
+                                        onChange={(e) =>
+                                          update({
+                                            defaultHeaders: {
+                                              ...current().defaultHeaders,
+                                              [name]: e.currentTarget.checked,
+                                            },
+                                          })
+                                        }
+                                      />
+                                      <span class={sent() ? '' : 'line-through text-text-muted'}>
+                                        {h.key}: {h.secret ? '••••••' : h.value}
+                                      </span>
+                                      <Show
+                                        when={
+                                          name === 'authorization' &&
+                                          isPublic() &&
+                                          current().defaultHeaders?.[name] === undefined
+                                        }
+                                      >
+                                        <span class="font-sans text-text-muted">
+                                          (off by default: public route)
+                                        </span>
+                                      </Show>
+                                    </label>
+                                  )
+                                }}
+                              </For>
+                            </div>
+                          </Show>
+                        </Section>
+
+                        <Show when={acceptsBody(route().method)}>
+                          <Section title="Body" open>
+                            <div class="flex items-center gap-1 mb-2">
+                              <For
+                                each={
+                                  [
+                                    ['raw', 'Raw'],
+                                    ['form', 'Form data'],
+                                  ] as const
+                                }
+                              >
+                                {([mode, label]) => (
+                                  <button
+                                    type="button"
+                                    aria-pressed={(current().bodyMode ?? 'raw') === mode}
+                                    onClick={() => update({ bodyMode: mode })}
+                                    class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                                      (current().bodyMode ?? 'raw') === mode
+                                        ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
+                                        : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                )}
+                              </For>
+                              <Show when={route().upload && route().upload!.mode !== 'none'}>
+                                <span class="text-xs text-text-muted ml-2">
+                                  @FileUpload: field{' '}
+                                  <code>{route().upload!.fieldName ?? 'file'}</code>
+                                  {route().upload!.mode === 'array'
+                                    ? `, up to ${route().upload!.maxCount ?? 10} files`
+                                    : ', one file'}
+                                </span>
+                              </Show>
+                            </div>
+                            <Show
+                              when={current().bodyMode === 'form'}
+                              fallback={
+                                <div class="group relative">
+                                  <textarea
+                                    class={`${inputClass} font-mono min-h-40`}
+                                    placeholder='{ "name": "value" }'
+                                    value={current().body}
+                                    onInput={(e) => update({ body: e.currentTarget.value })}
+                                  />
+                                  <HoverActions>
+                                    <Show when={current().body.trim()}>
+                                      <FormatButton
+                                        text={() => current().body}
+                                        onFormat={(body) => update({ body })}
+                                      />
+                                      <CopyButton text={() => current().body} label="Copy body" />
+                                    </Show>
+                                  </HoverActions>
+                                </div>
+                              }
+                            >
+                              <FormEditor
+                                rows={current().form ?? []}
+                                multiple={route().upload?.mode === 'array'}
+                                onChange={(form) => update({ form })}
+                              />
+                              <p class="text-xs text-text-muted mt-2">
+                                Sent as multipart/form-data. Picked files aren't saved — pick them
+                                again after reopening.
+                              </p>
+                            </Show>
+                          </Section>
+                        </Show>
+                      </>
+                    )}
+                  </Show>
+
+                  <Section
+                    title="Save to variable"
+                    open={!!(capture().path || capture().name)}
+                    count={capture().path && capture().name ? 1 : undefined}
+                  >
+                    <p class="text-xs text-text-muted mb-2">
+                      Set this up before you send. With both filled in, every 2xx response from this
+                      route copies the value at the JSON path into that variable of the environment
+                      it was sent with — log in once and routes using <code>{'{{token}}'}</code>{' '}
+                      pick it up. New variables start masked. Saved for this route only.
+                    </p>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+                      <input
+                        class={inputClass}
+                        aria-label="JSON path"
+                        placeholder="JSON path, e.g. data.accessToken"
+                        value={capture().path}
+                        onInput={(e) => setCapture({ ...capture(), path: e.currentTarget.value })}
+                      />
+                      <input
+                        class={inputClass}
+                        aria-label="Variable name"
+                        placeholder="variable, e.g. token"
+                        value={capture().name}
+                        onInput={(e) => setCapture({ ...capture(), name: e.currentTarget.value })}
+                      />
+                      <button
+                        type="button"
+                        class={`${secondaryButton} shrink-0`}
+                        disabled={!result()}
+                        title={
+                          result() ? 'Copy from the response shown now' : 'Send the request first'
+                        }
+                        onClick={captureVariable}
+                      >
+                        Save now
+                      </button>
+                    </div>
+                    <Show when={captureNote()}>
+                      <p class="text-xs text-text-muted mt-1" role="status">
+                        {captureNote()}
+                      </p>
+                    </Show>
+                  </Section>
+                </>
+              </Show>
+              <Show when={tab() === 'snippet'}>
+                <div class="py-1">
+                  <div class="flex items-center gap-1 mb-2">
+                    <For each={['curl', 'fetch'] as const}>
+                      {(kind) => (
+                        <button
+                          type="button"
+                          aria-pressed={snippetKind() === kind}
+                          onClick={() => setSnippetKind(kind)}
+                          class={`px-3 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                            snippetKind() === kind
+                              ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
+                              : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
+                          }`}
+                        >
+                          {kind}
+                        </button>
+                      )}
+                    </For>
+                    <button
+                      type="button"
+                      class={`${secondaryButton} ml-auto`}
+                      onClick={copySnippet}
+                    >
+                      Copy
+                    </button>
+                    <Show when={copied()}>
+                      <span class="text-xs text-text-muted" role="status">
+                        {copied()}
+                      </span>
+                    </Show>
+                  </div>
+                  <pre class="text-xs font-mono bg-surface-2 border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all select-text">
+                    {snippet()}
+                  </pre>
+                </div>
+              </Show>
+              <Show when={tab() === 'history'}>
+                <div class="py-1">
+                  <Show
+                    when={history().length > 0}
+                    fallback={<p class="text-xs text-text-muted">Nothing sent yet.</p>}
+                  >
+                    <ul class="flex flex-col gap-1">
+                      <For each={history()}>
+                        {(entry) => (
+                          <li>
+                            <button
+                              type="button"
+                              class="w-full flex items-center gap-2 text-xs text-left rounded px-2 py-1 hover:bg-surface-2"
+                              title="Open with these inputs"
+                              onClick={() => restore(entry)}
+                            >
+                              <span class={`font-bold w-14 shrink-0 ${methodColor(entry.method)}`}>
+                                {entry.method}
+                              </span>
+                              <span class="font-mono truncate flex-1">{historyLabel(entry)}</span>
+                              <span
+                                class={
+                                  entry.status ? statusPill(entry.status) : 'dt-pill dt-pill-err'
+                                }
+                              >
+                                {entry.status ?? 'failed'}
+                              </span>
+                              <span class="text-text-muted w-16 text-right">{entry.ms} ms</span>
+                              <span class="text-text-muted w-16 text-right">
+                                {new Date(entry.at).toLocaleTimeString()}
+                              </span>
+                            </button>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                    <button
+                      type="button"
+                      class={`${secondaryButton} mt-2`}
+                      onClick={() => setHistory([])}
+                    >
+                      Clear history
+                    </button>
+                  </Show>
+                </div>
+              </Show>
+              <Show when={tab() === 'settings'}>
+                <div class="py-1">
+                  <p class="text-xs text-text-muted mb-3">
+                    These apply to every route, not just this one, and save as you type in this
+                    browser (kept after the tab closes).
+                  </p>
+                  <Show when={hints()}>
+                    {(h) => (
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          class={secondaryButton}
+                          onClick={() => update(applyHints(inputs()!, h()))}
+                        >
+                          Fill empty inputs from OpenAPI
+                        </button>
+                        <span class="text-[0.7rem] text-text-muted">
+                          This route only: adds the query params the spec lists and an example body
+                          if the body is empty. Never overwrites what you typed.
+                        </span>
+                      </div>
+                    )}
+                  </Show>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                    <label class="flex flex-col gap-1 text-xs text-text-muted">
+                      Public route flags (comma-separated)
+                      <span class="text-[0.7rem]">
+                        On routes carrying one of these flags (e.g. <code>auth.public</code> from
+                        your auth setup), the environment's default Authorization header starts
+                        unticked — a login route needs no token — and is sent only if you tick it
+                        under the route's Headers. Names your app uses; the runner adds no flags to
+                        the request.
+                      </span>
+                      <input
+                        class={inputClass}
+                        value={publicFlagNames(settings().publicFlag).join(', ')}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings(),
+                            publicFlag: publicFlagNames(e.currentTarget.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <For
+                      each={
+                        [
+                          [
+                            'csrfCookie',
+                            'CSRF cookie',
+                            'For csrf() / csrfGuard(): on POST, PUT, PATCH and DELETE the runner reads this cookie…',
+                          ],
+                          [
+                            'csrfHeader',
+                            'CSRF header',
+                            '…and sends its value in this header, unless the route already sets it.',
+                          ],
+                          [
+                            'openApiUrl',
+                            'OpenAPI spec URL',
+                            'Where the Swagger adapter serves the spec. A route with nothing saved starts from its examples.',
+                          ],
+                          [
+                            'editorUrl',
+                            'Editor link ({file}, {line})',
+                            "What the handler link under the route's title opens; {file} and {line} are filled in.",
+                          ],
+                        ] as const
+                      }
+                    >
+                      {([key, label, help]) => (
+                        <label class="flex flex-col gap-1 text-xs text-text-muted">
+                          {label}
+                          <span class="text-[0.7rem]">{help}</span>
+                          <input
+                            class={inputClass}
+                            value={settings()[key]}
+                            onInput={(e) =>
+                              setSettings({ ...settings(), [key]: e.currentTarget.value })
+                            }
+                          />
+                        </label>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
 
               <Show when={error()}>
                 <div class="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
@@ -1125,51 +1263,6 @@ export const ApiRunnerPanel: Component = () => {
                   </Section>
                 )}
               </Show>
-
-              <Section title="History" count={history().length}>
-                <Show
-                  when={history().length > 0}
-                  fallback={<p class="text-xs text-text-muted">Nothing sent yet.</p>}
-                >
-                  <ul class="flex flex-col gap-1">
-                    <For each={history()}>
-                      {(entry) => (
-                        <li>
-                          <button
-                            type="button"
-                            class="w-full flex items-center gap-2 text-xs text-left rounded px-2 py-1 hover:bg-surface-2"
-                            title="Open with these inputs"
-                            onClick={() => restore(entry)}
-                          >
-                            <span class={`font-bold w-14 shrink-0 ${methodColor(entry.method)}`}>
-                              {entry.method}
-                            </span>
-                            <span class="font-mono truncate flex-1">{historyLabel(entry)}</span>
-                            <span
-                              class={
-                                entry.status ? statusPill(entry.status) : 'dt-pill dt-pill-err'
-                              }
-                            >
-                              {entry.status ?? 'failed'}
-                            </span>
-                            <span class="text-text-muted w-16 text-right">{entry.ms} ms</span>
-                            <span class="text-text-muted w-16 text-right">
-                              {new Date(entry.at).toLocaleTimeString()}
-                            </span>
-                          </button>
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                  <button
-                    type="button"
-                    class={`${secondaryButton} mt-2`}
-                    onClick={() => setHistory([])}
-                  >
-                    Clear history
-                  </button>
-                </Show>
-              </Section>
             </div>
           </section>
         </div>
