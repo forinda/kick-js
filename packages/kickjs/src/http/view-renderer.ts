@@ -12,8 +12,8 @@ export const VIEW_RENDERER = Symbol.for('kickjs.viewRenderer')
 export interface ViewRenderOptions {
   status?: number
   headers?: Record<string, string>
-  /** `false`: no layout — a partial response. */
-  layout?: boolean
+  /** A layout for this render, or `false` for none — a partial response. */
+  layout?: boolean | string
   locale?: string
   timeZone?: string
 }

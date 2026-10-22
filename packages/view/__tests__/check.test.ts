@@ -9,7 +9,8 @@ const BUILTINS = BUILTIN_PIPES
 function project(
   files: Record<string, string>,
   pipes: string[] = [],
-  defaultLayout?: string,
+  layouts?: string | Record<string, string>,
+  baseLayout?: string,
 ): Project {
   const templates = new Map(
     Object.entries(files).map(([name, src]) => [name, parse(src, `${name}.kick`).ast]),
@@ -18,7 +19,8 @@ function project(
     templates,
     pipes: new Set([...BUILTINS, ...pipes]),
     componentsDir: 'components',
-    defaultLayout,
+    layouts,
+    baseLayout,
   }
 }
 
@@ -101,10 +103,40 @@ describe('check', () => {
     expect(clean({ page: 'x' }).layout).toBeUndefined()
     expect(
       check('page', project({ page: 'x' }, [], 'nope')).diagnostics.map((d) => d.message)[0],
-    ).toContain("default layout 'nope'")
+    ).toContain("layout 'nope'")
     expect(errs({ page: "@layout('main')\n@slot('nope') { x }", main: '<slot />' })[0]).toContain(
       "slot 'nope'",
     )
+  })
+
+  it('layout mappings and the base layout', () => {
+    expect(
+      check('admin/x', project({ 'admin/x': 'x' }, [], { admin: 'layouts/nope' })).diagnostics[0]
+        ?.message,
+    ).toContain("layout 'layouts/nope'")
+    expect(
+      check('page', project({ page: 'x' }, [], undefined, 'layouts/nope')).diagnostics[0]?.message,
+    ).toContain("base layout 'layouts/nope'")
+    // a fill reaching the base's outlet through a mapped layout
+    expect(
+      check(
+        'admin/x',
+        project(
+          {
+            'admin/x': "@slot('head') { t }x",
+            'layouts/admin': '<slot />',
+            'layouts/base': '<slot name="head" /><slot />',
+          },
+          [],
+          { admin: 'layouts/admin' },
+          'layouts/base',
+        ),
+      ).diagnostics,
+    ).toEqual([])
+    // no resolvable layout: a warning, not an error
+    const r = check('page', project({ page: "@slot('head') { t }x" }))
+    expect(r.template).toBeDefined()
+    expect(r.diagnostics.map((d) => d.severity)).toEqual(['warning'])
   })
 
   it('components', () => {

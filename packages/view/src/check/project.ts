@@ -8,7 +8,36 @@ export interface Project {
   pipes: Set<string>
   /** Folder (inside the views folder) holding components. Default `components`. */
   componentsDir: string
-  defaultLayout?: string
+  /** A page's layout when it declares none: one name, or folder prefix → layout. */
+  layouts?: string | Record<string, string>
+  /** The shell around every page's outermost layout. */
+  baseLayout?: string
+}
+
+/**
+ * The layout for a page that declares none. A map's longest matching folder
+ * prefix wins: `{ admin: 'layouts/admin', '': 'layouts/main' }` gives
+ * `admin/users` the admin layout and everything else the main one.
+ */
+export function layoutResolver(
+  layouts?: string | Record<string, string>,
+): (page: string) => string | undefined {
+  if (layouts === undefined) return () => undefined
+  if (typeof layouts === 'string') return () => layouts
+  const prefixes = Object.keys(layouts).toSorted((a, b) => b.length - a.length)
+  return (page) => {
+    const hit = prefixes.find((p) => p === '' || page === p || page.startsWith(`${p}/`))
+    return hit === undefined ? undefined : layouts[hit]
+  }
+}
+
+/** Templates that are layouts by configuration — they never get a mapped layout themselves. */
+export function configuredLayouts(project: Project): Set<string> {
+  const names = new Set<string>()
+  if (typeof project.layouts === 'string') names.add(project.layouts)
+  else if (project.layouts) for (const v of Object.values(project.layouts)) names.add(v)
+  if (project.baseLayout) names.add(project.baseLayout)
+  return names
 }
 
 const SEGMENT = /^[A-Za-z0-9_-]+$/

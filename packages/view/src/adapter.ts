@@ -14,7 +14,7 @@ type Next = (err?: unknown) => void
 interface ViewRenderOptions {
   status?: number
   headers?: Record<string, string>
-  layout?: boolean
+  layout?: boolean | string
   locale?: string
   timeZone?: string
 }

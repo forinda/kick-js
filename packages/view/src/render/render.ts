@@ -25,8 +25,10 @@ export interface RenderEnv {
   warn(message: string): void
   /** A checked template by name: layouts and components. */
   resolve(name: string): CheckedTemplate
-  /** The layout a page gets when it declares none. */
-  defaultLayout?: string
+  /** The layout a page gets when it declares none (a folder mapping, usually). */
+  layoutFor?(page: string): string | undefined
+  /** The shell wrapped around every page's outermost layout. */
+  baseLayout?: string
   /** `@assets('entry')`: the tags for a Vite entry; `data` is the page's (for a CSP nonce). */
   assets?(entry: string, data: Record<string, unknown>): string
 }
@@ -426,14 +428,16 @@ function loopVar(m: LoopMeta, w: LoopVar): unknown {
 }
 
 /**
- * Render a checked page with `data`. The page's layout (declared, or the
- * environment's default) wraps it unless `opts.layout` is `false`.
+ * Render a checked page with `data`. Its layouts wrap it, outermost last:
+ * `opts.layout` (a name, or `false` for none), else the page's `@layout`, else
+ * the environment's mapping — then the base layout around the outermost one.
+ * `@layout(none)` and `layout: false` skip the base too.
  */
 export function render(
   template: CheckedTemplate,
   data: object,
   env: RenderEnv,
-  opts: { layout?: boolean } = {},
+  opts: { layout?: boolean | string } = {},
 ): string {
   const r = new Renderer(env)
   const page: Inst = {
@@ -444,25 +448,32 @@ export function render(
     stack: [template.name],
     depth: 0,
   }
-  let layout =
-    opts.layout === false
-      ? undefined
-      : template.layout === undefined
-        ? env.defaultLayout !== template.name
-          ? env.defaultLayout
-          : undefined
-        : (template.layout ?? undefined)
-  if (!layout) {
+  const none = opts.layout === false || (opts.layout === undefined && template.layout === null)
+  const chain: CheckedTemplate[] = []
+  if (!none) {
+    let next =
+      typeof opts.layout === 'string'
+        ? opts.layout
+        : (template.layout ?? env.layoutFor?.(template.name))
+    while (next && next !== template.name && !chain.some((t) => t.name === next)) {
+      const t = env.resolve(next)
+      chain.push(t)
+      next = t.layout ?? undefined
+    }
+    const base = env.baseLayout
+    if (base && base !== template.name && !chain.some((t) => t.name === base))
+      chain.push(env.resolve(base))
+  }
+  if (!chain.length) {
     r.nodes(template.body, page)
     return r.html()
   }
-  // Each layout renders the one inside it into its default slot; named
-  // fills pass outward until a layout's own fill replaces them.
+  // Each layout renders the one inside it into its default slot; named fills
+  // pass outward until a layout's own fill replaces them.
   let fills: Inst['fills'] = { '': { nodes: template.body, inst: page } }
   for (const [name, nodes] of Object.entries(template.fills)) fills[name] = { nodes, inst: page }
   let inst: Inst = page
-  for (;;) {
-    const t = env.resolve(layout)
+  for (const [i, t] of chain.entries()) {
     inst = {
       t,
       data: page.data,
@@ -471,11 +482,10 @@ export function render(
       stack: [...inst.stack, t.name],
       depth: 0,
     }
-    if (!t.layout) break
+    if (i === chain.length - 1) break
     const outer: Inst['fills'] = { ...fills, '': { nodes: t.body, inst } }
     for (const [name, nodes] of Object.entries(t.fills)) outer[name] = { nodes, inst }
     fills = outer
-    layout = t.layout
   }
   r.nodes(inst.t.body, inst)
   return r.html()

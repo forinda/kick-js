@@ -93,6 +93,32 @@ describe('createViews', () => {
     expect(await views.render('p', { n: 'a' }, { layout: false })).toBe('aa')
   })
 
+  it('maps dashboard layouts by folder inside a base layout', async () => {
+    const views = createViews({
+      viewsDir: dir({
+        'admin/users': "@slot('head') {<title>Users</title>}U",
+        'seller/home': 'S',
+        about: 'A',
+        'layouts/admin': 'admin[<slot />]',
+        'layouts/seller': 'seller[<slot />]',
+        'layouts/page': 'page[<slot />]',
+        'layouts/base':
+          '<head><slot name="head"><title>App</title></slot></head><body><slot /></body>',
+      }),
+      layout: { admin: 'layouts/admin', seller: 'layouts/seller', '': 'layouts/page' },
+      baseLayout: 'layouts/base',
+      warn: vi.fn(),
+    })
+    expect(await views.render('admin/users')).toBe(
+      '<head><title>Users</title></head><body>admin[U]</body>',
+    )
+    expect(await views.render('seller/home')).toBe(
+      '<head><title>App</title></head><body>seller[S]</body>',
+    )
+    expect(await views.render('about')).toBe('<head><title>App</title></head><body>page[A]</body>')
+    expect(await views.render('about', {}, { layout: false })).toBe('A')
+  })
+
   it('concurrent renders keep their own env', async () => {
     const views = createViews({ viewsDir: dir({ n: "{{ x | number:'1.2-2' }}" }) })
     const [en, de] = await Promise.all([

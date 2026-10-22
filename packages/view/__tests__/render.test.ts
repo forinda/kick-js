@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parse } from '../src/parse/template'
 import { check } from '../src/check/check'
-import type { Project } from '../src/check/project'
+import { layoutResolver, type Project } from '../src/check/project'
 import { render, RenderError, type RenderEnv } from '../src/render/render'
 import { SafeHtml } from '../src/render/safe'
 
@@ -11,13 +11,17 @@ const PIPES = {
   json: (v: unknown) => JSON.stringify(v),
 }
 
-function setup(files: Record<string, string>, env: Partial<RenderEnv> = {}) {
+type SetupEnv = Partial<RenderEnv> & { layouts?: string | Record<string, string> }
+
+function setup(files: Record<string, string>, setupEnv: SetupEnv = {}) {
+  const { layouts, ...env } = setupEnv
   const templates = new Map(Object.entries(files).map(([n, s]) => [n, parse(s, `${n}.kick`).ast]))
   const project: Project = {
     templates,
     pipes: new Set(Object.keys(PIPES)),
     componentsDir: 'components',
-    defaultLayout: env.defaultLayout,
+    layouts,
+    baseLayout: env.baseLayout,
   }
   const resolve = (name: string) => {
     const r = check(name, project)
@@ -32,6 +36,7 @@ function setup(files: Record<string, string>, env: Partial<RenderEnv> = {}) {
     pipes: PIPES,
     warn,
     resolve,
+    layoutFor: layoutResolver(layouts),
     ...env,
   }
   return { resolve, env: full, warn }
@@ -40,8 +45,8 @@ function setup(files: Record<string, string>, env: Partial<RenderEnv> = {}) {
 function r(
   files: Record<string, string>,
   data: object = {},
-  env: Partial<RenderEnv> = {},
-  opts?: { layout?: boolean },
+  env: SetupEnv = {},
+  opts?: { layout?: boolean | string },
 ) {
   const s = setup(files, env)
   return { html: render(s.resolve('page'), data, s.env, opts), warn: s.warn }
@@ -185,10 +190,89 @@ describe('render', () => {
       '<html><head><meta name="x"></head><main>\n<h1>Hi</h1></main></html>',
     )
     expect(r(files, { t: 'Hi' }, {}, { layout: false }).html).toBe('\n<h1>Hi</h1>')
-    expect(r({ page: 'p', main: '[<slot />]' }, {}, { defaultLayout: 'main' }).html).toBe('[p]')
-    expect(
-      r({ page: '@layout(none)p', main: '[<slot />]' }, {}, { defaultLayout: 'main' }).html,
-    ).toBe('p')
+    expect(r({ page: 'p', main: '[<slot />]' }, {}, { layouts: 'main' }).html).toBe('[p]')
+    expect(r({ page: '@layout(none)p', main: '[<slot />]' }, {}, { layouts: 'main' }).html).toBe(
+      'p',
+    )
+  })
+
+  it('maps layouts by folder', () => {
+    const files = {
+      'admin/users': 'U',
+      'admin/reports/q1': 'Q',
+      'seller/home': 'S',
+      page: 'P',
+      'layouts/admin': 'A[<slot />]',
+      'layouts/reports': 'R[<slot />]',
+      'layouts/seller': 'S[<slot />]',
+      'layouts/main': 'M[<slot />]',
+    }
+    const layouts = {
+      admin: 'layouts/admin',
+      'admin/reports': 'layouts/reports',
+      seller: 'layouts/seller',
+      '': 'layouts/main',
+    }
+    const s = setup(files, { layouts })
+    const out = (n: string) => render(s.resolve(n), {}, s.env)
+    expect([out('admin/users'), out('admin/reports/q1'), out('seller/home'), out('page')]).toEqual([
+      'A[U]',
+      'R[Q]',
+      'S[S]',
+      'M[P]',
+    ])
+  })
+
+  it('wraps every page in the base layout, once', () => {
+    const files = {
+      'admin/users': 'U',
+      page: 'P',
+      'already/x': "@layout('layouts/own')X",
+      'layouts/admin': 'A[<slot />]',
+      'layouts/own': "@layout('layouts/base')O[<slot />]",
+      'layouts/base': '<html><slot /></html>',
+    }
+    const s = setup(files, { layouts: { admin: 'layouts/admin' }, baseLayout: 'layouts/base' })
+    const out = (n: string, o?: { layout?: boolean | string }) => render(s.resolve(n), {}, s.env, o)
+    expect(out('admin/users')).toBe('<html>A[U]</html>')
+    expect(out('page')).toBe('<html>P</html>')
+    expect(out('already/x')).toBe('<html>O[X]</html>')
+  })
+
+  it("a page fills the base's head slot through its dashboard layout", () => {
+    const files = {
+      'admin/users': "@slot('head') {<title>Users</title>}U",
+      'layouts/admin': 'A[<slot />]',
+      'layouts/base':
+        '<head><slot name="head"><title>App</title></slot></head><body><slot /></body>',
+    }
+    const s = setup(files, { layouts: { admin: 'layouts/admin' }, baseLayout: 'layouts/base' })
+    expect(render(s.resolve('admin/users'), {}, s.env)).toBe(
+      '<head><title>Users</title></head><body>A[U]</body>',
+    )
+  })
+
+  it('@layout(none) and layout:false skip the base too', () => {
+    const files = {
+      'admin/frag': '@layout(none)F',
+      'admin/users': 'U',
+      'layouts/admin': 'A[<slot />]',
+      'layouts/base': 'B[<slot />]',
+    }
+    const s = setup(files, { layouts: { admin: 'layouts/admin' }, baseLayout: 'layouts/base' })
+    expect(render(s.resolve('admin/frag'), {}, s.env)).toBe('F')
+    expect(render(s.resolve('admin/users'), {}, s.env, { layout: false })).toBe('U')
+  })
+
+  it('a per-call layout name', () => {
+    const files = {
+      'admin/users': 'U',
+      'layouts/admin': 'A[<slot />]',
+      'layouts/print': 'P[<slot />]',
+      'layouts/base': 'B[<slot />]',
+    }
+    const s = setup(files, { layouts: { admin: 'layouts/admin' }, baseLayout: 'layouts/base' })
+    expect(render(s.resolve('admin/users'), {}, s.env, { layout: 'layouts/print' })).toBe('B[P[U]]')
   })
 
   it('components', () => {

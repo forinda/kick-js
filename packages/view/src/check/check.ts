@@ -19,7 +19,14 @@ import {
 } from '../ast'
 import { error, warning, type Diagnostic, type Span } from '../diagnostics'
 import { isUrlAttr } from '../urls'
-import { componentTag, isComponent, templateName, type Project } from './project'
+import {
+  componentTag,
+  configuredLayouts,
+  isComponent,
+  layoutResolver,
+  templateName,
+  type Project,
+} from './project'
 import { optimize } from './optimize'
 
 export type { CheckedTemplate } from '../ast'
@@ -684,20 +691,29 @@ export function check(name: string, project: Project): CheckResult {
     else body.push(n)
   }
 
-  if (project.defaultLayout !== undefined && !project.templates.has(project.defaultLayout)) {
-    c.diagnostics.push(error(ast.file, zero, `default layout '${project.defaultLayout}' not found`))
+  const base = project.baseLayout
+  if (base !== undefined && !project.templates.has(base)) {
+    c.diagnostics.push(error(ast.file, zero, `base layout '${base}' not found`))
   }
-  // The default layout applies to pages, not to components or to itself.
-  const layoutName =
-    ast.layout === undefined
-      ? component ||
-        name === project.defaultLayout ||
-        !project.templates.has(project.defaultLayout ?? '')
-        ? undefined
-        : project.defaultLayout
-      : (ast.layout ?? undefined)
-  const outlets =
+  // A page's own @layout wins; otherwise the configured mapping applies —
+  // to pages, not to components or to templates configured as layouts.
+  const mapped =
+    component || configuredLayouts(project).has(name)
+      ? undefined
+      : layoutResolver(project.layouts)(name)
+  const layoutName = ast.layout === undefined ? mapped : (ast.layout ?? undefined)
+  let outlets =
     layoutName === undefined ? undefined : c.layoutChain(layoutName, ast.layoutSpan ?? zero, name)
+  // The base layout wraps the chain, so its outlets are fillable too.
+  if (
+    base !== undefined &&
+    ast.layout !== null &&
+    !component &&
+    name !== base &&
+    project.templates.has(base)
+  ) {
+    outlets = new Set([...(outlets ?? []), ...c.signature(base).outlets])
+  }
 
   for (const f of fillNodes) {
     if (f.name in fills) {
@@ -705,7 +721,10 @@ export function check(name: string, project: Project): CheckResult {
       continue
     }
     if (!outlets) {
-      c.diagnostics.push(error(ast.file, f.span, `@slot('${f.name}') needs a layout to fill`))
+      // No layout is known here — a build that doesn't have the app's
+      // mapping, say. Kept, and filled if the page gets a layout with it.
+      c.diagnostics.push(warning(ast.file, f.span, `@slot('${f.name}') has no layout to fill here`))
+      fills[f.name] = optimize(c.nodes(f.body))
       continue
     }
     if (!outlets.has(f.name)) {

@@ -5,7 +5,7 @@
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
-import { templateName, type Project } from './check/project'
+import { layoutResolver, templateName, type Project } from './check/project'
 import { parse } from './parse/template'
 import { BUILTIN_PIPES } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
@@ -26,8 +26,8 @@ export interface ViewsBundle {
 }
 
 export interface RenderOptions {
-  /** `false`: render the page without its layout (htmx and other partial responses). */
-  layout?: boolean
+  /** A layout for this render, or `false` for none at all (htmx and other partial responses). */
+  layout?: boolean | string
   locale?: string
   timeZone?: string
 }
@@ -40,8 +40,13 @@ export interface ViewsOptions {
   /** Default `src/views/pipes.ts`. Read when `pipes` isn't given and there is no bundle. */
   pipesFile?: string
   pipes?: Record<string, Pipe | EnvPipe>
-  /** The layout a page gets when it declares none. */
-  layout?: string
+  /**
+   * The layout a page gets when it declares none: one name, or folder prefix →
+   * layout (`{ admin: 'layouts/admin', '': 'layouts/main' }`; the longest prefix wins).
+   */
+  layout?: string | Record<string, string>
+  /** The shell (CSS, assets, SEO tags) wrapped around every page's outermost layout. */
+  baseLayout?: string
   /** Default `en-US`. */
   locale?: string
   /** Default `UTC`. */
@@ -119,6 +124,7 @@ export function createViews(options: ViewsOptions = {}): Views {
   const bundle = options.bundle ?? undefined
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
+  const layoutFor = layoutResolver(options.layout)
   const warn = options.warn ?? ((m: string) => console.warn(`[kick/view] ${m}`))
   let loader: Promise<Loader> | undefined
   let appPipes: Promise<Record<string, Pipe | EnvPipe>> | undefined
@@ -158,7 +164,8 @@ export function createViews(options: ViewsOptions = {}): Views {
         templates,
         pipes: new Set([...BUILTIN_PIPES, ...Object.keys(pipes)]),
         componentsDir,
-        defaultLayout: options.layout,
+        layouts: options.layout,
+        baseLayout: options.baseLayout,
       },
       versions,
       parseErrors,
@@ -234,7 +241,8 @@ export function createViews(options: ViewsOptions = {}): Views {
           pipes: pipesFor(await getPipes(), { locale, timeZone }),
           warn,
           resolve,
-          defaultLayout: options.layout,
+          layoutFor,
+          baseLayout: options.baseLayout,
           assets: options.assets,
         },
         { layout: opts.layout },
