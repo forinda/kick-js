@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-view",
   "version": "0.0.0",
-  "description": "KickJS views \u2014 .kick templates with Angular-style syntax, rendered on every runtime and the edge",
+  "description": "KickJS views — .kick templates with Angular-style syntax, rendered on every runtime and the edge",
   "keywords": [
     "kickjs",
     "views",
@@ -14,16 +14,23 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/edge.js",
+      "worker": "./dist/edge.js",
+      "browser": "./dist/edge.js",
+      "import": "./dist/index.js"
     },
     "./file-loader": {
       "import": "./dist/file-loader.js",
       "types": "./dist/file-loader.d.ts"
+    },
+    "./virtual": {
+      "types": "./virtual.d.ts"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "virtual.d.ts"
   ],
   "scripts": {
     "build": "tsdown",

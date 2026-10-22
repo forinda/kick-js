@@ -80,25 +80,26 @@ describe('kickjsVitePlugin()', () => {
     expect(names).toContain('kickjs:virtual-modules')
     expect(names).toContain('kickjs:dev-server')
     expect(names).toContain('kickjs:devtools-flag')
+    expect(names).toContain('kickjs:views')
   })
 
-  it('returns exactly 9 sub-plugins (default config registers the devtools flag)', () => {
-    expect(plugins).toHaveLength(9)
+  it('returns exactly 10 sub-plugins (default config registers the devtools flag and views)', () => {
+    expect(plugins).toHaveLength(10)
   })
 
   it('accepts a custom entry option', () => {
     const custom = kickjsVitePlugin({ entry: 'app/server.ts' })
-    expect(custom).toHaveLength(9)
+    expect(custom).toHaveLength(10)
   })
 
   it('accepts empty options', () => {
     const noArgs = kickjsVitePlugin({})
-    expect(noArgs).toHaveLength(9)
+    expect(noArgs).toHaveLength(10)
   })
 
   it('drops the devtools flag + strip plugins when devtools: false', () => {
     const stripped = kickjsVitePlugin({ devtools: false })
-    expect(stripped).toHaveLength(7)
+    expect(stripped).toHaveLength(8)
     expect(stripped.map((p) => p.name)).not.toContain('kickjs:devtools-flag')
     expect(stripped.map((p) => p.name)).not.toContain('kickjs:devtools-strip')
   })

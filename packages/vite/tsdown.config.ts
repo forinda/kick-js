@@ -12,6 +12,13 @@ export default defineConfig({
   platform: 'node',
   minify: { compress: true, mangle: false },
   dts: true,
-  external: ['@forinda/kickjs', 'reflect-metadata', 'express', 'vite', /^node:/],
+  external: [
+    '@forinda/kickjs',
+    '@forinda/kickjs-view',
+    'reflect-metadata',
+    'express',
+    'vite',
+    /^node:/,
+  ],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

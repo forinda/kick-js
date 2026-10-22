@@ -846,9 +846,15 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../cli
+      '@forinda/kickjs-view':
+        specifier: workspace:*
+        version: link:../view
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
+      miniflare:
+        specifier: ^4.20260730.0
+        version: 4.20260730.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

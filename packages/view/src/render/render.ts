@@ -27,8 +27,8 @@ export interface RenderEnv {
   resolve(name: string): CheckedTemplate
   /** The layout a page gets when it declares none. */
   defaultLayout?: string
-  /** `@assets('entry')`: the tags for a Vite entry. */
-  assets?(entry: string): string
+  /** `@assets('entry')`: the tags for a Vite entry; `data` is the page's (for a CSP nonce). */
+  assets?(entry: string, data: Record<string, unknown>): string
 }
 
 export class RenderError extends Error {
@@ -281,7 +281,7 @@ class Renderer {
         return
       }
       case 'as':
-        if (this.env.assets) this.out.push(this.env.assets(n.en))
+        if (this.env.assets) this.out.push(this.env.assets(n.en, inst.data))
         else
           this.env.warn(
             `${inst.t.file}: @assets('${n.en}') needs the Vite plugin or an assets option`,

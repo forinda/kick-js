@@ -53,11 +53,15 @@ export interface ViewsOptions {
   /** Data every render gets, under the page's own: the current user, a CSP nonce. */
   share?: (ctx: unknown) => object | Promise<object>
   loader?: Loader
-  bundle?: ViewsBundle
+  /** Checked templates from the build (`virtual:kick-views`); `null` in dev. */
+  bundle?: ViewsBundle | null
   /** Re-check templates whose source changed, on every render. */
   dev?: boolean
-  /** `@assets('entry')`. */
-  assets?: (entry: string) => string
+  /**
+   * `@assets('entry')`: usually `(entry, data) => assetTags(entry, mode, data.cspNonce)`.
+   * `data` is the page's data with shared data merged in.
+   */
+  assets?: (entry: string, data: Record<string, unknown>) => string
   warn?: (message: string) => void
 }
 
@@ -87,8 +91,32 @@ interface State {
   checked: Map<string, CheckedTemplate>
 }
 
+type FileLoaderModule = typeof import('./loaders/file')
+
+/**
+ * How `createViews` reaches the file loader when it's given neither a loader
+ * nor a bundle. The Node entry sets it; the edge entry (`workerd`, `worker`,
+ * `browser` conditions) doesn't, so an edge build never contains `node:fs`.
+ */
+let fileLoaderModule: (() => Promise<FileLoaderModule>) | undefined
+
+export function useFileLoader(load: () => Promise<FileLoaderModule>): void {
+  fileLoaderModule = load
+}
+
+function fileLoaders(): Promise<FileLoaderModule> {
+  if (!fileLoaderModule) {
+    return Promise.reject(
+      new Error(
+        "createViews has no templates: pass the build's bundle (import kickViews from 'virtual:kick-views') or a loader",
+      ),
+    )
+  }
+  return fileLoaderModule()
+}
+
 export function createViews(options: ViewsOptions = {}): Views {
-  const bundle = options.bundle
+  const bundle = options.bundle ?? undefined
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
   const warn = options.warn ?? ((m: string) => console.warn(`[kick/view] ${m}`))
@@ -99,13 +127,13 @@ export function createViews(options: ViewsOptions = {}): Views {
   const getLoader = (): Promise<Loader> =>
     (loader ??= options.loader
       ? Promise.resolve(options.loader)
-      : import('./loaders/file').then((m) => m.fileLoader(options.viewsDir ?? 'src/views')))
+      : fileLoaders().then((m) => m.fileLoader(options.viewsDir ?? 'src/views')))
 
   const getPipes = (): Promise<Record<string, Pipe | EnvPipe>> =>
     (appPipes ??=
       options.pipes || bundle
         ? Promise.resolve(options.pipes ?? {})
-        : import('./loaders/file')
+        : fileLoaders()
             .then((m) => m.loadPipesFile(options.pipesFile ?? 'src/views/pipes.ts'))
             .then((mod) => (mod ?? {}) as Record<string, Pipe | EnvPipe>))
 
