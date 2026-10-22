@@ -108,7 +108,19 @@ export function startServer(): void {
     await server.languageFeatures.requestRefresh(false)
   })
 
-  server.documents.onDidClose(({ document }) => ws?.setBuffer(document.uri, undefined))
+  // Buffers count from the moment they open or change, not when a feature first
+  // touches them: a page checked before its new component's buffer synced
+  // would keep a stale error.
+  server.documents.onDidChangeContent(({ document }) => {
+    if (document.languageId === 'kick') ws?.sync(document.uri, document.getText())
+  })
+
+  // A closed buffer that was never saved stops counting: re-check what used it.
+  server.documents.onDidClose(async ({ document }) => {
+    if (!ws) return
+    await ws.setBuffer(document.uri, undefined)
+    await server.languageFeatures.requestRefresh(false)
+  })
 
   connection.onRequest('kick/templateNames', () => {
     if (!ws) return []

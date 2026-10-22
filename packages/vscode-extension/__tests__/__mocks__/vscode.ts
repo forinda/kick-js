@@ -104,6 +104,9 @@ export const workspace: Record<string, any> = {
   isTrusted: true,
   onDidGrantWorkspaceTrust: vi.fn(() => ({ dispose: vi.fn() })),
   createFileSystemWatcher: vi.fn((glob: string) => ({ glob, dispose: vi.fn() })),
+  findFiles: vi.fn(async () => []),
+  textDocuments: [],
+  onDidOpenTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -42,6 +42,8 @@ function startClient(context: vscode.ExtensionContext): void {
 /** Stop the running server once it has started, then start one with the current settings and trust. */
 function restart(context: vscode.ExtensionContext): Promise<void> {
   restarting = restarting.then(async () => {
+    // Not started yet: the first .kick file starts it with whatever is current then.
+    if (!client) return
     await starting
     await client?.stop().catch(() => {})
     startClient(context)
@@ -49,9 +51,17 @@ function restart(context: vscode.ExtensionContext): Promise<void> {
   return restarting
 }
 
-export function activateKickLanguage(context: vscode.ExtensionContext): void {
-  startClient(context)
+/**
+ * The server starts with the first `.kick` file: one in the workspace at
+ * activation, or the first one opened later. A KickJS app without views
+ * never runs it.
+ */
+export async function activateKickLanguage(context: vscode.ExtensionContext): Promise<void> {
+  const ensure = () => {
+    if (!client) startClient(context)
+  }
   context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument((d) => (d.languageId === 'kick' ? ensure() : undefined)),
     vscode.workspace.onDidGrantWorkspaceTrust(() => restart(context)),
     vscode.workspace.onDidChangeConfiguration((e) =>
       e.affectsConfiguration('kickjs.views') ? restart(context) : undefined,
@@ -74,6 +84,10 @@ export function activateKickLanguage(context: vscode.ExtensionContext): void {
       '`',
     ),
   )
+
+  if (vscode.workspace.textDocuments.some((d) => d.languageId === 'kick')) return ensure()
+  const found = await vscode.workspace.findFiles('**/*.kick', '**/node_modules/**', 1)
+  if (found.length) ensure()
 }
 
 export async function deactivateKickLanguage(): Promise<void> {
