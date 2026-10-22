@@ -190,6 +190,33 @@ describe('editors that send another languageId', () => {
   }, 30_000)
 })
 
+describe('ctx.render in TypeScript', () => {
+  it('completes, links and checks template names', async () => {
+    const { server, published } = await start(APP)
+    const ts = URI.file(join(APP, 'src/home.controller.ts')).toString()
+    const src = "export const show = (ctx) => ctx.render('home', {})\nctx.render('nope')\n"
+    await server.openInMemoryDocument(ts, 'typescript', src)
+    const list = await server.sendCompletionRequest(ts, { line: 0, character: 43 })
+    expect(list!.items.map((i) => i.label)).toEqual(
+      expect.arrayContaining(['home', 'layouts/main']),
+    )
+    expect(list!.items.map((i) => i.label)).not.toContain('components/user-card')
+    const [loc] = (await server.sendDefinitionRequest(ts, { line: 0, character: 42 })) as {
+      uri: string
+    }[]
+    expect(loc!.uri).toBe(views('home'))
+    await expect
+      .poll(() => published.get(ts), { timeout: 10_000 })
+      .toEqual(["template 'nope' not found"])
+    // TypeScript tooling keeps the rest of the file: no edits, no highlighting.
+    const edits = await server.sendDocumentFormattingRequest(ts, { tabSize: 2, insertSpaces: true })
+    expect(edits ?? []).toEqual([])
+    const tokens = await server.sendSemanticTokensRequest(ts)
+    expect(tokens?.data ?? []).toEqual([])
+    await server.shutdown()
+  }, 30_000)
+})
+
 describe('layout settings', () => {
   it("fill a mapped layout's slots", async () => {
     const { server, published } = await start(APP, { layout: { admin: 'layouts/main' } })
