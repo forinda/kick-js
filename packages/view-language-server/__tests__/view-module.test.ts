@@ -90,6 +90,16 @@ describe('loadViewModule', () => {
     )
     expect((await load(root, vi.fn(), true)).source).toBe('project')
   })
+  it('takes conditions in the order the package declares them, as Node does', async () => {
+    const root = project(FULL)
+    const dir = join(root, 'node_modules/@forinda/kickjs-view')
+    writeFileSync(join(dir, 'node.js'), "throw new Error('node entry')")
+    writeFileSync(
+      join(dir, 'package.json'),
+      '{"name":"@forinda/kickjs-view","version":"9.9.9","type":"module","exports":{".":{"types":"./index.d.ts","import":"./index.js","node":"./node.js"}}}',
+    )
+    expect((await load(root, vi.fn(), true)).source).toBe('project')
+  })
   it('refuses an entry outside the package folder', async () => {
     const root = project(FULL)
     const pkg = join(root, 'node_modules/@forinda/kickjs-view/package.json')

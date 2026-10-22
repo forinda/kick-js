@@ -38,12 +38,19 @@ const BUNDLED_VERSION =
         }
       })() ?? 'unknown')
 
-/** The entry an exports condition picks, following nested conditions. */
+/** Conditions active for a Node `import`. */
+const CONDITIONS = new Set(['node', 'import', 'default'])
+
+/**
+ * The entry an exports target resolves to, as Node picks it: the first active
+ * condition in the order the package declares them, following nested ones.
+ */
 function pick(target: unknown): string | undefined {
   if (typeof target === 'string') return target
   if (!target || typeof target !== 'object') return undefined
-  for (const key of ['node', 'import', 'default']) {
-    const found = pick((target as Record<string, unknown>)[key])
+  for (const [key, value] of Object.entries(target)) {
+    if (!CONDITIONS.has(key)) continue
+    const found = pick(value)
     if (found) return found
   }
   return undefined
