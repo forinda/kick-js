@@ -124,7 +124,7 @@
     "control-flow": {
       "patterns": [
         {
-          "begin": "(?<![\\w@.-])(@(?:else\\s+if|if|for|switch|case|slot|layout|assets))\\s*(\\()",
+          "begin": "(?<![\\w@.-])(@(?:else\\s+if|if|for|switch|case|slot|error|layout|assets))\\s*(\\()",
           "end": "\\)",
           "beginCaptures": {
             "1": {

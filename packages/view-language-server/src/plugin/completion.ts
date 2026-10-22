@@ -15,6 +15,9 @@ const PROPERTY = 10 as const
 const FILE = 17 as const
 const VARIABLE = 6 as const
 
+/** Request-wide names every template has (see `@forinda/kickjs-view`'s form state). */
+const FORM_STATE = ['$errors', '$old', '$flash']
+
 const KEYWORDS: Record<string, string> = {
   if: 'if (${1:condition}) {\n\t$0\n}',
   'else if': 'else if (${1:condition}) {\n\t$0\n}',
@@ -28,6 +31,7 @@ const KEYWORDS: Record<string, string> = {
   input: 'input ${1:name}',
   layout: "layout('$1')",
   slot: "slot('${1:name}') {\n\t$0\n}",
+  error: "error('${1:field}') {\n\t$0\n}",
   assets: "assets('$1')",
   verbatim: 'verbatim {\n\t$0\n}',
 }
@@ -148,7 +152,8 @@ export function completions(
     case 'slot-name':
       return layoutSlots(ws, ws.nameOf(uri)).map((label) => ({ label, kind: PROPERTY }))
     case 'expr':
-      return [...new Set(c.scope)].map((label) => ({ label, kind: VARIABLE }))
+      // Form state is in every template: errors, what was typed, flash messages.
+      return [...new Set([...c.scope, ...FORM_STATE])].map((label) => ({ label, kind: VARIABLE }))
     default:
       return []
   }

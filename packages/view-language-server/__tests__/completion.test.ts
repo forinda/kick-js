@@ -19,6 +19,14 @@ async function at(marked: string) {
 const labels = async (marked: string) => (await at(marked)).map((i) => i.label)
 
 describe('completions', () => {
+  it('@error and the form-state names', async () => {
+    const kw = await at('<p>@§')
+    expect(kw.find((i) => i.label === 'error')).toMatchObject({
+      insertText: "error('${1:field}') {\n\t$0\n}",
+    })
+    const names = (await at('<p>{{ §')).map((i) => i.label)
+    expect(names).toEqual(expect.arrayContaining(['$errors', '$old', '$flash']))
+  })
   it('keywords as snippets', async () => {
     const items = await at('<p>@§')
     expect(items.map((i) => i.label)).toEqual(

@@ -29,7 +29,7 @@ const ALL: CodeInformation = {
 const EMBEDDED: CodeInformation = { ...ALL, format: false }
 
 export const KEYWORD =
-  /^@(else\s+if|if|for|switch|case|slot|layout|assets|verbatim|let|input|else|empty|default)(?![\w$-])/
+  /^@(else\s+if|if|for|switch|case|slot|error|layout|assets|verbatim|let|input|else|empty|default)(?![\w$-])/
 
 const snapshotOf = (text: string): IScriptSnapshot => ({
   getText: (start, end) => text.slice(start, end),

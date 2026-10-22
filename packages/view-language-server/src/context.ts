@@ -45,6 +45,8 @@ function headerNames(kw: string, header: string): string[] {
     }
     return [...names.filter(Boolean), ...LOOP_VARS]
   }
+  // `@error('field') { … }` gives its body the field's message.
+  if (kw === 'error') return ['$message']
   if (kw === 'if' || kw === 'else if') {
     const as = /;\s*as\s+([\w$]+)/.exec(header)
     return as ? [as[1]!] : []
@@ -72,9 +74,10 @@ export function scopeAt(s: string, stop: number): string[] {
       continue
     }
     if (c === '@' && !/[\w@.-]/.test(s[i - 1] ?? '')) {
-      const m = /^@(else\s+if|for|if|switch|case|slot|else|empty|default|let|input)(?![\w$-])/.exec(
-        s.slice(i, i + 16),
-      )
+      const m =
+        /^@(else\s+if|for|if|switch|case|slot|error|else|empty|default|let|input)(?![\w$-])/.exec(
+          s.slice(i, i + 16),
+        )
       if (m) {
         const kw = m[1]!.replace(/\s+/g, ' ')
         let j = i + m[0].length

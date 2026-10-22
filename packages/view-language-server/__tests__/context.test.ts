@@ -28,6 +28,7 @@ describe('cursorContext', () => {
     expect(ctx('@for (x of xs) { } {{ §')).toMatchObject({ scope: [] })
     expect(ctx('@let t = 1;{{ §')).toMatchObject({ scope: ['t'] })
     expect(ctx('@if (a; as b) { {{ §')).toMatchObject({ scope: ['b'] })
+    expect(ctx("@error('title') { {{ §")).toMatchObject({ scope: ['$message'] })
     expect(ctx('@input user\n<p>{{ §')).toMatchObject({ scope: ['user'] })
     expect(ctx('@if (us§')).toMatchObject({ kind: 'expr', prefix: 'us' })
     expect(ctx('{{ a.b§')).toEqual({ kind: 'other' })
