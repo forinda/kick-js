@@ -1,5 +1,13 @@
 # kickjs-devtools
 
+## Unreleased
+
+- Renaming a page's `.kick` file (or its folder) updates the `ctx.render('…')` and `views.render('…')` calls that name it.
+- In TypeScript and JavaScript, `ctx.render('…')` names go to their template (Go to Definition) and get a warning when no template has that name. Templates you save re-check open controllers.
+- `.kick` templates: Find All References and Rename for pipes, components and layouts. Renaming a component or layout renames its file, and renaming a template file in the explorer updates its tags and `@layout('…')` uses.
+- The language server colours the template syntax with semantic tokens, alongside the TextMate grammar.
+- New settings `kickjs.views.layout` and `kickjs.views.baseLayout`, the same as `createViews({ layout, baseLayout })`. With them, pages that get their layout from the mapping check and complete their `@slot` blocks like the build does.
+
 ## 5.4.1
 
 - The `.kick` language server starts with the first `.kick` file, one in the workspace or the first you open, instead of in every KickJS workspace.
