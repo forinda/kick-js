@@ -1,5 +1,11 @@
 # @forinda/kickjs-view-language-server
 
+## 0.1.2
+
+### Patch Changes
+
+- [#1026](https://github.com/forinda/kick-js/pull/1026) [`a4eea95`](https://github.com/forinda/kick-js/commit/a4eea95444a08ebe4d9b548a025ff4f018991f01) Thanks [@forinda](https://github.com/forinda)! - Any file ending in `.kick` is treated as a template, whatever `languageId` the editor sends. Before, a client that sent `html` or `plaintext` got no diagnostics, completion or formatting at all, which is what most editors do unless you configure a language ID. New guide: setting up `kick-view-ls --stdio` in Neovim, Vim, Helix, Emacs and JetBrains IDEs.
+
 ## 0.1.1
 
 ### Patch Changes
