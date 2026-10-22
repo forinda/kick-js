@@ -1,0 +1,4 @@
+@verbatim {
+  <div id="app">{{ vueMessage }}</div>
+}
+<p>{{ real }}</p>

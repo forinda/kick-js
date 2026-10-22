@@ -29,10 +29,7 @@ for (const [srcRel, destRel, size] of SOURCES) {
   const dest = join(root, destRel)
   const svg = readFileSync(src)
   mkdirSync(dirname(dest), { recursive: true })
-  await sharp(svg, { density: 384 })
-    .resize(size, size)
-    .png({ compressionLevel: 9 })
-    .toFile(dest)
+  await sharp(svg, { density: 384 }).resize(size, size).png({ compressionLevel: 9 }).toFile(dest)
   // eslint-disable-next-line no-console
   console.log(`build-icons: ${srcRel} -> ${destRel} (${size}x${size})`)
 }

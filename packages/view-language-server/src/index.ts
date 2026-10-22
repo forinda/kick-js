@@ -1,0 +1,5 @@
+export { startServer, type ServerOptions } from './server'
+export { Workspace, type WorkspaceOptions, type ViewModule } from './workspace'
+export { kickLanguagePlugin, KickVirtualCode } from './language-plugin'
+export { createKickServicePlugin } from './plugin/index'
+export { loadViewModule } from './view-module'

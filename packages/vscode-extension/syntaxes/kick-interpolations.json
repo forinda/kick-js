@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "kick.interpolations",
+  "fileTypes": [],
+  "injectionSelector": "L:text.html.kick -comment -meta.verbatim.kick",
+  "patterns": [
+    {
+      "include": "text.html.kick#template-comment"
+    },
+    {
+      "include": "text.html.kick#interpolation"
+    }
+  ]
+}

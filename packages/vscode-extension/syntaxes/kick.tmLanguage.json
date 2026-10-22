@@ -1,0 +1,257 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kick",
+  "scopeName": "text.html.kick",
+  "fileTypes": ["kick"],
+  "patterns": [
+    {
+      "include": "#template-comment"
+    },
+    {
+      "include": "#verbatim"
+    },
+    {
+      "include": "text.html.basic"
+    }
+  ],
+  "repository": {
+    "expression": {
+      "patterns": [
+        {
+          "match": "(\\|)\\s*([A-Za-z_$][\\w$]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.pipe.kick"
+            },
+            "2": {
+              "name": "entity.name.function.pipe.kick"
+            }
+          }
+        },
+        {
+          "match": "'(?:[^'\\\\]|\\\\.)*'|\\\"(?:[^\\\"\\\\]|\\\\.)*\\\"",
+          "name": "string.quoted.kick"
+        },
+        {
+          "match": "\\b\\d+(?:\\.\\d+)?\\b",
+          "name": "constant.numeric.kick"
+        },
+        {
+          "match": "\\b(?:true|false|null)\\b",
+          "name": "constant.language.kick"
+        },
+        {
+          "match": "\\$(?:index|first|last|even|odd|count)\\b",
+          "name": "variable.language.loop.kick"
+        },
+        {
+          "match": "\\b(?:of|track|let|as)\\b",
+          "name": "keyword.other.kick"
+        },
+        {
+          "match": "\\?\\?|\\?\\.|===|!==|==|!=|<=|>=|&&|\\|\\||[!<>+\\-?:]",
+          "name": "keyword.operator.kick"
+        },
+        {
+          "match": "[A-Za-z_$][\\w$]*",
+          "name": "variable.other.readwrite.kick"
+        }
+      ]
+    },
+    "template-comment": {
+      "begin": "\\{\\{--",
+      "end": "--\\}\\}",
+      "name": "comment.block.template.kick"
+    },
+    "interpolation": {
+      "begin": "\\{\\{(?!--)",
+      "end": "\\}\\}",
+      "name": "meta.interpolation.kick",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.interpolation.begin.kick"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.interpolation.end.kick"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#expression"
+        }
+      ]
+    },
+    "verbatim": {
+      "begin": "(?<![\\w@.-])(@verbatim)\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.kick"
+        },
+        "2": {
+          "name": "punctuation.section.block.begin.kick"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.kick"
+        }
+      },
+      "contentName": "meta.verbatim.kick",
+      "patterns": [
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "text.html.basic"
+        }
+      ]
+    },
+    "braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "text.html.basic"
+        }
+      ]
+    },
+    "control-flow": {
+      "patterns": [
+        {
+          "begin": "(?<![\\w@.-])(@(?:else\\s+if|if|for|switch|case|slot|layout|assets))\\s*(\\()",
+          "end": "\\)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.kick"
+            },
+            "2": {
+              "name": "punctuation.section.parens.begin.kick"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.parens.end.kick"
+            }
+          },
+          "name": "meta.block-header.kick",
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        },
+        {
+          "begin": "(?<![\\w@.-])(@(?:let|input))\\b",
+          "end": ";|$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.kick"
+            }
+          },
+          "name": "meta.declaration.kick",
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        },
+        {
+          "match": "(?<![\\w@.-])@(?:else|empty|default)\\b",
+          "name": "keyword.control.kick"
+        },
+        {
+          "match": "\\{|\\}",
+          "name": "punctuation.section.block.kick"
+        }
+      ]
+    },
+    "binding": {
+      "patterns": [
+        {
+          "begin": "(\\[)((?:class|style)\\.[\\w-]+(?:\\.\\w+)?|[\\w:-]+)(\\])\\s*(=)\\s*(\")",
+          "end": "\"",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.binding.begin.kick"
+            },
+            "2": {
+              "name": "entity.other.attribute-name.binding.kick"
+            },
+            "3": {
+              "name": "punctuation.definition.binding.end.kick"
+            },
+            "4": {
+              "name": "punctuation.separator.key-value.kick"
+            },
+            "5": {
+              "name": "punctuation.definition.string.begin.kick"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.kick"
+            }
+          },
+          "contentName": "meta.binding-value.kick",
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        },
+        {
+          "begin": "(\\[)((?:class|style)\\.[\\w-]+(?:\\.\\w+)?|[\\w:-]+)(\\])\\s*(=)\\s*(')",
+          "end": "'",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.binding.begin.kick"
+            },
+            "2": {
+              "name": "entity.other.attribute-name.binding.kick"
+            },
+            "3": {
+              "name": "punctuation.definition.binding.end.kick"
+            },
+            "4": {
+              "name": "punctuation.separator.key-value.kick"
+            },
+            "5": {
+              "name": "punctuation.definition.string.begin.kick"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.kick"
+            }
+          },
+          "contentName": "meta.binding-value.kick",
+          "patterns": [
+            {
+              "include": "#expression"
+            }
+          ]
+        },
+        {
+          "match": "(\\[)((?:class|style)\\.[\\w-]+(?:\\.\\w+)?|[\\w:-]+)(\\])",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.binding.begin.kick"
+            },
+            "2": {
+              "name": "entity.other.attribute-name.binding.kick"
+            },
+            "3": {
+              "name": "punctuation.definition.binding.end.kick"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

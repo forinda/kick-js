@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "kick.bindings",
+  "fileTypes": [],
+  "injectionSelector": "L:text.html.kick meta.tag -string -comment -meta.verbatim.kick",
+  "patterns": [
+    {
+      "include": "text.html.kick#binding"
+    }
+  ]
+}

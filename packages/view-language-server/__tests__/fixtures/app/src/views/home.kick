@@ -1,0 +1,2 @@
+@layout('layouts/main')
+<user-card [user]="me" />

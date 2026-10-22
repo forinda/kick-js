@@ -426,6 +426,32 @@ export default defineConfig({ plugins: [viewCliPlugin] })
 - `kick fmt:views --check` lists the files that would change and exits 1, which suits CI.
 - `kick check:views` reports every error with its file, line and column, the same checks the build runs: syntax, unknown pipes, component inputs, slots, layouts and unsafe interpolation.
 
+## Editor support
+
+The KickJS VS Code extension understands `.kick` files:
+
+- highlighting for `{{ }}`, `@if` / `@for` / `@switch`, bindings and comments, on top of HTML;
+- errors as you type, from the same checks as `kick check:views`, including in unsaved files;
+- completion for `@` keywords, pipes after `|`, components and their inputs, layout and slot names, and the names in scope inside `{{ }}`;
+- HTML, CSS and Emmet completion inside templates;
+- hover on a pipe or a component to see its parameters or inputs;
+- go to definition on a component tag, `@layout('…')` or a pipe;
+- Format Document, with the same output as `kick fmt:views`;
+- template names inside `ctx.render('…')` in your controllers.
+
+In a trusted workspace the editor uses your project's installed `@forinda/kickjs-view`, so it agrees with your build. If the project has none, it uses its bundled copy and says so once in the output panel.
+
+Settings (relative to the workspace folder):
+
+| setting                     | default          |
+| --------------------------- | ---------------- |
+| `kickjs.views.dir`          | `src/views`      |
+| `kickjs.views.components`   | `components`     |
+| `kickjs.views.pipes`        | `<dir>/pipes.ts` |
+| `kickjs.views.trace.server` | `off`            |
+
+Other editors can run the language server directly: install `@forinda/kickjs-view-language-server` and start `kick-view-ls --stdio`.
+
 ## Options
 
 | option            | default                                       |                                                                                              |

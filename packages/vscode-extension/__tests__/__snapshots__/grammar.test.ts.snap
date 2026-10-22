@@ -1,0 +1,439 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`kick grammar > snapshot: bindings.kick 1`] = `
+"><button [disabled]="!ok" [class.active]="on" [style.width.px]="w">Save</button>
+#^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.tag.begin.html
+# ^^^^^^ text.html.kick meta.tag.structure.button.start.html entity.name.tag.html
+#       ^ text.html.kick meta.tag.structure.button.start.html
+#        ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.binding.begin.kick
+#         ^^^^^^^^ text.html.kick meta.tag.structure.button.start.html entity.other.attribute-name.binding.kick
+#                 ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.binding.end.kick
+#                  ^ text.html.kick meta.tag.structure.button.start.html punctuation.separator.key-value.kick
+#                   ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.string.begin.kick
+#                    ^ text.html.kick meta.tag.structure.button.start.html meta.binding-value.kick keyword.operator.kick
+#                     ^^ text.html.kick meta.tag.structure.button.start.html meta.binding-value.kick variable.other.readwrite.kick
+#                       ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.string.end.kick
+#                        ^ text.html.kick meta.tag.structure.button.start.html
+#                         ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.binding.begin.kick
+#                          ^^^^^^^^^^^^ text.html.kick meta.tag.structure.button.start.html entity.other.attribute-name.binding.kick
+#                                      ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.binding.end.kick
+#                                       ^ text.html.kick meta.tag.structure.button.start.html punctuation.separator.key-value.kick
+#                                        ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.string.begin.kick
+#                                         ^^ text.html.kick meta.tag.structure.button.start.html meta.binding-value.kick variable.other.readwrite.kick
+#                                           ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.string.end.kick
+#                                            ^ text.html.kick meta.tag.structure.button.start.html
+#                                             ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.binding.begin.kick
+#                                              ^^^^^^^^^^^^^^ text.html.kick meta.tag.structure.button.start.html entity.other.attribute-name.binding.kick
+#                                                            ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.binding.end.kick
+#                                                             ^ text.html.kick meta.tag.structure.button.start.html punctuation.separator.key-value.kick
+#                                                              ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.string.begin.kick
+#                                                               ^ text.html.kick meta.tag.structure.button.start.html meta.binding-value.kick variable.other.readwrite.kick
+#                                                                ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.string.end.kick
+#                                                                 ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.tag.end.html
+#                                                                  ^^^^ text.html.kick
+#                                                                      ^^ text.html.kick meta.tag.structure.button.end.html punctuation.definition.tag.begin.html
+#                                                                        ^^^^^^ text.html.kick meta.tag.structure.button.end.html entity.name.tag.html
+#                                                                              ^ text.html.kick meta.tag.structure.button.end.html punctuation.definition.tag.end.html
+><user-card [user]="u" compact />
+#^ text.html.kick meta.tag.custom.start.html punctuation.definition.tag.begin.html
+# ^^^^^^^^^ text.html.kick meta.tag.custom.start.html entity.name.tag.html
+#          ^ text.html.kick meta.tag.custom.start.html
+#           ^ text.html.kick meta.tag.custom.start.html punctuation.definition.binding.begin.kick
+#            ^^^^ text.html.kick meta.tag.custom.start.html entity.other.attribute-name.binding.kick
+#                ^ text.html.kick meta.tag.custom.start.html punctuation.definition.binding.end.kick
+#                 ^ text.html.kick meta.tag.custom.start.html punctuation.separator.key-value.kick
+#                  ^ text.html.kick meta.tag.custom.start.html punctuation.definition.string.begin.kick
+#                   ^ text.html.kick meta.tag.custom.start.html meta.binding-value.kick variable.other.readwrite.kick
+#                    ^ text.html.kick meta.tag.custom.start.html punctuation.definition.string.end.kick
+#                     ^ text.html.kick meta.tag.custom.start.html
+#                      ^^^^^^^ text.html.kick meta.tag.custom.start.html meta.attribute.unrecognized.compact.html entity.other.attribute-name.html
+#                             ^ text.html.kick meta.tag.custom.start.html
+#                              ^^ text.html.kick meta.tag.custom.start.html punctuation.definition.tag.end.html
+>
+#^ text.html.kick"
+`;
+
+exports[`kick grammar > snapshot: comments.kick 1`] = `
+">{{-- a template comment {{ b }} --}}
+#^^^^ text.html.kick comment.block.template.kick
+#    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ text.html.kick comment.block.template.kick
+#                                ^^^^ text.html.kick comment.block.template.kick
+><!-- an html comment -->
+#^^^^ text.html.kick comment.block.html punctuation.definition.comment.html
+#    ^^^^^^^^^^^^^^^^^ text.html.kick comment.block.html
+#                     ^^^ text.html.kick comment.block.html punctuation.definition.comment.html
+>
+#^ text.html.kick"
+`;
+
+exports[`kick grammar > snapshot: control-flow.kick 1`] = `
+">@layout('layouts/main')
+#^^^^^^^ text.html.kick meta.block-header.kick keyword.control.kick
+#       ^ text.html.kick meta.block-header.kick punctuation.section.parens.begin.kick
+#        ^^^^^^^^^^^^^^ text.html.kick meta.block-header.kick string.quoted.kick
+#                      ^ text.html.kick meta.block-header.kick punctuation.section.parens.end.kick
+>@if (user.isAdmin; as admin) {
+#^^^ text.html.kick meta.block-header.kick keyword.control.kick
+#   ^ text.html.kick meta.block-header.kick
+#    ^ text.html.kick meta.block-header.kick punctuation.section.parens.begin.kick
+#     ^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#         ^ text.html.kick meta.block-header.kick
+#          ^^^^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                 ^^ text.html.kick meta.block-header.kick
+#                   ^^ text.html.kick meta.block-header.kick keyword.other.kick
+#                     ^ text.html.kick meta.block-header.kick
+#                      ^^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                           ^ text.html.kick meta.block-header.kick punctuation.section.parens.end.kick
+#                            ^ text.html.kick
+#                             ^ text.html.kick punctuation.section.block.kick
+>  <admin-bar />
+#^^ text.html.kick
+#  ^ text.html.kick meta.tag.custom.start.html punctuation.definition.tag.begin.html
+#   ^^^^^^^^^ text.html.kick meta.tag.custom.start.html entity.name.tag.html
+#            ^ text.html.kick meta.tag.custom.start.html
+#             ^^ text.html.kick meta.tag.custom.start.html punctuation.definition.tag.end.html
+>} @else if (user) {
+#^ text.html.kick punctuation.section.block.kick
+# ^ text.html.kick
+#  ^^^^^^^^ text.html.kick meta.block-header.kick keyword.control.kick
+#          ^ text.html.kick meta.block-header.kick
+#           ^ text.html.kick meta.block-header.kick punctuation.section.parens.begin.kick
+#            ^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                ^ text.html.kick meta.block-header.kick punctuation.section.parens.end.kick
+#                 ^ text.html.kick
+#                  ^ text.html.kick punctuation.section.block.kick
+>  <p>Signed in</p>
+#^^ text.html.kick
+#  ^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.begin.html
+#   ^ text.html.kick meta.tag.structure.p.start.html entity.name.tag.html
+#    ^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.end.html
+#     ^^^^^^^^^ text.html.kick
+#              ^^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.begin.html
+#                ^ text.html.kick meta.tag.structure.p.end.html entity.name.tag.html
+#                 ^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.end.html
+>} @else {
+#^ text.html.kick punctuation.section.block.kick
+# ^ text.html.kick
+#  ^^^^^ text.html.kick keyword.control.kick
+#       ^ text.html.kick
+#        ^ text.html.kick punctuation.section.block.kick
+>  <a href="/login">Sign in</a>
+#^^ text.html.kick
+#  ^ text.html.kick meta.tag.inline.a.start.html punctuation.definition.tag.begin.html
+#   ^ text.html.kick meta.tag.inline.a.start.html entity.name.tag.html
+#    ^ text.html.kick meta.tag.inline.a.start.html
+#     ^^^^ text.html.kick meta.tag.inline.a.start.html meta.attribute.href.html entity.other.attribute-name.html
+#         ^ text.html.kick meta.tag.inline.a.start.html meta.attribute.href.html punctuation.separator.key-value.html
+#          ^ text.html.kick meta.tag.inline.a.start.html meta.attribute.href.html string.quoted.double.html punctuation.definition.string.begin.html
+#           ^^^^^^ text.html.kick meta.tag.inline.a.start.html meta.attribute.href.html string.quoted.double.html
+#                 ^ text.html.kick meta.tag.inline.a.start.html meta.attribute.href.html string.quoted.double.html punctuation.definition.string.end.html
+#                  ^ text.html.kick meta.tag.inline.a.start.html punctuation.definition.tag.end.html
+#                   ^^^^^^^ text.html.kick
+#                          ^^ text.html.kick meta.tag.inline.a.end.html punctuation.definition.tag.begin.html
+#                            ^ text.html.kick meta.tag.inline.a.end.html entity.name.tag.html
+#                             ^ text.html.kick meta.tag.inline.a.end.html punctuation.definition.tag.end.html
+>}
+#^ text.html.kick punctuation.section.block.kick
+>@for (item of items; track item.id; let i = $index) {
+#^^^^ text.html.kick meta.block-header.kick keyword.control.kick
+#    ^ text.html.kick meta.block-header.kick
+#     ^ text.html.kick meta.block-header.kick punctuation.section.parens.begin.kick
+#      ^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#          ^ text.html.kick meta.block-header.kick
+#           ^^ text.html.kick meta.block-header.kick keyword.other.kick
+#             ^ text.html.kick meta.block-header.kick
+#              ^^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                   ^^ text.html.kick meta.block-header.kick
+#                     ^^^^^ text.html.kick meta.block-header.kick keyword.other.kick
+#                          ^ text.html.kick meta.block-header.kick
+#                           ^^^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                               ^ text.html.kick meta.block-header.kick
+#                                ^^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                                  ^^ text.html.kick meta.block-header.kick
+#                                    ^^^ text.html.kick meta.block-header.kick keyword.other.kick
+#                                       ^ text.html.kick meta.block-header.kick
+#                                        ^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#                                         ^^^ text.html.kick meta.block-header.kick
+#                                            ^^^^^^ text.html.kick meta.block-header.kick variable.language.loop.kick
+#                                                  ^ text.html.kick meta.block-header.kick punctuation.section.parens.end.kick
+#                                                   ^ text.html.kick
+#                                                    ^ text.html.kick punctuation.section.block.kick
+>  <li>{{ i }}</li>
+#^^ text.html.kick
+#  ^ text.html.kick meta.tag.structure.li.start.html punctuation.definition.tag.begin.html
+#   ^^ text.html.kick meta.tag.structure.li.start.html entity.name.tag.html
+#     ^ text.html.kick meta.tag.structure.li.start.html punctuation.definition.tag.end.html
+#      ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#        ^ text.html.kick meta.interpolation.kick
+#         ^ text.html.kick meta.interpolation.kick variable.other.readwrite.kick
+#          ^ text.html.kick meta.interpolation.kick
+#           ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#             ^^ text.html.kick meta.tag.structure.li.end.html punctuation.definition.tag.begin.html
+#               ^^ text.html.kick meta.tag.structure.li.end.html entity.name.tag.html
+#                 ^ text.html.kick meta.tag.structure.li.end.html punctuation.definition.tag.end.html
+>} @empty {
+#^ text.html.kick punctuation.section.block.kick
+# ^ text.html.kick
+#  ^^^^^^ text.html.kick keyword.control.kick
+#        ^ text.html.kick
+#         ^ text.html.kick punctuation.section.block.kick
+>  <li>none</li>
+#^^ text.html.kick
+#  ^ text.html.kick meta.tag.structure.li.start.html punctuation.definition.tag.begin.html
+#   ^^ text.html.kick meta.tag.structure.li.start.html entity.name.tag.html
+#     ^ text.html.kick meta.tag.structure.li.start.html punctuation.definition.tag.end.html
+#      ^^^^ text.html.kick
+#          ^^ text.html.kick meta.tag.structure.li.end.html punctuation.definition.tag.begin.html
+#            ^^ text.html.kick meta.tag.structure.li.end.html entity.name.tag.html
+#              ^ text.html.kick meta.tag.structure.li.end.html punctuation.definition.tag.end.html
+>}
+#^ text.html.kick punctuation.section.block.kick
+>@switch (s) {
+#^^^^^^^ text.html.kick meta.block-header.kick keyword.control.kick
+#       ^ text.html.kick meta.block-header.kick
+#        ^ text.html.kick meta.block-header.kick punctuation.section.parens.begin.kick
+#         ^ text.html.kick meta.block-header.kick variable.other.readwrite.kick
+#          ^ text.html.kick meta.block-header.kick punctuation.section.parens.end.kick
+#           ^ text.html.kick
+#            ^ text.html.kick punctuation.section.block.kick
+>  @case ('a') { A }
+#^^ text.html.kick
+#  ^^^^^ text.html.kick meta.block-header.kick keyword.control.kick
+#       ^ text.html.kick meta.block-header.kick
+#        ^ text.html.kick meta.block-header.kick punctuation.section.parens.begin.kick
+#         ^^^ text.html.kick meta.block-header.kick string.quoted.kick
+#            ^ text.html.kick meta.block-header.kick punctuation.section.parens.end.kick
+#             ^ text.html.kick
+#              ^ text.html.kick punctuation.section.block.kick
+#               ^^^ text.html.kick
+#                  ^ text.html.kick punctuation.section.block.kick
+>  @default { D }
+#^^ text.html.kick
+#  ^^^^^^^^ text.html.kick keyword.control.kick
+#          ^ text.html.kick
+#           ^ text.html.kick punctuation.section.block.kick
+#            ^^^ text.html.kick
+#               ^ text.html.kick punctuation.section.block.kick
+>}
+#^ text.html.kick punctuation.section.block.kick
+>@let total = a + b;
+#^^^^ text.html.kick meta.declaration.kick keyword.control.kick
+#    ^ text.html.kick meta.declaration.kick
+#     ^^^^^ text.html.kick meta.declaration.kick variable.other.readwrite.kick
+#          ^^^ text.html.kick meta.declaration.kick
+#             ^ text.html.kick meta.declaration.kick variable.other.readwrite.kick
+#              ^ text.html.kick meta.declaration.kick
+#               ^ text.html.kick meta.declaration.kick keyword.operator.kick
+#                ^ text.html.kick meta.declaration.kick
+#                 ^ text.html.kick meta.declaration.kick variable.other.readwrite.kick
+#                  ^ text.html.kick meta.declaration.kick
+>
+#^ text.html.kick"
+`;
+
+exports[`kick grammar > snapshot: embedded.kick 1`] = `
+"><style>
+#^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.start.html punctuation.definition.tag.begin.html
+# ^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.start.html entity.name.tag.html
+#      ^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.start.html punctuation.definition.tag.end.html
+>  .card { color: red; }
+#^^ text.html.kick meta.embedded.block.html source.css
+#  ^ text.html.kick meta.embedded.block.html source.css meta.selector.css entity.other.attribute-name.class.css punctuation.definition.entity.css
+#   ^^^^ text.html.kick meta.embedded.block.html source.css meta.selector.css entity.other.attribute-name.class.css
+#       ^ text.html.kick meta.embedded.block.html source.css
+#        ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css punctuation.section.property-list.begin.bracket.curly.css
+#         ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css
+#          ^^^^^ text.html.kick meta.embedded.block.html source.css meta.property-list.css meta.property-name.css support.type.property-name.css
+#               ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css punctuation.separator.key-value.css
+#                ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css
+#                 ^^^ text.html.kick meta.embedded.block.html source.css meta.property-list.css meta.property-value.css support.constant.color.w3c-standard-color-name.css
+#                    ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css punctuation.terminator.rule.css
+#                     ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css
+#                      ^ text.html.kick meta.embedded.block.html source.css meta.property-list.css punctuation.section.property-list.end.bracket.curly.css
+></style>
+#^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.end.html punctuation.definition.tag.begin.html source.css-ignored-vscode
+# ^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.end.html punctuation.definition.tag.begin.html
+#  ^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.end.html entity.name.tag.html
+#       ^ text.html.kick meta.embedded.block.html meta.tag.metadata.style.end.html punctuation.definition.tag.end.html
+><script type="application/json">{{ data | json }}</script>
+#^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html punctuation.definition.tag.begin.html
+# ^^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html entity.name.tag.html
+#       ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html
+#        ^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html meta.attribute.type.html entity.other.attribute-name.html
+#            ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html meta.attribute.type.html punctuation.separator.key-value.html
+#             ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html meta.attribute.type.html string.quoted.double.html punctuation.definition.string.begin.html
+#              ^^^^^^^^^^^^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html meta.attribute.type.html string.quoted.double.html
+#                              ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html meta.attribute.type.html string.quoted.double.html punctuation.definition.string.end.html
+#                               ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html punctuation.definition.tag.end.html
+#                                ^^ text.html.kick meta.embedded.block.html meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#                                  ^ text.html.kick meta.embedded.block.html meta.interpolation.kick
+#                                   ^^^^ text.html.kick meta.embedded.block.html meta.interpolation.kick variable.other.readwrite.kick
+#                                       ^ text.html.kick meta.embedded.block.html meta.interpolation.kick
+#                                        ^ text.html.kick meta.embedded.block.html meta.interpolation.kick keyword.operator.pipe.kick
+#                                         ^ text.html.kick meta.embedded.block.html meta.interpolation.kick
+#                                          ^^^^ text.html.kick meta.embedded.block.html meta.interpolation.kick entity.name.function.pipe.kick
+#                                              ^ text.html.kick meta.embedded.block.html meta.interpolation.kick
+#                                               ^^ text.html.kick meta.embedded.block.html meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#                                                 ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html punctuation.definition.tag.begin.html
+#                                                  ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html punctuation.definition.tag.begin.html
+#                                                   ^^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html entity.name.tag.html
+#                                                         ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html punctuation.definition.tag.end.html
+><script>
+#^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html punctuation.definition.tag.begin.html
+# ^^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html entity.name.tag.html
+#       ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.start.html punctuation.definition.tag.end.html
+>  const a = 1
+#^^ text.html.kick meta.embedded.block.html source.js
+#  ^^^^^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js storage.type.js
+#       ^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js
+#        ^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js meta.var-single-variable.expr.js meta.definition.variable.js variable.other.constant.js
+#         ^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js meta.var-single-variable.expr.js
+#          ^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js keyword.operator.assignment.js
+#           ^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js
+#            ^ text.html.kick meta.embedded.block.html source.js meta.var.expr.js constant.numeric.decimal.js
+></script>
+#^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html punctuation.definition.tag.begin.html source.js-ignored-vscode
+# ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html punctuation.definition.tag.begin.html
+#  ^^^^^^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html entity.name.tag.html
+#        ^ text.html.kick meta.embedded.block.html meta.tag.metadata.script.end.html punctuation.definition.tag.end.html
+>
+#^ text.html.kick"
+`;
+
+exports[`kick grammar > snapshot: interpolation.kick 1`] = `
+"><h1 title="{{ t }}">{{ user.name | titlecase }}</h1>
+#^ text.html.kick meta.tag.structure.h1.start.html punctuation.definition.tag.begin.html
+# ^^ text.html.kick meta.tag.structure.h1.start.html entity.name.tag.html
+#   ^ text.html.kick meta.tag.structure.h1.start.html
+#    ^^^^^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html entity.other.attribute-name.html
+#         ^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html punctuation.separator.key-value.html
+#          ^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html punctuation.definition.string.begin.html
+#           ^^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#             ^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html meta.interpolation.kick
+#              ^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html meta.interpolation.kick variable.other.readwrite.kick
+#               ^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html meta.interpolation.kick
+#                ^^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#                  ^ text.html.kick meta.tag.structure.h1.start.html meta.attribute.title.html string.quoted.double.html punctuation.definition.string.end.html
+#                   ^ text.html.kick meta.tag.structure.h1.start.html punctuation.definition.tag.end.html
+#                    ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#                      ^ text.html.kick meta.interpolation.kick
+#                       ^^^^ text.html.kick meta.interpolation.kick variable.other.readwrite.kick
+#                           ^ text.html.kick meta.interpolation.kick
+#                            ^^^^ text.html.kick meta.interpolation.kick variable.other.readwrite.kick
+#                                ^ text.html.kick meta.interpolation.kick
+#                                 ^ text.html.kick meta.interpolation.kick keyword.operator.pipe.kick
+#                                  ^ text.html.kick meta.interpolation.kick
+#                                   ^^^^^^^^^ text.html.kick meta.interpolation.kick entity.name.function.pipe.kick
+#                                            ^ text.html.kick meta.interpolation.kick
+#                                             ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#                                               ^^ text.html.kick meta.tag.structure.h1.end.html punctuation.definition.tag.begin.html
+#                                                 ^^ text.html.kick meta.tag.structure.h1.end.html entity.name.tag.html
+#                                                   ^ text.html.kick meta.tag.structure.h1.end.html punctuation.definition.tag.end.html
+><p>{{ price | currency:'KES':'1.2-2' }} {{ a ?? 'none' }}</p>
+#^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.begin.html
+# ^ text.html.kick meta.tag.structure.p.start.html entity.name.tag.html
+#  ^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.end.html
+#   ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#     ^ text.html.kick meta.interpolation.kick
+#      ^^^^^ text.html.kick meta.interpolation.kick variable.other.readwrite.kick
+#           ^ text.html.kick meta.interpolation.kick
+#            ^ text.html.kick meta.interpolation.kick keyword.operator.pipe.kick
+#             ^ text.html.kick meta.interpolation.kick
+#              ^^^^^^^^ text.html.kick meta.interpolation.kick entity.name.function.pipe.kick
+#                      ^ text.html.kick meta.interpolation.kick keyword.operator.kick
+#                       ^^^^^ text.html.kick meta.interpolation.kick string.quoted.kick
+#                            ^ text.html.kick meta.interpolation.kick keyword.operator.kick
+#                             ^^^^^^^ text.html.kick meta.interpolation.kick string.quoted.kick
+#                                    ^ text.html.kick meta.interpolation.kick
+#                                     ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#                                       ^ text.html.kick
+#                                        ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#                                          ^ text.html.kick meta.interpolation.kick
+#                                           ^ text.html.kick meta.interpolation.kick variable.other.readwrite.kick
+#                                            ^ text.html.kick meta.interpolation.kick
+#                                             ^^ text.html.kick meta.interpolation.kick keyword.operator.kick
+#                                               ^ text.html.kick meta.interpolation.kick
+#                                                ^^^^^^ text.html.kick meta.interpolation.kick string.quoted.kick
+#                                                      ^ text.html.kick meta.interpolation.kick
+#                                                       ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#                                                         ^^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.begin.html
+#                                                           ^ text.html.kick meta.tag.structure.p.end.html entity.name.tag.html
+#                                                            ^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.end.html
+>
+#^ text.html.kick"
+`;
+
+exports[`kick grammar > snapshot: not-keywords.kick 1`] = `
+"><p>Mail hi@example.com or @someone</p>
+#^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.begin.html
+# ^ text.html.kick meta.tag.structure.p.start.html entity.name.tag.html
+#  ^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.end.html
+#   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ text.html.kick
+#                                  ^^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.begin.html
+#                                    ^ text.html.kick meta.tag.structure.p.end.html entity.name.tag.html
+#                                     ^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.end.html
+><button @click="go()" :class="{ on: x }">Go</button>
+#^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.tag.begin.html
+# ^^^^^^ text.html.kick meta.tag.structure.button.start.html entity.name.tag.html
+#       ^ text.html.kick meta.tag.structure.button.start.html
+#        ^^^^^^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.@click.html entity.other.attribute-name.html
+#              ^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.@click.html punctuation.separator.key-value.html
+#               ^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.@click.html string.quoted.double.html punctuation.definition.string.begin.html
+#                ^^^^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.@click.html string.quoted.double.html
+#                    ^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.@click.html string.quoted.double.html punctuation.definition.string.end.html
+#                     ^ text.html.kick meta.tag.structure.button.start.html
+#                      ^^^^^^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.:class.html entity.other.attribute-name.html
+#                            ^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.:class.html punctuation.separator.key-value.html
+#                             ^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.:class.html string.quoted.double.html punctuation.definition.string.begin.html
+#                              ^^^^^^^^^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.:class.html string.quoted.double.html
+#                                       ^ text.html.kick meta.tag.structure.button.start.html meta.attribute.unrecognized.:class.html string.quoted.double.html punctuation.definition.string.end.html
+#                                        ^ text.html.kick meta.tag.structure.button.start.html punctuation.definition.tag.end.html
+#                                         ^^ text.html.kick
+#                                           ^^ text.html.kick meta.tag.structure.button.end.html punctuation.definition.tag.begin.html
+#                                             ^^^^^^ text.html.kick meta.tag.structure.button.end.html entity.name.tag.html
+#                                                   ^ text.html.kick meta.tag.structure.button.end.html punctuation.definition.tag.end.html
+>
+#^ text.html.kick"
+`;
+
+exports[`kick grammar > snapshot: verbatim.kick 1`] = `
+">@verbatim {
+#^^^^^^^^^ text.html.kick keyword.control.kick
+#         ^ text.html.kick
+#          ^ text.html.kick punctuation.section.block.begin.kick
+>  <div id="app">{{ vueMessage }}</div>
+#^^ text.html.kick meta.verbatim.kick
+#  ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html punctuation.definition.tag.begin.html
+#   ^^^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html entity.name.tag.html
+#      ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html
+#       ^^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html meta.attribute.id.html entity.other.attribute-name.html
+#         ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html meta.attribute.id.html punctuation.separator.key-value.html
+#          ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html meta.attribute.id.html string.quoted.double.html punctuation.definition.string.begin.html
+#           ^^^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html meta.attribute.id.html string.quoted.double.html
+#              ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html meta.attribute.id.html string.quoted.double.html punctuation.definition.string.end.html
+#               ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.start.html punctuation.definition.tag.end.html
+#                ^ text.html.kick meta.verbatim.kick
+#                 ^ text.html.kick meta.verbatim.kick
+#                  ^^^^^^^^^^^^ text.html.kick meta.verbatim.kick
+#                              ^ text.html.kick meta.verbatim.kick
+#                               ^ text.html.kick meta.verbatim.kick
+#                                ^^ text.html.kick meta.verbatim.kick meta.tag.structure.div.end.html punctuation.definition.tag.begin.html
+#                                  ^^^ text.html.kick meta.verbatim.kick meta.tag.structure.div.end.html entity.name.tag.html
+#                                     ^ text.html.kick meta.verbatim.kick meta.tag.structure.div.end.html punctuation.definition.tag.end.html
+>}
+#^ text.html.kick punctuation.section.block.end.kick
+><p>{{ real }}</p>
+#^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.begin.html
+# ^ text.html.kick meta.tag.structure.p.start.html entity.name.tag.html
+#  ^ text.html.kick meta.tag.structure.p.start.html punctuation.definition.tag.end.html
+#   ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.begin.kick
+#     ^ text.html.kick meta.interpolation.kick
+#      ^^^^ text.html.kick meta.interpolation.kick variable.other.readwrite.kick
+#          ^ text.html.kick meta.interpolation.kick
+#           ^^ text.html.kick meta.interpolation.kick punctuation.definition.interpolation.end.kick
+#             ^^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.begin.html
+#               ^ text.html.kick meta.tag.structure.p.end.html entity.name.tag.html
+#                ^ text.html.kick meta.tag.structure.p.end.html punctuation.definition.tag.end.html
+>
+#^ text.html.kick"
+`;
