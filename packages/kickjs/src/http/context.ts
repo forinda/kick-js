@@ -1,4 +1,5 @@
 /// <reference types="multer" />
+import { setPendingResponse, viewRendererFor, type ViewRenderOptions } from './view-renderer'
 import type { RouteName, UrlForArgs } from './url-for'
 import { evaluatePreconditions, normalizeEtag, type Validators } from './conditional'
 import type { ConnectRequest as Request, ConnectNext as NextFunction } from './connect'
@@ -996,20 +997,38 @@ export class RequestContext<
   }
 
   /**
-   * Render a template using the registered view engine (EJS, Pug, Handlebars, etc.).
-   * Requires a ViewAdapter to be configured in bootstrap().
+   * Render a template. A view engine bound to the request (`KickView` from
+   * `@forinda/kickjs-view`, on every runtime) renders it when it owns the
+   * name; otherwise the runtime's engine does (Express + `ViewAdapter`).
+   * With a bound engine it returns a promise — await it, or the pipeline
+   * waits for it before answering, and a failure reaches the error handler.
    *
-   * @param template - Template name (without extension, relative to viewsDir)
+   * @param template - Template name (without extension, relative to the views folder)
    * @param data - Data to pass to the template
+   * @param opts - `status`, `headers`, `layout: false` for a partial, `locale`, `timeZone`
    *
    * @example
    * ```ts
-   * ctx.render('dashboard', { user, title: 'Dashboard' })
-   * ctx.render('emails/welcome', { name: 'Alice' })
+   * await ctx.render('dashboard', { user, title: 'Dashboard' })
+   * await ctx.render('users/row', { user }, { layout: false })
    * ```
    */
-  render(template: string, data: Record<string, any> = {}) {
-    return this._response.render(template, data)
+  render(template: string, data: Record<string, any> = {}, opts: ViewRenderOptions = {}) {
+    const renderer = viewRendererFor(this.req)
+    if (!renderer) return this._response.render(template, data)
+    const done = renderer(template, data, opts, this).then((html) => {
+      if (html === undefined) {
+        this._response.render(template, data)
+        return
+      }
+      for (const [name, value] of Object.entries(opts.headers ?? {})) this.setHeader(name, value)
+      this.html(html, opts.status ?? 200)
+    })
+    setPendingResponse(this, done)
+    // Handled here so an unawaited render isn't an unhandled rejection; the
+    // pipeline (or the caller's await) still sees the failure.
+    done.catch(() => {})
+    return done
   }
 
   /**

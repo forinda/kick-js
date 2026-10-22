@@ -64,6 +64,7 @@
  * @module @forinda/kickjs-vite
  */
 
+import { kickViewsPlugin } from './kick-views-plugin'
 import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
 import type { KickJSPluginOptions, PluginContext } from './types'
@@ -102,6 +103,8 @@ import { kickjsTypegenPlugin } from './typegen-plugin'
  * })
  * ```
  */
+export { kickViewsPlugin, type KickViewsPluginOptions } from './kick-views-plugin'
+
 export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
   const entry = options.entry ?? 'src/index.ts'
 
@@ -133,6 +136,8 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     // Typegen-on-save for bare `vite` boots — no-op under `kick dev`
     // (which claims ownership) or when @forinda/kickjs-cli is absent.
     kickjsTypegenPlugin(),
+    // `virtual:kick-views` for .kick templates — inert unless the app imports it.
+    ...(options.views === false ? [] : [kickViewsPlugin(options.views)]),
   ]
   // Register the devtools flag plugin by default. Adopters who don't
   // gate their devtools imports get a harmless no-op; adopters who do

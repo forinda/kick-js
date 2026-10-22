@@ -1,6 +1,6 @@
 # View Engines
 
-KickJS supports server-side template rendering through the **ViewAdapter**. It works with any Express-compatible template engine, including EJS, Pug, Handlebars, and Nunjucks.
+KickJS has its own template language, [`.kick` views](./views.md), which renders on every runtime and on the edge. This page covers the other option: the **ViewAdapter**, for any Express-compatible template engine — EJS, Pug, Handlebars, Nunjucks.
 
 ## Why Use a View Engine?
 
@@ -16,7 +16,7 @@ The `ViewAdapter` registers a template engine with the underlying Express app an
 
 ## Installation
 
-The `ViewAdapter` ships with `@forinda/kickjs`. Import it from the main barrel or the sub-path `@forinda/kickjs/views`. It runs on the **Express** runtime only. Fastify and h3 have no view engine, and `ctx.render()` throws there ([HTTP Runtimes](./http-runtimes.md)).
+The `ViewAdapter` ships with `@forinda/kickjs`. Import it from the main barrel or the sub-path `@forinda/kickjs/views`. `ViewAdapter` runs on the **Express** runtime only. On Fastify and h3, `ctx.render()` throws unless a `.kick` renderer is bound with [`KickView`](./views.md), which renders `.kick` templates on every runtime ([HTTP Runtimes](./http-runtimes.md)).
 
 You only need to install the template engine of your choice, and its types for TypeScript (`@types/ejs`, `@types/pug`, `@types/nunjucks`; express-handlebars ships its own):
 

@@ -25,7 +25,7 @@ import type {
   UseConnectOptions,
 } from '../runtime'
 import { lazyServeStatic } from './lazy-serve-static'
-import { compileWebRoute, readThrough, type WebRouteHooks } from '../web/handler'
+import { compileWebRoute, headFromGet, readThrough, type WebRouteHooks } from '../web/handler'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
@@ -568,14 +568,20 @@ export function h3Runtime(options: H3RuntimeOptions = {}): HttpRuntime<H3AppLike
           const run = compileWebRoute(entry, hooks, {
             bodyLimit: (app as unknown as Record<symbol, number | undefined>)[BODY_LIMIT],
           })
-          app.on(entry.method, url, (event: H3EventLike) =>
+          const handler = (event: H3EventLike) =>
             run({
               request: event.req,
               url: event.url,
               params: event.context.params ?? {},
               carry: event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req,
-            }),
-          )
+            })
+          app.on(entry.method, url, handler)
+          // HEAD answers every GET route (routes have no HEAD method of their own).
+          if (entry.method === 'GET') {
+            app.on('HEAD', url, (event: H3EventLike) =>
+              headFromGet(handler(event) as Promise<Response>),
+            )
+          }
         }
       }
     },

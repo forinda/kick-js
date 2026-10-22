@@ -183,20 +183,20 @@ What they cost you is the response _type_. A handler that ends
 `response: unknown`, because the helper hands back the engine's response object
 rather than the body, so the typed client has no payload to offer.
 
-| Method                                  | Status | Description                                     |
-| --------------------------------------- | ------ | ----------------------------------------------- |
-| `ctx.json(data, status?)`               | 200    | JSON response                                   |
-| `ctx.created(data)`                     | 201    | Created resource                                |
-| `ctx.noContent()`                       | 204    | No body                                         |
-| `ctx.problem.notFound(input?)`          | 404    | Not found, as RFC 9457 `problem+json`           |
-| `ctx.problem.badRequest(input?)`        | 400    | Bad request, as RFC 9457 `problem+json`         |
-| `ctx.notFound(message?)`                | 404    | **Deprecated** — use `ctx.problem.notFound()`   |
-| `ctx.badRequest(message)`               | 400    | **Deprecated** — use `ctx.problem.badRequest()` |
-| `ctx.html(content, status?)`            | 200    | HTML response                                   |
-| `ctx.redirect(url, status?)`            | 302    | Redirect (works on every runtime)               |
-| `ctx.download(buffer, filename, type?)` | --     | [File download](#returning-a-generated-file)    |
-| `ctx.render(template, data?)`           | 200    | Render a template (requires ViewAdapter)        |
-| `await ctx.sendResponse(response)`      | --     | Send a web `Response`, body streamed            |
+| Method                                  | Status | Description                                                    |
+| --------------------------------------- | ------ | -------------------------------------------------------------- |
+| `ctx.json(data, status?)`               | 200    | JSON response                                                  |
+| `ctx.created(data)`                     | 201    | Created resource                                               |
+| `ctx.noContent()`                       | 204    | No body                                                        |
+| `ctx.problem.notFound(input?)`          | 404    | Not found, as RFC 9457 `problem+json`                          |
+| `ctx.problem.badRequest(input?)`        | 400    | Bad request, as RFC 9457 `problem+json`                        |
+| `ctx.notFound(message?)`                | 404    | **Deprecated** — use `ctx.problem.notFound()`                  |
+| `ctx.badRequest(message)`               | 400    | **Deprecated** — use `ctx.problem.badRequest()`                |
+| `ctx.html(content, status?)`            | 200    | HTML response                                                  |
+| `ctx.redirect(url, status?)`            | 302    | Redirect (works on every runtime)                              |
+| `ctx.download(buffer, filename, type?)` | --     | [File download](#returning-a-generated-file)                   |
+| `ctx.render(template, data?, opts?)`    | 200    | Render a template ([`.kick` views](./views.md) or ViewAdapter) |
+| `await ctx.sendResponse(response)`      | --     | Send a web `Response`, body streamed                           |
 
 ::: warning Redirect destinations
 `ctx.redirect(url)` writes `url` into the `Location` header unchanged. A destination taken

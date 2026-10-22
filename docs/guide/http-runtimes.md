@@ -156,19 +156,19 @@ One difference remains: a handler that neither writes a response nor returns a v
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                     | Express      | Fastify                 | h3                                                  |
-| ------------------------------ | ------------ | ----------------------- | --------------------------------------------------- |
-| Routing + `ctx.json`           | ✅           | ✅                      | ✅                                                  |
-| Connect middleware             | ✅           | ✅ (via middie)         | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
-| Context decorators             | ✅           | ✅                      | ✅                                                  |
-| Errors / 404                   | ✅           | ✅                      | ✅                                                  |
-| Server-Sent Events             | ✅           | ✅                      | ✅                                                  |
-| Validation                     | ✅           | ✅                      | ✅                                                  |
-| `ctx.render` (views)           | ✅           | ❌ (no view engine)     | ❌ (no view engine)                                 |
-| File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart) | ✅ (web `FormData`)                                 |
-| File download (`ctx.download`) | ✅           | ✅                      | ✅                                                  |
-| Edge / Bun / Deno deploy       | ❌           | ❌                      | ✅ (via [`/web`](./edge-deployment.md))             |
-| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                      | ✅ (node); the platform's server on edge            |
+| Capability                     | Express      | Fastify                             | h3                                                  |
+| ------------------------------ | ------------ | ----------------------------------- | --------------------------------------------------- |
+| Routing + `ctx.json`           | ✅           | ✅                                  | ✅                                                  |
+| Connect middleware             | ✅           | ✅ (via middie)                     | ✅ ([node + fetch](#calling-the-app-through-fetch)) |
+| Context decorators             | ✅           | ✅                                  | ✅                                                  |
+| Errors / 404                   | ✅           | ✅                                  | ✅                                                  |
+| Server-Sent Events             | ✅           | ✅                                  | ✅                                                  |
+| Validation                     | ✅           | ✅                                  | ✅                                                  |
+| `ctx.render` (views)           | ✅           | ✅ with [`.kick` views](./views.md) | ✅ with [`.kick` views](./views.md)                 |
+| File uploads (`ctx.file`)      | ✅ (multer)  | ✅ (@fastify/multipart)             | ✅ (web `FormData`)                                 |
+| File download (`ctx.download`) | ✅           | ✅                                  | ✅                                                  |
+| Edge / Bun / Deno deploy       | ❌           | ❌                                  | ✅ (via [`/web`](./edge-deployment.md))             |
+| HTTP/2 (`server.http2`)        | ❌ (KICK007) | ✅                                  | ✅ (node); the platform's server on edge            |
 
 ## HTTPS and HTTP/2
 

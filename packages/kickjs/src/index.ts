@@ -189,6 +189,13 @@ export {
   type RequestStore,
 } from './http/request-store'
 export { requestScopeMiddleware } from './http/middleware/request-scope'
+export {
+  bindViewRenderer,
+  viewRendererFor,
+  VIEW_RENDERER,
+  type ViewRenderer,
+  type ViewRenderOptions,
+} from './http/view-renderer'
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './http/middleware/request-id'

@@ -23,6 +23,12 @@
  */
 export interface KickJSPluginOptions {
   /**
+   * `virtual:kick-views` options (folders for `.kick` templates and pipes),
+   * or `false` to leave the plugin out.
+   */
+  views?: import('./kick-views-plugin').KickViewsPluginOptions | false
+
+  /**
    * Path to the application entry file, relative to the project root.
    * This file should export the app from `bootstrap()`.
    *

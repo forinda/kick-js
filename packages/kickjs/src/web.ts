@@ -35,7 +35,7 @@ import { requestStore } from './http/request-store'
 import { forwardBackgroundWork, type PlatformContext } from './http/background'
 import { runCronJobs } from './core/cron'
 import { runJob } from './core/jobs'
-import { compileWebRoute } from './http/web/handler'
+import { compileWebRoute, headFromGet } from './http/web/handler'
 import { ROUTE_URLS, RouteUrls } from './http/url-for'
 import { loadSettings, type SettingsDeclaration } from './config/settings'
 import { DEFAULT_BODY_LIMIT, parseByteSize } from './http/body-policy'
@@ -195,6 +195,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   container.bootstrap()
 
   const app = new h3mod.H3()
+  const getUrls: Array<{ url: string; handler: (event: H3EventLike) => unknown }> = []
   const apiPrefix = options.apiPrefix ?? '/api'
   const defaultVersion = options.defaultVersion ?? 1
   const globalMiddleware = options.middlewares ?? []
@@ -236,7 +237,12 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           )
         }
         const version = route.version ?? defaultVersion
-        const mountPath = buildMountPath(apiPrefix, version, route.path)
+        // `prefix: false` mounts at the root — parity with Application.
+        const mountPath = buildMountPath(
+          route.prefix === false ? '' : apiPrefix,
+          version,
+          route.path,
+        )
         for (const entry of buildRouteTable(route.controller, { mountFlags: route.flags })) {
           const url = joinPath(mountPath, entry.path)
           // Per-handler owner so intra-controller duplicates name both methods.
@@ -250,18 +256,24 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           entry.urls = routeUrls
           routeUrls.add(owner, url)
           const run = compileWebRoute(entry, undefined, { bodyLimit })
-          app.on(entry.method, url, (event: H3EventLike) =>
+          const handler = (event: H3EventLike) =>
             run({
               request: event.req,
               url: event.url,
               params: event.context.params ?? {},
-            }),
-          )
+            })
+          app.on(entry.method, url, handler)
+          if (entry.method === 'GET') getUrls.push({ url, handler })
         }
       }
     } finally {
       _setExternalContributorSources([])
     }
+  }
+
+  // HEAD answers every GET route, as on the node engines.
+  for (const { url, handler } of getUrls) {
+    app.on('HEAD', url, (event: H3EventLike) => headFromGet(handler(event) as Promise<Response>))
   }
 
   // Anything no route answered: the same 404 / 405 problem details as the

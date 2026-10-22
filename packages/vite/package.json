@@ -48,12 +48,15 @@
   "peerDependencies": {
     "vite": ">=6.0.0",
     "@forinda/kickjs": ">=5.18.0",
-    "@forinda/kickjs-cli": ">=6.2.0"
+    "@forinda/kickjs-cli": ">=6.2.0",
+    "@forinda/kickjs-view": ">=0.0.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-cli": "workspace:*",
+    "@forinda/kickjs-view": "workspace:*",
     "@types/node": "^26.6.5",
+    "miniflare": "^4.20260730.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
@@ -80,6 +83,9 @@
       "optional": true
     },
     "@forinda/kickjs-cli": {
+      "optional": true
+    },
+    "@forinda/kickjs-view": {
       "optional": true
     }
   }

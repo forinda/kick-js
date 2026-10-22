@@ -1,0 +1,92 @@
+{
+  "name": "@forinda/kickjs-view",
+  "version": "0.0.0",
+  "description": "KickJS views — .kick templates rendered on every runtime and the edge",
+  "keywords": [
+    "kickjs",
+    "views",
+    "templates",
+    "html",
+    "ssr"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/edge.js",
+      "worker": "./dist/edge.js",
+      "browser": "./dist/edge.js",
+      "import": "./dist/index.js"
+    },
+    "./file-loader": {
+      "import": "./dist/file-loader.js",
+      "types": "./dist/file-loader.d.ts"
+    },
+    "./virtual": {
+      "types": "./virtual.d.ts"
+    },
+    "./cli": {
+      "import": "./dist/cli.js",
+      "types": "./dist/cli.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "virtual.d.ts"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit",
+    "bench": "vitest run --config vitest.bench.config.ts"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@forinda/kickjs": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@forinda/kickjs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@fastify/middie": "^9.3.5",
+    "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-cli-kit": "workspace:*",
+    "@swc/core": "^1.16.18",
+    "@types/ejs": "^3.1.5",
+    "@types/node": "^26.6.5",
+    "@types/supertest": "^7.2.1",
+    "commander": "^15.0.0",
+    "ejs": "^3.1.10",
+    "express": "^5.3.0",
+    "fastify": "^5.12.7",
+    "h3": "2.0.2",
+    "reflect-metadata": "^0.2.2",
+    "supertest": "^7.3.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://kickjs.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/view"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}
