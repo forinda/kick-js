@@ -31,6 +31,7 @@ import { publishMatchedRoute, stringifyJson } from '../runtime'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
+import type { RequestStore } from '../request-store'
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import {
@@ -125,6 +126,8 @@ type FastifyBodyParser = (
 const QUEUE = Symbol('kickjs.fastify.connectQueue')
 const READY = Symbol('kickjs.fastify.ready')
 const NEXT = Symbol('kickjs.fastify.next')
+/** The route's request store, re-entered by the error and not-found handlers. */
+const STORE = Symbol('kickjs.fastify.store')
 // Set during mountRoutes when any route carries @FileUpload metadata, so
 // nodeHandler knows to register @fastify/multipart before ready().
 const NEEDS_MULTIPART = Symbol('kickjs.fastify.needsMultipart')
@@ -143,6 +146,23 @@ function settleOrFail(reply: FastifyReplyLike, returned: unknown): void {
     }
   })
 }
+/**
+ * Run `fn` in the store the matched route opened. An error before any route
+ * ran (a body Fastify couldn't parse) uses the store already active, or one
+ * of its own, disposed when the response closes.
+ */
+function inRouteStore(raw: IncomingMessage, res: ServerResponse, fn: () => void): void {
+  const own = (raw as { [STORE]?: RequestStore })[STORE]
+  if (own) return void requestStore.run(own, fn)
+  if (requestStore.getStore()) return fn()
+  const header = raw.headers['x-request-id']
+  const store = createRequestStore(
+    (raw as { requestId?: string }).requestId || (Array.isArray(header) ? header[0] : header),
+  )
+  res.once('close', () => disposeRequestStore(store))
+  requestStore.run(store, fn)
+}
+
 /** `notFoundFallthrough: false` — answer unmatched requests instead of handing them back. */
 const NO_FALLTHROUGH = Symbol('kickjs.fastify.noFallthrough')
 
@@ -360,6 +380,7 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     // `req.requestId` inside the frame (e.g. request-logger) matches the store
     // and the X-Request-Id response header — parity with Express.
     raw.requestId = store.requestId
+    ;(raw as { [STORE]?: RequestStore })[STORE] = store
     if (!reply.getHeader('x-request-id')) reply.header('x-request-id', store.requestId)
 
     // @PreDestroy teardown for REQUEST-scoped instances once the response
@@ -614,12 +635,15 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         }
         // Pass the reply DRIVER (not raw res) so the connect-style
         // notFoundHandler's `res.status().json()` lands on the Fastify reply.
-        settleOrFail(
-          reply,
-          (mw as (req: unknown, res: unknown, next: () => void) => unknown)(
-            request.raw,
-            replyDriver(reply),
-            NOOP_NEXT,
+        // In the route's store when a route handed over (`callNotFound()`).
+        inRouteStore(request.raw, reply.raw, () =>
+          settleOrFail(
+            reply,
+            (mw as (req: unknown, res: unknown, next: () => void) => unknown)(
+              request.raw,
+              replyDriver(reply),
+              NOOP_NEXT,
+            ),
           ),
         )
       })
@@ -629,13 +653,17 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       app.setErrorHandler((err, request, reply) => {
         // Reply driver (not raw res) so the connect-style errorHandler's
         // `res.status().json()` / `setHeader` land on the Fastify reply.
-        settleOrFail(
-          reply,
-          (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
-            err,
-            request.raw,
-            replyDriver(reply),
-            NOOP_NEXT,
+        // In the route's store: Fastify calls this outside it, and an error
+        // page should see the handler's ctx values and REQUEST-scoped instances.
+        inRouteStore(request.raw, reply.raw, () =>
+          settleOrFail(
+            reply,
+            (mw as (e: unknown, req: unknown, res: unknown, next: () => void) => unknown)(
+              err,
+              request.raw,
+              replyDriver(reply),
+              NOOP_NEXT,
+            ),
           ),
         )
       })

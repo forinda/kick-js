@@ -282,9 +282,13 @@ export function compileWebRoute(
       try {
         await Promise.race([pipeline, driver.ready])
       } catch (err) {
+        // Inside the request's store: an error page renders with the same
+        // context and REQUEST-scoped services the route had.
         if (!driver.settled) {
-          if (hooks?.onError) await hooks.onError(err, req, driver)
-          if (!driver.settled) await builtInError(err, req, driver, NOOP_NEXT)
+          await requestStore.run(store, async () => {
+            if (hooks?.onError) await hooks.onError(err, req, driver)
+            if (!driver.settled) await builtInError(err, req, driver, NOOP_NEXT)
+          })
         }
       }
       if (!driver.settled) {

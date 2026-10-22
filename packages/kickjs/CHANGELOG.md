@@ -1,5 +1,18 @@
 # @forinda/kickjs
 
+## 10.10.0
+
+### Minor Changes
+
+- [#1005](https://github.com/forinda/kick-js/pull/1005) [`cd89641`](https://github.com/forinda/kick-js/commit/cd896416528a541459d896cec97f95de31893731) Thanks [@forinda](https://github.com/forinda)! - `KickCronAdapter({ schedule })` drives `@Cron` jobs with any scheduler library — node-cron, `cron`, your own — instead of `croner`: a function that starts one job's timer and returns something with `stop()`. The adapter still resolves each job, applies `enabled` and `overlap`, reports failures, keeps to one worker per cluster and waits for running jobs on shutdown. Without `schedule` it uses `croner` as before. New types: `CronScheduler`, `CronSchedule`.
+
+### Patch Changes
+
+- [#1010](https://github.com/forinda/kick-js/pull/1010) [`9ba0d62`](https://github.com/forinda/kick-js/commit/9ba0d62d6e62569d96c7b7e1448e3d68c0c2e076) Thanks [@forinda](https://github.com/forinda)! - Error and not-found handlers run in the request's AsyncLocalStorage store on every engine, so an error page's code (Inertia's `share()`, say) can use the request.
+  
+  - **h3 and the web fetch entry:** they ran outside any store and threw `RequestContext.set called outside an AsyncLocalStorage frame` for an unknown URL or a handler that threw.
+  - **Fastify:** a handler's error ran in an outer store. Its `ctx` values were missing there, and REQUEST-scoped services resolved to new instances.
+
 ## 10.9.0
 
 ### Minor Changes

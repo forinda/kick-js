@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.1.2
+
+### Patch Changes
+
+- [#1007](https://github.com/forinda/kick-js/pull/1007) [`ecf1834`](https://github.com/forinda/kick-js/commit/ecf1834be49603535ad5b2d11444b45e45f61ba3) Thanks [@forinda](https://github.com/forinda)! - Pages served by Vite load their dependencies pre-bundled again. The plugin turned dependency discovery off for every environment, so in an Inertia app each file of a package like `@tabler/icons-react` loaded as its own request (thousands per page). The server environment keeps Vite's default, discovery off.
+
 ## 8.1.1
 
 ### Patch Changes

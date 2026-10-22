@@ -26,6 +26,8 @@ import type {
 } from '../runtime'
 import { lazyServeStatic } from './lazy-serve-static'
 import { compileWebRoute, headFromGet, readThrough, type WebRouteHooks } from '../web/handler'
+import { requestStore } from '../request-store'
+import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
 import { createLogger } from '../../core/logger'
 import { errorHandler, notFoundHandler } from '../middleware/error-handler'
@@ -114,6 +116,27 @@ async function runConnectTerminal(
   const carry = event.req.runtime?.node?.req ?? FETCH_CONNECT.get(event)?.req
   const req = carry ? readThrough(shim, carry) : shim
   const driver = new WebResponseDriver(event.req.signal)
+  // A request store of its own, as a route has: the handler (an error page,
+  // say) can use the RequestContext and REQUEST-scoped services.
+  const store = createRequestStore(
+    (req as { requestId?: string }).requestId || (event.req.headers.get('x-request-id') ?? ''),
+  )
+  const work = requestStore.run(store, () => answerTerminal(mw, req, driver, err))
+  // After the handler finishes too: a streamed answer settles `ready` while
+  // the handler may still be using its REQUEST-scoped instances. A handler
+  // that fails may never answer, so its failure disposes at once.
+  const dispose = () => disposeRequestStore(store)
+  work.then(() => driver.ready).then(dispose, dispose)
+  await work
+  return driver.ready
+}
+
+async function answerTerminal(
+  mw: ConnectMiddleware | undefined,
+  req: Parameters<typeof builtInNotFound>[0],
+  driver: WebResponseDriver,
+  err: unknown,
+): Promise<void> {
   // A failing handler is an error in its own right: answered as one below.
   let failure = err
   if (mw) {
@@ -144,7 +167,6 @@ async function runConnectTerminal(
     if (failure !== undefined) await builtInError(failure, req, driver, NOOP_NEXT)
     else builtInNotFound(req, driver, NOOP_NEXT)
   }
-  return driver.ready
 }
 
 // ── Connect middleware on the fetch path ─────────────────────────────────
