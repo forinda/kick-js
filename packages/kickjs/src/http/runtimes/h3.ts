@@ -121,8 +121,11 @@ async function runConnectTerminal(
   const store = createRequestStore(
     (req as { requestId?: string }).requestId || (event.req.headers.get('x-request-id') ?? ''),
   )
-  void driver.ready.finally(() => disposeRequestStore(store))
-  await requestStore.run(store, () => answerTerminal(mw, req, driver, err))
+  const work = requestStore.run(store, () => answerTerminal(mw, req, driver, err))
+  // After the handler finishes too: a streamed answer settles `ready` while
+  // the handler may still be using its REQUEST-scoped instances.
+  void Promise.allSettled([work, driver.ready]).then(() => disposeRequestStore(store))
+  await work
   return driver.ready
 }
 
