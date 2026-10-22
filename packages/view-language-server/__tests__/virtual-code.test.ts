@@ -73,6 +73,12 @@ describe('KickVirtualCode', () => {
     expect(html('<p>{{ a(')).toBe('<p>     ')
     expect(html('@if (a {')).toBe('        ')
   })
+
+  it('a closing tag being typed', () => {
+    expect(html('<p>x</')).toBe('<p>x</')
+    expect(html('<p>x</ ')).toBe('<p>x</ ')
+    expect(html('<p>x</>')).toBe('<p>x</>')
+  })
 })
 
 describe('kickLanguagePlugin', () => {

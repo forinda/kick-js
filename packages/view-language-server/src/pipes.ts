@@ -11,16 +11,17 @@ export interface PipeDeclaration {
 }
 
 const DECL =
-  /^export\s+(?:(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]*)?=\s*(?:\(([^)]*)\)|([A-Za-z_$][\w$]*)\s*=>)|function\s+([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(([^)]*)\))/
+  /^export\s+(?:(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]*)?=\s*(?:\(([^)]*)\)|([A-Za-z_$][\w$]*)\s*=>)|function\s+([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\(([^)]*)\))/d
 
 export function pipeDeclarations(source: string): Map<string, PipeDeclaration> {
   const out = new Map<string, PipeDeclaration>()
   source.split('\n').forEach((text, line) => {
     const m = DECL.exec(text)
     if (!m) return
-    const name = (m[1] ?? m[4])!
+    const group = m[1] === undefined ? 4 : 1
+    const name = m[group]!
     const params = (m[2] ?? m[3] ?? m[5] ?? '').replace(/\s+/g, ' ').trim()
-    out.set(name, { line, column: text.indexOf(name), signature: `${name}(${params})` })
+    out.set(name, { line, column: m.indices![group]![0], signature: `${name}(${params})` })
   })
   return out
 }

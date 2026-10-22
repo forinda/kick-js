@@ -6,6 +6,10 @@ import * as vscode from 'vscode'
 import { LanguageClient, TransportKind, type ServerOptions } from 'vscode-languageclient/node'
 
 let client: LanguageClient | undefined
+/** The current client's `start()`: a client can't be stopped while it's starting. */
+let starting: Promise<void> = Promise.resolve()
+/** Restarts run one after another. */
+let restarting: Promise<void> = Promise.resolve()
 
 /** `ctx.render('` / `views.render("` up to the cursor. */
 const RENDER = /\b(?:ctx|views)\.render\(\s*['"`][^'"`]*$/
@@ -30,23 +34,28 @@ function startClient(context: vscode.ExtensionContext): void {
       // Untrusted: the server never imports the project's own view package.
       trusted: vscode.workspace.isTrusted,
     },
-    synchronize: {
-      fileEvents: [
-        vscode.workspace.createFileSystemWatcher('**/*.kick'),
-        vscode.workspace.createFileSystemWatcher('**/pipes.{ts,js}'),
-      ],
-    },
+    // The server registers its own file watchers, including the configured pipes file.
   })
-  void client.start()
+  starting = client.start().catch(() => {})
+}
+
+/** Stop the running server once it has started, then start one with the current settings and trust. */
+function restart(context: vscode.ExtensionContext): Promise<void> {
+  restarting = restarting.then(async () => {
+    await starting
+    await client?.stop().catch(() => {})
+    startClient(context)
+  })
+  return restarting
 }
 
 export function activateKickLanguage(context: vscode.ExtensionContext): void {
   startClient(context)
   context.subscriptions.push(
-    vscode.workspace.onDidGrantWorkspaceTrust(async () => {
-      await client?.stop()
-      startClient(context)
-    }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => restart(context)),
+    vscode.workspace.onDidChangeConfiguration((e) =>
+      e.affectsConfiguration('kickjs.views') ? restart(context) : undefined,
+    ),
   )
 
   context.subscriptions.push(
@@ -68,6 +77,8 @@ export function activateKickLanguage(context: vscode.ExtensionContext): void {
 }
 
 export async function deactivateKickLanguage(): Promise<void> {
+  await restarting
+  await starting
   await client?.stop()
   client = undefined
 }

@@ -38,7 +38,10 @@ function provider() {
 const docWith = (line: string) => ({ lineAt: () => ({ text: line }) })
 
 describe('activateKickLanguage', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    client.start.mockImplementation(async () => {})
+  })
 
   it('starts a client over the bundled server for kick documents', () => {
     activateKickLanguage(context)
@@ -75,5 +78,33 @@ describe('activateKickLanguage', () => {
     expect((await at('views.render("ho'))!.map((i) => i.label)).toEqual(['home', 'layouts/main'])
     expect(await at("ctx.json('")).toBeUndefined()
     expect(client.sendRequest).toHaveBeenCalledWith('kick/templateNames')
+  })
+
+  it('restarts the server when a views setting changes', async () => {
+    activateKickLanguage(context)
+    const onChange = vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)![0] as (
+      e: unknown,
+    ) => Promise<void>
+    await onChange({ affectsConfiguration: (s: string) => s === 'kickjs.editor' })
+    expect(client.stop).not.toHaveBeenCalled()
+    await onChange({ affectsConfiguration: (s: string) => s === 'kickjs.views' })
+    expect(client.stop).toHaveBeenCalledTimes(1)
+    expect(client.ctor).toHaveBeenCalledTimes(2)
+  })
+
+  it('waits for startup before restarting on trust grant', async () => {
+    let started!: () => void
+    client.start.mockImplementationOnce(() => new Promise<void>((r) => (started = r)))
+    activateKickLanguage(context)
+    const grant = vi
+      .mocked(vscode.workspace.onDidGrantWorkspaceTrust)
+      .mock.calls.at(-1)![0] as () => Promise<void>
+    const restarted = grant()
+    await Promise.resolve()
+    expect(client.stop).not.toHaveBeenCalled()
+    started()
+    await restarted
+    expect(client.stop).toHaveBeenCalledTimes(1)
+    expect(client.ctor).toHaveBeenCalledTimes(2)
   })
 })

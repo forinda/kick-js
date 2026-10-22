@@ -101,7 +101,7 @@ export class Workspace {
     const name = this.nameOf(uri)
     if (!name) return
     const e = this.entries.get(name)
-    if (text === undefined && !e?.disk) {
+    if (text === undefined && e?.disk === undefined) {
       this.remove(name)
       return
     }

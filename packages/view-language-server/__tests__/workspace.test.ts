@@ -93,6 +93,14 @@ describe('Workspace', () => {
     )
   })
 
+  it('keeps an empty file after its editor closes', async () => {
+    const { ws, uri } = workspace({ 'src/views/empty.kick': '' })
+    await ws.load()
+    ws.setBuffer(uri('empty'), '<p></p>')
+    ws.setBuffer(uri('empty'), undefined)
+    expect(ws.names()).toContain('empty')
+  })
+
   it('checks only the changed file and its dependents', async () => {
     const files: Record<string, string> = { 'src/views/layouts/main.kick': '<main><slot /></main>' }
     for (let i = 0; i < 50; i++)

@@ -5,7 +5,7 @@
  */
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createConnection, createServer, createSimpleProject } from '@volar/language-server/node.js'
 import { create as createCssService } from 'volar-service-css'
 import { create as createEmmetService } from 'volar-service-emmet'
@@ -31,21 +31,30 @@ export interface ServerOptions {
   trusted?: boolean
 }
 
-async function listKick(dir: string): Promise<string[]> {
+/** Every `.kick` file under `dir`; none when it doesn't exist. */
+export async function listKick(dir: string): Promise<string[]> {
   try {
-    const entries = await readdir(dir, { recursive: true, withFileTypes: true })
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith('.kick'))
-      .map((e) => join(e.parentPath, e.name))
+    // Names, not Dirents: Dirent.parentPath needs Node 20.12.
+    const names = await readdir(dir, { recursive: true })
+    return names.filter((n) => n.endsWith('.kick')).map((n) => join(dir, n))
   } catch {
     return []
   }
+}
+
+/** What the server watches: every template, and the pipes file wherever it's configured. */
+export function watchPatterns(root: string, pipesFile: string): string[] {
+  const patterns = ['**/*.kick', '**/pipes.{ts,js}']
+  if (!/^pipes\.(ts|js)$/.test(basename(pipesFile)))
+    patterns.push(relative(root, pipesFile).split(sep).join('/'))
+  return patterns
 }
 
 export function startServer(): void {
   const connection = createConnection()
   const server = createServer(connection)
   let ws: Workspace | undefined
+  let watched: string[] = []
 
   connection.listen()
 
@@ -63,11 +72,13 @@ export function startServer(): void {
       (m) => hasViews && connection.console.warn(m),
       opts.trusted === true,
     )
+    const pipesFile = at(opts.pipesFile ?? join(viewsDir, 'pipes.ts'))
+    watched = watchPatterns(root, pipesFile)
     ws = new Workspace({
       root,
       viewsDir,
       componentsDir: opts.componentsDir ?? 'components',
-      pipesFile: at(opts.pipesFile ?? join(viewsDir, 'pipes.ts')),
+      pipesFile,
       view,
       read: (p) => readFile(p, 'utf8').catch(() => undefined),
       list: listKick,
@@ -83,7 +94,7 @@ export function startServer(): void {
 
   connection.onInitialized(() => {
     server.initialized()
-    void server.fileWatcher.watchFiles(['**/*.kick', '**/pipes.{ts,js}'])
+    void server.fileWatcher.watchFiles(watched)
   })
 
   server.fileWatcher.onDidChangeWatchedFiles(async ({ changes }) => {

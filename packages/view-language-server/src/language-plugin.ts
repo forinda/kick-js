@@ -103,7 +103,8 @@ function scan(s: string): Scan {
       i = end < 0 ? s.length : end + 3
       continue
     }
-    if (c === '<' && /[A-Za-z/]/.test(s[i + 1] ?? '')) {
+    // `</` alone (a close tag being typed) is text until a name follows.
+    if (c === '<' && /^<\/?[A-Za-z]/.test(s.slice(i, i + 3))) {
       i = tag(s, i, out)
       continue
     }
