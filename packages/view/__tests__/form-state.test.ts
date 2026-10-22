@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { FLASH_KEY, FORM_ERRORS_KEY, OLD_INPUT_KEY } from '@forinda/kickjs'
+import {
+  FLASH_KEY,
+  FORM_ERRORS_KEY,
+  OLD_INPUT_KEY,
+  PREVIOUS_URL_KEY,
+  SECRET_FIELD,
+} from '@forinda/kickjs'
+import { render } from '../src/render/render'
 import { createViews } from '../src/index'
 import { check } from '../src/check/check'
 import { parse } from '../src/parse/template'
@@ -77,7 +84,10 @@ describe('form state', () => {
       flash: FLASH_KEY,
       errors: FORM_ERRORS_KEY,
       old: OLD_INPUT_KEY,
+      previous: PREVIOUS_URL_KEY,
     })
+    const { SECRET_FIELD: viewSecret } = await import('../src/form-state')
+    expect(viewSecret.source).toBe(SECRET_FIELD.source)
   })
 })
 
@@ -145,5 +155,95 @@ describe('refill from $old', () => {
     expect(html).toContain('<input name="api_token">')
     expect(html).toContain('value="7"')
     expect(html).not.toContain('value="9"')
+  })
+})
+
+describe('review fixes', () => {
+  const page = (src: string) => createViews({ viewsDir: dir({ page: src }), warn: vi.fn() })
+
+  it('remembers the last full page a GET rendered, for going back', async () => {
+    const views = page('<p></p>')
+    const ctx = (method: string, url: string) => ({
+      req: { method, url, originalUrl: url },
+      session: { data: {} as Record<string, unknown> },
+    })
+    const get = ctx('GET', '/products/new?step=2')
+    await views.render('page', {}, { ctx: get })
+    expect(get.session.data.__inertia_previous).toBe('/products/new?step=2')
+    const partial = ctx('GET', '/rows')
+    await views.render('page', {}, { ctx: partial, layout: false })
+    expect(partial.session.data.__inertia_previous).toBeUndefined()
+    const post = ctx('POST', '/products')
+    await views.render('page', {}, { ctx: post })
+    expect(post.session.data.__inertia_previous).toBeUndefined()
+  })
+
+  it('never refills a control whose type is bound, or short password names', async () => {
+    const html = await page(
+      '<input [type]="show ? \'text\' : \'password\'" name="secretish">\n<input name="pwd">\n<input name="pin">',
+    ).render('page', { show: true, $old: { secretish: 'hunter2', pwd: 'p', pin: '1' } })
+    expect(html).not.toContain('hunter2')
+    expect(html).not.toContain('value="p"')
+    expect(html).not.toContain('value="1"')
+  })
+
+  it('render() on its own works for templates with named inputs', () => {
+    const ast = parse('<input name="title">', 'p.kick').ast
+    const project = {
+      templates: new Map([['p', ast]]),
+      pipes: new Set(BUILTIN_PIPES),
+      componentsDir: 'components',
+    }
+    const t = check('p', project).template!
+    expect(
+      render(
+        t,
+        {},
+        {
+          locale: 'en-US',
+          timeZone: 'UTC',
+          strict: true,
+          pipes: {},
+          warn: vi.fn(),
+          resolve: () => t,
+        },
+      ),
+    ).toBe('<input name="title">')
+  })
+
+  it('refills options and checkboxes with dynamic values, in loops and ifs', async () => {
+    const views = page(
+      [
+        '<select name="cat">',
+        '  @if (true) { <option value="">Pick</option> }',
+        '  @for (c of cats; track c.id) { <option value="{{ c.id }}">{{ c.name }}</option> }',
+        '  <option value="other">Other</option>',
+        '</select>',
+        '@for (t of tags; track t) { <input type="radio" name="tag" value="{{ t }}"> }',
+      ].join('\n'),
+    )
+    const html = await views.render('page', {
+      cats: [
+        { id: '1', name: 'A' },
+        { id: '2', name: 'B' },
+      ],
+      tags: ['x', 'y'],
+      $old: { cat: '2', tag: 'y' },
+    })
+    expect(html).toContain('<option value="2" selected>')
+    expect(html).not.toContain('<option value="1" selected>')
+    expect(html).toContain('value="y" checked')
+    // Numeric ids: the submitted value is the string '2'.
+    const numeric = await views.render('page', {
+      cats: [
+        { id: 1, name: 'A' },
+        { id: 2, name: 'B' },
+      ],
+      tags: [],
+      $old: { cat: '2' },
+    })
+    expect(numeric).toContain('<option value="2" selected>')
+    const other = await views.render('page', { cats: [], tags: [], $old: { cat: 'other' } })
+    expect(other).toContain('<option value="other" selected>')
   })
 })

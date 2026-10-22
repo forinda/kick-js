@@ -2,7 +2,7 @@
  * `createViews`: templates from a loader or a build's bundle, checked once
  * and cached, rendered with the app's pipes and shared data.
  */
-import { takeFormState } from './form-state'
+import { rememberPage, takeFormState } from './form-state'
 import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './ast'
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
@@ -248,6 +248,7 @@ export function createViews(options: ViewsOptions = {}): Views {
           }
         : await current().then((s) => (n: string) => checked(s, n))
       const template = resolve(name)
+      rememberPage(opts.ctx, opts.layout)
       const shared = options.share ? await options.share(opts.ctx) : {}
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'

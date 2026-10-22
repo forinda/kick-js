@@ -334,7 +334,7 @@ export const app = await bootstrap({
   modules,
   middlewares: [session({ secret: env.SESSION_SECRET, store: 'cookie' })],
   adapters: [KickView({ views })],
-  onError: formErrorHandler(), // with Inertia: inertiaErrorHandler(formErrorHandler())
+  onError: formErrorHandler(), // with Inertia: formErrorHandler(inertiaErrorHandler())
 })
 ```
 
@@ -363,9 +363,9 @@ async create(ctx: RequestContext) {
 </form>
 ```
 
-- **Going back.** When route validation fails on a browser form post (urlencoded or multipart, not asking for JSON only, not an Inertia visit), `formErrorHandler()` stores the errors and the submitted values in the session and redirects (303) to the page the form was on: the `Referer`, when it's this site, else `formErrorHandler(fallback, { fallbackUrl })` (default `/`). Everything else goes to the usual error handler. It needs `session()`; without it a failed form post gets the usual 422.
+- **Going back.** When route validation fails on a browser form submit (urlencoded or multipart, asking for HTML, not an Inertia visit), `formErrorHandler()` stores the errors and the submitted values in the session and redirects (303) to the page the form was on: the last full page a GET rendered in this session, else the `Referer` when it's this site, else `formErrorHandler(fallback, { fallbackUrl })` (default `/`). `fetch()` posting `FormData`, API calls and everything else go to the usual error handler. It needs `session()`; without it a failed form post gets the usual 422. With Inertia, put Inertia's handler inside: `formErrorHandler(inertiaErrorHandler())`.
 - **In templates.** Every template, components included, has `$errors` (field → first message, `form` for the body as a whole), `$old` (what was submitted) and `$flash` (what `flash()` set). Each shows on the next page only. `@error('field') { … }` renders when that field has an error, with the message as `$message`.
-- **Refilling.** A named `<input>`, `<textarea>`, `<select>` (its `<option>`s), checkbox or radio takes its value back from `$old` by itself. It's left alone when the template sets `value`, `checked` or `selected`, and never refilled for passwords, files, hidden fields or names that look like secrets (`password`, `token`, `secret`, `card`, `cvv`, `csrf`). The values ride in the session, so they're capped: a field over 1,000 characters isn't kept, and over 2,000 in all nothing is (the errors still are), so a cookie session can't overflow.
+- **Refilling.** A named `<input>`, `<textarea>`, `<select>` (its `<option>`s), checkbox or radio takes its value back from `$old` by itself. It's left alone when the template sets `value`, `checked` or `selected`, and never refilled for passwords, files, hidden fields, a bound `[type]`, or names that look like secrets (`password`, `pwd`, `pin`, `otp`, `token`, `secret`, `card`, `cvv`, `csrf`). Options and checkboxes compare with their `value`, written or interpolated (`value="{{ c.id }}"`). The values ride in the session, so they're capped: a field over 1,000 bytes isn't kept, and over 1,500 bytes in all nothing is (the errors still are), so a cookie session can't overflow.
 - **Re-rendering instead.** A controller can answer with the form itself; its own `$errors` and `$old` win over the session's:
 
   ```ts

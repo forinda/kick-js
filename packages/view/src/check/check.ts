@@ -3,7 +3,7 @@
  * pipes, components, slots and layouts verified, and every interpolation's
  * context enforced (spec §4). What passes here is safe to render.
  */
-import { FORM_GLOBALS } from '../form-state'
+import { FORM_GLOBALS, SECRET_FIELD } from '../form-state'
 import {
   AST_FORMAT_VERSION,
   type Attr,
@@ -43,8 +43,6 @@ const ANIMATION = new Set(['animate', 'set', 'animatemotion', 'animatetransform'
 const ANIMATION_VALUES = new Set(['values', 'to', 'from', 'by', 'attributename'])
 
 const JSON_SCRIPT_TYPES = new Set(['application/json', 'application/ld+json'])
-/** Names never refilled: the same rule `@forinda/kickjs`'s `oldInput` uses to leave them out. */
-const SECRET_FIELD = /pass(word)?|passwd|secret|token|card|cvv|cvc|csrf/i
 /** Input types that never refill. */
 const NO_REFILL = new Set(['password', 'file', 'hidden', 'submit', 'button', 'reset', 'image'])
 
@@ -54,8 +52,8 @@ function oldOf(name: string): CExpr {
 }
 
 /** `e == value` */
-function equals(e: CExpr, value: string): CExpr {
-  return { k: 'b', o: '==', l: e, r: { k: 'l', v: value } }
+function equals(e: CExpr, value: CExpr): CExpr {
+  return { k: 'b', o: '==', l: e, r: value }
 }
 
 const LOOP_VARS: ReadonlySet<string> = new Set([
@@ -219,7 +217,8 @@ class Checker {
       const f = stack[stack.length - 1]!
       if (f.i >= f.list.length) {
         stack.pop()
-        if (f.parent?.tag.toLowerCase() === 'select') this.select = undefined
+        // The <select>'s own frame, not a block's walk of its children.
+        if (f.close && f.parent?.tag.toLowerCase() === 'select') this.select = undefined
         if (f.close) out.push({ k: 's', t: f.close })
         continue
       }
@@ -450,8 +449,17 @@ class Checker {
       const a = el.attrs.find((x) => x.name.toLowerCase() === n && x.kind === 'static')
       return a ? String(a.parts?.[0] ?? '') : undefined
     }
+    /** `value="x"` or `value="{{ x }}"`, as an expression to compare `$old` with. */
+    const valueExpr = (): CExpr | undefined => {
+      const a = el.attrs.find((x) => x.name.toLowerCase() === 'value')
+      if (a?.kind === 'static') return { k: 'l', v: String(a.parts?.[0] ?? '') }
+      // `'' + x`: the attribute prints as text, and `$old` holds the text a browser sent.
+      if (a?.kind === 'interp' && a.parts?.length === 1 && typeof a.parts[0] !== 'string')
+        return { k: 'b', o: '+', l: { k: 'l', v: '' }, r: this.expr(a.parts[0]!, 'attr') }
+      return undefined
+    }
     if (tag === 'option') {
-      const value = stat('value')
+      const value = valueExpr()
       if (this.select === undefined || value === undefined || has('selected')) return undefined
       attrs.push({ t: 'b', n: 'selected', e: equals(oldOf(this.select), value) })
       return undefined
@@ -464,11 +472,15 @@ class Checker {
       return name
     }
     if (tag === 'textarea') return name
+    // A bound type could be `password`: never refill what can't be read here.
+    if (has('type') && stat('type') === undefined) return undefined
     const type = (stat('type') ?? 'text').toLowerCase()
     if (NO_REFILL.has(type)) return undefined
     if (type === 'checkbox' || type === 'radio') {
       if (has('checked')) return undefined
-      attrs.push({ t: 'b', n: 'checked', e: equals(oldOf(name), stat('value') ?? 'on') })
+      const value = has('value') ? valueExpr() : { k: 'l' as const, v: 'on' }
+      if (!value) return undefined
+      attrs.push({ t: 'b', n: 'checked', e: equals(oldOf(name), value) })
       return name
     }
     if (has('value')) return undefined

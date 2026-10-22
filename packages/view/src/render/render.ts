@@ -111,7 +111,11 @@ class Renderer {
       case 'd': {
         // `$errors`, `$old`, `$flash` are request-wide: components read the page's.
         const data = FORM_GLOBALS.has(e.n) && !(e.n in inst.data) ? this.rootData : inst.data
-        if (!(e.n in data)) this.unresolved(e.n, inst)
+        if (!(e.n in data)) {
+          // Rendered without form state (render() on its own): empty, not missing.
+          if (FORM_GLOBALS.has(e.n)) return this.path({}, e.p, inst)
+          this.unresolved(e.n, inst)
+        }
         return this.path(read(data, e.n), e.p, inst)
       }
       case 'v':
