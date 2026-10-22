@@ -99,6 +99,18 @@ describe('kickTokens', () => {
       ],
     )
   })
+  it('reads quoted ; and } inside @let and @verbatim as the parser does', () => {
+    expect(t('@let s = "a; <user-card>";\n<user-card />')).toEqual([
+      ['@let', 'keyword'],
+      ['s', 'variable'],
+      ['"a; <user-card>"', 'string'],
+      ['user-card', 'class'],
+    ])
+    expect(t('@verbatim { "}" <user-card> }\n<user-card />')).toEqual([
+      ['@verbatim', 'keyword'],
+      ['user-card', 'class'],
+    ])
+  })
   it('leaves @verbatim, script and style content alone, and e-mail @s', () => {
     expect(t('@verbatim {\n{{ x }} @if\n}\n<script>if (a) {}</script>me@if.com')).toEqual([
       ['@verbatim', 'keyword'],

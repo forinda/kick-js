@@ -76,14 +76,21 @@ export async function activateKickLanguage(context: vscode.ExtensionContext): Pr
    * the client's document selector — that would make the server a TypeScript
    * formatter — so they go over a request instead.
    */
+  const isOpen = (doc: vscode.TextDocument) =>
+    vscode.workspace.textDocuments.some((d) => d.uri.toString() === doc.uri.toString())
   const checkScript = async (doc: vscode.TextDocument) => {
-    if (!client || !SCRIPTS.includes(doc.languageId)) return
+    if (!client || !SCRIPTS.includes(doc.languageId) || !isOpen(doc)) return
     const text = doc.getText()
     if (!text.includes('.render(')) return diagnostics.delete(doc.uri)
-    const found = await client.sendRequest<Array<{ range: LspRange; message: string }>>(
-      'kick/renderDiagnostics',
-      { text },
-    )
+    let found: Array<{ range: LspRange; message: string }>
+    try {
+      found = await client.sendRequest('kick/renderDiagnostics', { text })
+    } catch {
+      // Starting, restarting or stopped: the next check catches up.
+      return
+    }
+    // Closed while the server answered: nothing to show it on.
+    if (!isOpen(doc)) return
     diagnostics.set(
       doc.uri,
       found.map((d) => {
@@ -120,7 +127,11 @@ export async function activateKickLanguage(context: vscode.ExtensionContext): Pr
         setTimeout(() => void checkScript(d), 300),
       )
     }),
-    vscode.workspace.onDidCloseTextDocument((d) => diagnostics.delete(d.uri)),
+    vscode.workspace.onDidCloseTextDocument((d) => {
+      clearTimeout(pending.get(d.uri.toString()))
+      pending.delete(d.uri.toString())
+      diagnostics.delete(d.uri)
+    }),
     // A template saved, created or deleted can change what the names point at.
     vscode.workspace.onDidSaveTextDocument((d) =>
       d.languageId === 'kick' ? checkOpenScripts() : undefined,
@@ -128,10 +139,12 @@ export async function activateKickLanguage(context: vscode.ExtensionContext): Pr
     vscode.languages.registerDefinitionProvider(SCRIPTS, {
       async provideDefinition(document, position) {
         if (!client) return undefined
-        const found = await client.sendRequest<{ uri: string; range: LspRange } | null>(
-          'kick/renderDefinition',
-          { text: document.getText(), offset: document.offsetAt(position) },
-        )
+        const found = await client
+          .sendRequest<{ uri: string; range: LspRange } | null>('kick/renderDefinition', {
+            text: document.getText(),
+            offset: document.offsetAt(position),
+          })
+          .catch(() => null)
         if (!found) return undefined
         const top = new vscode.Position(0, 0)
         return [new vscode.Location(vscode.Uri.parse(found.uri), new vscode.Range(top, top))]

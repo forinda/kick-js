@@ -4,7 +4,7 @@
  * lexical scan, like the language plugin's: the buffer being typed in rarely
  * parses.
  */
-import { closeInterp, closeParen, KEYWORD } from '../language-plugin'
+import { closeInterp, closeParen, KEYWORD, letEnd, verbatimEnd } from '../language-plugin'
 
 /** The legend, in order: standard types, so themes colour them. */
 export const TOKEN_TYPES = [
@@ -174,9 +174,8 @@ export function kickTokens(s: string, isComponent: (tag: string) => boolean): Ki
               decl[1]!.length,
               kw === 'input' ? 'parameter' : 'variable',
             )
-          const semi = kw === 'let' ? s.indexOf(';', j) : -1
           const eol = s.indexOf('\n', j)
-          const stop = semi >= 0 && (eol < 0 || semi < eol) ? semi : eol < 0 ? s.length : eol
+          const stop = kw === 'let' ? letEnd(s, j).at : eol < 0 ? s.length : eol
           const eq = s.indexOf('=', j)
           if (eq >= 0 && eq < stop) expr(eq + 1, stop, false)
           i = stop
@@ -184,13 +183,7 @@ export function kickTokens(s: string, isComponent: (tag: string) => boolean): Ki
         }
         while (j < s.length && /\s/.test(s[j]!)) j++
         if (kw === 'verbatim' && s[j] === '{') {
-          let d = 0
-          let k = j
-          for (; k < s.length; k++) {
-            if (s[k] === '{') d++
-            else if (s[k] === '}' && --d === 0) break
-          }
-          i = Math.min(k + 1, s.length)
+          i = verbatimEnd(s, j)
           continue
         }
         if (s[j] === '(') {

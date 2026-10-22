@@ -37,6 +37,12 @@ describe('KickVirtualCode', () => {
     )
   })
 
+  it('quoted ; and } stay inside @let and @verbatim, as the parser reads them', () => {
+    const let_ = '@let t = "a; <b>";\n<i></i>'
+    expect(html(let_)).toBe(`${' '.repeat(18)}\n<i></i>`)
+    const verbatim = '@verbatim { "}" <b> }\n<i></i>'
+    expect(html(verbatim)).toBe(`${' '.repeat(21)}\n<i></i>`)
+  })
   it('verbatim blocks are blank', () => {
     expect(html('@verbatim { {{ v }} }<p></p>')).toBe(`${' '.repeat(21)}<p></p>`)
   })

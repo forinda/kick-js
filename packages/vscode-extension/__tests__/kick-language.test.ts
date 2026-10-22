@@ -45,6 +45,7 @@ describe('activateKickLanguage', () => {
     vi.clearAllMocks()
     client.start.mockImplementation(async () => {})
     client.sendRequest.mockImplementation(async () => ['home', 'layouts/main'])
+    ;(vscode.workspace as unknown as { textDocuments: unknown[] }).textDocuments = []
     // A workspace with templates, unless a test says otherwise.
     vi.mocked(vscode.workspace.findFiles).mockResolvedValue([{} as vscode.Uri])
   })
@@ -127,6 +128,7 @@ describe('activateKickLanguage', () => {
       d: unknown,
     ) => Promise<void>
     const doc = tsDoc("ctx.render('home')\nctx.render('nope')")
+    ;(vscode.workspace as unknown as { textDocuments: unknown[] }).textDocuments = [doc]
     await opened(doc)
     expect(client.sendRequest).toHaveBeenCalledWith('kick/renderDiagnostics', {
       text: doc.getText(),
@@ -138,6 +140,39 @@ describe('activateKickLanguage', () => {
     expect(diagnostics.map((d) => [d.message, d.source])).toEqual([
       ["template 'nope' not found", 'kick'],
     ])
+  })
+
+  it('drops a check whose file closed, or whose request failed', async () => {
+    let answer!: (v: unknown) => void
+    client.sendRequest.mockImplementation(
+      (method: string) =>
+        (method === 'kick/renderDiagnostics'
+          ? new Promise((r) => (answer = r))
+          : Promise.resolve([])) as never,
+    )
+    await activateKickLanguage(context)
+    const collection = vi.mocked(vscode.languages.createDiagnosticCollection).mock.results.at(-1)!
+      .value as { set: ReturnType<typeof vi.fn> }
+    const opened = vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1)![0] as (
+      d: unknown,
+    ) => Promise<void>
+    const doc = tsDoc("ctx.render('nope')")
+    ;(vscode.workspace as unknown as { textDocuments: unknown[] }).textDocuments = [doc]
+    const checking = opened(doc)
+    // Closed while the server was answering.
+    ;(vscode.workspace as unknown as { textDocuments: unknown[] }).textDocuments = []
+    answer([
+      { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, message: 'x' },
+    ])
+    await checking
+    expect(collection.set).not.toHaveBeenCalled()
+
+    client.sendRequest.mockImplementation(async () => {
+      throw new Error('Client is not running')
+    })
+    ;(vscode.workspace as unknown as { textDocuments: unknown[] }).textDocuments = [doc]
+    await expect(opened(doc)).resolves.toBeUndefined()
+    expect(collection.set).not.toHaveBeenCalled()
   })
 
   it('passes the layout mapping and base layout settings', async () => {

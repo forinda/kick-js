@@ -61,6 +61,41 @@ export function closeParen(s: string, i: number): number {
   return s.length
 }
 
+/**
+ * Where an `@let` value from `from` ends: its `;` outside quotes, as the
+ * parser reads it; the line's end while it's unterminated, so typing one
+ * doesn't swallow the lines below.
+ */
+export function letEnd(s: string, from: number): { at: number; closed: boolean } {
+  let quote = ''
+  for (let j = from; j < s.length; j++) {
+    const c = s[j]!
+    if (c === '\n') return { at: j, closed: false }
+    if (quote) {
+      if (c === '\\') j++
+      else if (c === quote) quote = ''
+    } else if (c === "'" || c === '"') quote = c
+    else if (c === ';') return { at: j, closed: true }
+  }
+  return { at: s.length, closed: false }
+}
+
+/** The end of `@verbatim { … }` from `brace` (at `{`): after its `}`, quoted braces skipped as the parser does. */
+export function verbatimEnd(s: string, brace: number): number {
+  let depth = 0
+  let quote = ''
+  for (let k = brace; k < s.length; k++) {
+    const c = s[k]!
+    if (quote) {
+      if (c === '\\') k++
+      else if (c === quote) quote = ''
+    } else if (c === "'" || c === '"' || c === '`') quote = c
+    else if (c === '{') depth++
+    else if (c === '}' && --depth === 0) return k + 1
+  }
+  return s.length
+}
+
 /** The end of a `{{ … }}` starting at `i`; the text's end when unclosed. */
 export function closeInterp(s: string, i: number): number {
   let quote = ''
@@ -114,9 +149,9 @@ function scan(s: string): Scan {
         const kw = m[1]!.replace(/\s+/g, ' ')
         let j = i + m[0].length
         if (kw === 'let' || kw === 'input') {
-          const semi = kw === 'let' ? s.indexOf(';', j) : -1
           const eol = s.indexOf('\n', j)
-          const stop = semi >= 0 && (eol < 0 || semi < eol) ? semi + 1 : eol < 0 ? s.length : eol
+          const end = kw === 'let' ? letEnd(s, j) : undefined
+          const stop = end ? end.at + (end.closed ? 1 : 0) : eol < 0 ? s.length : eol
           out.blank.push([i, stop])
           i = stop
           continue
@@ -124,13 +159,7 @@ function scan(s: string): Scan {
         if (kw === 'verbatim') {
           const b = skipWs(j)
           if (s[b] === '{') {
-            let d = 0
-            let k = b
-            for (; k < s.length; k++) {
-              if (s[k] === '{') d++
-              else if (s[k] === '}' && --d === 0) break
-            }
-            const stop = Math.min(k + 1, s.length)
+            const stop = verbatimEnd(s, b)
             out.blank.push([i, stop])
             i = stop
             continue

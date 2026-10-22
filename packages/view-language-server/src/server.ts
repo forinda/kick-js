@@ -71,6 +71,24 @@ export async function listScripts(root: string): Promise<string[]> {
   return out
 }
 
+/** `fn` over `items` with at most `limit` running at once, results in order. */
+export async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = Array.from({ length: items.length })
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 /** What the server watches: every template, and the pipes file wherever it's configured. */
 export function watchPatterns(root: string, pipesFile: string): string[] {
   const patterns = ['**/*.kick', '**/pipes.{ts,js}']
@@ -114,14 +132,14 @@ export function startServer(): void {
       layout: opts.layout || undefined,
       baseLayout: opts.baseLayout || undefined,
       // Read when a template is renamed: an open buffer's text, else the file's.
+      // A bounded number of reads at once: a big project would otherwise run
+      // out of file handles, and the failed reads would skip their calls.
       scripts: async () =>
-        Promise.all(
-          (await listScripts(root)).map(async (p) => {
-            const uri = URI.file(p).toString()
-            const open = server.documents.get(URI.parse(uri))
-            return { uri, text: open?.getText() ?? (await readFile(p, 'utf8').catch(() => '')) }
-          }),
-        ),
+        mapLimit(await listScripts(root), 64, async (p) => {
+          const uri = URI.file(p).toString()
+          const open = server.documents.get(URI.parse(uri))
+          return { uri, text: open?.getText() ?? (await readFile(p, 'utf8').catch(() => '')) }
+        }),
     })
     await ws.load()
     // Kick first: where a single answer wins (rename, hover), a component tag

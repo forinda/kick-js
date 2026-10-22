@@ -79,3 +79,20 @@ describe('listScripts', () => {
     ])
   })
 })
+
+describe('mapLimit', () => {
+  it('keeps at most `limit` calls in flight, results in order', async () => {
+    vi.resetModules()
+    const { mapLimit } = await import('../src/server')
+    let running = 0
+    let peak = 0
+    const out = await mapLimit([...Array(50).keys()], 4, async (n) => {
+      peak = Math.max(peak, ++running)
+      await new Promise((r) => setTimeout(r, 1))
+      running--
+      return n * 2
+    })
+    expect(peak).toBe(4)
+    expect(out).toEqual([...Array(50).keys()].map((n) => n * 2))
+  })
+})
