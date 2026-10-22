@@ -8,3 +8,4 @@ useFileLoader(() => import('./loaders/file'))
 
 export * from './exports'
 export { format, type FormatOptions } from './format'
+export { clientScriptResponse } from './serve'

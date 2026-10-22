@@ -19,7 +19,13 @@ import {
   expressRuntime,
   type RequestContext,
 } from '@forinda/kickjs'
-import { KickView, createViews, viewsMiddleware, type Views } from '../src/index'
+import {
+  KickView,
+  clientScriptResponse,
+  createViews,
+  viewsMiddleware,
+  type Views,
+} from '../src/index'
 
 function viewsDir(files: Record<string, string>, ext = 'kick'): string {
   const root = mkdtempSync(join(tmpdir(), 'kick-view-app-'))
@@ -36,6 +42,9 @@ const FILES = {
   'layouts/main': '<main><slot /></main>',
   broken: '{{ x | json }}',
   'errors/404': '<h1>Not here {{ path }}</h1>',
+  'components/flash-toast':
+    "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
+  island: '<flash-toast />',
 }
 
 @Controller()
@@ -56,6 +65,10 @@ class PagesController {
   async shared(ctx: RequestContext) {
     ctx.set('rid', 'r1')
     await ctx.render('home', { n: 'S' })
+  }
+  @Get('/island')
+  async island(ctx: RequestContext) {
+    await ctx.render('island')
   }
   @Get('/unawaited')
   unawaited(ctx: RequestContext) {
@@ -148,6 +161,27 @@ for (const rt of RUNTIMES)
       expect(res.text ?? '').toBe('')
     })
 
+    it("serves a component's script on every runtime", async () => {
+      const a = await app(rt.make, views)
+      const page = await a.get('/island').expect(200)
+      const src = /src="([^"]+)"/.exec(page.text)![1]!
+      const js = await a.get(src).expect(200)
+      expect(js.headers['content-type']).toMatch(/^text\/javascript/)
+      expect(js.headers['cache-control']).toContain('immutable')
+      expect(js.text).toContain("customElements.define('kick-toast'")
+      expect(js.text).not.toContain(': number')
+    })
+
+    it('unknown and malformed script URLs fall through', async () => {
+      const a = await app(rt.make, views)
+      for (const url of [
+        '/_kick/c/flash-toast.00000000.js',
+        '/_kick/c/..%2Fsecret.js',
+        '/_kick/c/a/b.js',
+      ])
+        expect((await a.get(url)).status).toBe(404)
+    })
+
     it('.kick error pages', async () => {
       const res = await (await app(rt.make, views)).get('/nowhere').expect(404)
       expect(res.text).toBe('<main><h1>Not here /nowhere</h1></main>')
@@ -168,6 +202,26 @@ describe('KickView — web entry', () => {
     const res = await web.fetch(new Request('http://edge/home'))
     expect(res.status).toBe(200)
     expect(await res.text()).toBe('<h1>Hi Ada</h1>')
+  })
+
+  it('serves component scripts through clientScriptResponse', async () => {
+    Container.reset()
+    const views = createViews({ viewsDir: viewsDir(FILES), warn: () => {} })
+    const web = createWebApp({
+      h3: h3v2,
+      modules: [
+        defineModule({ name: 'Pages', build: () => ({ routes: () => routes }) })() as never,
+      ],
+      middlewares: [viewsMiddleware(views) as never],
+    })
+    const fetch = async (req: Request) => (await clientScriptResponse(views, req)) ?? web.fetch(req)
+    const page = await (await fetch(new Request('http://edge/island'))).text()
+    const src = /src="([^"]+)"/.exec(page)![1]!
+    const js = await fetch(new Request(`http://edge${src}`))
+    expect(js.status).toBe(200)
+    expect(js.headers.get('content-type')).toMatch(/^text\/javascript/)
+    expect(await js.text()).toContain("customElements.define('kick-toast'")
+    expect(await clientScriptResponse(views, new Request('http://edge/home'))).toBeUndefined()
   })
 })
 
