@@ -143,8 +143,7 @@ for (const rt of RUNTIMES)
       }
     })
 
-    // h3's runtime doesn't answer HEAD for GET routes at all (any route, not just views).
-    it.skipIf(rt.name === 'h3')('HEAD', async () => {
+    it('HEAD', async () => {
       const res = await (await app(rt.make, views)).head('/home').expect(200)
       expect(res.text ?? '').toBe('')
     })
@@ -166,8 +165,7 @@ describe('KickView — web entry', () => {
       ],
       middlewares: [viewsMiddleware(views) as never],
     })
-    // The web entry mounts under apiPrefix even with prefix: false (a core gap, not views').
-    const res = await web.fetch(new Request('http://edge/api/home'))
+    const res = await web.fetch(new Request('http://edge/home'))
     expect(res.status).toBe(200)
     expect(await res.text()).toBe('<h1>Hi Ada</h1>')
   })

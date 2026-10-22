@@ -302,3 +302,16 @@ export function compileWebRoute(
     }
   }
 }
+
+/**
+ * HEAD for a GET route: run the route and answer with its status and
+ * headers, without the body — what Express and Fastify do for every GET.
+ */
+export async function headFromGet(response: Promise<Response> | Response): Promise<Response> {
+  const res = await response
+  return new Response(null, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  })
+}
