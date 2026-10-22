@@ -12,6 +12,7 @@ export const URL_ATTRS: ReadonlySet<string> = new Set([
   'background',
   'ping',
   'xlink:href',
+  'srcset',
 ])
 
 export function isUrlAttr(tag: string, attr: string): boolean {

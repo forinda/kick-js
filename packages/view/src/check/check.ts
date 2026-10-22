@@ -413,13 +413,7 @@ class Checker {
           continue
         }
       }
-      const url = isUrlAttr(tag, a.name)
-        ? lower === 'srcset'
-          ? 'srcset'
-          : 'url'
-        : lower === 'srcset'
-          ? 'srcset'
-          : undefined
+      const url = isUrlAttr(tag, a.name) ? (lower === 'srcset' ? 'srcset' : 'url') : undefined
       switch (a.kind) {
         case 'bare':
           out.push({ t: 's', n: a.name, v: true })

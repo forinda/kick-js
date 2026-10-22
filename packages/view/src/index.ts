@@ -9,3 +9,12 @@ export type { CAttr, CExpr, CNode, CSeg, CheckedTemplate } from './ast'
 export { check, type CheckResult } from './check/check'
 export { componentTag, templateName, type Project } from './check/project'
 export { isUrlAttr, URL_ATTRS } from './urls'
+export {
+  escapeHtml,
+  read,
+  safeStyleValue,
+  sanitizeSrcset,
+  sanitizeUrl,
+  escapeJsonForScript,
+  SafeHtml,
+} from './render/safe'
