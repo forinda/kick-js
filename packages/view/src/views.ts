@@ -8,6 +8,11 @@ import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import { componentTag, layoutResolver, templateName, type Project } from './check/project'
 import { CLIENT_SCRIPT_FILE, NO_STRIPPER, fnv1a, injectScripts } from './client-scripts'
+import { VALIDATE_RUNTIME } from './validate-runtime'
+
+/** The validator script's served name; component tags can't take it. */
+const VALIDATE_TAG = 'kick-validate'
+const VALIDATE_HASH = fnv1a(VALIDATE_RUNTIME)
 import { parse } from './parse/template'
 import { BUILTIN_PIPES } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
@@ -291,6 +296,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
       const used = new Map<string, CheckedTemplate>()
+      let validation = false
       // A controller's own `$errors` / `$old` (a re-render) win over the session's.
       const page = { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data }
       const html = render(
@@ -307,10 +313,11 @@ export function createViews(options: ViewsOptions = {}): Views {
           baseLayout: options.baseLayout,
           assets: options.assets,
           clientScript: (t) => used.set(t.name, t),
+          validation: () => (validation = true),
         },
         { layout: opts.layout },
       )
-      if (!used.size) return html
+      if (!used.size && !validation) return html
       // The nonce `@assets` gets too: often from share().
       const nonce = (page as { cspNonce?: unknown }).cspNonce
       const nonceAttr = typeof nonce === 'string' ? ` nonce="${nonce.replace(/"/g, '&quot;')}"` : ''
@@ -321,12 +328,17 @@ export function createViews(options: ViewsOptions = {}): Views {
           return `<script type="module" src="${scriptPath}/${file}"${nonceAttr}></script>`
         }),
       )
+      if (validation)
+        tags.push(
+          `<script type="module" src="${scriptPath}/${VALIDATE_TAG}.${VALIDATE_HASH}.js"${nonceAttr}></script>`,
+        )
       return injectScripts(html, tags.join(''))
     },
     clientScriptPath: scriptPath,
     async clientScript(file) {
       const m = CLIENT_SCRIPT_FILE.exec(file)
       if (!m) return undefined
+      if (m[1] === VALIDATE_TAG) return m[2] === VALIDATE_HASH ? VALIDATE_RUNTIME : undefined
       const names = bundle
         ? Object.keys(bundle.templates)
         : [...(await current()).project.templates.keys()]

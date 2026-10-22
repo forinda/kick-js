@@ -75,3 +75,49 @@ describe('validate', () => {
     )
   })
 })
+
+const VTAG = /<script type="module" src="\/_kick\/c\/kick-validate\.[0-9a-f]{8}\.js"><\/script>/g
+
+describe('the validator script', () => {
+  const views = (files: Record<string, string>) =>
+    createViews({ viewsDir: dir(files), warn: vi.fn() })
+
+  it('no validate, no script', async () => {
+    const html = await views({ page: '<input name="t">@error(\'t\') {x}' }).render('page')
+    expect(html).not.toContain('<script')
+  })
+
+  it('one validator script from pages, layouts and components', async () => {
+    const v = views({
+      'layouts/main': '<html><body><input name="q" validate="required"><slot /></body></html>',
+      'components/text-field': '@input name\n<input [name]="name" validate="required">',
+      page: '@layout(\'layouts/main\')\n<input name="a" validate="email"><text-field name="b" />',
+    })
+    expect((await v.render('page')).match(VTAG)).toHaveLength(1)
+    const only = views({
+      'components/text-field': '@input name\n<input name="x" validate="required">',
+      page: '<text-field name="b" />',
+    })
+    expect((await only.render('page')).match(VTAG)).toHaveLength(1)
+  })
+
+  it('serves the validator runtime, and reserves its name', async () => {
+    const v = views({ page: '<input name="a" validate="required">' })
+    const file = /kick-validate\.[0-9a-f]{8}\.js/.exec(await v.render('page'))![0]
+    expect(await v.clientScript(file)).toContain('data-kick-validate')
+    expect(await v.clientScript('kick-validate.00000000.js')).toBeUndefined()
+    const templates = new Map([
+      [
+        'components/kick-validate',
+        parse('<div></div><script client>let a = 1</script>', 'x.kick').ast,
+      ],
+    ])
+    expect(
+      check('components/kick-validate', {
+        templates,
+        pipes: new Set(BUILTIN_PIPES),
+        componentsDir: 'components',
+      }).diagnostics.map((d) => d.message),
+    ).toContain('kick-validate is reserved for the validator script')
+  })
+})

@@ -875,6 +875,12 @@ export function check(name: string, project: Project): CheckResult {
     }
     // Served as `<tag>.<hash>.js`: the tag has to be a plain file name.
     const tag = componentTag(name, project.componentsDir)
+    if (tag === 'kick-validate') {
+      c.diagnostics.push(
+        error(ast.file, n.span, 'kick-validate is reserved for the validator script'),
+      )
+      continue
+    }
     if (!/^[a-z][a-z0-9-]*$/.test(tag)) {
       c.diagnostics.push(
         error(
