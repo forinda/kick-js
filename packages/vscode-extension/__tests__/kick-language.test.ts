@@ -76,6 +76,18 @@ describe('activateKickLanguage', () => {
     expect(client.start).toHaveBeenCalled()
   })
 
+  it('passes the layout mapping and base layout settings', async () => {
+    const settings: Record<string, unknown> = {
+      layout: { admin: 'layouts/admin' },
+      baseLayout: 'layouts/base',
+    }
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValueOnce({
+      get: vi.fn((key: string, fallback: unknown) => settings[key] ?? fallback),
+    } as never)
+    await activateKickLanguage(context)
+    expect(client.ctor.mock.calls[0]![3].initializationOptions).toMatchObject(settings)
+  })
+
   it("tells the server whether the workspace is trusted, and restarts when it's granted", async () => {
     ;(vscode.workspace as { isTrusted: boolean }).isTrusted = false
     await activateKickLanguage(context)

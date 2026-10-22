@@ -31,6 +31,8 @@ function startClient(context: vscode.ExtensionContext): void {
       viewsDir: config.get<string>('dir', 'src/views'),
       componentsDir: config.get<string>('components', 'components'),
       pipesFile: config.get<string>('pipes') || undefined,
+      layout: config.get<string | Record<string, string>>('layout') || undefined,
+      baseLayout: config.get<string>('baseLayout') || undefined,
       // Untrusted: the server never imports the project's own view package.
       trusted: vscode.workspace.isTrusted,
     },

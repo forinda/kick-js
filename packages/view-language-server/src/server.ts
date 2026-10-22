@@ -24,6 +24,10 @@ export interface ServerOptions {
   componentsDir?: string
   /** Default `<viewsDir>/pipes.ts`. */
   pipesFile?: string
+  /** `createViews({ layout })`: a page's layout when it declares none; one name, or folder prefix → layout. */
+  layout?: string | Record<string, string>
+  /** `createViews({ baseLayout })`. */
+  baseLayout?: string
   /**
    * The editor trusts the workspace, so the project's own `@forinda/kickjs-view`
    * may be imported. Otherwise the bundled copy is used. Default `false`.
@@ -82,6 +86,8 @@ export function startServer(): void {
       view,
       read: (p) => readFile(p, 'utf8').catch(() => undefined),
       list: listKick,
+      layout: opts.layout || undefined,
+      baseLayout: opts.baseLayout || undefined,
     })
     await ws.load()
     // Kick first: where a single answer wins (rename, hover), a component tag

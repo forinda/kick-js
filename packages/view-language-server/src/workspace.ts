@@ -25,6 +25,10 @@ export interface WorkspaceOptions {
   read(path: string): Promise<string | undefined>
   /** Every `.kick` file (absolute paths) under `dir`. */
   list(dir: string): Promise<string[]>
+  /** `createViews({ layout })`: a page's layout when it declares none; one name, or folder prefix → layout. */
+  layout?: string | Record<string, string>
+  /** `createViews({ baseLayout })`: the shell around every page's outermost layout. */
+  baseLayout?: string
 }
 
 interface Entry {
@@ -210,6 +214,8 @@ export class Workspace {
 
   /** Templates that use `name` as a component or a layout — a layout even after it's gone. */
   dependentsOf(name: string): Set<string> {
+    // A configured layout can wrap any page: re-check them all.
+    if (this.configuredLayouts().has(name)) return new Set(this.names().filter((n) => n !== name))
     const out = new Set<string>()
     const tag = name.startsWith(`${this.opts.componentsDir}/`)
       ? this.opts.view.componentTag(name, this.opts.componentsDir)
@@ -241,7 +247,43 @@ export class Workspace {
       templates: new Map([...this.entries].map(([n, e]) => [n, e.ast])),
       pipes: new Set(this.pipeNames()),
       componentsDir: this.opts.componentsDir,
+      layouts: this.opts.layout,
+      baseLayout: this.opts.baseLayout,
     }
+  }
+
+  /** Templates that are layouts by configuration: the mapping's targets and the base layout. */
+  configuredLayouts(): Set<string> {
+    const { layout, baseLayout } = this.opts
+    const out = new Set(typeof layout === 'string' ? [layout] : Object.values(layout ?? {}))
+    if (baseLayout) out.add(baseLayout)
+    return out
+  }
+
+  baseLayout(): string | undefined {
+    return this.opts.baseLayout
+  }
+
+  /**
+   * The layout `name` renders in: its own `@layout`, else the configured
+   * mapping's longest matching folder prefix (pages only, as `check` does).
+   */
+  layoutOf(name: string): string | undefined {
+    const ast = this.astOf(name)
+    if (!ast) return undefined
+    if (ast.layout !== undefined) return ast.layout ?? undefined
+    const { layout } = this.opts
+    if (
+      layout === undefined ||
+      name.startsWith(`${this.opts.componentsDir}/`) ||
+      this.configuredLayouts().has(name)
+    )
+      return undefined
+    if (typeof layout === 'string') return layout
+    const hit = Object.keys(layout)
+      .toSorted((a, b) => b.length - a.length)
+      .find((p) => p === '' || name === p || name.startsWith(`${p}/`))
+    return hit === undefined ? undefined : layout[hit]
   }
 
   /** Parse errors, else everything `check` reports — as LSP diagnostics. */

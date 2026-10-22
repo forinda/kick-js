@@ -18,7 +18,7 @@ const APP = resolve(import.meta.dirname, 'fixtures/app')
 const EMPTY = resolve(import.meta.dirname, 'fixtures/empty')
 const views = (name: string) => URI.file(join(APP, 'src/views', `${name}.kick`)).toString()
 
-async function start(root: string) {
+async function start(root: string, initializationOptions: object = {}) {
   const server = startLanguageServer(BIN, root)
   const logs: { type: number; message: string }[] = []
   const published = new Map<string, string[]>()
@@ -29,7 +29,9 @@ async function start(root: string) {
       p.diagnostics.map((d) => d.message),
     ),
   )
-  await server.initialize(URI.file(root).toString(), {}, { workspace: { configuration: true } })
+  await server.initialize(URI.file(root).toString(), initializationOptions, {
+    workspace: { configuration: true },
+  })
   return { server, logs, published }
 }
 
@@ -184,6 +186,15 @@ describe('editors that send another languageId', () => {
     await expect
       .poll(() => published.get(views('plain-page'))?.join('\n'), { timeout: 10_000 })
       .toContain("missing input 'x'")
+    await server.shutdown()
+  }, 30_000)
+})
+
+describe('layout settings', () => {
+  it("fill a mapped layout's slots", async () => {
+    const { server, published } = await start(APP, { layout: { admin: 'layouts/main' } })
+    await server.openInMemoryDocument(views('admin/page'), 'kick', "@slot('head') {\n}\n<p></p>\n")
+    await expect.poll(() => published.get(views('admin/page')), { timeout: 10_000 }).toEqual([])
     await server.shutdown()
   }, 30_000)
 })

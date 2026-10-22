@@ -1,11 +1,14 @@
 import * as view from '@forinda/kickjs-view'
-import { Workspace } from '../src/workspace'
+import { Workspace, type WorkspaceOptions } from '../src/workspace'
 
 export const ROOT = '/app'
 export const uri = (name: string) => `file://${ROOT}/src/views/${name}.kick`
 
 /** A workspace over in-memory files (paths relative to ROOT). */
-export async function workspaceOf(files: Record<string, string>) {
+export async function workspaceOf(
+  files: Record<string, string>,
+  layouts: Pick<WorkspaceOptions, 'layout' | 'baseLayout'> = {},
+) {
   const disk = new Map(Object.entries(files).map(([p, s]) => [`${ROOT}/${p}`, s]))
   const ws = new Workspace({
     root: ROOT,
@@ -16,6 +19,7 @@ export async function workspaceOf(files: Record<string, string>) {
     read: async (p) => disk.get(p),
     list: async (dir) =>
       [...disk.keys()].filter((p) => p.startsWith(`${dir}/`) && p.endsWith('.kick')),
+    ...layouts,
   })
   await ws.load()
   return ws

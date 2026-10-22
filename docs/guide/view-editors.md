@@ -33,6 +33,8 @@ Every editor below passes these as `initializationOptions`. Paths are relative t
 | `viewsDir`      | `src/views`           |                                                                                        |
 | `componentsDir` | `components`          | inside `viewsDir`                                                                      |
 | `pipesFile`     | `<viewsDir>/pipes.ts` |                                                                                        |
+| `layout`        | none                  | the same as `createViews({ layout })`: one name, or folder prefix → layout             |
+| `baseLayout`    | none                  | the same as `createViews({ baseLayout })`                                              |
 | `trusted`       | `false`               | `true` loads the project's own `@forinda/kickjs-view`, which runs its code. See below. |
 
 **`trusted`:** with `true`, the server imports your installed `@forinda/kickjs-view`, so the editor checks and formats exactly as your build does. With `false`, it uses the copy bundled with the server, which may be a different version. Set `true` only for projects whose dependencies you trust: the VS Code extension sends it only for trusted workspaces.

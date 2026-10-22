@@ -27,6 +27,8 @@ Initialization options, relative to the workspace folder:
 | `viewsDir`      | `src/views`                                                                                      |
 | `componentsDir` | `components`                                                                                     |
 | `pipesFile`     | `<viewsDir>/pipes.ts`                                                                            |
+| `layout`        | none — the same as `createViews({ layout })`: one name, or folder prefix → layout                |
+| `baseLayout`    | none — the same as `createViews({ baseLayout })`                                                 |
 | `trusted`       | `false` — only `true` imports the project's `@forinda/kickjs-view` (its code runs in the server) |
 
 Any file ending in `.kick` is a template, whatever `languageId` the editor sends. The custom request `kick/templateNames` returns every template name except components.

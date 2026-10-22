@@ -42,11 +42,28 @@ export function componentOf(ws: Workspace, tag: string): string | undefined {
 function layoutSlots(ws: Workspace, name: string | undefined): string[] {
   const out = new Set<string>()
   const seen = new Set<string>()
-  let layout = name === undefined ? undefined : ws.astOf(name)?.layout
-  while (typeof layout === 'string' && !seen.has(layout)) {
+  const chain: string[] = []
+  let layout = name === undefined ? undefined : ws.layoutOf(name)
+  while (layout !== undefined && !seen.has(layout)) {
     seen.add(layout)
-    const ast = ws.astOf(layout)
-    if (!ast) break
+    chain.push(layout)
+    layout = ws.layoutOf(layout)
+  }
+  // The base layout wraps the chain, so its slots are fillable too.
+  const base = ws.baseLayout()
+  const page = name === undefined ? undefined : ws.astOf(name)
+  if (
+    base !== undefined &&
+    name !== undefined &&
+    page?.layout !== null &&
+    !name.startsWith(`${ws.componentsDir()}/`) &&
+    name !== base &&
+    !seen.has(base)
+  )
+    chain.push(base)
+  for (const l of chain) {
+    const ast = ws.astOf(l)
+    if (!ast) continue
     const stack = [ast.body]
     while (stack.length) {
       for (const n of stack.pop()!) {
@@ -60,7 +77,6 @@ function layoutSlots(ws: Workspace, name: string | undefined): string[] {
         else if (n.k === 'slot-fill') stack.push(n.body)
       }
     }
-    layout = ast.layout
   }
   return [...out]
 }
