@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fieldErrors, flash, oldInput } from '../src/http/form'
+import { fieldErrors, flash, oldInput, SECRET_FIELD } from '../src/http/form'
 
 describe('flash', () => {
   it('flash merges into the session and throws without one', () => {
@@ -41,5 +41,19 @@ describe('oldInput', () => {
   })
   it('drops all old input over the total cap', () => {
     expect(oldInput({ a: 'x'.repeat(900), b: 'y'.repeat(900), c: 'z'.repeat(900) })).toBeUndefined()
+  })
+})
+
+describe('oldInput limits', () => {
+  it('counts UTF-8 bytes, not characters', () => {
+    // 600 characters, but 1,800 bytes of UTF-8: over the total.
+    expect(oldInput({ a: '漢'.repeat(300), b: '字'.repeat(300) })).toBeUndefined()
+    expect(oldInput({ a: 'x'.repeat(300), b: 'y'.repeat(300) })).toBeDefined()
+  })
+  it('leaves out short password-like names too', () => {
+    expect(oldInput({ pwd: 'a', pin: '1', otp: '2', pin_code: '3', spinner: 's' })).toEqual({
+      spinner: 's',
+    })
+    expect(SECRET_FIELD.test('pwd')).toBe(true)
   })
 })

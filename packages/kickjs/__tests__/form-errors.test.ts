@@ -17,6 +17,13 @@ function app(opts: { withSession?: boolean; fallback?: Fallback; fallbackUrl?: s
   a.post('/products', () => {
     throw new HttpException(422, 'Invalid', [{ field: 'title', message: 'Too short' }])
   })
+  // What a page render records: the last full page this session saw.
+  a.get('/remember', (req, res) => {
+    ;(
+      req as unknown as { session: { data: Record<string, unknown> } }
+    ).session.data.__inertia_previous = req.query.url
+    res.end()
+  })
   a.get('/session', (req, res) => {
     res.json((req as unknown as { session: { data: unknown } }).session.data)
   })
@@ -39,6 +46,7 @@ describe('formErrorHandler', () => {
     const res = await agent
       .post('/products')
       .type('form')
+      .set('Accept', 'text/html')
       .set('Referer', 'http://127.0.0.1/products/new?step=2')
       .set('Host', '127.0.0.1')
       .send('title=a&password=p')
@@ -51,7 +59,11 @@ describe('formErrorHandler', () => {
 
   it('redirects to fallbackUrl for a foreign Referer', async () => {
     const post = (a: express.Express, referer?: string) => {
-      const r = request(a).post('/products').type('form').set('Host', '127.0.0.1')
+      const r = request(a)
+        .post('/products')
+        .type('form')
+        .set('Accept', 'text/html')
+        .set('Host', '127.0.0.1')
       return (referer ? r.set('Referer', referer) : r).send('title=a')
     }
     expect((await post(app(), 'https://evil.example/x')).headers.location).toBe('/')
@@ -66,6 +78,7 @@ describe('formErrorHandler', () => {
       request(app())
         .post('/products')
         .type('form')
+        .set('Accept', 'text/html')
         .set('Host', '127.0.0.1')
         .set('Referer', referer)
         .send('title=a')
@@ -88,12 +101,44 @@ describe('formErrorHandler', () => {
     expect(fallback).toHaveBeenCalledTimes(2)
   })
 
+  it('leaves fetch() with FormData to the fallback', async () => {
+    const fallback = spyFallback()
+    const res = await request(app({ fallback }))
+      .post('/products')
+      .type('form')
+      .set('Accept', '*/*')
+      .send('title=a')
+    expect(res.status).toBe(422)
+    // A real form submit: the browser asks for HTML, or says it's navigating.
+    const nav = await request(app())
+      .post('/products')
+      .type('form')
+      .set('Accept', '*/*')
+      .set('Sec-Fetch-Mode', 'navigate')
+      .send('title=a')
+    expect(nav.status).toBe(303)
+  })
+
+  it('goes back to the last page the session rendered, before the Referer', async () => {
+    const agent = request.agent(app())
+    await agent.get('/remember?url=/products/new')
+    const res = await agent
+      .post('/products')
+      .type('form')
+      .set('Accept', 'text/html')
+      .set('Host', '127.0.0.1')
+      .set('Referer', 'http://127.0.0.1/elsewhere')
+      .send('title=a')
+    expect(res.headers.location).toBe('/products/new')
+  })
+
   it('keeps errors when old input is dropped', async () => {
     const agent = request.agent(app())
     const big = (c: string) => c.repeat(900)
     await agent
       .post('/products')
       .type('form')
+      .set('Accept', 'text/html')
       .send({ a: big('x'), b: big('y'), c: big('z') })
     const data = (await agent.get('/session')).body
     expect(data.__inertia_errors).toEqual({ title: 'Too short' })
@@ -105,6 +150,7 @@ describe('formErrorHandler', () => {
     const res = await request(app({ withSession: false, fallback }))
       .post('/products')
       .type('form')
+      .set('Accept', 'text/html')
       .send('title=a')
     expect(res.status).toBe(422)
     expect(fallback).toHaveBeenCalledTimes(1)

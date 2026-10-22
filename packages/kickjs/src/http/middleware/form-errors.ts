@@ -9,7 +9,7 @@
  */
 import { HttpException } from '../../core/errors'
 import { createLogger } from '../../core/logger'
-import { FORM_ERRORS_KEY, OLD_INPUT_KEY, fieldErrors, oldInput } from '../form'
+import { FORM_ERRORS_KEY, OLD_INPUT_KEY, PREVIOUS_URL_KEY, fieldErrors, oldInput } from '../form'
 import type { RuntimeResponse } from '../runtime'
 import { errorHandler } from './error-handler'
 
@@ -34,16 +34,20 @@ export interface FormErrorHandlerOptions {
 
 const header = (req: any, name: string): string => String(req?.headers?.[name] ?? '')
 
-/** A browser form post: urlencoded or multipart, not an Inertia visit, not asking for JSON only. */
+/** A browser form submit: urlencoded or multipart, not an Inertia visit, navigating to HTML. */
 function isFormPost(req: any): boolean {
   const method = String(req?.method ?? 'GET').toUpperCase()
   if (method === 'GET' || method === 'HEAD') return false
   if (header(req, 'x-inertia') === 'true') return false
   const type = header(req, 'content-type')
   if (!/application\/x-www-form-urlencoded|multipart\/form-data/i.test(type)) return false
-  const accept = header(req, 'accept')
-  return !/application\/json/i.test(accept) || /text\/html/i.test(accept)
+  // A browser submitting a form asks for HTML and navigates; fetch() with
+  // FormData sends `*/*` and wants the usual JSON answer.
+  return /text\/html/i.test(header(req, 'accept')) || header(req, 'sec-fetch-mode') === 'navigate'
 }
+
+/** A path on this site: one leading `/`, not `//` or `/\`. */
+const ownPath = (path: string) => /^\/(?![/\\])/.test(path)
 
 /** The same-origin `Referer`'s path and query, else `fallback`. */
 function backUrl(req: any, fallback: string): string {
@@ -56,7 +60,7 @@ function backUrl(req: any, fallback: string): string {
     // `//other.site` (or `/\other.site`) in a Location header is another
     // site, even when the Referer's own host was ours.
     const path = url.pathname + url.search
-    return /^\/(?![/\\])/.test(path) ? path : fallback
+    return ownPath(path) ? path : fallback
   } catch {
     return fallback
   }
@@ -105,7 +109,12 @@ export function formErrorHandler(
     return session
       .save()
       .then(() => {
-        res.status(303).setHeader('location', backUrl(req, home))
+        // The last page this session rendered (helmet's default no-referrer
+        // policy leaves no Referer), else the Referer, else the fallback.
+        const previous = session.data[PREVIOUS_URL_KEY]
+        const back =
+          typeof previous === 'string' && ownPath(previous) ? previous : backUrl(req, home)
+        res.status(303).setHeader('location', back)
         res.end()
       })
       .catch((saveErr) => fallback(saveErr, req, res, next))
