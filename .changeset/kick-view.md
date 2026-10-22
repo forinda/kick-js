@@ -13,4 +13,6 @@ New, experimental: `.kick` views — KickJS's own template language for server-r
 - `createViews().render()` outside a request, for emails and tests.
 - `KickView` makes `ctx.render()` work on Express, Fastify, h3 and the web entry; `viewsMiddleware` does the same for the edge.
 
+`kick fmt:views` and `kick check:views` (through `viewCliPlugin` from `@forinda/kickjs-view/cli`) format and check templates.
+
 Templates can't call functions or reach prototypes, and refuse interpolation where escaping can't make it safe. The format is experimental while the package is 0.x.

@@ -26,6 +26,10 @@
     },
     "./virtual": {
       "types": "./virtual.d.ts"
+    },
+    "./cli": {
+      "import": "./dist/cli.js",
+      "types": "./dist/cli.d.ts"
     }
   },
   "files": [
@@ -53,10 +57,12 @@
   "devDependencies": {
     "@fastify/middie": "^9.3.5",
     "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-cli-kit": "workspace:*",
     "@swc/core": "^1.16.18",
     "@types/ejs": "^3.1.5",
     "@types/node": "^26.6.5",
     "@types/supertest": "^7.2.1",
+    "commander": "^15.0.0",
     "ejs": "^3.1.10",
     "express": "^5.3.0",
     "fastify": "^5.12.7",

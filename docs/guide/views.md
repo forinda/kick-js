@@ -381,6 +381,19 @@ const views = createViews({ ...kickViews })
 export default createWebApp({ h3, modules, middlewares: [viewsMiddleware(views)] })
 ```
 
+## Formatting and checking
+
+Add the plugin to `kick.config.ts`:
+
+```ts
+import { viewCliPlugin } from '@forinda/kickjs-view/cli'
+export default defineConfig({ plugins: [viewCliPlugin] })
+```
+
+- `kick fmt:views` formats every template: `{{ x }}` and `@if (x) {` spacing, and indentation by nesting. `<pre>`, `<textarea>`, `<script>`, `<style>`, `@verbatim` and comments are left exactly as written. A file is only rewritten if the result means the same template; otherwise it's left alone with a warning.
+- `kick fmt:views --check` lists the files that would change and exits 1, which suits CI.
+- `kick check:views` reports every error with its file, line and column, the same checks the build runs: syntax, unknown pipes, component inputs, slots, layouts and unsafe interpolation.
+
 ## Options
 
 | option            | default                                       |                                                                                              |

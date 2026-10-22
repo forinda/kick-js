@@ -797,6 +797,9 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../kickjs
+      '@forinda/kickjs-cli-kit':
+        specifier: workspace:*
+        version: link:../cli-kit
       '@swc/core':
         specifier: ^1.16.18
         version: 1.16.18
@@ -809,6 +812,9 @@ importers:
       '@types/supertest':
         specifier: ^7.2.1
         version: 7.2.1
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
       ejs:
         specifier: ^3.1.10
         version: 3.1.10

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from '../src/parse/template'
 import { check } from '../src/check/check'
 import { BUILTIN_PIPES } from '../src/pipes/builtins'
+import { format } from '../src/format'
 
 const CORPUS = [
   '<h1>{{ user.name | titlecase }}</h1>',
@@ -74,6 +75,9 @@ describe('fuzz', () => {
         throw new Error(`crashed on mutation #${n}: ${JSON.stringify(src)}`, { cause: e })
       }
       expect(result.template !== undefined || result.diagnostics.length > 0).toBe(true)
+      // The formatter never throws, and formatting its own output changes nothing.
+      const once = format(src, 'p.kick').output
+      if (once !== undefined) expect(format(once, 'p.kick').output, JSON.stringify(src)).toBe(once)
     }
   })
 })
