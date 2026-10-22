@@ -5,7 +5,10 @@ const client = vi.hoisted(() => ({
   ctor: vi.fn(),
   start: vi.fn(async () => {}),
   stop: vi.fn(async () => {}),
-  sendRequest: vi.fn(async () => ['home', 'layouts/main']),
+  sendRequest: vi.fn(async (_method: string, _params?: unknown): Promise<unknown> => [
+    'home',
+    'layouts/main',
+  ]),
 }))
 
 vi.mock('vscode-languageclient/node', () => ({
@@ -41,6 +44,7 @@ describe('activateKickLanguage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     client.start.mockImplementation(async () => {})
+    client.sendRequest.mockImplementation(async () => ['home', 'layouts/main'])
     // A workspace with templates, unless a test says otherwise.
     vi.mocked(vscode.workspace.findFiles).mockResolvedValue([{} as vscode.Uri])
   })
@@ -74,6 +78,78 @@ describe('activateKickLanguage', () => {
     expect(serverOptions.run.transport).toBe(1)
     expect(clientOptions.documentSelector).toEqual([{ language: 'kick' }])
     expect(client.start).toHaveBeenCalled()
+  })
+
+  /** A TS document the providers read. */
+  const tsDoc = (text: string) => ({
+    uri: { toString: () => 'file:///app/src/home.controller.ts' },
+    languageId: 'typescript',
+    getText: () => text,
+    offsetAt: (p: { character: number }) => p.character,
+  })
+
+  it('goes to the template from ctx.render in TS, asking the server', async () => {
+    client.sendRequest.mockImplementation(async (method: string) =>
+      method === 'kick/renderDefinition'
+        ? { uri: 'file:///app/src/views/home.kick', range: {} }
+        : ([] as never),
+    )
+    await activateKickLanguage(context)
+    const provider = vi.mocked(vscode.languages.registerDefinitionProvider).mock.calls.at(-1)!
+    expect(provider[0]).toEqual(expect.arrayContaining(['typescript', 'javascript']))
+    const doc = tsDoc("ctx.render('home')")
+    const [loc] = (await (provider[1] as { provideDefinition: Function }).provideDefinition(
+      doc,
+      new vscode.Position(0, 13),
+    )) as { uri: { toString(): string } }[]
+    expect(client.sendRequest).toHaveBeenCalledWith('kick/renderDefinition', {
+      text: "ctx.render('home')",
+      offset: 13,
+    })
+    expect(loc!.uri.toString()).toBe('file:///app/src/views/home.kick')
+  })
+
+  it("shows the server's warnings for missing templates in TS files", async () => {
+    client.sendRequest.mockImplementation(async (method: string) =>
+      method === 'kick/renderDiagnostics'
+        ? [
+            {
+              range: { start: { line: 1, character: 12 }, end: { line: 1, character: 16 } },
+              message: "template 'nope' not found",
+            },
+          ]
+        : ([] as never),
+    )
+    await activateKickLanguage(context)
+    const collection = vi.mocked(vscode.languages.createDiagnosticCollection).mock.results.at(-1)!
+      .value as { set: ReturnType<typeof vi.fn> }
+    const opened = vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1)![0] as (
+      d: unknown,
+    ) => Promise<void>
+    const doc = tsDoc("ctx.render('home')\nctx.render('nope')")
+    await opened(doc)
+    expect(client.sendRequest).toHaveBeenCalledWith('kick/renderDiagnostics', {
+      text: doc.getText(),
+    })
+    const [, diagnostics] = collection.set.mock.calls.at(-1)! as [
+      unknown,
+      { message: string; source: string }[],
+    ]
+    expect(diagnostics.map((d) => [d.message, d.source])).toEqual([
+      ["template 'nope' not found", 'kick'],
+    ])
+  })
+
+  it('passes the layout mapping and base layout settings', async () => {
+    const settings: Record<string, unknown> = {
+      layout: { admin: 'layouts/admin' },
+      baseLayout: 'layouts/base',
+    }
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValueOnce({
+      get: vi.fn((key: string, fallback: unknown) => settings[key] ?? fallback),
+    } as never)
+    await activateKickLanguage(context)
+    expect(client.ctor.mock.calls[0]![3].initializationOptions).toMatchObject(settings)
   })
 
   it("tells the server whether the workspace is trusted, and restarts when it's granted", async () => {

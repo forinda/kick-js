@@ -283,14 +283,35 @@ export class KickVirtualCode implements VirtualCode {
   }
 }
 
+/** TS / JS: a code only the kick service plugin reads, for `ctx.render('…')` names. */
+const SCRIPT_IDS = new Set(['typescript', 'typescriptreact', 'javascript', 'javascriptreact'])
+const SCRIPT_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/
+
+class RenderCallsCode implements VirtualCode {
+  readonly id = 'root'
+  // Not `typescript`: the HTML, CSS and Emmet services leave it alone.
+  readonly languageId = 'kick-render'
+  readonly snapshot: IScriptSnapshot
+  readonly mappings: CodeMapping[]
+  readonly embeddedCodes: VirtualCode[] = []
+
+  constructor(text: string) {
+    this.snapshot = snapshotOf(text)
+    this.mappings = [
+      { sourceOffsets: [0], generatedOffsets: [0], lengths: [text.length], data: EMBEDDED },
+    ]
+  }
+}
+
 export const kickLanguagePlugin: LanguagePlugin<URI> = {
   getLanguageId(uri) {
     return uri.path.endsWith('.kick') ? 'kick' : undefined
   },
   // By the file name too: not every editor sends the `kick` languageId.
   createVirtualCode(uri, languageId, snapshot) {
-    return languageId === 'kick' || uri.path.endsWith('.kick')
-      ? new KickVirtualCode(snapshot.getText(0, snapshot.getLength()))
-      : undefined
+    const text = snapshot.getText(0, snapshot.getLength())
+    if (languageId === 'kick' || uri.path.endsWith('.kick')) return new KickVirtualCode(text)
+    if (SCRIPT_IDS.has(languageId) || SCRIPT_FILE.test(uri.path)) return new RenderCallsCode(text)
+    return undefined
   },
 }

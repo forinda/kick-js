@@ -13,6 +13,17 @@ let restarting: Promise<void> = Promise.resolve()
 
 /** `ctx.render('` / `views.render("` up to the cursor. */
 const RENDER = /\b(?:ctx|views)\.render\(\s*['"`][^'"`]*$/
+const SCRIPTS = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact']
+
+interface LspRange {
+  start: { line: number; character: number }
+  end: { line: number; character: number }
+}
+const toRange = (r: LspRange) =>
+  new vscode.Range(
+    new vscode.Position(r.start.line, r.start.character),
+    new vscode.Position(r.end.line, r.end.character),
+  )
 
 function startClient(context: vscode.ExtensionContext): void {
   const module = context.asAbsolutePath('dist/kick-view-server.js')
@@ -31,6 +42,8 @@ function startClient(context: vscode.ExtensionContext): void {
       viewsDir: config.get<string>('dir', 'src/views'),
       componentsDir: config.get<string>('components', 'components'),
       pipesFile: config.get<string>('pipes') || undefined,
+      layout: config.get<string | Record<string, string>>('layout') || undefined,
+      baseLayout: config.get<string>('baseLayout') || undefined,
       // Untrusted: the server never imports the project's own view package.
       trusted: vscode.workspace.isTrusted,
     },
@@ -57,11 +70,73 @@ function restart(context: vscode.ExtensionContext): Promise<void> {
  * never runs it.
  */
 export async function activateKickLanguage(context: vscode.ExtensionContext): Promise<void> {
-  const ensure = () => {
-    if (!client) startClient(context)
+  const diagnostics = vscode.languages.createDiagnosticCollection('kick')
+  /**
+   * `ctx.render('…')` names checked by the server. TS / JS files stay out of
+   * the client's document selector — that would make the server a TypeScript
+   * formatter — so they go over a request instead.
+   */
+  const checkScript = async (doc: vscode.TextDocument) => {
+    if (!client || !SCRIPTS.includes(doc.languageId)) return
+    const text = doc.getText()
+    if (!text.includes('.render(')) return diagnostics.delete(doc.uri)
+    const found = await client.sendRequest<Array<{ range: LspRange; message: string }>>(
+      'kick/renderDiagnostics',
+      { text },
+    )
+    diagnostics.set(
+      doc.uri,
+      found.map((d) => {
+        const diag = new vscode.Diagnostic(
+          toRange(d.range),
+          d.message,
+          vscode.DiagnosticSeverity.Warning,
+        )
+        diag.source = 'kick'
+        return diag
+      }),
+    )
   }
+  const checkOpenScripts = () => {
+    for (const d of vscode.workspace.textDocuments) void checkScript(d)
+  }
+  const ensure = () => {
+    if (client) return
+    startClient(context)
+    void starting.then(checkOpenScripts)
+  }
+  const pending = new Map<string, ReturnType<typeof setTimeout>>()
   context.subscriptions.push(
-    vscode.workspace.onDidOpenTextDocument((d) => (d.languageId === 'kick' ? ensure() : undefined)),
+    diagnostics,
+    vscode.workspace.onDidOpenTextDocument((d) =>
+      d.languageId === 'kick' ? ensure() : checkScript(d),
+    ),
+    vscode.workspace.onDidChangeTextDocument(({ document: d }) => {
+      if (!SCRIPTS.includes(d.languageId)) return
+      const key = d.uri.toString()
+      clearTimeout(pending.get(key))
+      pending.set(
+        key,
+        setTimeout(() => void checkScript(d), 300),
+      )
+    }),
+    vscode.workspace.onDidCloseTextDocument((d) => diagnostics.delete(d.uri)),
+    // A template saved, created or deleted can change what the names point at.
+    vscode.workspace.onDidSaveTextDocument((d) =>
+      d.languageId === 'kick' ? checkOpenScripts() : undefined,
+    ),
+    vscode.languages.registerDefinitionProvider(SCRIPTS, {
+      async provideDefinition(document, position) {
+        if (!client) return undefined
+        const found = await client.sendRequest<{ uri: string; range: LspRange } | null>(
+          'kick/renderDefinition',
+          { text: document.getText(), offset: document.offsetAt(position) },
+        )
+        if (!found) return undefined
+        const top = new vscode.Position(0, 0)
+        return [new vscode.Location(vscode.Uri.parse(found.uri), new vscode.Range(top, top))]
+      },
+    }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => restart(context)),
     vscode.workspace.onDidChangeConfiguration((e) =>
       e.affectsConfiguration('kickjs.views') ? restart(context) : undefined,
@@ -70,7 +145,7 @@ export async function activateKickLanguage(context: vscode.ExtensionContext): Pr
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
-      ['typescript', 'typescriptreact', 'javascript'],
+      SCRIPTS,
       {
         async provideCompletionItems(document, position) {
           const line = document.lineAt(position.line).text.slice(0, position.character)

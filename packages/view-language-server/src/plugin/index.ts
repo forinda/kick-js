@@ -11,6 +11,7 @@ import { createDiagnosticsPlugin, sourceUri } from './diagnostics'
 import { formatEdits } from './format'
 import { hover } from './hover'
 import { fileRenameEdits, references, renameEdits, renameRange } from './references'
+import { renderCompletions, renderDefinition } from './render-calls'
 import { kickTokens, TOKEN_TYPES } from './tokens'
 
 export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
@@ -40,6 +41,10 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
       return {
         ...diagnostics.create(context),
         provideCompletionItems(document, position) {
+          if (document.languageId === 'kick-render') {
+            const items = renderCompletions(ws, document.getText(), document.offsetAt(position))
+            return items && { isIncomplete: false, items }
+          }
           const d = open(document)
           if (!d) return undefined
           const items = completions(ws, d.uri, d.text, document.offsetAt(position))
@@ -52,6 +57,10 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
             : undefined
         },
         provideDefinition(document, position) {
+          if (document.languageId === 'kick-render') {
+            const link = renderDefinition(ws, document.getText(), document.offsetAt(position))
+            return link ? [link] : undefined
+          }
           const d = open(document)
           const link = d && definition(ws, d.uri, d.text, document.offsetAt(position))
           return link ? [link] : undefined
