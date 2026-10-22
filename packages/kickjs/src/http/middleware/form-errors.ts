@@ -52,7 +52,11 @@ function backUrl(req: any, fallback: string): string {
   if (!referer || !host) return fallback
   try {
     const url = new URL(referer)
-    return url.host === host ? url.pathname + url.search : fallback
+    if (url.host !== host) return fallback
+    // `//other.site` (or `/\other.site`) in a Location header is another
+    // site, even when the Referer's own host was ours.
+    const path = url.pathname + url.search
+    return /^\/(?![/\\])/.test(path) ? path : fallback
   } catch {
     return fallback
   }

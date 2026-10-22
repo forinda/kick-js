@@ -61,6 +61,22 @@ describe('formErrorHandler', () => {
     expect((await post(app())).headers.location).toBe('/')
   })
 
+  it('never redirects to a path another site could own', async () => {
+    const post = (referer: string) =>
+      request(app())
+        .post('/products')
+        .type('form')
+        .set('Host', '127.0.0.1')
+        .set('Referer', referer)
+        .send('title=a')
+    // `//evil.example/x` is a link to another site, and so is `/\evil.example`.
+    expect((await post('http://127.0.0.1//evil.example/x')).headers.location).toBe('/')
+    expect((await post('http://127.0.0.1/%5Cevil.example')).headers.location).toBe(
+      '/%5Cevil.example',
+    )
+    expect((await post('http://127.0.0.1/ok?a=1')).headers.location).toBe('/ok?a=1')
+  })
+
   it('leaves Inertia and JSON requests to the fallback', async () => {
     const fallback = spyFallback()
     const a = app({ fallback })
