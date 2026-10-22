@@ -163,6 +163,8 @@ jobs:
           "
       - name: Smoke test — kick/db on bun:sqlite
         run: bun scripts/bun-db-smoke.ts
+      - name: Smoke test — .kick views on Bun
+        run: bun scripts/view-smoke.mjs
 
   deno-smoke-test:
     name: Deno smoke test
@@ -195,6 +197,8 @@ jobs:
           EOF
           deno run --allow-read=. --allow-env --allow-sys deno-smoke.mjs
           rm deno-smoke.mjs
+      - name: Smoke test — .kick views on Deno
+        run: deno run --allow-read --allow-write --allow-env --allow-sys scripts/view-smoke.mjs
 
   bundle-size:
     name: Bundle size assertion (devtools strip)
