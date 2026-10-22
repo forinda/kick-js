@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { parse } from '../src/parse/template'
 import { check, type CheckedTemplate } from '../src/check/check'
 import { componentTag, templateName, type Project } from '../src/check/project'
+import { BUILTIN_PIPES } from '../src/pipes/builtins'
 
-const BUILTINS = ['uppercase', 'lowercase', 'json', 'raw', 'date', 'number']
+const BUILTINS = BUILTIN_PIPES
 
 function project(
   files: Record<string, string>,

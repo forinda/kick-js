@@ -19,3 +19,13 @@ export {
   SafeHtml,
 } from './render/safe'
 export { render, RenderError, MAX_DEPTH, type RenderEnv, type Pipe } from './render/render'
+export {
+  BUILTIN_PIPES,
+  builtinPipes,
+  pipesFor,
+  safeHtml,
+  withEnv,
+  type EnvPipe,
+  type PipeEnv,
+} from './pipes/env'
+export { readPipeExports } from './pipes/read-exports'
