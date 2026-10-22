@@ -100,10 +100,14 @@ export class PagesModule implements AppModule {
 import { createInertiaApp } from '@inertiajs/react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 
-const pages = import.meta.glob('./pages/**/*.tsx', { eager: true })
+const pages = import.meta.glob('./pages/**/*.tsx')
 
 createInertiaApp({
-  resolve: (name) => pages[`./pages/${name}.tsx`] as never,
+  resolve: (name) => {
+    const page = pages[`./pages/${name}.tsx`]
+    if (!page) throw new Error(`No page component at src/client/pages/${name}.tsx`)
+    return page() as never
+  },
   setup({ el, App, props }) {
     // Server-rendered pages are hydrated; the rest render from scratch.
     if (el.hasAttribute('data-server-rendered')) hydrateRoot(el, <App {...props} />)
@@ -142,6 +146,17 @@ export default defineConfig({
 ```
 
 Without the split, page edits still show up, but as a full page reload that loses component state.
+
+### Keeping page loads fast
+
+- **Load pages lazily.** Without `{ eager: true }`, `import.meta.glob` gives each page its own chunk, which the browser fetches the first time someone visits it. With `eager: true`, every page is bundled into the first load. Inertia waits for the first page before hydrating, so server-rendered HTML hydrates the same way. `ssr.tsx` keeps `eager: true`, since the server downloads nothing.
+- **Let Vite pre-bundle dependencies.** In dev, Vite bundles each package the pages import into one file. Don't set `optimizeDeps.noDiscovery: true`: then Vite serves only the `include` list bundled, and every other package file by file. A page using `@tabler/icons-react` then makes thousands of requests. `@forinda/kickjs-vite` before 8.1.2 set it for you; on those versions, turn it back on for the pages:
+
+  ```ts
+  environments: { client: { optimizeDeps: { noDiscovery: false } } },
+  ```
+
+- **Mind icon barrels in dev.** `import { IconX } from '@tabler/icons-react'` pre-bundles the whole set (about 15 MB) once. A production build keeps only the icons you use, so this costs dev only. If dev reloads feel slow, import single icons: `@tabler/icons-react/dist/esm/icons/IconX.mjs`.
 
 ## Pages
 

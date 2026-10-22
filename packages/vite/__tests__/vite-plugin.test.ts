@@ -147,12 +147,12 @@ describe('kickjs:core plugin', () => {
     expect(config.ssr.external).toContain('reflect-metadata')
   })
 
-  it('disables optimizeDeps discovery for SSR-only apps', () => {
-    const serveConfig = callConfigHook(corePlugin, 'serve')
-    expect(serveConfig.optimizeDeps.noDiscovery).toBe(true)
-
-    const buildConfig = callConfigHook(corePlugin, 'build')
-    expect(buildConfig.optimizeDeps.noDiscovery).toBe(true)
+  // Pages served by Vite (Inertia, a fullstack client) need discovery, or
+  // every file of a dependency loads as its own request. The server
+  // environment has it off by default.
+  it('leaves dependency discovery to Vite', () => {
+    expect(callConfigHook(corePlugin, 'serve').optimizeDeps).toBeUndefined()
+    expect(callConfigHook(corePlugin, 'build').optimizeDeps).toBeUndefined()
   })
 
   it('configures SSR environment with warmup for entry', () => {
