@@ -450,7 +450,7 @@ Settings (relative to the workspace folder):
 | `kickjs.views.pipes`        | `<dir>/pipes.ts` |
 | `kickjs.views.trace.server` | `off`            |
 
-Other editors can run the language server directly: install `@forinda/kickjs-view-language-server` and start `kick-view-ls --stdio`.
+Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same language server directly: see [`.kick` in other editors](./view-editors.md).
 
 ## Options
 

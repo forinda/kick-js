@@ -11,7 +11,7 @@ When the client says the workspace is trusted, it loads the project's own `@fori
 
 ## Use
 
-The KickJS VS Code extension bundles this server. For other editors:
+The KickJS VS Code extension bundles this server. Any LSP client can run it: setups for Neovim, Vim, Helix, Emacs and JetBrains IDEs are in [`.kick` in other editors](https://kickjs.app/guide/view-editors).
 
 ```sh
 pnpm add -D @forinda/kickjs-view-language-server
@@ -27,6 +27,6 @@ Initialization options, relative to the workspace folder:
 | `pipesFile`     | `<viewsDir>/pipes.ts`                                                                            |
 | `trusted`       | `false` — only `true` imports the project's `@forinda/kickjs-view` (its code runs in the server) |
 
-The custom request `kick/templateNames` returns every template name except components.
+Any file ending in `.kick` is a template, whatever `languageId` the editor sends. The custom request `kick/templateNames` returns every template name except components.
 
 See the [views guide](https://kickjs.app/guide/views#editor-support).
