@@ -1,5 +1,11 @@
 # @forinda/kickjs-db
 
+## 8.11.1
+
+### Patch Changes
+
+- [#1006](https://github.com/forinda/kick-js/pull/1006) [`e1101fb`](https://github.com/forinda/kick-js/commit/e1101fb19909a198868774bc49ad6062fea75344) Thanks [@forinda](https://github.com/forinda)! - Drift no longer flags Postgres array defaults. `.default('{}')` on a `text[]` column (live `'{}'::text[]`) and `.defaultSql('ARRAY[]::text[]')` now read back as the defaults they are.
+
 ## 8.11.0
 
 ### Minor Changes

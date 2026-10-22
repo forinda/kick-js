@@ -1,5 +1,16 @@
 # @forinda/kickjs-devtools
 
+## 7.16.0
+
+### Minor Changes
+
+- [#1005](https://github.com/forinda/kick-js/pull/1005) [`213d8b3`](https://github.com/forinda/kick-js/commit/213d8b38ee9bab525c5eb5140893e2e2d7b92730) Thanks [@forinda](https://github.com/forinda)! - API runner: an HTML response (`text/html`) shows a rendered preview, with a Raw / Preview toggle. The page renders in a sandboxed iframe — its scripts don't run, and it can't reach DevTools or the app's cookies — and its relative CSS and images load from the URL it came from.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.15.0
 
 ### Minor Changes

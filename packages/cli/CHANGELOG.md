@@ -1,5 +1,20 @@
 # @forinda/kickjs-cli
 
+## 8.14.6
+
+### Patch Changes
+
+- [#1005](https://github.com/forinda/kick-js/pull/1005) [`a1db3d6`](https://github.com/forinda/kick-js/commit/a1db3d6060c8584c5a44826399ab25f728da05cb) Thanks [@forinda](https://github.com/forinda)! - A `kick` installed globally (or in a parent folder) now hands off to the project's own `@forinda/kickjs-cli` when run inside a project. Before, both CLIs' copies of `@forinda/kickjs` loaded into one process — this one's and the one `kick.config.ts` imports — which printed "@forinda/kickjs-di is loaded twice" and ran the global version instead of the project's.
+  
+  It hands off only to the nearest folder with a `package.json`, never past it, so a stray `node_modules` in a parent folder is never run. That `package.json` has to list `@forinda/kickjs-cli`; the folder and the CLI package must belong to the user running `kick` and not be writable by everyone (on Windows, only the current folder counts); and the `bin` has to sit inside that package. `KICK_NO_HANDOFF=1` runs the installed copy instead.
+
+- [#1005](https://github.com/forinda/kick-js/pull/1005) [`4a64638`](https://github.com/forinda/kick-js/commit/4a64638f4e338179c9df1b97fa582c7feeeb7c49) Thanks [@forinda](https://github.com/forinda)! - `kick new --template inertia --runtime fastify|h3`: the generated `pages.test.ts` boots the app on its own engine. It passed no runtime, so `createTestApp` used Express — not installed in a Fastify or h3 app — and both tests failed. Shared scaffold files now get only the imports they use and don't already write, so the test can take the runtime slot without inheriting the entry file's imports.
+
+- [#1008](https://github.com/forinda/kick-js/pull/1008) [`2b51493`](https://github.com/forinda/kick-js/commit/2b5149301664820e298eb8ba4d5a855edc4b7500) Thanks [@forinda](https://github.com/forinda)! - The Inertia template loads pages lazily in the browser: each page is its own chunk, fetched on first visit, instead of every page in the first load. Server rendering keeps them eager.
+- Updated dependencies [[`cd89641`](https://github.com/forinda/kick-js/commit/cd896416528a541459d896cec97f95de31893731), [`e1101fb`](https://github.com/forinda/kick-js/commit/e1101fb19909a198868774bc49ad6062fea75344), [`9ba0d62`](https://github.com/forinda/kick-js/commit/9ba0d62d6e62569d96c7b7e1448e3d68c0c2e076)]:
+  - @forinda/kickjs@10.10.0
+  - @forinda/kickjs-db@8.11.1
+
 ## 8.14.5
 
 ### Patch Changes
