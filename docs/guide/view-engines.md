@@ -1,6 +1,6 @@
 # View Engines
 
-KickJS supports server-side template rendering through the **ViewAdapter**. It works with any Express-compatible template engine, including EJS, Pug, Handlebars, and Nunjucks.
+KickJS has its own template language, [`.kick` views](./views.md), which renders on every runtime and on the edge. This page covers the other option: the **ViewAdapter**, for any Express-compatible template engine — EJS, Pug, Handlebars, Nunjucks.
 
 ## Why Use a View Engine?
 

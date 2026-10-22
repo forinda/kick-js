@@ -108,6 +108,7 @@ const guideSidebar = [
       },
       { text: 'Caching', link: '/guide/caching' },
       { text: 'Logging', link: '/guide/logging' },
+      { text: 'Views (.kick)', link: '/guide/views' },
       { text: 'View Engines', link: '/guide/view-engines' },
       { text: 'Asset Manager', link: '/guide/asset-manager' },
       { text: 'MongoDB', link: '/guide/mongodb' },

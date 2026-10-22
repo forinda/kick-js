@@ -120,7 +120,8 @@ it.
 | SSE (`ctx.sse`)                                    | ✅ — streams over a web `Response`                                                                                               |
 | File uploads (`@FileUpload`)                       | ✅ — web `FormData`, buffered in memory                                                                                          |
 | `@PreDestroy` request teardown                     | ✅ — runs when the response closes                                                                                               |
-| `ctx.render()` / view engines / SPA / static files | ❌ throws — serve assets from the platform CDN                                                                                   |
+| `ctx.render()` with [`.kick` views](./views.md)    | ✅ templates ship in the build                                                                                                   |
+| view engines (EJS, Pug) / SPA / static files       | ❌ throws — serve assets from the platform CDN                                                                                   |
 | Rate limiting                                      | ✅ — `rateLimitGuard()` + `KvRateLimitStore` over a Workers KV binding (below)                                                   |
 | Sessions                                           | ⚠️ — `KvSessionStore` plugs into the node `session()` middleware; the cookie middleware itself is not wired on the web entry yet |
 | `@Asset` injection                                 | ❌ — reads the filesystem; clear error on access                                                                                 |
