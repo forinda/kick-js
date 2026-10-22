@@ -53,7 +53,7 @@ Neovim 0.11 or later, no plugins:
 
 ```lua
 vim.filetype.add({ extension = { kick = 'kick' } })
--- HTML highlighting for the markup; the template syntax isn't highlighted.
+-- HTML highlighting for the markup; the server colours the template syntax with semantic tokens.
 vim.treesitter.language.register('html', 'kick')
 
 vim.lsp.config('kick_views', {
@@ -156,7 +156,7 @@ With the free [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin
 3. **Mappings → File name patterns:** add `*.kick`, with the language ID `kick`. For template names in controllers, also add `*.ts` and `*.js`, with the language IDs `typescript` and `javascript`.
 4. **Configuration → Initialization options:** `{ "trusted": true }`.
 
-For highlighting, add the VS Code extension's TextMate grammar under **Settings → Editor → TextMate Bundles**: point it at the `extension` folder inside the extension's `.vsix`, which is a zip file.
+LSP4IJ shows the server's semantic tokens, so the template syntax is coloured without anything else. Optionally, for highlighting before the server starts or in files it hasn't checked yet, add the VS Code extension's TextMate grammar under **Settings → Editor → TextMate Bundles**: point it at the `extension` folder inside the extension's `.vsix`, which is a zip file.
 
 ## Zed
 
