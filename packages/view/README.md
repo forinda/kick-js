@@ -29,6 +29,15 @@ bootstrap({ modules, adapters: [KickView({ views })] })
 await ctx.render('users/show', { user })
 ```
 
+`kick fmt:views` and `kick check:views` come from a CLI plugin. Add it to `kick.config.ts`:
+
+```ts
+import { defineConfig } from '@forinda/kickjs-cli'
+import { viewCliPlugin } from '@forinda/kickjs-view/cli'
+
+export default defineConfig({ plugins: [viewCliPlugin] })
+```
+
 Experimental while 0.x. Guide: [kickjs.app/guide/views](https://kickjs.app/guide/views).
 
 ## License
