@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-view",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "KickJS views — .kick templates rendered on every runtime and the edge",
   "keywords": [
     "kickjs",

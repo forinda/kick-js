@@ -1,5 +1,11 @@
 # @forinda/kickjs-swagger
 
+## 7.3.4
+
+### Patch Changes
+
+- [#1018](https://github.com/forinda/kick-js/pull/1018) [`682b6b5`](https://github.com/forinda/kick-js/commit/682b6b51dd33826a6570d731e7b11b26c05a79f3) Thanks [@forinda](https://github.com/forinda)! - `/redoc` renders again. The page loaded Redoc's `latest` bundle, which is now Redoc 3, whose standalone script uses `import.meta` and throws as a classic `<script>`. It now loads `redoc@2` from jsDelivr, and the CSP allows only that CDN for ReDoc, plus `worker-src 'self' blob:` for its search worker.
+
 ## 7.3.3
 
 ### Patch Changes
