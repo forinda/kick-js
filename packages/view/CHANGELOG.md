@@ -1,5 +1,15 @@
 # @forinda/kickjs-view
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1038](https://github.com/forinda/kick-js/pull/1038) [`e5bfa90`](https://github.com/forinda/kick-js/commit/e5bfa90f2600c621f86d9e8386f6d6f1046433a6) Thanks [@forinda](https://github.com/forinda)! - Components with a script. A component's top-level `<script client>` holds TypeScript for the browser. A page that renders the component gets one `<script type="module" src="/_kick/c/<tag>.<hash>.js">` for it before `</body>`, with `nonce` from `cspNonce`. A page that renders none gets no JavaScript. `KickView` serves the scripts with long-lived caching. On the web fetch entry, `clientScriptResponse(views, request)` serves them ahead of the router. Types are stripped by `kick build`, or at runtime with Node 22.13+'s stripper, registered by the Node entry only, so edge bundles don't reference `node:module`. Scripts are self-contained for now (no `import`), only in components, at most one each. `createViews` takes `clientScriptPath` and `stripTypes`.
+
+- [#1036](https://github.com/forinda/kick-js/pull/1036) [`4e7b07b`](https://github.com/forinda/kick-js/commit/4e7b07b54147aba8ca04eee2964848885575da24) Thanks [@forinda](https://github.com/forinda)! - Forms: every template, components included, gets `$errors`, `$old` and `$flash` from the request's session, each shown once. A controller's own `$errors` / `$old` in the render data win, for re-rendering a form. `@error('field') { … }` renders a field's error as `$message`. Named inputs, textareas, selects, checkboxes and radios refill from `$old` on their own, unless the template sets their value, and never for passwords, files, hidden fields, a bound `[type]` or secret-looking names. Options and checkboxes match on their written or interpolated `value`. A full page rendered by a GET is remembered in the session so a failed form goes back to it.
+
+- [#1039](https://github.com/forinda/kick-js/pull/1039) [`bc7e084`](https://github.com/forinda/kick-js/commit/bc7e084bad20e1f1fbc103517a8f595e4b8223f6) Thanks [@forinda](https://github.com/forinda)! - Browser validators. `validate="required | minLength:3"` on a named field gives instant feedback before a form is sent. The available validators are `required`, `email`, `url`, `minLength`, `maxLength`, `min`, `max`, `pattern` and `in`, and the check refuses unknown or malformed ones. Messages go into the field's `@error` spot, which also gets `setCustomValidity`. Submitting with an invalid field is stopped and focuses the first one. A page with a `validate` field ships one small validator script (`/_kick/c/kick-validate.<hash>.js`); other pages ship none. **`@error` output changes.** `@error('field')` now always renders a `<span data-kick-error="field" aria-live="polite">` spot, hidden while there's no error, so its output goes from the bare body to the body inside that span. Keep `@error` bodies inline (text, `<b>`, `<small>`): a `<p>`, `<li>` or `<tr>` body was valid before and isn't inside a `<span>`, and a table moves it out. Move block markup outside the `@error`, or change it to inline elements.
+
 ## 0.1.1
 
 ### Patch Changes

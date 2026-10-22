@@ -1,5 +1,17 @@
 # @forinda/kickjs-view-language-server
 
+## 0.3.0
+
+### Minor Changes
+
+- [#1036](https://github.com/forinda/kick-js/pull/1036) [`4e7b07b`](https://github.com/forinda/kick-js/commit/4e7b07b54147aba8ca04eee2964848885575da24) Thanks [@forinda](https://github.com/forinda)! - `@error('field')` is highlighted and completed, with `$message` in scope inside it, and `$errors`, `$old` and `$flash` complete in every template.
+
+### Patch Changes
+
+- [#1038](https://github.com/forinda/kick-js/pull/1038) [`e5bfa90`](https://github.com/forinda/kick-js/commit/e5bfa90f2600c621f86d9e8386f6d6f1046433a6) Thanks [@forinda](https://github.com/forinda)! - `<script client>` blocks are embedded as TypeScript rather than JavaScript.
+- Updated dependencies [[`e5bfa90`](https://github.com/forinda/kick-js/commit/e5bfa90f2600c621f86d9e8386f6d6f1046433a6), [`4e7b07b`](https://github.com/forinda/kick-js/commit/4e7b07b54147aba8ca04eee2964848885575da24), [`bc7e084`](https://github.com/forinda/kick-js/commit/bc7e084bad20e1f1fbc103517a8f595e4b8223f6)]:
+  - @forinda/kickjs-view@0.2.0
+
 ## 0.2.0
 
 ### Minor Changes

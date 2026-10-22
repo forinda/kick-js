@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.3.0
+
+### Minor Changes
+
+- [#1038](https://github.com/forinda/kick-js/pull/1038) [`e5bfa90`](https://github.com/forinda/kick-js/commit/e5bfa90f2600c621f86d9e8386f6d6f1046433a6) Thanks [@forinda](https://github.com/forinda)! - `kick build` strips the TypeScript from each component's `<script client>` (with `transformWithOxc`) and ships plain JS in the views bundle, so edge runtimes serve it without stripping anything.
+
 ## 8.2.0
 
 ### Minor Changes
