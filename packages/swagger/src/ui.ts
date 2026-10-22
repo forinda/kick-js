@@ -95,7 +95,7 @@ export function redocHtml(specUrl: string, title = 'API Docs'): string {
 </head>
 <body>
   <redoc spec-url="${safeUrl}"></redoc>
-  <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"></script>
 </body>
 </html>`
 }
