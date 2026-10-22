@@ -186,6 +186,10 @@ describe('drift on .defaultSql() casts', () => {
       id: serial().primaryKey(),
       meta: jsonb().notNull().defaultSql("'{}'::jsonb"),
       tags: text().array().notNull().defaultSql("'{}'::text[]"),
+      labels: text().array().notNull().default('{}'),
+      ids: integer().array().default('{1,2}'),
+      roles: text().array().notNull().defaultSql('ARRAY[]::text[]'),
+      key: text().defaultSql('gen_random_uuid()::text'),
       at: timestamptz().notNull().defaultSql('now()'),
       note: text().defaultSql("'left::right'"),
     }
@@ -197,6 +201,25 @@ describe('drift on .defaultSql() casts', () => {
     await expect(migrateLatest({ adapter, migrationsDir: dir })).resolves.toMatchObject({
       applied: ['20260102_000000_title'],
     })
+  })
+
+  it('catches a cast added to an expression default', async () => {
+    const pool = pglitePool(new PGlite())
+    const adapter = pgAdapter({ pool })
+    const dir = await mkdtemp(path.join(tmpdir(), 'kickdb-pglite-'))
+    const cols = {
+      id: serial().primaryKey(),
+      ref: text().defaultSql('(now())::text'),
+    }
+    const a = extractSnapshot({ docs: table('docs', cols) }, 'postgres')
+    const b = extractSnapshot({ docs: table('docs', { ...cols, title: text() }) }, 'postgres')
+    await writeMigration(dir, '20260101_000000_init', empty, a)
+    await migrateLatest({ adapter, migrationsDir: dir })
+    await pool.query('alter table docs alter column ref set default now()::varchar')
+    await writeMigration(dir, '20260102_000000_title', a, b)
+    await expect(migrateLatest({ adapter, migrationsDir: dir })).rejects.toBeInstanceOf(
+      MigrationDriftError,
+    )
   })
 
   it('catches a fixed string replaced by a generated one', async () => {
