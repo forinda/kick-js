@@ -24,6 +24,11 @@ export interface ServerOptions {
   componentsDir?: string
   /** Default `<viewsDir>/pipes.ts`. */
   pipesFile?: string
+  /**
+   * The editor trusts the workspace, so the project's own `@forinda/kickjs-view`
+   * may be imported. Otherwise the bundled copy is used. Default `false`.
+   */
+  trusted?: boolean
 }
 
 async function listKick(dir: string): Promise<string[]> {
@@ -53,7 +58,11 @@ export function startServer(): void {
     const viewsDir = at(opts.viewsDir ?? 'src/views')
     const hasViews = existsSync(viewsDir)
     // A folder without templates stays quiet, even about the fallback.
-    const { view } = await loadViewModule(root, (m) => hasViews && connection.console.warn(m))
+    const { view } = await loadViewModule(
+      root,
+      (m) => hasViews && connection.console.warn(m),
+      opts.trusted === true,
+    )
     ws = new Workspace({
       root,
       viewsDir,

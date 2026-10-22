@@ -5,7 +5,7 @@
  * have what the editor calls).
  */
 import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as bundled from '@forinda/kickjs-view'
 import type { ViewModule } from './workspace'
@@ -45,14 +45,21 @@ function findProjectView(root: string): { entry: string; version: string } | und
     const dot = typeof pkg.exports === 'string' ? pkg.exports : pkg.exports?.['.']
     const rel =
       typeof dot === 'string' ? dot : (dot?.node ?? dot?.import ?? dot?.default ?? pkg.main)
-    return { entry: join(pkgDir, typeof rel === 'string' ? rel : 'index.js'), version: pkg.version }
+    const entry = resolve(pkgDir, typeof rel === 'string' ? rel : 'index.js')
+    // An exports map pointing outside the package isn't followed.
+    if (relative(pkgDir, entry).startsWith('..') || isAbsolute(relative(pkgDir, entry)))
+      return undefined
+    return { entry, version: pkg.version }
   }
 }
 
 export async function loadViewModule(
   root: string,
   warn: (message: string) => void,
+  /** The editor trusts this workspace: only then is the project's code imported. */
+  trusted: boolean,
 ): Promise<{ view: ViewModule; source: 'project' | 'bundled'; version: string }> {
+  if (!trusted) return { view: bundled, source: 'bundled', version: BUNDLED_VERSION }
   const found = findProjectView(root)
   let reason = 'the project has no @forinda/kickjs-view'
   if (found) {

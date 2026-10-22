@@ -101,6 +101,8 @@ export const workspace: Record<string, any> = {
   })),
   workspaceFolders: undefined,
   onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
+  isTrusted: true,
+  onDidGrantWorkspaceTrust: vi.fn(() => ({ dispose: vi.fn() })),
   createFileSystemWatcher: vi.fn((glob: string) => ({ glob, dispose: vi.fn() })),
 }
 

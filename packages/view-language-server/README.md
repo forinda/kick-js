@@ -7,7 +7,7 @@ A language server for KickJS `.kick` views, built on [Volar](https://volarjs.dev
 - HTML, CSS and Emmet inside templates.
 - Hover, go to definition and formatting.
 
-It loads the project's own `@forinda/kickjs-view` so the editor agrees with the build, and falls back to its bundled copy (with one warning) when the project has none.
+When the client says the workspace is trusted, it loads the project's own `@forinda/kickjs-view` so the editor agrees with the build, and falls back to its bundled copy (with one warning) when the project has none.
 
 ## Use
 
@@ -20,11 +20,12 @@ kick-view-ls --stdio
 
 Initialization options, relative to the workspace folder:
 
-| option          | default               |
-| --------------- | --------------------- |
-| `viewsDir`      | `src/views`           |
-| `componentsDir` | `components`          |
-| `pipesFile`     | `<viewsDir>/pipes.ts` |
+| option          | default                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `viewsDir`      | `src/views`                                                                                      |
+| `componentsDir` | `components`                                                                                     |
+| `pipesFile`     | `<viewsDir>/pipes.ts`                                                                            |
+| `trusted`       | `false` — only `true` imports the project's `@forinda/kickjs-view` (its code runs in the server) |
 
 The custom request `kick/templateNames` returns every template name except components.
 

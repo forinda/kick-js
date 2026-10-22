@@ -439,7 +439,7 @@ The KickJS VS Code extension understands `.kick` files:
 - Format Document, with the same output as `kick fmt:views`;
 - template names inside `ctx.render('…')` in your controllers.
 
-The editor uses your project's installed `@forinda/kickjs-view`, so it agrees with your build. If the project has none, it uses its bundled copy and says so once in the output panel.
+In a trusted workspace the editor uses your project's installed `@forinda/kickjs-view`, so it agrees with your build. If the project has none, it uses its bundled copy and says so once in the output panel.
 
 Settings (relative to the workspace folder):
 

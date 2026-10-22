@@ -50,6 +50,19 @@ describe('activateKickLanguage', () => {
     expect(client.start).toHaveBeenCalled()
   })
 
+  it("tells the server whether the workspace is trusted, and restarts when it's granted", async () => {
+    vscode.workspace.isTrusted = false
+    activateKickLanguage(context)
+    expect(client.ctor.mock.calls[0]![3].initializationOptions.trusted).toBe(false)
+    const grant = vi
+      .mocked(vscode.workspace.onDidGrantWorkspaceTrust)
+      .mock.calls.at(-1)![0] as () => Promise<void>
+    vscode.workspace.isTrusted = true
+    await grant()
+    expect(client.stop).toHaveBeenCalled()
+    expect(client.ctor.mock.calls[1]![3].initializationOptions.trusted).toBe(true)
+  })
+
   it('completes template names in ctx.render', async () => {
     activateKickLanguage(context)
     const p = provider()

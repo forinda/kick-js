@@ -10,7 +10,7 @@ let client: LanguageClient | undefined
 /** `ctx.render('` / `views.render("` up to the cursor. */
 const RENDER = /\b(?:ctx|views)\.render\(\s*['"`][^'"`]*$/
 
-export function activateKickLanguage(context: vscode.ExtensionContext): void {
+function startClient(context: vscode.ExtensionContext): void {
   const module = context.asAbsolutePath('dist/kick-view-server.js')
   const serverOptions: ServerOptions = {
     run: { module, transport: TransportKind.ipc },
@@ -27,6 +27,8 @@ export function activateKickLanguage(context: vscode.ExtensionContext): void {
       viewsDir: config.get<string>('dir', 'src/views'),
       componentsDir: config.get<string>('components', 'components'),
       pipesFile: config.get<string>('pipes') || undefined,
+      // Untrusted: the server never imports the project's own view package.
+      trusted: vscode.workspace.isTrusted,
     },
     synchronize: {
       fileEvents: [
@@ -36,6 +38,16 @@ export function activateKickLanguage(context: vscode.ExtensionContext): void {
     },
   })
   void client.start()
+}
+
+export function activateKickLanguage(context: vscode.ExtensionContext): void {
+  startClient(context)
+  context.subscriptions.push(
+    vscode.workspace.onDidGrantWorkspaceTrust(async () => {
+      await client?.stop()
+      startClient(context)
+    }),
+  )
 
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
