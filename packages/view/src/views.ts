@@ -291,10 +291,11 @@ export function createViews(options: ViewsOptions = {}): Views {
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
       const used = new Map<string, CheckedTemplate>()
+      // A controller's own `$errors` / `$old` (a re-render) win over the session's.
+      const page = { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data }
       const html = render(
         template,
-        // A controller's own `$errors` / `$old` (a re-render) win over the session's.
-        { ...emptyFormState(), ...shared, ...takeFormState(opts.ctx), ...data },
+        page,
         {
           locale,
           timeZone,
@@ -310,7 +311,8 @@ export function createViews(options: ViewsOptions = {}): Views {
         { layout: opts.layout },
       )
       if (!used.size) return html
-      const nonce = (data as { cspNonce?: unknown }).cspNonce
+      // The nonce `@assets` gets too: often from share().
+      const nonce = (page as { cspNonce?: unknown }).cspNonce
       const nonceAttr = typeof nonce === 'string' ? ` nonce="${nonce.replace(/"/g, '&quot;')}"` : ''
       const tags = await Promise.all(
         [...used.values()].map(async (t) => {

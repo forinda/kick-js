@@ -805,6 +805,15 @@ export function check(name: string, project: Project): CheckResult {
   const top: Node[] = []
   let client: CheckedTemplate['client']
   for (const n of ast.body) {
+    if (
+      n.k === 'element' &&
+      n.tag.toLowerCase() === 'script' &&
+      n.attrs.some((a) => a.name.toLowerCase() === 'client' && a.kind !== 'bare')
+    ) {
+      // `client="…"` isn't lifted: say so rather than ship TypeScript inline.
+      c.diagnostics.push(error(ast.file, n.span, 'write <script client> with no value'))
+      continue
+    }
     if (n.k !== 'element' || !isClientScript(n)) {
       top.push(n)
       continue
@@ -833,6 +842,18 @@ export function check(name: string, project: Project): CheckResult {
     if (IMPORTS.test(code)) {
       c.diagnostics.push(
         error(ast.file, n.span, "client scripts can't import yet — keep the script self-contained"),
+      )
+      continue
+    }
+    // Served as `<tag>.<hash>.js`: the tag has to be a plain file name.
+    const tag = componentTag(name, project.componentsDir)
+    if (!/^[a-z][a-z0-9-]*$/.test(tag)) {
+      c.diagnostics.push(
+        error(
+          ast.file,
+          n.span,
+          `<script client> needs a component name of lowercase letters, digits and dashes: '${tag}'`,
+        ),
       )
       continue
     }

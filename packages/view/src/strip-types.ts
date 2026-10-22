@@ -7,8 +7,13 @@ import * as nodeModule from 'node:module'
 import { NO_STRIPPER } from './client-scripts'
 
 export function stripTypes(code: string): string {
-  const strip = (nodeModule as { stripTypeScriptTypes?: (code: string) => string })
-    .stripTypeScriptTypes
+  const strip = (
+    nodeModule as {
+      stripTypeScriptTypes?: (code: string, options?: { mode?: 'strip' | 'transform' }) => string
+    }
+  ).stripTypeScriptTypes
   if (!strip) throw new Error(NO_STRIPPER)
-  return strip(code)
+  // `transform`, not the default `strip`: enums and namespaces compile, as
+  // they do in a build.
+  return strip(code, { mode: 'transform' })
 }

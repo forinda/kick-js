@@ -150,3 +150,46 @@ describe('pages ship client scripts', () => {
     expect(await v.render('plain')).toBe('<p>ok</p>')
   })
 })
+
+describe('review fixes', () => {
+  const views = (pages: Record<string, string>, opts = {}) =>
+    createViews({ viewsDir: dir(pages), warn: vi.fn(), ...opts })
+
+  it('takes the nonce from share() too', async () => {
+    const v = views(
+      { 'components/flash-toast': TOAST, page: '<flash-toast />' },
+      { share: () => ({ cspNonce: 'shared' }) },
+    )
+    expect(await v.render('page')).toContain('nonce="shared"')
+  })
+
+  it('accepts the TypeScript a build accepts, enums included', async () => {
+    const v = views({
+      'components/mode-box':
+        '<div></div>\n<script client>\nenum Mode { A, B }\nconsole.log(Mode.B)\n</script>',
+      page: '<mode-box />',
+    })
+    const file = (await v.render('page')).match(/mode-box\.[0-9a-f]{8}\.js/)![0]
+    expect(await v.clientScript(file)).toContain('Mode')
+  })
+
+  it("refuses a client script whose component name can't be served", () => {
+    expect(
+      errors(
+        { 'components/my_toast-box': '<div></div><script client>let a = 1</script>' },
+        'components/my_toast-box',
+      ),
+    ).toContain(
+      "<script client> needs a component name of lowercase letters, digits and dashes: 'my_toast-box'",
+    )
+  })
+
+  it('refuses client with a value', () => {
+    expect(
+      errors(
+        { 'components/a-b': '<div></div><script client="true">let a = 1</script>' },
+        'components/a-b',
+      ),
+    ).toContain('write <script client> with no value')
+  })
+})
