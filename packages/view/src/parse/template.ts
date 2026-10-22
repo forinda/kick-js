@@ -348,7 +348,7 @@ class TemplateParser {
     if (RAW_TEXT.has(lower) || (!foreign && RCDATA.has(lower))) {
       // Where a browser ends it: `</script` followed by whitespace, `/` or `>`
       // — `</scriptx` doesn't.
-      const end = new RegExp(`</${lower}(?=[\\s/>])`, 'i')
+      const end = new RegExp(`</${lower}(?=[\\t\\n\\f\\r />])`, 'i')
       end.lastIndex = 0
       const found = end.exec(s.slice(j))
       const close = found ? j + found.index : -1
@@ -358,7 +358,15 @@ class TemplateParser {
         // `<script` inside a script keeps it open past `</script>`, and CDATA
         // in SVG hides a close tag. Refused rather than guessed.
         const content = s.slice(j, stop)
-        if (
+        if (foreign && content.includes('<')) {
+          // Inside SVG and MathML a browser parses script and style content
+          // as markup, so any `<` there could hide the close tag from us.
+          this.err(
+            j,
+            stop,
+            `markup isn't allowed inside <${lower}> in SVG or MathML — move the code to a separate file`,
+          )
+        } else if (
           /<!\[CDATA\[/i.test(content) ||
           (lower === 'script' && /<!--/.test(content) && /<script/i.test(content))
         ) {

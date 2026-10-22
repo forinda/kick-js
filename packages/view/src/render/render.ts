@@ -349,13 +349,10 @@ class Renderer {
             put(a.n, html)
             break
           }
-          // The scheme check reads what the browser will: static text with
-          // its entities decoded, interpolated values as they are.
-          const plain = a.p
-            .map((p, i) =>
-              typeof p === 'string' ? decodeEntities(p) : this.plain(values[i], inst),
-            )
-            .join('')
+          // The scheme check reads what the browser will: the whole value as
+          // written out, entities decoded — so a reference left unfinished in
+          // static text (`&#10`) and completed by a value is read as one.
+          const plain = decodeEntities(html)
           const safe = a.u === 'url' ? sanitizeUrl(plain) : sanitizeSrcset(plain)
           put(a.n, safe === plain ? html : escapeHtml(safe))
           break

@@ -337,6 +337,16 @@ describe('render', () => {
     ).toBe('<b>Tom &amp; Jerry</b>')
   })
 
+  it('an unfinished character reference before a value cannot hide a scheme', () => {
+    for (const [src, data] of [
+      ['<a href="&#10{{ s }}">x</a>', { s: '6avascript:alert(1)' }],
+      ['<a href="&#x6{{ s }}">x</a>', { s: 'A;avascript:alert(1)' }],
+      ['<a href="{{ a }}&#5{{ b }}">x</a>', { a: 'javascript', b: '8alert(1)' }],
+    ] as const) {
+      expect(html(src, data), src).toBe('<a href="#">x</a>')
+    }
+  })
+
   it('errors carry the template position', () => {
     try {
       html('<p>\n  {{ x | upper2 }}</p>')

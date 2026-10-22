@@ -211,6 +211,25 @@ describe('parse', () => {
     expect(errors('<svg><script><![CDATA[ x ]]></script></svg>').length).toBeGreaterThan(0)
   })
 
+  it('only HTML whitespace ends a raw-text close tag', () => {
+    // U+00A0 isn't HTML whitespace: `</script\u00a0>` doesn't close the script.
+    expect(flat(ok('<script>a</script\u00a0>b {{ x }}</script>').ast.body)).toBe(
+      '<script>a</script\u00a0>b {raw-text:x}</script>',
+    )
+    expect(flat(ok('<script>a</script\t>b').ast.body)).toBe('<script>a</script>b')
+  })
+
+  it('refuses markup inside a foreign script or style', () => {
+    for (const src of [
+      '<svg><script><!-- </script> --></script></svg>',
+      '<svg><script>if (a < b) {}</script></svg>',
+      '<math><style><!-- x --></style></math>',
+    ]) {
+      expect(errors(src).length, src).toBeGreaterThan(0)
+    }
+    expect(errors('<svg><script>go()</script></svg>')).toEqual([])
+  })
+
   it('positions survive CRLF and BOM', () => {
     const crlf = errors('﻿<p>\r\n{{ a() }}')[0]!
     const lf = errors('<p>\n{{ a() }}')[0]!
