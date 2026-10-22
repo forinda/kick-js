@@ -39,7 +39,7 @@ const DATE_FORMATS: Record<string, Intl.DateTimeFormatOptions> = {
   mediumTime: { timeStyle: 'medium' },
 }
 
-/** Angular's `digitsInfo`: `minInt.minFrac-maxFrac`, e.g. `1.0-2`. */
+/** Digits as `minInt.minFrac-maxFrac`, e.g. `1.0-2`. */
 function digits(info: unknown): Intl.NumberFormatOptions {
   if (info === undefined || info === null) return {}
   const m = /^(\d+)\.(\d+)-(\d+)$/.exec(String(info))

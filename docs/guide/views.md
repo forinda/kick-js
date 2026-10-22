@@ -1,6 +1,6 @@
 # Views (`.kick` templates)
 
-`@forinda/kickjs-view` renders server-side HTML from `.kick` templates. `ctx.render()` works with it on Express, Fastify, h3 and the web fetch entry, including edge platforms with no file system. The syntax follows Angular's: `{{ }}` with pipes, and `@if` / `@for` blocks.
+`@forinda/kickjs-view` renders server-side HTML from `.kick` templates. `ctx.render()` works with it on Express, Fastify, h3 and the web fetch entry, including edge platforms with no file system. Values print with `{{ }}` and pipes; logic lives in `@if` / `@for` blocks.
 
 ::: warning Experimental
 The first releases are `0.x`. The template syntax is settled; the format the build emits may still change between minor versions.

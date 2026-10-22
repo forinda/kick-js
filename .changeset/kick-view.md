@@ -2,7 +2,7 @@
 '@forinda/kickjs-view': minor
 ---
 
-New, experimental: `.kick` views — KickJS's own template language for server-rendered pages, with Angular-style syntax:
+New, experimental: `.kick` views — KickJS's own template language for server-rendered pages:
 
 - `{{ value | pipe }}` interpolation, escaped for where it lands: text, attributes, URL attributes (unsafe schemes become `#`) and JSON scripts.
 - `@if` / `@else`, `@for` / `@empty`, `@switch`, `@let`, `@verbatim`.
