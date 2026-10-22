@@ -26,6 +26,10 @@ Every editor below passes these as `initializationOptions`. Paths are relative t
 
 **`trusted`:** with `true`, the server imports your installed `@forinda/kickjs-view`, so the editor checks and formats exactly as your build does. With `false`, it uses the copy bundled with the server, which may be a different version. Set `true` only for projects whose dependencies you trust: the VS Code extension sends it only for trusted workspaces.
 
+::: warning Keep `trusted` out of project files
+Set `trusted` only in your own editor config: `init.lua`, `~/.config/helix/languages.toml`, your global `coc-settings.json` and so on. Some editors also read config from the project, like `.helix/languages.toml` or `.vim/coc-settings.json`. A repository you clone could ship one with `trusted: true` and run its code when you open a `.kick` file.
+:::
+
 ## Neovim
 
 Neovim 0.11 or later, no plugins:
@@ -76,7 +80,7 @@ With [coc.nvim](https://github.com/neoclide/coc.nvim), in `coc-settings.json`:
 
 ## Helix
 
-In `languages.toml` (global, or `.helix/languages.toml` in the project):
+In `~/.config/helix/languages.toml`:
 
 ```toml
 [language-server.kick-views]
