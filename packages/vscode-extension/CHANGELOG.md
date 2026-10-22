@@ -1,6 +1,6 @@
 # kickjs-devtools
 
-## Unreleased
+## 5.4.0
 
 - **`.kick` views:** highlighting, errors as you type, completion (keywords, pipes, components, HTML, CSS, Emmet), hover, go to definition and Format Document, through a bundled language server. `.kick` files get their own icon, and `ctx.render('…')` completes template names. Settings live under `kickjs.views.*`.
 - Requires VS Code 1.140 or later (`engines.vscode` now matches the `@types/vscode` the extension is built against).
