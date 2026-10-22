@@ -1,0 +1,5 @@
+export { AST_FORMAT_VERSION } from './ast'
+export type { Expr, Literal, PathSegment } from './ast'
+export type { Diagnostic, Pos, Span } from './diagnostics'
+export { positionAt } from './diagnostics'
+export { parseExpression, FORBIDDEN_NAMES } from './parse/expression'
