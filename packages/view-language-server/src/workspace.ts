@@ -29,6 +29,8 @@ export interface WorkspaceOptions {
   layout?: string | Record<string, string>
   /** `createViews({ baseLayout })`: the shell around every page's outermost layout. */
   baseLayout?: string
+  /** The project's TS / JS files with their text (an open buffer's when there is one), for `ctx.render('…')` names. */
+  scripts?(): Promise<Array<{ uri: string; text: string }>>
 }
 
 interface Entry {
@@ -258,6 +260,10 @@ export class Workspace {
     const out = new Set(typeof layout === 'string' ? [layout] : Object.values(layout ?? {}))
     if (baseLayout) out.add(baseLayout)
     return out
+  }
+
+  scripts(): Promise<Array<{ uri: string; text: string }>> {
+    return this.opts.scripts?.() ?? Promise.resolve([])
   }
 
   baseLayout(): string | undefined {

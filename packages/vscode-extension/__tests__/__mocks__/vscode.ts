@@ -107,11 +107,42 @@ export const workspace: Record<string, any> = {
   findFiles: vi.fn(async () => []),
   textDocuments: [],
   onDidOpenTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidChangeTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidCloseTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
+  onDidSaveTextDocument: vi.fn(() => ({ dispose: vi.fn() })),
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const languages: Record<string, any> = {
   registerCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  registerDefinitionProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  createDiagnosticCollection: vi.fn(() => ({
+    set: vi.fn(),
+    delete: vi.fn(),
+    clear: vi.fn(),
+    dispose: vi.fn(),
+  })),
+}
+
+export enum DiagnosticSeverity {
+  Error = 0,
+  Warning = 1,
+}
+
+export class Diagnostic {
+  source?: string
+  constructor(
+    public range: unknown,
+    public message: string,
+    public severity?: number,
+  ) {}
+}
+
+export class Location {
+  constructor(
+    public uri: unknown,
+    public range: unknown,
+  ) {}
 }
 
 export enum CompletionItemKind {
