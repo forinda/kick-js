@@ -80,3 +80,22 @@ describe('form state', () => {
     })
   })
 })
+
+describe('@error', () => {
+  const page = (src: string) => createViews({ viewsDir: dir({ page: src }), warn: vi.fn() })
+  it("@error shows the field's message", async () => {
+    const views = page('@error(\'title\') {\n<p class="e">{{ $message }}</p>\n}')
+    expect(await views.render('page', { $errors: { title: 'Too short' } })).toContain(
+      '<p class="e">Too short</p>',
+    )
+    expect(await views.render('page', { $errors: {} })).not.toContain('<p')
+  })
+  it("@error('form') shows a form-level error", async () => {
+    const views = page("@error('form') {{{ $message }}}")
+    expect(await views.render('page', { $errors: { form: 'Bad' } })).toBe('Bad')
+  })
+  it('@error needs a string', () => {
+    const r = parse('@error(title) {}', 'p.kick')
+    expect(r.diagnostics.map((d) => d.message).join('\n')).toContain('@error')
+  })
+})

@@ -21,8 +21,8 @@ const VOID = new Set(
   'area base br col embed hr img input link meta param source track wbr'.split(' '),
 )
 /** Block heads: control flow is spaced (`@if (a) {`), directives aren't (`@layout('x')`). */
-const HEADS = /@(else\s+if|if|for|switch|case|slot|layout|assets)\s*\(/y
-const DIRECTIVES = new Set(['slot', 'layout', 'assets'])
+const HEADS = /@(else\s+if|if|for|switch|case|slot|error|layout|assets)\s*\(/y
+const DIRECTIVES = new Set(['slot', 'error', 'layout', 'assets'])
 
 type Range = [number, number]
 
@@ -140,7 +140,7 @@ function outside(source: string, ranges: Range[], fn: (s: string) => string): st
 }
 
 const TOKENS =
-  /<\/([A-Za-z][\w:.-]*)\s*>|<([A-Za-z][\w:.-]*)(?:[^>"']|"[^"]*"|'[^']*')*?(\/?)>|@(?:if|for|switch|case|slot|else|empty|default)\b[^{}\n]*\{|\}/g
+  /<\/([A-Za-z][\w:.-]*)\s*>|<([A-Za-z][\w:.-]*)(?:[^>"']|"[^"]*"|'[^']*')*?(\/?)>|@(?:if|for|switch|case|slot|error|else|empty|default)\b[^{}\n]*\{|\}/g
 
 /**
  * Re-indent lines by the blocks and elements open at their start. A closer

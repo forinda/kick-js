@@ -43,6 +43,12 @@ describe('format', () => {
     expect(fmt('<p><b>x</b></p>\n')).toBe('<p><b>x</b></p>\n')
   })
 
+  it("writes @error('…') like @slot('…')", () => {
+    expect(fmt("@error ( 'title' ){\n<p>{{ $message }}</p>\n}\n")).toBe(
+      "@error('title') {\n  <p>{{ $message }}</p>\n}\n",
+    )
+  })
+
   it('spaces pipes in interpolations and block headers', () => {
     expect(fmt("<p>{{title|titlecase}} {{ at  |date:'short'| uppercase }}</p>\n")).toBe(
       "<p>{{ title | titlecase }} {{ at | date:'short' | uppercase }}</p>\n",
