@@ -9,6 +9,7 @@ import { posix, relative, sep } from 'node:path'
 import type { Diagnostic } from '@volar/language-service'
 import { URI } from 'vscode-uri'
 import type * as View from '@forinda/kickjs-view'
+import { pipeDeclarations, type PipeDeclaration } from './pipes'
 import { toRange } from './positions'
 
 export type ViewModule = typeof View
@@ -40,6 +41,7 @@ export class Workspace {
   private readonly entries = new Map<string, Entry>()
   private readonly cache = new Map<string, Diagnostic[]>()
   private pipes: string[] = []
+  private pipeDecls = new Map<string, PipeDeclaration>()
 
   constructor(private readonly opts: WorkspaceOptions) {}
 
@@ -69,6 +71,10 @@ export class Workspace {
 
   uriOf(name: string): string {
     return URI.file(`${this.opts.viewsDir}/${name}.kick`).toString()
+  }
+
+  componentsDir(): string {
+    return this.opts.componentsDir
   }
 
   pathOf(name: string): string {
@@ -102,6 +108,11 @@ export class Workspace {
     this.update(name, { disk: e?.disk, buffer: text })
   }
 
+  /** `setBuffer`, skipped when the buffer is already `text`. */
+  sync(uri: string, text: string): void {
+    if (this.textOf(this.nameOf(uri) ?? '') !== text) this.setBuffer(uri, text)
+  }
+
   async fileChanged(path: string): Promise<void> {
     if (path === this.opts.pipesFile) {
       await this.loadPipes()
@@ -119,6 +130,7 @@ export class Workspace {
   async fileDeleted(path: string): Promise<void> {
     if (path === this.opts.pipesFile) {
       this.pipes = []
+      this.pipeDecls = new Map()
       this.cache.clear()
       return
     }
@@ -130,6 +142,7 @@ export class Workspace {
     const source = await this.opts.read(this.opts.pipesFile)
     this.pipes =
       source === undefined ? [] : this.opts.view.readPipeExports(source, this.opts.pipesFile).names
+    this.pipeDecls = source === undefined ? new Map() : pipeDeclarations(source)
   }
 
   private update(name: string, src: { disk?: string; buffer?: string }): void {
@@ -203,6 +216,11 @@ export class Workspace {
 
   pipeNames(): string[] {
     return [...this.opts.view.BUILTIN_PIPES, ...this.pipes]
+  }
+
+  /** Where an app pipe is declared in `pipes.ts`, and its parameters. */
+  pipeDeclaration(name: string): PipeDeclaration | undefined {
+    return this.pipeDecls.get(name)
   }
 
   pipesFile(): string {

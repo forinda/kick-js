@@ -17,9 +17,7 @@ export function createDiagnosticsPlugin(ws: Workspace): LanguageServicePlugin {
         provideDiagnostics(document) {
           if (document.languageId !== 'kick') return undefined
           // The document's text is the editor's buffer: the workspace checks that.
-          if (ws.textOf(ws.nameOf(document.uri) ?? '') !== document.getText()) {
-            ws.setBuffer(document.uri, document.getText())
-          }
+          ws.sync(document.uri, document.getText())
           return ws.diagnosticsFor(document.uri)
         },
       }
