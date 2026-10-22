@@ -1,5 +1,10 @@
 # kickjs-devtools
 
+## Unreleased
+
+- `.kick` templates: Find All References and Rename for pipes, components and layouts. Renaming a component or layout renames its file, and renaming a template file in the explorer updates its tags and `@layout('…')` uses.
+- The language server colours the template syntax with semantic tokens, alongside the TextMate grammar.
+
 ## 5.4.1
 
 - The `.kick` language server starts with the first `.kick` file, one in the workspace or the first you open, instead of in every KickJS workspace.

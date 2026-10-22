@@ -84,11 +84,13 @@ export function startServer(): void {
       list: listKick,
     })
     await ws.load()
+    // Kick first: where a single answer wins (rename, hover), a component tag
+    // is ours, not the HTML service's plain tag.
     return server.initialize(params, createSimpleProject([kickLanguagePlugin]), [
+      createKickServicePlugin(ws),
       createHtmlService(),
       createCssService(),
       createEmmetService(),
-      createKickServicePlugin(ws),
     ])
   })
 

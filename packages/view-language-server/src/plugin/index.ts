@@ -10,6 +10,7 @@ import { definition } from './definition'
 import { createDiagnosticsPlugin, sourceUri } from './diagnostics'
 import { formatEdits } from './format'
 import { hover } from './hover'
+import { fileRenameEdits, references, renameEdits, renameRange } from './references'
 import { kickTokens, TOKEN_TYPES } from './tokens'
 
 export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
@@ -23,6 +24,9 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
       definitionProvider: true,
       documentFormattingProvider: true,
       semanticTokensProvider: { legend: { tokenTypes: [...TOKEN_TYPES], tokenModifiers: [] } },
+      referencesProvider: true,
+      renameProvider: { prepareProvider: true },
+      fileRenameEditsProvider: true,
     },
     create(context) {
       /** The source file's uri and text, with the workspace synced to the buffer. */
@@ -51,6 +55,23 @@ export function createKickServicePlugin(ws: Workspace): LanguageServicePlugin {
           const d = open(document)
           const link = d && definition(ws, d.uri, d.text, document.offsetAt(position))
           return link ? [link] : undefined
+        },
+        provideReferences(document, position, context) {
+          const d = open(document)
+          return d
+            ? references(ws, d.text, document.offsetAt(position), context.includeDeclaration)
+            : undefined
+        },
+        provideRenameRange(document, position) {
+          const d = open(document)
+          return d ? renameRange(ws, d.text, document.offsetAt(position)) : undefined
+        },
+        provideRenameEdits(document, position, newName) {
+          const d = open(document)
+          return d ? renameEdits(ws, d.text, document.offsetAt(position), newName) : undefined
+        },
+        provideFileRenameEdits(oldUri, newUri) {
+          return fileRenameEdits(ws, oldUri.toString(), newUri.toString())
         },
         provideDocumentSemanticTokens(document, range, legend) {
           const d = open(document)

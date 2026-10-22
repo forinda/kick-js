@@ -5,7 +5,9 @@ A language server for KickJS `.kick` views, built on [Volar](https://volarjs.dev
 - Errors as you type, from the same `parse` + `check` the runtime uses.
 - Completion for `@` keywords, pipes, components and their inputs, layout and slot names, and names in scope.
 - HTML, CSS and Emmet inside templates.
-- Hover, go to definition and formatting.
+- Hover, go to definition, find references and formatting.
+- Rename pipes, components and layouts across templates; renaming a template file updates its uses.
+- Semantic tokens, so any LSP editor highlights the template syntax.
 
 When the client says the workspace is trusted, it loads the project's own `@forinda/kickjs-view` so the editor agrees with the build, and falls back to its bundled copy (with one warning) when the project has none.
 

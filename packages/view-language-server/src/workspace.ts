@@ -5,7 +5,7 @@
  * runtime uses, cached per template and invalidated along the graph of
  * which template uses which component or layout.
  */
-import { posix, relative, sep } from 'node:path'
+import { isAbsolute, posix, relative, sep } from 'node:path'
 import type { Diagnostic } from '@volar/language-service'
 import { URI } from 'vscode-uri'
 import type * as View from '@forinda/kickjs-view'
@@ -63,6 +63,12 @@ export class Workspace {
     const rel = relative(this.opts.viewsDir, path).split(sep).join(posix.sep)
     if (rel.startsWith('..') || !rel.endsWith('.kick')) return undefined
     return this.opts.view.templateName(rel.slice(0, -'.kick'.length))
+  }
+
+  /** `uri`'s path inside the views folder (`layouts/main.kick`, `layouts`); `undefined` outside it. */
+  relOf(uri: string): string | undefined {
+    const rel = relative(this.opts.viewsDir, URI.parse(uri).fsPath).split(sep).join(posix.sep)
+    return rel.startsWith('..') || isAbsolute(rel) ? undefined : rel
   }
 
   nameOf(uri: string): string | undefined {

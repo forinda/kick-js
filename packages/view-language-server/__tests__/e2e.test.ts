@@ -99,6 +99,54 @@ describe('language server', () => {
     // Five numbers per token: `{{`, user, name, |, titlecase, `}}`.
     expect(tokens!.data.length).toBe(6 * 5)
   })
+  it('finds references to a component across templates', async () => {
+    const at = await open('k9', '<user-ca§rd [user]="x" />')
+    const locs = await server.sendReferencesRequest(views('k9'), at, { includeDeclaration: true })
+    // Buffers opened by earlier tests use it too.
+    expect(locs!.map((l) => l.uri)).toEqual(
+      expect.arrayContaining([views('components/user-card'), views('home'), views('k9')]),
+    )
+  })
+  it('renames a pipe across templates and pipes.ts', async () => {
+    const at = await open('k10', '{{ n | initi§als }}')
+    expect(await server.sendPrepareRenameRequest(views('k10'), at)).toMatchObject({
+      start: { line: 0, character: 7 },
+    })
+    const edit = await server.sendRenameRequest(views('k10'), at, 'firstLetter')
+    expect(
+      Object.keys(edit!.changes!)
+        .map((u) => u.split('/src/views/')[1])
+        .toSorted(),
+    ).toEqual(['components/user-card.kick', 'k10.kick', 'pipes.ts'])
+  })
+  it('renames a component: its tags, then its file', async () => {
+    const at = await open('k11', '<user-ca§rd [user]="x"></user-card>')
+    expect(await server.sendPrepareRenameRequest(views('k11'), at)).toMatchObject({
+      start: { line: 0, character: 1 },
+      end: { line: 0, character: 10 },
+    })
+    const edit = await server.sendRenameRequest(views('k11'), at, 'user-badge')
+    const moves = edit!.documentChanges!.filter((c) => 'kind' in c)
+    expect(moves).toEqual([
+      {
+        kind: 'rename',
+        oldUri: views('components/user-card'),
+        newUri: views('components/user-badge'),
+      },
+    ])
+    // The HTML service's tag-pair edit is the same as ours, not added twice.
+    const k11 = edit!.documentChanges!.find(
+      (c) => !('kind' in c) && c.textDocument.uri === views('k11'),
+    ) as { edits: unknown[] }
+    expect(k11.edits).toHaveLength(2)
+  })
+  it('updates uses when a layout file is renamed in the editor', async () => {
+    const edit = await server.connection.sendRequest<{ changes?: Record<string, unknown[]> }>(
+      'workspace/willRenameFiles',
+      { files: [{ oldUri: views('layouts/main'), newUri: views('layouts/site') }] },
+    )
+    expect(Object.keys(edit!.changes!)).toContain(views('home'))
+  })
   it('lists template names for ctx.render', async () => {
     const names = await server.connection.sendRequest<string[]>('kick/templateNames')
     expect(names).toEqual(expect.arrayContaining(['home', 'layouts/main']))
