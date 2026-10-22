@@ -1,5 +1,23 @@
 # @forinda/kickjs-view-language-server
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1030](https://github.com/forinda/kick-js/pull/1030) [`bd99617`](https://github.com/forinda/kick-js/commit/bd99617f851891ac355775cf6fea97c6fcf5dba7) Thanks [@forinda](https://github.com/forinda)! - `layout` and `baseLayout` initialization options, the same as `createViews({ layout, baseLayout })`. Pages that declare no `@layout` are checked against the mapped layout and the base layout, as the build does, so their `@slot` blocks no longer warn "has no layout to fill here". Slot completion offers those layouts' slots, and editing a configured layout re-checks every page.
+
+- [#1029](https://github.com/forinda/kick-js/pull/1029) [`e10f5ca`](https://github.com/forinda/kick-js/commit/e10f5caebd21060f3bdd610c87267460003b2796) Thanks [@forinda](https://github.com/forinda)! - Find references and rename. References list every use of a component tag (closing tags included), a layout name or a pipe across templates, with the declaration on request. Rename covers a pipe (its uses and its declaration in `pipes.ts`), a component (every tag, then its file) and a layout (every `@layout('…')`, then its file). Renaming a template file or folder in the editor updates the tags and `@layout('…')` strings that point at it.
+
+- [#1031](https://github.com/forinda/kick-js/pull/1031) [`f2afcef`](https://github.com/forinda/kick-js/commit/f2afcef604920a389ca9c6c252d18057ce2a687e) Thanks [@forinda](https://github.com/forinda)! - TypeScript and JavaScript files: in `ctx.render('…')` and `views.render('…')`, the server completes template names (components left out), goes to the template, and warns "template 'x' not found" for a literal name with no template. It doesn't format, highlight or otherwise touch the rest of the file. Editors attach it to TS and JS files as well as `.kick` to use it.
+
+- [#1028](https://github.com/forinda/kick-js/pull/1028) [`92c3b35`](https://github.com/forinda/kick-js/commit/92c3b3584d4189f652b9d44d0321d285f5290461) Thanks [@forinda](https://github.com/forinda)! - Semantic tokens: the server highlights the template syntax itself, so editors without the VS Code TextMate grammar colour it too. That covers `@if` and the other keywords, `{{ }}` and `|`, names and properties, pipes, component tags, `@input` names, literals and `{{-- --}}` comments, using standard token types so themes colour them. Neovim and JetBrains IDEs (LSP4IJ) show them by default; Zed needs `"semantic_tokens": "combined"` for the Kick language.
+
+### Patch Changes
+
+- [#1033](https://github.com/forinda/kick-js/pull/1033) [`df72c30`](https://github.com/forinda/kick-js/commit/df72c30b20196c529258ee91d2ef5f48f09e3c88) Thanks [@forinda](https://github.com/forinda)! - Renaming a page's `.kick` file or folder updates the `ctx.render('…')` and `views.render('…')` calls that name it. The server scans the project's TS and JS files when the rename happens, skipping `node_modules`, build output, dot folders and `.d.ts`, and uses an open editor's text where there is one.
+
+- [#1032](https://github.com/forinda/kick-js/pull/1032) [`5abe464`](https://github.com/forinda/kick-js/commit/5abe464005ce69f54ac81d71eeefd93a7ae62922) Thanks [@forinda](https://github.com/forinda)! - Custom requests `kick/renderDefinition` (`{ text, offset }`) and `kick/renderDiagnostics` (`{ text }`). They give the `ctx.render('…')` template-name features for a TypeScript or JavaScript file's text, for clients that don't send those files to the server.
+
 ## 0.1.2
 
 ### Patch Changes
