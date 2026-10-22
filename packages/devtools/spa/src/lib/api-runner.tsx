@@ -394,7 +394,8 @@ export const ApiRunnerPanel: Component = () => {
       record({ status: res.status })
       if (sentIn !== generation) return
       setResult({
-        url: new URL(req.url, location.href).href,
+        // After redirects: the page's relative links resolve against where it came from.
+        url: res.url || new URL(req.url, location.href).href,
         status: res.status,
         statusText: res.statusText,
         ms: Math.round(performance.now() - started),
@@ -1092,11 +1093,12 @@ export const ApiRunnerPanel: Component = () => {
                       >
                         {/* No sandbox permissions: the page's scripts don't run, and it
                             can't reach DevTools or the app's cookies. Its CSS and images
-                            load, relative to the URL it came from. */}
+                            load, relative to the URL it came from. Truncated like Raw, so a
+                            huge page can't stall the runner. */}
                         <iframe
                           title="Response preview"
                           sandbox=""
-                          srcdoc={`<base href="${escapeAttr(res().url)}">${res().raw}`}
+                          srcdoc={`<base href="${escapeAttr(res().url)}">${res().raw.slice(0, MAX_BODY_CHARS)}`}
                           class="w-full h-[50vh] bg-white border border-border rounded-lg"
                         />
                       </Show>

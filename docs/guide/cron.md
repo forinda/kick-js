@@ -86,7 +86,11 @@ export const app = await bootstrap({
 import cron from 'node-cron'
 
 KickCronAdapter({
-  schedule: (expression, { timezone }, tick) => cron.schedule(expression, tick, { timezone }),
+  schedule: (expression, { timezone }, tick) => {
+    const task = cron.schedule(expression, tick, { timezone })
+    // destroy(), not stop(): node-cron keeps stopped tasks, and every HMR reload stops them.
+    return { stop: () => task.destroy() }
+  },
 })
 ```
 

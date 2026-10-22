@@ -43,7 +43,8 @@ describe('bin.js', () => {
   it("runs the project's CLI from anywhere inside the project", () => {
     const root = project()
     const out = execFileSync('node', [BIN, 'routes', '--json'], {
-      cwd: join(root, 'src/modules'),
+      // Without owners to check (Windows), only the current folder counts.
+      cwd: process.platform === 'win32' ? root : join(root, 'src/modules'),
       encoding: 'utf8',
     })
     expect(out.trim()).toBe('project cli routes --json')
