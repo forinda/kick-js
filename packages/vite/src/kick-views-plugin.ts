@@ -9,7 +9,7 @@
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
-import { transformWithOxc, type Plugin } from 'vite'
+import type { Plugin } from 'vite'
 
 export interface KickViewsPluginOptions {
   /** Default `src/views`. */
@@ -94,8 +94,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     >) {
       if (!t.client || t.client.js) continue
       try {
-        const out = await transformWithOxc(t.client.code, `${name}.ts`, { lang: 'ts' })
-        t.client = { code: out.code, js: true }
+        t.client = { code: await stripTs(t.client.code, `${name}.ts`), js: true }
       } catch (err) {
         errors.push(`${name}.kick — <script client>: ${(err as Error).message}`)
       }
@@ -141,6 +140,19 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       ].join('\n')
     },
   }
+}
+
+/**
+ * TypeScript to JS with the running Vite: `transformWithOxc` from Vite 8,
+ * `transformWithEsbuild` before it (the plugin supports Vite 6 and up).
+ */
+async function stripTs(code: string, file: string): Promise<string> {
+  const vite = (await import('vite')) as typeof import('vite') & {
+    transformWithOxc?: typeof import('vite').transformWithOxc
+  }
+  if ('transformWithOxc' in vite && vite.transformWithOxc)
+    return (await vite.transformWithOxc(code, file, { lang: 'ts' })).code
+  return (await vite.transformWithEsbuild(code, file, { loader: 'ts' })).code
 }
 
 /** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */

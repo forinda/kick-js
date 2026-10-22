@@ -19,7 +19,10 @@ export const CLIENT_SCRIPT_FILE = /^([a-z][a-z0-9-]*)\.([0-9a-f]{8})\.js$/
 
 /** Insert `tags` before the last `</body>`, or at the end when there's none. */
 export function injectScripts(html: string, tags: string): string {
-  const at = html.toLowerCase().lastIndexOf('</body>')
+  // A case-insensitive search of the text itself: lowercasing can change its
+  // length (`İ` becomes two units) and move the offset.
+  let at = -1
+  for (const m of html.matchAll(/<\/body\s*>/gi)) at = m.index
   return at < 0 ? html + tags : html.slice(0, at) + tags + html.slice(at)
 }
 

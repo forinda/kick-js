@@ -114,6 +114,9 @@ function runtime(messages: Record<string, string>, doc: any): void {
       if (el.form) el.form.noValidate = true
   }
   quiet()
+  // Forms swapped in later (htmx, Turbo) get the same treatment before a submit.
+  const Observer = (globalThis as any).MutationObserver
+  if (Observer) new Observer(quiet).observe(doc.documentElement, { childList: true, subtree: true })
   doc.addEventListener('focusin', (e: El) => {
     const el = field(e.target)
     if (el?.form) el.form.noValidate = true
@@ -130,6 +133,8 @@ function runtime(messages: Record<string, string>, doc: any): void {
   doc.addEventListener(
     'submit',
     (e: El) => {
+      // A `formnovalidate` button ("Save draft") submits without checks.
+      if (e.submitter?.formNoValidate) return
       const form = e.target
       const fields = form.querySelectorAll('[data-kick-validate]')
       // Forms without validate fields are the browser's to check.

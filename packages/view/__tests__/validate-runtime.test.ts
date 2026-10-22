@@ -149,3 +149,26 @@ describe('review fixes', () => {
     expect(f.input.hasAttribute('aria-invalid')).toBe(false)
   })
 })
+
+describe('more review fixes', () => {
+  it('a formnovalidate button submits without checks', () => {
+    document.body.innerHTML =
+      '<form><input name="f" data-kick-validate="[[&quot;required&quot;]]"><button formnovalidate>Draft</button></form>'
+    const form = document.querySelector('form')!
+    const event = new SubmitEvent('submit', {
+      bubbles: true,
+      cancelable: true,
+      submitter: document.querySelector('button')!,
+    })
+    form.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('quiets forms added after load', async () => {
+    const form = document.createElement('form')
+    form.innerHTML = '<input name="f" required data-kick-validate="[[&quot;required&quot;]]">'
+    document.body.append(form)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(form.noValidate).toBe(true)
+  })
+})

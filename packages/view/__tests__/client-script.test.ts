@@ -68,6 +68,14 @@ describe('<script client>', () => {
         'components/a-b',
       ),
     ).toContain("<script client> can't use {{ }} — pass data through attributes")
+    expect(
+      errors(
+        {
+          'components/a-b': "<div></div><script client>export {\n  a,\n  b\n} from './x'</script>",
+        },
+        'components/a-b',
+      ),
+    ).toContain("client scripts can't import yet — keep the script self-contained")
     for (const code of [
       "import { x } from './x'",
       "const m = await import('./m')",
@@ -191,5 +199,12 @@ describe('review fixes', () => {
         'components/a-b',
       ),
     ).toContain('write <script client> with no value')
+  })
+})
+
+describe('injectScripts', () => {
+  it('finds </body> by position in the original text', async () => {
+    const { injectScripts } = await import('../src/client-scripts')
+    expect(injectScripts('<body>İİ</BODY>', '<s>')).toBe('<body>İİ<s></BODY>')
   })
 })

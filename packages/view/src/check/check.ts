@@ -773,7 +773,8 @@ class Checker {
 
 /** Top-level elements, or -1 per other non-whitespace output (text, blocks). */
 /** `import … from`, `export … from` or `import(`: a client script needs bundling for those. */
-const IMPORTS = /(^|[\n;])\s*import[\s{*'"]|\bimport\s*\(|(^|[\n;])\s*export\s[^\n;]*\bfrom\s*['"]/
+const IMPORTS =
+  /(^|[\n;])\s*import[\s{*'"]|\bimport\s*\(|(^|[\n;])\s*export\s*(\*(\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"]/
 
 function isClientScript(n: Node): boolean {
   return (
