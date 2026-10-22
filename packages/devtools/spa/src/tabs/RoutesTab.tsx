@@ -13,6 +13,7 @@ import { store, type RouteEntry } from '../lib/store'
 import { ApiRunnerPanel, openApiRunner, runnerRoute } from '../lib/api-runner'
 import { methodColor } from '../lib/format'
 import { SplitPane } from '../lib/split-pane'
+import { metaSummary, routeMatches } from '../lib/route-meta'
 
 const COLLAPSED_KEY = 'kickjs-devtools:routes:collapsed'
 
@@ -28,12 +29,6 @@ function loadCollapsed(): Set<string> {
 const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 type MethodFilter = (typeof METHODS)[number]
 
-/** A count only — the chain itself is listed in the route's panel, however long it is. */
-function formatContributors(r: RouteEntry): string {
-  const count = r.contributors?.length ?? 0
-  return count > 0 ? `ctx ${count}` : ''
-}
-
 /** One line per contributor for the tooltip: key, where it was registered, what it replaced. */
 function describeContributors(r: RouteEntry): string {
   return (r.contributors ?? [])
@@ -46,13 +41,6 @@ function describeContributors(r: RouteEntry): string {
     .join('\n')
 }
 
-/** Resolved route flags; a `true` flag carries no more than its name. */
-function formatFlags(flags?: Record<string, unknown>): string {
-  return Object.entries(flags ?? {})
-    .map(([k, v]) => (v === true ? k : `${k}=${JSON.stringify(v)}`))
-    .join(', ')
-}
-
 export const RoutesTab: Component = () => {
   const [search, setSearch] = createSignal('')
   const [method, setMethod] = createSignal<MethodFilter>('ALL')
@@ -60,12 +48,7 @@ export const RoutesTab: Component = () => {
   const filtered = createMemo<RouteEntry[]>(() => {
     const q = search().trim().toLowerCase()
     return (store.routes() as RouteEntry[]).filter(
-      (r) =>
-        (method() === 'ALL' || r.method.toUpperCase() === method()) &&
-        (!q ||
-          r.path.toLowerCase().includes(q) ||
-          r.controller.toLowerCase().includes(q) ||
-          r.handler.toLowerCase().includes(q)),
+      (r) => (method() === 'ALL' || r.method.toUpperCase() === method()) && routeMatches(r, q),
     )
   })
 
@@ -108,7 +91,7 @@ export const RoutesTab: Component = () => {
       <div class="flex flex-col gap-1.5 border-b border-border p-2">
         <input
           type="text"
-          placeholder="Search path, controller, handler…"
+          placeholder="Search path, controller, handler, flag…"
           value={search()}
           onInput={(e) => setSearch(e.currentTarget.value)}
           class="w-full bg-surface-2 border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
@@ -184,6 +167,10 @@ export const RoutesTab: Component = () => {
                       onClick={() => openApiRunner(r)}
                       title={`${r.controller}.${r.handler}${
                         r.middleware.length ? ` · middleware: ${r.middleware.join(', ')}` : ''
+                      }${
+                        Object.keys(r.flags ?? {}).length
+                          ? `\nflags: ${Object.keys(r.flags ?? {}).join(', ')}`
+                          : ''
                       }${r.contributors?.length ? `\ncontext contributors:\n${describeContributors(r)}` : ''}${
                         r.offPort
                           ? `\nServed on the ${r.port} port — the runner calls this page's own port.`
@@ -201,17 +188,11 @@ export const RoutesTab: Component = () => {
                           mgmt
                         </span>
                       </Show>
-                      <Show when={formatContributors(r)}>
-                        {(c) => (
-                          <span class="shrink-0 font-mono text-[0.66rem] text-text-muted">
-                            {c()}
-                          </span>
-                        )}
-                      </Show>
-                      <Show when={formatFlags(r.flags)}>
-                        {(f) => (
-                          <span class="max-w-[40%] truncate text-[0.66rem] text-text-muted">
-                            {f()}
+                      {/* Flags and contributors as counts; the route's panel lists them. */}
+                      <Show when={metaSummary(r)}>
+                        {(m) => (
+                          <span class="shrink-0 whitespace-nowrap rounded border border-border-strong px-1 font-mono text-[0.62rem] text-text-muted">
+                            {m()}
                           </span>
                         )}
                       </Show>
