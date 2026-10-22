@@ -102,7 +102,9 @@ describe('@error', () => {
   })
   it("@error('form') shows a form-level error", async () => {
     const views = page("@error('form') {{{ $message }}}")
-    expect(await views.render('page', { $errors: { form: 'Bad' } })).toBe('Bad')
+    expect(await views.render('page', { $errors: { form: 'Bad' } })).toBe(
+      '<span data-kick-error="form">Bad</span>',
+    )
   })
   it('@error needs a string', () => {
     const r = parse('@error(title) {}', 'p.kick')

@@ -4,6 +4,7 @@
  * context enforced (spec §4). What passes here is safe to render.
  */
 import { FORM_GLOBALS, SECRET_FIELD } from '../form-state'
+import { parseValidate } from '../validators'
 import {
   AST_FORMAT_VERSION,
   type Attr,
@@ -440,6 +441,28 @@ class Checker {
     return el
   }
 
+  /** The template has a `validate` field: pages rendering it ship the validator script. */
+  validates = false
+
+  private validateAttr(el: Element, a: Element['attrs'][number], out: CAttr[]): void {
+    if (a.kind !== 'static') {
+      this.err(a.span, 'validate must be written, not bound')
+      return
+    }
+    if (!el.attrs.some((x) => x.name.toLowerCase() === 'name')) {
+      this.err(a.span, 'validate needs a name on the same field')
+      return
+    }
+    const r = parseValidate(decodeEntities(String(a.parts?.[0] ?? '')))
+    if ('error' in r) {
+      this.err(a.span, r.error)
+      return
+    }
+    this.validates = true
+    // Written as is into the attribute: `&` escaped here, `"` by the writer.
+    out.push({ t: 's', n: 'data-kick-validate', v: JSON.stringify(r.rules).replace(/&/g, '&amp;') })
+  }
+
   /** The `<select name>` being walked, for its options' refill. */
   private select?: string
 
@@ -513,6 +536,11 @@ class Checker {
       String(httpEquiv.parts?.[0]).trim().toLowerCase() === 'refresh'
     for (const a of el.attrs) {
       const lower = a.name.toLowerCase()
+      // `validate="required | minLength:3"`: rule data for the validator script.
+      if (lower === 'validate' && !el.foreign) {
+        this.validateAttr(el, a, out)
+        continue
+      }
       const dynamic = a.kind !== 'static' && a.kind !== 'bare'
       if (dynamic && a.kind !== 'class' && a.kind !== 'style') {
         if (lower.startsWith('on')) {
@@ -930,6 +958,7 @@ export function check(name: string, project: Project): CheckResult {
   template.slots = c.slots
   if (ast.layout !== undefined) template.layout = ast.layout
   if (client) template.client = client
+  if (c.validates) template.validates = true
   const failed = c.diagnostics.some((d) => d.severity === 'error')
   return failed ? { diagnostics: c.diagnostics } : { template, diagnostics: c.diagnostics }
 }
