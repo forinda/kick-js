@@ -29,3 +29,12 @@ export {
   type PipeEnv,
 } from './pipes/env'
 export { readPipeExports } from './pipes/read-exports'
+export {
+  createViews,
+  bundleLoader,
+  type Loader,
+  type RenderOptions,
+  type Views,
+  type ViewsBundle,
+  type ViewsOptions,
+} from './views'

@@ -10,12 +10,16 @@
     "ssr"
   ],
   "type": "module",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.mts"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./file-loader": {
+      "import": "./dist/file-loader.js",
+      "types": "./dist/file-loader.d.ts"
     }
   },
   "files": [
