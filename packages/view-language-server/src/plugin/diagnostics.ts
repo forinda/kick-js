@@ -5,6 +5,7 @@
 import type { LanguageServiceContext, LanguageServicePlugin } from '@volar/language-service'
 import { URI } from 'vscode-uri'
 import type { Workspace } from '../workspace'
+import { renderDiagnostics } from './render-calls'
 
 /** The `.kick` file a root virtual-code document belongs to. */
 export function sourceUri(context: LanguageServiceContext, uri: string): string {
@@ -21,6 +22,8 @@ export function createDiagnosticsPlugin(ws: Workspace): LanguageServicePlugin {
     create(context) {
       return {
         provideDiagnostics(document) {
+          if (document.languageId === 'kick-render')
+            return renderDiagnostics(ws, document.getText())
           if (document.languageId !== 'kick') return undefined
           // The document's text is the editor's buffer: the workspace checks that.
           const uri = sourceUri(context, document.uri)

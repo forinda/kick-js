@@ -437,7 +437,7 @@ The KickJS VS Code extension understands `.kick` files:
 - hover on a pipe or a component to see its parameters or inputs;
 - go to definition on a component tag, `@layout('…')` or a pipe;
 - find references to a component, layout or pipe across templates;
-- rename a pipe (its uses and `pipes.ts`), a component (its tags and file) or a layout (its `@layout('…')` uses and file), and renaming a template file in the explorer updates its uses;
+- rename a pipe (its uses and `pipes.ts`), a component (its tags and file) or a layout (its `@layout('…')` uses and file), and renaming a template file in the explorer updates its uses, including the `ctx.render('…')` calls that name it;
 - Format Document, with the same output as `kick fmt:views`;
 - template names inside `ctx.render('…')` in your controllers.
 

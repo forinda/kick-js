@@ -50,3 +50,32 @@ describe('watchPatterns', () => {
     ])
   })
 })
+
+describe('listScripts', () => {
+  it('finds TS / JS files, skipping dependencies, build output and dot folders', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-scripts-'))
+    const file = (p: string) => {
+      mkdirSync(join(dir, p, '..'), { recursive: true })
+      writeFileSync(join(dir, p), '')
+    }
+    for (const p of [
+      'src/a.ts',
+      'src/modules/b.controller.tsx',
+      'src/c.mjs',
+      'src/views/home.kick',
+      'src/d.d.ts',
+      'node_modules/x/index.js',
+      'dist/index.js',
+      '.kickjs/types/routes.ts',
+    ])
+      file(p)
+    vi.resetModules()
+    vi.doUnmock('node:fs/promises')
+    const { listScripts } = await import('../src/server')
+    expect((await listScripts(dir)).map((p) => p.slice(dir.length + 1)).toSorted()).toEqual([
+      'src/a.ts',
+      'src/c.mjs',
+      'src/modules/b.controller.tsx',
+    ])
+  })
+})
