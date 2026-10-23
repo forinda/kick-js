@@ -525,3 +525,14 @@ describe('validators.ts under kick dev', () => {
     expect(code).not.toContain('validatorsFile:')
   })
 })
+
+describe('validators.ts beside a moved views folder', () => {
+  it('defaults to <viewsDir>/validators.ts, as the editor and check:views do', async () => {
+    const root = project({
+      'app/views/page.kick': '<input name="p" validate="phone">',
+      'app/views/validators.ts': 'export const phone = () => undefined',
+    })
+    const code = await bundle(root, { viewsDir: 'app/views' })
+    expect(code).toMatch(/"kick-validators": "kick-validators\.[\w-]{8}\.js"/)
+  })
+})

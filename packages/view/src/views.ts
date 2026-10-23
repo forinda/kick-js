@@ -71,7 +71,7 @@ export interface ViewsOptions {
   componentsDir?: string
   /** Default `src/views/pipes.ts`. Read when `pipes` isn't given and there is no bundle. */
   pipesFile?: string
-  /** Default `src/views/validators.ts`: the app's browser validators. Read when there is no bundle. */
+  /** Default `<viewsDir>/validators.ts`: the app's browser validators. Read when there is no bundle. */
   validatorsFile?: string
   pipes?: Record<string, Pipe | EnvPipe>
   /**
@@ -200,7 +200,10 @@ export function createViews(options: ViewsOptions = {}): Views {
       if (!typeStripper) throw new Error(NO_STRIPPER)
       return typeStripper(code)
     })
-  const validatorsFile = options.validatorsFile ?? 'src/views/validators.ts'
+  // Beside the views, as the build, the editor and `kick check:views` look for it.
+  const validatorsFile =
+    options.validatorsFile ??
+    `${(options.viewsDir ?? 'src/views').replace(/\/+$/, '')}/validators.ts`
   /** `validators.ts` as served without a bundle, kept while its source stays the same. */
   let validatorsJs: { source: string; js: Promise<{ js: string; hash: string }> } | undefined
   const validatorsScript = (source: string): Promise<{ js: string; hash: string }> => {

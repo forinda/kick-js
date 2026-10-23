@@ -848,7 +848,7 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 | `viewsDir`                                         | `'src/views'`                                 |                                                                                                     |
 | `componentsDir`                                    | `'components'`                                | inside `viewsDir`                                                                                   |
 | `pipesFile`                                        | `'src/views/pipes.ts'`                        | `.js` also works; without Vite, Node runs a `.ts` file only when it can strip types (22.18+)        |
-| `validatorsFile`                                   | `'src/views/validators.ts'`                   | [your own validators](#your-own-validators); read when there is no build                            |
+| `validatorsFile`                                   | `'<viewsDir>/validators.ts'`                  | [your own validators](#your-own-validators); read when there is no build                            |
 | `layout`                                           | none                                          | a layout name, or folder prefix → layout                                                            |
 | `baseLayout`                                       | none                                          | the shell around every page's outermost layout                                                      |
 | `locale`                                           | `'en-US'`                                     |                                                                                                     |
@@ -863,16 +863,16 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 
 The Vite plugin's own options, in `vite.config.ts` as `kickjs({ views: { … } })`:
 
-| option             | default                     |                                                                                             |
-| ------------------ | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `viewsDir`         | `'src/views'`               |                                                                                             |
-| `componentsDir`    | `'components'`              |                                                                                             |
-| `pipesFile`        | `'src/views/pipes.ts'`      |                                                                                             |
-| `validatorsFile`   | `'src/views/validators.ts'` | [your own validators](#your-own-validators)                                                 |
-| `clientScriptPath` | `'/_kick/c'`                | the URL path client files are served under                                                  |
-| `clientFiles`      | `'disk'`                    | `'bundle'` keeps client files in the server bundle                                          |
-| `publicDir`        | `'public'`                  | relative to the build's `outDir`, or absolute; files go to `<publicDir><clientScriptPath>/` |
-| `inlineLimit`      | `4096`                      | images and fonts up to this many bytes are inlined (`'disk'` only)                          |
+| option             | default                      |                                                                                             |
+| ------------------ | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `viewsDir`         | `'src/views'`                |                                                                                             |
+| `componentsDir`    | `'components'`               |                                                                                             |
+| `pipesFile`        | `'src/views/pipes.ts'`       |                                                                                             |
+| `validatorsFile`   | `'<viewsDir>/validators.ts'` | [your own validators](#your-own-validators)                                                 |
+| `clientScriptPath` | `'/_kick/c'`                 | the URL path client files are served under                                                  |
+| `clientFiles`      | `'disk'`                     | `'bundle'` keeps client files in the server bundle                                          |
+| `publicDir`        | `'public'`                   | relative to the build's `outDir`, or absolute; files go to `<publicDir><clientScriptPath>/` |
+| `inlineLimit`      | `4096`                       | images and fonts up to this many bytes are inlined (`'disk'` only)                          |
 
 ## Related
 

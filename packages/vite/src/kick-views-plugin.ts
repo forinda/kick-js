@@ -16,7 +16,7 @@ export interface KickViewsPluginOptions {
   viewsDir?: string
   /** Default `src/views/pipes.ts`. */
   pipesFile?: string
-  /** The app's browser validators. Default `src/views/validators.ts`. */
+  /** The app's browser validators. Default `<viewsDir>/validators.ts`. */
   validatorsFile?: string
   /** Default `components`, inside the views folder. */
   componentsDir?: string
@@ -214,7 +214,10 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     configResolved(config) {
       viewsDir = resolve(config.root, options.viewsDir ?? 'src/views')
       pipesFile = resolve(config.root, options.pipesFile ?? 'src/views/pipes.ts')
-      validatorsFile = resolve(config.root, options.validatorsFile ?? 'src/views/validators.ts')
+      // Beside the views, as the editor and `kick check:views` look for it.
+      validatorsFile = options.validatorsFile
+        ? resolve(config.root, options.validatorsFile)
+        : join(viewsDir, 'validators.ts')
       build = config.command === 'build'
       root = config.root
       shared = {

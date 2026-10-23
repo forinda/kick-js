@@ -116,3 +116,14 @@ describe('validators.ts under kick dev (bundle: null)', () => {
     expect(await v.clientScript(file)).toBeUndefined()
   })
 })
+
+describe('validators.ts beside a moved views folder', () => {
+  it('defaults to <viewsDir>/validators.ts', async () => {
+    const { viewsDir } = app({
+      'page.kick': '<input name="p" validate="phone">',
+      'validators.ts': PHONE,
+    })
+    const v = createViews({ viewsDir, warn: vi.fn() })
+    expect(await v.render('page')).toContain('kick-validators.')
+  })
+})
