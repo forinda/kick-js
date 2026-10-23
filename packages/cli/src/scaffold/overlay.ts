@@ -223,7 +223,8 @@ export function renderSlots(
     const text = out.join('\n')
     const statements = /^import\b[^;]*?\bfrom\s*['"][^'"]+['"]/gm
     const own = (text.match(statements) ?? []).join('\n')
-    const body = text.replace(statements, '')
+    // Whole-line comments don't use a name: kick.config.ts mentions `bootstrap({ runtime })`.
+    const body = text.replace(statements, '').replace(/^[ \t]*\/\/.*$/gm, '')
     const used = (name: string) => word(name).test(body) && !word(name).test(own)
     const specs = active.flatMap((entry) => {
       if (!entry.import) return []

@@ -179,6 +179,38 @@ describe('kick new --yes (non-interactive)', () => {
     )
   })
 
+  it('--packages views sets up .kick views', () => {
+    const result = runNew(cwd, [
+      'my-views',
+      '--yes',
+      '--packages',
+      'views',
+      '--no-install',
+      '--no-git',
+    ])
+    expect(result.exitCode).toBe(0)
+    const dir = join(cwd, 'my-views')
+    for (const file of [
+      'src/views.ts',
+      'src/adapters/views.ts',
+      'src/views/layouts/main.kick',
+      'src/views/home.kick',
+    ])
+      expect(existsSync(join(dir, file)), file).toBe(true)
+    expect(readFileSync(join(dir, 'src/index.ts'), 'utf-8')).toContain('viewsAdapter()')
+    const config = readFileSync(join(dir, 'kick.config.ts'), 'utf-8')
+    expect(config).toContain("import { viewCliPlugin } from '@forinda/kickjs-view/cli'")
+    expect(config).toMatch(/plugins: \[[^\]]*viewCliPlugin,?\s*\]/)
+    expect(
+      JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')).dependencies,
+    ).toHaveProperty('@forinda/kickjs-view')
+  })
+
+  it('without views kick.config.ts has no plugins block', () => {
+    runNew(cwd, ['plain', '--yes', '--no-install', '--no-git'])
+    expect(readFileSync(join(cwd, 'plain/kick.config.ts'), 'utf-8')).not.toContain('plugins:')
+  })
+
   it('the starter module serves no health route of its own', () => {
     // The framework already answers /health/live and /health/ready.
     const result = runNew(cwd, [

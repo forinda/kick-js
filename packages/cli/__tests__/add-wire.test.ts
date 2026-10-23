@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   applyLayerFiles,
+  configSnippet,
   dirtyFiles,
   findEntry,
   findEnvSchema,
@@ -127,6 +128,38 @@ describe('wireEntry', () => {
     const entry = readFileSync(join(dir, 'src/main.ts'), 'utf-8')
     expect(entry).toContain("import { SwaggerAdapter } from '@forinda/kickjs-swagger'")
     expect(entry).toContain('adapters: [')
+  })
+})
+
+describe('kick add views', () => {
+  it('writes the views files, wires viewsAdapter() and leaves kick.config.ts to a hint', async () => {
+    tmp()
+    mkdirSync(join(dir, 'src'))
+    writeFileSync(
+      join(dir, 'src/index.ts'),
+      "import { bootstrap } from '@forinda/kickjs'\n\nawait bootstrap({\n  modules,\n  adapters: [],\n})\n",
+    )
+    const plan = planWiring(['views'])!
+    expect(plan.dependencies).toEqual(['@forinda/kickjs-view'])
+    const { created } = await applyLayerFiles(dir, plan.files)
+    expect(created.toSorted()).toEqual([
+      'src/adapters/views.ts',
+      'src/views.ts',
+      'src/views/home.kick',
+      'src/views/layouts/main.kick',
+    ])
+    expect(readFileSync(join(dir, 'src/views.ts'), 'utf-8')).toContain("from 'virtual:kick-views'")
+    const result = await wireEntry(dir, 'src/index.ts', plan.integrations)
+    expect(result.added).toEqual(['viewsAdapter'])
+    // kick.config.ts isn't the entry: nothing for it lands in the bootstrap snippet.
+    expect(result.manual).toEqual([])
+    const entry = readFileSync(join(dir, 'src/index.ts'), 'utf-8')
+    expect(entry).toContain("import { viewsAdapter } from './adapters/views'")
+    expect(configSnippet(plan.integrations)).toContain(
+      "import { viewCliPlugin } from '@forinda/kickjs-view/cli'",
+    )
+    expect(configSnippet(plan.integrations)).toContain('plugins: [viewCliPlugin]')
+    expect(configSnippet(planWiring(['storage'])!.integrations)).toBeUndefined()
   })
 })
 

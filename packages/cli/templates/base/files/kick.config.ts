@@ -1,4 +1,5 @@
 import { defineConfig } from '@forinda/kickjs-cli'
+// @kick:imports
 
 export default defineConfig({
   pattern: '{{template}}',
@@ -10,6 +11,9 @@ export default defineConfig({
   // Pinned so `kick add` and other dep-installing commands always use the
   // project's intended package manager, regardless of which lockfile exists.
   packageManager: '{{packageManager}}',
+  plugins: [
+    // @kick:config-plugin
+  ],
   modules: {
     dir: 'src/modules',
     // @kick:repo

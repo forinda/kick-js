@@ -47,6 +47,8 @@ export function wireIntegrations(
     if (!integration.slot || !integration.code) continue
     // The env schema's entries, wired by wireEnvSchema.
     if (integration.slot.startsWith('env-')) continue
+    // kick.config.ts entries (CLI plugins): not the entry file's.
+    if (integration.slot.startsWith('config-')) continue
     const property = SLOT_PROPERTY[integration.slot]
     const code = fill(integration.code)
     const call = callName(code)

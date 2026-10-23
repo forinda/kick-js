@@ -23,6 +23,7 @@ export const FEATURE_LAYERS: Record<string, string> = {
   queue: 'feature-queue',
   'queue:bullmq': 'feature-queue',
   storage: 'feature-storage',
+  views: 'feature-views',
 }
 
 /** The layers `packages` bring, rendered — or undefined when none has one. */
@@ -189,6 +190,24 @@ function readPackageJson(cwd: string): Record<string, unknown> {
   } catch {
     return {}
   }
+}
+
+/**
+ * What to add to kick.config.ts for a layer's CLI plugins (`config-plugin`
+ * entries): `kick add` edits only the entry file. Undefined when there are none.
+ */
+export function configSnippet(integrations: readonly Integration[]): string | undefined {
+  const plugins = integrations.filter((i) => i.slot === 'config-plugin' && i.code)
+  if (!plugins.length) return undefined
+  const imports = plugins.flatMap((i) =>
+    i.import?.names?.length
+      ? [`import { ${i.import.names.join(', ')} } from '${i.import.from}'`]
+      : [],
+  )
+  const names = plugins.map((i) => i.code!.split('\n').at(-1)!.trim())
+  return [...imports, '', `// in defineConfig({ ... }):`, `plugins: [${names.join(', ')}],`].join(
+    '\n',
+  )
 }
 
 /** What to paste by hand for entries that couldn't be placed. */
