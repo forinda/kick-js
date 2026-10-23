@@ -81,6 +81,8 @@ export const ConfigTab: Component = () => {
     if (!next.delete(title)) next.add(title)
     setAll(next)
   }
+  /** Only the groups on screen count: a remembered title can outlive its section. */
+  const anyCollapsed = () => groups().some((g) => collapsed().has(g.title))
 
   return (
     <div class="flex flex-col gap-3">
@@ -98,10 +100,10 @@ export const ConfigTab: Component = () => {
                 type="button"
                 class="underline hover:text-text-body"
                 onClick={() =>
-                  setAll(collapsed().size ? new Set() : new Set(groups().map((g) => g.title)))
+                  setAll(anyCollapsed() ? new Set() : new Set(groups().map((g) => g.title)))
                 }
               >
-                {collapsed().size ? 'Expand all' : 'Collapse all'}
+                {anyCollapsed() ? 'Expand all' : 'Collapse all'}
               </button>
             </Show>
           </span>
