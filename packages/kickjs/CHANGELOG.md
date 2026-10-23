@@ -1,5 +1,17 @@
 # @forinda/kickjs
 
+## 10.13.0
+
+### Minor Changes
+
+- [#1046](https://github.com/forinda/kick-js/pull/1046) [`f00cbf2`](https://github.com/forinda/kick-js/commit/f00cbf2a91d7fa1702aa310bc841c8c425070fda) Thanks [@forinda](https://github.com/forinda)! - `csrf()` and `csrfGuard()` accept the token as a form field (`_csrf`, or `field` to rename it) when the `x-csrf-token` header is absent, so plain HTML forms can pass the check. `csrfToken(ctx)` returns this request's token for a page to put in its forms, including on the first visit, before the browser has the cookie.
+
+- [#1054](https://github.com/forinda/kick-js/pull/1054) [`772b563`](https://github.com/forinda/kick-js/commit/772b56357a95f1044732ba871e4212893fe258ae) Thanks [@forinda](https://github.com/forinda)! - `urlFor` (on `ctx`, `Application` and `ROUTE_URLS`) also takes a route's params as a list, filled in the order its path has them: `ctx.urlFor('PostsController.show', [user.id, post.slug])`. A wrong count throws, naming the params the route takes.
+
+### Patch Changes
+
+- [#1055](https://github.com/forinda/kick-js/pull/1055) [`69bd6c1`](https://github.com/forinda/kick-js/commit/69bd6c1096d662627609b29d54f2700e168ba186) Thanks [@forinda](https://github.com/forinda)! - `session()` with a store saves the session before the response goes out, not after. With a slow store such as Redis, the request right after a form post (the redirect) could otherwise read the session before the write landed and miss the flashed errors and messages. On a Node response (Express, Fastify, h3), `end()` now waits for the store's write, for at most `saveTimeout` ms (new option, default 5000); a failed or stalled write is logged and the response still goes out. The fetch entry still saves after the response. The cookie store, which writes the cookie before the headers, is unchanged.
+
 ## 10.12.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @forinda/kickjs-vite
 
+## 8.5.0
+
+### Minor Changes
+
+- [#1052](https://github.com/forinda/kick-js/pull/1052) [`d2c3568`](https://github.com/forinda/kick-js/commit/d2c356828abb268dc520e57c16e9e8957a9ecfe0) Thanks [@forinda](https://github.com/forinda)! - `kickViewsPlugin` checks templates against `src/views/validators.ts` (`validatorsFile` to move it), bundles it with the client files, including in apps with no component scripts, and serves it through Vite under `kick dev`.
+
+### Patch Changes
+
+- [#1045](https://github.com/forinda/kick-js/pull/1045) [`0582c23`](https://github.com/forinda/kick-js/commit/0582c2393b26fa02b8ce285f61059a42376d3f40) Thanks [@forinda](https://github.com/forinda)! - `kickViewsPlugin` clears the last build's client files when it rebuilds into the same `outDir` (`vite build --watch`), so old hashed files no longer pile up. An absolute `publicDir` is used as given, not joined under `outDir`.
+
 ## 8.4.0
 
 ### Minor Changes
