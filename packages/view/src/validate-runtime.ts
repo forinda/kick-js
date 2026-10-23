@@ -45,6 +45,20 @@ function runtime(messages: Record<string, string>, doc: any): void {
       }
       // Optional and empty: nothing else applies.
       if (value === '') continue
+      // The app's own (validators.ts), registered by its script: a message string, or it passes.
+      if (!Object.hasOwn(messages, name)) {
+        const fn = (globalThis as { __kickValidators?: Record<string, unknown> })
+          .__kickValidators?.[name]
+        if (typeof fn !== 'function') continue
+        try {
+          const out = fn(value, ...args, el.form)
+          if (typeof out === 'string' && out) return out
+        } catch (err) {
+          // One broken validator mustn't block the form.
+          console.error(`[kick/view] validator '${name}' threw`, err)
+        }
+        continue
+      }
       const n = Number(value)
       let ok = true
       if (name === 'email') ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
@@ -153,6 +167,13 @@ function runtime(messages: Record<string, string>, doc: any): void {
     true,
   )
 }
+
+/**
+ * Appended to `validators.ts` when it's served without a bundler: the module
+ * imports its own namespace and registers every export for the validator script.
+ */
+export const VALIDATORS_REGISTER =
+  '\nimport(import.meta.url).then((m) => Object.assign((globalThis.__kickValidators ??= {}), m))\n'
 
 const MESSAGES = Object.fromEntries(Object.entries(VALIDATORS).map(([k, v]) => [k, v.message]))
 

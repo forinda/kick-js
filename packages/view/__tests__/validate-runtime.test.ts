@@ -172,3 +172,64 @@ describe('more review fixes', () => {
     expect(form.noValidate).toBe(true)
   })
 })
+
+describe('the app validators', () => {
+  const g = globalThis as { __kickValidators?: Record<string, unknown> }
+  beforeEach(() => {
+    g.__kickValidators = {
+      phone: (v: string) => (/^\+?\d{9,15}$/.test(v) ? undefined : 'Enter a phone number'),
+      sameAs: (v: string, other: string, form: HTMLFormElement) =>
+        v === (form.elements.namedItem(other) as HTMLInputElement).value ? undefined : 'Must match',
+      boom: () => {
+        throw new Error('bug')
+      },
+      NOT_A_FUNCTION: /x/,
+      truthy: () => true,
+    }
+  })
+
+  it('custom validator message shows in the spot', () => {
+    expect(check([['phone']], 'abc')).toBe('Enter a phone number')
+    expect(check([['phone']], '+254700000000')).toBe('')
+  })
+
+  it('custom validator gets args and the form', () => {
+    const field =
+      '<input name="password" value="secret"><input name="f" data-kick-validate="RULES">'
+    expect(check([['sameAs', 'password']], 'other', field)).toBe('Must match')
+    expect(check([['sameAs', 'password']], 'secret', field)).toBe('')
+  })
+
+  it('empty value skips custom validators', () => {
+    expect(check([['phone']], '')).toBe('')
+  })
+
+  it('a throwing validator passes and logs', () => {
+    const errors: unknown[] = []
+    const log = console.error
+    console.error = (...a: unknown[]) => errors.push(a)
+    try {
+      expect(check([['boom']], 'x')).toBe('')
+    } finally {
+      console.error = log
+    }
+    expect(errors).toHaveLength(1)
+  })
+
+  it('non-function export passes', () => {
+    expect(check([['NOT_A_FUNCTION']], 'x')).toBe('')
+  })
+
+  it('only a string is a message', () => {
+    expect(check([['truthy']], 'x')).toBe('')
+  })
+
+  it('built-in message wins when it fails first', () => {
+    expect(check([['required'], ['phone']], '')).toBe('This field is required')
+  })
+
+  it('unknown name with no registry passes', () => {
+    g.__kickValidators = undefined
+    expect(check([['phone']], 'abc')).toBe('')
+  })
+})
