@@ -49,6 +49,7 @@ export {
   type RouteName,
   type UrlBuilder,
   type UrlForArgs,
+  type PositionalParams,
   type UrlQuery,
 } from './http/url-for'
 export { metricsAdapter, RequestHistogram, type MetricsOptions } from './http/metrics'

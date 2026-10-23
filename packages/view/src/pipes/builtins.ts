@@ -19,11 +19,15 @@ export const BUILTIN_PIPES: readonly string[] = [
   'number',
   'currency',
   'percent',
+  'kvRoute',
+  'kvQuery',
 ]
 
 export interface PipeEnv {
   locale: string
   timeZone: string
+  /** The request's `ctx.urlFor` (params in path order), for `kvRoute`. Absent outside a request. */
+  urlFor?: (name: string, params: Array<string | number>) => string
 }
 
 const DATE_FORMATS: Record<string, Intl.DateTimeFormatOptions> = {
@@ -79,6 +83,33 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
+    // `{{ 'Users.show' | kvRoute:user.id }}`: the route's URL, params in path order.
+    // `{{ url | kvQuery:'page':page:'sort':'name' }}`: key/value pairs onto a URL's
+    // query. Empty values are skipped, so optional filters pass straight through.
+    kvQuery: (url, ...pairs) => {
+      if (pairs.length % 2) throw new Error("kvQuery takes key/value pairs: kvQuery:'page':page")
+      const parts: string[] = []
+      for (let i = 0; i < pairs.length; i += 2) {
+        const key = encodeURIComponent(str(pairs[i]))
+        for (const v of Array.isArray(pairs[i + 1]) ? (pairs[i + 1] as unknown[]) : [pairs[i + 1]])
+          if (v !== undefined && v !== null && v !== '')
+            parts.push(`${key}=${encodeURIComponent(str(v))}`)
+      }
+      const [base, hash] = str(url).split(/(?=#)/, 2) as [string, string?]
+      if (!parts.length) return str(url)
+      return `${base}${base.includes('?') ? '&' : '?'}${parts.join('&')}${hash ?? ''}`
+    },
+    // `kv`, for KickJS views: `route` stays free for an app's own pipe.
+    kvRoute: (name, ...params) => {
+      if (!env.urlFor)
+        throw new Error(
+          'kvRoute needs a request (ctx.render): outside one, pass the URLs in as data, built with ROUTE_URLS',
+        )
+      return env.urlFor(
+        str(name),
+        params.map((p) => (typeof p === 'number' ? p : str(p))),
+      )
+    },
     uppercase: (v) => str(v).toUpperCase(),
     lowercase: (v) => str(v).toLowerCase(),
     titlecase: (v) => str(v).replace(/\b\p{L}/gu, (c) => c.toUpperCase()),

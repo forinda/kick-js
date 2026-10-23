@@ -158,3 +158,33 @@ describe('urlFor errors and types', () => {
     expect(app.urlFor('UrlUsersController.show', { id: '1' })).toBe('/api/v1/users/1')
   })
 })
+
+describe('urlFor with positional params', () => {
+  it('fills the path params in the order they appear', async () => {
+    const { RouteUrls } = await import('../src/http/url-for')
+    const urls = new RouteUrls()
+    urls.add('Posts.show', '/api/v1/users/:id/posts/:postId')
+    expect(urls.build('Posts.show', ['1', 'a b'])).toBe('/api/v1/users/1/posts/a%20b')
+    expect(urls.build('Posts.show', [7, 'x'], { tab: 'c' })).toBe('/api/v1/users/7/posts/x?tab=c')
+  })
+
+  it('a wrong count names the params the route takes', async () => {
+    const { RouteUrls } = await import('../src/http/url-for')
+    const urls = new RouteUrls()
+    urls.add('Posts.show', '/api/v1/users/:id/posts/:postId')
+    expect(() => urls.build('Posts.show', ['1'])).toThrow(
+      "urlFor('Posts.show'): takes 2 params (id, postId), got 1",
+    )
+    urls.add('Users.list', '/api/v1/users')
+    expect(urls.build('Users.list', [])).toBe('/api/v1/users')
+  })
+})
+
+describe('urlFor with positional params and a repeated name', () => {
+  it('fills each placeholder by position', async () => {
+    const { RouteUrls } = await import('../src/http/url-for')
+    const urls = new RouteUrls()
+    urls.add('Compare.show', '/compare/:id/with/:id')
+    expect(urls.build('Compare.show', ['first', 'second'])).toBe('/compare/first/with/second')
+  })
+})

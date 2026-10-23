@@ -45,6 +45,7 @@ const FILES = {
   'components/flash-toast':
     "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
   island: '<flash-toast />',
+  links: `<a href="{{ 'PagesController.home' | kvRoute }}">h</a>|{{ 'PagesController.item' | kvRoute:id }}`,
 }
 
 @Controller()
@@ -75,6 +76,14 @@ class PagesController {
     const cyclic: Record<string, unknown> = {}
     cyclic.self = cyclic
     ctx.render('broken', { x: cyclic })
+  }
+  @Get('/links')
+  async links(ctx: RequestContext) {
+    await ctx.render('links', { id: 'a b' }, { layout: false })
+  }
+  @Get('/items/:id')
+  item(ctx: RequestContext) {
+    ctx.json({ id: ctx.params.id })
   }
   @Get('/legacy')
   async legacy(ctx: RequestContext) {
@@ -121,6 +130,11 @@ for (const rt of RUNTIMES)
         share: (ctx) => ({ id: (ctx as RequestContext | undefined)?.get?.('rid') }),
         warn: () => {},
       })
+    })
+
+    it("kvRoute links to the app's routes by name", async () => {
+      const res = await (await app(rt.make, views)).get('/links').expect(200)
+      expect(res.text).toBe('<a href="/home">h</a>|/items/a%20b')
     })
 
     it('renders a .kick page', async () => {
