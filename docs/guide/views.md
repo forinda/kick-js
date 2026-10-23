@@ -537,6 +537,135 @@ Add `validate` to a field for instant feedback, before the form is sent. It writ
 - **What ships:** a page with a `validate` field gets one small validator script (`/_kick/c/kick-validate.<hash>.js`); pages without one get none.
 - **The server still decides.** These checks are for quick feedback; route validation in the controller is what counts, and its messages can differ.
 
+### Your own checks
+
+`validate` covers the common rules. For anything else, a [component with a script](#components-with-a-script) can run your own code against the same `@error` spots. Two recipes cover most needs.
+
+**The route's schema, in the browser.** A component script can import your files and npm packages, so it can import the schema the route validates with. The rules then live in one file and the messages match the server's:
+
+```ts
+// src/client/check-form.ts — shared by every form that checks itself
+/// <reference lib="dom" />
+import type { z } from 'zod'
+
+/** Each field's first message, as route validation reports them. */
+function messages(form: HTMLFormElement, schema: z.ZodType): Record<string, string> {
+  const result = schema.safeParse(Object.fromEntries(new FormData(form)))
+  const out: Record<string, string> = {}
+  if (!result.success)
+    for (const issue of result.error.issues) out[String(issue.path[0] ?? 'form')] ??= issue.message
+  return out
+}
+
+/** Fills the form's `@error` spots, for one field or all of them. */
+function show(form: HTMLFormElement, errors: Record<string, string>, only?: string): void {
+  for (const spot of form.querySelectorAll<HTMLElement>('[data-kick-error]')) {
+    const field = spot.dataset.kickError!
+    if (only && field !== only) continue
+    const message = errors[field] ?? ''
+    spot.textContent = message
+    spot.hidden = !message
+    const input = form.elements.namedItem(field)
+    if (input instanceof HTMLElement && 'setCustomValidity' in input) {
+      ;(input as HTMLInputElement).setCustomValidity(message)
+      input.setAttribute('aria-invalid', String(!!message))
+    }
+  }
+}
+
+/** Checks a field when it loses focus, and every field on submit. */
+export function checkWith(form: HTMLFormElement, schema: z.ZodType): void {
+  form.noValidate = true
+  form.addEventListener('focusout', (e) => {
+    const name = (e.target as HTMLInputElement).name
+    if (name) show(form, messages(form, schema), name)
+  })
+  form.addEventListener('submit', (e) => {
+    const errors = messages(form, schema)
+    show(form, errors)
+    const first = Object.keys(errors)[0]
+    if (!first) return
+    e.preventDefault()
+    ;(form.elements.namedItem(first) as HTMLElement | null)?.focus()
+  })
+}
+```
+
+```kick
+{{-- src/views/components/task-form.kick --}}
+@input categories
+<task-form-check>
+  <form method="post" action="/tasks">
+    <input name="title" placeholder="What needs doing?">
+    @error('title') {
+      {{ $message }}
+    }
+    <select name="categoryId">
+      <option value="">None</option>
+      @for (c of categories; track c.id) {
+        <option value="{{ c.id }}">{{ c.name }}</option>
+      }
+    </select>
+    <button>Add</button>
+  </form>
+</task-form-check>
+
+<script client>
+  import { checkWith } from '@/client/check-form'
+  import { taskSchema } from '@/modules/tasks/tasks.schemas'
+
+  class TaskFormCheck extends HTMLElement {
+    connectedCallback(): void {
+      checkWith(this.querySelector('form')!, taskSchema)
+    }
+  }
+  customElements.get('task-form-check') || customElements.define('task-form-check', TaskFormCheck)
+</script>
+```
+
+- **Browser types.** The server's `tsconfig` has no DOM types, so a browser file under `src/` names them with `/// <reference lib="dom" />`. Component scripts don't need it.
+- **Keep schemas in their own files.** Whatever the schema file imports goes to the browser with it. A schema next to a database client, or anything from `node:`, pulls that into the client build or breaks it. A `*.schemas.ts` that imports only `zod` is safe to share.
+- **Size.** Zod adds about 23 KB gzipped to the component's script, and only pages that render the component load it. For a form that needs only `required` or `minLength`, `validate` is a fraction of that.
+- **Content Security Policy.** Zod 4 tries `new Function` once for a faster path. Under a CSP without `'unsafe-eval'` the browser reports it as blocked, and Zod carries on without it.
+- **Without JavaScript** the form posts as usual, and route validation answers with the same messages.
+
+**Checks that need the server.** Whether an email is already registered, or a name is taken, only the server knows. Give the component a small endpoint to ask, and show the answer in the field's spot:
+
+```ts
+@Get('/register/email-taken')
+async emailTaken(ctx: RequestContext) {
+  const email = String(ctx.query.email ?? '').trim().toLowerCase()
+  ctx.json({ taken: email !== '' && (await this.users.exists(email)) })
+}
+```
+
+```kick
+<email-check>
+  <input name="email" type="email">
+  @error('email') {
+    {{ $message }}
+  }
+</email-check>
+
+<script client>
+  class EmailCheck extends HTMLElement {
+    connectedCallback(): void {
+      const input = this.querySelector('input')!
+      const spot = this.querySelector<HTMLElement>('[data-kick-error="email"]')!
+      input.addEventListener('change', async () => {
+        const res = await fetch(`/register/email-taken?email=${encodeURIComponent(input.value)}`)
+        const { taken } = (await res.json()) as { taken: boolean }
+        spot.textContent = taken ? 'That email is already registered' : ''
+        spot.hidden = !taken
+      })
+    }
+  }
+  customElements.get('email-check') || customElements.define('email-check', EmailCheck)
+</script>
+```
+
+The route that saves the form still checks again, since two people can claim the same email between the check and the submit. Rate-limit an endpoint like this one so it can't be used to list your users.
+
 ## Shared data
 
 ```ts
