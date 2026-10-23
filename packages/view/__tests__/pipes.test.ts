@@ -40,6 +40,7 @@ describe('pipes', () => {
         'number',
         'percent',
         'raw',
+        'kvQuery',
         'kvRoute',
         'slice',
         'titlecase',

@@ -20,6 +20,7 @@ export const BUILTIN_PIPES: readonly string[] = [
   'currency',
   'percent',
   'kvRoute',
+  'kvQuery',
 ]
 
 export interface PipeEnv {
@@ -83,6 +84,21 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
     // `{{ 'Users.show' | kvRoute:user.id }}`: the route's URL, params in path order.
+    // `{{ url | kvQuery:'page':page:'sort':'name' }}`: key/value pairs onto a URL's
+    // query. Empty values are skipped, so optional filters pass straight through.
+    kvQuery: (url, ...pairs) => {
+      if (pairs.length % 2) throw new Error("kvQuery takes key/value pairs: kvQuery:'page':page")
+      const parts: string[] = []
+      for (let i = 0; i < pairs.length; i += 2) {
+        const key = encodeURIComponent(str(pairs[i]))
+        for (const v of Array.isArray(pairs[i + 1]) ? (pairs[i + 1] as unknown[]) : [pairs[i + 1]])
+          if (v !== undefined && v !== null && v !== '')
+            parts.push(`${key}=${encodeURIComponent(str(v))}`)
+      }
+      const [base, hash] = str(url).split(/(?=#)/, 2) as [string, string?]
+      if (!parts.length) return str(url)
+      return `${base}${base.includes('?') ? '&' : '?'}${parts.join('&')}${hash ?? ''}`
+    },
     // `kv`, for KickJS views: `route` stays free for an app's own pipe.
     kvRoute: (name, ...params) => {
       if (!env.urlFor)
