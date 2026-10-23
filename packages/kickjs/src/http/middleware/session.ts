@@ -9,6 +9,7 @@ import {
   timingSafeEqual,
 } from 'node:crypto'
 import { createLogger } from '../../core/logger'
+import { WebResponseDriver } from '../web/driver'
 import type {
   ConnectRequest as Request,
   ConnectResponse as Response,
@@ -239,6 +240,8 @@ function unsign(signed: string, secrets: string[]): { value: string; stale: bool
  * })
  * ```
  */
+const storeLog = createLogger('Session')
+
 export function session(options: SessionOptions) {
   if (options.store === 'cookie') return cookieSession(options)
   const {
@@ -333,19 +336,38 @@ export function session(options: SessionOptions) {
       setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
     }
 
-    // Auto-save on response finish
-    res.on('finish', async () => {
-      if (destroyed) return
-      if (isNew && !saveUninitialized && Object.keys(currentData).length === 0) return
+    // Saved once, at the end of the request.
+    let persisted: Promise<void> | undefined
+    const persist = () =>
+      (persisted ??= (async () => {
+        if (destroyed) return
+        if (isNew && !saveUninitialized && Object.keys(currentData).length === 0) return
+        await store.set(currentSid, currentData, maxAge)
+        if (rolling && !isNew && store.touch) await store.touch(currentSid, maxAge)
+      })())
 
-      await store.set(currentSid, currentData, maxAge)
-
-      if (rolling && !isNew) {
-        if (store.touch) {
-          await store.touch(currentSid, maxAge)
-        }
+    // Before the response goes out, not after: the redirect after a form post
+    // comes straight back and must see what this request wrote. The response
+    // ends once the store has it (a Redis write, say), as express-session does.
+    // The fetch drivers build their Response in end(), so they keep the
+    // `finish` save below.
+    if (!(res instanceof WebResponseDriver)) {
+      const end = res.end as (...args: unknown[]) => unknown
+      ;(res as unknown as { end: (...args: unknown[]) => unknown }).end = function (
+        this: unknown,
+        ...args: unknown[]
+      ) {
+        persist().then(
+          () => end.apply(this, args),
+          (err: unknown) => {
+            storeLog.error(err, 'Session save failed; sending the response anyway')
+            end.apply(this, args)
+          },
+        )
+        return this
       }
-    })
+    }
+    res.on('finish', () => void persist().catch(() => {}))
 
     // Rolling refreshes the cookie on every response; a cookie signed with an
     // older secret is re-signed with the current one.

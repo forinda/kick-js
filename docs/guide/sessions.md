@@ -101,13 +101,15 @@ Keys you don't declare are still readable, as `unknown`.
 
 The `req.session` (or `ctx.session`) object provides:
 
-| Property/Method | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `id`            | Current session ID                                        |
-| `data`          | Key-value session data object                             |
-| `regenerate()`  | Create a new session ID (prevents fixation attacks)       |
-| `destroy()`     | Delete the session and clear the cookie                   |
-| `save()`        | Manually save the session (auto-saves on response finish) |
+| Property/Method | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `id`            | Current session ID                                          |
+| `data`          | Key-value session data object                               |
+| `regenerate()`  | Create a new session ID (prevents fixation attacks)         |
+| `destroy()`     | Delete the session and clear the cookie                     |
+| `save()`        | Save now (it also saves itself before the response is sent) |
+
+**When it's saved.** A session saves itself before the response goes out: with a store, the response waits for the store's write, so the request after it — the redirect after a form post — always sees what this one wrote. If the store fails, the error is logged and the response still goes out.
 
 ## Rolling Sessions
 
