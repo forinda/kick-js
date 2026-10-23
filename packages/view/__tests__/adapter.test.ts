@@ -45,7 +45,7 @@ const FILES = {
   'components/flash-toast':
     "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
   island: '<flash-toast />',
-  links: `<a href="{{ 'PagesController.home' | route }}">h</a>|{{ 'PagesController.item' | route:id }}`,
+  links: `<a href="{{ 'PagesController.home' | kroute }}">h</a>|{{ 'PagesController.item' | kroute:id }}`,
 }
 
 @Controller()
@@ -132,7 +132,7 @@ for (const rt of RUNTIMES)
       })
     })
 
-    it("route links to the app's routes by name", async () => {
+    it("kroute links to the app's routes by name", async () => {
       const res = await (await app(rt.make, views)).get('/links').expect(200)
       expect(res.text).toBe('<a href="/home">h</a>|/items/a%20b')
     })
