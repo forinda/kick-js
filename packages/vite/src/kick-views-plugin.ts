@@ -18,6 +18,8 @@ export interface KickViewsPluginOptions {
   pipesFile?: string
   /** Default `components`, inside the views folder. */
   componentsDir?: string
+  /** Where component scripts are served (the views' `clientScriptPath`). Default `'/_kick/c'`. */
+  clientScriptPath?: string
 }
 
 const ID = 'virtual:kick-views'
@@ -132,7 +134,41 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       alias = config.resolve?.alias ?? []
     },
     resolveId(id) {
-      return id === ID ? RESOLVED : undefined
+      if (id === ID) return RESOLVED
+      // A component's client script, as a module next to its `.kick` file.
+      if (id.endsWith(`.kick${CLIENT_SUFFIX}`) && existsSync(id.slice(0, -CLIENT_SUFFIX.length)))
+        return id
+      return undefined
+    },
+    // kick dev: component scripts through Vite's pipeline, so their imports
+    // (relative, npm, aliases) resolve as they do in a build. Ahead of the app.
+    configureServer(server) {
+      const prefix = `${(options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')}/`
+      server.middlewares.use(async (req, res, next) => {
+        const url = (req.url ?? '').split('?')[0]!
+        if ((req.method !== 'GET' && req.method !== 'HEAD') || !url.startsWith(prefix))
+          return next()
+        const m = /^([a-z][a-z0-9-]*)\.[A-Za-z0-9_-]{8}\.js$/.exec(url.slice(prefix.length))
+        if (!m) return next()
+        try {
+          const view = await import('@forinda/kickjs-view')
+          const dir = options.componentsDir ?? 'components'
+          const name = (await kickFiles(viewsDir)).find(
+            (n) => n.startsWith(`${dir}/`) && view.componentTag(n, dir) === m[1],
+          )
+          if (!name) return next()
+          const file = join(viewsDir, `${name}.kick`)
+          if (clientScriptOf(view, await readFile(file, 'utf8')) === undefined) return next()
+          const out = await server.transformRequest(file + CLIENT_SUFFIX)
+          if (!out) return next()
+          res.statusCode = 200
+          res.setHeader('content-type', 'text/javascript; charset=utf-8')
+          res.setHeader('cache-control', 'no-cache')
+          res.end(req.method === 'HEAD' ? undefined : out.code)
+        } catch (err) {
+          next(err)
+        }
+      })
     },
     // In a build the templates are checked up front, whether or not the app
     // imports the virtual module: a broken template always fails `kick build`.
@@ -142,6 +178,10 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       checked = await checkTemplates(this)
     },
     async load(id) {
+      if (id.endsWith(`.kick${CLIENT_SUFFIX}`)) {
+        const view = await import('@forinda/kickjs-view')
+        return clientScriptOf(view, await readFile(id.slice(0, -CLIENT_SUFFIX.length), 'utf8'))
+      }
       if (id !== RESOLVED) return undefined
       const hasPipes = existsSync(pipesFile)
       const pipes = hasPipes
@@ -160,6 +200,27 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       ].join('\n')
     },
   }
+}
+
+/** A template's top-level `<script client>` text, as the checker lifts it. */
+function clientScriptOf(
+  view: { parse(src: string, file: string): { ast: { body: unknown[] } } },
+  src: string,
+): string | undefined {
+  for (const n of view.parse(src, 'x.kick').ast.body as Array<{
+    k: string
+    tag?: string
+    attrs?: Array<{ name: string; kind: string }>
+    children?: Array<{ k: string; value?: string }>
+  }>) {
+    if (
+      n.k === 'element' &&
+      n.tag?.toLowerCase() === 'script' &&
+      n.attrs?.some((a) => a.name.toLowerCase() === 'client' && a.kind === 'bare')
+    )
+      return (n.children ?? []).map((c) => (c.k === 'text' ? c.value : '')).join('')
+  }
+  return undefined
 }
 
 /** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */

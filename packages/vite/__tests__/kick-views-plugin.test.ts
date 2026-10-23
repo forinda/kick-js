@@ -1,4 +1,6 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createServer as createHttpServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { build, createServer, type Rollup } from 'vite'
@@ -95,6 +97,39 @@ describe('kickViewsPlugin', () => {
   it('an unknown pipe fails the build', async () => {
     const root = project({ 'src/views/p.kick': '{{ x | nope }}' })
     await expect(bundle(root)).rejects.toThrow(/unknown pipe 'nope'/)
+  })
+
+  it('dev serves client scripts through Vite, imports resolved', async () => {
+    const root = project({
+      'src/views/components/flash-toast.kick':
+        "<kick-toast></kick-toast>\n<script client>\nimport { count } from './shared'\nconst n: number = count\nconsole.log(n)\n</script>",
+      'src/views/components/shared.ts': 'export const count = 1',
+      'src/views/home.kick': '<flash-toast />',
+    })
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin()],
+      server: { middlewareMode: true, ws: false },
+    })
+    const http = createHttpServer(vite.middlewares)
+    await new Promise<void>((r) => http.listen(0, r))
+    const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+    try {
+      const res = await fetch(`${base}/_kick/c/flash-toast.00000000.js`)
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toMatch(/javascript/)
+      const js = await res.text()
+      expect(js).toContain('/src/views/components/shared.ts')
+      expect(js).not.toContain(': number')
+      // Not a component's script: left for the app.
+      expect((await fetch(`${base}/_kick/c/nope.00000000.js`)).status).toBe(404)
+    } finally {
+      http.close()
+      await vite.close()
+    }
   })
 
   it('dev serves no bundle: the file loader reads templates', async () => {
