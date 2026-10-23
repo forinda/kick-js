@@ -71,16 +71,25 @@ export function readLayerSkills(
  * devDependencies). A layer that lists none (devtools) never counts.
  */
 export function detectFeatureLayers(appDir: string, dir = TEMPLATES_DIR): string[] {
-  let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
-  try {
-    pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'))
-  } catch {
-    return []
+  // A fullstack workspace root keeps .agents/ but the app's packages are server/'s.
+  const dirs = [appDir]
+  if (
+    !existsSync(join(appDir, 'kick.config.ts')) &&
+    existsSync(join(appDir, 'server/kick.config.ts'))
+  )
+    dirs.push(join(appDir, 'server'))
+  const installed = new Set<string>()
+  for (const d of dirs) {
+    let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+    try {
+      pkg = JSON.parse(readFileSync(join(d, 'package.json'), 'utf8'))
+    } catch {
+      continue
+    }
+    for (const name of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }))
+      installed.add(name)
   }
-  const installed = new Set([
-    ...Object.keys(pkg.dependencies ?? {}),
-    ...Object.keys(pkg.devDependencies ?? {}),
-  ])
+  if (!installed.size) return []
   return readdirSync(dir)
     .filter((layer) => layer.startsWith('feature-'))
     .toSorted()

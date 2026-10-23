@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { writeFileSafe } from '../utils/fs'
 import { confirm } from '../utils/prompts'
@@ -184,8 +184,10 @@ export async function writeLayerSkills(
   layers: readonly string[],
   pm: string,
 ): Promise<string[]> {
-  const root = join(cwd, AGENTS_DIR, 'skills')
-  if (!layers.length || !existsSync(root)) return []
+  // The app's own .agents/, else a fullstack workspace's, one folder up from server/.
+  const candidates = basename(cwd) === 'server' ? [cwd, dirname(cwd)] : [cwd]
+  const base = candidates.find((d) => existsSync(join(d, AGENTS_DIR, 'skills')))
+  if (!layers.length || !base) return []
   const style = await detectStyle(cwd)
   const own = new Set(readLayerSkills(layers, skillVars(pm, style)).map((s) => s.slug))
   const files = generateKickJsSkillFiles(
@@ -197,10 +199,10 @@ export async function writeLayerSkills(
   ).filter((f) => own.has(f.slug))
   const written: string[] = []
   for (const f of files) {
-    const rel = join(AGENTS_DIR, 'skills', f.slug, 'SKILL.md')
-    if (existsSync(join(cwd, rel))) continue
-    await writeFileSafe(join(cwd, rel), f.content)
-    written.push(rel)
+    const abs = join(base, AGENTS_DIR, 'skills', f.slug, 'SKILL.md')
+    if (existsSync(abs)) continue
+    await writeFileSafe(abs, f.content)
+    written.push(relative(cwd, abs))
   }
   return written
 }

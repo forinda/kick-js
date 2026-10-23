@@ -163,6 +163,19 @@ describe('kick add views', () => {
   })
 })
 
+describe('kick add views over an app that has views', () => {
+  it('leaves an existing .kick file as it is', async () => {
+    tmp()
+    mkdirSync(join(dir, 'src/views/layouts'), { recursive: true })
+    const mine = '<!doctype html>\n<html>\n  <body><slot /></body>\n</html>\n'
+    writeFileSync(join(dir, 'src/views/layouts/main.kick'), mine)
+    const { created, updated } = await applyLayerFiles(dir, planWiring(['views'])!.files)
+    expect(updated).toEqual([])
+    expect(created).not.toContain('src/views/layouts/main.kick')
+    expect(readFileSync(join(dir, 'src/views/layouts/main.kick'), 'utf-8')).toBe(mine)
+  })
+})
+
 describe('kick add storage', () => {
   it('writes src/adapters/storage.ts, the env and gitignore lines, and wires storageAdapter()', async () => {
     tmp()

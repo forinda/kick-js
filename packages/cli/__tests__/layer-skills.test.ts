@@ -147,3 +147,33 @@ describe('kick add writes the layer skills', () => {
     expect(readFileSync(join(dir, '.agents/skills/views/SKILL.md'), 'utf8')).toBe('mine')
   })
 })
+
+describe('a fullstack workspace', () => {
+  const workspace = () => {
+    const root = mkdtempSync(join(tmpdir(), 'kick-fs-'))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fs', private: true }))
+    mkdirSync(join(root, 'server'))
+    writeFileSync(
+      join(root, 'server/package.json'),
+      JSON.stringify({ name: 'server', dependencies: { '@forinda/kickjs-view': '^0.3.0' } }),
+    )
+    writeFileSync(join(root, 'server/kick.config.ts'), 'export default {}\n')
+    return root
+  }
+
+  it("kick g agents at the root sees the server's features", () => {
+    expect(detectFeatureLayers(workspace())).toContain('feature-views')
+  })
+
+  it("kick add in server/ writes into the root's .agents/skills", async () => {
+    const root = workspace()
+    mkdirSync(join(root, '.agents/skills'), { recursive: true })
+    const written = await writeLayerSkills(join(root, 'server'), ['feature-views'], 'pnpm')
+    expect(written.toSorted()).toEqual([
+      '../.agents/skills/views-forms/SKILL.md',
+      '../.agents/skills/views/SKILL.md',
+    ])
+    expect(existsSync(join(root, '.agents/skills/views/SKILL.md'))).toBe(true)
+    expect(existsSync(join(root, 'server/.agents'))).toBe(false)
+  })
+})

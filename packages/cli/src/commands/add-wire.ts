@@ -76,8 +76,11 @@ export async function wireEnv(
   return result
 }
 
-/** Source files: never merged line by line — appending a module duplicates its declarations. */
-const SOURCE = /\.(?:[cm]?[jt]sx?)$/
+/**
+ * Source files and templates: never merged line by line — appending a module
+ * duplicates its declarations, and appending to a `.kick` template breaks it.
+ */
+const SOURCE = /\.(?:[cm]?[jt]sx?|kick)$/
 
 /**
  * A layer's source files that already exist with other contents — the app's
