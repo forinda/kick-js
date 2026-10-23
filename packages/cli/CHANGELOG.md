@@ -1,5 +1,16 @@
 # @forinda/kickjs-cli
 
+## 8.15.0
+
+### Minor Changes
+
+- [#1042](https://github.com/forinda/kick-js/pull/1042) [`2ab6a74`](https://github.com/forinda/kick-js/commit/2ab6a746dd2df28192280a33027208bcd01a3659) Thanks [@forinda](https://github.com/forinda)! - `kick build:netlify` / `kick build:vercel` for `.kick` views apps: the serverless build includes the views plugin, writes client files into `dist/public`, and the platform serves that folder before the function.
+
+### Patch Changes
+
+- Updated dependencies [[`eb74ee9`](https://github.com/forinda/kick-js/commit/eb74ee983aa8a111d42fda55e9e6e30e590e6190)]:
+  - @forinda/kickjs-db@8.11.2
+
 ## 8.14.8
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-view-language-server",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Language server for KickJS .kick views — diagnostics, completion, hover, definition and formatting from the runtime's own parser and checker",
   "keywords": [
     "kickjs",

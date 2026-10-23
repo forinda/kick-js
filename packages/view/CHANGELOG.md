@@ -1,5 +1,13 @@
 # @forinda/kickjs-view
 
+## 0.3.0
+
+### Minor Changes
+
+- [#1042](https://github.com/forinda/kick-js/pull/1042) [`2ab6a74`](https://github.com/forinda/kick-js/commit/2ab6a746dd2df28192280a33027208bcd01a3659) Thanks [@forinda](https://github.com/forinda)! - Client files on disk. A bundle's `client.disk` lists files the build wrote to disk; `createViews({ clientDir })` (from `virtual:kick-views`) points at their folder. The Node entry serves them, bytes and all, with their content type (`views.clientFile(file)`); only listed names are ever read. The edge entry has no reader, so those requests fall through to the platform's static files. `useClientFiles(read)` sets the reader.
+
+- [#1041](https://github.com/forinda/kick-js/pull/1041) [`a90596b`](https://github.com/forinda/kick-js/commit/a90596b3577f1f2a4d8fc34760254ae7a2eaa328) Thanks [@forinda](https://github.com/forinda)! - Client scripts can import. A bundle's `client` map (`entries` by component tag, `files` with entries and shared chunks) is served from `clientScriptPath`, and a page's tag points at the component's entry. Served file names may now be bundler names (`<name>.<hash>.js`, letters, digits, `_` and `-`). The checker no longer refuses imports. Without a bundler (plain Node, no `kick dev`), a script that imports fails at render with `client scripts that import need kick dev or a kick build`; self-contained scripts work as before. The bundle's `client.css` (stylesheets by component tag) is linked in the page's `<head>` when the component renders, and `.css` files are served as `text/css`. Under `kick dev`, scripts aren't type-stripped by the server (Vite does it), and the import check ignores comments and strings.
+
 ## 0.2.0
 
 ### Minor Changes
