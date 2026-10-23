@@ -334,6 +334,10 @@ export const App: Component = () => {
     })),
   ]
 
+  /** The app stopped answering: hide the last data it sent and block navigation until it's back. */
+  const offline = (): boolean =>
+    store.connectionStatus() === 'disconnected' && !store.authRequired()
+
   const activeCustom = (): DevtoolsTabDescriptor | undefined =>
     customTabs().find((t) => t.id === active())
 
@@ -349,7 +353,8 @@ export const App: Component = () => {
         <div style="display:flex;align-items:center;gap:12px;">
           <button
             type="button"
-            class="flex cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-2.5 py-1 text-xs text-text-muted hover:text-text-strong"
+            class="flex cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-2.5 py-1 text-xs text-text-muted hover:text-text-strong disabled:cursor-default disabled:opacity-50 disabled:hover:text-text-muted"
+            disabled={offline()}
             onClick={openCommandPalette}
           >
             <Icon name="search" size={13} />
@@ -361,222 +366,236 @@ export const App: Component = () => {
           <SettingsMenu />
         </div>
       </header>
-      <div class="dt-shell">
-        <aside
-          class={`dt-sidebar ${rail() ? 'rail' : ''}`}
-          role="tablist"
-          style={`width:${sidebarWidth()}px`}
-        >
-          <For each={TAB_GROUPS}>
-            {(group) => (
-              <Show
-                when={group.label}
-                fallback={
-                  <For each={group.ids}>
-                    {(id) => {
-                      const tab = byId.get(id)
-                      return (
-                        <Show when={tab}>
-                          {(t) => (
-                            <button
-                              type="button"
-                              role="tab"
-                              data-tab-id={id}
-                              class={`dt-nav-item ${active() === id ? 'active' : ''} ${
-                                idle(t(), active() === id) ? 'opacity-50' : ''
-                              }`}
-                              aria-selected={active() === id}
-                              aria-label={t().label}
-                              title={
-                                idle(t(), active() === id)
-                                  ? `${t().label} — nothing reported yet`
-                                  : t().label
-                              }
-                              onClick={() => switchTo(id)}
-                            >
-                              <span class="dt-nav-main">
-                                <Icon name={id} />
-                                <span class="dt-nav-label">{t().label}</span>
-                              </span>
-                              <Show when={t().count?.()}>
-                                {(n) => <span class="tab-badge">{n()}</span>}
-                              </Show>
-                            </button>
-                          )}
-                        </Show>
-                      )
-                    }}
-                  </For>
-                }
-              >
-                {(label) => (
-                  <div class="dt-nav-group">
-                    <Show when={rail()}>
-                      <div class="dt-nav-sep" />
-                    </Show>
-                    <button
-                      hidden={rail()}
-                      type="button"
-                      class="dt-nav-group-header"
-                      aria-expanded={!collapsed().includes(label())}
-                      onClick={() => toggleGroup(label())}
-                    >
-                      <span class={`dt-nav-caret ${collapsed().includes(label()) ? 'closed' : ''}`}>
-                        ▾
-                      </span>
-                      {label()}
-                    </button>
-                    <Show when={rail() || !collapsed().includes(label())}>
-                      <For each={group.ids}>
-                        {(id) => {
-                          const tab = byId.get(id)
-                          return (
-                            <Show when={tab}>
-                              {(t) => (
-                                <button
-                                  type="button"
-                                  role="tab"
-                                  data-tab-id={id}
-                                  class={`dt-nav-item nested ${active() === id ? 'active' : ''} ${
-                                    idle(t(), active() === id) ? 'opacity-50' : ''
-                                  }`}
-                                  aria-selected={active() === id}
-                                  aria-label={t().label}
-                                  title={
-                                    idle(t(), active() === id)
-                                      ? `${t().label} — nothing reported yet`
-                                      : t().label
-                                  }
-                                  onClick={() => switchTo(id)}
-                                >
-                                  <span class="dt-nav-main">
-                                    <Icon name={id} />
-                                    <span class="dt-nav-label">{t().label}</span>
-                                  </span>
-                                  <Show when={t().count?.()}>
-                                    {(n) => <span class="tab-badge">{n()}</span>}
-                                  </Show>
-                                </button>
-                              )}
-                            </Show>
-                          )
-                        }}
-                      </For>
-                    </Show>
-                  </div>
-                )}
-              </Show>
-            )}
-          </For>
-          <Show when={customTabs().length > 0}>
-            <div class="dt-nav-sep" />
-            <For each={customTabs()}>
-              {(tab) => (
-                <button
-                  type="button"
-                  role="tab"
-                  data-tab-id={tab.id}
-                  class={`dt-nav-item ${active() === tab.id ? 'active' : ''}`}
-                  aria-selected={active() === tab.id}
-                  aria-label={tab.title}
-                  onClick={() => switchTo(tab.id)}
-                  title={tab.title}
+      <div class="dt-shell relative">
+        <Show when={offline()}>
+          <div
+            class="absolute inset-0 z-50 flex items-center justify-center bg-app-bg p-4"
+            role="status"
+          >
+            <div class="flex max-w-sm flex-col items-center gap-2 text-center">
+              <span class="dt-pulse dt-pulse-disconnected" aria-hidden="true" />
+              <p class="text-sm font-semibold text-text-strong">Can't reach the app</p>
+              <p class="text-xs text-text-muted">
+                Retrying every few seconds. The dashboard comes back when the app answers.
+              </p>
+            </div>
+          </div>
+        </Show>
+        <div class="contents" inert={offline()}>
+          <aside
+            class={`dt-sidebar ${rail() ? 'rail' : ''}`}
+            role="tablist"
+            style={`width:${sidebarWidth()}px`}
+          >
+            <For each={TAB_GROUPS}>
+              {(group) => (
+                <Show
+                  when={group.label}
+                  fallback={
+                    <For each={group.ids}>
+                      {(id) => {
+                        const tab = byId.get(id)
+                        return (
+                          <Show when={tab}>
+                            {(t) => (
+                              <button
+                                type="button"
+                                role="tab"
+                                data-tab-id={id}
+                                class={`dt-nav-item ${active() === id ? 'active' : ''} ${
+                                  idle(t(), active() === id) ? 'opacity-50' : ''
+                                }`}
+                                aria-selected={active() === id}
+                                aria-label={t().label}
+                                title={
+                                  idle(t(), active() === id)
+                                    ? `${t().label} — nothing reported yet`
+                                    : t().label
+                                }
+                                onClick={() => switchTo(id)}
+                              >
+                                <span class="dt-nav-main">
+                                  <Icon name={id} />
+                                  <span class="dt-nav-label">{t().label}</span>
+                                </span>
+                                <Show when={t().count?.()}>
+                                  {(n) => <span class="tab-badge">{n()}</span>}
+                                </Show>
+                              </button>
+                            )}
+                          </Show>
+                        )
+                      }}
+                    </For>
+                  }
                 >
-                  <span class="dt-nav-main">
-                    <Icon name="custom" />
-                    <span class="dt-nav-label">{tab.title}</span>
-                  </span>
-                </button>
+                  {(label) => (
+                    <div class="dt-nav-group">
+                      <Show when={rail()}>
+                        <div class="dt-nav-sep" />
+                      </Show>
+                      <button
+                        hidden={rail()}
+                        type="button"
+                        class="dt-nav-group-header"
+                        aria-expanded={!collapsed().includes(label())}
+                        onClick={() => toggleGroup(label())}
+                      >
+                        <span
+                          class={`dt-nav-caret ${collapsed().includes(label()) ? 'closed' : ''}`}
+                        >
+                          ▾
+                        </span>
+                        {label()}
+                      </button>
+                      <Show when={rail() || !collapsed().includes(label())}>
+                        <For each={group.ids}>
+                          {(id) => {
+                            const tab = byId.get(id)
+                            return (
+                              <Show when={tab}>
+                                {(t) => (
+                                  <button
+                                    type="button"
+                                    role="tab"
+                                    data-tab-id={id}
+                                    class={`dt-nav-item nested ${active() === id ? 'active' : ''} ${
+                                      idle(t(), active() === id) ? 'opacity-50' : ''
+                                    }`}
+                                    aria-selected={active() === id}
+                                    aria-label={t().label}
+                                    title={
+                                      idle(t(), active() === id)
+                                        ? `${t().label} — nothing reported yet`
+                                        : t().label
+                                    }
+                                    onClick={() => switchTo(id)}
+                                  >
+                                    <span class="dt-nav-main">
+                                      <Icon name={id} />
+                                      <span class="dt-nav-label">{t().label}</span>
+                                    </span>
+                                    <Show when={t().count?.()}>
+                                      {(n) => <span class="tab-badge">{n()}</span>}
+                                    </Show>
+                                  </button>
+                                )}
+                              </Show>
+                            )
+                          }}
+                        </For>
+                      </Show>
+                    </div>
+                  )}
+                </Show>
               )}
             </For>
-          </Show>
-          <div class="dt-sidebar-foot">
-            <button
-              type="button"
-              class="dt-rail-toggle"
-              onClick={toggleRail}
-              title={rail() ? 'Show labels' : 'Icons only'}
-              aria-label={rail() ? 'Show labels' : 'Icons only'}
-            >
-              <Icon name={rail() ? 'expand' : 'collapse'} size={16} />
-            </button>
-          </div>
-        </aside>
-        <Show when={!rail()}>
-          <div
-            class="dt-resizer"
-            role="separator"
-            aria-orientation="vertical"
-            onMouseDown={startResize}
-          />
-        </Show>
-        <main class={`dt-main ${FLUSH_TABS.has(active()) ? 'flush' : ''}`} role="tabpanel">
-          <Show when={active() === 'overview'}>
-            <OverviewTab />
-          </Show>
-          <Show when={active() === 'runtime'}>
-            <div class="flex flex-col gap-6">
-              <RuntimeTab />
-              <TopologyTab />
+            <Show when={customTabs().length > 0}>
+              <div class="dt-nav-sep" />
+              <For each={customTabs()}>
+                {(tab) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    data-tab-id={tab.id}
+                    class={`dt-nav-item ${active() === tab.id ? 'active' : ''}`}
+                    aria-selected={active() === tab.id}
+                    aria-label={tab.title}
+                    onClick={() => switchTo(tab.id)}
+                    title={tab.title}
+                  >
+                    <span class="dt-nav-main">
+                      <Icon name="custom" />
+                      <span class="dt-nav-label">{tab.title}</span>
+                    </span>
+                  </button>
+                )}
+              </For>
+            </Show>
+            <div class="dt-sidebar-foot">
+              <button
+                type="button"
+                class="dt-rail-toggle"
+                onClick={toggleRail}
+                title={rail() ? 'Show labels' : 'Icons only'}
+                aria-label={rail() ? 'Show labels' : 'Icons only'}
+              >
+                <Icon name={rail() ? 'expand' : 'collapse'} size={16} />
+              </button>
             </div>
+          </aside>
+          <Show when={!rail()}>
+            <div
+              class="dt-resizer"
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={startResize}
+            />
           </Show>
-          <Show when={active() === 'config'}>
-            <ConfigTab />
-          </Show>
-          <Show when={active() === 'routes'}>
-            <RoutesTab />
-          </Show>
-          <Show when={active() === 'sockets'}>
-            <SocketsTab />
-          </Show>
-          <Show when={active() === 'requests'}>
-            <RequestsTab />
-          </Show>
-          <Show when={active() === 'metrics'}>
-            <MetricsTab />
-          </Show>
-          <Show when={active() === 'container'}>
-            <ContainerTab />
-          </Show>
-          <Show when={active() === 'queues'}>
-            <JobsTab />
-          </Show>
-          <Show when={active() === 'database'}>
-            <DatabaseTab />
-          </Show>
-          <Show when={active() === 'activity'}>
-            <ActivityLogTab />
-          </Show>
-          <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
-          <Show when={tabErrors().length > 0 && active() === 'overview'}>
-            <div class="card" style="border-color:var(--warn);margin-top:16px">
-              <div class="card-title" style="color:var(--warn)">
-                {tabErrors().length} custom-tab issue(s)
-              </div>
-              <ul style="margin:8px 0 0;padding-left:20px;font-family:var(--font-mono);font-size:12px">
-                <For each={tabErrors()}>
-                  {(err) => (
-                    <li>
-                      {err.source}: {err.reason}
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </div>
-          </Show>
-        </main>
-      </div>
-      <CommandPalette items={paletteItems} />
-      <AuthGate />
-      <Show when={store.connectionStatus() === 'disconnected' && !store.authRequired()}>
-        <div
-          class="fixed bottom-4 left-1/2 z-60 flex -translate-x-1/2 items-center gap-2.5 rounded-md border border-red-500/40 bg-surface-1 px-3.5 py-2 text-[0.8rem] shadow-xl"
-          role="status"
-        >
-          <span class="dt-pulse dt-pulse-disconnected" aria-hidden="true" />
-          Can't reach the app — retrying every few seconds…
+          <main class={`dt-main ${FLUSH_TABS.has(active()) ? 'flush' : ''}`} role="tabpanel">
+            {/* Unmounted while offline: each tab refetches on its own mount when the app is back. */}
+            <Show when={!offline()}>
+              <Show when={active() === 'overview'}>
+                <OverviewTab />
+              </Show>
+              <Show when={active() === 'runtime'}>
+                <div class="flex flex-col gap-6">
+                  <RuntimeTab />
+                  <TopologyTab />
+                </div>
+              </Show>
+              <Show when={active() === 'config'}>
+                <ConfigTab />
+              </Show>
+              <Show when={active() === 'routes'}>
+                <RoutesTab />
+              </Show>
+              <Show when={active() === 'sockets'}>
+                <SocketsTab />
+              </Show>
+              <Show when={active() === 'requests'}>
+                <RequestsTab />
+              </Show>
+              <Show when={active() === 'metrics'}>
+                <MetricsTab />
+              </Show>
+              <Show when={active() === 'container'}>
+                <ContainerTab />
+              </Show>
+              <Show when={active() === 'queues'}>
+                <JobsTab />
+              </Show>
+              <Show when={active() === 'database'}>
+                <DatabaseTab />
+              </Show>
+              <Show when={active() === 'activity'}>
+                <ActivityLogTab />
+              </Show>
+              <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
+              <Show when={tabErrors().length > 0 && active() === 'overview'}>
+                <div class="card" style="border-color:var(--warn);margin-top:16px">
+                  <div class="card-title" style="color:var(--warn)">
+                    {tabErrors().length} custom-tab issue(s)
+                  </div>
+                  <ul style="margin:8px 0 0;padding-left:20px;font-family:var(--font-mono);font-size:12px">
+                    <For each={tabErrors()}>
+                      {(err) => (
+                        <li>
+                          {err.source}: {err.reason}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </div>
+              </Show>
+            </Show>
+          </main>
         </div>
+      </div>
+      <Show when={!offline()}>
+        <CommandPalette items={paletteItems} />
       </Show>
+      <AuthGate />
     </div>
   )
 }
