@@ -311,7 +311,14 @@ class FetchConnectResponse extends WebResponseDriver {
     for (const event of ['finish', 'close']) {
       for (const [e, listener] of this.listeners) {
         if (e !== event) continue
-        const out = listener() as unknown
+        let out: unknown
+        try {
+          out = listener()
+        } catch (err) {
+          // One broken listener mustn't hold the response or skip the rest.
+          log.error(err, `h3: a '${event}' listener failed`)
+          continue
+        }
         if (out && typeof (out as Promise<unknown>).then === 'function')
           pending.push(Promise.resolve(out).catch(() => {}))
       }

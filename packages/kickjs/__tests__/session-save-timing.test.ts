@@ -176,4 +176,30 @@ describe('session save timing — h3 through fetch', () => {
     expect((await app.fetch(new Request('http://x/save', { method: 'POST' }))).status).toBe(303)
     expect(Date.now() - started).toBeLessThan(2000)
   })
+  it('a finish listener that throws still lets the response out', async () => {
+    const app = new Application({
+      runtime: h3Runtime(),
+      middlewares: [
+        (_req: unknown, res: { on: (e: string, l: () => void) => void }, next: () => void) => {
+          res.on('finish', () => {
+            throw new Error('listener broke')
+          })
+          next()
+        },
+        session({ secret: 'x'.repeat(32), store: slowStore(10) }),
+      ] as never,
+      modules: [
+        {
+          routes: () => ({ path: '/', prefix: false, version: false, controller: FlashController }),
+        } as never,
+      ],
+    })
+    await app.setup()
+    const saved = await Promise.race([
+      app.fetch(new Request('http://x/save', { method: 'POST' })),
+      new Promise<'hung'>((done) => setTimeout(() => done('hung'), 1000)),
+    ])
+    expect(saved).not.toBe('hung')
+    expect((saved as Response).status).toBe(303)
+  })
 })
