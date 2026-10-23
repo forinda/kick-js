@@ -460,10 +460,16 @@ A form post that fails validation goes back to the form with each field's error 
 ```ts
 // src/index.ts
 import { bootstrap, formErrorHandler, session } from '@forinda/kickjs'
+import express from 'express'
 
 export const app = await bootstrap({
   modules,
-  middlewares: [session({ secret: env.SESSION_SECRET, store: 'cookie' })],
+  middlewares: [
+    // Express only: listing `middlewares` replaces the default pipeline, body
+    // parsers included, and forms post urlencoded. Fastify and h3 parse bodies themselves.
+    express.urlencoded({ extended: false }),
+    session({ secret: env.SESSION_SECRET, store: 'cookie' }),
+  ],
   adapters: [KickView({ views })],
   onError: formErrorHandler(), // with Inertia: formErrorHandler(inertiaErrorHandler())
 })

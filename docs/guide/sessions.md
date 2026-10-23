@@ -6,10 +6,16 @@ KickJS provides cookie-based session middleware with HMAC-SHA256 signing, automa
 
 ```ts
 import { session } from '@forinda/kickjs'
+import express from 'express'
 
 bootstrap({
   modules,
-  middlewares: [session({ secret: process.env.SESSION_SECRET! })],
+  middlewares: [
+    // Express only: listing `middlewares` replaces the default pipeline, body
+    // parsers included. Fastify and h3 parse bodies themselves.
+    express.json(),
+    session({ secret: process.env.SESSION_SECRET! }),
+  ],
 })
 ```
 
