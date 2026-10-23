@@ -110,7 +110,7 @@ The `req.session` (or `ctx.session`) object provides:
 | `destroy()`     | Delete the session and clear the cookie                     |
 | `save()`        | Save now (it also saves itself before the response is sent) |
 
-**When it's saved.** On Express, Fastify and h3 (Node), a session with a store saves itself before the response is sent: the response's `end()` waits for the store's write, so the request after it — the redirect after a form post — sees what this one wrote. A store that fails, or takes longer than `saveTimeout` (5s), is logged and the response goes out anyway; the next request may then miss the write. A streamed response (SSE, `write()` before `end()`) sends its headers and body as it goes and saves when it ends. The fetch entry (`@forinda/kickjs/web`, edge runtimes) saves after the response; use `store: 'cookie'` there, which writes the cookie with the response.
+**When it's saved.** A session with a store saves itself before the response is sent, on every engine — Express, Fastify, and h3 whether it runs on Node or behind a fetch handler: the response waits for the store's write, so the request after it — the redirect after a form post — sees what this one wrote. A store that fails, or takes longer than `saveTimeout` (5s), is logged and the response goes out anyway; the next request may then miss the write. A streamed response (SSE, `write()` before `end()`) sends its headers and body as it goes and saves when it ends.
 
 ## Rolling Sessions
 

@@ -353,42 +353,47 @@ export function session(options: SessionOptions) {
         if (rolling && !isNew && store.touch) await store.touch(currentSid, maxAge)
       })())
 
+    /**
+     * The save, waited for at most `saveTimeout` ms: a stalled store mustn't hold
+     * the response forever. Never rejects — a failure is logged.
+     */
+    const saved = (): Promise<void> =>
+      new Promise((done) => {
+        const timer = setTimeout(() => {
+          storeLog.error(`Session save took over ${saveTimeout}ms; sending the response anyway`)
+          done()
+        }, saveTimeout)
+        persist().then(
+          () => {
+            clearTimeout(timer)
+            done()
+          },
+          (err: unknown) => {
+            clearTimeout(timer)
+            storeLog.error(err, 'Session save failed; sending the response anyway')
+            done()
+          },
+        )
+      })
+
     // Before the response goes out, not after: the redirect after a form post
     // comes straight back and must see what this request wrote. The response
     // ends once the store has it (a Redis write, say), as express-session does.
-    // The fetch drivers build their Response in end(), so they keep the
-    // `finish` save below.
+    // The fetch drivers build their Response in end(); h3 through fetch waits
+    // for the promise the `finish` listener below returns instead.
     if (!(res instanceof WebResponseDriver)) {
       const end = res.end as (...args: unknown[]) => unknown
       ;(res as unknown as { end: (...args: unknown[]) => unknown }).end = function (
         this: unknown,
         ...args: unknown[]
       ) {
-        let sent = false
-        const send = () => {
-          if (sent) return
-          sent = true
-          clearTimeout(timer)
-          end.apply(this, args)
-        }
-        const timer = setTimeout(() => {
-          storeLog.error(`Session save took over ${saveTimeout}ms; sending the response anyway`)
-          send()
-        }, saveTimeout)
-        persist().then(send, (err: unknown) => {
-          storeLog.error(err, 'Session save failed; sending the response anyway')
-          send()
-        })
+        void saved().then(() => end.apply(this, args))
         return this
       }
     }
-    res.on('finish', () => {
-      // Already logged by end() on a Node response; the fetch drivers only save here.
-      persist().catch((err: unknown) => {
-        if (res instanceof WebResponseDriver)
-          storeLog.error(err, 'Session save failed after the response was sent')
-      })
-    })
+    // The fetch drivers: h3 through fetch waits for this promise before handing
+    // back the response. (A Node response saved in end(), above.)
+    else res.on('finish', () => saved())
 
     // Rolling refreshes the cookie on every response; a cookie signed with an
     // older secret is re-signed with the current one.

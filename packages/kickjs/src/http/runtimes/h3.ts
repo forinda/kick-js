@@ -302,13 +302,22 @@ class FetchConnectResponse extends WebResponseDriver {
    * The response exists (or the request failed): fire `finish` then `close`.
    * Runs before `withConnectHeaders` merges this response's headers into the
    * route's, so a `finish` listener can still set one — the cookie session
-   * store writes its cookie there.
+   * store writes its cookie there. A listener that returns a promise (a session
+   * store's save) is waited for: the response isn't handed back before it, so
+   * the request after it sees what this one saved.
    */
-  done(): void {
+  done(): Promise<void> {
+    const pending: Promise<unknown>[] = []
     for (const event of ['finish', 'close']) {
-      for (const [e, listener] of this.listeners) if (e === event) listener()
+      for (const [e, listener] of this.listeners) {
+        if (e !== event) continue
+        const out = listener() as unknown
+        if (out && typeof (out as Promise<unknown>).then === 'function')
+          pending.push(Promise.resolve(out).catch(() => {}))
+      }
       this.listeners = this.listeners.filter(([e]) => e !== event)
     }
+    return Promise.all(pending).then(() => {})
   }
 }
 
@@ -322,12 +331,10 @@ function runConnectOnFetch(
 
   return new Promise((resolve, reject) => {
     const respond = (response: Response): void => {
-      res.done()
-      resolve(withConnectHeaders(event, response))
+      void res.done().then(() => resolve(withConnectHeaders(event, response)))
     }
     const fail = (err: unknown): void => {
-      res.done()
-      reject(err)
+      void res.done().then(() => reject(err))
     }
 
     // The middleware answered itself (`res.end`, `res.json`, `writeHead`).
@@ -356,8 +363,7 @@ function runConnectOnFetch(
       }
       Promise.resolve(downstream).then((value) => {
         if (value instanceof Response) return respond(value)
-        res.done()
-        resolve(value)
+        void res.done().then(() => resolve(value))
       }, fail)
     }
 
