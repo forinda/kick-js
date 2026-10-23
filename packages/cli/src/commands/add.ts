@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, type PackageManager } from '../config'
 import { setAllowBuilds } from '../generators/templates/project-config'
+import { writeLayerSkills } from '../generators/agent-docs'
 import { resolvePackageManagerWithSource } from '../utils/package-manager'
 
 export {
@@ -16,6 +17,8 @@ import {
   dirtyFiles,
   findEntry,
   findEnvSchema,
+  configSnippet,
+  FEATURE_LAYERS,
   manualSnippet,
   planWiring,
   projectVars,
@@ -124,6 +127,11 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   },
 
   // API
+  views: {
+    pkg: '@forinda/kickjs-view',
+    peers: [],
+    description: 'Server-rendered .kick templates: layouts, components, pipes, forms',
+  },
   swagger: {
     pkg: '@forinda/kickjs-swagger',
     peers: [],
@@ -787,7 +795,10 @@ export function registerAddCommand(program: Command): void {
           const manual = result
             ? result.manual
             : wiring.integrations
-                .filter((i) => i.slot && i.code && !i.slot.startsWith('env-'))
+                .filter(
+                  (i) =>
+                    i.slot && i.code && !i.slot.startsWith('env-') && !i.slot.startsWith('config-'),
+                )
                 .map((i) => ({ ...i, code: fill(i.code!) }))
           if (kept.length > 0) {
             const fillBlocked = blocked.map((i) => ({ ...i, code: fill(i.code ?? '') }))
@@ -806,6 +817,17 @@ export function registerAddCommand(program: Command): void {
             console.log(manualSnippet(manual).replace(/^/gm, '    '))
             console.log()
           }
+          // CLI plugins go in kick.config.ts, which kick add doesn't edit.
+          const config = configSnippet(wiring.integrations)
+          if (config) {
+            console.log('\n  Add this to kick.config.ts:\n')
+            console.log(config.replace(/^/gm, '    '))
+            console.log()
+          }
+          // The features' agent skills, when the app keeps them in .agents/skills.
+          const layers = [...new Set(packages.map((n) => FEATURE_LAYERS[n]).filter(Boolean))]
+          for (const path of await writeLayerSkills(cwd, layers as string[], pm))
+            console.log(`  Created ${path}`)
         }
       }
 

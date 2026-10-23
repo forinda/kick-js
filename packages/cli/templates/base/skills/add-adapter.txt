@@ -1,0 +1,56 @@
+---
+name: kickjs-add-adapter
+description: Use when wiring a single-concern lifecycle integration (Swagger, DevTools, Sentry, Redis client).
+---
+
+**Steps**:
+1. `kick g adapter <name>` to scaffold the boilerplate, OR install via `kick add <package>` for first-party adapters.
+2. The generated file uses `defineAdapter()` — never `class implements AppAdapter`.
+3. Add the adapter instance (note the parens) to `src/adapters/index.ts` — don't inline in `src/index.ts`.
+4. Pick the right hook and middleware phase deliberately.
+5. Verify with `kick dev` that the adapter's lifecycle logs fire.
+
+**Canonical shape** — factory closure owns instance state:
+
+```ts
+export const RedisAdapter = defineAdapter<RedisConfig>({
+  name: 'RedisAdapter',
+  defaults: { url: 'redis://localhost' },
+  build: (config) => {
+    const client = createClient(config.url)
+    return {
+      beforeStart: ({ container }) => {
+        container.registerInstance(REDIS_CLIENT, client)
+      },
+      afterStart: () => client.connect(),
+      shutdown: () => client.quit(),
+    }
+  },
+})
+
+// In src/adapters/index.ts:
+export const adapters = [RedisAdapter({ url: getEnv('REDIS_URL') })] // <-- note parens
+```
+
+**Lifecycle hook decision tree**:
+- `beforeMount` — register early routes that should bypass middleware (health, docs UI).
+- `beforeStart` — DI ready, server not listening yet. **Use this for `container.registerInstance(...)` calls** so they work under `createTestApp` too.
+- `afterStart` — server has `ctx.server` available. Only use for things that need a listening server (Socket.IO upgrades, port logging). **Doesn't fire under `createTestApp`.**
+- `shutdown` — runs concurrently via `Promise.allSettled`, so one failure doesn't block siblings (but errors are swallowed — log inside).
+
+**Middleware phases** (see `MiddlewarePhase` JSDoc):
+`beforeGlobal` | `afterGlobal` (default) | `beforeRoutes` | `afterRoutes` (fires only on fall-through — matched routes that respond skip it).
+
+**Multi-instance** — `.scoped('cache', { url: ... })` makes `name` become `RedisAdapter:cache`. **Deferred config** — `.async({ inject, useFactory })` for config that depends on DI-resolved services.
+
+**Red flags**:
+- `bootstrap({ adapters: [MyAdapter] })` — passed the factory, not the instance. Call it: `MyAdapter()`.
+- Inlining the adapter list directly in `src/index.ts` — entry file should stay thin.
+- Returning a plain object instead of going through `defineAdapter()` — type inference for `config` will be wrong.
+- Using `.async()` for an adapter that returns `middleware()` / `contributors()` / `beforeMount()` / `onRouteMount()` — those hooks have already run by the time `.async()` resolves and are silently skipped.
+- Cross-adapter ordering via array position when it's load-bearing — use `dependsOn: ['OtelAdapter']`; cycles throw `MountCycleError` at boot.
+- Using an adapter when the integration ships **modules + DI bindings + middleware** together → that's a plugin. Promote to `definePlugin()` (see `add-plugin` skill).
+
+**Nuances**:
+- `AdapterContext.server` is `undefined` outside `afterStart`.
+- `shutdown` errors are swallowed by `Promise.allSettled` — wrap in try/catch and log if you care.

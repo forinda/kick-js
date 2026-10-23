@@ -1,0 +1,3 @@
+@layout('layouts/main')
+<h1>Hello from {{ title }}</h1>
+<p>Edit src/views/home.kick, then render it from a controller: ctx.render('home', { title }).</p>

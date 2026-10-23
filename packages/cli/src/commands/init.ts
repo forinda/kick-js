@@ -15,6 +15,7 @@ const OPTIONAL_PACKAGES = [
   { value: 'queue', label: 'Queue', hint: 'BullMQ/RabbitMQ/Kafka' },
   { value: 'devtools', label: 'DevTools', hint: 'debug dashboard' },
   { value: 'storage', label: 'Storage', hint: 'disk, S3 / R2 / MinIO' },
+  { value: 'views', label: 'Views', hint: 'server-rendered .kick templates' },
 ] as const
 
 export function registerInitCommand(program: Command): void {

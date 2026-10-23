@@ -1,0 +1,73 @@
+---
+name: kickjs-route-flags
+description: Use when a fact about a route (public, CSRF-exempt, unmetered, expose as a tool) has to be read by auth, CSRF, rate limiting, OpenAPI or MCP — instead of repeating it as paths in each consumer.
+---
+
+A route flag is a named, inheritable fact about a route. It carries no
+behaviour: it records something every consumer can read, so "this endpoint is
+open" is declared once instead of restated as an auth contributor, a
+`csrf ignorePaths` entry and a `rateLimit skipPaths` entry — two of which are
+pathname strings that cannot express `/users/:id`.
+
+**Steps**:
+1. Declare it once, in its own module:
+   ```ts
+   import { defineRouteFlag } from '@forinda/kickjs'
+
+   export const Public = defineRouteFlag('auth.public')
+   export const Limit = defineRouteFlag<{ rpm: number }>('rate.limit')
+   ```
+2. Apply it. A class flag is inherited by every route under it; `.off` on a
+   method removes it:
+   ```ts
+   @Public // every route below inherits it
+   @Controller()
+   export class WebhooksController {
+     @Get('/health')
+     health(ctx: RequestContext) {} // public
+
+     @Public.off // the method wins
+     @Post('/admin')
+     admin(ctx: RequestContext) {} // not public
+
+     @Limit({ rpm: 10 }) // flags can carry a value
+     @Post('/login')
+     login(ctx: RequestContext) {}
+   }
+   ```
+3. Read it from the consumer that already exists, rather than a new one.
+   **Where a consumer is mounted decides how it reads flags** — everything
+   after route matching gets `ctx.route`; anything before it does not:
+
+   | Consumer | Mounted at | Reads flags by |
+   | --- | --- | --- |
+   | Handler | the route itself | `ctx.route?.flags.has('auth.public')` |
+   | Guard / `@Middleware()` | `@Middleware(fn)` on a method or controller class | `ctx.route`, or the built-ins' `exemptWhen` |
+   | `csrfGuard()` / `rateLimitGuard()` | same — `@Middleware()`, class or method | `exemptWhen: 'csrf.exempt'` |
+   | Contributor | method > class > module `contributors()` > adapter `contributors()` > `bootstrap({ contributors })` | `skipWhen` / `onlyWhen` on the registration |
+   | Global middleware (`rateLimit()`) | `bootstrap({ middlewares: [...] })` — runs **before** matching | the route policy table (`bindRoutePolicy`); `ctx.route` is `undefined` here |
+   | Adapter middleware | `AppAdapter.middleware()`, phase `beforeGlobal` … `afterRoutes` | the policy table — the handler is Express-style `(req, res, next)`, so there is no `ctx` in any phase |
+   | OpenAPI | `SwaggerAdapter({ publicFlag: 'auth.public' })` | read once at startup, not per request |
+   | MCP / AI tools | `McpAdapter({ exposeWhen: 'mcp.tool', hideWhen: 'mcp.hidden' })` | read once at startup |
+
+   The contributor row is the one that buys the most: those five levels mean a
+   plugin's contributor can be skipped on one route (`skipWhen`) without
+   forking it, and a method-level registration beats the adapter's.
+
+4. Run `kick typegen`. It writes the `KickRouteFlags` augmentation, so flag
+   names autocomplete and a typo fails `tsc` instead of silently never matching.
+
+**Red flags**:
+- Writing `@Public(false)` to remove a flag — removal is `@Public.off`. A
+  resolved flag is present or absent; `false` is a legitimate *value* for a
+  flag declared `boolean`, and a presence check would still answer `true`.
+- A new consumer growing its own `skipPaths` / `ignorePaths` list — that is
+  the duplication flags exist to remove, and path strings break on params and
+  on any `apiPrefix` change.
+- `@Public.off` on a route that never inherited the flag — a no-op, and
+  usually a sign the expected class-level flag is not there.
+- Reading `ctx.route` in global middleware — it is `undefined` before a route
+  is matched (steps 1-6 of the pipeline). Move the check into a guard mounted
+  with `@Middleware()`, or read the policy table.
+- Inventing a flag name per consumer (`auth.open`, `public`, `isPublic`). The
+  framework names none of them; pick one name per fact and reuse it.

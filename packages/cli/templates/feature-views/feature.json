@@ -1,0 +1,21 @@
+{
+  "dependencies": ["@forinda/kickjs-view"],
+  "integrations": [
+    {
+      "import": {
+        "from": "./adapters/views",
+        "names": ["viewsAdapter"]
+      },
+      "slot": "adapter",
+      "code": "// .kick templates in src/views: ctx.render('home').\nviewsAdapter()"
+    },
+    {
+      "import": {
+        "from": "@forinda/kickjs-view/cli",
+        "names": ["viewCliPlugin"]
+      },
+      "slot": "config-plugin",
+      "code": "// kick check:views and kick fmt:views\nviewCliPlugin"
+    }
+  ]
+}

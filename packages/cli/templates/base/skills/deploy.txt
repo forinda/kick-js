@@ -1,0 +1,99 @@
+---
+name: kickjs-deploy
+description: Use when deploying this app — a Node host or Docker, Netlify, Vercel or Cloudflare Workers — or when an API route returns the SPA shell, the platform build fails, or the function is missing from a deploy.
+---
+
+Deploy files are added on demand: `kick g deploy docker` writes a
+`Dockerfile` and `.dockerignore`; `kick g deploy netlify vercel` writes
+`netlify.toml` / `vercel.json`, `src/serverless.ts` and the
+`build:netlify` / `build:vercel` scripts.
+
+**A Node host or a container** runs the long-running server. Without Docker:
+
+```bash
+{{pm}} run build && NODE_ENV=production node dist/index.js
+```
+
+Start it with `node`, not `kick start`: the CLI is a dev dependency, gone
+after a production install. The image installs from the lockfile, so commit it.
+
+**Netlify and Vercel** run the app as a Node function; the CLI builds both:
+
+```bash
+{{pm}} run build:netlify   # → .netlify/v1/functions/api.mjs
+{{pm}} run build:vercel    # → .vercel/output (Build Output API v3)
+```
+
+Both bundle `src/serverless.ts`:
+`createHandler(() => import('./index'))` serves the app `src/index.ts`
+describes — its `bootstrap()` call builds the app without listening — so
+there is one set of options. Add middleware and adapters to `src/index.ts`
+as usual.
+
+Settings are detected from the layout: a workspace member beside a `web`
+package publishes `web/dist` and routes `/api/*`; an Inertia app publishes
+`dist/client`, packages the asset manifest and SSR bundle with the function,
+and lets it take every other path; a standalone API takes every path.
+Override in `kick.config.ts`:
+
+```ts
+export default defineConfig({
+  deploy: { apiPath: '/api', staticDir: '../web/dist', include: ['data/geo.json'] },
+})
+```
+
+`include` lists files the app reads at runtime; they are packaged with the
+function. Memory does not survive between function instances: keep sessions in
+`session({ store: 'cookie' })` or a shared store, and data in a database.
+
+**Cloudflare Workers** is a different entry, not a third flag on this one.
+Workers have no `node:http`, so `createHandler` cannot run there; use the
+web entry over h3 v2:
+
+```ts
+// src/worker.ts
+import 'reflect-metadata'
+import { createFetchHandler } from '@forinda/kickjs/web'
+import * as h3 from 'h3' // v2 — passed in, edge bundlers have no createRequire
+import { modules } from './modules'
+
+export default createFetchHandler((env) => ({ h3, modules, env }))
+```
+
+Two things make or break that deploy:
+
+1. **Pre-bundle it yourself.** Point `wrangler.jsonc`'s `main` at a bundle
+   built with SWC (the same Vite + `unplugin-swc` setup as the other
+   targets), never at `src/worker.ts`. Wrangler's own esbuild compiles
+   decorators as ES decorators and emits no decorator metadata, so DI fails
+   at startup with a `getOwnMetadata` TypeError before any request lands.
+2. **`compatibility_flags = ["nodejs_compat"]`** — request-scoped DI and
+   `ctx.set` / `ctx.get` ride on `AsyncLocalStorage`.
+3. **Do not `import './config'` here.** It is required in `src/index.ts` and
+   `src/serverless.ts`, and wrong in a Worker twice over: the config module
+   reaches for `node:fs` / `createRequire`, which kills the Worker at
+   startup, and `loadEnvFromSchema` parses `process.env`, which Workers do
+   not have. The `env` binding threaded through `createFetchHandler` is what
+   feeds `ConfigService.get()` and `@Value()` instead — so values arrive as
+   the raw strings the platform holds, without the schema's coercion or
+   defaults. Coerce where you read them.
+
+Not available on Workers: views, SPA/static serving, `@Asset`, adapters and
+plugins. Serve static files from Workers Assets or a separate deploy.
+
+**Red flags**:
+- An `/api/*` route returning `index.html` on Netlify — the function is not
+  routed. Check the deploy summary says a function was deployed, keep
+  `preferStatic` out of a fullstack function's config, and leave Netlify's
+  **Package directory** unset so it reads the function at the repo root.
+- Validation errors or flash messages that vanish on Netlify / Vercel — the
+  session lives in one instance's memory. Use `session({ store: 'cookie' })`.
+- Committing `.netlify/` or `.vercel/` — both are build output.
+- A frontend that builds somewhere other than `web/dist` and only one of
+  `deploy.staticDir`, `SpaAdapter({ clientDir })` and netlify.toml's
+  `publish` updated. All three name that directory.
+- Pointing a platform at `src/index.ts` — it calls `bootstrap()`, which
+  listens on a port and registers signal handlers inside the function. The
+  platform entry is `src/serverless.ts`.
+- Expecting `kick build` alone to produce a deployable function; it builds
+  the server. Run the target command after it.

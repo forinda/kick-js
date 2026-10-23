@@ -1,0 +1,68 @@
+---
+name: kickjs-views-forms
+description: Use when building an HTML form with .kick views — validation errors back on the form, refilled values, flash messages, browser-side checks (validate="…"), CSRF for form posts — or when a form post arrives with an empty body.
+---
+
+**Wiring** (once):
+
+```ts
+import express from 'express'
+import { bootstrap, csrf, formErrorHandler, getEnv, session } from '@forinda/kickjs'
+import { KickView } from '@forinda/kickjs-view'
+import { views } from './views'
+
+export const app = await bootstrap({
+  modules,
+  middlewares: [
+    // Express only: listing middlewares replaces the default body parsers —
+    // forms post urlencoded, and keep JSON for any JSON routes.
+    express.urlencoded({ extended: false }),
+    express.json(),
+    session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' }),
+    csrf(),
+  ],
+  adapters: [KickView({ views })],
+  onError: formErrorHandler(),
+})
+```
+
+Without `express.urlencoded` on Express, `ctx.body` is empty for form posts; without `express.json()`, for JSON. When the app already lists `middlewares`, add these to its list rather than replacing it. Fastify and h3 parse bodies themselves.
+
+**The round trip**
+
+```ts
+@Post('/tasks', { body: taskSchema })
+async create(ctx: RequestContext) {
+  await this.tasks.create(ctx.body)
+  flash(ctx, { success: 'Task added' })
+  ctx.redirect('/tasks', 303)
+}
+```
+
+A failed `body` schema on a browser form post: `formErrorHandler()` stores the errors and the submitted values in the session and redirects (303) back to the page the form was on. API and `fetch()` calls get the usual 422.
+
+```kick
+<form method="post" action="/tasks">
+  <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+  <input name="title" validate="required | maxLength:200">
+  @error('title') {
+    {{ $message }}
+  }
+  <button>Add</button>
+</form>
+```
+
+- Every template has `$errors` (field → first message, `form` for the whole body), `$old` and `$flash` — for the next page only.
+- Named inputs refill from `$old` by themselves; passwords, hidden fields and secret-looking names never do.
+- A check the schema can't do (email already taken): re-render with `ctx.render('tasks/new', { $errors: { email: '…' }, $old: ctx.body })`.
+- Flash messages: `@for ([kind, message] of $flash | entries; track kind) { … }` in the layout.
+
+**CSRF.** `csrf()` takes the token from the `_csrf` form field when there's no `x-csrf-token` header. Give pages the token with `createViews({ share: (ctx) => ({ csrfToken: csrfToken(ctx) }) })` (`csrfToken` from `@forinda/kickjs`).
+
+**Checking in the browser**
+
+- `validate="required | email | minLength:3"` on a named field: built-ins `required`, `email`, `url`, `minLength:n`, `maxLength:n`, `min:n`, `max:n`, `pattern:'re'`, `in:'a, b'`. Messages land in the field's `@error` spot. Only pages with such a field get the small validator script.
+- Rich rules: a component with a `<script client>` can import the route's own schema (`import { taskSchema } from '@/modules/tasks/tasks.schemas'`) and run `safeParse` on blur and submit — one set of rules for server and browser. Keep the schema file free of server imports.
+- The browser checks are for quick feedback. The route's schema still decides.
+
+Full guide: https://kickjs.app/guide/views#forms.
