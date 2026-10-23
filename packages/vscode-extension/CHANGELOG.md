@@ -1,6 +1,6 @@
 # kickjs-devtools
 
-## Unreleased
+## 5.6.0
 
 - `.kick` templates: `@error('field')` is highlighted and completed, with `$message` inside it; `$errors`, `$old` and `$flash` complete everywhere.
 
