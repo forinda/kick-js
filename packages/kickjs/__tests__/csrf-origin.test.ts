@@ -63,6 +63,8 @@ describe('isAllowedOrigin', () => {
   })
 })
 
+const TOK = 'ab'.repeat(32)
+
 describe('csrf() origin check', () => {
   const run = (headers: Record<string, string>, options = {}) => {
     let status = 0
@@ -77,7 +79,7 @@ describe('csrf() origin check', () => {
       {
         method: 'POST',
         url: '/x',
-        headers: { cookie: '_csrf=tok', 'x-csrf-token': 'tok', ...headers },
+        headers: { cookie: `_csrf=${TOK}`, 'x-csrf-token': TOK, ...headers },
       } as never,
       res as never,
       (() => (nexted = true)) as never,
@@ -140,6 +142,19 @@ describe('csrf() form field', () => {
       .type('form')
       .send('_csrf=nope')
     expect(bad.status).toBe(403)
+  })
+})
+
+describe('csrf() cookie it did not issue', () => {
+  it('replaces a cookie that is not one of its tokens, so pages never get it', async () => {
+    const app = express()
+    app.use(csrf())
+    app.get('/form', (req, res) => {
+      res.send(String(csrfToken({ req })))
+    })
+    const page = await request(app).get('/form').set('cookie', '_csrf="><script>x</script>')
+    expect(page.text).toMatch(/^[0-9a-f]{64}$/)
+    expect(String(page.headers['set-cookie'])).toContain(`_csrf=${page.text}`)
   })
 })
 

@@ -138,6 +138,15 @@ export function csrfToken(ctx: { req: unknown } | undefined): string | undefined
   return (ctx?.req as { [TOKEN]?: string } | undefined)?.[TOKEN]
 }
 
+/**
+ * A cookie value shaped like a token this middleware issues. Anything else
+ * (set by a sibling subdomain, or by hand) is replaced, so {@link csrfToken}
+ * only ever hands a page hex.
+ */
+function isOwnToken(value: string | undefined, bytes: number): value is string {
+  return value !== undefined && value.length === bytes * 2 && /^[0-9a-f]+$/.test(value)
+}
+
 /** The token a mutating request sent: the header, else the form field. */
 function sentToken(headers: HeaderBag, body: unknown, header: string, field: string) {
   const fromHeader = headers[header]
@@ -206,7 +215,7 @@ export function csrf(options: CsrfOptions = {}) {
     const cookies = readCookies(req)
     let token = cookies[cookieName]
 
-    if (!token) {
+    if (!isOwnToken(token, tokenLength)) {
       token = randomHex(tokenLength)
       setCookie(res, cookieName, token, cookieOpts)
     }
@@ -315,7 +324,7 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
     const cookies = readCookies(ctx.req)
     let token = cookies[cookieName]
 
-    if (!token) {
+    if (!isOwnToken(token, tokenLength)) {
       token = randomHex(tokenLength)
       setCookie(ctx.res, cookieName, token, cookieOpts)
     }
