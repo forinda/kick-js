@@ -14,8 +14,10 @@ import { views } from './views'
 export const app = await bootstrap({
   modules,
   middlewares: [
-    // Express only: listing middlewares replaces the default body parsers.
+    // Express only: listing middlewares replaces the default body parsers —
+    // forms post urlencoded, and keep JSON for any JSON routes.
     express.urlencoded({ extended: false }),
+    express.json(),
     session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' }),
     csrf(),
   ],
@@ -24,7 +26,7 @@ export const app = await bootstrap({
 })
 ```
 
-Without `express.urlencoded` on Express, `ctx.body` is empty. Fastify and h3 parse forms themselves.
+Without `express.urlencoded` on Express, `ctx.body` is empty for form posts; without `express.json()`, for JSON. When the app already lists `middlewares`, add these to its list rather than replacing it. Fastify and h3 parse bodies themselves.
 
 **The round trip**
 

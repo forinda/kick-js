@@ -14,7 +14,7 @@ import { createViews } from '@forinda/kickjs-view'
 export const views = createViews({ ...kickViews, layout: 'layouts/main' })
 ```
 
-and `adapters: [KickView({ views })]` in `bootstrap()`. `virtual:kick-views` comes from `kickjsVitePlugin()`: `kick build` checks every template and ships them; `kick dev` reads `src/views` on each request.
+and `adapters: [KickView({ views })]` in `bootstrap()`. For `kick check:views` / `kick fmt:views`, register the CLI plugin in `kick.config.ts`: `import { viewCliPlugin } from '@forinda/kickjs-view/cli'` and `plugins: [viewCliPlugin]` (`kick add views` prints this line; `kick new --packages views` writes it). `virtual:kick-views` comes from `kickjsVitePlugin()`: `kick build` checks every template and ships them; `kick dev` reads `src/views` on each request.
 
 **Where things go**
 

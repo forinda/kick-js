@@ -172,6 +172,8 @@ describe('the views skills', () => {
     expect(body).toContain('[class.')
     expect(body).toContain('<script client>')
     expect(body).toContain('kick dev or a kick build')
+    // check:views / fmt:views exist only once the plugin is registered.
+    expect(body).toContain('plugins: [viewCliPlugin]')
   })
 
   it('kickjs-views-forms: the form round trip and its traps', () => {
@@ -179,6 +181,8 @@ describe('the views skills', () => {
     expect(body).toMatch(/^---\nname:\s+kickjs-views-forms\n/)
     expect(body).toContain('formErrorHandler()')
     expect(body).toContain('express.urlencoded')
+    // Listing middlewares drops the default JSON parser too: keep it for JSON routes.
+    expect(body).toContain('express.json()')
     expect(body).toContain("@error('")
     expect(body).toContain('validate="')
     expect(body).toContain('csrfToken(ctx)')
