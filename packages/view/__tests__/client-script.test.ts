@@ -68,25 +68,64 @@ describe('<script client>', () => {
         'components/a-b',
       ),
     ).toContain("<script client> can't use {{ }} — pass data through attributes")
-    expect(
-      errors(
-        {
-          'components/a-b': "<div></div><script client>export {\n  a,\n  b\n} from './x'</script>",
-        },
-        'components/a-b',
-      ),
-    ).toContain("client scripts can't import yet — keep the script self-contained")
+  })
+})
+
+describe('imports', () => {
+  it('the checker allows imports', () => {
     for (const code of [
       "import { x } from './x'",
       "const m = await import('./m')",
-      "export { y } from './y'",
+      "export {\n  a,\n  b\n} from './x'",
     ])
       expect(
         errors(
           { 'components/a-b': `<div></div><script client>${code}</script>` },
           'components/a-b',
         ),
-      ).toContain("client scripts can't import yet — keep the script self-contained")
+      ).toEqual([])
+  })
+
+  it('serves bundled entries and chunks', async () => {
+    const files = { 'components/flash-toast': TOAST, page: '<flash-toast />' }
+    const p = project(files)
+    const v = createViews({
+      bundle: {
+        v: 1,
+        templates: {
+          'components/flash-toast': check('components/flash-toast', p).template!,
+          page: check('page', p).template!,
+        },
+        client: {
+          entries: { 'flash-toast': 'flash-toast.AbC_12-x.js' },
+          files: {
+            'flash-toast.AbC_12-x.js': "import './shared.Zz9_8-yq.js'",
+            'shared.Zz9_8-yq.js': 'export {}',
+          },
+        },
+      },
+      warn: vi.fn(),
+    })
+    expect(await v.render('page')).toContain('src="/_kick/c/flash-toast.AbC_12-x.js"')
+    expect(await v.clientScript('flash-toast.AbC_12-x.js')).toBe("import './shared.Zz9_8-yq.js'")
+    expect(await v.clientScript('shared.Zz9_8-yq.js')).toBe('export {}')
+    for (const bad of ['../x.js', 'a/b.js', 'x.js', 'shared.Zz9_8-yq.js.map'])
+      expect(await v.clientScript(bad)).toBeUndefined()
+  })
+
+  it('imports need a bundler', async () => {
+    const files = {
+      'components/flash-toast':
+        "<kick-toast></kick-toast>\n<script client>\nimport { a } from './a'\n</script>",
+      page: '<flash-toast />',
+    }
+    await expect(
+      createViews({ viewsDir: dir(files), warn: vi.fn() }).render('page'),
+    ).rejects.toThrow('client scripts that import need kick dev or a kick build')
+    // kick dev (bundle: null): the Vite plugin serves it.
+    expect(
+      await createViews({ viewsDir: dir(files), bundle: null, warn: vi.fn() }).render('page'),
+    ).toContain('/_kick/c/flash-toast.')
   })
 })
 

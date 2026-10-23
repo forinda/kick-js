@@ -772,10 +772,6 @@ class Checker {
 }
 
 /** Top-level elements, or -1 per other non-whitespace output (text, blocks). */
-/** `import … from`, `export … from` or `import(`: a client script needs bundling for those. */
-const IMPORTS =
-  /(^|[\n;])\s*import[\s{*'"]|\bimport\s*\(|(^|[\n;])\s*export\s*(\*(\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"]/
-
 function isClientScript(n: Node): boolean {
   return (
     n.k === 'element' &&
@@ -868,12 +864,6 @@ export function check(name: string, project: Project): CheckResult {
       continue
     }
     const code = n.children.map((ch) => (ch.k === 'text' ? ch.value : '')).join('')
-    if (IMPORTS.test(code)) {
-      c.diagnostics.push(
-        error(ast.file, n.span, "client scripts can't import yet — keep the script self-contained"),
-      )
-      continue
-    }
     // Served as `<tag>.<hash>.js`: the tag has to be a plain file name.
     const tag = componentTag(name, project.componentsDir)
     if (tag === 'kick-validate') {

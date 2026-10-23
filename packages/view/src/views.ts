@@ -7,7 +7,7 @@ import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './as
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import { componentTag, layoutResolver, templateName, type Project } from './check/project'
-import { CLIENT_SCRIPT_FILE, NO_STRIPPER, fnv1a, injectScripts } from './client-scripts'
+import { CLIENT_SCRIPT_FILE, IMPORTS, NO_STRIPPER, fnv1a, injectScripts } from './client-scripts'
 import { VALIDATE_RUNTIME } from './validate-runtime'
 
 /** The validator script's served name; component tags can't take it. */
@@ -30,6 +30,8 @@ export interface Loader {
 export interface ViewsBundle {
   v: number
   templates: Record<string, CheckedTemplate>
+  /** Client scripts bundled by the build: each component's entry file, and every file (entries and shared chunks). */
+  client?: { entries: Record<string, string>; files: Record<string, string> }
 }
 
 export interface RenderOptions {
@@ -159,6 +161,9 @@ export function createViews(options: ViewsOptions = {}): Views {
   const scripts = new Map<string, { code: string; js: Promise<{ js: string; hash: string }> }>()
   const scriptFor = (t: CheckedTemplate) => {
     const client = t.client!
+    // Without a bundler (no build, not kick dev) imports can't be resolved.
+    if (options.bundle === undefined && IMPORTS.test(client.code))
+      return Promise.reject(new Error('client scripts that import need kick dev or a kick build'))
     const hit = scripts.get(t.name)
     if (hit?.code === client.code) return hit.js
     const js = Promise.resolve(client.js ? client.code : stripTypes(client.code)).then((code) => ({
@@ -323,8 +328,10 @@ export function createViews(options: ViewsOptions = {}): Views {
       const nonceAttr = typeof nonce === 'string' ? ` nonce="${nonce.replace(/"/g, '&quot;')}"` : ''
       const tags = await Promise.all(
         [...used.values()].map(async (t) => {
-          const { hash } = await scriptFor(t)
-          const file = `${componentTag(t.name, componentsDir)}.${hash}.js`
+          const tag = componentTag(t.name, componentsDir)
+          // Bundled by the build: its entry, which imports its chunks.
+          const entry = bundle?.client?.entries[tag]
+          const file = entry ?? `${tag}.${(await scriptFor(t)).hash}.js`
           return `<script type="module" src="${scriptPath}/${file}"${nonceAttr}></script>`
         }),
       )
@@ -339,6 +346,8 @@ export function createViews(options: ViewsOptions = {}): Views {
       const m = CLIENT_SCRIPT_FILE.exec(file)
       if (!m) return undefined
       if (m[1] === VALIDATE_TAG) return m[2] === VALIDATE_HASH ? VALIDATE_RUNTIME : undefined
+      const files = bundle?.client?.files
+      if (files) return Object.hasOwn(files, file) ? files[file] : undefined
       const names = bundle
         ? Object.keys(bundle.templates)
         : [...(await current()).project.templates.keys()]
