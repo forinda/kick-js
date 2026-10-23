@@ -435,6 +435,8 @@ Dates and numbers use `locale` (default `en-US`) and `timeZone` (default `UTC`, 
 
 - The name is `'Controller.method'`; the API prefix and version are included.
 - The arguments fill the route's `:params` in the order its path has them (`/users/:id/posts/:slug` takes `user.id`, then `post.slug`), encoded. A wrong count, or a name no route has, fails the render with the route's own message.
+- Order is what matters, not names: two arguments swapped give a wrong URL, not an error. Keep them in the path's order.
+- An argument is any expression: data, a literal, `a ?? b`. A conditional needs parentheses, as for any pipe argument: `kvRoute:org.slug:(draft ? 'drafts' : 'posts')`.
 - A query string goes after the pipe, written by hand.
 - It needs the request: inside `ctx.render`. For a page rendered elsewhere (an email, a job), build the URLs with [`ROUTE_URLS`](./controllers.md#linking-to-routes) and pass them in as data.
 
