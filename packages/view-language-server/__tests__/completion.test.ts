@@ -8,6 +8,7 @@ const FILES = {
   'src/views/components/user-card.kick':
     '@input user\n@input compact = false\n<div>{{ user.name }}</div>',
   'src/views/pipes.ts': 'export const initials = (name: string) => name[0]',
+  'src/views/validators.ts': "export const phone = (v: string) => (v ? undefined : 'x')",
 }
 
 async function at(marked: string) {
@@ -36,6 +37,14 @@ describe('completions', () => {
       insertText: 'if (${1:condition}) {\n\t$0\n}',
       insertTextFormat: 2,
     })
+  })
+  it('validators: built-ins and the app, inside validate', async () => {
+    expect(await labels('<input name="p" validate="req|§">')).toEqual(
+      expect.arrayContaining(['required', 'email', 'phone']),
+    )
+    expect(await labels('<input name="p" validate="§')).toContain('phone')
+    // An argument isn't a validator name.
+    expect(await labels('<input name="p" validate="minLength:§')).toEqual([])
   })
   it('pipes: built-ins and the app', async () => {
     expect(await labels('{{ a | §')).toEqual(

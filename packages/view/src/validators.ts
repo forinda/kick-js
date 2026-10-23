@@ -25,6 +25,9 @@ export const VALIDATORS: Record<string, { args: Arg[]; message: string }> = {
   in: { args: ['string'], message: 'Choose one of: {0}' },
 }
 
+/** The built-in validator names, for editors. */
+export const BUILTIN_VALIDATORS = Object.keys(VALIDATORS)
+
 export type Rule = [string, ...Array<string | number>]
 
 /** The validators `validators.ts` exports, refusing the built-in names. */

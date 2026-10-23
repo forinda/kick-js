@@ -21,6 +21,8 @@ export interface WorkspaceOptions {
   componentsDir: string
   /** Absolute. */
   pipesFile: string
+  /** Absolute. The app's browser validators. Default `<viewsDir>/validators.ts`. */
+  validatorsFile?: string
   view: ViewModule
   read(path: string): Promise<string | undefined>
   /** Every `.kick` file (absolute paths) under `dir`. */
@@ -48,6 +50,7 @@ export class Workspace {
   private readonly cache = new Map<string, Diagnostic[]>()
   private pipes: string[] = []
   private pipeDecls = new Map<string, PipeDeclaration>()
+  private validators: string[] = []
 
   constructor(private readonly opts: WorkspaceOptions) {}
 
@@ -57,6 +60,7 @@ export class Workspace {
 
   async load(): Promise<void> {
     await this.loadPipes()
+    await this.loadValidators()
     for (const path of await this.opts.list(this.opts.viewsDir)) {
       const name = this.nameOfPath(path)
       if (name) this.update(name, { disk: await this.opts.read(path) })
@@ -131,6 +135,11 @@ export class Workspace {
       this.cache.clear()
       return
     }
+    if (path === this.validatorsFile()) {
+      await this.loadValidators()
+      this.cache.clear()
+      return
+    }
     const name = this.nameOfPath(path)
     if (name)
       this.update(name, {
@@ -146,12 +155,28 @@ export class Workspace {
       this.cache.clear()
       return
     }
+    if (path === this.validatorsFile()) {
+      this.validators = []
+      this.cache.clear()
+      return
+    }
     const name = this.nameOfPath(path)
     if (!name) return
     const buffer = this.entries.get(name)?.buffer
     // Still open in an editor: keep the buffer, but closing it now removes the template.
     if (buffer !== undefined) this.update(name, { buffer })
     else this.remove(name)
+  }
+
+  private validatorsFile(): string {
+    return this.opts.validatorsFile ?? `${this.opts.viewsDir}/validators.ts`
+  }
+
+  /** An older view package without custom validators: none, and no crash. */
+  private async loadValidators(): Promise<void> {
+    const read = (this.opts.view as Partial<ViewModule>).readValidatorExports
+    const source = read && (await this.opts.read(this.validatorsFile()))
+    this.validators = source === undefined || !read ? [] : read(source, this.validatorsFile()).names
   }
 
   private async loadPipes(): Promise<void> {
@@ -244,10 +269,19 @@ export class Workspace {
     return this.opts.pipesFile
   }
 
+  /** Validator names for completion: the built-ins and the app's. */
+  validatorNames(): string[] {
+    return [
+      ...((this.opts.view as Partial<ViewModule>).BUILTIN_VALIDATORS ?? []),
+      ...this.validators,
+    ]
+  }
+
   project(): View.Project {
     return {
       templates: new Map([...this.entries].map(([n, e]) => [n, e.ast])),
       pipes: new Set(this.pipeNames()),
+      validators: new Set(this.validators),
       componentsDir: this.opts.componentsDir,
       layouts: this.opts.layout,
       baseLayout: this.opts.baseLayout,

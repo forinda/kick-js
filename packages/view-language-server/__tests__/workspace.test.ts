@@ -132,6 +132,18 @@ describe('Workspace', () => {
     expect(ws.diagnosticsFor(uri('a')).map((d) => d.message)).toEqual(["unknown pipe 'initials'"])
   })
 
+  it('validator names from validators.ts', async () => {
+    const { ws, disk, uri } = workspace({
+      'src/views/a.kick': '<input name="p" validate="phone">',
+      'src/views/validators.ts': "export const phone = (v: string) => (v ? undefined : 'x')",
+    })
+    await ws.load()
+    expect(ws.diagnosticsFor(uri('a'))).toEqual([])
+    disk.delete(`${ROOT}/src/views/validators.ts`)
+    await ws.fileDeleted(`${ROOT}/src/views/validators.ts`)
+    expect(ws.diagnosticsFor(uri('a')).map((d) => d.message)).toEqual(["unknown validator 'phone'"])
+  })
+
   it('parse errors are diagnostics', async () => {
     const { ws, uri } = workspace({ 'src/views/a.kick': '<a href={{ x }}>' })
     await ws.load()
