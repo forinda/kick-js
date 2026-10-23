@@ -1,4 +1,4 @@
-import type { ColumnSnapshot, FkAction } from '../../snapshot/types'
+import { FK_ACTION_NAMES, type ColumnSnapshot, type FkAction } from '../../snapshot/types'
 
 /**
  * Runtime + type representation of a column reference (e.g. `users.id`).
@@ -218,6 +218,19 @@ export class ColumnBuilder<T = unknown> {
     target: () => ColumnRef,
     opts: { onDelete?: FkAction; onUpdate?: FkAction; name?: string } = {},
   ): this {
+    // Checked here, where it's written: the schema is loaded without a type
+    // check by `kick db generate`, and an unknown action reached the SQL as `undefined`.
+    for (const key of ['onDelete', 'onUpdate'] as const) {
+      const action = opts[key]
+      if (action !== undefined && !(FK_ACTION_NAMES as readonly string[]).includes(action))
+        throw new Error(
+          `references(): ${key} '${action}' isn't an action — use ${FK_ACTION_NAMES.map(
+            (a) => `'${a}'`,
+          )
+            .join(', ')
+            .replace(/, ([^,]*)$/, ' or $1')}`,
+        )
+    }
     // Store the thunk — do NOT invoke it here. Self-referencing tables
     // pass `() => self.id` whose binding does not exist yet.
     this.state.references = {

@@ -1,6 +1,14 @@
 export type Dialect = 'postgres' | 'sqlite' | 'mysql'
 
-export type FkAction = 'cascade' | 'restrict' | 'set_null' | 'set_default' | 'no_action'
+/** The foreign-key actions, in the snapshot's spelling. */
+export const FK_ACTION_NAMES = [
+  'cascade',
+  'restrict',
+  'set_null',
+  'set_default',
+  'no_action',
+] as const
+export type FkAction = (typeof FK_ACTION_NAMES)[number]
 
 export interface ColumnSnapshot {
   name: string
