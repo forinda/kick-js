@@ -418,19 +418,19 @@ kick-toast[kind='error'] {
 | `keys`, `entries`                     | `@for ([k, v] of obj \| entries) { … }`                                                                                                      |
 | `json`                                | `{{ data \| json }}`                                                                                                                         |
 | `url`                                 | `href="/search?q={{ term \| url }}"`                                                                                                         |
-| `kroute:param…`                       | `href="{{ 'UsersController.show' \| kroute:user.id }}"` — see [Links to routes](#links-to-routes)                                            |
+| `kvRoute:param…`                      | `href="{{ 'UsersController.show' \| kvRoute:user.id }}"` — see [Links to routes](#links-to-routes)                                           |
 | `raw`                                 | `{{ html \| raw }}`                                                                                                                          |
 
 Dates and numbers use `locale` (default `en-US`) and `timeZone` (default `UTC`, never the server's zone). Set them in `createViews`, per request through `share`, or per call: `ctx.render(name, data, { locale: 'sw-KE', timeZone: 'Africa/Nairobi' })`.
 
 ### Links to routes
 
-`kroute` turns a route's name into its URL, the way [`ctx.urlFor()`](./controllers.md#linking-to-routes) does in a controller, so a moved route can't leave a link pointing at the old path:
+`kvRoute` turns a route's name into its URL, the way [`ctx.urlFor()`](./controllers.md#linking-to-routes) does in a controller, so a moved route can't leave a link pointing at the old path:
 
 ```kick
-<a href="{{ 'UsersController.show' | kroute:user.id }}">{{ user.name }}</a>
-<form method="post" action="{{ 'PostsController.update' | kroute:user.id:post.slug }}"></form>
-<a href="{{ 'UsersController.list' | kroute }}?page=2">All users</a>
+<a href="{{ 'UsersController.show' | kvRoute:user.id }}">{{ user.name }}</a>
+<form method="post" action="{{ 'PostsController.update' | kvRoute:user.id:post.slug }}"></form>
+<a href="{{ 'UsersController.list' | kvRoute }}?page=2">All users</a>
 ```
 
 - The name is `'Controller.method'`; the API prefix and version are included.

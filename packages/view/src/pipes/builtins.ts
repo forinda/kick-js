@@ -19,13 +19,13 @@ export const BUILTIN_PIPES: readonly string[] = [
   'number',
   'currency',
   'percent',
-  'kroute',
+  'kvRoute',
 ]
 
 export interface PipeEnv {
   locale: string
   timeZone: string
-  /** The request's `ctx.urlFor` (params in path order), for `kroute`. Absent outside a request. */
+  /** The request's `ctx.urlFor` (params in path order), for `kvRoute`. Absent outside a request. */
   urlFor?: (name: string, params: Array<string | number>) => string
 }
 
@@ -82,12 +82,12 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
-    // `{{ 'Users.show' | kroute:user.id }}`: the route's URL, params in path order.
-    // `k`, for KickJS: `route` stays free for an app's own pipe.
-    kroute: (name, ...params) => {
+    // `{{ 'Users.show' | kvRoute:user.id }}`: the route's URL, params in path order.
+    // `kv`, for KickJS views: `route` stays free for an app's own pipe.
+    kvRoute: (name, ...params) => {
       if (!env.urlFor)
         throw new Error(
-          'kroute needs a request (ctx.render): outside one, pass the URLs in as data, built with ROUTE_URLS',
+          'kvRoute needs a request (ctx.render): outside one, pass the URLs in as data, built with ROUTE_URLS',
         )
       return env.urlFor(
         str(name),

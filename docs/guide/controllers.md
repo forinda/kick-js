@@ -321,7 +321,7 @@ ctx.urlFor('UsersController.show', { id: '42' }) // '/api/v1/users/42'
 ctx.urlFor('UsersController.list', {}, { page: 2, tag: ['a', 'b'] }) // '/api/v1/users?page=2&tag=a&tag=b'
 ```
 
-The params can also be a list, filled in the order the path has them — what the views' [`kroute` pipe](./views.md#links-to-routes) uses: `ctx.urlFor('PostsController.show', [user.id, post.slug])`. A wrong count throws, naming the params the route takes.
+The params can also be a list, filled in the order the path has them — what the views' [`kvRoute` pipe](./views.md#links-to-routes) uses: `ctx.urlFor('PostsController.show', [user.id, post.slug])`. A wrong count throws, naming the params the route takes.
 
 After `kick typegen`, names and params are typed: an unknown name or a missing param is a compile error (and, untyped, a thrown error).
 

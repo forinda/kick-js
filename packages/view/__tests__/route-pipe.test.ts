@@ -1,4 +1,4 @@
-/** `{{ 'Controller.method' | kroute:a:b }}`: the request's urlFor, params in path order. */
+/** `{{ 'Controller.method' | kvRoute:a:b }}`: the request's urlFor, params in path order. */
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,24 +18,24 @@ const ctx = {
     `/api/v1/${name}/${(params as Array<string | number>).map(encodeURIComponent).join('/')}`,
 }
 
-describe('the kroute pipe', () => {
+describe('the kvRoute pipe', () => {
   it('is a built-in pipe', () => {
-    expect(BUILTIN_PIPES).toContain('kroute')
+    expect(BUILTIN_PIPES).toContain('kvRoute')
   })
 
   it("fills a route's params from its arguments, in order", async () => {
-    const v = views(`<a href="{{ 'Posts.show' | kroute:user.id:post.slug }}">x</a>`)
+    const v = views(`<a href="{{ 'Posts.show' | kvRoute:user.id:post.slug }}">x</a>`)
     const html = await v.render('page', { user: { id: 7 }, post: { slug: 'a b' } }, { ctx })
     expect(html).toBe('<a href="/api/v1/Posts.show/7/a%20b">x</a>')
   })
 
   it('a route with no params takes none', async () => {
-    const v = views(`{{ 'Users.list' | kroute }}`)
+    const v = views(`{{ 'Users.list' | kvRoute }}`)
     expect(await v.render('page', {}, { ctx })).toBe('/api/v1/Users.list/')
   })
 
   it('outside a request it says how to link instead', async () => {
-    const v = views(`{{ 'Users.list' | kroute }}`)
-    await expect(v.render('page')).rejects.toThrow('kroute needs a request')
+    const v = views(`{{ 'Users.list' | kvRoute }}`)
+    await expect(v.render('page')).rejects.toThrow('kvRoute needs a request')
   })
 })
