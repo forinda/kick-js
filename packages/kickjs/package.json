@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs",
-  "version": "10.12.0",
+  "version": "10.13.0",
   "description": "Modern type-safe backend framework, powered by Vite. Built for developer experience, pluggable as you need — runs on Express, Fastify or h3.",
   "keywords": [
     "kickjs",

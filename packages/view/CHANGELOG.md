@@ -1,5 +1,17 @@
 # @forinda/kickjs-view
 
+## 0.4.0
+
+### Minor Changes
+
+- [#1052](https://github.com/forinda/kick-js/pull/1052) [`d2c3568`](https://github.com/forinda/kick-js/commit/d2c356828abb268dc520e57c16e9e8957a9ecfe0) Thanks [@forinda](https://github.com/forinda)! - Your own browser validators: each export of `src/views/validators.ts` is a validator usable in `validate="…"` beside the built-ins (`validate="required | phone"`, `validate="sameAs:'password'"`). A validator gets the value, the template's arguments and the form, and returns a message when the value fails. Names are checked like pipes, and an export named like a built-in is an error. The file ships as `kick-validators.<hash>.js` on pages with a `validate` field. New: `validatorsFile` option, `readValidatorExports`, `BUILTIN_VALIDATORS`, `kick check:views --validators`.
+
+- [#1054](https://github.com/forinda/kick-js/pull/1054) [`772b563`](https://github.com/forinda/kick-js/commit/772b56357a95f1044732ba871e4212893fe258ae) Thanks [@forinda](https://github.com/forinda)! - A built-in `kvRoute` pipe links templates to the app's routes by name: `href="{{ 'UsersController.show' | kvRoute:user.id }}"`. The arguments fill the route's params in path order, through the request's `ctx.urlFor`, so the API prefix and version are included. `kvQuery` adds query parameters as key/value pairs: `{{ 'UsersController.list' | kvRoute | kvQuery:'page':page }}`, skipping empty values. Outside a request `kvRoute` fails with a message saying to pass URLs as data. The `kv` prefix (KickJS views) keeps `route` free for an app's own pipe.
+
+### Patch Changes
+
+- [#1046](https://github.com/forinda/kick-js/pull/1046) [`f00cbf2`](https://github.com/forinda/kick-js/commit/f00cbf2a91d7fa1702aa310bc841c8c425070fda) Thanks [@forinda](https://github.com/forinda)! - `share`'s `ctx` is typed `ShareContext | undefined` (`req` and `get()`), instead of `unknown`, so `share: (ctx) => ({ user: ctx?.get('user'), csrfToken: csrfToken(ctx) })` type-checks without a cast.
+
 ## 0.3.0
 
 ### Minor Changes

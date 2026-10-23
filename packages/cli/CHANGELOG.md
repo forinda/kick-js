@@ -1,5 +1,24 @@
 # @forinda/kickjs-cli
 
+## 8.16.0
+
+### Minor Changes
+
+- [#1053](https://github.com/forinda/kick-js/pull/1053) [`639f9cc`](https://github.com/forinda/kick-js/commit/639f9cc912e3313013f67629e0b5f89988c5506b) Thanks [@forinda](https://github.com/forinda)! - `kick add views` (and `kick new --packages views`) sets an app up for `.kick` templates: it installs `@forinda/kickjs-view`, writes `src/views.ts`, `src/adapters/views.ts`, a layout and a `home` page, and adds `viewsAdapter()` to the entry file. `kick new` also registers `viewCliPlugin` in `kick.config.ts`; `kick add` prints that line.
+  
+  Agent skills now follow the app's features. `kick g agents` writes the general skills plus those of the features whose packages are in `package.json` (the views skills for an app using `@forinda/kickjs-view`). `kick add <feature>` writes that feature's skills when `.agents/skills/` exists, never over one already there. The general skills read the same as before.
+
+### Patch Changes
+
+- [#1051](https://github.com/forinda/kick-js/pull/1051) [`52cec91`](https://github.com/forinda/kick-js/commit/52cec917ea08b26827eb5ce925059b770f760a59) Thanks [@forinda](https://github.com/forinda)! - Two agent skills for `.kick` views: `kickjs-views` (setup, pages, layouts, components, pipes, shared data, client scripts, `kick check:views`) and `kickjs-views-forms` (the form round trip with `formErrorHandler()`, Express body parsers, `$errors` / `$old` / `$flash`, CSRF with `csrfToken(ctx)`, browser checks with `validate="…"` or the route's schema). They're written for apps that use `@forinda/kickjs-view` (`kick g agents`, `kick add views`); `AGENTS.md`'s task table and the docs-lookup skill point at them.
+
+- [#1047](https://github.com/forinda/kick-js/pull/1047) [`02def26`](https://github.com/forinda/kick-js/commit/02def269b96315f1b253346c2a1cedbdf725e7a0) Thanks [@forinda](https://github.com/forinda)! - `kick new` writes `.vscode/extensions.json`, so VS Code offers the KickJS extension (`.kick` language server and devtools) when the project opens. A fullstack workspace gets it at the root.
+
+- [#1045](https://github.com/forinda/kick-js/pull/1045) [`0582c23`](https://github.com/forinda/kick-js/commit/0582c2393b26fa02b8ce285f61059a42376d3f40) Thanks [@forinda](https://github.com/forinda)! - `kick build:netlify` and `kick build:vercel` take the aliases and `define` from the app's `vite.config.ts`, so code that relies on them builds the same as under `kick build`.
+- Updated dependencies [[`f00cbf2`](https://github.com/forinda/kick-js/commit/f00cbf2a91d7fa1702aa310bc841c8c425070fda), [`69bd6c1`](https://github.com/forinda/kick-js/commit/69bd6c1096d662627609b29d54f2700e168ba186), [`772b563`](https://github.com/forinda/kick-js/commit/772b56357a95f1044732ba871e4212893fe258ae)]:
+  - @forinda/kickjs@10.13.0
+  - @forinda/kickjs-db@8.11.2
+
 ## 8.15.0
 
 ### Minor Changes

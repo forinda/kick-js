@@ -1,5 +1,16 @@
 # @forinda/kickjs-view-language-server
 
+## 0.4.0
+
+### Minor Changes
+
+- [#1052](https://github.com/forinda/kick-js/pull/1052) [`d2c3568`](https://github.com/forinda/kick-js/commit/d2c356828abb268dc520e57c16e9e8957a9ecfe0) Thanks [@forinda](https://github.com/forinda)! - The app's validators from `validators.ts` count in diagnostics, and validator names, built-in and the app's, are completed inside `validate="…"`. The file is watched like `pipes.ts`; `validatorsFile` moves it.
+
+### Patch Changes
+
+- Updated dependencies [[`d2c3568`](https://github.com/forinda/kick-js/commit/d2c356828abb268dc520e57c16e9e8957a9ecfe0), [`772b563`](https://github.com/forinda/kick-js/commit/772b56357a95f1044732ba871e4212893fe258ae), [`f00cbf2`](https://github.com/forinda/kick-js/commit/f00cbf2a91d7fa1702aa310bc841c8c425070fda)]:
+  - @forinda/kickjs-view@0.4.0
+
 ## 0.3.1
 
 ### Patch Changes
