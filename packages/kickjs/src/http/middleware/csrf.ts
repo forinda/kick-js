@@ -149,8 +149,8 @@ function isOwnToken(value: string | undefined, bytes: number): value is string {
 
 /** The token a mutating request sent: the header, else the form field. */
 function sentToken(headers: HeaderBag, body: unknown, header: string, field: string) {
-  const fromHeader = headers[header]
-  if (typeof fromHeader === 'string') return fromHeader
+  // Any header, even sent as a list, is the answer: a form field never overrides it.
+  if (headers[header] !== undefined) return headerOf(headers, header)
   const fromBody =
     body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined
   return typeof fromBody === 'string' ? fromBody : undefined

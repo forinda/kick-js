@@ -145,6 +145,29 @@ describe('csrf() form field', () => {
   })
 })
 
+describe('csrf() header precedence', () => {
+  it('a header sent as a list still wins over the form field', () => {
+    let status = 0
+    const res = {
+      status: (code: number) => ((status = code), res),
+      json: () => {},
+      setHeader: () => {},
+      getHeader: () => undefined,
+    }
+    csrf()(
+      {
+        method: 'POST',
+        url: '/x',
+        headers: { cookie: `_csrf=${TOK}`, 'x-csrf-token': ['wrong'] },
+        body: { _csrf: TOK },
+      } as never,
+      res as never,
+      (() => {}) as never,
+    )
+    expect(status).toBe(403)
+  })
+})
+
 describe('csrf() cookie it did not issue', () => {
   it('replaces a cookie that is not one of its tokens, so pages never get it', async () => {
     const app = express()
