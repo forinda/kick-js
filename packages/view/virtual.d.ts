@@ -13,6 +13,12 @@ declare module 'virtual:kick-views' {
   import type { EnvPipe, Pipe, ViewsBundle } from '@forinda/kickjs-view'
   export const bundle: ViewsBundle | null
   export const pipes: Record<string, Pipe | EnvPipe>
-  const views: { bundle: ViewsBundle | null; pipes: Record<string, Pipe | EnvPipe> }
+  /** Where component scripts are served: the Vite plugin's `clientScriptPath`. */
+  export const clientScriptPath: string
+  const views: {
+    bundle: ViewsBundle | null
+    pipes: Record<string, Pipe | EnvPipe>
+    clientScriptPath: string
+  }
   export default views
 }

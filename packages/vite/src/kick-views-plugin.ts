@@ -44,6 +44,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let pipesFile = ''
   let build = true
   let checked: string | undefined
+  // Exported by the virtual module, so `createViews({ ...kickViews })` serves where this plugin does.
+  const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
   let root = ''
   // What the nested browser build takes from the app's config.
   let shared: ClientBuildConfig = {}
@@ -114,6 +116,11 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       [string, { client?: { code: string; js: boolean } }]
     >) {
       if (!t.client || t.client.js) continue
+      // Bundled: the views serve the bundle's files, not this source.
+      if (client) {
+        t.client = { code: '', js: true }
+        continue
+      }
       try {
         t.client = { code: await stripTs(t.client.code, `${name}.ts`), js: true }
       } catch (err) {
@@ -149,7 +156,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     // kick dev: component scripts through Vite's pipeline, so their imports
     // (relative, npm, aliases) resolve as they do in a build. Ahead of the app.
     configureServer(server) {
-      const prefix = `${(options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')}/`
+      const prefix = `${scriptPath}/`
       // An edited template's script is rebuilt on the next request.
       server.watcher.on('change', (file) => {
         const mod = server.moduleGraph.getModuleById(resolve(file) + CLIENT_SUFFIX)
@@ -209,8 +216,9 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       return [
         pipes,
         `const bundle = ${bundle};`,
-        'export { bundle, pipes }',
-        'export default { bundle, pipes }',
+        `const clientScriptPath = ${JSON.stringify(scriptPath)};`,
+        'export { bundle, pipes, clientScriptPath }',
+        'export default { bundle, pipes, clientScriptPath }',
       ].join('\n')
     },
   }

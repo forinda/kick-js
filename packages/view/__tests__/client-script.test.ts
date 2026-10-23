@@ -127,6 +127,39 @@ describe('imports', () => {
       await createViews({ viewsDir: dir(files), bundle: null, warn: vi.fn() }).render('page'),
     ).toContain('/_kick/c/flash-toast.')
   })
+
+  it("comments and strings that mention import aren't imports", async () => {
+    const code = [
+      '// import later',
+      '/*',
+      "import { b } from './b'",
+      '*/',
+      'const s: string = "import x from \'y\'"',
+      'const t = `',
+      "import('./c')`",
+      'console.log(s, t, import.meta.url)',
+    ].join('\n')
+    const v = createViews({
+      viewsDir: dir({
+        'components/flash-toast': `<kick-toast></kick-toast>\n<script client>\n${code}\n</script>`,
+        page: '<flash-toast />',
+      }),
+      warn: vi.fn(),
+    })
+    expect(await v.render('page')).toContain('/_kick/c/flash-toast.')
+  })
+
+  it('kick dev leaves type stripping to Vite', async () => {
+    const v = createViews({
+      viewsDir: dir({ 'components/flash-toast': TOAST, page: '<flash-toast />' }),
+      bundle: null,
+      stripTypes: () => {
+        throw new Error('no stripper')
+      },
+      warn: vi.fn(),
+    })
+    expect(await v.render('page')).toMatch(/\/_kick\/c\/flash-toast\.[0-9a-f]{8}\.js/)
+  })
 })
 
 function dir(files: Record<string, string>): string {

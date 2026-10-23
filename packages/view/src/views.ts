@@ -7,7 +7,7 @@ import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './as
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import { componentTag, layoutResolver, templateName, type Project } from './check/project'
-import { CLIENT_SCRIPT_FILE, IMPORTS, NO_STRIPPER, fnv1a, injectScripts } from './client-scripts'
+import { CLIENT_SCRIPT_FILE, NO_STRIPPER, fnv1a, hasImports, injectScripts } from './client-scripts'
 import { VALIDATE_RUNTIME } from './validate-runtime'
 
 /** The validator script's served name; component tags can't take it. */
@@ -162,11 +162,13 @@ export function createViews(options: ViewsOptions = {}): Views {
   const scriptFor = (t: CheckedTemplate) => {
     const client = t.client!
     // Without a bundler (no build, not kick dev) imports can't be resolved.
-    if (options.bundle === undefined && IMPORTS.test(client.code))
+    if (options.bundle === undefined && hasImports(client.code))
       return Promise.reject(new Error('client scripts that import need kick dev or a kick build'))
     const hit = scripts.get(t.name)
     if (hit?.code === client.code) return hit.js
-    const js = Promise.resolve(client.js ? client.code : stripTypes(client.code)).then((code) => ({
+    // kick dev: Vite strips it when serving.
+    const raw = client.js || options.bundle === null
+    const js = Promise.resolve(raw ? client.code : stripTypes(client.code)).then((code) => ({
       js: code,
       hash: fnv1a(code),
     }))

@@ -18,8 +18,16 @@ export function fnv1a(s: string): string {
 export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.js$/
 
 /** `import … from`, `export … from` or `import(`: a script that needs a bundler. */
-export const IMPORTS =
+const IMPORTS =
   /(^|[\n;])\s*import[\s{*'"]|\bimport\s*\(|(^|[\n;])\s*export\s*(\*(\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"]/
+
+// ponytail: no `${}` nesting or regex literals; a real lexer if those cause false hits.
+const NOISE =
+  /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g
+
+/** Whether a script imports: searched with comments removed and strings emptied. */
+export const hasImports = (code: string): boolean =>
+  IMPORTS.test(code.replace(NOISE, (m) => (m[0] === '/' ? '\n' : m[0]! + m[0])))
 
 /** Insert `tags` before the last `</body>`, or at the end when there's none. */
 export function injectScripts(html: string, tags: string): string {

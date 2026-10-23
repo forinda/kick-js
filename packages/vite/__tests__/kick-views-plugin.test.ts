@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { build, createServer, type Rollup } from 'vite'
 import { describe, expect, it } from 'vitest'
-import { kickViewsPlugin } from '../src/kick-views-plugin'
+import { kickViewsPlugin, type KickViewsPluginOptions } from '../src/kick-views-plugin'
 
 function project(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'kick-views-build-'))
@@ -17,12 +17,12 @@ function project(files: Record<string, string>): string {
   return root
 }
 
-async function bundle(root: string): Promise<string> {
+async function bundle(root: string, opts: KickViewsPluginOptions = {}): Promise<string> {
   const out = (await build({
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [kickViewsPlugin()],
+    plugins: [kickViewsPlugin(opts)],
     build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
   })) as Rollup.RollupOutput | Rollup.RollupOutput[]
   const output = (Array.isArray(out) ? out[0]! : out).output
@@ -154,6 +154,15 @@ describe('kickViewsPlugin', () => {
     const files = [...code.matchAll(/"([^"/]+\.js)": "/g)].map((m) => m[1]!)
     expect(files.length).toBeGreaterThanOrEqual(3)
     for (const f of files) expect(f).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{8}\.js$/)
+    // The bundle's files are what ships: templates don't carry the source again.
+    expect(code).not.toContain('./date.utils')
+  })
+
+  it("hands the views the plugin's clientScriptPath", async () => {
+    const root = project({ 'src/views/page.kick': '<p>hi</p>' })
+    expect(await bundle(root, { clientScriptPath: '/assets/c/' })).toMatch(
+      /clientScriptPath[:=]\s*"\/assets\/c"/,
+    )
   })
 
   it('refuses CSS and asset imports in client scripts at build', async () => {
