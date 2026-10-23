@@ -2,7 +2,14 @@
  * `.kick` pages on the edge: a worker built with the plugin renders from the
  * bundled templates in workerd (miniflare), with no file system.
  */
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -104,6 +111,58 @@ describe('kick views on workerd', () => {
       expect(cssRes.headers.get('content-type')).toBe('text/css; charset=utf-8')
       expect(await cssRes.text()).toContain('teal')
       expect(await js.text()).toMatch(/customElements\.define\(["'`]kick-toast/)
+    } finally {
+      await mf.dispose()
+    }
+  }, 60_000)
+
+  it('disk mode: client files go to dist/public, the worker leaves them to the platform', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kick-views-edge-disk-'))
+    const files: Record<string, string> = {
+      'worker.js': WORKER,
+      'src/views/home.kick': '<h1>Hi {{ name | shout }}</h1>',
+      'src/views/layouts/main.kick': '<main><slot /></main>',
+      'src/views/pipes.ts': 'export const shout = (v: string) => `${v}!`',
+      'src/views/island.kick': '<import-box />',
+      'src/views/components/import-box.kick':
+        "<div></div>\n<script client>\nimport './box.css'\nconsole.log('box')\n</script>",
+      'src/views/components/box.css': 'div { color: teal }',
+    }
+    mkdirSync(join(root, 'node_modules/@forinda'), { recursive: true })
+    symlinkSync(VIEW_PKG, join(root, 'node_modules/@forinda/kickjs-view'), 'dir')
+    for (const [name, src] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, name)), { recursive: true })
+      writeFileSync(join(root, name), src)
+    }
+    await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [kickViewsPlugin()],
+      resolve: { conditions: ['workerd', 'worker', 'import', 'default'] },
+      ssr: { noExternal: true, target: 'webworker' },
+      build: {
+        ssr: join(root, 'worker.js'),
+        outDir: join(root, 'dist'),
+        minify: false,
+        rollupOptions: { output: { inlineDynamicImports: true } },
+      },
+    })
+    const written = readdirSync(join(root, 'dist/public/_kick/c'))
+    expect(written.some((f) => /^import-box\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => f.endsWith('.css'))).toBe(true)
+    const script = readFileSync(join(root, 'dist/worker.js'), 'utf8')
+    expect(script).not.toMatch(/node:fs/)
+
+    const mf = new Miniflare({ modules: true, script, compatibilityDate: '2025-01-01' })
+    try {
+      const island = await (await mf.dispatchFetch('http://edge/island')).text()
+      const src = /src="(\/_kick\/c\/import-box\.[^"]+)"/.exec(island)![1]!
+      expect(island).toMatch(/href="\/_kick\/c\/[^"]+\.css"/)
+      // No file reader on the edge: the request falls through to the app (here, the home page).
+      const res = await mf.dispatchFetch(`http://edge${src}`)
+      expect(res.status).toBe(200)
+      expect(await res.text()).toContain('<h1>')
     } finally {
       await mf.dispose()
     }
