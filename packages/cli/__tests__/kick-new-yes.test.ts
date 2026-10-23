@@ -80,6 +80,10 @@ describe('kick new --yes (non-interactive)', () => {
     ]) {
       expect(existsSync(join(projectDir, file)), file).toBe(true)
     }
+    // VS Code offers the KickJS extension (`.kick` language server, devtools).
+    expect(JSON.parse(readFileSync(join(projectDir, '.vscode/extensions.json'), 'utf-8'))).toEqual({
+      recommendations: ['forinda.forinda-kickjs-devtools'],
+    })
 
     // Sanity: no prompt strings leaked into stdout
     expect(result.stdout).not.toContain('Project template')
@@ -169,6 +173,10 @@ describe('kick new --yes (non-interactive)', () => {
     const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf-8')
     expect(workspace).toContain(`'@scarf/scarf': true`)
     expect(workspace).toContain('msgpackr-extract: false')
+    // The workspace root is the folder VS Code opens.
+    expect(readFileSync(join(dir, '.vscode/extensions.json'), 'utf-8')).toContain(
+      'forinda.forinda-kickjs-devtools',
+    )
   })
 
   it('the starter module serves no health route of its own', () => {
