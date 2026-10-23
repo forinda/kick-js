@@ -1,9 +1,19 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
+import { createServer as createHttpServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { build, createServer, type Rollup } from 'vite'
 import { describe, expect, it } from 'vitest'
-import { kickViewsPlugin } from '../src/kick-views-plugin'
+import { kickViewsPlugin, type KickViewsPluginOptions } from '../src/kick-views-plugin'
 
 function project(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'kick-views-build-'))
@@ -15,19 +25,131 @@ function project(files: Record<string, string>): string {
   return root
 }
 
-async function bundle(root: string): Promise<string> {
+async function bundle(root: string, opts: KickViewsPluginOptions = {}): Promise<string> {
   const out = (await build({
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [kickViewsPlugin()],
+    // File contents inspected in the bundle; disk mode has its own tests.
+    plugins: [kickViewsPlugin({ clientFiles: 'bundle', ...opts })],
     build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
   })) as Rollup.RollupOutput | Rollup.RollupOutput[]
   const output = (Array.isArray(out) ? out[0]! : out).output
   return output.map((c) => ('code' in c ? c.code : '')).join('\n')
 }
 
+/** A real build to `dist/`: the server entry plus whatever the plugin writes. */
+async function buildToDisk(root: string, opts: KickViewsPluginOptions = {}): Promise<string> {
+  await build({
+    root,
+    configFile: false,
+    logLevel: 'silent',
+    plugins: [kickViewsPlugin(opts)],
+    build: { ssr: join(root, 'entry.ts'), outDir: join(root, 'dist'), minify: false },
+  })
+  return readFileSync(join(root, 'dist/entry.mjs'), 'utf8')
+}
+
+const PHOTO = Uint8Array.from({ length: 5000 }, (_, i) => (i * 7) % 256)
+
+const diskProject = () =>
+  project({
+    'src/views/components/toast-a.kick':
+      "<div></div>\n<script client>\nimport { fmt } from './date.utils'\nimport './a.css'\nimport photo from './photo.png'\nimport icon from './icon.svg'\nconsole.log(fmt('a'), photo, icon)\n</script>",
+    'src/views/components/toast-b.kick':
+      "<div></div>\n<script client>\nimport { fmt } from './date.utils'\nconsole.log(fmt('b'))\n</script>",
+    'src/views/components/date.utils.ts': 'export const fmt = (s: string) => `<${s}>`',
+    'src/views/components/a.css': 'div { color: red }',
+    'src/views/components/icon.svg': `<svg xmlns="http://www.w3.org/2000/svg">${' '.repeat(40)}</svg>`,
+  })
+
+describe('client files on disk', () => {
+  it('writes client files to dist/public/_kick/c', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    const code = await buildToDisk(root)
+    const dir = join(root, 'dist/public/_kick/c')
+    const written = readdirSync(dir).toSorted()
+    expect(written.some((f) => /^toast-a\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => /^toast-b\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => /^date_utils\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => f.endsWith('.css'))).toBe(true)
+    const png = written.find((f) => f.endsWith('.png'))!
+    expect(new Uint8Array(readFileSync(join(dir, png)))).toEqual(PHOTO)
+    const disk = JSON.parse(/"disk": (\[[^\]]*\])/.exec(code)![1]!) as string[]
+    expect(disk.toSorted()).toEqual(written)
+    expect(
+      readFileSync(
+        join(
+          dir,
+          written.find((f) => f.startsWith('toast-a'))!,
+        ),
+        'utf8',
+      ),
+    ).toContain('data:image/svg+xml')
+    expect(code).not.toContain('"files"')
+  })
+
+  it('clientDir points at the emitted folder', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    await buildToDisk(root)
+    const mod = await import(pathToFileURL(join(root, 'dist/entry.mjs')).href)
+    const entry = mod.default.bundle.client.entries['toast-a'] as string
+    expect(existsSync(new URL(entry, mod.default.clientDir))).toBe(true)
+  })
+
+  it('bundle mode keeps files in the bundle', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    const code = await buildToDisk(root, { clientFiles: 'bundle' })
+    expect(code).toContain('"files"')
+    expect(code).not.toContain('"disk"')
+    expect(existsSync(join(root, 'dist/public'))).toBe(false)
+    expect(code).toContain('data:image/png')
+  })
+
+  it('upper-case asset extensions are written lower-case, so they can be served', async () => {
+    const root = project({
+      'src/views/components/a-b.kick':
+        "<div></div>\n<script client>\nimport logo from './Logo.PNG'\nconsole.log(logo)\n</script>",
+    })
+    writeFileSync(join(root, 'src/views/components/Logo.PNG'), PHOTO)
+    await buildToDisk(root)
+    const written = readdirSync(join(root, 'dist/public/_kick/c'))
+    expect(written.some((f) => /^Logo\.[\w-]{8}\.png$/.test(f))).toBe(true)
+  })
+
+  it('publicDir and clientScriptPath move the folder', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    await buildToDisk(root, { publicDir: 'static', clientScriptPath: '/assets/c' })
+    expect(readdirSync(join(root, 'dist/static/assets/c')).length).toBeGreaterThan(3)
+  })
+})
+
 describe('kickViewsPlugin', () => {
+  it('bundles imports into shared chunks', async () => {
+    const comp = (tag: string) =>
+      `<div></div>\n<script client>\nimport { count } from './shared'\nconst n: number = count\ncustomElements.define('${tag}-el', class extends HTMLElement {})\nconsole.log(n)\n</script>`
+    const code = await bundle(
+      project({
+        'src/views/components/toast-a.kick': comp('toast-a'),
+        'src/views/components/toast-b.kick': comp('toast-b'),
+        'src/views/components/shared.ts': 'export let count = 41\ncount++\n',
+        'src/views/home.kick': '<toast-a /><toast-b />',
+      }),
+    )
+    const a = /"toast-a": ?"(toast-a\.[A-Za-z0-9_-]{8}\.js)"/.exec(code)
+    const b = /"toast-b": ?"(toast-b\.[A-Za-z0-9_-]{8}\.js)"/.exec(code)
+    expect(a && b).toBeTruthy()
+    // One shared chunk holds the helper; both entries import it.
+    const chunk = /"(shared\.[A-Za-z0-9_-]{8}\.js)":/.exec(code)
+    expect(chunk).toBeTruthy()
+    expect(code.split(chunk![1]!).length - 1).toBeGreaterThanOrEqual(3)
+    expect(code).not.toContain(': number')
+  })
+
   it('build ships plain JavaScript', async () => {
     const code = await bundle(
       project({
@@ -74,6 +196,127 @@ describe('kickViewsPlugin', () => {
   it('an unknown pipe fails the build', async () => {
     const root = project({ 'src/views/p.kick': '{{ x | nope }}' })
     await expect(bundle(root)).rejects.toThrow(/unknown pipe 'nope'/)
+  })
+
+  it('dev serves client scripts through Vite, imports resolved', async () => {
+    const root = project({
+      'src/views/components/flash-toast.kick':
+        "<kick-toast></kick-toast>\n<script client>\nimport './toast.css'\nimport { count } from './shared'\nconst n: number = count\nconsole.log(n)\n</script>",
+      'src/views/components/shared.ts': 'export const count = 1',
+      'src/views/components/toast.css': 'kick-toast { color: plum }',
+      'src/views/home.kick': '<flash-toast />',
+    })
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin()],
+      server: { middlewareMode: true, ws: false },
+    })
+    const http = createHttpServer(vite.middlewares)
+    await new Promise<void>((r) => http.listen(0, r))
+    const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+    try {
+      const res = await fetch(`${base}/_kick/c/flash-toast.00000000.js`)
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toMatch(/javascript/)
+      const js = await res.text()
+      expect(js).toContain('/src/views/components/shared.ts')
+      expect(js).not.toContain(': number')
+      // CSS imports go through Vite too: a module that injects the stylesheet.
+      const css = await fetch(`${base}/src/views/components/toast.css`)
+      expect(css.status).toBe(200)
+      expect(await css.text()).toContain('plum')
+      // Not a component's script: left for the app.
+      expect((await fetch(`${base}/_kick/c/nope.00000000.js`)).status).toBe(404)
+      // An edit to the template's script shows on the next load.
+      writeFileSync(
+        join(root, 'src/views/components/flash-toast.kick'),
+        "<kick-toast></kick-toast>\n<script client>\nconsole.log('edited-version')\n</script>",
+      )
+      vite.watcher.emit('change', join(root, 'src/views/components/flash-toast.kick'))
+      expect(await (await fetch(`${base}/_kick/c/flash-toast.00000000.js`)).text()).toContain(
+        'edited-version',
+      )
+    } finally {
+      http.close()
+      await vite.close()
+    }
+  })
+
+  it('servable names for chunks from dotted modules', async () => {
+    const comp = (tag: string) =>
+      `<div></div>\n<script client>\nimport { fmt } from './date.utils'\nconsole.log(fmt('${tag}'))\n</script>`
+    const code = await bundle(
+      project({
+        'src/views/components/toast-a.kick': comp('a'),
+        'src/views/components/toast-b.kick': comp('b'),
+        'src/views/components/date.utils.ts': 'export const fmt = (s: string) => `<${s}>`',
+      }),
+    )
+    const files = [...code.matchAll(/"([^"/]+\.js)": "/g)].map((m) => m[1]!)
+    expect(files.length).toBeGreaterThanOrEqual(3)
+    for (const f of files) expect(f).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{8}\.js$/)
+    // The bundle's files are what ships: templates don't carry the source again.
+    expect(code).not.toContain('./date.utils')
+  })
+
+  it("hands the views the plugin's clientScriptPath", async () => {
+    const root = project({ 'src/views/page.kick': '<p>hi</p>' })
+    expect(await bundle(root, { clientScriptPath: '/assets/c/' })).toMatch(
+      /clientScriptPath[:=]\s*"\/assets\/c"/,
+    )
+  })
+
+  it('bundles imported CSS and inlines images', async () => {
+    const code = await bundle(
+      project({
+        'src/views/components/a-b.kick':
+          "<div></div>\n<script client>\nimport './a.css'\nimport icon from './icon.svg'\nconsole.log(icon)\n</script>",
+        'src/views/components/a.css': 'div { color: red }',
+        'src/views/components/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      }),
+    )
+    const css = /"a-b": \[\s*"(a-b\.[A-Za-z0-9_-]{8}\.css)"/.exec(code)?.[1]
+    expect(css).toBeTruthy()
+    expect(code).toMatch(new RegExp(`"${css!.replace(/\./g, '\\.')}": "[^"]*color:\\s*red`))
+    expect(code).toContain('data:image/svg+xml')
+  })
+
+  it("applies the app's define and mode to client scripts", async () => {
+    const root = project({
+      'src/views/components/a-b.kick':
+        '<div></div>\n<script client>\nconsole.log(__FLAG__, import.meta.env.MODE)\n</script>',
+    })
+    const out = (await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      mode: 'staging',
+      define: { __FLAG__: JSON.stringify('flag-on') },
+      plugins: [kickViewsPlugin({ clientFiles: 'bundle' })],
+      build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
+    })) as Rollup.RollupOutput | Rollup.RollupOutput[]
+    const code = (Array.isArray(out) ? out[0]! : out).output
+      .map((c) => ('code' in c ? c.code : ''))
+      .join('\n')
+    expect(code).toContain('flag-on')
+    expect(code).toContain('staging')
+  })
+
+  it('only resolves client-script modules inside the views folder', async () => {
+    const root = project({
+      'src/views/components/a-b.kick': '<div></div><script client>let a = 1</script>',
+    })
+    const outside = project({ 'secret.kick': '<script client>leak</script>' })
+    const plugin = kickViewsPlugin() as any
+    plugin.configResolved({ root, command: 'serve', resolve: { alias: [] } })
+    const inside = join(root, 'src/views/components/a-b.kick.client.ts')
+    expect(plugin.resolveId(inside)).toBe(inside)
+    const escaped = join(outside, 'secret.kick.client.ts')
+    expect(plugin.resolveId(escaped)).toBeUndefined()
+    expect(await plugin.load(escaped)).toBeUndefined()
   })
 
   it('dev serves no bundle: the file loader reads templates', async () => {

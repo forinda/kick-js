@@ -3,10 +3,12 @@
  * default template source. Edge runtimes resolve `./edge` instead.
  */
 import { stripTypes } from './strip-types'
-import { useFileLoader, useStripTypes } from './views'
+import { readFile } from 'node:fs/promises'
+import { useClientFiles, useFileLoader, useStripTypes } from './views'
 
 useFileLoader(() => import('./loaders/file'))
 useStripTypes(stripTypes)
+useClientFiles((url) => readFile(url))
 
 export * from './exports'
 export { format, type FormatOptions } from './format'

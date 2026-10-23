@@ -4,14 +4,14 @@
  * middlewares only run for matched routes, call `clientScriptResponse` ahead
  * of the router.
  */
-import { CLIENT_SCRIPT_FILE } from './client-scripts'
+import { CLIENT_SCRIPT_FILE, contentType } from './client-scripts'
 import type { Views } from './views'
 
-/** A script's name never changes with its content, so it caches forever. */
-export const CLIENT_SCRIPT_HEADERS: Record<string, string> = {
-  'content-type': 'text/javascript; charset=utf-8',
+/** A file's name changes with its content, so it caches forever. */
+export const clientFileHeaders = (file: string): Record<string, string> => ({
+  'content-type': contentType(file),
   'cache-control': 'public, max-age=31536000, immutable',
-}
+})
 
 /** The script file a GET / HEAD asks for under `views.clientScriptPath`, if any. */
 export function clientScriptFile(
@@ -41,10 +41,13 @@ export async function clientScriptResponse(
 ): Promise<Response | undefined> {
   const file = clientScriptFile(views, request.method, new URL(request.url).pathname)
   if (!file) return undefined
-  const js = await views.clientScript(file)
-  if (js === undefined) return undefined
-  return new Response(request.method === 'HEAD' ? null : js, {
-    status: 200,
-    headers: CLIENT_SCRIPT_HEADERS,
-  })
+  const found = await views.clientFile(file)
+  if (!found) return undefined
+  return new Response(
+    request.method === 'HEAD' ? null : (found.body as ConstructorParameters<typeof Response>[0]),
+    {
+      status: 200,
+      headers: clientFileHeaders(file),
+    },
+  )
 }

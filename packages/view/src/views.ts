@@ -7,7 +7,15 @@ import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './as
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import { componentTag, layoutResolver, templateName, type Project } from './check/project'
-import { CLIENT_SCRIPT_FILE, NO_STRIPPER, fnv1a, injectScripts } from './client-scripts'
+import {
+  CLIENT_SCRIPT_FILE,
+  NO_STRIPPER,
+  contentType,
+  fnv1a,
+  hasImports,
+  injectHead,
+  injectScripts,
+} from './client-scripts'
 import { VALIDATE_RUNTIME } from './validate-runtime'
 
 /** The validator script's served name; component tags can't take it. */
@@ -30,6 +38,16 @@ export interface Loader {
 export interface ViewsBundle {
   v: number
   templates: Record<string, CheckedTemplate>
+  /** Client scripts bundled by the build: each component's entry file, and every file (entries and shared chunks). */
+  client?: {
+    entries: Record<string, string>
+    /** Each entry's stylesheets, by component tag. */
+    css?: Record<string, string[]>
+    /** Files kept in the bundle (`clientFiles: 'bundle'`). */
+    files?: Record<string, string>
+    /** Files the build wrote to disk, under `clientDir` (`clientFiles: 'disk'`). */
+    disk?: string[]
+  }
 }
 
 export interface RenderOptions {
@@ -79,12 +97,16 @@ export interface ViewsOptions {
   stripTypes?: (code: string) => string | Promise<string>
   /** Where component scripts are served. Default `'/_kick/c'`. */
   clientScriptPath?: string
+  /** A `file:` URL of the folder holding the bundle's `disk` files; `virtual:kick-views` exports it. */
+  clientDir?: string
 }
 
 export interface Views {
   render(name: string, data?: object, opts?: RenderOptions & { ctx?: unknown }): Promise<string>
   /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
   clientScript(file: string): Promise<string | undefined>
+  /** A client file (script, stylesheet, asset) by its served name, with its content type. */
+  clientFile(file: string): Promise<{ body: string | Uint8Array; type: string } | undefined>
   /** The path component scripts are served under (`clientScriptPath`). */
   readonly clientScriptPath: string
   /** Whether `name` is one of these views — `ctx.render` falls through to another engine when not. */
@@ -131,6 +153,13 @@ export function useStripTypes(strip: (code: string) => string): void {
   typeStripper = strip
 }
 
+/** Reads a client file the build wrote to disk; the Node entry sets it. */
+let clientReader: ((url: URL) => Promise<Uint8Array>) | undefined
+
+export function useClientFiles(read: ((url: URL) => Promise<Uint8Array>) | undefined): void {
+  clientReader = read
+}
+
 function fileLoaders(): Promise<FileLoaderModule> {
   if (!fileLoaderModule) {
     return Promise.reject(
@@ -148,6 +177,7 @@ export function createViews(options: ViewsOptions = {}): Views {
   const dev = options.dev ?? options.bundle === null
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
+  const disk = new Set(bundle?.client?.disk)
   const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
   const stripTypes =
     options.stripTypes ??
@@ -159,9 +189,14 @@ export function createViews(options: ViewsOptions = {}): Views {
   const scripts = new Map<string, { code: string; js: Promise<{ js: string; hash: string }> }>()
   const scriptFor = (t: CheckedTemplate) => {
     const client = t.client!
+    // Without a bundler (no build, not kick dev) imports can't be resolved.
+    if (options.bundle === undefined && hasImports(client.code))
+      return Promise.reject(new Error('client scripts that import need kick dev or a kick build'))
     const hit = scripts.get(t.name)
     if (hit?.code === client.code) return hit.js
-    const js = Promise.resolve(client.js ? client.code : stripTypes(client.code)).then((code) => ({
+    // kick dev: Vite strips it when serving.
+    const raw = client.js || options.bundle === null
+    const js = Promise.resolve(raw ? client.code : stripTypes(client.code)).then((code) => ({
       js: code,
       hash: fnv1a(code),
     }))
@@ -172,6 +207,10 @@ export function createViews(options: ViewsOptions = {}): Views {
   }
   const layoutFor = layoutResolver(options.layout)
   const warn = options.warn ?? ((m: string) => console.warn(`[kick/view] ${m}`))
+  if (disk.size && clientReader && !options.clientDir)
+    warn(
+      "the build wrote client files to disk but createViews has no clientDir: pass { ...kickViews } from 'virtual:kick-views'",
+    )
   let loader: Promise<Loader> | undefined
   let appPipes: Promise<Record<string, Pipe | EnvPipe>> | undefined
   let state: Promise<State> | undefined
@@ -278,7 +317,7 @@ export function createViews(options: ViewsOptions = {}): Views {
     return (await current()).project.templates.has(name)
   }
 
-  return {
+  const views: Views = {
     has,
     async render(name, data = {}, opts = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
@@ -323,8 +362,10 @@ export function createViews(options: ViewsOptions = {}): Views {
       const nonceAttr = typeof nonce === 'string' ? ` nonce="${nonce.replace(/"/g, '&quot;')}"` : ''
       const tags = await Promise.all(
         [...used.values()].map(async (t) => {
-          const { hash } = await scriptFor(t)
-          const file = `${componentTag(t.name, componentsDir)}.${hash}.js`
+          const tag = componentTag(t.name, componentsDir)
+          // Bundled by the build: its entry, which imports its chunks.
+          const entry = bundle?.client?.entries[tag]
+          const file = entry ?? `${tag}.${(await scriptFor(t)).hash}.js`
           return `<script type="module" src="${scriptPath}/${file}"${nonceAttr}></script>`
         }),
       )
@@ -332,13 +373,26 @@ export function createViews(options: ViewsOptions = {}): Views {
         tags.push(
           `<script type="module" src="${scriptPath}/${VALIDATE_TAG}.${VALIDATE_HASH}.js"${nonceAttr}></script>`,
         )
-      return injectScripts(html, tags.join(''))
+      // Stylesheets the bundled scripts import, once each, in the head.
+      const css = new Set(
+        [...used.values()].flatMap(
+          (t) => bundle?.client?.css?.[componentTag(t.name, componentsDir)] ?? [],
+        ),
+      )
+      const links = [...css]
+        .map((f) => `<link rel="stylesheet" href="${scriptPath}/${f}"${nonceAttr}>`)
+        .join('')
+      return injectScripts(links ? injectHead(html, links) : html, tags.join(''))
     },
     clientScriptPath: scriptPath,
     async clientScript(file) {
       const m = CLIENT_SCRIPT_FILE.exec(file)
       if (!m) return undefined
-      if (m[1] === VALIDATE_TAG) return m[2] === VALIDATE_HASH ? VALIDATE_RUNTIME : undefined
+      if (m[1] === VALIDATE_TAG)
+        return m[2] === VALIDATE_HASH && m[3] === 'js' ? VALIDATE_RUNTIME : undefined
+      const files = bundle?.client?.files
+      if (files) return Object.hasOwn(files, file) ? files[file] : undefined
+      if (m[3] !== 'js') return undefined
       const names = bundle
         ? Object.keys(bundle.templates)
         : [...(await current()).project.templates.keys()]
@@ -351,7 +405,25 @@ export function createViews(options: ViewsOptions = {}): Views {
       const { js, hash } = await scriptFor(t)
       return hash === m[2] ? js : undefined
     },
+    async clientFile(file) {
+      if (!CLIENT_SCRIPT_FILE.test(file)) return undefined
+      // Written by the build: read only names it listed, never a probed path.
+      if (disk.has(file)) {
+        if (!clientReader || !options.clientDir) return undefined
+        try {
+          const body = await clientReader(new URL(file, options.clientDir))
+          return { body, type: contentType(file) }
+        } catch (err) {
+          // Not deployed with the server: left to whatever serves static files.
+          if ((err as { code?: string }).code === 'ENOENT') return undefined
+          throw err
+        }
+      }
+      const text = await views.clientScript(file)
+      return text === undefined ? undefined : { body: text, type: contentType(file) }
+    },
   }
+  return views
 }
 
 const zeroSpan = {

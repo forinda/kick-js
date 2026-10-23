@@ -33,6 +33,7 @@ export {
   createViews,
   useFileLoader,
   useStripTypes,
+  useClientFiles,
   bundleLoader,
   type Loader,
   type RenderOptions,
