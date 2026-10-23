@@ -7,7 +7,7 @@
  * @module @forinda/kickjs-vite/kick-views-plugin
  */
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Plugin } from 'vite'
 
@@ -27,7 +27,7 @@ export interface KickViewsPluginOptions {
    * server bundle, for hosts with no static files.
    */
   clientFiles?: 'disk' | 'bundle'
-  /** Default `'public'`, inside the build's `outDir`. */
+  /** Default `'public'`, relative to the build's `outDir` (or absolute). */
   publicDir?: string
   /** Images and fonts up to this many bytes are inlined (`'disk'` mode). Default `4096`. */
   inlineLimit?: number
@@ -72,6 +72,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     error(message: string): never
   }): Promise<string> {
     const hasPipes = existsSync(pipesFile)
+    // Empty, a rebuild with no client scripts left still clears the last build's files.
+    clientOut = onDisk ? new Map() : undefined
     // The view package is optional: only apps that import this module need it.
     const view = await import('@forinda/kickjs-view')
     const names = await kickFiles(viewsDir)
@@ -236,18 +238,26 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       if (!build || !(await kickFiles(viewsDir)).length) return
       checked = await checkTemplates(this)
     },
-    renderChunk(code, chunk) {
+    renderChunk(code, chunk, out) {
       if (!code.includes(CLIENT_DIR)) return null
-      const rel = posix.relative(posix.dirname(chunk.fileName), clientFolder)
+      const dir = out.dir ?? (out.file ? dirname(out.file) : '')
+      const rel = relative(resolve(dir, dirname(chunk.fileName)), resolve(dir, clientFolder))
       return {
-        code: code.replaceAll(CLIENT_DIR, `./${rel}/`),
+        code: code.replaceAll(CLIENT_DIR, `./${rel.split(sep).join('/')}/`),
         map: null,
       }
     },
     async writeBundle(out) {
       if (!clientOut || !out.dir) return
+      const folder = resolve(out.dir, clientFolder)
+      // A rebuild (`vite build --watch`) doesn't empty outDir: drop the last build's files.
+      const keep = new Set([...clientOut.keys()].map((f) => resolve(out.dir!, f)))
+      if (existsSync(folder))
+        for (const name of await readdir(folder))
+          if (CLIENT_FILE.test(name) && !keep.has(join(folder, name)))
+            await rm(join(folder, name), { force: true })
       for (const [file, source] of clientOut) {
-        const to = join(out.dir, file)
+        const to = resolve(out.dir, file)
         await mkdir(dirname(to), { recursive: true })
         await writeFile(to, source)
       }
@@ -330,6 +340,9 @@ type ClientBuildConfig = {
 
 /** Replaced, per output chunk, with the relative path to the client files folder. */
 const CLIENT_DIR = '__KICK_CLIENT_DIR__'
+
+/** A file this plugin writes, as the view package's `CLIENT_SCRIPT_FILE` matches it. */
+const CLIENT_FILE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{8}\.[a-z0-9]{1,16}$/
 
 /** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */
 const CLIENT_SUFFIX = '.client.ts'

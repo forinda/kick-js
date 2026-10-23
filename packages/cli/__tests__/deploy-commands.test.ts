@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 
 import { cronScheduleId as coreScheduleId } from '@forinda/kickjs'
 import {
+  appBuildOptions,
   bareImportPackage,
   registerDeployCommands,
   netlifyHiddenRules,
@@ -161,6 +162,30 @@ describe('views apps', () => {
       '@forinda/kickjs-inertia': '^0.2.0',
     })
     expect(inertia.staticDir).toBe('dist/client')
+  })
+})
+
+describe('the function bundle', () => {
+  it("takes the app's aliases and define from its Vite config", () => {
+    const opts = appBuildOptions('/apps/site', {
+      resolve: { alias: { '~': '/apps/site/lib', '@': '/apps/site/app' } },
+      define: { __FLAG__: 'true' },
+    })
+    expect(opts.define).toEqual({ __FLAG__: 'true' })
+    // The app's own aliases come first, so its `@` wins.
+    expect(opts.resolve.alias).toEqual([
+      { find: '~', replacement: '/apps/site/lib' },
+      { find: '@', replacement: '/apps/site/app' },
+      { find: '@', replacement: '/apps/site/src' },
+    ])
+    const list = appBuildOptions('/apps/site', {
+      resolve: { alias: [{ find: /^#(.*)/, replacement: '/apps/site/$1' }] },
+    })
+    expect(list.resolve.alias).toHaveLength(2)
+    expect(appBuildOptions('/apps/site', undefined)).toEqual({
+      define: {},
+      resolve: { alias: [{ find: '@', replacement: '/apps/site/src' }] },
+    })
   })
 })
 

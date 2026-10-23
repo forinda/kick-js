@@ -39,13 +39,17 @@ async function bundle(root: string, opts: KickViewsPluginOptions = {}): Promise<
 }
 
 /** A real build to `dist/`: the server entry plus whatever the plugin writes. */
-async function buildToDisk(root: string, opts: KickViewsPluginOptions = {}): Promise<string> {
+async function buildToDisk(
+  root: string,
+  opts: KickViewsPluginOptions = {},
+  emptyOutDir = true,
+): Promise<string> {
   await build({
     root,
     configFile: false,
     logLevel: 'silent',
     plugins: [kickViewsPlugin(opts)],
-    build: { ssr: join(root, 'entry.ts'), outDir: join(root, 'dist'), minify: false },
+    build: { ssr: join(root, 'entry.ts'), outDir: join(root, 'dist'), minify: false, emptyOutDir },
   })
   return readFileSync(join(root, 'dist/entry.mjs'), 'utf8')
 }
@@ -125,6 +129,35 @@ describe('client files on disk', () => {
     writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
     await buildToDisk(root, { publicDir: 'static', clientScriptPath: '/assets/c' })
     expect(readdirSync(join(root, 'dist/static/assets/c')).length).toBeGreaterThan(3)
+  })
+
+  it('an absolute publicDir is used as is', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    const publicDir = join(root, 'www')
+    await buildToDisk(root, { publicDir })
+    expect(readdirSync(join(publicDir, '_kick/c')).length).toBeGreaterThan(3)
+    const mod = await import(pathToFileURL(join(root, 'dist/entry.mjs')).href)
+    const entry = mod.default.bundle.client.entries['toast-a'] as string
+    expect(existsSync(new URL(entry, mod.default.clientDir))).toBe(true)
+  })
+
+  it('a rebuild into the same outDir drops the old files', async () => {
+    const root = project({
+      'src/views/components/a-b.kick': '<div></div>\n<script client>\nconsole.log(1)\n</script>',
+    })
+    await buildToDisk(root)
+    const dir = join(root, 'dist/public/_kick/c')
+    const before = readdirSync(dir)
+    writeFileSync(
+      join(root, 'src/views/components/a-b.kick'),
+      '<div></div>\n<script client>\nconsole.log(2)\n</script>',
+    )
+    // As in `vite build --watch`: the outDir isn't emptied between builds.
+    await buildToDisk(root, {}, false)
+    const after = readdirSync(dir)
+    expect(after).toHaveLength(before.length)
+    expect(after.some((f) => before.includes(f))).toBe(false)
   })
 })
 

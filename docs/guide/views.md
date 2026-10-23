@@ -688,15 +688,15 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 
 The Vite plugin's own options, in `vite.config.ts` as `kickjs({ views: { … } })`:
 
-| option             | default                |                                                                           |
-| ------------------ | ---------------------- | ------------------------------------------------------------------------- |
-| `viewsDir`         | `'src/views'`          |                                                                           |
-| `componentsDir`    | `'components'`         |                                                                           |
-| `pipesFile`        | `'src/views/pipes.ts'` |                                                                           |
-| `clientScriptPath` | `'/_kick/c'`           | the URL path client files are served under                                |
-| `clientFiles`      | `'disk'`               | `'bundle'` keeps client files in the server bundle                        |
-| `publicDir`        | `'public'`             | inside the build's `outDir`; files go to `<publicDir><clientScriptPath>/` |
-| `inlineLimit`      | `4096`                 | images and fonts up to this many bytes are inlined (`'disk'` only)        |
+| option             | default                |                                                                                             |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------------------------- |
+| `viewsDir`         | `'src/views'`          |                                                                                             |
+| `componentsDir`    | `'components'`         |                                                                                             |
+| `pipesFile`        | `'src/views/pipes.ts'` |                                                                                             |
+| `clientScriptPath` | `'/_kick/c'`           | the URL path client files are served under                                                  |
+| `clientFiles`      | `'disk'`               | `'bundle'` keeps client files in the server bundle                                          |
+| `publicDir`        | `'public'`             | relative to the build's `outDir`, or absolute; files go to `<publicDir><clientScriptPath>/` |
+| `inlineLimit`      | `4096`                 | images and fonts up to this many bytes are inlined (`'disk'` only)                          |
 
 ## Related
 
