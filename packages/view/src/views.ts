@@ -16,7 +16,8 @@ import {
   injectHead,
   injectScripts,
 } from './client-scripts'
-import { VALIDATE_RUNTIME } from './validate-runtime'
+import { VALIDATE_RUNTIME, VALIDATORS_REGISTER } from './validate-runtime'
+import { readValidatorExports, VALIDATORS_TAG } from './validators'
 
 /** The validator script's served name; component tags can't take it. */
 const VALIDATE_TAG = 'kick-validate'
@@ -70,6 +71,8 @@ export interface ViewsOptions {
   componentsDir?: string
   /** Default `src/views/pipes.ts`. Read when `pipes` isn't given and there is no bundle. */
   pipesFile?: string
+  /** Default `src/views/validators.ts`: the app's browser validators. Read when there is no bundle. */
+  validatorsFile?: string
   pipes?: Record<string, Pipe | EnvPipe>
   /**
    * The layout a page gets when it declares none: one name, or folder prefix →
@@ -137,6 +140,8 @@ export function bundleLoader(bundle: ViewsBundle): Loader {
 
 interface State {
   project: Project
+  /** `validators.ts`'s source, when there's one and no bundle. */
+  validators?: string
   /** Syntax errors from parsing, raised when the template is first used. */
   parseErrors: Map<string, Diagnostic>
   versions: Map<string, number>
@@ -195,6 +200,22 @@ export function createViews(options: ViewsOptions = {}): Views {
       if (!typeStripper) throw new Error(NO_STRIPPER)
       return typeStripper(code)
     })
+  const validatorsFile = options.validatorsFile ?? 'src/views/validators.ts'
+  /** `validators.ts` as served without a bundle, kept while its source stays the same. */
+  let validatorsJs: { source: string; js: Promise<{ js: string; hash: string }> } | undefined
+  const validatorsScript = (source: string): Promise<{ js: string; hash: string }> => {
+    // Without a bundler (no build, not kick dev) imports can't be resolved.
+    if (options.bundle === undefined && hasImports(source))
+      return Promise.reject(new Error('client scripts that import need kick dev or a kick build'))
+    if (validatorsJs?.source === source) return validatorsJs.js
+    // kick dev: Vite serves it (the plugin answers first); the hash only names it.
+    const js = Promise.resolve(
+      options.bundle === null ? source : stripTypes(source) + VALIDATORS_REGISTER,
+    ).then((code) => ({ js: code, hash: fnv1a(code) }))
+    js.catch(() => validatorsJs?.js === js && (validatorsJs = undefined))
+    validatorsJs = { source, js }
+    return js
+  }
   /** Each component's served script, kept while its source stays the same. */
   const scripts = new Map<string, { code: string; js: Promise<{ js: string; hash: string }> }>()
   const scriptFor = (t: CheckedTemplate) => {
@@ -256,9 +277,20 @@ export function createViews(options: ViewsOptions = {}): Views {
   /** A fresh load, forgotten if it fails. */
   const reload = (): Promise<State> => (state = settle(load(), () => (state = undefined)))
 
+  /** `validators.ts`'s source, read without a bundle and where there's a file system. */
+  const readValidators = async (): Promise<string | undefined> =>
+    bundle || !fileLoaderModule
+      ? undefined
+      : (await fileLoaderModule()).readTextFile(validatorsFile)
+
   async function load(): Promise<State> {
     const l = await getLoader()
     const pipes = await getPipes()
+    const validators = await readValidators()
+    const custom =
+      validators === undefined ? undefined : readValidatorExports(validators, validatorsFile)
+    for (const d of custom?.diagnostics ?? [])
+      warn(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
     const names = await l.list()
     const templates = new Map<string, TemplateAst>()
     const versions = new Map<string, number>()
@@ -276,6 +308,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       project: {
         templates,
         pipes: new Set([...BUILTIN_PIPES, ...Object.keys(pipes)]),
+        validators: new Set(custom?.names),
         componentsDir,
         layouts: options.layout,
         baseLayout: options.baseLayout,
@@ -283,6 +316,7 @@ export function createViews(options: ViewsOptions = {}): Views {
       versions,
       parseErrors,
       checked: new Map(),
+      validators,
     }
   }
 
@@ -299,7 +333,8 @@ export function createViews(options: ViewsOptions = {}): Views {
       (await Promise.all(names.map(async (n) => (await l.version!(n)) !== s.versions.get(n)))).some(
         Boolean,
       )
-    if (!stale) return s
+    // An edited validators.ts changes which names check and what's served.
+    if (!stale && (await readValidators()) === s.validators) return s
     return reload()
   }
 
@@ -332,13 +367,14 @@ export function createViews(options: ViewsOptions = {}): Views {
     async render(name, data = {}, opts = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
       if (!(await has(name))) throw new Error(`template '${name}' not found`)
+      const st = bundle ? undefined : await current()
       const resolve = bundle
         ? (n: string) => {
             const t = Object.hasOwn(bundle.templates, n) ? bundle.templates[n] : undefined
             if (!t) throw new RenderError(error(`${n}.kick`, zeroSpan, `template '${n}' not found`))
             return t
           }
-        : await current().then((s) => (n: string) => checked(s, n))
+        : (n: string) => checked(st!, n)
       const template = resolve(name)
       rememberPage(opts.ctx, opts.layout)
       const shared = options.share ? await options.share(opts.ctx as ShareContext | undefined) : {}
@@ -379,10 +415,19 @@ export function createViews(options: ViewsOptions = {}): Views {
           return `<script type="module" src="${scriptPath}/${file}"${nonceAttr}></script>`
         }),
       )
-      if (validation)
+      if (validation) {
         tags.push(
           `<script type="module" src="${scriptPath}/${VALIDATE_TAG}.${VALIDATE_HASH}.js"${nonceAttr}></script>`,
         )
+        // The app's validators.ts, registering into the script above.
+        const custom = bundle
+          ? bundle.client?.entries[VALIDATORS_TAG]
+          : st?.validators !== undefined
+            ? `${VALIDATORS_TAG}.${(await validatorsScript(st.validators)).hash}.js`
+            : undefined
+        if (custom)
+          tags.push(`<script type="module" src="${scriptPath}/${custom}"${nonceAttr}></script>`)
+      }
       // Stylesheets the bundled scripts import, once each, in the head.
       const css = new Set(
         [...used.values()].flatMap(
@@ -402,6 +447,13 @@ export function createViews(options: ViewsOptions = {}): Views {
         return m[2] === VALIDATE_HASH && m[3] === 'js' ? VALIDATE_RUNTIME : undefined
       const files = bundle?.client?.files
       if (files) return Object.hasOwn(files, file) ? files[file] : undefined
+      if (m[1] === VALIDATORS_TAG) {
+        if (bundle || m[3] !== 'js') return undefined
+        const source = (await current()).validators
+        if (source === undefined) return undefined
+        const { js, hash } = await validatorsScript(source)
+        return hash === m[2] ? js : undefined
+      }
       if (m[3] !== 'js') return undefined
       const names = bundle
         ? Object.keys(bundle.templates)
