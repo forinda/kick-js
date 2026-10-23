@@ -15,7 +15,7 @@ export function fnv1a(s: string): string {
 }
 
 /** `<name>.<hash>.js`: a component's own script, or a bundled entry or chunk. Nothing but one `.js`. */
-export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.([a-z0-9]{1,8})$/
+export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.([a-z0-9]{1,16})$/
 
 const TYPES: Record<string, string> = {
   js: 'text/javascript; charset=utf-8',

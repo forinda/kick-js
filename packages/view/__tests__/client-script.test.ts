@@ -127,6 +127,43 @@ describe('client files on disk', () => {
     }
   })
 
+  it('long extensions are served', async () => {
+    const v = diskViews()
+    expect(await v.clientFile('site.Ab0_12-x.webmanifest')).toBeUndefined() // not listed
+    expect(
+      (await import('../src/client-scripts')).CLIENT_SCRIPT_FILE.test('site.Ab0_12-x.webmanifest'),
+    ).toBe(true)
+  })
+
+  it('a listed file missing on disk falls through', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'kick-disk-gone-'))
+    const p = project({ 'components/flash-toast': TOAST, page: '<flash-toast />' })
+    const v = createViews({
+      bundle: {
+        v: 1,
+        templates: { 'components/flash-toast': check('components/flash-toast', p).template! },
+        client: { entries: {}, disk: ['gone.Lg0_12-x.png'] },
+      },
+      clientDir: pathToFileURL(`${out}/`).href,
+      warn: vi.fn(),
+    })
+    expect(await v.clientFile('gone.Lg0_12-x.png')).toBeUndefined()
+  })
+
+  it('warns when the bundle lists disk files but no clientDir is given', () => {
+    const warn = vi.fn()
+    const p = project({ 'components/flash-toast': TOAST })
+    createViews({
+      bundle: {
+        v: 1,
+        templates: { 'components/flash-toast': check('components/flash-toast', p).template! },
+        client: { entries: {}, disk: ['a.Lg0_12-x.js'] },
+      },
+      warn,
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('clientDir'))
+  })
+
   it('without a reader, disk files fall through', async () => {
     useClientFiles(undefined)
     try {

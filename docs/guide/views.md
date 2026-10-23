@@ -669,22 +669,22 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 
 ## Options
 
-| option            | default                                       |                                                                                              |
-| ----------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `viewsDir`        | `'src/views'`                                 |                                                                                              |
-| `componentsDir`   | `'components'`                                | inside `viewsDir`                                                                            |
-| `pipesFile`       | `'src/views/pipes.ts'`                        | `.js` also works; without Vite, Node runs a `.ts` file only when it can strip types (22.18+) |
-| `layout`          | none                                          | a layout name, or folder prefix → layout                                                     |
-| `baseLayout`      | none                                          | the shell around every page's outermost layout                                               |
-| `locale`          | `'en-US'`                                     |                                                                                              |
-| `timeZone`        | `'UTC'`                                       |                                                                                              |
-| `strict`          | `false`                                       | unknown names and values that can't print become errors                                      |
-| `share`           | none                                          | `(ctx) => data`                                                                              |
-| `assets`          | none                                          | `(entry, data) => tags`, for `@assets`                                                       |
-| `cache`           | `true`                                        | `false` re-reads every template on every render                                              |
-| `dev`             | `NODE_ENV !== 'production'` (with `KickView`) | re-check changed templates on each render                                                    |
-| `bundle`, `pipes` | from `virtual:kick-views`                     |                                                                                              |
-| `loader`          | the file loader                               | `{ list, read, version? }` for templates from anywhere else                                  |
+| option                                             | default                                       |                                                                                                     |
+| -------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `viewsDir`                                         | `'src/views'`                                 |                                                                                                     |
+| `componentsDir`                                    | `'components'`                                | inside `viewsDir`                                                                                   |
+| `pipesFile`                                        | `'src/views/pipes.ts'`                        | `.js` also works; without Vite, Node runs a `.ts` file only when it can strip types (22.18+)        |
+| `layout`                                           | none                                          | a layout name, or folder prefix → layout                                                            |
+| `baseLayout`                                       | none                                          | the shell around every page's outermost layout                                                      |
+| `locale`                                           | `'en-US'`                                     |                                                                                                     |
+| `timeZone`                                         | `'UTC'`                                       |                                                                                                     |
+| `strict`                                           | `false`                                       | unknown names and values that can't print become errors                                             |
+| `share`                                            | none                                          | `(ctx) => data`                                                                                     |
+| `assets`                                           | none                                          | `(entry, data) => tags`, for `@assets`                                                              |
+| `cache`                                            | `true`                                        | `false` re-reads every template on every render                                                     |
+| `dev`                                              | `NODE_ENV !== 'production'` (with `KickView`) | re-check changed templates on each render                                                           |
+| `bundle`, `pipes`, `clientScriptPath`, `clientDir` | from `virtual:kick-views`                     | pass them all with `...kickViews`; without `clientDir`, files the build wrote to disk aren't served |
+| `loader`                                           | the file loader                               | `{ list, read, version? }` for templates from anywhere else                                         |
 
 The Vite plugin's own options, in `vite.config.ts` as `kickjs({ views: { … } })`:
 

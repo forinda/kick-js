@@ -207,6 +207,10 @@ export function createViews(options: ViewsOptions = {}): Views {
   }
   const layoutFor = layoutResolver(options.layout)
   const warn = options.warn ?? ((m: string) => console.warn(`[kick/view] ${m}`))
+  if (disk.size && clientReader && !options.clientDir)
+    warn(
+      "the build wrote client files to disk but createViews has no clientDir: pass { ...kickViews } from 'virtual:kick-views'",
+    )
   let loader: Promise<Loader> | undefined
   let appPipes: Promise<Record<string, Pipe | EnvPipe>> | undefined
   let state: Promise<State> | undefined
@@ -406,9 +410,13 @@ export function createViews(options: ViewsOptions = {}): Views {
       // Written by the build: read only names it listed, never a probed path.
       if (disk.has(file)) {
         if (!clientReader || !options.clientDir) return undefined
-        return {
-          body: await clientReader(new URL(file, options.clientDir)),
-          type: contentType(file),
+        try {
+          const body = await clientReader(new URL(file, options.clientDir))
+          return { body, type: contentType(file) }
+        } catch (err) {
+          // Not deployed with the server: left to whatever serves static files.
+          if ((err as { code?: string }).code === 'ENOENT') return undefined
+          throw err
         }
       }
       const text = await views.clientScript(file)

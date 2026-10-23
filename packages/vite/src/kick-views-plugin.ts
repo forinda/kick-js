@@ -119,7 +119,11 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         code: t.client!.code,
       }))
     let client: ClientBundle | undefined
-    if (scripts.length) {
+    if (scripts.length && onDisk && !('useClientFiles' in view))
+      errors.push(
+        "client files on disk need @forinda/kickjs-view 0.3 or later: upgrade it, or set views: { clientFiles: 'bundle' }",
+      )
+    else if (scripts.length) {
       try {
         client = await bundleClientScripts(
           scripts,
@@ -371,8 +375,12 @@ async function bundleClientScripts(
           format: 'es',
           entryFileNames: '[name].[hash].js',
           chunkFileNames: (c: { name: string }) => `${servable(c.name)}.[hash].js`,
-          assetFileNames: (a: { names?: string[]; name?: string }) =>
-            `${servable((a.names?.[0] ?? a.name ?? 'asset').replace(/\.[^.]*$/, ''))}.[hash][extname]`,
+          // Served names take a lower-case extension: `Logo.PNG` becomes `Logo.<hash>.png`.
+          assetFileNames: (a: { names?: string[]; name?: string }) => {
+            const name = a.names?.[0] ?? a.name ?? 'asset'
+            const ext = /\.[^.]*$/.exec(name)?.[0] ?? ''
+            return `${servable(name.slice(0, name.length - ext.length))}.[hash]${ext.toLowerCase()}`
+          },
         },
       },
     },

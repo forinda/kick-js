@@ -109,6 +109,17 @@ describe('client files on disk', () => {
     expect(code).toContain('data:image/png')
   })
 
+  it('upper-case asset extensions are written lower-case, so they can be served', async () => {
+    const root = project({
+      'src/views/components/a-b.kick':
+        "<div></div>\n<script client>\nimport logo from './Logo.PNG'\nconsole.log(logo)\n</script>",
+    })
+    writeFileSync(join(root, 'src/views/components/Logo.PNG'), PHOTO)
+    await buildToDisk(root)
+    const written = readdirSync(join(root, 'dist/public/_kick/c'))
+    expect(written.some((f) => /^Logo\.[\w-]{8}\.png$/.test(f))).toBe(true)
+  })
+
   it('publicDir and clientScriptPath move the folder', async () => {
     const root = diskProject()
     writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
