@@ -22,6 +22,7 @@ my-api/                           # Default layout — adopters can rearrange
 │   ├── GEMINI.md
 │   └── skills/<slug>/SKILL.md    # One folder per skill, auto-discovered by agents
 ├── .kickjs/                      # generated types (kick typegen), gitignored
+├── .vscode/extensions.json       # recommends the KickJS VS Code extension
 ├── .env / .env.example            # .env gitignored, .env.example committed
 ├── .env.test / .env.test.example  # same split, for the test suite
 ├── .editorconfig
