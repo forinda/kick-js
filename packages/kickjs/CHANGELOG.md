@@ -1,5 +1,11 @@
 # @forinda/kickjs
 
+## 10.12.0
+
+### Minor Changes
+
+- [#1036](https://github.com/forinda/kick-js/pull/1036) [`4e7b07b`](https://github.com/forinda/kick-js/commit/4e7b07b54147aba8ca04eee2964848885575da24) Thanks [@forinda](https://github.com/forinda)! - Form state for server-rendered forms. `formErrorHandler()` (pass to `bootstrap({ onError })`; with Inertia, `formErrorHandler(inertiaErrorHandler())`) turns a browser form submit that fails route validation into a 303 back to the form. It keeps the field errors and the submitted values in the session, and goes back to the last full page the session rendered, else the same-site `Referer`, else `fallbackUrl` (default `/`). `fetch()` with `FormData` keeps getting the usual JSON error. `flash(ctx, data)` leaves messages for the next page, with the same session key as `@forinda/kickjs-inertia`'s, so it works for Inertia pages and `.kick` views alike. `fieldErrors(details)` and `oldInput(body)` are exported too. Old input leaves out secrets (`SECRET_FIELD`) and files and is capped in bytes (1,000 a field, 1,500 in all), so a cookie session can't overflow.
+
 ## 10.11.0
 
 ### Minor Changes
