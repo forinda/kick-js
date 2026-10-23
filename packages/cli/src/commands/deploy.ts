@@ -373,8 +373,9 @@ async function importFromProject(root: string, specifier: string): Promise<any> 
 export function viewsPluginOptions(
   root: string,
   deploy: ResolvedDeploy,
-): { publicDir: string } | undefined {
-  if (!deploy.staticDir) return undefined
+): { publicDir: string } | { clientFiles: 'bundle' } {
+  // No static folder to publish to: client files stay in the function's bundle.
+  if (!deploy.staticDir) return { clientFiles: 'bundle' }
   const from = resolve(root, deploy.outDir)
   return { publicDir: relative(from, resolve(root, deploy.staticDir)).split(sep).join('/') }
 }

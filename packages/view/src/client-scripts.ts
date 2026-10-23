@@ -46,13 +46,38 @@ export const contentType = (file: string): string =>
 const IMPORTS =
   /(^|[\n;])\s*import[\s{*'"]|\bimport\s*\(|(^|[\n;])\s*export\s*(\*(\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"]/
 
-// ponytail: no `${}` nesting or regex literals; a real lexer if those cause false hits.
+// ponytail: a template literal nested inside `${}` or a regex literal can confuse it; a real lexer if those bite.
 const NOISE =
   /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g
 
 /** Whether a script imports: searched with comments removed and strings emptied. */
-export const hasImports = (code: string): boolean =>
-  IMPORTS.test(code.replace(NOISE, (m) => (m[0] === '/' ? '\n' : m[0]! + m[0])))
+export function hasImports(code: string): boolean {
+  // A template literal's `${…}` parts are code: checked on their own.
+  const parts: string[] = []
+  const masked = code.replace(NOISE, (m) => {
+    if (m[0] === '/') return '\n'
+    if (m[0] === '`') parts.push(...templateExpressions(m))
+    return m[0]! + m[0]
+  })
+  return IMPORTS.test(masked) || parts.some(hasImports)
+}
+
+/** The `${…}` expressions of a template literal, by brace depth. */
+function templateExpressions(literal: string): string[] {
+  const out: string[] = []
+  for (let i = 0; i < literal.length; i++) {
+    if (literal[i] === '\\') i++
+    else if (literal[i] === '$' && literal[i + 1] === '{') {
+      let depth = 1
+      let j = i + 2
+      for (; j < literal.length && depth; j++)
+        depth += literal[j] === '{' ? 1 : literal[j] === '}' ? -1 : 0
+      out.push(literal.slice(i + 2, j - 1))
+      i = j - 1
+    }
+  }
+  return out
+}
 
 /** Insert `tags` before the last `</body>`, or at the end when there's none. */
 export function injectScripts(html: string, tags: string): string {

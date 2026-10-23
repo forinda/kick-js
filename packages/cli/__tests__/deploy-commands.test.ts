@@ -152,6 +152,9 @@ describe('views apps', () => {
   it('write client files into the static folder from the serverless build', () => {
     const resolved = resolveDeploy(undefined, '/apps/site', tree(), views)
     expect(viewsPluginOptions('/apps/site', resolved)).toEqual({ publicDir: '../public' })
+    // No static folder to publish to: client files stay in the function's bundle.
+    const off = resolveDeploy({ staticDir: false }, '/apps/site', tree(), views)
+    expect(viewsPluginOptions('/apps/site', off)).toEqual({ clientFiles: 'bundle' })
     // Inertia keeps its own layout; no views plugin wiring for it here.
     const inertia = resolveDeploy(undefined, '/apps/site', tree(), {
       ...views,

@@ -290,6 +290,13 @@ describe('imports', () => {
     expect(await v.render('page')).toContain('/_kick/c/flash-toast.')
   })
 
+  it('finds imports inside template literal expressions', async () => {
+    const { hasImports } = await import('../src/client-scripts')
+    expect(hasImports("const s = `x ${import('./helper.js')} y`")).toBe(true)
+    expect(hasImports("const s = `a ${`b ${import('./deep.js')}`} c`")).toBe(true)
+    expect(hasImports("const s = `import('./x') ${'import(1)'} ${{ a: 1 }.a}`")).toBe(false)
+  })
+
   it('kick dev leaves type stripping to Vite', async () => {
     const v = createViews({
       viewsDir: dir({ 'components/flash-toast': TOAST, page: '<flash-toast />' }),
