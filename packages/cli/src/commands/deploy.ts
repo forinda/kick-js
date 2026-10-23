@@ -85,6 +85,8 @@ export function detectLayout(
   if (isWorkspaceRoot && exists(resolve(parent, 'web', 'package.json'))) {
     return { staticDir: '../web/dist', siteRoot: '..', apiPath: '/api' }
   }
+  // Views: the build writes client files to dist/public, served before the function.
+  if (deps['@forinda/kickjs-view']) return { staticDir: 'dist/public', siteRoot: '.', apiPath: '' }
   // API only: nothing else serves this domain, so the function takes every
   // path and unknown routes get the app's own 404 rather than the platform's.
   return { siteRoot: '.', apiPath: '' }
@@ -364,6 +366,19 @@ async function importFromProject(root: string, specifier: string): Promise<any> 
 }
 
 /** Build `<outDir>/server.mjs`, returning its absolute path. */
+/**
+ * The views plugin's options for the serverless build: client files go to the
+ * static folder, whatever the function's `outDir`.
+ */
+export function viewsPluginOptions(
+  root: string,
+  deploy: ResolvedDeploy,
+): { publicDir: string } | undefined {
+  if (!deploy.staticDir) return undefined
+  const from = resolve(root, deploy.outDir)
+  return { publicDir: relative(from, resolve(root, deploy.staticDir)).split(sep).join('/') }
+}
+
 async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) => void) {
   const entry = resolve(root, deploy.entry)
   if (!existsSync(entry)) {
@@ -374,17 +389,21 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
   }
   const { build } = await importFromProject(root, 'vite')
   const { default: swc } = await importFromProject(root, 'unplugin-swc')
-  const { devtoolsFlagPlugin, devtoolsStripPlugin } = await importFromProject(
+  const { devtoolsFlagPlugin, devtoolsStripPlugin, kickViewsPlugin } = await importFromProject(
     root,
     '@forinda/kickjs-vite',
   )
+  // `virtual:kick-views`: templates checked and client files written, as `kick build` does.
+  const views = projectDeps(root)['@forinda/kickjs-view']
+    ? [kickViewsPlugin(viewsPluginOptions(root, deploy))]
+    : []
 
   await build({
     configFile: false,
     root,
     logLevel: 'warn',
     oxc: false,
-    plugins: [swc.vite(), devtoolsFlagPlugin(), devtoolsStripPlugin()],
+    plugins: [swc.vite(), devtoolsFlagPlugin(), devtoolsStripPlugin(), ...views],
     resolve: { alias: { '@': resolve(root, 'src') } },
     ssr: { noExternal: true, target: 'node' },
     build: {
@@ -406,6 +425,9 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
       },
     },
   })
+  // An app with no client scripts writes nothing there; the platform still publishes it.
+  if (views.length && deploy.staticDir)
+    mkdirSync(resolve(root, deploy.staticDir), { recursive: true })
   const file = resolve(root, deploy.outDir, 'server.mjs')
   log(`bundled ${relative(process.cwd(), file)}`)
   return file
