@@ -1,5 +1,13 @@
 # @forinda/kickjs-vite
 
+## 8.4.0
+
+### Minor Changes
+
+- [#1042](https://github.com/forinda/kick-js/pull/1042) [`2ab6a74`](https://github.com/forinda/kick-js/commit/2ab6a746dd2df28192280a33027208bcd01a3659) Thanks [@forinda](https://github.com/forinda)! - `kick build` writes client-script files (entries, chunks, CSS, images and fonts over 4 KB) to `dist/public/_kick/c/` instead of the server bundle; `virtual:kick-views` exports `clientDir`. Edge deployments now need the platform to serve `dist/public` (Cloudflare: `assets.directory`), or set `clientFiles: 'bundle'`. Needs `@forinda/kickjs-view` 0.3 or later in disk mode; the build says so otherwise. New `views` options: `clientFiles` (`'disk'` default, `'bundle'` keeps everything in the server bundle and inlines every asset), `publicDir` (default `'public'`), `inlineLimit` (default `4096`).
+
+- [#1041](https://github.com/forinda/kick-js/pull/1041) [`a90596b`](https://github.com/forinda/kick-js/commit/a90596b3577f1f2a4d8fc34760254ae7a2eaa328) Thanks [@forinda](https://github.com/forinda)! - `<script client>` imports. `kick build` runs one browser build of every component's script, so relative imports, the app's aliases and npm packages resolve. Each component gets an entry, and shared code goes into shared chunks. The output ships in the views bundle. Under `kick dev`, the plugin serves component scripts through Vite's dev pipeline, ahead of the app, so imports resolve the same way. Scripts can import CSS (linked by the page after a build) and small assets (inlined as data URIs). The browser build takes the app's `define`, mode, `.env` files and aliases. New option: `clientScriptPath`, exported by `virtual:kick-views` so `createViews({ ...kickViews })` serves from the same path.
+
 ## 8.3.0
 
 ### Minor Changes

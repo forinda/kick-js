@@ -1,5 +1,12 @@
 # @forinda/kickjs-view-language-server
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`2ab6a74`](https://github.com/forinda/kick-js/commit/2ab6a746dd2df28192280a33027208bcd01a3659), [`a90596b`](https://github.com/forinda/kick-js/commit/a90596b3577f1f2a4d8fc34760254ae7a2eaa328)]:
+  - @forinda/kickjs-view@0.3.0
+
 ## 0.3.0
 
 ### Minor Changes
