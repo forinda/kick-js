@@ -1,0 +1,21 @@
+---
+name: kickjs-bootstrap-export
+description: Use when HMR is silently doing full restarts on every save, or createTestApp can't find the app handle.
+---
+
+**Check** `src/index.ts`'s last line:
+
+```ts
+// CORRECT — Vite plugin + createTestApp import the named `app` symbol
+export const app = await bootstrap({ ... })
+
+// WRONG — HMR degrades to full restart, createTestApp loses the handle
+await bootstrap({ ... })
+```
+
+The Vite plugin imports the named `app` symbol via `virtual:kickjs/app`; testing helpers do too. Without the export, both fall back to slower paths (full restart on save, mock handle in tests) **without warning**.
+
+**Red flags**:
+- A bare `await bootstrap(...)` with no `export` — fix by adding `export const app =`.
+- Re-assigning `app` later in the file (`app = somethingElse`) — Vite imports by reference at module-load time; reassignments don't propagate.
+- Multiple files calling `bootstrap()` — only the entry should. Tests use `createTestApp` instead.

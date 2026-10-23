@@ -407,6 +407,8 @@ kick g agents -f --only both           # .agents/AGENTS.md + CLAUDE.md (skip ski
 
 Aliases: `kick g agent-docs`, `kick g ai-docs`.
 
+The skills follow the app: every app gets the general ones, and a feature adds its own when its packages are in `package.json` — `@forinda/kickjs-view` brings `kickjs-views` and `kickjs-views-forms`.
+
 The generator auto-detects:
 
 - **Project name** from `package.json` `name` (strips `@scope/` prefix).

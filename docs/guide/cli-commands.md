@@ -517,16 +517,17 @@ Add KickJS packages with their required peer dependencies automatically resolved
 kick add swagger          # installs @forinda/kickjs-swagger
 kick add db ai            # installs multiple packages at once
 kick add queue:bullmq     # installs queue package + bullmq + ioredis
+kick add views            # .kick templates: @forinda/kickjs-view, src/views, the adapter
 kick add --list           # show core packages (alias: kick list)
 kick add --list --all     # full optional catalog
 ```
 
 ### Wiring: adapters added for you
 
-`swagger`, `devtools`, `ws`, `queue` (BullMQ; also `queue:bullmq`) and `storage` are wired as well as installed — the same way `kick new --packages` wires them:
+`swagger`, `devtools`, `ws`, `queue` (BullMQ; also `queue:bullmq`), `storage` and `views` are wired as well as installed — the same way `kick new --packages` wires them:
 
 - the adapter is added to `bootstrap({ adapters: [...] })` in `src/index.ts` (or `src/main.ts`, or `--entry <file>`), with its import — a path relative to that file, so `--entry src/app/index.ts` imports `../adapters/queue`. An `adapters` list is created if the call has none;
-- `queue` writes `src/adapters/queue.ts` and declares `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` in the env schema (`src/config/index.ts`, else `src/env.ts`) — into the object passed to `fromZod` / `fromValibot` / `fromYup` (the one the default export names), in that library's syntax, skipping keys it already declares. Host and port default to `127.0.0.1:6379`; the password has no default. `storage` writes `src/adapters/storage.ts`;
+- `views` writes `src/views.ts`, `src/adapters/views.ts`, a layout (`src/views/layouts/main.kick`) and a `home` page, and prints the line that adds `viewCliPlugin` to `kick.config.ts` (for `kick check:views` and `kick fmt:views`) — `kick new --packages views` puts it there for you; `queue` writes `src/adapters/queue.ts` and declares `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` in the env schema (`src/config/index.ts`, else `src/env.ts`) — into the object passed to `fromZod` / `fromValibot` / `fromYup` (the one the default export names), in that library's syntax, skipping keys it already declares. Host and port default to `127.0.0.1:6379`; the password has no default. `storage` writes `src/adapters/storage.ts`;
 - the package goes into `dependencies` (the entry file imports it) along with the peers the adapter uses — except `devtools`, which is only imported under `kick dev`: it stays in `devDependencies`, and its entry is the flag-gated dynamic import above, plus `src/devtools.d.ts` for the flag's type.
 
 ```text
@@ -535,6 +536,8 @@ kick add --list --all     # full optional catalog
 ```
 
 Only the call's position changes — the rest of the file is left as it was, and running `kick add` again for the same package doesn't add a second copy. When the file doesn't have that shape (no `bootstrap({ ... })`, or `adapters` is a variable rather than a list), `kick add` prints the import and the call to paste yourself.
+
+When the app keeps agent skills (`.agents/skills/` exists), `kick add` also writes the package's skills there — `views` brings `kickjs-views` and `kickjs-views-forms` — and leaves any skill already in place alone.
 
 `kick add` won't edit a tracked file with unstaged changes, so the wiring lands as its own diff: commit, stage (`git add`) or stash first, or pass `--force`. Files git doesn't track yet — a fresh `kick new` before its first commit, or one inside a parent repository — don't block it. `--no-wire` installs without touching any file.
 
@@ -760,6 +763,8 @@ kick g agents -f --only both       # .agents/AGENTS.md + CLAUDE.md (skip skills)
 ```
 
 Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from `package.json`), package manager (corepack `packageManager` field), and template (from `kick.config.ts` `pattern`).
+
+The skills follow the app: every app gets the general ones, and a feature adds its own when its packages are in `package.json` — `@forinda/kickjs-view` brings `kickjs-views` and `kickjs-views-forms`.
 
 | Flag                    | Description                                                                  | Default               |
 | ----------------------- | ---------------------------------------------------------------------------- | --------------------- |

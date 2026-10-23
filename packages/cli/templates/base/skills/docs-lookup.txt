@@ -1,0 +1,40 @@
+---
+name: kickjs-docs-lookup
+description: Use FIRST when unsure about any KickJS API, option, or behaviour — before guessing from memory or inferring from surrounding code.
+---
+
+These skills are deliberately short — they cover the traps, not the whole API
+surface. When the answer is not in one of them, read the docs rather than
+inferring it from nearby code: a wrong guess about a framework API compiles
+fine and fails at runtime.
+
+**Where to look**
+
+| Question | Page |
+| --- | --- |
+| Anything — start here | https://kickjs.app/ |
+| Controllers, routing, `ctx` helpers | https://kickjs.app/guide/controllers |
+| DI, tokens, scopes | https://kickjs.app/guide/dependency-injection |
+| Modules and mounting | https://kickjs.app/guide/modules |
+| Adapters, plugins, lifecycle hooks | https://kickjs.app/guide/adapters |
+| Context Contributors | https://kickjs.app/guide/context-decorators |
+| Env, `ConfigService`, `@Value` | https://kickjs.app/guide/configuration |
+| Middleware and guards | https://kickjs.app/guide/middleware |
+| Testing (`createTestApp`) | https://kickjs.app/guide/testing |
+| Typegen and generated types | https://kickjs.app/guide/typegen |
+| HMR and the dev server | https://kickjs.app/guide/hmr |
+| `.kick` views, forms, components | https://kickjs.app/guide/views |
+
+**Local, and usually faster**
+
+- `kick explain "<error message>"` — matches known failures and gives the fix.
+  Pipe a failing run in: `{{test}} 2>&1 | {{kick}} explain`.
+- `kick doctor` — checks this project's wiring.
+- `kick inspect` — the live route / adapter table.
+- `.kickjs/types/` — generated types are ground truth for what exists.
+- `node_modules/@forinda/kickjs/dist/*.d.mts` — the real signature when a doc
+  page and the code disagree.
+
+**Rule**: if you would be guessing, look it up. If a doc page contradicts the
+installed `.d.mts`, trust the `.d.mts` and say so — the docs may be behind the
+version this project has.

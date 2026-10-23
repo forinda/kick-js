@@ -480,3 +480,13 @@ describe('env schema entries fail closed on secrets', () => {
     }
   })
 })
+
+describe('renderSlots imports', () => {
+  it('a name only mentioned in a comment is not imported', () => {
+    const out = renderSlots(
+      '// @kick:imports\n// matches `bootstrap({ runtime })`\nexport default {}\n',
+      [{ import: { from: '@forinda/kickjs', names: ['bootstrap'] } }],
+    )
+    expect(out).not.toContain('import { bootstrap }')
+  })
+})

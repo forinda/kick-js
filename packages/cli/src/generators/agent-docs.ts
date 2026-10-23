@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { writeFileSafe } from '../utils/fs'
 import { confirm } from '../utils/prompts'
@@ -12,6 +12,7 @@ import {
 import { loadKickConfig } from '../config'
 import { resolvePackageManager } from '../utils/package-manager'
 import type { ModuleStyle } from './templates/types'
+import { detectFeatureLayers, readLayerSkills, skillVars } from '../scaffold/skills'
 
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
@@ -132,7 +133,9 @@ export async function generateAgentDocs(options: GenerateAgentDocsOptions): Prom
     // auto-discover skills (Claude Code, Copilot CLI plugins, Gemini's
     // activate_skill) pick each up by its frontmatter without needing
     // a separate index file.
-    for (const skill of generateKickJsSkillFiles(name, template, pm, style)) {
+    // Base skills, plus those of the features this app uses (from package.json).
+    const layers = detectFeatureLayers(options.outDir)
+    for (const skill of generateKickJsSkillFiles(name, template, pm, style, layers)) {
       targets.push({
         file: join(options.outDir, AGENTS_DIR, 'skills', skill.slug, 'SKILL.md'),
         render: () => skill.content,
@@ -166,6 +169,40 @@ export async function generateAgentDocs(options: GenerateAgentDocsOptions): Prom
     }
     await writeFileSafe(file, render())
     written.push(file)
+  }
+  return written
+}
+
+/**
+ * `kick add <feature>`: the feature's own skills, into an app that already
+ * keeps skills in `.agents/skills/` (`kick g agents --only skills` creates it).
+ * An existing SKILL.md is left alone — refreshing is `kick g agents -f`'s job.
+ * Returns the paths written, relative to `cwd`.
+ */
+export async function writeLayerSkills(
+  cwd: string,
+  layers: readonly string[],
+  pm: string,
+): Promise<string[]> {
+  // The app's own .agents/, else a fullstack workspace's, one folder up from server/.
+  const candidates = basename(cwd) === 'server' ? [cwd, dirname(cwd)] : [cwd]
+  const base = candidates.find((d) => existsSync(join(d, AGENTS_DIR, 'skills')))
+  if (!layers.length || !base) return []
+  const style = await detectStyle(cwd)
+  const own = new Set(readLayerSkills(layers, skillVars(pm, style)).map((s) => s.slug))
+  const files = generateKickJsSkillFiles(
+    detectName(cwd),
+    await detectTemplate(cwd),
+    pm,
+    style,
+    layers,
+  ).filter((f) => own.has(f.slug))
+  const written: string[] = []
+  for (const f of files) {
+    const abs = join(base, AGENTS_DIR, 'skills', f.slug, 'SKILL.md')
+    if (existsSync(abs)) continue
+    await writeFileSafe(abs, f.content)
+    written.push(relative(cwd, abs))
   }
   return written
 }

@@ -1,0 +1,27 @@
+---
+name: kickjs-refresh-agent-docs
+description: Use after a KickJS version bump to sync the .agents/ docs with the latest CLI templates.
+---
+
+**Steps**:
+1. `kick g agents -f --only both` — overwrites `CLAUDE.md` (root) and `.agents/AGENTS.md`.
+2. `kick g agents -f --only skills` — refreshes every `.agents/skills/<slug>/SKILL.md`.
+3. `kick g agents -f --only gemini` / `--only copilot` — refresh the per-agent files when needed.
+4. Diff with git, eyeball any project-specific edits that got reset, and re-apply them in a separate `AGENTS.local.md` or per-skill `SKILL.local.md` alongside.
+5. Commit as `docs(agents): sync from CLI vX.Y`.
+
+**`.agents/` layout** (post-restructure):
+
+```
+CLAUDE.md                 # at root — Claude Code auto-loads from here
+.agents/
+├── AGENTS.md             # canonical multi-agent reference
+├── GEMINI.md             # Gemini-specific notes
+├── COPILOT.md            # Copilot CLI notes
+└── skills/
+    ├── add-module/SKILL.md
+    ├── add-adapter/SKILL.md
+    └── …                 # one SKILL.md per skill, frontmatter-namespaced
+```
+
+Customisation goes in `.local.md` siblings (`AGENTS.local.md`, `skills/<slug>/SKILL.local.md`) — those are never overwritten.
