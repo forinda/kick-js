@@ -1,0 +1,21 @@
+# Auto-detect text files and normalise line endings to LF — the same rule
+# `kick new` writes into apps. Scaffold templates and skill sources
+# (packages/cli/templates/**) render byte for byte, so a CRLF checkout must
+# never reach them.
+* text=auto eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.vsix binary
+
+# Lock files — treat as generated
+pnpm-lock.yaml -diff linguist-generated
