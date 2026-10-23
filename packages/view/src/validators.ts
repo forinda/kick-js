@@ -5,7 +5,13 @@
  * (`./validate-runtime`) runs it in the browser.
  */
 
+import type { Diagnostic } from './diagnostics'
+import { readExportNames } from './pipes/read-exports'
+
 type Arg = 'number' | 'string'
+
+/** The component tag the app's validators are served under: `kick-validators.<hash>.js`. */
+export const VALIDATORS_TAG = 'kick-validators'
 
 export const VALIDATORS: Record<string, { args: Arg[]; message: string }> = {
   required: { args: [], message: 'This field is required' },
@@ -20,6 +26,22 @@ export const VALIDATORS: Record<string, { args: Arg[]; message: string }> = {
 }
 
 export type Rule = [string, ...Array<string | number>]
+
+/** The validators `validators.ts` exports, refusing the built-in names. */
+export function readValidatorExports(
+  source: string,
+  file: string,
+): { names: string[]; diagnostics: Diagnostic[] } {
+  return readExportNames(source, file, Object.keys(VALIDATORS), 'validator')
+}
+
+/** A quoted string or a number, as validator arguments are written; undefined when it's neither. */
+function argValue(a: string): string | number | undefined {
+  if (/^-?\d+(\.\d+)?$/.test(a)) return Number(a)
+  const m = /^(['"])([\s\S]*)\1$/.exec(a)
+  // Only an escaped quote is unescaped: `\d` stays a regex escape.
+  return m ? m[2]!.split(`\\${m[1]}`).join(m[1]!) : undefined
+}
 
 /** `s` split on `sep` outside single or double quotes. */
 function split(s: string, sep: string): string[] {
@@ -41,12 +63,25 @@ function split(s: string, sep: string): string[] {
   return out.map((p) => p.trim())
 }
 
-/** `required | minLength:3 | pattern:'^[a-z]+$'` → rule data, or what's wrong with it. */
-export function parseValidate(src: string): { rules: Rule[] } | { error: string } {
+/**
+ * `required | minLength:3 | pattern:'^[a-z]+$'` → rule data, or what's wrong
+ * with it. `custom`: the app's validators, which take any numbers or quoted strings.
+ */
+export function parseValidate(
+  src: string,
+  custom?: ReadonlySet<string>,
+): { rules: Rule[] } | { error: string } {
   const rules: Rule[] = []
   for (const part of split(src, '|')) {
     if (!part) return { error: 'empty validator in validate' }
     const [name, ...raw] = split(part, ':')
+    if (!Object.hasOwn(VALIDATORS, name!) && custom?.has(name!)) {
+      const args = raw.map(argValue)
+      if (args.some((a) => a === undefined))
+        return { error: `${name} takes numbers or quoted strings` }
+      rules.push([name!, ...(args as Array<string | number>)])
+      continue
+    }
     const spec = VALIDATORS[name!]
     if (!spec) return { error: `unknown validator '${name}'` }
     if (raw.length !== spec.args.length)

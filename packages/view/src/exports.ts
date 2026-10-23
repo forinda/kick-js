@@ -29,6 +29,7 @@ export {
   type PipeEnv,
 } from './pipes/env'
 export { readPipeExports } from './pipes/read-exports'
+export { readValidatorExports, VALIDATORS_TAG } from './validators'
 export {
   createViews,
   useFileLoader,

@@ -6,6 +6,8 @@ export interface Project {
   templates: Map<string, TemplateAst>
   /** Pipe names: the built-ins and the app's. */
   pipes: Set<string>
+  /** The app's validator names, from `validators.ts` (the built-ins are always known). */
+  validators?: Set<string>
   /** Folder (inside the views folder) holding components. Default `components`. */
   componentsDir: string
   /** A page's layout when it declares none: one name, or folder prefix → layout. */
