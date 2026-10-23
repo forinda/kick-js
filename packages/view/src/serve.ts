@@ -7,11 +7,13 @@
 import { CLIENT_SCRIPT_FILE } from './client-scripts'
 import type { Views } from './views'
 
-/** A script's name never changes with its content, so it caches forever. */
-export const CLIENT_SCRIPT_HEADERS: Record<string, string> = {
-  'content-type': 'text/javascript; charset=utf-8',
+/** A file's name changes with its content, so it caches forever. */
+export const clientFileHeaders = (file: string): Record<string, string> => ({
+  'content-type': file.endsWith('.css')
+    ? 'text/css; charset=utf-8'
+    : 'text/javascript; charset=utf-8',
   'cache-control': 'public, max-age=31536000, immutable',
-}
+})
 
 /** The script file a GET / HEAD asks for under `views.clientScriptPath`, if any. */
 export function clientScriptFile(
@@ -45,6 +47,6 @@ export async function clientScriptResponse(
   if (js === undefined) return undefined
   return new Response(request.method === 'HEAD' ? null : js, {
     status: 200,
-    headers: CLIENT_SCRIPT_HEADERS,
+    headers: clientFileHeaders(file),
   })
 }

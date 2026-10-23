@@ -103,10 +103,10 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         file: join(viewsDir, `${name}.kick`),
         code: t.client!.code,
       }))
-    let client: { entries: Record<string, string>; files: Record<string, string> } | undefined
+    let client: ClientBundle | undefined
     if (scripts.length) {
       try {
-        client = await bundleClientScripts(scripts, root, shared)
+        client = await bundleClientScripts(scripts, root, shared, scriptPath)
       } catch (err) {
         errors.push(`<script client> bundling failed: ${(err as Error).message}`)
       }
@@ -277,13 +277,16 @@ async function bundleClientScripts(
   scripts: Array<{ tag: string; file: string; code: string }>,
   root: string,
   shared: ClientBuildConfig,
-): Promise<{ entries: Record<string, string>; files: Record<string, string> }> {
+  scriptPath: string,
+): Promise<ClientBundle> {
   const vite = await import('vite')
   const byId = new Map(scripts.map((s) => [s.file + CLIENT_SUFFIX, s.code]))
   const out = (await vite.build({
     ...(shared as object),
     configFile: false,
     root,
+    // CSS `url()`s and asset URLs point where the views serve files.
+    base: `${scriptPath}/`,
     logLevel: 'silent',
     plugins: [
       {
@@ -297,47 +300,71 @@ async function bundleClientScripts(
       minify: true,
       modulePreload: false,
       copyPublicDir: false,
+      assetsDir: '',
+      // ponytail: images and fonts inline as data URIs, so every served file is text; serve binaries if size bites.
+      assetsInlineLimit: () => true,
       rollupOptions: {
         input: Object.fromEntries(scripts.map((s) => [s.tag, s.file + CLIENT_SUFFIX])),
         output: {
           format: 'es',
           entryFileNames: '[name].[hash].js',
-          // Served names allow no dots: `date.utils` becomes `date_utils`.
-          chunkFileNames: (c: { name: string }) =>
-            `${c.name.replace(/[^A-Za-z0-9_-]/g, '_')}.[hash].js`,
+          chunkFileNames: (c: { name: string }) => `${servable(c.name)}.[hash].js`,
+          assetFileNames: (a: { names?: string[]; name?: string }) =>
+            `${servable((a.names?.[0] ?? a.name ?? 'asset').replace(/\.[^.]*$/, ''))}.[hash][extname]`,
         },
       },
     },
-  })) as
-    | {
-        output: Array<{
-          type: string
-          fileName: string
-          code?: string
-          isEntry?: boolean
-          name?: string
-        }>
-      }
-    | Array<{
-        output: Array<{
-          type: string
-          fileName: string
-          code?: string
-          isEntry?: boolean
-          name?: string
-        }>
-      }>
+  })) as { output: OutputFile[] } | Array<{ output: OutputFile[] }>
   const output = (Array.isArray(out) ? out[0]! : out).output
   const entries: Record<string, string> = {}
+  const css: Record<string, string[]> = {}
   const files: Record<string, string> = {}
-  for (const chunk of output) {
-    // ponytail: no CSS/asset serving yet; add a files map entry per asset when needed.
-    if (chunk.type !== 'chunk')
-      throw new Error(`client scripts can't import CSS or other assets yet (${chunk.fileName})`)
-    files[chunk.fileName] = chunk.code!
-    if (chunk.isEntry && chunk.name) entries[chunk.name] = chunk.fileName
+  const byName = new Map(output.map((f) => [f.fileName, f]))
+  /** The stylesheets a chunk and the chunks it imports bring in. */
+  const cssOf = (name: string, seen = new Set<string>()): string[] => {
+    const c = byName.get(name)
+    if (!c || seen.has(name)) return []
+    seen.add(name)
+    return [
+      ...(c.imports ?? []).flatMap((i) => cssOf(i, seen)),
+      ...(c.viteMetadata?.importedCss ?? []),
+    ]
   }
-  return { entries, files }
+  for (const f of output) {
+    if (f.type === 'chunk') {
+      files[f.fileName] = f.code!
+      if (f.isEntry && f.name) entries[f.name] = f.fileName
+    } else if (f.fileName.endsWith('.css')) {
+      files[f.fileName] =
+        typeof f.source === 'string' ? f.source : new TextDecoder().decode(f.source)
+    } else
+      throw new Error(`client scripts can't import ${f.fileName} yet: only CSS and inlined assets`)
+  }
+  for (const [tag, file] of Object.entries(entries)) {
+    const list = [...new Set(cssOf(file))]
+    if (list.length) css[tag] = list
+  }
+  return { entries, css, files }
+}
+
+/** Served names allow no dots: `date.utils` becomes `date_utils`. */
+const servable = (name: string) => name.replace(/[^A-Za-z0-9_-]/g, '_')
+
+type OutputFile = {
+  type: string
+  fileName: string
+  code?: string
+  source?: string | Uint8Array
+  isEntry?: boolean
+  name?: string
+  imports?: string[]
+  viteMetadata?: { importedCss?: Set<string> }
+}
+
+type ClientBundle = {
+  entries: Record<string, string>
+  css: Record<string, string[]>
+  files: Record<string, string>
 }
 
 /**

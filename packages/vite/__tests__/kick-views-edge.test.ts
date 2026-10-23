@@ -49,7 +49,8 @@ describe('kick views on workerd', () => {
       'src/views/island.kick': '<flash-toast /><import-box /><import-two />',
       // Two importers: the helper becomes a shared chunk.
       'src/views/components/import-box.kick':
-        "<div></div>\n<script client>\nimport { label } from './label'\nconsole.log(label)\n</script>",
+        "<div></div>\n<script client>\nimport './box.css'\nimport { label } from './label'\nconsole.log(label)\n</script>",
+      'src/views/components/box.css': 'div { color: teal }',
       'src/views/components/import-two.kick':
         "<div></div>\n<script client>\nimport { label } from './label'\nconsole.log(label, 2)\n</script>",
       'src/views/components/label.ts': "export let label: string = 'from a chunk'\nlabel += '!'",
@@ -97,6 +98,11 @@ describe('kick views on workerd', () => {
       const depJs = await mf.dispatchFetch(`http://edge/_kick/c/${dep![1] ?? dep![2]}`)
       expect(depJs.status).toBe(200)
       expect(await depJs.text()).toContain('from a chunk')
+      // Its stylesheet: linked by the page, served as CSS.
+      const css = /href="(\/_kick\/c\/[^"]+\.css)"/.exec(island)![1]!
+      const cssRes = await mf.dispatchFetch(`http://edge${css}`)
+      expect(cssRes.headers.get('content-type')).toBe('text/css; charset=utf-8')
+      expect(await cssRes.text()).toContain('teal')
       expect(await js.text()).toMatch(/customElements\.define\(["'`]kick-toast/)
     } finally {
       await mf.dispose()

@@ -4,7 +4,7 @@
  * (`Symbol.for('kickjs.viewRenderer')`), so this module never imports
  * `@forinda/kickjs` at runtime — it stays edge-safe.
  */
-import { CLIENT_SCRIPT_HEADERS, clientScriptFile } from './serve'
+import { clientFileHeaders, clientScriptFile } from './serve'
 import { createViews, type Views, type ViewsOptions } from './views'
 
 const VIEW_RENDERER = Symbol.for('kickjs.viewRenderer')
@@ -67,7 +67,7 @@ function bindViews(views: Views): (req: object, res: unknown, next: Next) => voi
         }
         const out = res as ScriptResponse
         out.statusCode = 200
-        for (const [k, v] of Object.entries(CLIENT_SCRIPT_HEADERS)) out.setHeader(k, v)
+        for (const [k, v] of Object.entries(clientFileHeaders(file))) out.setHeader(k, v)
         out.end(String(r.method).toUpperCase() === 'HEAD' ? undefined : js)
       },
       (err: unknown) => next(err),

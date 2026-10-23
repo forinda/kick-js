@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { createViews } from '../src/index'
+import { clientScriptResponse, createViews } from '../src/index'
 import { check } from '../src/check/check'
 import { parse } from '../src/parse/template'
 import { BUILTIN_PIPES } from '../src/pipes/builtins'
@@ -111,6 +111,44 @@ describe('imports', () => {
     expect(await v.clientScript('shared.Zz9_8-yq.js')).toBe('export {}')
     for (const bad of ['../x.js', 'a/b.js', 'x.js', 'shared.Zz9_8-yq.js.map'])
       expect(await v.clientScript(bad)).toBeUndefined()
+  })
+
+  it('links bundled CSS in the head and serves it as CSS', async () => {
+    const files = {
+      'components/flash-toast': TOAST,
+      page: '<html><head><title>x</title></head><body><flash-toast /></body></html>',
+    }
+    const p = project(files)
+    const v = createViews({
+      bundle: {
+        v: 1,
+        templates: {
+          'components/flash-toast': check('components/flash-toast', p).template!,
+          page: check('page', p).template!,
+        },
+        client: {
+          entries: { 'flash-toast': 'flash-toast.AbC_12-x.js' },
+          css: { 'flash-toast': ['flash-toast.Cs5_12-x.css'] },
+          files: {
+            'flash-toast.AbC_12-x.js': 'export {}',
+            'flash-toast.Cs5_12-x.css': 'kick-toast{color:red}',
+          },
+        },
+      },
+      warn: vi.fn(),
+    })
+    const html = await v.render('page', { cspNonce: 'n1' })
+    expect(html).toContain(
+      '<link rel="stylesheet" href="/_kick/c/flash-toast.Cs5_12-x.css" nonce="n1"></head>',
+    )
+    const res = await clientScriptResponse(
+      v,
+      new Request('http://x/_kick/c/flash-toast.Cs5_12-x.css'),
+    )
+    expect(res?.headers.get('content-type')).toBe('text/css; charset=utf-8')
+    expect(await res?.text()).toBe('kick-toast{color:red}')
+    // Only bundled files are CSS: no per-component CSS name.
+    expect(await v.clientScript('flash-toast.00000000.css')).toBeUndefined()
   })
 
   it('imports need a bundler', async () => {

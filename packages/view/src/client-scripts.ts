@@ -15,7 +15,7 @@ export function fnv1a(s: string): string {
 }
 
 /** `<name>.<hash>.js`: a component's own script, or a bundled entry or chunk. Nothing but one `.js`. */
-export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.js$/
+export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.(js|css)$/
 
 /** `import … from`, `export … from` or `import(`: a script that needs a bundler. */
 const IMPORTS =
@@ -36,6 +36,12 @@ export function injectScripts(html: string, tags: string): string {
   let at = -1
   for (const m of html.matchAll(/<\/body\s*>/gi)) at = m.index
   return at < 0 ? html + tags : html.slice(0, at) + tags + html.slice(at)
+}
+
+/** Insert `tags` before the first `</head>`, or as `injectScripts` does when there's none. */
+export function injectHead(html: string, tags: string): string {
+  const at = /<\/head\s*>/i.exec(html)?.index ?? -1
+  return at < 0 ? injectScripts(html, tags) : html.slice(0, at) + tags + html.slice(at)
 }
 
 export const NO_STRIPPER = 'client scripts need Node 22.13+ to strip TypeScript, or a kick build'

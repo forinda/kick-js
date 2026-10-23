@@ -102,8 +102,9 @@ describe('kickViewsPlugin', () => {
   it('dev serves client scripts through Vite, imports resolved', async () => {
     const root = project({
       'src/views/components/flash-toast.kick':
-        "<kick-toast></kick-toast>\n<script client>\nimport { count } from './shared'\nconst n: number = count\nconsole.log(n)\n</script>",
+        "<kick-toast></kick-toast>\n<script client>\nimport './toast.css'\nimport { count } from './shared'\nconst n: number = count\nconsole.log(n)\n</script>",
       'src/views/components/shared.ts': 'export const count = 1',
+      'src/views/components/toast.css': 'kick-toast { color: plum }',
       'src/views/home.kick': '<flash-toast />',
     })
     const vite = await createServer({
@@ -124,6 +125,10 @@ describe('kickViewsPlugin', () => {
       const js = await res.text()
       expect(js).toContain('/src/views/components/shared.ts')
       expect(js).not.toContain(': number')
+      // CSS imports go through Vite too: a module that injects the stylesheet.
+      const css = await fetch(`${base}/src/views/components/toast.css`)
+      expect(css.status).toBe(200)
+      expect(await css.text()).toContain('plum')
       // Not a component's script: left for the app.
       expect((await fetch(`${base}/_kick/c/nope.00000000.js`)).status).toBe(404)
       // An edit to the template's script shows on the next load.
@@ -165,12 +170,19 @@ describe('kickViewsPlugin', () => {
     )
   })
 
-  it('refuses CSS and asset imports in client scripts at build', async () => {
-    const root = project({
-      'src/views/components/a-b.kick': "<div></div>\n<script client>\nimport './a.css'\n</script>",
-      'src/views/components/a.css': 'div { color: red }',
-    })
-    await expect(bundle(root)).rejects.toThrow(/can't import CSS or other assets yet/)
+  it('bundles imported CSS and inlines images', async () => {
+    const code = await bundle(
+      project({
+        'src/views/components/a-b.kick':
+          "<div></div>\n<script client>\nimport './a.css'\nimport icon from './icon.svg'\nconsole.log(icon)\n</script>",
+        'src/views/components/a.css': 'div { color: red }',
+        'src/views/components/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      }),
+    )
+    const css = /"a-b": \[\s*"(a-b\.[A-Za-z0-9_-]{8}\.css)"/.exec(code)?.[1]
+    expect(css).toBeTruthy()
+    expect(code).toMatch(new RegExp(`"${css!.replace(/\./g, '\\.')}": "[^"]*color:\\s*red`))
+    expect(code).toContain('data:image/svg+xml')
   })
 
   it("applies the app's define and mode to client scripts", async () => {

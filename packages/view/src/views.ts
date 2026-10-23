@@ -7,7 +7,14 @@ import { AST_FORMAT_VERSION, type CheckedTemplate, type TemplateAst } from './as
 import { error, type Diagnostic } from './diagnostics'
 import { check } from './check/check'
 import { componentTag, layoutResolver, templateName, type Project } from './check/project'
-import { CLIENT_SCRIPT_FILE, NO_STRIPPER, fnv1a, hasImports, injectScripts } from './client-scripts'
+import {
+  CLIENT_SCRIPT_FILE,
+  NO_STRIPPER,
+  fnv1a,
+  hasImports,
+  injectHead,
+  injectScripts,
+} from './client-scripts'
 import { VALIDATE_RUNTIME } from './validate-runtime'
 
 /** The validator script's served name; component tags can't take it. */
@@ -31,7 +38,12 @@ export interface ViewsBundle {
   v: number
   templates: Record<string, CheckedTemplate>
   /** Client scripts bundled by the build: each component's entry file, and every file (entries and shared chunks). */
-  client?: { entries: Record<string, string>; files: Record<string, string> }
+  client?: {
+    entries: Record<string, string>
+    /** Each entry's stylesheets, by component tag. */
+    css?: Record<string, string[]>
+    files: Record<string, string>
+  }
 }
 
 export interface RenderOptions {
@@ -341,15 +353,26 @@ export function createViews(options: ViewsOptions = {}): Views {
         tags.push(
           `<script type="module" src="${scriptPath}/${VALIDATE_TAG}.${VALIDATE_HASH}.js"${nonceAttr}></script>`,
         )
-      return injectScripts(html, tags.join(''))
+      // Stylesheets the bundled scripts import, once each, in the head.
+      const css = new Set(
+        [...used.values()].flatMap(
+          (t) => bundle?.client?.css?.[componentTag(t.name, componentsDir)] ?? [],
+        ),
+      )
+      const links = [...css]
+        .map((f) => `<link rel="stylesheet" href="${scriptPath}/${f}"${nonceAttr}>`)
+        .join('')
+      return injectScripts(links ? injectHead(html, links) : html, tags.join(''))
     },
     clientScriptPath: scriptPath,
     async clientScript(file) {
       const m = CLIENT_SCRIPT_FILE.exec(file)
       if (!m) return undefined
-      if (m[1] === VALIDATE_TAG) return m[2] === VALIDATE_HASH ? VALIDATE_RUNTIME : undefined
+      if (m[1] === VALIDATE_TAG)
+        return m[2] === VALIDATE_HASH && m[3] === 'js' ? VALIDATE_RUNTIME : undefined
       const files = bundle?.client?.files
       if (files) return Object.hasOwn(files, file) ? files[file] : undefined
+      if (m[3] !== 'js') return undefined
       const names = bundle
         ? Object.keys(bundle.templates)
         : [...(await current()).project.templates.keys()]
