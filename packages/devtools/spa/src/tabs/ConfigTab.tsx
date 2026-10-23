@@ -3,6 +3,7 @@
  * environment, read from a `<NAME>_FILE`, the schema's default, `provide()`,
  * or not set at all. The env schema first, then each settings section in the
  * order the app bound it. Names only; values never leave the server here.
+ * Each group collapses; collapsed groups are remembered.
  *
  * Fetches `/_debug/config/origins` on open.
  */
@@ -16,6 +17,17 @@ const LABEL: Record<ValueOrigin, string> = {
   provided: 'provided',
   default: 'default',
   unset: 'unset',
+}
+
+const COLLAPSED_KEY = 'kickjs-devtools:config:collapsed'
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]')
+    return new Set(Array.isArray(raw) ? raw.filter((c) => typeof c === 'string') : [])
+  } catch {
+    return new Set()
+  }
 }
 
 const TONE: Record<ValueOrigin, string> = {
@@ -55,6 +67,23 @@ export const ConfigTab: Component = () => {
         .filter((v) => v.origin === 'unset').length,
   )
 
+  const [collapsed, setCollapsed] = createSignal(loadCollapsed())
+  const setAll = (next: Set<string>) => {
+    setCollapsed(next)
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]))
+    } catch {
+      /* storage unavailable */
+    }
+  }
+  const toggle = (title: string) => {
+    const next = new Set(collapsed())
+    if (!next.delete(title)) next.add(title)
+    setAll(next)
+  }
+  /** Only the groups on screen count: a remembered title can outlive its section. */
+  const anyCollapsed = () => groups().some((g) => collapsed().has(g.title))
+
   return (
     <div class="flex flex-col gap-3">
       <div class="flex items-center gap-3 text-xs text-text-muted">
@@ -65,6 +94,18 @@ export const ConfigTab: Component = () => {
           <span>
             {groups().reduce((n, g) => n + g.vars.length, 0)} variables
             <Show when={unset()}> · {unset()} unset</Show>
+            <Show when={groups().length > 1}>
+              {' · '}
+              <button
+                type="button"
+                class="underline hover:text-text-body"
+                onClick={() =>
+                  setAll(anyCollapsed() ? new Set() : new Set(groups().map((g) => g.title)))
+                }
+              >
+                {anyCollapsed() ? 'Expand all' : 'Collapse all'}
+              </button>
+            </Show>
           </span>
         </Show>
         <span class="flex-1" />
@@ -96,25 +137,45 @@ export const ConfigTab: Component = () => {
           <For each={groups()}>
             {(group) => (
               <section class="card">
-                <h3 class="mb-2 text-xs font-semibold text-text-strong">{group.title}</h3>
-                <table class="w-full text-[0.78rem]">
-                  <tbody>
-                    <For each={group.vars}>
-                      {(v) => (
-                        <tr class="border-b border-border/50 last:border-0">
-                          <td class="py-1 pr-3 font-mono text-text-body">{v.name}</td>
-                          <td class="py-1 text-right">
-                            <span
-                              class={`rounded-md border px-1.5 py-0.5 text-[0.68rem] font-semibold ${TONE[v.origin]}`}
-                            >
-                              {LABEL[v.origin]}
-                            </span>
-                          </td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
+                <button
+                  type="button"
+                  aria-expanded={!collapsed().has(group.title)}
+                  onClick={() => toggle(group.title)}
+                  class="flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-left text-xs font-semibold text-text-strong"
+                >
+                  <span class="inline-block w-2.5 text-text-muted">
+                    {collapsed().has(group.title) ? '▸' : '▾'}
+                  </span>
+                  {group.title}
+                  <span class="font-normal text-text-muted">
+                    ({group.vars.length}
+                    <Show when={group.vars.some((v) => v.origin === 'unset')}>
+                      {' · '}
+                      {group.vars.filter((v) => v.origin === 'unset').length} unset
+                    </Show>
+                    )
+                  </span>
+                </button>
+                <Show when={!collapsed().has(group.title)}>
+                  <table class="mt-2 w-full text-[0.78rem]">
+                    <tbody>
+                      <For each={group.vars}>
+                        {(v) => (
+                          <tr class="border-b border-border/50 last:border-0">
+                            <td class="py-1 pr-3 font-mono text-text-body">{v.name}</td>
+                            <td class="py-1 text-right">
+                              <span
+                                class={`rounded-md border px-1.5 py-0.5 text-[0.68rem] font-semibold ${TONE[v.origin]}`}
+                              >
+                                {LABEL[v.origin]}
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </Show>
               </section>
             )}
           </For>
