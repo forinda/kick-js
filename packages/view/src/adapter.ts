@@ -43,7 +43,7 @@ function rendererFor(views: Views): Renderer {
 interface ScriptResponse {
   statusCode: number
   setHeader(name: string, value: string): unknown
-  end(body?: string): unknown
+  end(body?: string | Uint8Array): unknown
 }
 
 /**
@@ -59,16 +59,16 @@ function bindViews(views: Views): (req: object, res: unknown, next: Next) => voi
       r[VIEW_RENDERER] = renderer
       return next()
     }
-    views.clientScript(file).then(
-      (js) => {
-        if (js === undefined) {
+    views.clientFile(file).then(
+      (found) => {
+        if (!found) {
           r[VIEW_RENDERER] = renderer
           return next()
         }
         const out = res as ScriptResponse
         out.statusCode = 200
         for (const [k, v] of Object.entries(clientFileHeaders(file))) out.setHeader(k, v)
-        out.end(String(r.method).toUpperCase() === 'HEAD' ? undefined : js)
+        out.end(String(r.method).toUpperCase() === 'HEAD' ? undefined : found.body)
       },
       (err: unknown) => next(err),
     )

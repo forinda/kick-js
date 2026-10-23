@@ -15,7 +15,32 @@ export function fnv1a(s: string): string {
 }
 
 /** `<name>.<hash>.js`: a component's own script, or a bundled entry or chunk. Nothing but one `.js`. */
-export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.(js|css)$/
+export const CLIENT_SCRIPT_FILE = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{8})\.([a-z0-9]{1,8})$/
+
+const TYPES: Record<string, string> = {
+  js: 'text/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  ico: 'image/x-icon',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  otf: 'font/otf',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  wasm: 'application/wasm',
+}
+
+/** A client file's `Content-Type`, by extension. */
+export const contentType = (file: string): string =>
+  TYPES[file.slice(file.lastIndexOf('.') + 1)] ?? 'application/octet-stream'
 
 /** `import … from`, `export … from` or `import(`: a script that needs a bundler. */
 const IMPORTS =
