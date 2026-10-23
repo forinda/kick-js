@@ -93,10 +93,13 @@ export class RouteUrls implements UrlBuilder {
           `urlFor('${name}'): takes ${keys.length} param${keys.length === 1 ? '' : 's'}${keys.length ? ` (${keys.join(', ')})` : ''}, got ${list.length}`,
         )
       }
-      params = Object.fromEntries(keys.map((k, i) => [k, list[i]]))
     }
+    // A list fills each placeholder by position, so a repeated name keeps both values.
+    let at = 0
     const path = pattern.replace(/:([A-Za-z0-9_]+)/g, (_, key: string) => {
-      const value = (params as Record<string, unknown> | undefined)?.[key]
+      const value = Array.isArray(params)
+        ? (params as PositionalParams)[at++]
+        : (params as Record<string, unknown> | undefined)?.[key]
       if (value === undefined || value === null || value === '') {
         throw new Error(`urlFor('${name}'): missing param '${key}' for '${pattern}'`)
       }

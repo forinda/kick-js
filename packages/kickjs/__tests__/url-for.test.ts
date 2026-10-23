@@ -179,3 +179,12 @@ describe('urlFor with positional params', () => {
     expect(urls.build('Users.list', [])).toBe('/api/v1/users')
   })
 })
+
+describe('urlFor with positional params and a repeated name', () => {
+  it('fills each placeholder by position', async () => {
+    const { RouteUrls } = await import('../src/http/url-for')
+    const urls = new RouteUrls()
+    urls.add('Compare.show', '/compare/:id/with/:id')
+    expect(urls.build('Compare.show', ['first', 'second'])).toBe('/compare/first/with/second')
+  })
+})
