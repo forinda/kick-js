@@ -12,7 +12,7 @@ import {
 import { loadKickConfig } from '../config'
 import { resolvePackageManager } from '../utils/package-manager'
 import type { ModuleStyle } from './templates/types'
-import { detectFeatureLayers } from '../scaffold/skills'
+import { detectFeatureLayers, readLayerSkills, skillVars } from '../scaffold/skills'
 
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
@@ -169,6 +169,38 @@ export async function generateAgentDocs(options: GenerateAgentDocsOptions): Prom
     }
     await writeFileSafe(file, render())
     written.push(file)
+  }
+  return written
+}
+
+/**
+ * `kick add <feature>`: the feature's own skills, into an app that already
+ * keeps skills in `.agents/skills/` (`kick g agents --only skills` creates it).
+ * An existing SKILL.md is left alone — refreshing is `kick g agents -f`'s job.
+ * Returns the paths written, relative to `cwd`.
+ */
+export async function writeLayerSkills(
+  cwd: string,
+  layers: readonly string[],
+  pm: string,
+): Promise<string[]> {
+  const root = join(cwd, AGENTS_DIR, 'skills')
+  if (!layers.length || !existsSync(root)) return []
+  const style = await detectStyle(cwd)
+  const own = new Set(readLayerSkills(layers, skillVars(pm, style)).map((s) => s.slug))
+  const files = generateKickJsSkillFiles(
+    detectName(cwd),
+    await detectTemplate(cwd),
+    pm,
+    style,
+    layers,
+  ).filter((f) => own.has(f.slug))
+  const written: string[] = []
+  for (const f of files) {
+    const rel = join(AGENTS_DIR, 'skills', f.slug, 'SKILL.md')
+    if (existsSync(join(cwd, rel))) continue
+    await writeFileSafe(join(cwd, rel), f.content)
+    written.push(rel)
   }
   return written
 }

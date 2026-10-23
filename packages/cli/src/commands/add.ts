@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, type PackageManager } from '../config'
 import { setAllowBuilds } from '../generators/templates/project-config'
+import { writeLayerSkills } from '../generators/agent-docs'
 import { resolvePackageManagerWithSource } from '../utils/package-manager'
 
 export {
@@ -17,6 +18,7 @@ import {
   findEntry,
   findEnvSchema,
   configSnippet,
+  FEATURE_LAYERS,
   manualSnippet,
   planWiring,
   projectVars,
@@ -822,6 +824,10 @@ export function registerAddCommand(program: Command): void {
             console.log(config.replace(/^/gm, '    '))
             console.log()
           }
+          // The features' agent skills, when the app keeps them in .agents/skills.
+          const layers = [...new Set(packages.map((n) => FEATURE_LAYERS[n]).filter(Boolean))]
+          for (const path of await writeLayerSkills(cwd, layers as string[], pm))
+            console.log(`  Created ${path}`)
         }
       }
 

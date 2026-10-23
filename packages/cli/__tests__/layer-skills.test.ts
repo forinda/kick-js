@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateKickJsSkillFiles } from '../src/generators/templates/project-docs'
-import { generateAgentDocs } from '../src/generators/agent-docs'
+import { generateAgentDocs, writeLayerSkills } from '../src/generators/agent-docs'
 import { detectFeatureLayers, readLayerSkills, skillVars } from '../src/scaffold/skills'
 
 // The rendered SKILL.md of every base skill before the move, as text: formatters leave .txt alone.
@@ -106,5 +106,44 @@ describe('kick g agents writes the detected layers’ skills', () => {
     writeFileSync(join(without, 'package.json'), JSON.stringify({ name: 'w' }))
     await generateAgentDocs({ outDir: without, only: 'skills', pm: 'pnpm' })
     expect(existsSync(join(without, '.agents/skills/views'))).toBe(false)
+  })
+})
+
+describe('kick add writes the layer skills', () => {
+  const appWith = (skillsDir: boolean) => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-add-skills-'))
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'demo' }))
+    if (skillsDir) mkdirSync(join(dir, '.agents/skills/add-module'), { recursive: true })
+    return dir
+  }
+
+  it('kick add views writes the views skills when .agents/skills exists', async () => {
+    const dir = appWith(true)
+    const written = await writeLayerSkills(dir, ['feature-views'], 'pnpm')
+    expect(written.toSorted()).toEqual([
+      '.agents/skills/views-forms/SKILL.md',
+      '.agents/skills/views/SKILL.md',
+    ])
+    const skill = readFileSync(join(dir, '.agents/skills/views/SKILL.md'), 'utf8')
+    expect(skill).toMatch(/^---\nname: kickjs-views\n/)
+    expect(skill).toContain('pnpm exec kick check:views')
+    // Only the layer's skills: the base ones are kick g agents' job.
+    expect(existsSync(join(dir, '.agents/skills/add-module/SKILL.md'))).toBe(false)
+  })
+
+  it('no .agents/skills: no skills written', async () => {
+    const dir = appWith(false)
+    expect(await writeLayerSkills(dir, ['feature-views'], 'pnpm')).toEqual([])
+    expect(existsSync(join(dir, '.agents'))).toBe(false)
+  })
+
+  it('kick add views keeps an edited skill', async () => {
+    const dir = appWith(true)
+    mkdirSync(join(dir, '.agents/skills/views'), { recursive: true })
+    writeFileSync(join(dir, '.agents/skills/views/SKILL.md'), 'mine')
+    expect(await writeLayerSkills(dir, ['feature-views'], 'pnpm')).toEqual([
+      '.agents/skills/views-forms/SKILL.md',
+    ])
+    expect(readFileSync(join(dir, '.agents/skills/views/SKILL.md'), 'utf8')).toBe('mine')
   })
 })
