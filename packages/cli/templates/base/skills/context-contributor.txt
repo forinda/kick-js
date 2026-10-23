@@ -1,0 +1,73 @@
+---
+name: kickjs-context-contributor
+description: Use when a middleware's only job is to set ctx values consumed elsewhere — replace with defineHttpContextDecorator (HTTP) or defineContextDecorator (transport-agnostic).
+---
+
+**Pattern** (HTTP — most common):
+
+```ts
+import { defineHttpContextDecorator, type RequestContext } from '@forinda/kickjs'
+
+// Augment ContextMeta — required for ctx.get('tenant') to be typed
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    tenant: { id: string; name: string }
+  }
+}
+
+// The `declare module` block above is all you need for typed `ctx.get`.
+
+const LoadTenant = defineHttpContextDecorator({
+  key: 'tenant',
+  deps: { repo: TENANT_REPO }, // typed DI
+  resolve: (ctx, { repo }) => repo.findById(ctx.req.headers['x-tenant-id'] as string),
+})
+
+const LoadProject = defineHttpContextDecorator({
+  key: 'project',
+  dependsOn: ['tenant'], // typo'd key = tsc error
+  resolve: (ctx) => projectsRepo.find(ctx.get('tenant')!.id, ctx.params.id),
+})
+
+@LoadTenant
+@LoadProject
+@Get('/projects/:id')
+getProject(ctx: RequestContext) {
+  return ctx.get('project')
+}
+```
+
+Use `defineContextDecorator` (no Http prefix) only when the contributor must run across HTTP, WebSocket, queue, and cron transports — `Ctx` defaults to the smaller `ExecutionContext` surface (`get` / `set` / `requestId` only, no `req`).
+
+**Five precedence levels** (high → low):
+**method > class > module > adapter > global**
+
+Same-key collisions WITHIN a precedence level throw `DuplicateContributorError`. Across levels, the higher precedence silently overrides — a feature, not a bug, but debug it by giving resolvers distinguishable return values.
+
+**Boot-time validation**:
+- Cycles in `dependsOn` → `ContributorCycleError`.
+- `dependsOn` referring to an unknown key → `MissingContributorError`.
+- Both errors fail boot, not first request.
+
+**Critical rules — all stem from the same shared-via-ALS instance model**:
+- Every per-request stage (middleware → contributors → handler) gets its OWN `RequestContext` instance, but they all read/write the SAME `AsyncLocalStorage`-backed bag.
+- **`resolve` and `onError` must RETURN the value** — the runner writes it via `ctx.set(key, value)`. Direct property assignment (`ctx.tenant = …`) sticks to one instance only and the handler instance never sees it.
+- `ctx.set('tenant', x)` then `ctx.get('tenant')` works across instances. `ctx.req.headers[...]` works (the underlying node request is shared). Note it is a node `IncomingMessage` on Fastify and a web-backed request on h3, not an `express.Request`.
+- Services with no `ctx` reference: `getRequestValue('tenant')` returns `MetaValue<'tenant'> | undefined` (typed via the augmented `ContextMeta`). For `requestId` use `getRequestStore()`.
+- **No `setRequestValue` — writes flow through `ctx.set` or a contributor's return value.** Avoids "spooky action at a distance" where any service can pollute the per-request bag.
+
+**Error matrix**:
+- `optional: true` — `resolve` throws → key left unset; downstream sees `ctx.get(key) === undefined`.
+- `optional: false` (default) + `onError` — return a fallback value to write; return `undefined` to skip; throw to forward to the request error handler.
+- `optional: false` + no `onError` — throw propagates straight to the request error handler.
+
+**Don't use this for**: response short-circuit, stream mutation, or pre-route-matching work — keep `@Middleware()` for those.
+
+**Red flags**:
+- `ctx.get('key')!` — the non-null assertion compiles even when the producing decorator isn't on the route. Use `ctx.require('key')`.
+- `contributors: [LoadX]` at a module / adapter / bootstrap site — those take registrations: `LoadX.registration` or `LoadX.with({ ... }).registration`.
+- A `paramDefaults` value that every call site overrides (`action: 'settings:read'`) — drop it and let the compiler require the field at each site.
+- `defineContextDecorator<'k', Deps, Params>(spec)` positional form for a parameterised contributor — use `.withParams<Params>()(spec)` or `deps` inference is lost.
+- `ctx.tenant = x` instead of returning the value from `resolve` — sticks to one instance only.
+- Plugin / adapter authors using bare keys (`'state'`) instead of namespaced (`'@my-plugin/state'`) — collides with adopter keys.
+- `getRequestValue<string>('traceId')` — generic is the **key** type, not value type.

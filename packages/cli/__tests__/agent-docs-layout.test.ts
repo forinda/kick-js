@@ -156,8 +156,11 @@ describe('the deploy skill', () => {
 })
 
 describe('the views skills', () => {
+  // They come with the views layer: an app that uses @forinda/kickjs-view.
   const bySlug = (slug: string) =>
-    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find((f) => f.slug === slug)!
+    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define', ['feature-views']).find(
+      (f) => f.slug === slug,
+    )!
 
   it('kickjs-views: setup, templates, components, client scripts', () => {
     const body = bySlug('views').content
