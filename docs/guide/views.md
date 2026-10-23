@@ -38,6 +38,8 @@ Other template engines (EJS, Pug, Handlebars) keep working through [`ViewAdapter
 
 ## Setup
 
+`kick add views` does all of this: it installs the package, writes `src/views.ts`, a layout and a `home` page, and adds the adapter to `src/index.ts`. By hand:
+
 ```bash
 pnpm add @forinda/kickjs-view
 ```

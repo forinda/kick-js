@@ -3,7 +3,7 @@ name: kickjs-views
 description: Use when rendering server-side HTML with .kick templates — setting up views, adding a page, layout, component or pipe, a component with a <script client>, or when a template fails kick build / kick check:views.
 ---
 
-**Setup** (once): `{{pm}} add @forinda/kickjs-view`, then
+**Setup** (once): `{{kick}} add views` does it all. By hand: `{{pm}} add @forinda/kickjs-view`, then
 
 ```ts
 // src/views.ts
