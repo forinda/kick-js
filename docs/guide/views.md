@@ -418,9 +418,25 @@ kick-toast[kind='error'] {
 | `keys`, `entries`                     | `@for ([k, v] of obj \| entries) { … }`                                                                                                      |
 | `json`                                | `{{ data \| json }}`                                                                                                                         |
 | `url`                                 | `href="/search?q={{ term \| url }}"`                                                                                                         |
+| `route:param…`                        | `href="{{ 'UsersController.show' \| route:user.id }}"` — see [Links to routes](#links-to-routes)                                             |
 | `raw`                                 | `{{ html \| raw }}`                                                                                                                          |
 
 Dates and numbers use `locale` (default `en-US`) and `timeZone` (default `UTC`, never the server's zone). Set them in `createViews`, per request through `share`, or per call: `ctx.render(name, data, { locale: 'sw-KE', timeZone: 'Africa/Nairobi' })`.
+
+### Links to routes
+
+`route` turns a route's name into its URL, the way [`ctx.urlFor()`](./controllers.md#linking-to-routes) does in a controller, so a moved route can't leave a link pointing at the old path:
+
+```kick
+<a href="{{ 'UsersController.show' | route:user.id }}">{{ user.name }}</a>
+<form method="post" action="{{ 'PostsController.update' | route:user.id:post.slug }}"></form>
+<a href="{{ 'UsersController.list' | route }}?page=2">All users</a>
+```
+
+- The name is `'Controller.method'`; the API prefix and version are included.
+- The arguments fill the route's `:params` in the order its path has them (`/users/:id/posts/:slug` takes `user.id`, then `post.slug`), encoded. A wrong count, or a name no route has, fails the render with the route's own message.
+- A query string goes after the pipe, written by hand.
+- It needs the request: inside `ctx.render`. For a page rendered elsewhere (an email, a job), build the URLs with [`ROUTE_URLS`](./controllers.md#linking-to-routes) and pass them in as data.
 
 ### Your own pipes
 

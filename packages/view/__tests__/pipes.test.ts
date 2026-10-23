@@ -40,6 +40,7 @@ describe('pipes', () => {
         'number',
         'percent',
         'raw',
+        'route',
         'slice',
         'titlecase',
         'uppercase',

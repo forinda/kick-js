@@ -19,11 +19,14 @@ export const BUILTIN_PIPES: readonly string[] = [
   'number',
   'currency',
   'percent',
+  'route',
 ]
 
 export interface PipeEnv {
   locale: string
   timeZone: string
+  /** The request's `ctx.urlFor` (params in path order), for `route`. Absent outside a request. */
+  urlFor?: (name: string, params: Array<string | number>) => string
 }
 
 const DATE_FORMATS: Record<string, Intl.DateTimeFormatOptions> = {
@@ -79,6 +82,17 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 
 export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
   return {
+    // `{{ 'Users.show' | route:user.id }}`: the route's URL, params in path order.
+    route: (name, ...params) => {
+      if (!env.urlFor)
+        throw new Error(
+          'route needs a request (ctx.render): outside one, pass the URLs in as data, built with ROUTE_URLS',
+        )
+      return env.urlFor(
+        str(name),
+        params.map((p) => (typeof p === 'number' ? p : str(p))),
+      )
+    },
     uppercase: (v) => str(v).toUpperCase(),
     lowercase: (v) => str(v).toLowerCase(),
     titlecase: (v) => str(v).replace(/\b\p{L}/gu, (c) => c.toUpperCase()),

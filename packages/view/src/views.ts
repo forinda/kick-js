@@ -23,7 +23,7 @@ import { readValidatorExports, VALIDATORS_TAG } from './validators'
 const VALIDATE_TAG = 'kick-validate'
 const VALIDATE_HASH = fnv1a(VALIDATE_RUNTIME)
 import { parse } from './parse/template'
-import { BUILTIN_PIPES } from './pipes/builtins'
+import { BUILTIN_PIPES, type PipeEnv } from './pipes/builtins'
 import { pipesFor, type EnvPipe } from './pipes/env'
 import { render, RenderError, type Pipe } from './render/render'
 
@@ -394,7 +394,7 @@ export function createViews(options: ViewsOptions = {}): Views {
           locale,
           timeZone,
           strict: options.strict ?? false,
-          pipes: pipesFor(await getPipes(), { locale, timeZone }),
+          pipes: pipesFor(await getPipes(), { locale, timeZone, urlFor: urlForOf(opts.ctx) }),
           warn,
           resolve,
           layoutFor,
@@ -490,6 +490,12 @@ export function createViews(options: ViewsOptions = {}): Views {
     },
   }
   return views
+}
+
+/** The request's `urlFor`, when the render has a request that has one (KickJS's `RequestContext`). */
+function urlForOf(ctx: unknown): PipeEnv['urlFor'] {
+  const c = ctx as { urlFor?: (name: string, params: Array<string | number>) => string } | undefined
+  return typeof c?.urlFor === 'function' ? (name, params) => c.urlFor!(name, params) : undefined
 }
 
 const zeroSpan = {
