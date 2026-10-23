@@ -472,3 +472,51 @@ describe('validators.ts', () => {
     }
   })
 })
+
+describe('validators.ts module ids', () => {
+  it('the wrapper loads however Vite spells its id', async () => {
+    const root = project({ 'src/views/validators.ts': 'export const phone = () => undefined' })
+    const plugin = kickViewsPlugin()
+    ;(plugin.configResolved as (c: unknown) => void)({
+      root,
+      command: 'serve',
+      mode: 'development',
+    })
+    // Vite normalises resolved ids (forward slashes on Windows): not the string the plugin built.
+    const id = `${root}/src/views/../views/kick-validators.client.ts`
+    const resolveId = plugin.resolveId as (id: string) => string | undefined
+    const load = plugin.load as (id: string) => Promise<string | undefined>
+    expect(resolveId(id)).toBe(id)
+    expect(await load(id)).toContain('__kickValidators')
+  })
+})
+
+describe('validators.ts under kick dev', () => {
+  it('hands createViews the plugin’s validatorsFile, so dev reads the file the build bundles', async () => {
+    const root = project({ 'src/forms/checks.ts': 'export const phone = () => undefined' })
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin({ validatorsFile: 'src/forms/checks.ts' })],
+      server: { middlewareMode: true, ws: false },
+    })
+    try {
+      const mod = await vite.ssrLoadModule('virtual:kick-views')
+      expect(mod.default.validatorsFile).toBe(join(root, 'src/forms/checks.ts'))
+      expect(mod.default.bundle).toBeNull()
+    } finally {
+      await vite.close()
+    }
+  })
+
+  it('a build hands over no validatorsFile: the bundle has the script', async () => {
+    const root = project({
+      'src/views/page.kick': '<input name="p" validate="phone">',
+      'src/views/validators.ts': 'export const phone = () => undefined',
+    })
+    const code = await bundle(root)
+    expect(code).not.toContain('validatorsFile:')
+  })
+})

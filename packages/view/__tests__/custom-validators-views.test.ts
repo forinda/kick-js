@@ -105,3 +105,14 @@ describe('createViews and validators.ts', () => {
     await expect(withIt.render('page')).resolves.toContain('data-kick-validate')
   })
 })
+
+describe('validators.ts under kick dev (bundle: null)', () => {
+  it('never serves validators.ts itself: Vite does, and a miss is a 404, not raw TypeScript', async () => {
+    const files = app({ 'page.kick': '<input name="p" validate="phone">', 'validators.ts': PHONE })
+    const v = createViews({ ...files, bundle: null, warn: vi.fn() })
+    const file = srcOf(await v.render('page'), 'kick-validators')!
+      .split('/')
+      .pop()!
+    expect(await v.clientScript(file)).toBeUndefined()
+  })
+})

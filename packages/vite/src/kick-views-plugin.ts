@@ -58,6 +58,9 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let validatorsFile = ''
   /** The module that registers validators.ts's exports: a namespace import keeps every one. */
   const validatorsEntry = () => join(dirname(validatorsFile), VALIDATORS_TAG)
+  /** Compared resolved: Vite normalises ids (forward slashes on Windows) before `load`. */
+  const isValidatorsEntry = (id: string) =>
+    !!validatorsFile && resolve(id) === resolve(validatorsEntry() + CLIENT_SUFFIX)
   let build = true
   let checked: string | undefined
   // Exported by the virtual module, so `createViews({ ...kickViews })` serves where this plugin does.
@@ -226,7 +229,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       if (id === ID) return RESOLVED
       // A component's client script, as a module next to its `.kick` file.
       if (clientModuleFile(id, viewsDir)) return id
-      if (validatorsFile && id === validatorsEntry() + CLIENT_SUFFIX) return id
+      if (isValidatorsEntry(id)) return id
       return undefined
     },
     // kick dev: component scripts through Vite's pipeline, so their imports
@@ -318,8 +321,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         const view = await import('@forinda/kickjs-view')
         return clientScriptOf(view, await readFile(kickFile, 'utf8'))
       }
-      if (validatorsFile && id === validatorsEntry() + CLIENT_SUFFIX)
-        return validatorsWrapper(validatorsFile)
+      if (isValidatorsEntry(id)) return validatorsWrapper(validatorsFile)
       // Any other `.kick.client.ts`: not ours to load.
       if (id.endsWith(`.kick${CLIENT_SUFFIX}`)) return undefined
       if (id !== RESOLVED) return undefined
@@ -342,8 +344,10 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         clientOut
           ? `const clientDir = (() => { try { return new URL(${JSON.stringify(CLIENT_DIR)}, import.meta.url).href } catch { return undefined } })();`
           : 'const clientDir = undefined;',
+        // kick dev: the views read the validators file this plugin serves, wherever it's configured.
+        `export const validatorsFile = ${build ? 'undefined' : JSON.stringify(validatorsFile)};`,
         'export { bundle, pipes, clientScriptPath, clientDir }',
-        'export default { bundle, pipes, clientScriptPath, clientDir }',
+        `export default { bundle, pipes, clientScriptPath, clientDir${build ? '' : ', validatorsFile'} }`,
       ].join('\n')
     },
   }

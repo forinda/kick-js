@@ -448,7 +448,8 @@ export function createViews(options: ViewsOptions = {}): Views {
       const files = bundle?.client?.files
       if (files) return Object.hasOwn(files, file) ? files[file] : undefined
       if (m[1] === VALIDATORS_TAG) {
-        if (bundle || m[3] !== 'js') return undefined
+        // A build serves its own file; kick dev's plugin serves it through Vite.
+        if (options.bundle !== undefined || m[3] !== 'js') return undefined
         const source = (await current()).validators
         if (source === undefined) return undefined
         const { js, hash } = await validatorsScript(source)
