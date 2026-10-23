@@ -33,6 +33,7 @@ session middleware reuses it and will not re-parse.
 | `maxAge`            | `number`                   | `86400000` (24h)     | Session TTL in milliseconds                                                        |
 | `rolling`           | `boolean`                  | `false`              | Reset TTL on every request                                                         |
 | `saveUninitialized` | `boolean`                  | `true`               | Save empty sessions                                                                |
+| `saveTimeout`       | `number`                   | `5000`               | How long a response waits for the store to save, in ms                             |
 | `cookie.httpOnly`   | `boolean`                  | `true`               | HTTP-only cookie                                                                   |
 | `cookie.secure`     | `boolean`                  | `true` in production | Secure cookie                                                                      |
 | `cookie.sameSite`   | `string`                   | `'lax'`              | SameSite attribute                                                                 |
@@ -101,13 +102,15 @@ Keys you don't declare are still readable, as `unknown`.
 
 The `req.session` (or `ctx.session`) object provides:
 
-| Property/Method | Description                                               |
-| --------------- | --------------------------------------------------------- |
-| `id`            | Current session ID                                        |
-| `data`          | Key-value session data object                             |
-| `regenerate()`  | Create a new session ID (prevents fixation attacks)       |
-| `destroy()`     | Delete the session and clear the cookie                   |
-| `save()`        | Manually save the session (auto-saves on response finish) |
+| Property/Method | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `id`            | Current session ID                                          |
+| `data`          | Key-value session data object                               |
+| `regenerate()`  | Create a new session ID (prevents fixation attacks)         |
+| `destroy()`     | Delete the session and clear the cookie                     |
+| `save()`        | Save now (it also saves itself before the response is sent) |
+
+**When it's saved.** On Express, Fastify and h3 (Node), a session with a store saves itself before the response is sent: the response's `end()` waits for the store's write, so the request after it — the redirect after a form post — sees what this one wrote. A store that fails, or takes longer than `saveTimeout` (5s), is logged and the response goes out anyway; the next request may then miss the write. A streamed response (SSE, `write()` before `end()`) sends its headers and body as it goes and saves when it ends. The fetch entry (`@forinda/kickjs/web`, edge runtimes) saves after the response; use `store: 'cookie'` there, which writes the cookie with the response.
 
 ## Rolling Sessions
 
