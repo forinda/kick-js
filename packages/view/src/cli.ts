@@ -18,6 +18,7 @@ import { format } from './format'
 import { parse } from './parse/template'
 import { BUILTIN_PIPES } from './pipes/builtins'
 import { readPipeExports } from './pipes/read-exports'
+import { readValidatorExports } from './validators'
 
 export interface ViewsCliOptions {
   /** Project root. */
@@ -85,6 +86,8 @@ export async function fmtViews(
 export async function checkViews(
   opts: ViewsCliOptions & {
     pipesFile?: string
+    /** The app's browser validators. Default `<dir>/validators.ts`. */
+    validatorsFile?: string
     componentsDir?: string
     layouts?: Project['layouts']
     baseLayout?: string
@@ -93,6 +96,7 @@ export async function checkViews(
   const dir = opts.dir ?? 'src/views'
   const viewsDir = resolve(opts.root, dir)
   const pipesFile = resolve(opts.root, opts.pipesFile ?? join(dir, 'pipes.ts'))
+  const validatorsFile = resolve(opts.root, opts.validatorsFile ?? join(dir, 'validators.ts'))
   const all = await templates(viewsDir, opts.root)
   const pipes = new Set(BUILTIN_PIPES)
   let errors = 0
@@ -105,9 +109,19 @@ export async function checkViews(
     for (const n of read.names) pipes.add(n)
     for (const d of read.diagnostics) report(d, '')
   }
+  const validators = new Set<string>()
+  if (existsSync(validatorsFile)) {
+    const read = readValidatorExports(
+      await readFile(validatorsFile, 'utf8'),
+      relative(opts.root, validatorsFile),
+    )
+    for (const n of read.names) validators.add(n)
+    for (const d of read.diagnostics) report(d, '')
+  }
   const project: Project = {
     templates: new Map(),
     pipes,
+    validators,
     componentsDir: opts.componentsDir ?? 'components',
     layouts: opts.layouts,
     baseLayout: opts.baseLayout,
@@ -152,12 +166,14 @@ export const viewCliPlugin: KickCliPlugin = {
       )
       .option('--dir <dir>', 'views folder', 'src/views')
       .option('--pipes <file>', 'pipes file (default <dir>/pipes.ts)')
-      .action(async (paths: string[], o: { dir: string; pipes?: string }) => {
+      .option('--validators <file>', 'validators file (default <dir>/validators.ts)')
+      .action(async (paths: string[], o: { dir: string; pipes?: string; validators?: string }) => {
         process.exitCode = await checkViews({
           root: ctx.projectRoot,
           dir: o.dir,
           paths,
           pipesFile: o.pipes,
+          validatorsFile: o.validators,
           log: ctx.log,
         })
       })

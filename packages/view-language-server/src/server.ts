@@ -25,6 +25,8 @@ export interface ServerOptions {
   componentsDir?: string
   /** Default `<viewsDir>/pipes.ts`. */
   pipesFile?: string
+  /** The app's browser validators. Default `<viewsDir>/validators.ts`. */
+  validatorsFile?: string
   /** `createViews({ layout })`: a page's layout when it declares none; one name, or folder prefix → layout. */
   layout?: string | Record<string, string>
   /** `createViews({ baseLayout })`. */
@@ -89,11 +91,13 @@ export async function mapLimit<T, R>(
   return out
 }
 
-/** What the server watches: every template, and the pipes file wherever it's configured. */
-export function watchPatterns(root: string, pipesFile: string): string[] {
-  const patterns = ['**/*.kick', '**/pipes.{ts,js}']
+/** What the server watches: every template, and the pipes and validators files wherever they're configured. */
+export function watchPatterns(root: string, pipesFile: string, validatorsFile?: string): string[] {
+  const patterns = ['**/*.kick', '**/pipes.{ts,js}', '**/validators.{ts,js}']
   if (!/^pipes\.(ts|js)$/.test(basename(pipesFile)))
     patterns.push(relative(root, pipesFile).split(sep).join('/'))
+  if (validatorsFile && !/^validators\.(ts|js)$/.test(basename(validatorsFile)))
+    patterns.push(relative(root, validatorsFile).split(sep).join('/'))
   return patterns
 }
 
@@ -120,12 +124,14 @@ export function startServer(): void {
       opts.trusted === true,
     )
     const pipesFile = at(opts.pipesFile ?? join(viewsDir, 'pipes.ts'))
-    watched = watchPatterns(root, pipesFile)
+    const validatorsFile = at(opts.validatorsFile ?? join(viewsDir, 'validators.ts'))
+    watched = watchPatterns(root, pipesFile, validatorsFile)
     ws = new Workspace({
       root,
       viewsDir,
       componentsDir: opts.componentsDir ?? 'components',
       pipesFile,
+      validatorsFile,
       view,
       read: (p) => readFile(p, 'utf8').catch(() => undefined),
       list: listKick,

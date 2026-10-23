@@ -76,9 +76,23 @@ function braceNames(
   return { names, end: close < 0 ? src.length : close + 1 }
 }
 
+/** The names a pipes file exports (spec §7). */
 export function readPipeExports(
   source: string,
   file: string,
+): { names: string[]; diagnostics: Diagnostic[] } {
+  return readExportNames(source, file, BUILTIN_PIPES, 'pipe')
+}
+
+/**
+ * The names a module of named functions exports — `pipes.ts`, `validators.ts`
+ * — refusing the built-in names of its `kind`.
+ */
+export function readExportNames(
+  source: string,
+  file: string,
+  builtins: readonly string[],
+  kind: 'pipe' | 'validator',
 ): { names: string[]; diagnostics: Diagnostic[] } {
   const names: string[] = []
   const diagnostics: Diagnostic[] = []
@@ -87,8 +101,8 @@ export function readPipeExports(
       error(file, { start: positionAt(source, at), end: positionAt(source, at + len) }, message),
     )
   const add = (name: string, at: number) => {
-    if (BUILTIN_PIPES.includes(name)) {
-      fail(at, name.length, `'${name}' is a built-in pipe — choose another name`)
+    if (builtins.includes(name)) {
+      fail(at, name.length, `'${name}' is a built-in ${kind} — choose another name`)
       return
     }
     names.push(name)
@@ -105,20 +119,20 @@ export function readPipeExports(
       case 'let':
       case 'var': {
         if (after && /^[A-Za-z_$]/.test(after.v)) add(after.v, after.start)
-        else fail(at, 6, 'export one pipe per name: export const name = …')
+        else fail(at, 6, `export one ${kind} per name: export const name = …`)
         break
       }
       case 'function':
         if (after && /^[A-Za-z_$]/.test(after.v)) add(after.v, after.start)
         break
       case 'async':
-        fail(at, 6, 'pipes must be synchronous — an async function returns a Promise')
+        fail(at, 6, `${kind}s must be synchronous — an async function returns a Promise`)
         break
       case '{': {
         const { names: list, end } = braceNames(source, next.start)
         const rest = tokens.find((x) => x.start >= end)
         if (rest?.v === 'from') {
-          fail(at, 6, "re-exports aren't read — import the pipe and export it from this file")
+          fail(at, 6, `re-exports aren't read — import the ${kind} and export it from this file`)
           break
         }
         for (const n of list) add(n.exported, n.at)
@@ -128,13 +142,13 @@ export function readPipeExports(
       case 'interface':
         break
       case '*':
-        fail(at, 6, "export * isn't read — export each pipe by name")
+        fail(at, 6, `export * isn't read — export each ${kind} by name`)
         break
       case 'default':
-        fail(at, 6, 'a default export is not a pipe — export each pipe by name')
+        fail(at, 6, `a default export is not a ${kind} — export each ${kind} by name`)
         break
       default:
-        fail(at, 6, `export ${next?.v ?? ''} is not a pipe — export const or function`)
+        fail(at, 6, `export ${next?.v ?? ''} is not a ${kind} — export const or function`)
     }
   }
   return { names, diagnostics }

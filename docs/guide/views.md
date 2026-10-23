@@ -537,6 +537,39 @@ Add `validate` to a field for instant feedback, before the form is sent. It writ
 - **What ships:** a page with a `validate` field gets one small validator script (`/_kick/c/kick-validate.<hash>.js`); pages without one get none.
 - **The server still decides.** These checks are for quick feedback; route validation in the controller is what counts, and its messages can differ.
 
+### Your own validators
+
+Rules of your own go in `src/views/validators.ts`, next to `pipes.ts`. Each export is a validator, used by its name like the built-ins:
+
+```ts
+// src/views/validators.ts
+export const phone = (value: string) =>
+  /^\+?\d{9,15}$/.test(value) ? undefined : 'Enter a phone number'
+
+export const sameAs = (value: string, other: string, form: HTMLFormElement) =>
+  value === (form.elements.namedItem(other) as HTMLInputElement | null)?.value
+    ? undefined
+    : 'Must match'
+```
+
+```kick
+<input name="phone" validate="required | phone">
+@error('phone') {
+  {{ $message }}
+}
+<input name="password" type="password" validate="required | minLength:8">
+<input name="confirm" type="password" validate="sameAs:'password'">
+@error('confirm') {
+  {{ $message }}
+}
+```
+
+- **The contract:** a validator gets the field's value, then the arguments written in the template (numbers or quoted strings), then the form. It returns the message when the value fails. Anything else passes: `undefined`, `null`, `false`, an empty string, `true`.
+- **Same rules as the built-ins:** an empty field skips them (only `required` checks for one), they run in the order written, and the first message wins. A validator that throws counts as a pass and is logged with `console.error`, so a bug can't block the form.
+- **Checked like pipes:** an unknown name, or an export named like a built-in, fails `kick build`, `kick check:views` and the page in `kick dev`, and the editor marks it. The editor also completes validator names inside `validate="…"`.
+- **What ships:** the file can import npm packages and your own files, like a component script. `kick build` bundles it as `kick-validators.<hash>.js`, loaded after the built-in validator script on pages with a `validate` field; `kick dev` serves it through Vite. Running from source without either, it's served as is with its types stripped, and an import fails the page, as it does for component scripts.
+- **Browser only.** The route's schema still decides on the server; a rule that needs your data is a [server check](#your-own-checks).
+
 ### Your own checks
 
 `validate` covers the common rules. For anything else, a [component with a script](#components-with-a-script) can run your own code against the same `@error` spots. Two recipes cover most needs.
@@ -815,6 +848,7 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 | `viewsDir`                                         | `'src/views'`                                 |                                                                                                     |
 | `componentsDir`                                    | `'components'`                                | inside `viewsDir`                                                                                   |
 | `pipesFile`                                        | `'src/views/pipes.ts'`                        | `.js` also works; without Vite, Node runs a `.ts` file only when it can strip types (22.18+)        |
+| `validatorsFile`                                   | `'<viewsDir>/validators.ts'`                  | [your own validators](#your-own-validators); read when there is no build                            |
 | `layout`                                           | none                                          | a layout name, or folder prefix → layout                                                            |
 | `baseLayout`                                       | none                                          | the shell around every page's outermost layout                                                      |
 | `locale`                                           | `'en-US'`                                     |                                                                                                     |
@@ -829,15 +863,16 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 
 The Vite plugin's own options, in `vite.config.ts` as `kickjs({ views: { … } })`:
 
-| option             | default                |                                                                                             |
-| ------------------ | ---------------------- | ------------------------------------------------------------------------------------------- |
-| `viewsDir`         | `'src/views'`          |                                                                                             |
-| `componentsDir`    | `'components'`         |                                                                                             |
-| `pipesFile`        | `'src/views/pipes.ts'` |                                                                                             |
-| `clientScriptPath` | `'/_kick/c'`           | the URL path client files are served under                                                  |
-| `clientFiles`      | `'disk'`               | `'bundle'` keeps client files in the server bundle                                          |
-| `publicDir`        | `'public'`             | relative to the build's `outDir`, or absolute; files go to `<publicDir><clientScriptPath>/` |
-| `inlineLimit`      | `4096`                 | images and fonts up to this many bytes are inlined (`'disk'` only)                          |
+| option             | default                      |                                                                                             |
+| ------------------ | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `viewsDir`         | `'src/views'`                |                                                                                             |
+| `componentsDir`    | `'components'`               |                                                                                             |
+| `pipesFile`        | `'src/views/pipes.ts'`       |                                                                                             |
+| `validatorsFile`   | `'<viewsDir>/validators.ts'` | [your own validators](#your-own-validators)                                                 |
+| `clientScriptPath` | `'/_kick/c'`                 | the URL path client files are served under                                                  |
+| `clientFiles`      | `'disk'`                     | `'bundle'` keeps client files in the server bundle                                          |
+| `publicDir`        | `'public'`                   | relative to the build's `outDir`, or absolute; files go to `<publicDir><clientScriptPath>/` |
+| `inlineLimit`      | `4096`                       | images and fonts up to this many bytes are inlined (`'disk'` only)                          |
 
 ## Related
 

@@ -39,6 +39,16 @@ export async function loadPipesFile(file: string): Promise<Record<string, unknow
   return (await import(/* @vite-ignore */ pathToFileURL(path).href)) as Record<string, unknown>
 }
 
+/** A text file's contents, or undefined when there's none. */
+export async function readTextFile(file: string): Promise<string | undefined> {
+  try {
+    return await readFile(resolve(file), 'utf8')
+  } catch (err) {
+    if ((err as { code?: string }).code === 'ENOENT') return undefined
+    throw err
+  }
+}
+
 /** A dirent's folder: `parentPath` from Node 20.12, `path` before it. */
 function direntDir(e: { parentPath?: string; path?: string }): string {
   return e.parentPath ?? e.path ?? ''

@@ -4,7 +4,7 @@
  * context enforced (spec §4). What passes here is safe to render.
  */
 import { FORM_GLOBALS, SECRET_FIELD } from '../form-state'
-import { parseValidate } from '../validators'
+import { parseValidate, VALIDATORS_TAG } from '../validators'
 import {
   AST_FORMAT_VERSION,
   type Attr,
@@ -453,7 +453,7 @@ class Checker {
       this.err(a.span, 'validate needs a name on the same field')
       return
     }
-    const r = parseValidate(decodeEntities(String(a.parts?.[0] ?? '')))
+    const r = parseValidate(decodeEntities(String(a.parts?.[0] ?? '')), this.project.validators)
     if ('error' in r) {
       this.err(a.span, r.error)
       return
@@ -869,6 +869,12 @@ export function check(name: string, project: Project): CheckResult {
     if (tag === 'kick-validate') {
       c.diagnostics.push(
         error(ast.file, n.span, 'kick-validate is reserved for the validator script'),
+      )
+      continue
+    }
+    if (tag === VALIDATORS_TAG) {
+      c.diagnostics.push(
+        error(ast.file, n.span, "kick-validators is reserved for the app's validators"),
       )
       continue
     }

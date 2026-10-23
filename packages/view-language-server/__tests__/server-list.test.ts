@@ -37,17 +37,18 @@ describe('listKick', () => {
 })
 
 describe('watchPatterns', () => {
-  it('watches templates and the configured pipes file', async () => {
+  it('watches templates and the configured pipes and validators files', async () => {
     const { watchPatterns } = await import('../src/server')
-    expect(watchPatterns('/app', '/app/src/views/filters.ts')).toEqual([
+    expect(watchPatterns('/app', '/app/src/views/filters.ts', '/app/src/views/checks.ts')).toEqual([
       '**/*.kick',
       '**/pipes.{ts,js}',
+      '**/validators.{ts,js}',
       'src/views/filters.ts',
+      'src/views/checks.ts',
     ])
-    expect(watchPatterns('/app', '/app/src/views/pipes.ts')).toEqual([
-      '**/*.kick',
-      '**/pipes.{ts,js}',
-    ])
+    expect(
+      watchPatterns('/app', '/app/src/views/pipes.ts', '/app/src/views/validators.ts'),
+    ).toEqual(['**/*.kick', '**/pipes.{ts,js}', '**/validators.{ts,js}'])
   })
 })
 

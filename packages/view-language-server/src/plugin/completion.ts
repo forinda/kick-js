@@ -102,6 +102,8 @@ export function completions(
       }))
     case 'pipe':
       return ws.pipeNames().map((label) => ({ label, kind: FUNCTION }))
+    case 'validator':
+      return ws.validatorNames().map((label) => ({ label, kind: FUNCTION }))
     case 'tag': {
       const dir = ws.componentsDir()
       return ws

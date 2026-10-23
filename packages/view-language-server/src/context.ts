@@ -6,6 +6,7 @@
 export type CursorContext =
   | { kind: 'keyword'; prefix: string }
   | { kind: 'pipe'; prefix: string }
+  | { kind: 'validator'; prefix: string }
   | { kind: 'expr'; prefix: string; scope: string[] }
   | { kind: 'tag'; prefix: string }
   | { kind: 'attr'; tag: string; prefix: string }
@@ -157,6 +158,11 @@ export function cursorContext(s: string, offset: number): CursorContext {
     if (openValue !== undefined) {
       // In a binding's value: an expression.
       if (/\[[^\]]+\]\s*=\s*$/.test(attrs)) return exprContext(openValue.slice(1), s, offset)
+      // `validate="required | min…`: a validator name, not one of its arguments.
+      if (/\svalidate\s*=\s*$/i.test(attrs)) {
+        const rule = /(?:^|\|)\s*([\w$]*)$/.exec(openValue.slice(1))
+        return rule ? { kind: 'validator', prefix: rule[1]! } : { kind: 'other' }
+      }
       return { kind: 'other' }
     }
     if (!attrs) return { kind: 'tag', prefix: name! }
