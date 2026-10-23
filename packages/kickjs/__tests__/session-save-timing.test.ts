@@ -133,3 +133,73 @@ for (const [name, runtime] of [
       expect(Date.now() - started).toBeLessThan(2000)
     })
   })
+
+describe('session save timing — h3 through fetch', () => {
+  beforeEach(() => Container.reset())
+
+  it('the request after the response sees what it wrote', async () => {
+    const app = new Application({
+      runtime: h3Runtime(),
+      middlewares: [session({ secret: 'x'.repeat(32), store: slowStore(50) })],
+      modules: [
+        {
+          routes: () => ({ path: '/', prefix: false, version: false, controller: FlashController }),
+        } as never,
+      ],
+    })
+    await app.setup()
+    const saved = await app.fetch(new Request('http://x/save', { method: 'POST' }))
+    expect(saved.status).toBe(303)
+    const cookie = saved.headers.get('set-cookie')!.split(';')[0]!
+    // Straight away, as a browser following the redirect would.
+    const read = await app.fetch(new Request('http://x/read', { headers: { cookie } }))
+    expect(await read.json()).toEqual({ msg: 'saved' })
+  })
+
+  it('a store that never answers holds the response only until saveTimeout', async () => {
+    const stalled: SessionStore = {
+      get: async () => null,
+      set: () => new Promise(() => {}),
+      destroy: async () => {},
+    }
+    const app = new Application({
+      runtime: h3Runtime(),
+      middlewares: [session({ secret: 'x'.repeat(32), store: stalled, saveTimeout: 30 })],
+      modules: [
+        {
+          routes: () => ({ path: '/', prefix: false, version: false, controller: FlashController }),
+        } as never,
+      ],
+    })
+    await app.setup()
+    const started = Date.now()
+    expect((await app.fetch(new Request('http://x/save', { method: 'POST' }))).status).toBe(303)
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
+  it('a finish listener that throws still lets the response out', async () => {
+    const app = new Application({
+      runtime: h3Runtime(),
+      middlewares: [
+        (_req: unknown, res: { on: (e: string, l: () => void) => void }, next: () => void) => {
+          res.on('finish', () => {
+            throw new Error('listener broke')
+          })
+          next()
+        },
+        session({ secret: 'x'.repeat(32), store: slowStore(10) }),
+      ] as never,
+      modules: [
+        {
+          routes: () => ({ path: '/', prefix: false, version: false, controller: FlashController }),
+        } as never,
+      ],
+    })
+    await app.setup()
+    const saved = await Promise.race([
+      app.fetch(new Request('http://x/save', { method: 'POST' })),
+      new Promise<'hung'>((done) => setTimeout(() => done('hung'), 1000)),
+    ])
+    expect(saved).not.toBe('hung')
+    expect((saved as Response).status).toBe(303)
+  })
+})
