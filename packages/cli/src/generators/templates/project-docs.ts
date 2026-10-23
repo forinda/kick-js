@@ -391,6 +391,8 @@ Each of these has a skill with the steps and the traps:
 | Flag a route (public, exempt, unmetered) | \`kickjs-route-flags\` |
 | Add a kick CLI command or generator | \`kickjs-cli-plugin\` |
 | Deploy to Netlify / Vercel / Cloudflare | \`kickjs-deploy\` |
+| Server-rendered pages with \`.kick\` views | \`kickjs-views\` |
+| HTML forms: errors, flash, browser checks, CSRF | \`kickjs-views-forms\` |
 | Anything else | \`kickjs-docs-lookup\` |
 
 ## Testing Guidelines
@@ -1523,6 +1525,123 @@ plugins. Serve static files from Workers Assets or a separate deploy.
   the server. Run the target command after it.`,
     },
     {
+      slug: 'views',
+      frontmatterName: 'kickjs-views',
+      description:
+        'Use when rendering server-side HTML with .kick templates — setting up views, adding a page, layout, component or pipe, a component with a <script client>, or when a template fails kick build / kick check:views.',
+      body: `**Setup** (once): \`${pm} add @forinda/kickjs-view\`, then
+
+\`\`\`ts
+// src/views.ts
+/// <reference types="@forinda/kickjs-view/virtual" />
+import kickViews from 'virtual:kick-views'
+import { createViews } from '@forinda/kickjs-view'
+
+export const views = createViews({ ...kickViews, layout: 'layouts/main' })
+\`\`\`
+
+and \`adapters: [KickView({ views })]\` in \`bootstrap()\`. \`virtual:kick-views\` comes from \`kickjsVitePlugin()\`: \`kick build\` checks every template and ships them; \`kick dev\` reads \`src/views\` on each request.
+
+**Where things go**
+
+| Thing | File | Used as |
+| --- | --- | --- |
+| Page | \`src/views/users/show.kick\` | \`await ctx.render('users/show', { user })\` |
+| Layout | \`src/views/layouts/main.kick\` (\`<slot />\`, \`<slot name="head">\`) | \`@layout('layouts/main')\` or \`createViews({ layout })\` |
+| Component | \`src/views/components/user-card.kick\` (\`@input user\`) | \`<user-card [user]="u" />\` |
+| Pipe | an export of \`src/views/pipes.ts\` | \`{{ total \\| money }}\` |
+| Data every page gets | \`createViews({ share: (ctx) => ({ user: ctx?.get('user') }) })\` | \`{{ user.email }}\` |
+
+**Syntax that trips people**
+
+- \`{{ expr }}\` escapes. Expressions read data: **no function calls**, no object literals. Compute in the controller and pass the result.
+- \`class\` and \`style\` can't be interpolated: use \`[class.done]="task.done"\` and \`[style.width.px]="n"\`. \`[attr]="expr"\` drops the attribute for \`null\`/\`false\`.
+- \`@if (items.length)\`, not \`@if (items)\`: an empty array is truthy. Or \`@for (x of items; track x.id) { … } @empty { … }\`.
+- \`[flag]="false"\` on a component input, not \`flag="false"\` (a non-empty string is truthy).
+- A component tag needs a hyphen and matches \`components/<path>.kick\`, folders joined by \`-\` (\`components/forms/text-field.kick\` → \`<forms-text-field>\`). A missing or unknown input fails the check.
+- \`{{-- comment --}}\` stays out of the output.
+
+**Components with a script.** A top-level \`<script client>\` in a component is TypeScript that runs in the browser — typically a custom element that the component's markup contains. It ships once per page that renders the component, as \`/_kick/c/<tag>.<hash>.js\`. It can \`import\` npm packages and your own files (\`@/…\` aliases work): \`kick build\` bundles them into \`dist/public/_kick/c/\`, \`kick dev\` serves them through Vite. Running from source without either, a script that imports fails with "client scripts that import need kick dev or a kick build". Keep imported files browser-safe — whatever they import ships too.
+
+**Check before claiming done**
+
+\`\`\`bash
+${execBin(pm as PackageManager, 'kick')} check:views   # every template parsed and checked, as kick build does
+${execBin(pm as PackageManager, 'kick')} fmt:views     # format .kick files (--check in CI)
+\`\`\`
+
+Errors name the file, line and column. An unknown pipe, input or slot, a \`{{ }}\` inside \`<script>\`/\`<style>\` or an \`on*\` attribute, and an unquoted attribute value are all check errors — fix the template, not the checker.
+
+Full guide: https://kickjs.app/guide/views. Forms and validation: the \`kickjs-views-forms\` skill.`,
+    },
+    {
+      slug: 'views-forms',
+      frontmatterName: 'kickjs-views-forms',
+      description:
+        'Use when building an HTML form with .kick views — validation errors back on the form, refilled values, flash messages, browser-side checks (validate="…"), CSRF for form posts — or when a form post arrives with an empty body.',
+      body: `**Wiring** (once):
+
+\`\`\`ts
+import express from 'express'
+import { bootstrap, csrf, formErrorHandler, getEnv, session } from '@forinda/kickjs'
+import { KickView } from '@forinda/kickjs-view'
+import { views } from './views'
+
+export const app = await bootstrap({
+  modules,
+  middlewares: [
+    // Express only: listing middlewares replaces the default body parsers.
+    express.urlencoded({ extended: false }),
+    session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' }),
+    csrf(),
+  ],
+  adapters: [KickView({ views })],
+  onError: formErrorHandler(),
+})
+\`\`\`
+
+Without \`express.urlencoded\` on Express, \`ctx.body\` is empty. Fastify and h3 parse forms themselves.
+
+**The round trip**
+
+\`\`\`ts
+@Post('/tasks', { body: taskSchema })
+async create(ctx: RequestContext) {
+  await this.tasks.create(ctx.body)
+  flash(ctx, { success: 'Task added' })
+  ctx.redirect('/tasks', 303)
+}
+\`\`\`
+
+A failed \`body\` schema on a browser form post: \`formErrorHandler()\` stores the errors and the submitted values in the session and redirects (303) back to the page the form was on. API and \`fetch()\` calls get the usual 422.
+
+\`\`\`kick
+<form method="post" action="/tasks">
+  <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+  <input name="title" validate="required | maxLength:200">
+  @error('title') {
+    {{ $message }}
+  }
+  <button>Add</button>
+</form>
+\`\`\`
+
+- Every template has \`$errors\` (field → first message, \`form\` for the whole body), \`$old\` and \`$flash\` — for the next page only.
+- Named inputs refill from \`$old\` by themselves; passwords, hidden fields and secret-looking names never do.
+- A check the schema can't do (email already taken): re-render with \`ctx.render('tasks/new', { $errors: { email: '…' }, $old: ctx.body })\`.
+- Flash messages: \`@for ([kind, message] of $flash | entries; track kind) { … }\` in the layout.
+
+**CSRF.** \`csrf()\` takes the token from the \`_csrf\` form field when there's no \`x-csrf-token\` header. Give pages the token with \`createViews({ share: (ctx) => ({ csrfToken: csrfToken(ctx) }) })\` (\`csrfToken\` from \`@forinda/kickjs\`).
+
+**Checking in the browser**
+
+- \`validate="required | email | minLength:3"\` on a named field: built-ins \`required\`, \`email\`, \`url\`, \`minLength:n\`, \`maxLength:n\`, \`min:n\`, \`max:n\`, \`pattern:'re'\`, \`in:'a, b'\`. Messages land in the field's \`@error\` spot. Only pages with such a field get the small validator script.
+- Rich rules: a component with a \`<script client>\` can import the route's own schema (\`import { taskSchema } from '@/modules/tasks/tasks.schemas'\`) and run \`safeParse\` on blur and submit — one set of rules for server and browser. Keep the schema file free of server imports.
+- The browser checks are for quick feedback. The route's schema still decides.
+
+Full guide: https://kickjs.app/guide/views#forms.`,
+    },
+    {
       slug: 'docs-lookup',
       frontmatterName: 'kickjs-docs-lookup',
       description:
@@ -1547,6 +1666,7 @@ fine and fails at runtime.
 | Testing (\`createTestApp\`) | https://kickjs.app/guide/testing |
 | Typegen and generated types | https://kickjs.app/guide/typegen |
 | HMR and the dev server | https://kickjs.app/guide/hmr |
+| \`.kick\` views, forms, components | https://kickjs.app/guide/views |
 
 **Local, and usually faster**
 

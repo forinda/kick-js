@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { generateAgentDocs } from '../src/generators/agent-docs'
-import { generateKickJsSkillFiles } from '../src/generators/templates/project-docs'
+import { generateAgents, generateKickJsSkillFiles } from '../src/generators/templates/project-docs'
 
 let dir: string
 
@@ -152,6 +152,40 @@ describe('the deploy skill', () => {
     expect(body).toContain('preferStatic')
     expect(body).toContain('build:netlify')
     expect(body).toContain('build:vercel')
+  })
+})
+
+describe('the views skills', () => {
+  const bySlug = (slug: string) =>
+    generateKickJsSkillFiles('demo', 'minimal', 'pnpm', 'define').find((f) => f.slug === slug)!
+
+  it('kickjs-views: setup, templates, components, client scripts', () => {
+    const body = bySlug('views').content
+    expect(body).toMatch(/^---\nname:\s+kickjs-views\n/)
+    expect(body).toContain('virtual:kick-views')
+    expect(body).toContain('KickView({ views })')
+    expect(body).toContain('kick check:views')
+    // The traps: no calls in templates, no interpolated class/style, imports need a bundler.
+    expect(body).toContain('[class.')
+    expect(body).toContain('<script client>')
+    expect(body).toContain('kick dev or a kick build')
+  })
+
+  it('kickjs-views-forms: the form round trip and its traps', () => {
+    const body = bySlug('views-forms').content
+    expect(body).toMatch(/^---\nname:\s+kickjs-views-forms\n/)
+    expect(body).toContain('formErrorHandler()')
+    expect(body).toContain('express.urlencoded')
+    expect(body).toContain("@error('")
+    expect(body).toContain('validate="')
+    expect(body).toContain('csrfToken(ctx)')
+  })
+
+  it('the common-tasks table and the docs map point at them', () => {
+    const agents = generateAgents('demo', 'minimal', 'pnpm')
+    expect(agents).toContain('`kickjs-views`')
+    expect(agents).toContain('`kickjs-views-forms`')
+    expect(bySlug('docs-lookup').content).toContain('https://kickjs.app/guide/views')
   })
 })
 
