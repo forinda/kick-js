@@ -533,58 +533,61 @@ export const App: Component = () => {
             />
           </Show>
           <main class={`dt-main ${FLUSH_TABS.has(active()) ? 'flush' : ''}`} role="tabpanel">
-            <Show when={active() === 'overview'}>
-              <OverviewTab />
-            </Show>
-            <Show when={active() === 'runtime'}>
-              <div class="flex flex-col gap-6">
-                <RuntimeTab />
-                <TopologyTab />
-              </div>
-            </Show>
-            <Show when={active() === 'config'}>
-              <ConfigTab />
-            </Show>
-            <Show when={active() === 'routes'}>
-              <RoutesTab />
-            </Show>
-            <Show when={active() === 'sockets'}>
-              <SocketsTab />
-            </Show>
-            <Show when={active() === 'requests'}>
-              <RequestsTab />
-            </Show>
-            <Show when={active() === 'metrics'}>
-              <MetricsTab />
-            </Show>
-            <Show when={active() === 'container'}>
-              <ContainerTab />
-            </Show>
-            <Show when={active() === 'queues'}>
-              <JobsTab />
-            </Show>
-            <Show when={active() === 'database'}>
-              <DatabaseTab />
-            </Show>
-            <Show when={active() === 'activity'}>
-              <ActivityLogTab />
-            </Show>
-            <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
-            <Show when={tabErrors().length > 0 && active() === 'overview'}>
-              <div class="card" style="border-color:var(--warn);margin-top:16px">
-                <div class="card-title" style="color:var(--warn)">
-                  {tabErrors().length} custom-tab issue(s)
+            {/* Unmounted while offline: each tab refetches on its own mount when the app is back. */}
+            <Show when={!offline()}>
+              <Show when={active() === 'overview'}>
+                <OverviewTab />
+              </Show>
+              <Show when={active() === 'runtime'}>
+                <div class="flex flex-col gap-6">
+                  <RuntimeTab />
+                  <TopologyTab />
                 </div>
-                <ul style="margin:8px 0 0;padding-left:20px;font-family:var(--font-mono);font-size:12px">
-                  <For each={tabErrors()}>
-                    {(err) => (
-                      <li>
-                        {err.source}: {err.reason}
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </div>
+              </Show>
+              <Show when={active() === 'config'}>
+                <ConfigTab />
+              </Show>
+              <Show when={active() === 'routes'}>
+                <RoutesTab />
+              </Show>
+              <Show when={active() === 'sockets'}>
+                <SocketsTab />
+              </Show>
+              <Show when={active() === 'requests'}>
+                <RequestsTab />
+              </Show>
+              <Show when={active() === 'metrics'}>
+                <MetricsTab />
+              </Show>
+              <Show when={active() === 'container'}>
+                <ContainerTab />
+              </Show>
+              <Show when={active() === 'queues'}>
+                <JobsTab />
+              </Show>
+              <Show when={active() === 'database'}>
+                <DatabaseTab />
+              </Show>
+              <Show when={active() === 'activity'}>
+                <ActivityLogTab />
+              </Show>
+              <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
+              <Show when={tabErrors().length > 0 && active() === 'overview'}>
+                <div class="card" style="border-color:var(--warn);margin-top:16px">
+                  <div class="card-title" style="color:var(--warn)">
+                    {tabErrors().length} custom-tab issue(s)
+                  </div>
+                  <ul style="margin:8px 0 0;padding-left:20px;font-family:var(--font-mono);font-size:12px">
+                    <For each={tabErrors()}>
+                      {(err) => (
+                        <li>
+                          {err.source}: {err.reason}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </div>
+              </Show>
             </Show>
           </main>
         </div>
