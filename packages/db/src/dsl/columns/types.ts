@@ -63,6 +63,24 @@ export interface FkSpec {
   name?: string
 }
 
+/** Postgres array literal text: `{1,2}`, `{"a","b c"}`. */
+function arrayLiteral(value: unknown[]): string {
+  const item = (v: unknown): string =>
+    v === null || v === undefined
+      ? 'NULL'
+      : Array.isArray(v)
+        ? arrayLiteral(v)
+        : typeof v === 'string' || v instanceof Date
+          ? `"${(typeof v === 'string' ? v : dateLiteral(v)).replace(/["\\]/g, '\\$&')}"`
+          : String(v)
+  return `{${value.map(item).join(',')}}`
+}
+
+/** A Date's UTC time that Postgres, MySQL and SQLite all read: no `T`, no `Z`. */
+function dateLiteral(d: Date): string {
+  return d.toISOString().replace('T', ' ').replace('Z', '+00:00')
+}
+
 export interface ColumnState {
   type: string
   nullable: boolean
@@ -225,18 +243,21 @@ export class ColumnBuilder<T = unknown> {
    * (`ColumnSnapshot.default: string | null`) and migration emitter stay
    * string-only. For a quoted string default the text is the value
    * itself (`'active'`); booleans/numbers emit bare (`false`, `0`). A JSON
-   * column takes its value (`jsonb().default({})` stores `{}`), and a `Date`
-   * is stored as its ISO string.
+   * column takes its value (`jsonb().default({})` stores `{}`), an array
+   * column its array literal (`integer().array().default([1, 2])` stores
+   * `{1,2}`), and a `Date` its UTC time (`2026-01-02 03:04:05.000+00:00`).
    */
   default(value: string | number | boolean | T): this & GeneratedBrand {
     this.state.default =
       typeof value === 'string'
         ? value
-        : value instanceof Date
-          ? value.toISOString()
-          : typeof value === 'object' && value !== null
-            ? JSON.stringify(value)
-            : String(value)
+        : Array.isArray(value) && this.state.type.endsWith('[]')
+          ? arrayLiteral(value)
+          : value instanceof Date
+            ? dateLiteral(value)
+            : typeof value === 'object' && value !== null
+              ? JSON.stringify(value)
+              : String(value)
     this.state.defaultSql = false
     return this as this & GeneratedBrand
   }
