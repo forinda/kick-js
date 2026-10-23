@@ -47,6 +47,31 @@ describe('kick fmt:views / check:views', () => {
     expect(out).not.toContain('good.kick')
   })
 
+  it('check:views reads validators.ts', async () => {
+    const page = { 'src/views/a.kick': '<input name="p" validate="phone">' }
+    expect(await checkViews({ root: project(page), log: vi.fn() })).toBe(1)
+    const root = project({
+      ...page,
+      'src/views/validators.ts': "export const phone = (v: string) => (v ? undefined : 'x')",
+    })
+    expect(await checkViews({ root, log: vi.fn() })).toBe(0)
+    const other = project({
+      ...page,
+      'lib/checks.ts': "export const phone = (v: string) => (v ? undefined : 'x')",
+    })
+    expect(await checkViews({ root: other, validatorsFile: 'lib/checks.ts', log: vi.fn() })).toBe(0)
+  })
+
+  it('check:views reports a built-in name in validators.ts', async () => {
+    const root = project({
+      'src/views/a.kick': '<p></p>',
+      'src/views/validators.ts': 'export const email = () => undefined',
+    })
+    const log = vi.fn()
+    expect(await checkViews({ root, log })).toBe(1)
+    expect(log.mock.calls.flat().join('\n')).toContain("'email' is a built-in validator")
+  })
+
   it('check:views passes a clean project', async () => {
     const root = project({ 'src/views/a.kick': '<p>{{ x }}</p>' })
     expect(await checkViews({ root, log: vi.fn() })).toBe(0)
