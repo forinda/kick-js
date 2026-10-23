@@ -7,7 +7,7 @@
  * @module @forinda/kickjs-vite/kick-views-plugin
  */
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Plugin } from 'vite'
 
@@ -27,7 +27,7 @@ export interface KickViewsPluginOptions {
    * server bundle, for hosts with no static files.
    */
   clientFiles?: 'disk' | 'bundle'
-  /** Default `'public'`, inside the build's `outDir`. */
+  /** Default `'public'`, relative to the build's `outDir` (or absolute). */
   publicDir?: string
   /** Images and fonts up to this many bytes are inlined (`'disk'` mode). Default `4096`. */
   inlineLimit?: number
@@ -60,6 +60,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   const onDisk = options.clientFiles !== 'bundle'
   /** Client files to write beside the server bundle, by path inside its `outDir`. */
   let clientOut: Map<string, string | Uint8Array> | undefined
+  /** The client files the last build wrote, by absolute path. */
+  let written = new Set<string>()
   const clientFolder = posix.join(options.publicDir ?? 'public', scriptPath.slice(1))
   let root = ''
   // What the nested browser build takes from the app's config.
@@ -72,6 +74,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     error(message: string): never
   }): Promise<string> {
     const hasPipes = existsSync(pipesFile)
+    // Empty, a rebuild with no client scripts left still clears the last build's files.
+    clientOut = onDisk ? new Map() : undefined
     // The view package is optional: only apps that import this module need it.
     const view = await import('@forinda/kickjs-view')
     const names = await kickFiles(viewsDir)
@@ -233,21 +237,32 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     // imports the virtual module: a broken template always fails `kick build`.
     async buildStart() {
       // Apps without templates skip it, so they needn't install the view package.
-      if (!build || !(await kickFiles(viewsDir)).length) return
+      if (!build || !(await kickFiles(viewsDir)).length) {
+        // The last template removed between rebuilds: nothing of the last build is current.
+        checked = undefined
+        if (clientOut) clientOut = new Map()
+        return
+      }
       checked = await checkTemplates(this)
     },
-    renderChunk(code, chunk) {
+    renderChunk(code, chunk, out) {
       if (!code.includes(CLIENT_DIR)) return null
-      const rel = posix.relative(posix.dirname(chunk.fileName), clientFolder)
+      const dir = out.dir ?? (out.file ? dirname(out.file) : '')
+      const rel = relative(resolve(dir, dirname(chunk.fileName)), resolve(dir, clientFolder))
       return {
-        code: code.replaceAll(CLIENT_DIR, `./${rel}/`),
+        code: code.replaceAll(CLIENT_DIR, `./${rel.split(sep).join('/')}/`),
         map: null,
       }
     },
     async writeBundle(out) {
       if (!clientOut || !out.dir) return
+      // A rebuild (`vite build --watch`) doesn't empty outDir: drop the files the
+      // last build wrote that this one doesn't. Only ours: nothing else is touched.
+      const keep = new Set([...clientOut.keys()].map((f) => resolve(out.dir!, f)))
+      for (const file of written) if (!keep.has(file)) await rm(file, { force: true })
+      written = keep
       for (const [file, source] of clientOut) {
-        const to = join(out.dir, file)
+        const to = resolve(out.dir, file)
         await mkdir(dirname(to), { recursive: true })
         await writeFile(to, source)
       }

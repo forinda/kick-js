@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
@@ -11,7 +12,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { build, createServer, type Rollup } from 'vite'
+import { build, createServer, type Plugin, type Rollup } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { kickViewsPlugin, type KickViewsPluginOptions } from '../src/kick-views-plugin'
 
@@ -39,13 +40,18 @@ async function bundle(root: string, opts: KickViewsPluginOptions = {}): Promise<
 }
 
 /** A real build to `dist/`: the server entry plus whatever the plugin writes. */
-async function buildToDisk(root: string, opts: KickViewsPluginOptions = {}): Promise<string> {
+async function buildToDisk(
+  root: string,
+  opts: KickViewsPluginOptions | Plugin = {},
+  emptyOutDir = true,
+): Promise<string> {
   await build({
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [kickViewsPlugin(opts)],
-    build: { ssr: join(root, 'entry.ts'), outDir: join(root, 'dist'), minify: false },
+    // A plugin instance, reused: one `vite build --watch` session.
+    plugins: ['name' in opts ? opts : kickViewsPlugin(opts)],
+    build: { ssr: join(root, 'entry.ts'), outDir: join(root, 'dist'), minify: false, emptyOutDir },
   })
   return readFileSync(join(root, 'dist/entry.mjs'), 'utf8')
 }
@@ -125,6 +131,44 @@ describe('client files on disk', () => {
     writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
     await buildToDisk(root, { publicDir: 'static', clientScriptPath: '/assets/c' })
     expect(readdirSync(join(root, 'dist/static/assets/c')).length).toBeGreaterThan(3)
+  })
+
+  it('an absolute publicDir is used as is', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    const publicDir = join(root, 'www')
+    await buildToDisk(root, { publicDir })
+    expect(readdirSync(join(publicDir, '_kick/c')).length).toBeGreaterThan(3)
+    const mod = await import(pathToFileURL(join(root, 'dist/entry.mjs')).href)
+    const entry = mod.default.bundle.client.entries['toast-a'] as string
+    expect(existsSync(new URL(entry, mod.default.clientDir))).toBe(true)
+  })
+
+  it('a rebuild drops the files the last build wrote, and only those', async () => {
+    const root = project({
+      'src/views/components/a-b.kick': '<div></div>\n<script client>\nconsole.log(1)\n</script>',
+    })
+    // As in `vite build --watch`: one plugin, and the outDir isn't emptied between builds.
+    const plugin = kickViewsPlugin()
+    await buildToDisk(root, plugin, false)
+    const dir = join(root, 'dist/public/_kick/c')
+    const before = readdirSync(dir)
+    // Shaped like a client file, but not one this plugin wrote.
+    writeFileSync(join(dir, 'other.abcd1234.js'), 'keep me')
+    writeFileSync(
+      join(root, 'src/views/components/a-b.kick'),
+      '<div></div>\n<script client>\nconsole.log(2)\n</script>',
+    )
+    await buildToDisk(root, plugin, false)
+    const after = readdirSync(dir)
+    expect(after.some((f) => before.includes(f))).toBe(false)
+    expect(after).toContain('other.abcd1234.js')
+    expect(after).toHaveLength(before.length + 1)
+
+    // The last template gone: its files go too.
+    rmSync(join(root, 'src/views'), { recursive: true })
+    await buildToDisk(root, plugin, false)
+    expect(readdirSync(dir)).toEqual(['other.abcd1234.js'])
   })
 })
 

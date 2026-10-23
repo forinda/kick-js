@@ -380,6 +380,49 @@ export function viewsPluginOptions(
   return { publicDir: relative(from, resolve(root, deploy.staticDir)).split(sep).join('/') }
 }
 
+type Alias = { find: string | RegExp; replacement: string }
+
+/**
+ * What the function bundle takes from the app's Vite config: its `define`,
+ * and its aliases ahead of the default `@` → `src`. The rest of that config
+ * (dev server, its own build) isn't for this build.
+ */
+export function appBuildOptions(
+  root: string,
+  app: { resolve?: { alias?: unknown }; define?: Record<string, unknown> } | undefined,
+): { define: Record<string, unknown>; resolve: { alias: Alias[] } } {
+  const alias = app?.resolve?.alias
+  const own: Alias[] = Array.isArray(alias)
+    ? alias
+    : Object.entries((alias ?? {}) as Record<string, string>).map(([find, replacement]) => ({
+        find,
+        replacement,
+      }))
+  return {
+    define: app?.define ?? {},
+    resolve: { alias: [...own, { find: '@', replacement: resolve(root, 'src') }] },
+  }
+}
+
+type AppConfig = Parameters<typeof appBuildOptions>[1]
+
+/**
+ * The app's `vite.config.ts`, resolved as Vite resolves it for this build: an
+ * SSR build, so a config function that branches on `isSsrBuild` picks the
+ * server settings.
+ */
+export async function appViteConfig(
+  root: string,
+  load: (
+    env: { command: 'build'; mode: string; isSsrBuild: boolean },
+    file: undefined,
+    root: string,
+  ) => Promise<{ config: AppConfig } | null>,
+): Promise<AppConfig> {
+  return (await load({ command: 'build', mode: 'production', isSsrBuild: true }, undefined, root))
+    ?.config
+}
+
 async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) => void) {
   const entry = resolve(root, deploy.entry)
   if (!existsSync(entry)) {
@@ -388,7 +431,10 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
         `\`handler = createHandler({ modules })\` — see the Serverless guide.`,
     )
   }
-  const { build } = await importFromProject(root, 'vite')
+  const { build, loadConfigFromFile } = await importFromProject(root, 'vite')
+  const app = await appViteConfig(root, (env, file, dir) =>
+    loadConfigFromFile(env, file, dir, 'silent'),
+  )
   const { default: swc } = await importFromProject(root, 'unplugin-swc')
   const { devtoolsFlagPlugin, devtoolsStripPlugin, kickViewsPlugin } = await importFromProject(
     root,
@@ -405,7 +451,7 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
     logLevel: 'warn',
     oxc: false,
     plugins: [swc.vite(), devtoolsFlagPlugin(), devtoolsStripPlugin(), ...views],
-    resolve: { alias: { '@': resolve(root, 'src') } },
+    ...appBuildOptions(root, app),
     ssr: { noExternal: true, target: 'node' },
     build: {
       ssr: true,
