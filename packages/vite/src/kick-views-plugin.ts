@@ -136,8 +136,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     resolveId(id) {
       if (id === ID) return RESOLVED
       // A component's client script, as a module next to its `.kick` file.
-      if (id.endsWith(`.kick${CLIENT_SUFFIX}`) && existsSync(id.slice(0, -CLIENT_SUFFIX.length)))
-        return id
+      if (clientModuleFile(id, viewsDir)) return id
       return undefined
     },
     // kick dev: component scripts through Vite's pipeline, so their imports
@@ -178,10 +177,13 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       checked = await checkTemplates(this)
     },
     async load(id) {
-      if (id.endsWith(`.kick${CLIENT_SUFFIX}`)) {
+      const kickFile = clientModuleFile(id, viewsDir)
+      if (kickFile) {
         const view = await import('@forinda/kickjs-view')
-        return clientScriptOf(view, await readFile(id.slice(0, -CLIENT_SUFFIX.length), 'utf8'))
+        return clientScriptOf(view, await readFile(kickFile, 'utf8'))
       }
+      // Any other `.kick.client.ts`: not ours to load.
+      if (id.endsWith(`.kick${CLIENT_SUFFIX}`)) return undefined
       if (id !== RESOLVED) return undefined
       const hasPipes = existsSync(pipesFile)
       const pipes = hasPipes
@@ -200,6 +202,17 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       ].join('\n')
     },
   }
+}
+
+/**
+ * The `.kick` file behind a client-script module id — only inside the views
+ * folder, so a crafted dev request can't load a template from elsewhere.
+ */
+function clientModuleFile(id: string, viewsDir: string): string | undefined {
+  if (!viewsDir || !id.endsWith(`.kick${CLIENT_SUFFIX}`)) return undefined
+  const file = resolve(id.slice(0, -CLIENT_SUFFIX.length))
+  if (!file.startsWith(viewsDir + sep) || !existsSync(file)) return undefined
+  return file
 }
 
 /** A template's top-level `<script client>` text, as the checker lifts it. */

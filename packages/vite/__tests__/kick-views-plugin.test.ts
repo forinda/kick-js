@@ -132,6 +132,20 @@ describe('kickViewsPlugin', () => {
     }
   })
 
+  it('only resolves client-script modules inside the views folder', async () => {
+    const root = project({
+      'src/views/components/a-b.kick': '<div></div><script client>let a = 1</script>',
+    })
+    const outside = project({ 'secret.kick': '<script client>leak</script>' })
+    const plugin = kickViewsPlugin() as any
+    plugin.configResolved({ root, command: 'serve', resolve: { alias: [] } })
+    const inside = join(root, 'src/views/components/a-b.kick.client.ts')
+    expect(plugin.resolveId(inside)).toBe(inside)
+    const escaped = join(outside, 'secret.kick.client.ts')
+    expect(plugin.resolveId(escaped)).toBeUndefined()
+    expect(await plugin.load(escaped)).toBeUndefined()
+  })
+
   it('dev serves no bundle: the file loader reads templates', async () => {
     const root = project({ 'src/views/home.kick': 'x' })
     const server = await createServer({
