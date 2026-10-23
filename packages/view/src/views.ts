@@ -10,6 +10,7 @@ import { componentTag, layoutResolver, templateName, type Project } from './chec
 import {
   CLIENT_SCRIPT_FILE,
   NO_STRIPPER,
+  contentType,
   fnv1a,
   hasImports,
   injectHead,
@@ -42,7 +43,10 @@ export interface ViewsBundle {
     entries: Record<string, string>
     /** Each entry's stylesheets, by component tag. */
     css?: Record<string, string[]>
-    files: Record<string, string>
+    /** Files kept in the bundle (`clientFiles: 'bundle'`). */
+    files?: Record<string, string>
+    /** Files the build wrote to disk, under `clientDir` (`clientFiles: 'disk'`). */
+    disk?: string[]
   }
 }
 
@@ -93,12 +97,16 @@ export interface ViewsOptions {
   stripTypes?: (code: string) => string | Promise<string>
   /** Where component scripts are served. Default `'/_kick/c'`. */
   clientScriptPath?: string
+  /** A `file:` URL of the folder holding the bundle's `disk` files; `virtual:kick-views` exports it. */
+  clientDir?: string
 }
 
 export interface Views {
   render(name: string, data?: object, opts?: RenderOptions & { ctx?: unknown }): Promise<string>
   /** A component's script by its served file name (`<tag>.<hash>.js`); `undefined` when there's none by that name. */
   clientScript(file: string): Promise<string | undefined>
+  /** A client file (script, stylesheet, asset) by its served name, with its content type. */
+  clientFile(file: string): Promise<{ body: string | Uint8Array; type: string } | undefined>
   /** The path component scripts are served under (`clientScriptPath`). */
   readonly clientScriptPath: string
   /** Whether `name` is one of these views — `ctx.render` falls through to another engine when not. */
@@ -145,6 +153,13 @@ export function useStripTypes(strip: (code: string) => string): void {
   typeStripper = strip
 }
 
+/** Reads a client file the build wrote to disk; the Node entry sets it. */
+let clientReader: ((url: URL) => Promise<Uint8Array>) | undefined
+
+export function useClientFiles(read: ((url: URL) => Promise<Uint8Array>) | undefined): void {
+  clientReader = read
+}
+
 function fileLoaders(): Promise<FileLoaderModule> {
   if (!fileLoaderModule) {
     return Promise.reject(
@@ -162,6 +177,7 @@ export function createViews(options: ViewsOptions = {}): Views {
   const dev = options.dev ?? options.bundle === null
   if (bundle) bundleLoader(bundle) // version check
   const componentsDir = options.componentsDir ?? 'components'
+  const disk = new Set(bundle?.client?.disk)
   const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
   const stripTypes =
     options.stripTypes ??
@@ -191,6 +207,10 @@ export function createViews(options: ViewsOptions = {}): Views {
   }
   const layoutFor = layoutResolver(options.layout)
   const warn = options.warn ?? ((m: string) => console.warn(`[kick/view] ${m}`))
+  if (disk.size && clientReader && !options.clientDir)
+    warn(
+      "the build wrote client files to disk but createViews has no clientDir: pass { ...kickViews } from 'virtual:kick-views'",
+    )
   let loader: Promise<Loader> | undefined
   let appPipes: Promise<Record<string, Pipe | EnvPipe>> | undefined
   let state: Promise<State> | undefined
@@ -297,7 +317,7 @@ export function createViews(options: ViewsOptions = {}): Views {
     return (await current()).project.templates.has(name)
   }
 
-  return {
+  const views: Views = {
     has,
     async render(name, data = {}, opts = {}) {
       if (!templateName(name)) throw new Error(`invalid template name '${name}'`)
@@ -385,7 +405,25 @@ export function createViews(options: ViewsOptions = {}): Views {
       const { js, hash } = await scriptFor(t)
       return hash === m[2] ? js : undefined
     },
+    async clientFile(file) {
+      if (!CLIENT_SCRIPT_FILE.test(file)) return undefined
+      // Written by the build: read only names it listed, never a probed path.
+      if (disk.has(file)) {
+        if (!clientReader || !options.clientDir) return undefined
+        try {
+          const body = await clientReader(new URL(file, options.clientDir))
+          return { body, type: contentType(file) }
+        } catch (err) {
+          // Not deployed with the server: left to whatever serves static files.
+          if ((err as { code?: string }).code === 'ENOENT') return undefined
+          throw err
+        }
+      }
+      const text = await views.clientScript(file)
+      return text === undefined ? undefined : { body: text, type: contentType(file) }
+    },
   }
+  return views
 }
 
 const zeroSpan = {

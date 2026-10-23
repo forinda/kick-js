@@ -7,8 +7,8 @@
  * @module @forinda/kickjs-vite/kick-views-plugin
  */
 import { existsSync } from 'node:fs'
-import { readdir, readFile } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import type { Plugin } from 'vite'
 
 export interface KickViewsPluginOptions {
@@ -20,6 +20,17 @@ export interface KickViewsPluginOptions {
   componentsDir?: string
   /** Where component scripts are served (the views' `clientScriptPath`). Default `'/_kick/c'`. */
   clientScriptPath?: string
+  /**
+   * Where `kick build` puts client files: `'disk'` (default) writes them to
+   * `<outDir>/<publicDir><clientScriptPath>/`, served from disk on Node and by
+   * the platform's static files on the edge; `'bundle'` keeps them in the
+   * server bundle, for hosts with no static files.
+   */
+  clientFiles?: 'disk' | 'bundle'
+  /** Default `'public'`, inside the build's `outDir`. */
+  publicDir?: string
+  /** Images and fonts up to this many bytes are inlined (`'disk'` mode). Default `4096`. */
+  inlineLimit?: number
 }
 
 const ID = 'virtual:kick-views'
@@ -46,6 +57,10 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let checked: string | undefined
   // Exported by the virtual module, so `createViews({ ...kickViews })` serves where this plugin does.
   const scriptPath = (options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')
+  const onDisk = options.clientFiles !== 'bundle'
+  /** Client files to write beside the server bundle, by path inside its `outDir`. */
+  let clientOut: Map<string, string | Uint8Array> | undefined
+  const clientFolder = posix.join(options.publicDir ?? 'public', scriptPath.slice(1))
   let root = ''
   // What the nested browser build takes from the app's config.
   let shared: ClientBuildConfig = {}
@@ -104,9 +119,19 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         code: t.client!.code,
       }))
     let client: ClientBundle | undefined
-    if (scripts.length) {
+    if (scripts.length && onDisk && !('useClientFiles' in view))
+      errors.push(
+        "client files on disk need @forinda/kickjs-view 0.3 or later: upgrade it, or set views: { clientFiles: 'bundle' }",
+      )
+    else if (scripts.length) {
       try {
-        client = await bundleClientScripts(scripts, root, shared, scriptPath)
+        client = await bundleClientScripts(
+          scripts,
+          root,
+          shared,
+          scriptPath,
+          onDisk ? (options.inlineLimit ?? 4096) : () => true,
+        )
       } catch (err) {
         errors.push(`<script client> bundling failed: ${(err as Error).message}`)
       }
@@ -129,7 +154,23 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     }
     if (errors.length)
       ctx.error(`.kick templates have errors:\n  ${[...new Set(errors)].join('\n  ')}`)
-    return JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked, client }, null, 1)
+    let out: Record<string, unknown> | undefined
+    if (client && onDisk) {
+      // Vite drops assets from server builds: written in `writeBundle` instead.
+      clientOut = new Map(
+        Object.entries(client.files).map(([name, source]) => [
+          posix.join(clientFolder, name),
+          source,
+        ]),
+      )
+      out = { entries: client.entries, css: client.css, disk: Object.keys(client.files) }
+    } else if (client) {
+      for (const [name, source] of Object.entries(client.files))
+        if (typeof source !== 'string')
+          ctx.error(`client file ${name} isn't text: use clientFiles: 'disk' to serve it`)
+      out = client
+    }
+    return JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked, client: out }, null, 1)
   }
 
   return {
@@ -195,6 +236,22 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       if (!build || !(await kickFiles(viewsDir)).length) return
       checked = await checkTemplates(this)
     },
+    renderChunk(code, chunk) {
+      if (!code.includes(CLIENT_DIR)) return null
+      const rel = posix.relative(posix.dirname(chunk.fileName), clientFolder)
+      return {
+        code: code.replaceAll(CLIENT_DIR, `./${rel}/`),
+        map: null,
+      }
+    },
+    async writeBundle(out) {
+      if (!clientOut || !out.dir) return
+      for (const [file, source] of clientOut) {
+        const to = join(out.dir, file)
+        await mkdir(dirname(to), { recursive: true })
+        await writeFile(to, source)
+      }
+    },
     async load(id) {
       const kickFile = clientModuleFile(id, viewsDir)
       if (kickFile) {
@@ -217,8 +274,14 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         pipes,
         `const bundle = ${bundle};`,
         `const clientScriptPath = ${JSON.stringify(scriptPath)};`,
-        'export { bundle, pipes, clientScriptPath }',
-        'export default { bundle, pipes, clientScriptPath }',
+        // The folder beside this bundle; the edge may have no usable `import.meta.url`.
+        // The folder beside this bundle (`renderChunk` fills the path); the
+        // edge may have no usable `import.meta.url`.
+        clientOut
+          ? `const clientDir = (() => { try { return new URL(${JSON.stringify(CLIENT_DIR)}, import.meta.url).href } catch { return undefined } })();`
+          : 'const clientDir = undefined;',
+        'export { bundle, pipes, clientScriptPath, clientDir }',
+        'export default { bundle, pipes, clientScriptPath, clientDir }',
       ].join('\n')
     },
   }
@@ -265,6 +328,9 @@ type ClientBuildConfig = {
   resolve?: { alias: unknown }
 }
 
+/** Replaced, per output chunk, with the relative path to the client files folder. */
+const CLIENT_DIR = '__KICK_CLIENT_DIR__'
+
 /** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */
 const CLIENT_SUFFIX = '.client.ts'
 
@@ -278,6 +344,7 @@ async function bundleClientScripts(
   root: string,
   shared: ClientBuildConfig,
   scriptPath: string,
+  inline: number | (() => boolean),
 ): Promise<ClientBundle> {
   const vite = await import('vite')
   const byId = new Map(scripts.map((s) => [s.file + CLIENT_SUFFIX, s.code]))
@@ -301,16 +368,19 @@ async function bundleClientScripts(
       modulePreload: false,
       copyPublicDir: false,
       assetsDir: '',
-      // ponytail: images and fonts inline as data URIs, so every served file is text; serve binaries if size bites.
-      assetsInlineLimit: () => true,
+      assetsInlineLimit: inline,
       rollupOptions: {
         input: Object.fromEntries(scripts.map((s) => [s.tag, s.file + CLIENT_SUFFIX])),
         output: {
           format: 'es',
           entryFileNames: '[name].[hash].js',
           chunkFileNames: (c: { name: string }) => `${servable(c.name)}.[hash].js`,
-          assetFileNames: (a: { names?: string[]; name?: string }) =>
-            `${servable((a.names?.[0] ?? a.name ?? 'asset').replace(/\.[^.]*$/, ''))}.[hash][extname]`,
+          // Served names take a lower-case extension: `Logo.PNG` becomes `Logo.<hash>.png`.
+          assetFileNames: (a: { names?: string[]; name?: string }) => {
+            const name = a.names?.[0] ?? a.name ?? 'asset'
+            const ext = /\.[^.]*$/.exec(name)?.[0] ?? ''
+            return `${servable(name.slice(0, name.length - ext.length))}.[hash]${ext.toLowerCase()}`
+          },
         },
       },
     },
@@ -318,7 +388,7 @@ async function bundleClientScripts(
   const output = (Array.isArray(out) ? out[0]! : out).output
   const entries: Record<string, string> = {}
   const css: Record<string, string[]> = {}
-  const files: Record<string, string> = {}
+  const files: Record<string, string | Uint8Array> = {}
   const byName = new Map(output.map((f) => [f.fileName, f]))
   /** The stylesheets a chunk and the chunks it imports bring in. */
   const cssOf = (name: string, seen = new Set<string>()): string[] => {
@@ -337,8 +407,7 @@ async function bundleClientScripts(
     } else if (f.fileName.endsWith('.css')) {
       files[f.fileName] =
         typeof f.source === 'string' ? f.source : new TextDecoder().decode(f.source)
-    } else
-      throw new Error(`client scripts can't import ${f.fileName} yet: only CSS and inlined assets`)
+    } else files[f.fileName] = f.source!
   }
   for (const [tag, file] of Object.entries(entries)) {
     const list = [...new Set(cssOf(file))]
@@ -364,7 +433,7 @@ type OutputFile = {
 type ClientBundle = {
   entries: Record<string, string>
   css: Record<string, string[]>
-  files: Record<string, string>
+  files: Record<string, string | Uint8Array>
 }
 
 /**

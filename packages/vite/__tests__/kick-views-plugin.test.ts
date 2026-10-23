@@ -1,8 +1,16 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { build, createServer, type Rollup } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { kickViewsPlugin, type KickViewsPluginOptions } from '../src/kick-views-plugin'
@@ -22,12 +30,103 @@ async function bundle(root: string, opts: KickViewsPluginOptions = {}): Promise<
     root,
     configFile: false,
     logLevel: 'silent',
-    plugins: [kickViewsPlugin(opts)],
+    // File contents inspected in the bundle; disk mode has its own tests.
+    plugins: [kickViewsPlugin({ clientFiles: 'bundle', ...opts })],
     build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
   })) as Rollup.RollupOutput | Rollup.RollupOutput[]
   const output = (Array.isArray(out) ? out[0]! : out).output
   return output.map((c) => ('code' in c ? c.code : '')).join('\n')
 }
+
+/** A real build to `dist/`: the server entry plus whatever the plugin writes. */
+async function buildToDisk(root: string, opts: KickViewsPluginOptions = {}): Promise<string> {
+  await build({
+    root,
+    configFile: false,
+    logLevel: 'silent',
+    plugins: [kickViewsPlugin(opts)],
+    build: { ssr: join(root, 'entry.ts'), outDir: join(root, 'dist'), minify: false },
+  })
+  return readFileSync(join(root, 'dist/entry.mjs'), 'utf8')
+}
+
+const PHOTO = Uint8Array.from({ length: 5000 }, (_, i) => (i * 7) % 256)
+
+const diskProject = () =>
+  project({
+    'src/views/components/toast-a.kick':
+      "<div></div>\n<script client>\nimport { fmt } from './date.utils'\nimport './a.css'\nimport photo from './photo.png'\nimport icon from './icon.svg'\nconsole.log(fmt('a'), photo, icon)\n</script>",
+    'src/views/components/toast-b.kick':
+      "<div></div>\n<script client>\nimport { fmt } from './date.utils'\nconsole.log(fmt('b'))\n</script>",
+    'src/views/components/date.utils.ts': 'export const fmt = (s: string) => `<${s}>`',
+    'src/views/components/a.css': 'div { color: red }',
+    'src/views/components/icon.svg': `<svg xmlns="http://www.w3.org/2000/svg">${' '.repeat(40)}</svg>`,
+  })
+
+describe('client files on disk', () => {
+  it('writes client files to dist/public/_kick/c', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    const code = await buildToDisk(root)
+    const dir = join(root, 'dist/public/_kick/c')
+    const written = readdirSync(dir).toSorted()
+    expect(written.some((f) => /^toast-a\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => /^toast-b\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => /^date_utils\.[\w-]{8}\.js$/.test(f))).toBe(true)
+    expect(written.some((f) => f.endsWith('.css'))).toBe(true)
+    const png = written.find((f) => f.endsWith('.png'))!
+    expect(new Uint8Array(readFileSync(join(dir, png)))).toEqual(PHOTO)
+    const disk = JSON.parse(/"disk": (\[[^\]]*\])/.exec(code)![1]!) as string[]
+    expect(disk.toSorted()).toEqual(written)
+    expect(
+      readFileSync(
+        join(
+          dir,
+          written.find((f) => f.startsWith('toast-a'))!,
+        ),
+        'utf8',
+      ),
+    ).toContain('data:image/svg+xml')
+    expect(code).not.toContain('"files"')
+  })
+
+  it('clientDir points at the emitted folder', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    await buildToDisk(root)
+    const mod = await import(pathToFileURL(join(root, 'dist/entry.mjs')).href)
+    const entry = mod.default.bundle.client.entries['toast-a'] as string
+    expect(existsSync(new URL(entry, mod.default.clientDir))).toBe(true)
+  })
+
+  it('bundle mode keeps files in the bundle', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    const code = await buildToDisk(root, { clientFiles: 'bundle' })
+    expect(code).toContain('"files"')
+    expect(code).not.toContain('"disk"')
+    expect(existsSync(join(root, 'dist/public'))).toBe(false)
+    expect(code).toContain('data:image/png')
+  })
+
+  it('upper-case asset extensions are written lower-case, so they can be served', async () => {
+    const root = project({
+      'src/views/components/a-b.kick':
+        "<div></div>\n<script client>\nimport logo from './Logo.PNG'\nconsole.log(logo)\n</script>",
+    })
+    writeFileSync(join(root, 'src/views/components/Logo.PNG'), PHOTO)
+    await buildToDisk(root)
+    const written = readdirSync(join(root, 'dist/public/_kick/c'))
+    expect(written.some((f) => /^Logo\.[\w-]{8}\.png$/.test(f))).toBe(true)
+  })
+
+  it('publicDir and clientScriptPath move the folder', async () => {
+    const root = diskProject()
+    writeFileSync(join(root, 'src/views/components/photo.png'), PHOTO)
+    await buildToDisk(root, { publicDir: 'static', clientScriptPath: '/assets/c' })
+    expect(readdirSync(join(root, 'dist/static/assets/c')).length).toBeGreaterThan(3)
+  })
+})
 
 describe('kickViewsPlugin', () => {
   it('bundles imports into shared chunks', async () => {
@@ -196,7 +295,7 @@ describe('kickViewsPlugin', () => {
       logLevel: 'silent',
       mode: 'staging',
       define: { __FLAG__: JSON.stringify('flag-on') },
-      plugins: [kickViewsPlugin()],
+      plugins: [kickViewsPlugin({ clientFiles: 'bundle' })],
       build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
     })) as Rollup.RollupOutput | Rollup.RollupOutput[]
     const code = (Array.isArray(out) ? out[0]! : out).output

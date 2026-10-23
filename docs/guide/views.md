@@ -315,10 +315,11 @@ A component can carry its own browser code. Pages that render it get one small s
 
   `kick build` bundles every component's script in one browser build: each component gets an entry, and code several components import goes into shared chunks, loaded once and sharing its state. Under `kick dev`, the scripts go through Vite's dev pipeline, so imports resolve the same way and edits show on the next load. On plain Node without Vite there's no bundler: scripts that import fail with a clear message, and self-contained scripts still work.
 
-  The browser build takes your app's `define`, mode, `.env` files and aliases, not its Vite plugins. A script can import CSS too (`import './toast.css'`): after `kick build`, a page that renders the component links the stylesheet in its `<head>` (with the page's `nonce`), and under `kick dev` Vite injects it. Images and fonts a script or its CSS imports are inlined as data URIs, so keep them small.
+  The browser build takes your app's `define`, mode, `.env` files and aliases, not its Vite plugins. A script can import CSS too (`import './toast.css'`): after `kick build`, a page that renders the component links the stylesheet in its `<head>` (with the page's `nonce`), and under `kick dev` Vite injects it. Images and fonts a script or its CSS imports are inlined as data URIs up to 4 KB; larger ones are files of their own.
 
 - **Types.** `kick build` strips the TypeScript and ships plain JS, which is what edge runtimes serve. Under `kick dev`, Vite strips it. On plain Node, the server strips self-contained scripts with Node's built-in stripper, which needs Node 22.13 or later. The editor treats the block as TypeScript; it doesn't type-check it yet.
 - **Rules.** Only in components, at the top level, one per component. Other `<script>` tags render inline as before.
+- **Where the files go.** `kick build` writes every client file (entries, shared chunks, CSS, larger images and fonts) to `dist/public/_kick/c/`, with the content hash in each name. On Node, `KickView` serves them from there, cached for a year. On an edge runtime, the platform serves that folder before your worker: `kick g deploy` sets it up for Netlify and Vercel, and on Cloudflare point `assets.directory` in `wrangler.toml` at `dist/public`. For a host with no static files, `kickjs({ views: { clientFiles: 'bundle' } })` keeps everything in the server bundle and inlines every image and font.
 - **Serving.** `KickView` serves the scripts on Express, Fastify and h3. On the web fetch entry, call `clientScriptResponse` ahead of the app: `fetch: async (req) => (await clientScriptResponse(views, req)) ?? web.fetch(req)`. The path is `clientScriptPath` (default `/_kick/c`); set it in `vite.config.ts` (`kickjs({ views: { clientScriptPath } })`), and `...kickViews` passes it to `createViews`.
 - **Swapped HTML.** A custom element starts whenever it lands in the page, so components inside HTML swapped in by htmx or Turbo work without extra code.
 
@@ -668,22 +669,34 @@ Other editors (Neovim, Vim, Helix, Emacs, JetBrains IDEs) can run the same langu
 
 ## Options
 
-| option            | default                                       |                                                                                              |
-| ----------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `viewsDir`        | `'src/views'`                                 |                                                                                              |
-| `componentsDir`   | `'components'`                                | inside `viewsDir`                                                                            |
-| `pipesFile`       | `'src/views/pipes.ts'`                        | `.js` also works; without Vite, Node runs a `.ts` file only when it can strip types (22.18+) |
-| `layout`          | none                                          | a layout name, or folder prefix → layout                                                     |
-| `baseLayout`      | none                                          | the shell around every page's outermost layout                                               |
-| `locale`          | `'en-US'`                                     |                                                                                              |
-| `timeZone`        | `'UTC'`                                       |                                                                                              |
-| `strict`          | `false`                                       | unknown names and values that can't print become errors                                      |
-| `share`           | none                                          | `(ctx) => data`                                                                              |
-| `assets`          | none                                          | `(entry, data) => tags`, for `@assets`                                                       |
-| `cache`           | `true`                                        | `false` re-reads every template on every render                                              |
-| `dev`             | `NODE_ENV !== 'production'` (with `KickView`) | re-check changed templates on each render                                                    |
-| `bundle`, `pipes` | from `virtual:kick-views`                     |                                                                                              |
-| `loader`          | the file loader                               | `{ list, read, version? }` for templates from anywhere else                                  |
+| option                                             | default                                       |                                                                                                     |
+| -------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `viewsDir`                                         | `'src/views'`                                 |                                                                                                     |
+| `componentsDir`                                    | `'components'`                                | inside `viewsDir`                                                                                   |
+| `pipesFile`                                        | `'src/views/pipes.ts'`                        | `.js` also works; without Vite, Node runs a `.ts` file only when it can strip types (22.18+)        |
+| `layout`                                           | none                                          | a layout name, or folder prefix → layout                                                            |
+| `baseLayout`                                       | none                                          | the shell around every page's outermost layout                                                      |
+| `locale`                                           | `'en-US'`                                     |                                                                                                     |
+| `timeZone`                                         | `'UTC'`                                       |                                                                                                     |
+| `strict`                                           | `false`                                       | unknown names and values that can't print become errors                                             |
+| `share`                                            | none                                          | `(ctx) => data`                                                                                     |
+| `assets`                                           | none                                          | `(entry, data) => tags`, for `@assets`                                                              |
+| `cache`                                            | `true`                                        | `false` re-reads every template on every render                                                     |
+| `dev`                                              | `NODE_ENV !== 'production'` (with `KickView`) | re-check changed templates on each render                                                           |
+| `bundle`, `pipes`, `clientScriptPath`, `clientDir` | from `virtual:kick-views`                     | pass them all with `...kickViews`; without `clientDir`, files the build wrote to disk aren't served |
+| `loader`                                           | the file loader                               | `{ list, read, version? }` for templates from anywhere else                                         |
+
+The Vite plugin's own options, in `vite.config.ts` as `kickjs({ views: { … } })`:
+
+| option             | default                |                                                                           |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------- |
+| `viewsDir`         | `'src/views'`          |                                                                           |
+| `componentsDir`    | `'components'`         |                                                                           |
+| `pipesFile`        | `'src/views/pipes.ts'` |                                                                           |
+| `clientScriptPath` | `'/_kick/c'`           | the URL path client files are served under                                |
+| `clientFiles`      | `'disk'`               | `'bundle'` keeps client files in the server bundle                        |
+| `publicDir`        | `'public'`             | inside the build's `outDir`; files go to `<publicDir><clientScriptPath>/` |
+| `inlineLimit`      | `4096`                 | images and fonts up to this many bytes are inlined (`'disk'` only)        |
 
 ## Related
 

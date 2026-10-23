@@ -26,6 +26,7 @@ import {
   vercelFunctionSource,
   vercelCrons,
   vercelRoutes,
+  viewsPluginOptions,
 } from '../src/commands/deploy'
 
 /** Fake tree: every path in the set exists. */
@@ -134,6 +135,29 @@ describe('optional peers in the function bundle', () => {
     expect(missingPackage('zod', from, exists)).toBe(false)
     expect(missingPackage('@valibot/to-json-schema', from, exists)).toBe(true)
     expect(missingPackage('./sibling', from, exists)).toBe(false)
+  })
+})
+
+describe('views apps', () => {
+  const views = { '@forinda/kickjs-view': '^0.2.0' }
+
+  it('serve dist/public before the function, which owns every path', () => {
+    expect(resolveDeploy(undefined, '/apps/site', tree(), views)).toMatchObject({
+      staticDir: 'dist/public',
+      siteRoot: '.',
+      apiPath: '',
+    })
+  })
+
+  it('write client files into the static folder from the serverless build', () => {
+    const resolved = resolveDeploy(undefined, '/apps/site', tree(), views)
+    expect(viewsPluginOptions('/apps/site', resolved)).toEqual({ publicDir: '../public' })
+    // Inertia keeps its own layout; no views plugin wiring for it here.
+    const inertia = resolveDeploy(undefined, '/apps/site', tree(), {
+      ...views,
+      '@forinda/kickjs-inertia': '^0.2.0',
+    })
+    expect(inertia.staticDir).toBe('dist/client')
   })
 })
 

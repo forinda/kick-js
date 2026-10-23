@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { clientScriptResponse, createViews } from '../src/index'
+import { readFile } from 'node:fs/promises'
+import { pathToFileURL } from 'node:url'
+import { clientScriptResponse, createViews, useClientFiles } from '../src/index'
 import { check } from '../src/check/check'
 import { parse } from '../src/parse/template'
 import { BUILTIN_PIPES } from '../src/pipes/builtins'
@@ -68,6 +70,107 @@ describe('<script client>', () => {
         'components/a-b',
       ),
     ).toContain("<script client> can't use {{ }} — pass data through attributes")
+  })
+})
+
+describe('client files on disk', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 255])
+  const diskViews = () => {
+    const out = mkdtempSync(join(tmpdir(), 'kick-disk-'))
+    writeFileSync(join(out, 'flash-toast.AbC_12-x.js'), 'export {}')
+    writeFileSync(join(out, 'logo.Lg0_12-x.png'), PNG)
+    writeFileSync(join(out, 'secret.Lg0_12-x.png'), PNG)
+    const p = project({ 'components/flash-toast': TOAST, page: '<flash-toast />' })
+    return createViews({
+      bundle: {
+        v: 1,
+        templates: {
+          'components/flash-toast': check('components/flash-toast', p).template!,
+          page: check('page', p).template!,
+        },
+        client: {
+          entries: { 'flash-toast': 'flash-toast.AbC_12-x.js' },
+          disk: ['flash-toast.AbC_12-x.js', 'logo.Lg0_12-x.png'],
+        },
+      },
+      clientDir: pathToFileURL(`${out}/`).href,
+      warn: vi.fn(),
+    })
+  }
+
+  it('serves binary files from disk with their type', async () => {
+    const v = diskViews()
+    expect(await v.render('page')).toContain('src="/_kick/c/flash-toast.AbC_12-x.js"')
+    const png = await v.clientFile('logo.Lg0_12-x.png')
+    expect(png?.type).toBe('image/png')
+    expect(new Uint8Array(png!.body as Uint8Array)).toEqual(PNG)
+    expect((await v.clientFile('flash-toast.AbC_12-x.js'))?.type).toBe(
+      'text/javascript; charset=utf-8',
+    )
+    const res = await clientScriptResponse(v, new Request('http://x/_kick/c/logo.Lg0_12-x.png'))
+    expect(res?.status).toBe(200)
+    expect(res?.headers.get('content-type')).toBe('image/png')
+    expect(res?.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    expect(new Uint8Array(await res!.arrayBuffer())).toEqual(PNG)
+  })
+
+  it('reads only listed files', async () => {
+    const read = vi.fn((url: URL) => readFile(url))
+    useClientFiles(read)
+    try {
+      const v = diskViews()
+      for (const bad of ['../x.png', 'secret.Lg0_12-x.png', 'logo.Lg0_12-x.png.map'])
+        expect(await v.clientFile(bad)).toBeUndefined()
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      useClientFiles((url) => readFile(url))
+    }
+  })
+
+  it('long extensions are served', async () => {
+    const v = diskViews()
+    expect(await v.clientFile('site.Ab0_12-x.webmanifest')).toBeUndefined() // not listed
+    expect(
+      (await import('../src/client-scripts')).CLIENT_SCRIPT_FILE.test('site.Ab0_12-x.webmanifest'),
+    ).toBe(true)
+  })
+
+  it('a listed file missing on disk falls through', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'kick-disk-gone-'))
+    const p = project({ 'components/flash-toast': TOAST, page: '<flash-toast />' })
+    const v = createViews({
+      bundle: {
+        v: 1,
+        templates: { 'components/flash-toast': check('components/flash-toast', p).template! },
+        client: { entries: {}, disk: ['gone.Lg0_12-x.png'] },
+      },
+      clientDir: pathToFileURL(`${out}/`).href,
+      warn: vi.fn(),
+    })
+    expect(await v.clientFile('gone.Lg0_12-x.png')).toBeUndefined()
+  })
+
+  it('warns when the bundle lists disk files but no clientDir is given', () => {
+    const warn = vi.fn()
+    const p = project({ 'components/flash-toast': TOAST })
+    createViews({
+      bundle: {
+        v: 1,
+        templates: { 'components/flash-toast': check('components/flash-toast', p).template! },
+        client: { entries: {}, disk: ['a.Lg0_12-x.js'] },
+      },
+      warn,
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('clientDir'))
+  })
+
+  it('without a reader, disk files fall through', async () => {
+    useClientFiles(undefined)
+    try {
+      expect(await diskViews().clientFile('logo.Lg0_12-x.png')).toBeUndefined()
+    } finally {
+      useClientFiles((url) => readFile(url))
+    }
   })
 })
 
