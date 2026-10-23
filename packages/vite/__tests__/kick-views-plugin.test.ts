@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build, createServer, type Plugin, type Rollup } from 'vite'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { kickViewsPlugin, type KickViewsPluginOptions } from '../src/kick-views-plugin'
 
 function project(files: Record<string, string>): string {
@@ -463,8 +463,13 @@ describe('validators.ts', () => {
         "export const phone = (v) => (v ? undefined : 'edited-version')\n",
       )
       vite.watcher.emit('change', join(root, 'src/views/validators.ts'))
-      expect(await (await fetch(`${base}/src/views/validators.ts`)).text()).toContain(
-        'edited-version',
+      // Vite invalidates the module asynchronously: the next request after that has the edit.
+      await vi.waitFor(
+        async () =>
+          expect(await (await fetch(`${base}/src/views/validators.ts`)).text()).toContain(
+            'edited-version',
+          ),
+        { timeout: 5000 },
       )
     } finally {
       http.close()
