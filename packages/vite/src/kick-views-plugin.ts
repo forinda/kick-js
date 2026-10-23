@@ -42,6 +42,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let pipesFile = ''
   let build = true
   let checked: string | undefined
+  let root = ''
+  let alias: unknown = []
 
   /** Parse and check every template; the bundle as JSON, or a build error listing every problem. */
   async function checkTemplates(ctx: {
@@ -88,6 +90,22 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       }
       if (r.template) checked[name] = r.template
     }
+    // Client scripts bundled together: imports resolved, shared code in shared chunks.
+    const scripts = Object.entries(checked as Record<string, { client?: { code: string } }>)
+      .filter(([, t]) => t.client)
+      .map(([name, t]) => ({
+        tag: view.componentTag(name, project.componentsDir),
+        file: join(viewsDir, `${name}.kick`),
+        code: t.client!.code,
+      }))
+    let client: { entries: Record<string, string>; files: Record<string, string> } | undefined
+    if (scripts.length) {
+      try {
+        client = await bundleClientScripts(scripts, root, alias)
+      } catch (err) {
+        errors.push(`<script client> bundling failed: ${(err as Error).message}`)
+      }
+    }
     // `<script client>` ships as plain JS: the edge never strips types.
     for (const [name, t] of Object.entries(checked) as Array<
       [string, { client?: { code: string; js: boolean } }]
@@ -101,7 +119,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     }
     if (errors.length)
       ctx.error(`.kick templates have errors:\n  ${[...new Set(errors)].join('\n  ')}`)
-    return JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked }, null, 1)
+    return JSON.stringify({ v: view.AST_FORMAT_VERSION, templates: checked, client }, null, 1)
   }
 
   return {
@@ -110,6 +128,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       viewsDir = resolve(config.root, options.viewsDir ?? 'src/views')
       pipesFile = resolve(config.root, options.pipesFile ?? 'src/views/pipes.ts')
       build = config.command === 'build'
+      root = config.root
+      alias = config.resolve?.alias ?? []
     },
     resolveId(id) {
       return id === ID ? RESOLVED : undefined
@@ -140,6 +160,77 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       ].join('\n')
     },
   }
+}
+
+/** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */
+const CLIENT_SUFFIX = '.client.ts'
+
+/**
+ * One browser build of every component's `<script client>`: imports
+ * (relative, npm, the app's aliases) resolved, code shared by several
+ * components in shared chunks. Entries are named by component tag.
+ */
+async function bundleClientScripts(
+  scripts: Array<{ tag: string; file: string; code: string }>,
+  root: string,
+  alias: unknown,
+): Promise<{ entries: Record<string, string>; files: Record<string, string> }> {
+  const vite = await import('vite')
+  const byId = new Map(scripts.map((s) => [s.file + CLIENT_SUFFIX, s.code]))
+  const out = (await vite.build({
+    configFile: false,
+    root,
+    logLevel: 'silent',
+    resolve: { alias: alias as never },
+    plugins: [
+      {
+        name: 'kickjs:client-scripts',
+        resolveId: (id: string) => (byId.has(id) ? id : undefined),
+        load: (id: string) => byId.get(id),
+      },
+    ],
+    build: {
+      write: false,
+      minify: true,
+      modulePreload: false,
+      copyPublicDir: false,
+      rollupOptions: {
+        input: Object.fromEntries(scripts.map((s) => [s.tag, s.file + CLIENT_SUFFIX])),
+        output: {
+          format: 'es',
+          entryFileNames: '[name].[hash].js',
+          chunkFileNames: '[name].[hash].js',
+        },
+      },
+    },
+  })) as
+    | {
+        output: Array<{
+          type: string
+          fileName: string
+          code?: string
+          isEntry?: boolean
+          name?: string
+        }>
+      }
+    | Array<{
+        output: Array<{
+          type: string
+          fileName: string
+          code?: string
+          isEntry?: boolean
+          name?: string
+        }>
+      }>
+  const output = (Array.isArray(out) ? out[0]! : out).output
+  const entries: Record<string, string> = {}
+  const files: Record<string, string> = {}
+  for (const chunk of output) {
+    if (chunk.type !== 'chunk') continue
+    files[chunk.fileName] = chunk.code!
+    if (chunk.isEntry && chunk.name) entries[chunk.name] = chunk.fileName
+  }
+  return { entries, files }
 }
 
 /**

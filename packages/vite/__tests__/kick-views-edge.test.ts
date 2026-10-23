@@ -46,7 +46,10 @@ describe('kick views on workerd', () => {
       'src/views/pipes.ts': 'export const shout = (v: string) => `${v}!`',
       'src/views/components/flash-toast.kick':
         "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
-      'src/views/island.kick': '<flash-toast />',
+      'src/views/island.kick': '<flash-toast /><import-box />',
+      'src/views/components/import-box.kick':
+        "<div></div>\n<script client>\nimport { label } from './label'\nconsole.log(label)\n</script>",
+      'src/views/components/label.ts': "export const label: string = 'from a chunk'",
     }
     mkdirSync(join(root, 'node_modules/@forinda'), { recursive: true })
     symlinkSync(VIEW_PKG, join(root, 'node_modules/@forinda/kickjs-view'), 'dir')
@@ -83,7 +86,16 @@ describe('kick views on workerd', () => {
       const src = /src="([^"]+)"/.exec(island)![1]!
       const js = await mf.dispatchFetch(`http://edge${src}`)
       expect(js.status).toBe(200)
-      expect(await js.text()).toMatch(/customElements\.define\(["']kick-toast/)
+      // The importing component's entry, then the module it imports.
+      const entry = /src="(\/_kick\/c\/import-box\.[^"]+)"/.exec(island)![1]!
+      const entryJs = await (await mf.dispatchFetch(`http://edge${entry}`)).text()
+      const dep = /from\s*["']\.\/([^"']+)["']|import\s*["']\.\/([^"']+)["']/.exec(entryJs)
+      if (dep) {
+        const depJs = await mf.dispatchFetch(`http://edge/_kick/c/${dep[1] ?? dep[2]}`)
+        expect(depJs.status).toBe(200)
+        expect(await depJs.text()).toContain('from a chunk')
+      } else expect(entryJs).toContain('from a chunk')
+      expect(await js.text()).toMatch(/customElements\.define\(["'`]kick-toast/)
     } finally {
       await mf.dispose()
     }

@@ -28,6 +28,27 @@ async function bundle(root: string): Promise<string> {
 }
 
 describe('kickViewsPlugin', () => {
+  it('bundles imports into shared chunks', async () => {
+    const comp = (tag: string) =>
+      `<div></div>\n<script client>\nimport { count } from './shared'\nconst n: number = count\ncustomElements.define('${tag}-el', class extends HTMLElement {})\nconsole.log(n)\n</script>`
+    const code = await bundle(
+      project({
+        'src/views/components/toast-a.kick': comp('toast-a'),
+        'src/views/components/toast-b.kick': comp('toast-b'),
+        'src/views/components/shared.ts': 'export let count = 41\ncount++\n',
+        'src/views/home.kick': '<toast-a /><toast-b />',
+      }),
+    )
+    const a = /"toast-a": ?"(toast-a\.[A-Za-z0-9_-]{8}\.js)"/.exec(code)
+    const b = /"toast-b": ?"(toast-b\.[A-Za-z0-9_-]{8}\.js)"/.exec(code)
+    expect(a && b).toBeTruthy()
+    // One shared chunk holds the helper; both entries import it.
+    const chunk = /"(shared\.[A-Za-z0-9_-]{8}\.js)":/.exec(code)
+    expect(chunk).toBeTruthy()
+    expect(code.split(chunk![1]!).length - 1).toBeGreaterThanOrEqual(3)
+    expect(code).not.toContain(': number')
+  })
+
   it('build ships plain JavaScript', async () => {
     const code = await bundle(
       project({
