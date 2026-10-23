@@ -14,6 +14,7 @@ import { describe, expect, it } from 'vitest'
 import { cronScheduleId as coreScheduleId } from '@forinda/kickjs'
 import {
   appBuildOptions,
+  appViteConfig,
   bareImportPackage,
   registerDeployCommands,
   netlifyHiddenRules,
@@ -186,6 +187,23 @@ describe('the function bundle', () => {
       define: {},
       resolve: { alias: [{ find: '@', replacement: '/apps/site/src' }] },
     })
+  })
+})
+
+describe('the app config for the function bundle', () => {
+  it('is loaded as an SSR build, as Vite resolves it for one', async () => {
+    let seen: unknown
+    const config = await appViteConfig('/apps/site', async (env, file, root) => {
+      seen = { env, file, root }
+      return { config: { define: { __SSR__: String(env.isSsrBuild) } } }
+    })
+    expect(seen).toEqual({
+      env: { command: 'build', mode: 'production', isSsrBuild: true },
+      file: undefined,
+      root: '/apps/site',
+    })
+    expect(config).toEqual({ define: { __SSR__: 'true' } })
+    expect(await appViteConfig('/apps/site', async () => null)).toBeUndefined()
   })
 })
 

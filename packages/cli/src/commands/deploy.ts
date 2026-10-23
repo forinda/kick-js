@@ -404,6 +404,25 @@ export function appBuildOptions(
   }
 }
 
+type AppConfig = Parameters<typeof appBuildOptions>[1]
+
+/**
+ * The app's `vite.config.ts`, resolved as Vite resolves it for this build: an
+ * SSR build, so a config function that branches on `isSsrBuild` picks the
+ * server settings.
+ */
+export async function appViteConfig(
+  root: string,
+  load: (
+    env: { command: 'build'; mode: string; isSsrBuild: boolean },
+    file: undefined,
+    root: string,
+  ) => Promise<{ config: AppConfig } | null>,
+): Promise<AppConfig> {
+  return (await load({ command: 'build', mode: 'production', isSsrBuild: true }, undefined, root))
+    ?.config
+}
+
 async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) => void) {
   const entry = resolve(root, deploy.entry)
   if (!existsSync(entry)) {
@@ -413,11 +432,8 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
     )
   }
   const { build, loadConfigFromFile } = await importFromProject(root, 'vite')
-  const app = await loadConfigFromFile(
-    { command: 'build', mode: 'production' },
-    undefined,
-    root,
-    'silent',
+  const app = await appViteConfig(root, (env, file, dir) =>
+    loadConfigFromFile(env, file, dir, 'silent'),
   )
   const { default: swc } = await importFromProject(root, 'unplugin-swc')
   const { devtoolsFlagPlugin, devtoolsStripPlugin, kickViewsPlugin } = await importFromProject(
@@ -435,7 +451,7 @@ async function bundle(root: string, deploy: ResolvedDeploy, log: (msg: string) =
     logLevel: 'warn',
     oxc: false,
     plugins: [swc.vite(), devtoolsFlagPlugin(), devtoolsStripPlugin(), ...views],
-    ...appBuildOptions(root, app?.config),
+    ...appBuildOptions(root, app),
     ssr: { noExternal: true, target: 'node' },
     build: {
       ssr: true,

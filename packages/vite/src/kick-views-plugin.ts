@@ -60,6 +60,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   const onDisk = options.clientFiles !== 'bundle'
   /** Client files to write beside the server bundle, by path inside its `outDir`. */
   let clientOut: Map<string, string | Uint8Array> | undefined
+  /** The client files the last build wrote, by absolute path. */
+  let written = new Set<string>()
   const clientFolder = posix.join(options.publicDir ?? 'public', scriptPath.slice(1))
   let root = ''
   // What the nested browser build takes from the app's config.
@@ -235,7 +237,12 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     // imports the virtual module: a broken template always fails `kick build`.
     async buildStart() {
       // Apps without templates skip it, so they needn't install the view package.
-      if (!build || !(await kickFiles(viewsDir)).length) return
+      if (!build || !(await kickFiles(viewsDir)).length) {
+        // The last template removed between rebuilds: nothing of the last build is current.
+        checked = undefined
+        if (clientOut) clientOut = new Map()
+        return
+      }
       checked = await checkTemplates(this)
     },
     renderChunk(code, chunk, out) {
@@ -249,13 +256,11 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     },
     async writeBundle(out) {
       if (!clientOut || !out.dir) return
-      const folder = resolve(out.dir, clientFolder)
-      // A rebuild (`vite build --watch`) doesn't empty outDir: drop the last build's files.
+      // A rebuild (`vite build --watch`) doesn't empty outDir: drop the files the
+      // last build wrote that this one doesn't. Only ours: nothing else is touched.
       const keep = new Set([...clientOut.keys()].map((f) => resolve(out.dir!, f)))
-      if (existsSync(folder))
-        for (const name of await readdir(folder))
-          if (CLIENT_FILE.test(name) && !keep.has(join(folder, name)))
-            await rm(join(folder, name), { force: true })
+      for (const file of written) if (!keep.has(file)) await rm(file, { force: true })
+      written = keep
       for (const [file, source] of clientOut) {
         const to = resolve(out.dir, file)
         await mkdir(dirname(to), { recursive: true })
@@ -340,9 +345,6 @@ type ClientBuildConfig = {
 
 /** Replaced, per output chunk, with the relative path to the client files folder. */
 const CLIENT_DIR = '__KICK_CLIENT_DIR__'
-
-/** A file this plugin writes, as the view package's `CLIENT_SCRIPT_FILE` matches it. */
-const CLIENT_FILE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{8}\.[a-z0-9]{1,16}$/
 
 /** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */
 const CLIENT_SUFFIX = '.client.ts'
