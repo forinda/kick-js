@@ -71,6 +71,7 @@ export const SIBLING_PACKAGES = [
   '@forinda/kickjs-client',
   '@forinda/kickjs-inertia',
   '@forinda/kickjs-storage',
+  '@forinda/kickjs-view',
 ] as const
 
 /**

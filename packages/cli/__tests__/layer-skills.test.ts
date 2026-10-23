@@ -1,10 +1,18 @@
 /** Agent skills as text files in scaffold layers: base renders as before, layers add theirs. */
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { generateKickJsSkillFiles } from '../src/generators/templates/project-docs'
-import { readLayerSkills, skillVars } from '../src/scaffold/skills'
+import { generateAgentDocs } from '../src/generators/agent-docs'
+import { detectFeatureLayers, readLayerSkills, skillVars } from '../src/scaffold/skills'
 
 // The rendered SKILL.md of every base skill before the move, as text: formatters leave .txt alone.
 const FIXTURES = join(import.meta.dirname, 'fixtures/skills')
@@ -42,5 +50,61 @@ describe('layer skills', () => {
       description: 'Use for x.',
       body: '{{ user.name }} with npm and npx kick',
     })
+  })
+})
+
+describe('detectFeatureLayers', () => {
+  const app = (pkg: object) => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-detect-'))
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(pkg))
+    return dir
+  }
+
+  it('detects a feature from dependencies', () => {
+    const dir = app({
+      dependencies: { '@forinda/kickjs-queue': '^8', bullmq: '^5', ioredis: '^5' },
+    })
+    expect(detectFeatureLayers(dir)).toContain('feature-queue')
+  })
+
+  it('detects a feature from devDependencies', () => {
+    const dir = app({
+      dependencies: { '@forinda/kickjs-queue': '^8' },
+      devDependencies: { bullmq: '^5', ioredis: '^5' },
+    })
+    expect(detectFeatureLayers(dir)).toContain('feature-queue')
+  })
+
+  it('needs every package the layer lists', () => {
+    expect(detectFeatureLayers(app({ dependencies: { bullmq: '^5' } }))).not.toContain(
+      'feature-queue',
+    )
+  })
+
+  it('a layer without dependencies never counts', () => {
+    const dir = app({ devDependencies: { '@forinda/kickjs-devtools': '^7' } })
+    expect(detectFeatureLayers(dir)).not.toContain('feature-devtools')
+  })
+
+  it('no package.json: none', () => {
+    expect(detectFeatureLayers(mkdtempSync(join(tmpdir(), 'kick-detect-')))).toEqual([])
+  })
+})
+
+describe('kick g agents writes the detected layers’ skills', () => {
+  it('a views app gets the views skills; another app does not', async () => {
+    const withViews = mkdtempSync(join(tmpdir(), 'kick-agents-'))
+    writeFileSync(
+      join(withViews, 'package.json'),
+      JSON.stringify({ name: 'v', dependencies: { '@forinda/kickjs-view': '^0.3.0' } }),
+    )
+    await generateAgentDocs({ outDir: withViews, only: 'skills', pm: 'pnpm' })
+    expect(existsSync(join(withViews, '.agents/skills/views/SKILL.md'))).toBe(true)
+    expect(existsSync(join(withViews, '.agents/skills/add-module/SKILL.md'))).toBe(true)
+
+    const without = mkdtempSync(join(tmpdir(), 'kick-agents-'))
+    writeFileSync(join(without, 'package.json'), JSON.stringify({ name: 'w' }))
+    await generateAgentDocs({ outDir: without, only: 'skills', pm: 'pnpm' })
+    expect(existsSync(join(without, '.agents/skills/views'))).toBe(false)
   })
 })

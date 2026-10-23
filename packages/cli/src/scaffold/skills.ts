@@ -64,3 +64,31 @@ export function readLayerSkills(
   }
   return out
 }
+
+/**
+ * The feature layers an app uses: each `feature-*` layer whose `feature.json`
+ * lists dependencies that are all in `package.json` (dependencies or
+ * devDependencies). A layer that lists none (devtools) never counts.
+ */
+export function detectFeatureLayers(appDir: string, dir = TEMPLATES_DIR): string[] {
+  let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+  try {
+    pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'))
+  } catch {
+    return []
+  }
+  const installed = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+  ])
+  return readdirSync(dir)
+    .filter((layer) => layer.startsWith('feature-'))
+    .toSorted()
+    .filter((layer) => {
+      const file = join(dir, layer, 'feature.json')
+      if (!existsSync(file)) return false
+      const deps = (JSON.parse(readFileSync(file, 'utf8')) as { dependencies?: string[] })
+        .dependencies
+      return !!deps?.length && deps.every((d) => installed.has(d))
+    })
+}

@@ -12,6 +12,7 @@ import {
 import { loadKickConfig } from '../config'
 import { resolvePackageManager } from '../utils/package-manager'
 import type { ModuleStyle } from './templates/types'
+import { detectFeatureLayers } from '../scaffold/skills'
 
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack' | 'inertia'
 
@@ -132,7 +133,9 @@ export async function generateAgentDocs(options: GenerateAgentDocsOptions): Prom
     // auto-discover skills (Claude Code, Copilot CLI plugins, Gemini's
     // activate_skill) pick each up by its frontmatter without needing
     // a separate index file.
-    for (const skill of generateKickJsSkillFiles(name, template, pm, style)) {
+    // Base skills, plus those of the features this app uses (from package.json).
+    const layers = detectFeatureLayers(options.outDir)
+    for (const skill of generateKickJsSkillFiles(name, template, pm, style, layers)) {
       targets.push({
         file: join(options.outDir, AGENTS_DIR, 'skills', skill.slug, 'SKILL.md'),
         render: () => skill.content,
