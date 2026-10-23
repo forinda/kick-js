@@ -18,6 +18,12 @@ export interface CsrfOptions {
   cookie?: string
   /** Header name to check for the token (default: 'x-csrf-token') */
   header?: string
+  /**
+   * Form field that carries the token when the header is absent, for plain
+   * HTML forms (default: '_csrf'). Read from the parsed body, so `csrf()` must
+   * come after the body parser; `csrfGuard()` always runs after it.
+   */
+  field?: string
   /** HTTP methods that require CSRF validation (default: POST, PUT, PATCH, DELETE) */
   methods?: string[]
   /** Paths to exclude from CSRF checks (e.g. webhooks) */
@@ -119,6 +125,28 @@ function trustedSet(origins: string[] | undefined): Set<string> {
 
 const ORIGIN_REJECTED = { message: 'CSRF origin not allowed' }
 
+/** Where the middleware leaves this request's token, for {@link csrfToken}. */
+const TOKEN = Symbol.for('kickjs.csrfToken')
+
+/**
+ * This request's CSRF token, for a page to put in its forms
+ * (`<input type="hidden" name="_csrf" value="…">`) or a `<meta>` tag. Set by
+ * `csrf()` or `csrfGuard()`, including on the first visit, before the
+ * browser has the cookie. `undefined` when neither ran.
+ */
+export function csrfToken(ctx: { req: unknown } | undefined): string | undefined {
+  return (ctx?.req as { [TOKEN]?: string } | undefined)?.[TOKEN]
+}
+
+/** The token a mutating request sent: the header, else the form field. */
+function sentToken(headers: HeaderBag, body: unknown, header: string, field: string) {
+  const fromHeader = headers[header]
+  if (typeof fromHeader === 'string') return fromHeader
+  const fromBody =
+    body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined
+  return typeof fromBody === 'string' ? fromBody : undefined
+}
+
 /**
  * Double-submit cookie CSRF protection middleware.
  *
@@ -147,6 +175,7 @@ const ORIGIN_REJECTED = { message: 'CSRF origin not allowed' }
 export function csrf(options: CsrfOptions = {}) {
   const cookieName = options.cookie ?? '_csrf'
   const headerName = options.header ?? 'x-csrf-token'
+  const fieldName = options.field ?? '_csrf'
   const protectedMethods = new Set(
     (options.methods ?? ['POST', 'PUT', 'PATCH', 'DELETE']).map((m) => m.toUpperCase()),
   )
@@ -181,6 +210,7 @@ export function csrf(options: CsrfOptions = {}) {
       token = randomHex(tokenLength)
       setCookie(res, cookieName, token, cookieOpts)
     }
+    ;(req as { [TOKEN]?: string })[TOKEN] = token
 
     // Skip validation for safe methods and ignored paths
     if (!protectedMethods.has(req.method.toUpperCase())) {
@@ -197,10 +227,15 @@ export function csrf(options: CsrfOptions = {}) {
       return sendJson(res, 403, ORIGIN_REJECTED)
     }
 
-    // Validate: header token must match cookie token
-    const headerToken = req.headers[headerName] as string | undefined
+    // Validate: the header (or form field) token must match the cookie token
+    const sent = sentToken(
+      req.headers as HeaderBag,
+      (req as { body?: unknown }).body,
+      headerName,
+      fieldName,
+    )
 
-    if (typeof headerToken !== 'string' || !safeEqual(headerToken, token)) {
+    if (sent === undefined || !safeEqual(sent, token)) {
       return sendJson(res, 403, {
         message: 'CSRF token mismatch',
       })
@@ -257,6 +292,7 @@ export interface CsrfGuardOptions extends CsrfOptions {
 export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
   const cookieName = options.cookie ?? '_csrf'
   const headerName = options.header ?? 'x-csrf-token'
+  const fieldName = options.field ?? '_csrf'
   const protectedMethods = new Set(
     (options.methods ?? ['POST', 'PUT', 'PATCH', 'DELETE']).map((m) => m.toUpperCase()),
   )
@@ -283,6 +319,7 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
       token = randomHex(tokenLength)
       setCookie(ctx.res, cookieName, token, cookieOpts)
     }
+    ;(ctx.req as { [TOKEN]?: string })[TOKEN] = token
 
     // Safe methods only ever issue the token.
     const method = ctx.route?.method ?? (ctx.req as { method?: string }).method ?? 'GET'
@@ -300,8 +337,8 @@ export function csrfGuard(options: CsrfGuardOptions = {}): MiddlewareHandler {
       return
     }
 
-    const headerToken = ctx.headers[headerName] as string | undefined
-    if (typeof headerToken !== 'string' || !safeEqual(headerToken, token)) {
+    const sent = sentToken(ctx.headers as HeaderBag, ctx.req.body, headerName, fieldName)
+    if (sent === undefined || !safeEqual(sent, token)) {
       ctx.json({ message: 'CSRF token mismatch' }, 403)
       return
     }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import express from 'express'
 import request from 'supertest'
-import { csrf, isAllowedOrigin } from '../src/http/middleware/csrf'
+import { csrf, csrfToken, isAllowedOrigin } from '../src/http/middleware/csrf'
 
 const none = new Set<string>()
 
@@ -111,6 +111,35 @@ describe('csrf() origin check', () => {
   it('rejects a trustedOrigins entry that is not an origin', () => {
     expect(() => csrf({ trustedOrigins: ['https://a.test/path'] })).toThrow(/origin/)
     expect(() => csrf({ trustedOrigins: ['app.a.test'] })).toThrow(/not an http\(s\) origin/)
+  })
+})
+
+describe('csrf() form field', () => {
+  it('takes the token from a parsed form body, after the body parser', async () => {
+    const app = express()
+    app.use(express.urlencoded({ extended: false }))
+    app.use(csrf())
+    app.get('/form', (req, res) => {
+      res.send(String(csrfToken({ req })))
+    })
+    app.post('/save', (_req, res) => {
+      res.send('saved')
+    })
+    const page = await request(app).get('/form')
+    const token = page.text
+    expect(String(page.headers['set-cookie'])).toContain(`_csrf=${token}`)
+    const ok = await request(app)
+      .post('/save')
+      .set('cookie', `_csrf=${token}`)
+      .type('form')
+      .send(`_csrf=${token}`)
+    expect(ok.text).toBe('saved')
+    const bad = await request(app)
+      .post('/save')
+      .set('cookie', `_csrf=${token}`)
+      .type('form')
+      .send('_csrf=nope')
+    expect(bad.status).toBe(403)
   })
 })
 
