@@ -19,7 +19,7 @@ describe('kickViewsPlugin on Vite without transformWithOxc', () => {
       file,
       "<kick-toast>hi</kick-toast>\n<script client>\nconst n: number = 1\ncustomElements.define('kick-toast', class extends HTMLElement {})\n</script>",
     )
-    const plugin = kickViewsPlugin() as any
+    const plugin = kickViewsPlugin({ clientFiles: 'bundle' }) as any
     plugin.configResolved({ root, command: 'build' })
     const ctx = {
       addWatchFile: () => {},

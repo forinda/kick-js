@@ -65,7 +65,7 @@ describe('kick views on workerd', () => {
       root,
       configFile: false,
       logLevel: 'silent',
-      plugins: [kickViewsPlugin()],
+      plugins: [kickViewsPlugin({ clientFiles: 'bundle' })],
       resolve: {
         conditions: ['workerd', 'worker', 'import', 'default'],
       },
