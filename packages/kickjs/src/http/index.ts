@@ -96,7 +96,13 @@ export {
   type ValidationErrorFactory,
 } from './middleware/validate'
 export { notFoundHandler, errorHandler } from './middleware/error-handler'
-export { csrf, csrfGuard, type CsrfOptions, type CsrfGuardOptions } from './middleware/csrf'
+export {
+  csrf,
+  csrfGuard,
+  csrfToken,
+  type CsrfOptions,
+  type CsrfGuardOptions,
+} from './middleware/csrf'
 export {
   requestLogger,
   type RequestLoggerOptions,

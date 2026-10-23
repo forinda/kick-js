@@ -13,6 +13,7 @@ import {
   Post,
   Middleware,
   csrfGuard,
+  csrfToken,
   defineRouteFlag,
   rateLimitGuard,
   type AppModule,
@@ -122,6 +123,43 @@ describe('csrfGuard + route flags', () => {
       .send({})
     expect({ status: res.status, paid: res.body?.paid }).toEqual({ status: 200, paid: true })
   })
+
+  for (const [name, runtime] of [
+    ['express', undefined],
+    ['fastify', fastifyRuntime],
+    ['h3', h3Runtime],
+  ] as const) {
+    it(`accepts the token as a form field, and hands it to the page (${name})`, async () => {
+      @Middleware(csrfGuard())
+      @Controller()
+      class F {
+        @Get('/form')
+        form(ctx: RequestContext) {
+          ctx.html(`<input name="_csrf" value="${csrfToken(ctx)}">`)
+        }
+
+        @Post('/save')
+        save(ctx: RequestContext) {
+          ctx.json({ saved: true })
+        }
+      }
+      const app = await boot(F, runtime)
+      const h = app.handle.bind(app)
+      const page = await request(h).get('/api/v1/t/form')
+      // The first page already has the token it just issued.
+      const token = /value="([0-9a-f]+)"/.exec(page.text)?.[1]
+      expect(String(page.headers['set-cookie'])).toContain(`_csrf=${token}`)
+
+      const post = (field: string) =>
+        request(h)
+          .post('/api/v1/t/save')
+          .set('cookie', `_csrf=${token}`)
+          .type('form')
+          .send(`title=x&_csrf=${field}`)
+      expect((await post(token!)).body).toEqual({ saved: true })
+      expect((await post('nope')).status).toBe(403)
+    })
+  }
 
   it('skips the check on a flagged route — including one with a param', async () => {
     const app = await boot(makeController())

@@ -33,6 +33,7 @@ Pass an options object to customize behavior:
 csrf({
   cookie: '_csrf', // cookie name (default: '_csrf')
   header: 'x-csrf-token', // header name to validate (default: 'x-csrf-token')
+  field: '_csrf', // form field checked when the header is absent (default: '_csrf')
   methods: ['POST', 'PUT', 'PATCH', 'DELETE'], // methods that require validation
   ignorePaths: ['/webhooks/stripe', '/webhooks/github'],
   tokenLength: 32, // bytes before hex encoding (default: 32 = 64 hex chars)
@@ -63,6 +64,7 @@ by the server, or fetched from an endpoint of your own.
 | ---------------- | ---------- | ------------------------------------ |
 | `cookie`         | `string`   | `'_csrf'`                            |
 | `header`         | `string`   | `'x-csrf-token'`                     |
+| `field`          | `string`   | `'_csrf'`                            |
 | `methods`        | `string[]` | `['POST', 'PUT', 'PATCH', 'DELETE']` |
 | `ignorePaths`    | `string[]` | `[]`                                 |
 | `tokenLength`    | `number`   | `32`                                 |
@@ -104,6 +106,26 @@ fetch('/api/tasks', {
   body: JSON.stringify({ title: 'New task' }),
 })
 ```
+
+### HTML forms
+
+A plain form post can't set a header, so the token can also come as a form field, `_csrf` by default (`field` to rename it). Put it in each form with `csrfToken(ctx)`, which returns this request's token, including on the first visit, before the browser has the cookie:
+
+```ts
+import { csrfToken } from '@forinda/kickjs'
+
+// With views, once for every page:
+createViews({ ...kickViews, share: (ctx) => ({ csrfToken: csrfToken(ctx) }) })
+```
+
+```kick
+<form method="post" action="/tasks">
+  <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+  …
+</form>
+```
+
+The field is read from the parsed body. `csrfGuard()` runs inside the route, after the body is parsed. `csrf()` runs where you list it: on Express, put the body parsers ahead of it (`middlewares: [express.urlencoded({ extended: false }), csrf()]`). The header still wins when both are sent.
 
 ### Axios Interceptor
 

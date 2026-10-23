@@ -57,6 +57,12 @@ export interface RenderOptions {
   timeZone?: string
 }
 
+/** What `share` can read from the request: KickJS's `RequestContext` has both. */
+export interface ShareContext {
+  req: unknown
+  get(key: string): unknown
+}
+
 export interface ViewsOptions {
   /** Default `src/views`. */
   viewsDir?: string
@@ -80,8 +86,12 @@ export interface ViewsOptions {
   strict?: boolean
   /** Default `true`. `false` re-reads and re-checks on every render. */
   cache?: boolean
-  /** Data every render gets, under the page's own: the current user, a CSP nonce. */
-  share?: (ctx: unknown) => object | Promise<object>
+  /**
+   * Data every render gets, under the page's own: the current user, a CSP nonce.
+   * `ctx` is the request the page renders in (KickJS's `RequestContext`), or
+   * `undefined` outside one.
+   */
+  share?: (ctx: ShareContext | undefined) => object | Promise<object>
   loader?: Loader
   /** Checked templates from the build (`virtual:kick-views`); `null` in dev. */
   bundle?: ViewsBundle | null
@@ -331,7 +341,7 @@ export function createViews(options: ViewsOptions = {}): Views {
         : await current().then((s) => (n: string) => checked(s, n))
       const template = resolve(name)
       rememberPage(opts.ctx, opts.layout)
-      const shared = options.share ? await options.share(opts.ctx) : {}
+      const shared = options.share ? await options.share(opts.ctx as ShareContext | undefined) : {}
       const locale = opts.locale ?? options.locale ?? 'en-US'
       const timeZone = opts.timeZone ?? options.timeZone ?? 'UTC'
       const used = new Map<string, CheckedTemplate>()

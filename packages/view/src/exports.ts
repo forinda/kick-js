@@ -40,6 +40,7 @@ export {
   type Views,
   type ViewsBundle,
   type ViewsOptions,
+  type ShareContext,
 } from './views'
 export { KickView, viewsMiddleware, type KickViewOptions } from './adapter'
 export { assetTags, type AssetsMode, type ViteManifest, type ViteManifestChunk } from './assets'

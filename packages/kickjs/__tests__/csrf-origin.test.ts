@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import express from 'express'
 import request from 'supertest'
-import { csrf, isAllowedOrigin } from '../src/http/middleware/csrf'
+import { csrf, csrfToken, isAllowedOrigin } from '../src/http/middleware/csrf'
 
 const none = new Set<string>()
 
@@ -63,6 +63,8 @@ describe('isAllowedOrigin', () => {
   })
 })
 
+const TOK = 'ab'.repeat(32)
+
 describe('csrf() origin check', () => {
   const run = (headers: Record<string, string>, options = {}) => {
     let status = 0
@@ -77,7 +79,7 @@ describe('csrf() origin check', () => {
       {
         method: 'POST',
         url: '/x',
-        headers: { cookie: '_csrf=tok', 'x-csrf-token': 'tok', ...headers },
+        headers: { cookie: `_csrf=${TOK}`, 'x-csrf-token': TOK, ...headers },
       } as never,
       res as never,
       (() => (nexted = true)) as never,
@@ -111,6 +113,71 @@ describe('csrf() origin check', () => {
   it('rejects a trustedOrigins entry that is not an origin', () => {
     expect(() => csrf({ trustedOrigins: ['https://a.test/path'] })).toThrow(/origin/)
     expect(() => csrf({ trustedOrigins: ['app.a.test'] })).toThrow(/not an http\(s\) origin/)
+  })
+})
+
+describe('csrf() form field', () => {
+  it('takes the token from a parsed form body, after the body parser', async () => {
+    const app = express()
+    app.use(express.urlencoded({ extended: false }))
+    app.use(csrf())
+    app.get('/form', (req, res) => {
+      res.send(String(csrfToken({ req })))
+    })
+    app.post('/save', (_req, res) => {
+      res.send('saved')
+    })
+    const page = await request(app).get('/form')
+    const token = page.text
+    expect(String(page.headers['set-cookie'])).toContain(`_csrf=${token}`)
+    const ok = await request(app)
+      .post('/save')
+      .set('cookie', `_csrf=${token}`)
+      .type('form')
+      .send(`_csrf=${token}`)
+    expect(ok.text).toBe('saved')
+    const bad = await request(app)
+      .post('/save')
+      .set('cookie', `_csrf=${token}`)
+      .type('form')
+      .send('_csrf=nope')
+    expect(bad.status).toBe(403)
+  })
+})
+
+describe('csrf() header precedence', () => {
+  it('a header sent as a list still wins over the form field', () => {
+    let status = 0
+    const res = {
+      status: (code: number) => ((status = code), res),
+      json: () => {},
+      setHeader: () => {},
+      getHeader: () => undefined,
+    }
+    csrf()(
+      {
+        method: 'POST',
+        url: '/x',
+        headers: { cookie: `_csrf=${TOK}`, 'x-csrf-token': ['wrong'] },
+        body: { _csrf: TOK },
+      } as never,
+      res as never,
+      (() => {}) as never,
+    )
+    expect(status).toBe(403)
+  })
+})
+
+describe('csrf() cookie it did not issue', () => {
+  it('replaces a cookie that is not one of its tokens, so pages never get it', async () => {
+    const app = express()
+    app.use(csrf())
+    app.get('/form', (req, res) => {
+      res.send(String(csrfToken({ req })))
+    })
+    const page = await request(app).get('/form').set('cookie', '_csrf="><script>x</script>')
+    expect(page.text).toMatch(/^[0-9a-f]{64}$/)
+    expect(String(page.headers['set-cookie'])).toContain(`_csrf=${page.text}`)
   })
 })
 
