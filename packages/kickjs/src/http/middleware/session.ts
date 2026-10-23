@@ -71,6 +71,12 @@ export interface SessionOptions {
   rolling?: boolean
   /** Save new sessions that have not been modified (default: true) */
   saveUninitialized?: boolean
+  /**
+   * How long a response waits for the store to save the session before it
+   * goes out anyway, in ms (default 5000). A stalled store would otherwise
+   * hold every response; past this, the request after it may not see the save.
+   */
+  saveTimeout?: number
   /** Cookie options */
   cookie?: {
     httpOnly?: boolean
@@ -249,6 +255,7 @@ export function session(options: SessionOptions) {
     maxAge = 86_400_000,
     rolling = false,
     saveUninitialized = true,
+    saveTimeout = 5000,
     cookie: cookieOpts = {},
   } = options
   const secrets = secretList(options.secret)
@@ -357,17 +364,31 @@ export function session(options: SessionOptions) {
         this: unknown,
         ...args: unknown[]
       ) {
-        persist().then(
-          () => end.apply(this, args),
-          (err: unknown) => {
-            storeLog.error(err, 'Session save failed; sending the response anyway')
-            end.apply(this, args)
-          },
-        )
+        let sent = false
+        const send = () => {
+          if (sent) return
+          sent = true
+          clearTimeout(timer)
+          end.apply(this, args)
+        }
+        const timer = setTimeout(() => {
+          storeLog.error(`Session save took over ${saveTimeout}ms; sending the response anyway`)
+          send()
+        }, saveTimeout)
+        persist().then(send, (err: unknown) => {
+          storeLog.error(err, 'Session save failed; sending the response anyway')
+          send()
+        })
         return this
       }
     }
-    res.on('finish', () => void persist().catch(() => {}))
+    res.on('finish', () => {
+      // Already logged by end() on a Node response; the fetch drivers only save here.
+      persist().catch((err: unknown) => {
+        if (res instanceof WebResponseDriver)
+          storeLog.error(err, 'Session save failed after the response was sent')
+      })
+    })
 
     // Rolling refreshes the cookie on every response; a cookie signed with an
     // older secret is re-signed with the current one.

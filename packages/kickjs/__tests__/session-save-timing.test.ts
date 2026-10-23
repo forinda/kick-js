@@ -106,4 +106,30 @@ for (const [name, runtime] of [
       await app.setup()
       await request(app.handle.bind(app)).post('/save').expect(303)
     })
+
+    it('a store that never answers holds the response only until saveTimeout', async () => {
+      const stalled: SessionStore = {
+        get: async () => null,
+        set: () => new Promise(() => {}),
+        destroy: async () => {},
+      }
+      const app = new Application({
+        runtime: runtime(),
+        middlewares: [session({ secret: 'x'.repeat(32), store: stalled, saveTimeout: 30 })],
+        modules: [
+          {
+            routes: () => ({
+              path: '/',
+              prefix: false,
+              version: false,
+              controller: FlashController,
+            }),
+          } as never,
+        ],
+      })
+      await app.setup()
+      const started = Date.now()
+      await request(app.handle.bind(app)).post('/save').expect(303)
+      expect(Date.now() - started).toBeLessThan(2000)
+    })
   })

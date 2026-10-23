@@ -33,6 +33,7 @@ session middleware reuses it and will not re-parse.
 | `maxAge`            | `number`                   | `86400000` (24h)     | Session TTL in milliseconds                                                        |
 | `rolling`           | `boolean`                  | `false`              | Reset TTL on every request                                                         |
 | `saveUninitialized` | `boolean`                  | `true`               | Save empty sessions                                                                |
+| `saveTimeout`       | `number`                   | `5000`               | How long a response waits for the store to save, in ms                             |
 | `cookie.httpOnly`   | `boolean`                  | `true`               | HTTP-only cookie                                                                   |
 | `cookie.secure`     | `boolean`                  | `true` in production | Secure cookie                                                                      |
 | `cookie.sameSite`   | `string`                   | `'lax'`              | SameSite attribute                                                                 |
@@ -109,7 +110,7 @@ The `req.session` (or `ctx.session`) object provides:
 | `destroy()`     | Delete the session and clear the cookie                     |
 | `save()`        | Save now (it also saves itself before the response is sent) |
 
-**When it's saved.** A session saves itself before the response goes out: with a store, the response waits for the store's write, so the request after it — the redirect after a form post — always sees what this one wrote. If the store fails, the error is logged and the response still goes out.
+**When it's saved.** On Express, Fastify and h3 (Node), a session with a store saves itself before the response is sent: the response's `end()` waits for the store's write, so the request after it — the redirect after a form post — sees what this one wrote. A store that fails, or takes longer than `saveTimeout` (5s), is logged and the response goes out anyway; the next request may then miss the write. A streamed response (SSE, `write()` before `end()`) sends its headers and body as it goes and saves when it ends. The fetch entry (`@forinda/kickjs/web`, edge runtimes) saves after the response; use `store: 'cookie'` there, which writes the cookie with the response.
 
 ## Rolling Sessions
 
