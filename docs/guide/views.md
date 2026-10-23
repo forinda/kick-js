@@ -315,6 +315,8 @@ A component can carry its own browser code. Pages that render it get one small s
 
   `kick build` bundles every component's script in one browser build: each component gets an entry, and code several components import goes into shared chunks, loaded once and sharing its state. Under `kick dev`, the scripts go through Vite's dev pipeline, so imports resolve the same way and edits show on the next load. On plain Node without Vite there's no bundler: scripts that import fail with a clear message, and self-contained scripts still work.
 
+  The browser build takes your app's `define`, mode, `.env` files and aliases, not its Vite plugins. Importing CSS or other assets (images, `?url`) isn't supported yet: `kick build` fails with a message saying so.
+
 - **Types.** `kick build` strips the TypeScript and ships plain JS, which is what edge runtimes serve. Under `kick dev`, Vite strips it. On plain Node, the server strips self-contained scripts with Node's built-in stripper, which needs Node 22.13 or later. The editor treats the block as TypeScript; it doesn't type-check it yet.
 - **Rules.** Only in components, at the top level, one per component. Other `<script>` tags render inline as before.
 - **Serving.** `KickView` serves the scripts on Express, Fastify and h3. On the web fetch entry, call `clientScriptResponse` ahead of the app: `fetch: async (req) => (await clientScriptResponse(views, req)) ?? web.fetch(req)`. The path is `clientScriptPath` (default `/_kick/c`).

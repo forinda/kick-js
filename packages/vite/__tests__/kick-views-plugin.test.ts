@@ -126,10 +126,63 @@ describe('kickViewsPlugin', () => {
       expect(js).not.toContain(': number')
       // Not a component's script: left for the app.
       expect((await fetch(`${base}/_kick/c/nope.00000000.js`)).status).toBe(404)
+      // An edit to the template's script shows on the next load.
+      writeFileSync(
+        join(root, 'src/views/components/flash-toast.kick'),
+        "<kick-toast></kick-toast>\n<script client>\nconsole.log('edited-version')\n</script>",
+      )
+      vite.watcher.emit('change', join(root, 'src/views/components/flash-toast.kick'))
+      expect(await (await fetch(`${base}/_kick/c/flash-toast.00000000.js`)).text()).toContain(
+        'edited-version',
+      )
     } finally {
       http.close()
       await vite.close()
     }
+  })
+
+  it('servable names for chunks from dotted modules', async () => {
+    const comp = (tag: string) =>
+      `<div></div>\n<script client>\nimport { fmt } from './date.utils'\nconsole.log(fmt('${tag}'))\n</script>`
+    const code = await bundle(
+      project({
+        'src/views/components/toast-a.kick': comp('a'),
+        'src/views/components/toast-b.kick': comp('b'),
+        'src/views/components/date.utils.ts': 'export const fmt = (s: string) => `<${s}>`',
+      }),
+    )
+    const files = [...code.matchAll(/"([^"/]+\.js)": "/g)].map((m) => m[1]!)
+    expect(files.length).toBeGreaterThanOrEqual(3)
+    for (const f of files) expect(f).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{8}\.js$/)
+  })
+
+  it('refuses CSS and asset imports in client scripts at build', async () => {
+    const root = project({
+      'src/views/components/a-b.kick': "<div></div>\n<script client>\nimport './a.css'\n</script>",
+      'src/views/components/a.css': 'div { color: red }',
+    })
+    await expect(bundle(root)).rejects.toThrow(/can't import CSS or other assets yet/)
+  })
+
+  it("applies the app's define and mode to client scripts", async () => {
+    const root = project({
+      'src/views/components/a-b.kick':
+        '<div></div>\n<script client>\nconsole.log(__FLAG__, import.meta.env.MODE)\n</script>',
+    })
+    const out = (await build({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      mode: 'staging',
+      define: { __FLAG__: JSON.stringify('flag-on') },
+      plugins: [kickViewsPlugin()],
+      build: { ssr: join(root, 'entry.ts'), write: false, minify: false },
+    })) as Rollup.RollupOutput | Rollup.RollupOutput[]
+    const code = (Array.isArray(out) ? out[0]! : out).output
+      .map((c) => ('code' in c ? c.code : ''))
+      .join('\n')
+    expect(code).toContain('flag-on')
+    expect(code).toContain('staging')
   })
 
   it('only resolves client-script modules inside the views folder', async () => {

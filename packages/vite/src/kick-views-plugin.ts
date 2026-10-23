@@ -45,7 +45,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let build = true
   let checked: string | undefined
   let root = ''
-  let alias: unknown = []
+  // What the nested browser build takes from the app's config.
+  let shared: ClientBuildConfig = {}
 
   /** Parse and check every template; the bundle as JSON, or a build error listing every problem. */
   async function checkTemplates(ctx: {
@@ -103,7 +104,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     let client: { entries: Record<string, string>; files: Record<string, string> } | undefined
     if (scripts.length) {
       try {
-        client = await bundleClientScripts(scripts, root, alias)
+        client = await bundleClientScripts(scripts, root, shared)
       } catch (err) {
         errors.push(`<script client> bundling failed: ${(err as Error).message}`)
       }
@@ -131,7 +132,13 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       pipesFile = resolve(config.root, options.pipesFile ?? 'src/views/pipes.ts')
       build = config.command === 'build'
       root = config.root
-      alias = config.resolve?.alias ?? []
+      shared = {
+        mode: config.mode,
+        define: config.define,
+        envDir: config.envDir,
+        envPrefix: config.envPrefix,
+        resolve: { alias: config.resolve?.alias ?? [] },
+      }
     },
     resolveId(id) {
       if (id === ID) return RESOLVED
@@ -143,6 +150,11 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     // (relative, npm, aliases) resolve as they do in a build. Ahead of the app.
     configureServer(server) {
       const prefix = `${(options.clientScriptPath ?? '/_kick/c').replace(/\/+$/, '')}/`
+      // An edited template's script is rebuilt on the next request.
+      server.watcher.on('change', (file) => {
+        const mod = server.moduleGraph.getModuleById(resolve(file) + CLIENT_SUFFIX)
+        if (mod) server.moduleGraph.invalidateModule(mod)
+      })
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url ?? '').split('?')[0]!
         if ((req.method !== 'GET' && req.method !== 'HEAD') || !url.startsWith(prefix))
@@ -236,6 +248,15 @@ function clientScriptOf(
   return undefined
 }
 
+/** The app config the client build shares: mode, `define`, env files, aliases. */
+type ClientBuildConfig = {
+  mode?: string
+  define?: Record<string, unknown>
+  envDir?: string | false
+  envPrefix?: string | string[]
+  resolve?: { alias: unknown }
+}
+
 /** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */
 const CLIENT_SUFFIX = '.client.ts'
 
@@ -247,15 +268,15 @@ const CLIENT_SUFFIX = '.client.ts'
 async function bundleClientScripts(
   scripts: Array<{ tag: string; file: string; code: string }>,
   root: string,
-  alias: unknown,
+  shared: ClientBuildConfig,
 ): Promise<{ entries: Record<string, string>; files: Record<string, string> }> {
   const vite = await import('vite')
   const byId = new Map(scripts.map((s) => [s.file + CLIENT_SUFFIX, s.code]))
   const out = (await vite.build({
+    ...(shared as object),
     configFile: false,
     root,
     logLevel: 'silent',
-    resolve: { alias: alias as never },
     plugins: [
       {
         name: 'kickjs:client-scripts',
@@ -273,7 +294,9 @@ async function bundleClientScripts(
         output: {
           format: 'es',
           entryFileNames: '[name].[hash].js',
-          chunkFileNames: '[name].[hash].js',
+          // Served names allow no dots: `date.utils` becomes `date_utils`.
+          chunkFileNames: (c: { name: string }) =>
+            `${c.name.replace(/[^A-Za-z0-9_-]/g, '_')}.[hash].js`,
         },
       },
     },
@@ -300,7 +323,9 @@ async function bundleClientScripts(
   const entries: Record<string, string> = {}
   const files: Record<string, string> = {}
   for (const chunk of output) {
-    if (chunk.type !== 'chunk') continue
+    // ponytail: no CSS/asset serving yet; add a files map entry per asset when needed.
+    if (chunk.type !== 'chunk')
+      throw new Error(`client scripts can't import CSS or other assets yet (${chunk.fileName})`)
     files[chunk.fileName] = chunk.code!
     if (chunk.isEntry && chunk.name) entries[chunk.name] = chunk.fileName
   }
