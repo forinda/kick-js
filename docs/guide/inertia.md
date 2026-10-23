@@ -45,11 +45,17 @@ pnpm add -D @vitejs/plugin-react @types/react @types/react-dom
 import './config' // the env schema, which declares SESSION_SECRET
 import { bootstrap, getEnv, session } from '@forinda/kickjs'
 import { InertiaAdapter, inertiaErrorHandler, inertiaNotFound } from '@forinda/kickjs-inertia'
+import express from 'express'
 
 export const app = await bootstrap({
   modules,
-  // Carries validation errors and flash messages to the next page.
-  middlewares: [session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' })],
+  middlewares: [
+    // Express only: listing `middlewares` replaces the default pipeline, body
+    // parsers included, and Inertia's forms post JSON. Fastify and h3 parse bodies themselves.
+    express.json(),
+    // Carries validation errors and flash messages to the next page.
+    session({ secret: getEnv('SESSION_SECRET'), store: 'cookie' }),
+  ],
   adapters: [
     InertiaAdapter({
       title: 'My App',

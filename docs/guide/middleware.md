@@ -193,8 +193,13 @@ If you omit the `middlewares` option, sensible defaults are applied:
 ```ts
 // Default pipeline when middlewares is not specified:
 requestId()
-express.json({ limit: '100kb' })
+// Express only — Fastify and h3 parse bodies themselves:
+express.json({ limit: '1mb' }) // JSON, including `+json` types
+express.urlencoded({ extended: true, limit: '1mb' }) // HTML forms
+express.text({ limit: '1mb', type: 'text/*' })
 ```
+
+Listing `middlewares` replaces this pipeline. On Express, include the body parsers your routes need (`express.json()`, and `express.urlencoded()` for forms), or `ctx.body` arrives empty.
 
 Global middleware entries can be path-scoped:
 
