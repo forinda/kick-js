@@ -1,5 +1,11 @@
 # @forinda/kickjs-db
 
+## 8.11.3
+
+### Patch Changes
+
+- [#1056](https://github.com/forinda/kick-js/pull/1056) [`1bb02d9`](https://github.com/forinda/kick-js/commit/1bb02d9043cdf0d8363c0ff2cce5afa610efc5ff) Thanks [@forinda](https://github.com/forinda)! - `references(…, { onDelete, onUpdate })` refuses an action that isn't one of `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'` or `'no_action'`, with an error naming the bad value. `kick db generate` loads the schema without a type check, so a mistype such as `'set null'`, `'SET NULL'` or `'setNull'` used to reach the migration as `ON DELETE undefined`. `FK_ACTION_NAMES` lists the valid actions.
+
 ## 8.11.2
 
 ### Patch Changes
