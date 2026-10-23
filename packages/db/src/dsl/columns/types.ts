@@ -224,10 +224,19 @@ export class ColumnBuilder<T = unknown> {
    * literals are normalised to their SQL-literal text so the snapshot
    * (`ColumnSnapshot.default: string | null`) and migration emitter stay
    * string-only. For a quoted string default the text is the value
-   * itself (`'active'`); booleans/numbers emit bare (`false`, `0`).
+   * itself (`'active'`); booleans/numbers emit bare (`false`, `0`). A JSON
+   * column takes its value (`jsonb().default({})` stores `{}`), and a `Date`
+   * is stored as its ISO string.
    */
-  default(value: string | number | boolean): this & GeneratedBrand {
-    this.state.default = typeof value === 'string' ? value : String(value)
+  default(value: string | number | boolean | T): this & GeneratedBrand {
+    this.state.default =
+      typeof value === 'string'
+        ? value
+        : value instanceof Date
+          ? value.toISOString()
+          : typeof value === 'object' && value !== null
+            ? JSON.stringify(value)
+            : String(value)
     this.state.defaultSql = false
     return this as this & GeneratedBrand
   }
