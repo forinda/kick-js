@@ -306,8 +306,17 @@ A component can carry its own browser code. Pages that render it get one small s
 - **What it is.** `<script client>` holds TypeScript for the browser, usually a custom element that the component's markup uses. The component's file name and the custom element's tag differ (`flash-toast` renders `<kick-toast>`): a tag that names a component file is that component.
 - **What ships.** When a page renders the component, the page gets `<script type="module" src="/_kick/c/flash-toast.<hash>.js">` before `</body>`, once however many times the component renders, and with a `nonce` when the page data has `cspNonce`. The hash changes with the code, and the file caches for a year. A component inside a false `@if` ships nothing.
 - **Passing data.** Give the element attributes (escaped like any other); for structured data, a `<script type="application/json">` child. The script is the same for every render, so it can't use `{{ }}`.
-- **Types.** `kick build` strips the TypeScript and ships plain JS, which is what edge runtimes serve. Without a build (`kick dev`, plain Node), the server strips it with Node's built-in stripper, which needs Node 22.13 or later. The editor treats the block as TypeScript; it doesn't type-check it yet.
-- **Rules.** Only in components, at the top level, one per component, and self-contained for now: no `import`. Other `<script>` tags render inline as before.
+- **Imports.** A script can import your own modules (`./format`, `@/lib/dates`, with your Vite aliases) and npm packages:
+
+  ```ts
+  import { relativeTime } from './format'
+  import { computePosition } from '@floating-ui/dom'
+  ```
+
+  `kick build` bundles every component's script in one browser build: each component gets an entry, and code several components import goes into shared chunks, loaded once and sharing its state. Under `kick dev`, the scripts go through Vite's dev pipeline, so imports resolve the same way and edits show on the next load. On plain Node without Vite there's no bundler: scripts that import fail with a clear message, and self-contained scripts still work.
+
+- **Types.** `kick build` strips the TypeScript and ships plain JS, which is what edge runtimes serve. Under `kick dev`, Vite strips it. On plain Node, the server strips self-contained scripts with Node's built-in stripper, which needs Node 22.13 or later. The editor treats the block as TypeScript; it doesn't type-check it yet.
+- **Rules.** Only in components, at the top level, one per component. Other `<script>` tags render inline as before.
 - **Serving.** `KickView` serves the scripts on Express, Fastify and h3. On the web fetch entry, call `clientScriptResponse` ahead of the app: `fetch: async (req) => (await clientScriptResponse(views, req)) ?? web.fetch(req)`. The path is `clientScriptPath` (default `/_kick/c`).
 - **Swapped HTML.** A custom element starts whenever it lands in the page, so components inside HTML swapped in by htmx or Turbo work without extra code.
 
