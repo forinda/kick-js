@@ -16,6 +16,8 @@ export interface KickViewsPluginOptions {
   viewsDir?: string
   /** Default `src/views/pipes.ts`. */
   pipesFile?: string
+  /** The app's browser validators. Default `src/views/validators.ts`. */
+  validatorsFile?: string
   /** Default `components`, inside the views folder. */
   componentsDir?: string
   /** Where component scripts are served (the views' `clientScriptPath`). Default `'/_kick/c'`. */
@@ -53,6 +55,9 @@ async function kickFiles(dir: string): Promise<string[]> {
 export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
   let viewsDir = ''
   let pipesFile = ''
+  let validatorsFile = ''
+  /** The module that registers validators.ts's exports: a namespace import keeps every one. */
+  const validatorsEntry = () => join(dirname(validatorsFile), VALIDATORS_TAG)
   let build = true
   let checked: string | undefined
   // Exported by the virtual module, so `createViews({ ...kickViews })` serves where this plugin does.
@@ -88,6 +93,22 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
       }
     }
+    const validators = new Set<string>()
+    const hasValidators = existsSync(validatorsFile)
+    if (hasValidators) {
+      ctx.addWatchFile(validatorsFile)
+      if (!('readValidatorExports' in view))
+        errors.push('custom validators need a newer @forinda/kickjs-view: upgrade it')
+      else {
+        const read = view.readValidatorExports(
+          await readFile(validatorsFile, 'utf8'),
+          validatorsFile,
+        )
+        for (const n of read.names) validators.add(n)
+        for (const d of read.diagnostics)
+          errors.push(`${d.file}:${d.span.start.line}:${d.span.start.column} — ${d.message}`)
+      }
+    }
     const templates = new Map()
     for (const name of names) {
       const file = join(viewsDir, `${name}.kick`)
@@ -102,6 +123,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     const project = {
       templates,
       pipes: new Set(pipeNames),
+      validators,
       componentsDir: options.componentsDir ?? 'components',
     }
     const checked: Record<string, unknown> = {}
@@ -122,6 +144,13 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         file: join(viewsDir, `${name}.kick`),
         code: t.client!.code,
       }))
+    // validators.ts: one more entry, so it's bundled even with no component scripts.
+    if (hasValidators)
+      scripts.push({
+        tag: VALIDATORS_TAG,
+        file: validatorsEntry(),
+        code: validatorsWrapper(validatorsFile),
+      })
     let client: ClientBundle | undefined
     if (scripts.length && onDisk && !('useClientFiles' in view))
       errors.push(
@@ -182,6 +211,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     configResolved(config) {
       viewsDir = resolve(config.root, options.viewsDir ?? 'src/views')
       pipesFile = resolve(config.root, options.pipesFile ?? 'src/views/pipes.ts')
+      validatorsFile = resolve(config.root, options.validatorsFile ?? 'src/views/validators.ts')
       build = config.command === 'build'
       root = config.root
       shared = {
@@ -196,6 +226,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
       if (id === ID) return RESOLVED
       // A component's client script, as a module next to its `.kick` file.
       if (clientModuleFile(id, viewsDir)) return id
+      if (validatorsFile && id === validatorsEntry() + CLIENT_SUFFIX) return id
       return undefined
     },
     // kick dev: component scripts through Vite's pipeline, so their imports
@@ -213,6 +244,20 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
           return next()
         const m = /^([a-z][a-z0-9-]*)\.[A-Za-z0-9_-]{8}\.js$/.exec(url.slice(prefix.length))
         if (!m) return next()
+        if (m[1] === VALIDATORS_TAG) {
+          if (!existsSync(validatorsFile)) return next()
+          try {
+            const out = await server.transformRequest(validatorsEntry() + CLIENT_SUFFIX)
+            if (!out) return next()
+            res.statusCode = 200
+            res.setHeader('content-type', 'text/javascript; charset=utf-8')
+            res.setHeader('cache-control', 'no-cache')
+            res.end(req.method === 'HEAD' ? undefined : out.code)
+          } catch (err) {
+            next(err)
+          }
+          return
+        }
         try {
           const view = await import('@forinda/kickjs-view')
           const dir = options.componentsDir ?? 'components'
@@ -273,6 +318,8 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
         const view = await import('@forinda/kickjs-view')
         return clientScriptOf(view, await readFile(kickFile, 'utf8'))
       }
+      if (validatorsFile && id === validatorsEntry() + CLIENT_SUFFIX)
+        return validatorsWrapper(validatorsFile)
       // Any other `.kick.client.ts`: not ours to load.
       if (id.endsWith(`.kick${CLIENT_SUFFIX}`)) return undefined
       if (id !== RESOLVED) return undefined
@@ -348,6 +395,17 @@ const CLIENT_DIR = '__KICK_CLIENT_DIR__'
 
 /** The module id a component's client script builds from: next to its `.kick` file, so `./x` imports resolve there. */
 const CLIENT_SUFFIX = '.client.ts'
+
+/** The view package's tag for the app's validators script: `kick-validators.<hash>.js`. */
+const VALIDATORS_TAG = 'kick-validators'
+
+/**
+ * Registers every validators.ts export for the validator script. A namespace
+ * import, not the module itself as the entry: app builds drop entry exports.
+ */
+function validatorsWrapper(file: string): string {
+  return `import * as v from ${JSON.stringify(file)}\nObject.assign((globalThis.__kickValidators ??= {}), v)\n`
+}
 
 /**
  * One browser build of every component's `<script client>`: imports

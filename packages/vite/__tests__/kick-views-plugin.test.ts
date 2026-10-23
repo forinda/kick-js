@@ -383,3 +383,92 @@ describe('kickViewsPlugin', () => {
     }
   })
 })
+
+describe('validators.ts', () => {
+  const PHONE =
+    "import { digits } from './digits'\nexport const phone = (v: string) => (digits.test(v) ? undefined : 'Enter a phone number')\n"
+  const DIGITS = 'export const digits = /^\\+?\\d{9,15}$/ // phone-pattern\n'
+
+  it('bundles validators with no component scripts', async () => {
+    const root = project({
+      'src/views/page.kick': '<input name="p" validate="required | phone">',
+      'src/views/validators.ts': PHONE,
+      'src/views/digits.ts': DIGITS,
+    })
+    await buildToDisk(root)
+    const dir = join(root, 'dist/public/_kick/c')
+    const file = readdirSync(dir).find((f) => /^kick-validators\.[\w-]{8}\.js$/.test(f))!
+    expect(file).toBeTruthy()
+    const js = readFileSync(join(dir, file), 'utf8')
+    expect(js).toContain('__kickValidators')
+    // Not tree-shaken: the function and what it imports ship.
+    expect(js).toContain('Enter a phone number')
+    expect(js).toContain('\\d{9,15}')
+    const mod = await import(pathToFileURL(join(root, 'dist/entry.mjs')).href)
+    expect(mod.default.bundle.client.entries['kick-validators']).toBe(file)
+  })
+
+  it('bundle mode keeps validators in files', async () => {
+    const root = project({
+      'src/views/page.kick': '<input name="p" validate="phone">',
+      'src/views/validators.ts': PHONE,
+      'src/views/digits.ts': DIGITS,
+    })
+    const code = await bundle(root)
+    expect(code).toMatch(/"kick-validators": "kick-validators\.[\w-]{8}\.js"/)
+    expect(code).toContain('Enter a phone number')
+  })
+
+  it('unknown validator fails the build', async () => {
+    const root = project({ 'src/views/page.kick': '<input name="p" validate="phone">' })
+    await expect(bundle(root)).rejects.toThrow("unknown validator 'phone'")
+  })
+
+  it('built-in name in validators.ts fails the build', async () => {
+    const root = project({
+      'src/views/page.kick': '<p></p>',
+      'src/views/validators.ts': 'export const email = () => undefined',
+    })
+    await expect(bundle(root)).rejects.toThrow("'email' is a built-in validator")
+  })
+
+  it('dev serves validators.ts through Vite', async () => {
+    const root = project({
+      'src/views/page.kick': '<input name="p" validate="phone">',
+      'src/views/validators.ts': PHONE,
+      'src/views/digits.ts': DIGITS,
+    })
+    const vite = await createServer({
+      root,
+      configFile: false,
+      logLevel: 'silent',
+      appType: 'custom',
+      plugins: [kickViewsPlugin()],
+      server: { middlewareMode: true, ws: false },
+    })
+    const http = createHttpServer(vite.middlewares)
+    await new Promise<void>((r) => http.listen(0, r))
+    const base = `http://127.0.0.1:${(http.address() as AddressInfo).port}`
+    try {
+      const res = await fetch(`${base}/_kick/c/kick-validators.00000000.js`)
+      expect(res.status).toBe(200)
+      const wrapper = await res.text()
+      expect(wrapper).toContain('__kickValidators')
+      expect(wrapper).toContain('/src/views/validators.ts')
+      const mod = await (await fetch(`${base}/src/views/validators.ts`)).text()
+      expect(mod).toContain('Enter a phone number')
+      expect(mod).not.toContain(': string')
+      writeFileSync(
+        join(root, 'src/views/validators.ts'),
+        "export const phone = (v) => (v ? undefined : 'edited-version')\n",
+      )
+      vite.watcher.emit('change', join(root, 'src/views/validators.ts'))
+      expect(await (await fetch(`${base}/src/views/validators.ts`)).text()).toContain(
+        'edited-version',
+      )
+    } finally {
+      http.close()
+      await vite.close()
+    }
+  })
+})
