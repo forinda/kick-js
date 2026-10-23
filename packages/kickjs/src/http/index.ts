@@ -18,6 +18,7 @@ export {
   type RouteName,
   type UrlBuilder,
   type UrlForArgs,
+  type PositionalParams,
   type UrlQuery,
 } from './url-for'
 export {

@@ -22,11 +22,14 @@ type ParamsOf<N> = N extends keyof KickRoutes.Named
     : Record<string, string | number>
   : Record<string, string | number>
 
+/** Path params in the order the path has them: `['42', 'a']` for `/users/:id/posts/:slug`. */
+export type PositionalParams = ReadonlyArray<string | number>
+
 /** `params` is optional when the route has none, required otherwise. */
 export type UrlForArgs<N> =
   Record<string, never> extends ParamsOf<N>
-    ? [params?: ParamsOf<N>, query?: UrlQuery]
-    : [params: ParamsOf<N>, query?: UrlQuery]
+    ? [params?: ParamsOf<N> | PositionalParams, query?: UrlQuery]
+    : [params: ParamsOf<N> | PositionalParams, query?: UrlQuery]
 
 export type UrlQuery = Record<string, string | number | boolean | Array<string | number>>
 
@@ -69,16 +72,31 @@ export class RouteUrls implements UrlBuilder {
 
   urlFor<N extends RouteName>(name: N, ...args: UrlForArgs<N>): string {
     const [params, query] = args
-    return this.build(name, params as Record<string, unknown> | undefined, query)
+    return this.build(name, params as Record<string, unknown> | PositionalParams | undefined, query)
   }
 
-  build(name: string, params?: Record<string, unknown>, query?: UrlQuery): string {
+  build(
+    name: string,
+    params?: Record<string, unknown> | PositionalParams,
+    query?: UrlQuery,
+  ): string {
     const pattern = this.paths.get(name)
     if (pattern === undefined) {
       throw new Error(`urlFor: no route named '${name}' — expected 'Controller.method'`)
     }
+    if (Array.isArray(params)) {
+      const list = params as PositionalParams
+      // Positional (templates can't write objects): in the order the path has them.
+      const keys = [...pattern.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1]!)
+      if (list.length !== keys.length) {
+        throw new Error(
+          `urlFor('${name}'): takes ${keys.length} param${keys.length === 1 ? '' : 's'}${keys.length ? ` (${keys.join(', ')})` : ''}, got ${list.length}`,
+        )
+      }
+      params = Object.fromEntries(keys.map((k, i) => [k, list[i]]))
+    }
     const path = pattern.replace(/:([A-Za-z0-9_]+)/g, (_, key: string) => {
-      const value = params?.[key]
+      const value = (params as Record<string, unknown> | undefined)?.[key]
       if (value === undefined || value === null || value === '') {
         throw new Error(`urlFor('${name}'): missing param '${key}' for '${pattern}'`)
       }
