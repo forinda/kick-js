@@ -1,5 +1,11 @@
 # @forinda/kickjs-devtools
 
+## 7.18.1
+
+### Patch Changes
+
+- [#1062](https://github.com/forinda/kick-js/pull/1062) [`2e67b64`](https://github.com/forinda/kick-js/commit/2e67b64f7e51054f9f47b68224e0a6a903c35056) Thanks [@forinda](https://github.com/forinda)! - DevTools Routes tab: "Expand all" / "Collapse all" looks only at the controller groups on screen, so a remembered group that's filtered out or no longer exists doesn't make it offer "Expand all" with nothing to expand.
+
 ## 7.18.0
 
 ### Minor Changes
