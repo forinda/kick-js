@@ -49,6 +49,40 @@ describe('createViews and validators.ts', () => {
     expect(await v.clientScript(file.replace(/\.[^.]+\.js$/, '.AAAAAAAA.js'))).toBeUndefined()
   })
 
+  it('a validators.js is served as written, no stripper needed', async () => {
+    const files = app({
+      'page.kick': '<input name="p" validate="phone">',
+      'validators.js': "export const phone = (v) => (v ? undefined : 'x')\n",
+    })
+    const v = createViews({
+      viewsDir: files.viewsDir,
+      validatorsFile: join(files.viewsDir, 'validators.js'),
+      stripTypes: () => {
+        throw new Error('stripped a .js file')
+      },
+      warn: vi.fn(),
+    })
+    const file = srcOf(await v.render('page'), 'kick-validators')!
+      .split('/')
+      .pop()!
+    const js = await v.clientScript(file)
+    expect(js).toContain('export const phone = (v) =>')
+    expect(js!.endsWith(VALIDATORS_REGISTER)).toBe(true)
+  })
+
+  it('an async stripTypes is awaited before the register call is added', async () => {
+    const v = createViews({
+      ...app({ 'page.kick': '<input name="p" validate="phone">', 'validators.ts': PHONE }),
+      stripTypes: async () => "export const phone = (v) => (v ? undefined : 'x')\n",
+      warn: vi.fn(),
+    })
+    const file = srcOf(await v.render('page'), 'kick-validators')!
+      .split('/')
+      .pop()!
+    const js = await v.clientScript(file)
+    expect(js!.startsWith('export const phone')).toBe(true)
+  })
+
   it('no validators.ts: no extra tag', async () => {
     const v = createViews({
       ...app({ 'page.kick': '<input name="p" validate="required">' }),
@@ -95,6 +129,38 @@ describe('createViews and validators.ts', () => {
     const html = await bundle({ 'kick-validators': 'kick-validators.AbCd1234.js' }).render('page')
     expect(srcOf(html, 'kick-validators')).toBe('/_kick/c/kick-validators.AbCd1234.js')
     expect(await bundle({}).render('page')).not.toContain('kick-validators.')
+  })
+
+  it('bundle: CSS that validators.ts imports is linked on validate pages', async () => {
+    const page = check('page', {
+      templates: new Map([
+        [
+          'page',
+          parse(
+            '<html><head></head><body><input name="p" validate="phone"></body></html>',
+            'page.kick',
+          ).ast,
+        ],
+      ]),
+      pipes: new Set(BUILTIN_PIPES),
+      componentsDir: 'components',
+      validators: new Set(['phone']),
+    }).template!
+    const v = createViews({
+      bundle: {
+        v: AST_FORMAT_VERSION,
+        templates: { page },
+        client: {
+          entries: { 'kick-validators': 'kick-validators.AbCd1234.js' },
+          css: { 'kick-validators': ['kick-validators.Cs5_12-x.css'] },
+          files: {},
+        },
+      } as never,
+      warn: vi.fn(),
+    })
+    expect(await v.render('page')).toContain(
+      '<link rel="stylesheet" href="/_kick/c/kick-validators.Cs5_12-x.css"></head>',
+    )
   })
 
   it('custom name in a template checks against validators.ts', async () => {

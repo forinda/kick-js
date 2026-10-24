@@ -818,7 +818,11 @@ export function registerAddCommand(program: Command): void {
             console.log()
           }
           // CLI plugins go in kick.config.ts, which kick add doesn't edit.
-          const config = configSnippet(wiring.integrations)
+          const configFile = resolve(cwd, 'kick.config.ts')
+          const config = configSnippet(
+            wiring.integrations,
+            existsSync(configFile) ? readFileSync(configFile, 'utf-8') : '',
+          )
           if (config) {
             console.log('\n  Add this to kick.config.ts:\n')
             console.log(config.replace(/^/gm, '    '))

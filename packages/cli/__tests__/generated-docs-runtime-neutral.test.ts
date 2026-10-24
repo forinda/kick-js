@@ -46,7 +46,7 @@ describe('CLI-emitted env reads', () => {
 })
 
 describe('generated skill docs follow modules.style', () => {
-  // `buildSkills` emitted `UserModule()` unconditionally. Under
+  // The skills once emitted `UserModule()` unconditionally. Under
   // `modules.style: 'class'` that calls a class without `new`; under
   // `define` the bare name is refused for a configurable module. The
   // scaffolded guidance has to match the project it was generated for.

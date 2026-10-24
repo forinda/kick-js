@@ -62,6 +62,7 @@ A failed `body` schema on a browser form post: `formErrorHandler()` stores the e
 **Checking in the browser**
 
 - `validate="required | email | minLength:3"` on a named field: built-ins `required`, `email`, `url`, `minLength:n`, `maxLength:n`, `min:n`, `max:n`, `pattern:'re'`, `in:'a, b'`. Messages land in the field's `@error` spot. Only pages with such a field get the small validator script.
+- Rules of your own: export them from `src/views/validators.ts` (next to `pipes.ts`) and use them by name, `validate="required | phone"`. Each is `(value, ...args, form) => message | undefined`; an empty field skips them, a throw counts as a pass. They run in the browser only.
 - Rich rules: a component with a `<script client>` can import the route's own schema (`import { taskSchema } from '@/modules/tasks/tasks.schemas'`) and run `safeParse` on blur and submit — one set of rules for server and browser. Keep the schema file free of server imports.
 - The browser checks are for quick feedback. The route's schema still decides.
 

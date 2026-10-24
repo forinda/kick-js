@@ -419,6 +419,32 @@ describe('validators.ts', () => {
     expect(code).toContain('Enter a phone number')
   })
 
+  it('a watch build watches validators.ts, before it exists too, and what it imports', async () => {
+    const watched = async (root: string) => {
+      const files: string[] = []
+      const plugin = kickViewsPlugin({ clientFiles: 'bundle' }) as any
+      plugin.configResolved({ root, command: 'build', build: {} })
+      await plugin.buildStart.call({
+        addWatchFile: (f: string) => files.push(f),
+        warn: () => {},
+        error: (m: string) => {
+          throw new Error(m)
+        },
+      })
+      return files
+    }
+    const withIt = project({
+      'src/views/page.kick': '<input name="p" validate="phone">',
+      'src/views/validators.ts': PHONE,
+      'src/views/digits.ts': DIGITS,
+    })
+    const files = await watched(withIt)
+    expect(files).toContain(join(withIt, 'src/views/validators.ts'))
+    expect(files).toContain(join(withIt, 'src/views/digits.ts'))
+    const without = project({ 'src/views/page.kick': '<input name="p" validate="required">' })
+    expect(await watched(without)).toContain(join(without, 'src/views/validators.ts'))
+  })
+
   it('unknown validator fails the build', async () => {
     const root = project({ 'src/views/page.kick': '<input name="p" validate="phone">' })
     await expect(bundle(root)).rejects.toThrow("unknown validator 'phone'")
