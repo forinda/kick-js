@@ -1,5 +1,13 @@
 # @forinda/kickjs-devtools
 
+## 7.18.0
+
+### Minor Changes
+
+- [#1059](https://github.com/forinda/kick-js/pull/1059) [`0783f5f`](https://github.com/forinda/kick-js/commit/0783f5f8cf7e2e6e28abb7b528b2d71c809f3b3f) Thanks [@forinda](https://github.com/forinda)! - DevTools Config tab: each group (the env schema, each settings section) collapses, with its variable and unset counts in the header and an "Expand all" / "Collapse all" toggle when there's more than one. Collapsed groups are remembered.
+
+- [#1060](https://github.com/forinda/kick-js/pull/1060) [`5e0e87d`](https://github.com/forinda/kick-js/commit/5e0e87dc721afa7660a05e5ca00465c8bf6232ef) Thanks [@forinda](https://github.com/forinda)! - DevTools hides the dashboard while it can't reach the app. Instead of a small banner over the last data the app sent, the tabs are replaced by a "Can't reach the app" panel and can't be clicked or reached with the keyboard, and search (⌘K) is off. The dashboard comes back on the same tab once the app answers again.
+
 ## 7.17.0
 
 ### Minor Changes
