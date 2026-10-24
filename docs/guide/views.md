@@ -38,7 +38,7 @@ Other template engines (EJS, Pug, Handlebars) keep working through [`ViewAdapter
 
 ## Setup
 
-`kick add views` does all of this: it installs the package, writes `src/views.ts`, a layout and a `home` page, and adds the adapter to `src/index.ts`. By hand:
+`kick add views` does this for you: it installs the package, writes `src/views.ts`, a layout and a `home` page, puts the adapter in `src/adapters/views.ts` (`viewsAdapter()`) and adds it to `bootstrap()` in `src/index.ts`, and prints the line that registers `viewCliPlugin` in `kick.config.ts` (for `kick check:views` and `kick fmt:views`). By hand:
 
 ```bash
 pnpm add @forinda/kickjs-view
@@ -592,7 +592,7 @@ export const sameAs = (value: string, other: string, form: HTMLFormElement) =>
 
 - **The contract:** a validator gets the field's value, then the arguments written in the template (numbers or quoted strings), then the form. It returns the message when the value fails. Anything else passes: `undefined`, `null`, `false`, an empty string, `true`.
 - **Same rules as the built-ins:** an empty field skips them (only `required` checks for one), they run in the order written, and the first message wins. A validator that throws counts as a pass and is logged with `console.error`, so a bug can't block the form.
-- **Checked like pipes:** an unknown name, or an export named like a built-in, fails `kick build`, `kick check:views` and the page in `kick dev`, and the editor marks it. The editor also completes validator names inside `validate="…"`.
+- **Checked like pipes:** an unknown name fails `kick build`, `kick check:views` and the page in `kick dev`, and the editor marks it. An export named like a built-in fails `kick build` and `kick check:views`; `kick dev` logs a warning and the built-in keeps its meaning. The editor also completes validator names inside `validate="…"`.
 - **What ships:** the file can import npm packages and your own files, like a component script. `kick build` bundles it as `kick-validators.<hash>.js`, loaded after the built-in validator script on pages with a `validate` field; `kick dev` serves it through Vite. Running from source without either, it's served as is with its types stripped, and an import fails the page, as it does for component scripts.
 - **Browser only.** The route's schema still decides on the server; a rule that needs your data is a [server check](#your-own-checks).
 

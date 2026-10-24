@@ -212,8 +212,13 @@ export function createViews(options: ViewsOptions = {}): Views {
       return Promise.reject(new Error('client scripts that import need kick dev or a kick build'))
     if (validatorsJs?.source === source) return validatorsJs.js
     // kick dev: Vite serves it (the plugin answers first); the hash only names it.
-    const js = Promise.resolve(
-      options.bundle === null ? source : stripTypes(source) + VALIDATORS_REGISTER,
+    const js = (
+      options.bundle === null
+        ? Promise.resolve(source)
+        : // A plain `.js` file has no types to strip.
+          Promise.resolve(/\.m?js$/.test(validatorsFile) ? source : stripTypes(source)).then(
+            (code) => code + VALIDATORS_REGISTER,
+          )
     ).then((code) => ({ js: code, hash: fnv1a(code) }))
     js.catch(() => validatorsJs?.js === js && (validatorsJs = undefined))
     validatorsJs = { source, js }
@@ -432,11 +437,12 @@ export function createViews(options: ViewsOptions = {}): Views {
           tags.push(`<script type="module" src="${scriptPath}/${custom}"${nonceAttr}></script>`)
       }
       // Stylesheets the bundled scripts import, once each, in the head.
-      const css = new Set(
-        [...used.values()].flatMap(
+      const css = new Set([
+        ...[...used.values()].flatMap(
           (t) => bundle?.client?.css?.[componentTag(t.name, componentsDir)] ?? [],
         ),
-      )
+        ...((validation && bundle?.client?.css?.[VALIDATORS_TAG]) || []),
+      ])
       const links = [...css]
         .map((f) => `<link rel="stylesheet" href="${scriptPath}/${f}"${nonceAttr}>`)
         .join('')

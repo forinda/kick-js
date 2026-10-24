@@ -98,8 +98,9 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
     }
     const validators = new Set<string>()
     const hasValidators = existsSync(validatorsFile)
+    // Watched before it exists too: a `vite build --watch` picks up a new one.
+    ctx.addWatchFile(validatorsFile)
     if (hasValidators) {
-      ctx.addWatchFile(validatorsFile)
       if (!('readValidatorExports' in view))
         errors.push('custom validators need a newer @forinda/kickjs-view: upgrade it')
       else {
@@ -167,6 +168,7 @@ export function kickViewsPlugin(options: KickViewsPluginOptions = {}): Plugin {
           shared,
           scriptPath,
           onDisk ? (options.inlineLimit ?? 4096) : () => true,
+          (file) => ctx.addWatchFile(file),
         )
       } catch (err) {
         errors.push(`<script client> bundling failed: ${(err as Error).message}`)
@@ -425,6 +427,8 @@ async function bundleClientScripts(
   shared: ClientBuildConfig,
   scriptPath: string,
   inline: number | (() => boolean),
+  /** Each of the app's files the scripts import, so a watch build sees their edits. */
+  watch: (file: string) => void,
 ): Promise<ClientBundle> {
   const vite = await import('vite')
   const byId = new Map(scripts.map((s) => [s.file + CLIENT_SUFFIX, s.code]))
@@ -439,7 +443,12 @@ async function bundleClientScripts(
       {
         name: 'kickjs:client-scripts',
         resolveId: (id: string) => (byId.has(id) ? id : undefined),
-        load: (id: string) => byId.get(id),
+        load: (id: string) => {
+          // Every module read, tree-shaken or not: a later edit may bring it in.
+          if (!id.startsWith('\0') && !byId.has(id) && !id.includes('/node_modules/'))
+            watch(id.split('?')[0]!)
+          return byId.get(id)
+        },
       },
     ],
     build: {

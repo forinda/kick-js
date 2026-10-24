@@ -161,6 +161,20 @@ describe('kick add views', () => {
     expect(configSnippet(plan.integrations)).toContain('plugins: [viewCliPlugin]')
     expect(configSnippet(planWiring(['storage'])!.integrations)).toBeUndefined()
   })
+
+  it('no kick.config.ts hint when the plugin is already registered', () => {
+    const plan = planWiring(['views'])!
+    const config =
+      "import { viewCliPlugin } from '@forinda/kickjs-view/cli'\nexport default defineConfig({ plugins: [viewCliPlugin] })\n"
+    expect(configSnippet(plan.integrations, config)).toBeUndefined()
+    expect(configSnippet(plan.integrations, 'export default defineConfig({})\n')).toContain(
+      'plugins: [viewCliPlugin]',
+    )
+    // Imported but not in plugins: still needs registering.
+    const importedOnly =
+      "import { viewCliPlugin } from '@forinda/kickjs-view/cli'\nexport default defineConfig({ plugins: [] })\n"
+    expect(configSnippet(plan.integrations, importedOnly)).toContain('plugins: [viewCliPlugin]')
+  })
 })
 
 describe('kick add views over an app that has views', () => {
