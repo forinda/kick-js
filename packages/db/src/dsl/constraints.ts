@@ -86,7 +86,7 @@ export function index(name: string) {
 }
 
 /**
- * A unique index, named, over one or more columns. With `.where()`, unique
+ * A unique index, named, over one or more columns or expressions. With `.where()`, unique
  * among the rows that match — e.g. live rows only.
  *
  * @example

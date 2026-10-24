@@ -256,8 +256,8 @@ export function timestamp(opts?: TimeOptions): TimestampBuilder {
 }
 
 /**
- * A point in time with its zone (`timestamptz`; MySQL `TIMESTAMP`), typed
- * `Date`. `{ precision: 3 }` keeps milliseconds.
+ * A zone-aware instant (`timestamptz`; MySQL `TIMESTAMP`), typed `Date`. Stored
+ * as UTC; the zone you wrote isn't kept. `{ precision: 3 }` keeps milliseconds.
  *
  * @example
  * createdAt: timestamptz().notNull().defaultNow()

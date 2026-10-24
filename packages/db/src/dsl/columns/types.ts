@@ -182,7 +182,7 @@ export const KICK_NOT_NULL = Symbol.for('@forinda/kickjs-db/NotNull')
 export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
 
 /**
- * Re-attach the nullability / generated brands after a transform that
+ * Re-attach the nullability / generated / selfRef brands after a transform that
  * must return a *new* builder type (e.g. `.array()` widening `T` to
  * `T[]`). Without this, `integer().notNull().array()` silently dropped
  * `NotNullBrand` and the row type regressed to `number[] | null`.
@@ -193,7 +193,8 @@ export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
 export type PreserveBrands<Self, Out> = Out &
   (Self extends NotNullBrand ? NotNullBrand : unknown) &
   (Self extends GeneratedBrand ? GeneratedBrand : unknown) &
-  (Self extends GeneratedAlwaysBrand ? GeneratedAlwaysBrand : unknown)
+  (Self extends GeneratedAlwaysBrand ? GeneratedAlwaysBrand : unknown) &
+  (Self extends SelfRefTo<infer K> ? SelfRefTo<K> : unknown)
 
 /**
  * Phantom-typed column builder. The `T` generic carries the column's TS

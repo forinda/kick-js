@@ -212,6 +212,8 @@ describe('self-references need no annotation', () => {
     table('c', { id: uuid().primaryKey(), parentId: fk(uuid(), selfRef('idd')) })
     // @ts-expect-error — uuid → serial
     table('c', { id: serial().primaryKey(), parentId: fk(uuid(), selfRef('id')) })
+    // @ts-expect-error — uuid[] → uuid: .array() keeps the check
+    table('c', { id: uuid().primaryKey(), parentIds: fk(uuid(), selfRef('id')).array() })
     // A plain thunk to another table is untouched.
     table('d', { id: uuid().primaryKey(), cId: uuid().references(() => ok.id) })
   })
