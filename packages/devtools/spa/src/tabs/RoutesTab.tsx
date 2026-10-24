@@ -124,7 +124,16 @@ export const RoutesTab: Component = () => {
             <button
               type="button"
               class="underline hover:text-text-body"
-              onClick={() => setAll(anyCollapsed() ? new Set() : new Set(groups().map(([c]) => c)))}
+              onClick={() => {
+                // Only the groups on screen change; ones a filter hides keep their state.
+                const next = new Set(collapsed())
+                const expand = anyCollapsed()
+                for (const [c] of groups()) {
+                  if (expand) next.delete(c)
+                  else next.add(c)
+                }
+                setAll(next)
+              }}
             >
               {anyCollapsed() ? 'Expand all' : 'Collapse all'}
             </button>
