@@ -1,5 +1,15 @@
 # @forinda/kickjs-db
 
+## 8.12.0
+
+### Minor Changes
+
+- [#1069](https://github.com/forinda/kick-js/pull/1069) [`38827b5`](https://github.com/forinda/kick-js/commit/38827b5929199484523645f98ad3c0c0d12e335d) Thanks [@forinda](https://github.com/forinda)! - `fk(builder, selfRef('id'))` is checked by the compiler: `table()`, `pgSchema().table()` and `TableBase()` reject a self-reference naming a column the table doesn't have, or one of another type, with the reason on that column. `.references(selfRef('id'))` still works and is checked at runtime, as before.
+
+### Patch Changes
+
+- [#1068](https://github.com/forinda/kick-js/pull/1068) [`9edb9d2`](https://github.com/forinda/kick-js/commit/9edb9d2a68e20cbd8e30aac9eb8c0eaf492cd893) Thanks [@forinda](https://github.com/forinda)! - JSDoc on every column builder and modifier: SQL type per dialect, TS type, and an example (`serial`, `integer`, `varchar`, `uuid`, `jsonb`, `pgEnum`, `citext`, `.notNull()`, `.references()`, `index()`, `unique()` and the rest). `selfRef` shows its docs on hover, and `.softDelete()` notes that `selectFrom` still sees deleted rows.
+
 ## 8.11.3
 
 ### Patch Changes
