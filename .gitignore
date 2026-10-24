@@ -38,3 +38,6 @@ packages/kickjs/.dts-mw-*/
 
 # Playwright MCP screenshots and snapshots
 .playwright-mcp/
+
+# Internal notes — kept locally, not tracked
+docs-internal/
