@@ -77,6 +77,8 @@ export const RoutesTab: Component = () => {
     if (!next.delete(controller)) next.add(controller)
     setAll(next)
   }
+  /** Only the groups on screen count: a remembered controller can be filtered out or gone. */
+  const anyCollapsed = () => groups().some(([c]) => collapsed().has(c))
   /** A search or method filter shows every match, collapsed or not. */
   const isOpen = (controller: string) =>
     !!search().trim() || method() !== 'ALL' || !collapsed().has(controller)
@@ -122,11 +124,9 @@ export const RoutesTab: Component = () => {
             <button
               type="button"
               class="underline hover:text-text-body"
-              onClick={() =>
-                setAll(collapsed().size ? new Set() : new Set(groups().map(([c]) => c)))
-              }
+              onClick={() => setAll(anyCollapsed() ? new Set() : new Set(groups().map(([c]) => c)))}
             >
-              {collapsed().size ? 'Expand all' : 'Collapse all'}
+              {anyCollapsed() ? 'Expand all' : 'Collapse all'}
             </button>
           </Show>
         </div>
