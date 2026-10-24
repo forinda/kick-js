@@ -23,6 +23,7 @@ import {
   type SchemaToTypes,
 } from '../../src/index'
 import { pgEnum } from '../../src/dsl/columns/pg'
+import { pgSchema } from '../../src/dsl/pg-schema'
 import type { InferInsert, InferSelect } from '../../src/schema'
 
 type Row = { id: string; email: string; age: number; bio: string | null }
@@ -203,6 +204,25 @@ describe('self-references need no annotation', () => {
   it('base class: selfRef', () => {
     class C extends TableBase('c', { id: uuid().primaryKey(), parentId: uuid().references(selfRef('id')) }) {}
     expectTypeOf<C['parentId']>().toEqualTypeOf<string | null>()
+  })
+  it('table(): fk(builder, selfRef) names a column of this table, of the same type', () => {
+    const ok = table('c', { id: uuid().primaryKey(), parentId: fk(uuid().notNull(), selfRef('id')) })
+    expectTypeOf<InferSelect<typeof ok>['parentId']>().toEqualTypeOf<string>()
+    // @ts-expect-error — no column `idd`
+    table('c', { id: uuid().primaryKey(), parentId: fk(uuid(), selfRef('idd')) })
+    // @ts-expect-error — uuid → serial
+    table('c', { id: serial().primaryKey(), parentId: fk(uuid(), selfRef('id')) })
+    // @ts-expect-error — uuid[] → uuid: .array() keeps the check
+    table('c', { id: uuid().primaryKey(), parentIds: fk(uuid(), selfRef('id')).array() })
+    // A plain thunk to another table is untouched.
+    table('d', { id: uuid().primaryKey(), cId: uuid().references(() => ok.id) })
+  })
+  it('pgSchema().table() and TableBase check selfRef too', () => {
+    // @ts-expect-error — no column `idd`
+    pgSchema('s').table('c', { id: uuid().primaryKey(), parentId: fk(uuid(), selfRef('idd')) })
+    // @ts-expect-error — uuid → serial
+    class C extends TableBase('c', { id: serial().primaryKey(), parentId: fk(uuid(), selfRef('id')) }) {}
+    void C
   })
   it('fluent: a column callback, key and type checked', () => {
     const c = defineTable('c').column('id', uuid().primaryKey()).column('parentId', (t) => fk(uuid(), () => t.id)).build()

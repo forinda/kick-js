@@ -53,18 +53,18 @@ All four declare the same `users` table — one file shows them side by side her
 
 ## Where they differ
 
-|                                   | Object                 | Builder fields    | Base class           | Fluent                                                                      |
-| --------------------------------- | ---------------------- | ----------------- | -------------------- | --------------------------------------------------------------------------- |
-| Self-reference                    | `selfRef('id')`        | a plain thunk     | `selfRef('id')`      | `.column('parentId', (t) => fk(uuid(), () => t.id))` — key and type checked |
-| Two tables referencing each other | `link()`               | plain thunks      | `link()`             | `link()`                                                                    |
-| Validation rules                  | `insertSchema` options | `@Rule(...)`      | `rules` option       | `.column(key, builder, rule)`                                               |
-| Indexes                           | third argument         | `static indexes`  | `indexes` option     | `.index(...)`                                                               |
-| Row objects with methods          | —                      | —                 | `User.from(row)`     | —                                                                           |
-| A repeated column name            | object literal error   | class field error | object literal error | type error                                                                  |
+|                                   | Object                                             | Builder fields    | Base class                                         | Fluent                                                                      |
+| --------------------------------- | -------------------------------------------------- | ----------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
+| Self-reference                    | `fk(uuid(), selfRef('id'))` — key and type checked | a plain thunk     | `fk(uuid(), selfRef('id'))` — key and type checked | `.column('parentId', (t) => fk(uuid(), () => t.id))` — key and type checked |
+| Two tables referencing each other | `link()`                                           | plain thunks      | `link()`                                           | `link()`                                                                    |
+| Validation rules                  | `insertSchema` options                             | `@Rule(...)`      | `rules` option                                     | `.column(key, builder, rule)`                                               |
+| Indexes                           | third argument                                     | `static indexes`  | `indexes` option                                   | `.index(...)`                                                               |
+| Row objects with methods          | —                                                  | —                 | `User.from(row)`                                   | —                                                                           |
+| A repeated column name            | object literal error                               | class field error | object literal error                               | type error                                                                  |
 
 - **Builder fields** need no annotation even for a table that references itself or a pair that reference each other: the class body breaks the inference cycle that `table()` hits.
 - **Base class**: export the class — `kick db generate` and `createDbClient({ schema })` find its table. `User.table` is the table itself, for `relations()` and `insertSchema`.
-- **Fluent** checks the most: a self-reference names a column declared above it with the right type, and a column declared twice fails to compile.
+- **Fluent** checks the most: a self-reference names a column declared above it with the right type, and a column declared twice fails to compile. The object and base-class forms check a self-reference written `fk(builder, selfRef('id'))` the same way.
 
 ## Validation rules travel with the table
 
@@ -97,7 +97,7 @@ The typed client keys it `'billing.invoices'`, as with `pgSchema`.
 
 ## Foreign keys
 
-`fk(builder, () => target)` is `.references()` that checks both sides hold the same type, in every form. `link(column, () => target)` adds a foreign key after both tables exist — how two tables reference each other without an annotation. `selfRef('column')` points a foreign key at the table's own column. See [Schema → Foreign keys](./database/constraints.md#foreign-keys).
+`fk(builder, () => target)` is `.references()` that checks both sides hold the same type, in every form. `link(column, () => target)` adds a foreign key after both tables exist — how two tables reference each other without an annotation. `selfRef('column')` points a foreign key at the table's own column; inside `fk()` the column's name and type are checked. See [Schema → Foreign keys](./database/constraints.md#foreign-keys).
 
 ## Related
 

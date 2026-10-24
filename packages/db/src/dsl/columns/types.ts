@@ -46,6 +46,36 @@ export type TypedColumnRefs<C> = {
   [K in keyof C]: TypedColumnRef<C[K] extends ColumnBuilder<infer T> ? T : never>
 }
 
+declare const SELF_REF: unique symbol
+declare const SELF_REF_TO: unique symbol
+
+/** What `selfRef('id')` returns: a target thunk that names a column of this table. */
+export type SelfRef<K extends string> = (() => ColumnRef) & { readonly [SELF_REF]: K }
+
+/**
+ * A column whose foreign key is `fk(builder, selfRef(K))`, checked by `table()`
+ * against its own columns. `.references()` can't carry it: a generic or
+ * overloaded `.references()` makes a plain thunk in a class field circular (TS7022).
+ */
+export type SelfRefTo<K extends string> = { readonly [SELF_REF_TO]: K }
+
+type SelfRefTarget<B> = B extends SelfRefTo<infer K> ? K : never
+type ValueOf<B> = B extends ColumnBuilder<infer T> ? T : never
+
+/**
+ * `table()`'s check on its columns: each `selfRef(K)` names one of them, of a
+ * type this column can hold. A failing column reads as the reason.
+ */
+export type CheckSelfRefs<C> = {
+  [P in keyof C]: [SelfRefTarget<C[P]>] extends [never]
+    ? C[P]
+    : SelfRefTarget<C[P]> extends keyof C
+      ? [ValueOf<C[SelfRefTarget<C[P]>]>] extends [ValueOf<C[P]>]
+        ? C[P]
+        : `selfRef('${SelfRefTarget<C[P]>}'): that column's type doesn't match this one`
+      : `selfRef('${SelfRefTarget<C[P]>}'): this table has no such column`
+}
+
 export interface FkSpec {
   thunk: () => ColumnRef
   onDelete: FkAction
@@ -152,7 +182,7 @@ export const KICK_NOT_NULL = Symbol.for('@forinda/kickjs-db/NotNull')
 export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
 
 /**
- * Re-attach the nullability / generated brands after a transform that
+ * Re-attach the nullability / generated / selfRef brands after a transform that
  * must return a *new* builder type (e.g. `.array()` widening `T` to
  * `T[]`). Without this, `integer().notNull().array()` silently dropped
  * `NotNullBrand` and the row type regressed to `number[] | null`.
@@ -163,7 +193,8 @@ export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
 export type PreserveBrands<Self, Out> = Out &
   (Self extends NotNullBrand ? NotNullBrand : unknown) &
   (Self extends GeneratedBrand ? GeneratedBrand : unknown) &
-  (Self extends GeneratedAlwaysBrand ? GeneratedAlwaysBrand : unknown)
+  (Self extends GeneratedAlwaysBrand ? GeneratedAlwaysBrand : unknown) &
+  (Self extends SelfRefTo<infer K> ? SelfRefTo<K> : unknown)
 
 /**
  * Phantom-typed column builder. The `T` generic carries the column's TS
@@ -193,27 +224,64 @@ export class ColumnBuilder<T = unknown> {
     }
   }
 
+  /**
+   * `NOT NULL`: drops `| null` from the column's type.
+   *
+   * @example
+   * name: text().notNull()
+   */
   notNull(): this & NotNullBrand {
     this.state.nullable = false
     return this as this & NotNullBrand
   }
 
+  /**
+   * `PRIMARY KEY` (implies `NOT NULL`). For a key over several columns, use
+   * `primaryKey().on(...)` in the table's constraints instead.
+   *
+   * @example
+   * id: uuid().primaryKey().defaultRandom()
+   */
   primaryKey(): this & NotNullBrand {
     this.state.primaryKey = true
     this.state.nullable = false
     return this as this & NotNullBrand
   }
 
+  /**
+   * `UNIQUE` on this column alone. Partial or multi-column: `unique(name).on(...)`
+   * in the table's constraints.
+   *
+   * @example
+   * email: varchar(320).notNull().unique()
+   */
   unique(): this {
     this.state.unique = true
     return this
   }
 
+  /**
+   * An array of this type (`text[]`), typed `T[]`.
+   *
+   * @example
+   * tags: text().array().notNull().default([])
+   */
   array(): PreserveBrands<this, ColumnBuilder<T[]>> {
     this.state.type = `${this.state.type}[]`
     return this as unknown as PreserveBrands<this, ColumnBuilder<T[]>>
   }
 
+  /**
+   * A foreign key to another table's column. The target is a thunk, so tables
+   * can be declared in any order. For a column of the same table, use
+   * `selfRef('id')`; for two tables that point at each other, `link()`.
+   * Actions: `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`,
+   * `'no_action'` (the default). `name` overrides the derived constraint name.
+   *
+   * @example
+   * authorId: uuid().notNull().references(() => users.id, { onDelete: 'cascade' })
+   * parentId: uuid().references(selfRef('id'), { onDelete: 'set_null' })
+   */
   references(
     target: () => ColumnRef,
     opts: { onDelete?: FkAction; onUpdate?: FkAction; name?: string } = {},
@@ -311,7 +379,11 @@ export class ColumnBuilder<T = unknown> {
 
   /**
    * Set this column to the current time on every update that doesn't set it
-   * itself — `updatedAt: timestamp().notNull().defaultNow().onUpdateNow()`.
+   * itself, and on an upsert's update branch. Your own value wins. Raw `sql`
+   * updates don't maintain it.
+   *
+   * @example
+   * updatedAt: timestamp().notNull().defaultNow().onUpdateNow()
    */
   onUpdateNow(): this {
     this.state.managed = 'updatedAt'
@@ -321,7 +393,16 @@ export class ColumnBuilder<T = unknown> {
   /**
    * Mark this column — a nullable timestamp — as the soft-delete marker:
    * relational reads (`db.query`) skip rows where it's set, at every level,
-   * unless asked `withDeleted: true`. Soft-delete by setting it.
+   * unless that level passes `withDeleted: true`. Soft-delete by setting it to
+   * the current time; restore by setting it back to `null`.
+   *
+   * The query builder (`selectFrom`) is plain SQL and still sees deleted rows:
+   * add `.where('deletedAt', 'is', null)` there yourself. No schema change.
+   *
+   * @example
+   * deletedAt: timestamp().softDelete()
+   * // delete:  db.updateTable('docs').set({ deletedAt: new Date() }).where('id', '=', id)
+   * // include: db.query.docs.findMany({ withDeleted: true })
    */
   softDelete(): this {
     this.state.managed = 'softDelete'

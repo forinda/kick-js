@@ -1,3 +1,4 @@
+import type { CheckSelfRefs } from './columns/types'
 import type { ColumnBuilder, TypedColumnRefs } from './columns/types'
 import { buildTable, type TableDecl, type TableOptions } from './table'
 
@@ -34,7 +35,7 @@ export interface PgSchema<TSchema extends string | undefined = string | undefine
 
   table<TName extends string, C extends Record<string, ColumnBuilder>>(
     name: TName,
-    columns: C,
+    columns: C & CheckSelfRefs<C>,
     options?: TableOptions<C>,
   ): TableDecl<TName, C, TSchema> & TypedColumnRefs<C>
 }

@@ -130,14 +130,16 @@ Brand-based instead of a class generic so chained methods preserve subclass iden
 A column whose foreign key points back at the same table names the column with `selfRef`:
 
 ```ts
-import { selfRef, table, uuid, varchar } from '@forinda/kickjs-db'
+import { fk, selfRef, table, uuid, varchar } from '@forinda/kickjs-db'
 
 export const categories = table('categories', {
   id: uuid().primaryKey().defaultRandom(),
   name: varchar(255).notNull(),
-  parentId: uuid().references(selfRef('id'), { onDelete: 'set_null' }),
+  parentId: fk(uuid(), selfRef('id'), { onDelete: 'set_null' }),
 })
 ```
+
+`fk()` makes it a compile error to name a column that doesn't exist, or one of another type. `uuid().references(selfRef('id'))` works the same at runtime, but it's checked only when the table is declared.
 
 A thunk to the const itself — `() => categories.id` — makes TypeScript infer `categories` from an initializer that references it (TS7022), which is why it used to need an explicit `(): ColumnRef => categories.id`. `selfRef` avoids the cycle; the table binds it once it exists. The same holds between two tables that reference each other — use `link()` ([Schema → Typed foreign keys and cycles](./database/constraints.md#typed-foreign-keys-and-cycles)).
 

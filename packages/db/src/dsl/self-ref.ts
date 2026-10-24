@@ -1,24 +1,30 @@
-import type { ColumnBuilder, ColumnRef } from './columns/types'
+import type { ColumnBuilder, ColumnRef, SelfRef } from './columns/types'
 
-/**
- * `parentId: uuid().references(() => categories.id)` inside `table(...)` is
- * TS7022: the const's type depends on its own initializer. The usual fix —
- * `(): ColumnRef => categories.id` — is the step people don't know about.
- * `selfRef('id')` names the column instead of reaching for the const; the
- * table binds it to its own column once it exists.
- *
- *   const categories = table('categories', {
- *     id: uuid().primaryKey(),
- *     parentId: uuid().references(selfRef('id')),
- *   })
- */
 const SELF = Symbol.for('@forinda/kickjs-db/self-ref')
 
-export function selfRef(column: string): () => ColumnRef {
+/**
+ * A foreign key to a column of the table being declared. The table binds it
+ * to its own column once it exists; a name that isn't a column fails there.
+ *
+ * Writing `() => categories.id` instead makes the const's type depend on its
+ * own initializer, which TypeScript rejects (TS7022) unless the thunk is
+ * annotated `(): ColumnRef => categories.id`. Tables that point at each other
+ * use `link()`.
+ *
+ * Inside `fk()` the compiler checks it too: the column exists and holds the
+ * same type. `.references(selfRef(...))` is checked only at runtime.
+ *
+ * @example
+ * const categories = table('categories', {
+ *   id: uuid().primaryKey().defaultRandom(),
+ *   parentId: fk(uuid(), selfRef('id'), { onDelete: 'set_null' }),
+ * })
+ */
+export function selfRef<const K extends string>(column: K): SelfRef<K> {
   const thunk = () => {
     throw new Error(`selfRef('${column}') is not bound to a table`)
   }
-  return Object.assign(thunk, { [SELF]: column })
+  return Object.assign(thunk, { [SELF]: column }) as unknown as SelfRef<K>
 }
 
 /**
