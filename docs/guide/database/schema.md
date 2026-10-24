@@ -57,31 +57,32 @@ email: varchar(200).notNull().comment('Sign-in address, lowercased'),
 
 All cross-dialect builders are imported from the package root. Each carries a phantom TypeScript type that flows into the row shape.
 
-| Builder                      | SQL type           | TS type                        |
-| ---------------------------- | ------------------ | ------------------------------ |
-| `serial()`                   | `serial`           | `number` (generated, not-null) |
-| `bigSerial()`                | `bigserial`        | `bigint` (generated, not-null) |
-| `smallSerial()`              | `smallserial`      | `number` (generated, not-null) |
-| `integer()`                  | `integer`          | `number`                       |
-| `bigint({ mode? })`          | `bigint`           | `bigint` (or per `mode`)       |
-| `smallint()`                 | `smallint`         | `number`                       |
-| `decimal(p?, s?, { mode? })` | `decimal(p, s)`    | `string` (or per `mode`)       |
-| `numeric(p?, s?, { mode? })` | `numeric(p, s)`    | `string` (or per `mode`)       |
-| `real()`                     | `real`             | `number`                       |
-| `doublePrecision()`          | `double precision` | `number`                       |
-| `varchar(length = 255)`      | `varchar(n)`       | `string`                       |
-| `char(length = 1)`           | `char(n)`          | `string`                       |
-| `text()`                     | `text`             | `string`                       |
-| `boolean()`                  | `boolean`          | `boolean`                      |
-| `timestamp()`                | `timestamp`        | `Date`                         |
-| `timestamptz()`              | `timestamptz`      | `Date`                         |
-| `date()`                     | `date`             | `Date`                         |
-| `time()`                     | `time`             | `string`                       |
-| `interval()`                 | `interval`         | `string`                       |
-| `uuid()`                     | `uuid`             | `string`                       |
-| `json<T>()`                  | `json`             | `T`                            |
-| `jsonb<T>()`                 | `jsonb`            | `T`                            |
-| `bytea()`                    | `bytea`            | `Uint8Array`                   |
+| Builder                      | SQL type           | TS type                         |
+| ---------------------------- | ------------------ | ------------------------------- |
+| `serial()`                   | `serial`           | `number` (generated, not-null)  |
+| `bigSerial()`                | `bigserial`        | `bigint` (generated, not-null)  |
+| `smallSerial()`              | `smallserial`      | `number` (generated, not-null)  |
+| `integer()`                  | `integer`          | `number`                        |
+| `bigint({ mode? })`          | `bigint`           | `bigint` (or per `mode`)        |
+| `smallint()`                 | `smallint`         | `number`                        |
+| `version()`                  | `integer`          | `number` (not-null, maintained) |
+| `decimal(p?, s?, { mode? })` | `decimal(p, s)`    | `string` (or per `mode`)        |
+| `numeric(p?, s?, { mode? })` | `numeric(p, s)`    | `string` (or per `mode`)        |
+| `real()`                     | `real`             | `number`                        |
+| `doublePrecision()`          | `double precision` | `number`                        |
+| `varchar(length = 255)`      | `varchar(n)`       | `string`                        |
+| `char(length = 1)`           | `char(n)`          | `string`                        |
+| `text()`                     | `text`             | `string`                        |
+| `boolean()`                  | `boolean`          | `boolean`                       |
+| `timestamp()`                | `timestamp`        | `Date`                          |
+| `timestamptz()`              | `timestamptz`      | `Date`                          |
+| `date()`                     | `date`             | `Date`                          |
+| `time()`                     | `time`             | `string`                        |
+| `interval()`                 | `interval`         | `string`                        |
+| `uuid()`                     | `uuid`             | `string`                        |
+| `json<T>()`                  | `json`             | `T`                             |
+| `jsonb<T>()`                 | `jsonb`            | `T`                             |
+| `bytea()`                    | `bytea`            | `Uint8Array`                    |
 
 **`mode` for big and exact numbers.** Drivers disagree on 64-bit integers: `pg` returns a string, better-sqlite3 a number. Pick what you get back, and the type follows:
 
@@ -109,12 +110,14 @@ varchar(255).unique() // UNIQUE
 integer().default(0) // DEFAULT 0 (marks column generated)
 text().defaultSql('gen_random_uuid()::text') // a default the database evaluates
 text().array() // text[]  → TS type becomes T[]
+uuid().references(() => users.id, { onDelete: 'cascade' }) // FOREIGN KEY
 ```
 
 - `.notNull()` / `.primaryKey()` stamp the column NOT NULL and remove `| null` from its inferred type.
 - `.default(value)` sets a default **value** and marks the column generated, so you can omit it on insert: `.default(true)`, `.default(0)`, `.default('pending')` — the bare value, quoted for you. On a text column it's always the text you wrote: `.default('now()')` stores the string `now()`. A number, boolean or time column also takes an expression that fits it (`timestamp().default('now()')`).
 - `.defaultSql(expression)` sets a default the database **evaluates** for each new row, on any column, written in your dialect's SQL: `text().defaultSql('gen_random_uuid()::text')`, `text().defaultSql("lower(hex(randomblob(8)))")`. `kick db generate` warns about a `.default()` on a text column that looks like a call — on SQLite and MySQL earlier versions evaluated it.
 - `.array()` wraps the SQL type in `[]` and the TS type in `T[]`.
+- `.references(() => target, { onDelete?, onUpdate?, name? })` adds a foreign key. Use `selfRef('id')` for a column of the same table. See [Foreign keys](./constraints.md#foreign-keys).
 - `timestamp({ precision: 3 })`, `timestamptz(…)` and `time(…)` keep that many fractional-second digits (0–6) — `3` for milliseconds. Without it each database uses its own default: microseconds on Postgres, whole seconds on MySQL. On MySQL a `defaultNow()` column gets `CURRENT_TIMESTAMP(3)` to match.
 - `.comment(text)` stores a comment with the column ([Comments](#comments)).
 

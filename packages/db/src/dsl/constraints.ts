@@ -68,6 +68,15 @@ export class IndexDecl {
   }
 }
 
+/**
+ * An index, named, over one or more columns or expressions, in the table's
+ * constraints. Chain `.where()` for a partial index, `.using()` for a method.
+ *
+ * @example
+ * table('posts', { authorId: uuid(), createdAt: timestamp() }, (t) => ({
+ *   byAuthor: index('posts_author_idx').on(t.authorId, t.createdAt),
+ * }))
+ */
 export function index(name: string) {
   return {
     on(...keys: IndexKey[]): IndexDecl {
@@ -76,6 +85,13 @@ export function index(name: string) {
   }
 }
 
+/**
+ * A unique index, named, over one or more columns. With `.where()`, unique
+ * among the rows that match — e.g. live rows only.
+ *
+ * @example
+ * emailLive: unique('users_email_live').on(t.email).where('"deletedAt" IS NULL')
+ */
 export function unique(name: string) {
   return {
     on(...keys: IndexKey[]): IndexDecl {

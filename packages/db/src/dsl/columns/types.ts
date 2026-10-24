@@ -193,27 +193,64 @@ export class ColumnBuilder<T = unknown> {
     }
   }
 
+  /**
+   * `NOT NULL`: drops `| null` from the column's type.
+   *
+   * @example
+   * name: text().notNull()
+   */
   notNull(): this & NotNullBrand {
     this.state.nullable = false
     return this as this & NotNullBrand
   }
 
+  /**
+   * `PRIMARY KEY` (implies `NOT NULL`). For a key over several columns, use
+   * `primaryKey().on(...)` in the table's constraints instead.
+   *
+   * @example
+   * id: uuid().primaryKey().defaultRandom()
+   */
   primaryKey(): this & NotNullBrand {
     this.state.primaryKey = true
     this.state.nullable = false
     return this as this & NotNullBrand
   }
 
+  /**
+   * `UNIQUE` on this column alone. Partial or multi-column: `unique(name).on(...)`
+   * in the table's constraints.
+   *
+   * @example
+   * email: varchar(320).notNull().unique()
+   */
   unique(): this {
     this.state.unique = true
     return this
   }
 
+  /**
+   * An array of this type (`text[]`), typed `T[]`.
+   *
+   * @example
+   * tags: text().array().notNull().default([])
+   */
   array(): PreserveBrands<this, ColumnBuilder<T[]>> {
     this.state.type = `${this.state.type}[]`
     return this as unknown as PreserveBrands<this, ColumnBuilder<T[]>>
   }
 
+  /**
+   * A foreign key to another table's column. The target is a thunk, so tables
+   * can be declared in any order. For a column of the same table, use
+   * `selfRef('id')`; for two tables that point at each other, `link()`.
+   * Actions: `'cascade'`, `'restrict'`, `'set_null'`, `'set_default'`,
+   * `'no_action'` (the default). `name` overrides the derived constraint name.
+   *
+   * @example
+   * authorId: uuid().notNull().references(() => users.id, { onDelete: 'cascade' })
+   * parentId: uuid().references(selfRef('id'), { onDelete: 'set_null' })
+   */
   references(
     target: () => ColumnRef,
     opts: { onDelete?: FkAction; onUpdate?: FkAction; name?: string } = {},
@@ -311,7 +348,11 @@ export class ColumnBuilder<T = unknown> {
 
   /**
    * Set this column to the current time on every update that doesn't set it
-   * itself — `updatedAt: timestamp().notNull().defaultNow().onUpdateNow()`.
+   * itself, and on an upsert's update branch. Your own value wins. Raw `sql`
+   * updates don't maintain it.
+   *
+   * @example
+   * updatedAt: timestamp().notNull().defaultNow().onUpdateNow()
    */
   onUpdateNow(): this {
     this.state.managed = 'updatedAt'
@@ -321,7 +362,16 @@ export class ColumnBuilder<T = unknown> {
   /**
    * Mark this column — a nullable timestamp — as the soft-delete marker:
    * relational reads (`db.query`) skip rows where it's set, at every level,
-   * unless asked `withDeleted: true`. Soft-delete by setting it.
+   * unless that level passes `withDeleted: true`. Soft-delete by setting it to
+   * the current time; restore by setting it back to `null`.
+   *
+   * The query builder (`selectFrom`) is plain SQL and still sees deleted rows:
+   * add `.where('deletedAt', 'is', null)` there yourself. No schema change.
+   *
+   * @example
+   * deletedAt: timestamp().softDelete()
+   * // delete:  db.updateTable('docs').set({ deletedAt: new Date() }).where('id', '=', id)
+   * // include: db.query.docs.findMany({ withDeleted: true })
    */
   softDelete(): this {
     this.state.managed = 'softDelete'

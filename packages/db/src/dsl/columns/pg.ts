@@ -36,6 +36,7 @@ export interface PgEnumBuilder<TName extends string, TValues extends readonly st
   readonly values: TValues
 }
 
+/** The column a {@link pgEnum} factory makes, typed as the union of its values. */
 export class PgEnumColumnBuilder<
   TName extends string,
   TValues extends readonly string[],
@@ -61,6 +62,13 @@ export class PgEnumColumnBuilder<
 // column phantom would collapse to plain `string`, defeating the
 // entire point of the helper. Adopters with a pre-existing array
 // can still spread it: `pgEnum('s', ...VALUES as const)`.
+/**
+ * Declare a Postgres ENUM type; call the result to make a column of it.
+ *
+ * @example
+ * export const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
+ * status: taskStatus().notNull().default('todo') // 'todo' | 'in_progress' | 'done'
+ */
 export function pgEnum<TName extends string, const TValues extends readonly [string, ...string[]]>(
   name: TName,
   ...values: TValues
@@ -73,6 +81,7 @@ export function pgEnum<TName extends string, const TValues extends readonly [str
   return Object.assign(factory, { enumName: name, values }) as PgEnumBuilder<TName, TValues>
 }
 
+/** A full-text search vector (`tsvector`), typed `string`. Index it with GIN. */
 export function tsvector(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('tsvector')
 }
@@ -154,22 +163,27 @@ export function macaddr8(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('macaddr8')
 }
 
+/** Case-insensitive text (`citext`), typed `string`. Needs the `citext` extension. */
 export function citext(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('citext')
 }
 
+/** Currency (`money`), typed `string` as the server formats it (`'$1,234.50'`). Prefer `decimal(p, s)`. */
 export function money(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('money')
 }
 
+/** An IPv4 or IPv6 host address, optionally with a netmask (`inet`), typed `string`. */
 export function inet(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('inet')
 }
 
+/** An IPv4 or IPv6 network (`cidr`, e.g. `'10.0.0.0/8'`), typed `string`. */
 export function cidr(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('cidr')
 }
 
+/** An XML document (`xml`), typed `string`. */
 export function xml(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('xml')
 }
