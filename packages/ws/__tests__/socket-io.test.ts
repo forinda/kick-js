@@ -419,6 +419,7 @@ describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
       server.close()
     })
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const baseline = server.listeners('request')
 
     const first = SocketIoAdapter({}) as any
     await first.beforeStart({ container: Container.getInstance() })
@@ -427,7 +428,6 @@ describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
     const second = SocketIoAdapter({}) as any
     await second.beforeStart({ container: Container.getInstance() })
     await second.afterStart({ server })
-    cleanups.push(() => second.shutdown())
     await first.shutdown()
 
     expect(await (await fetch(`${origin}/app.css`)).text()).toBe('app')
@@ -435,6 +435,10 @@ describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
     const c = await client(`${origin}/chat`)
     c.socket.emit('echo', 'still-live')
     await waitFor(() => c.got.includes('echo:still-live'))
+
+    // Once both are gone the app's own listener is back, not the first's wrapper.
+    await second.shutdown()
+    expect(server.listeners('request')).toEqual(baseline)
   })
 })
 
