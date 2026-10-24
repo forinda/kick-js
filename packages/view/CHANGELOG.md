@@ -1,5 +1,16 @@
 # @forinda/kickjs-view
 
+## 0.4.1
+
+### Patch Changes
+
+- [#1064](https://github.com/forinda/kick-js/pull/1064) [`d87935f`](https://github.com/forinda/kick-js/commit/d87935fab55a0e2adf53fdb4807bc5bd3dd2ae10) Thanks [@forinda](https://github.com/forinda)! - Views fixes:
+  
+  - A built `validators.ts` that imports CSS gets its stylesheet linked on pages with a `validate` field.
+  - From source, a `validators.js` is served as written instead of going through the TypeScript stripper, and an async `stripTypes` option is awaited before the validators register themselves.
+  - `vite build --watch` rebuilds when `validators.ts` is added, and when a file a client script or `validators.ts` imports changes.
+  - `kick add views` skips the `kick.config.ts` hint when `viewCliPlugin` is already there, and its `home` page reads "Hello from KickJS" when rendered with no data. The views forms skill covers `validators.ts`.
+
 ## 0.4.0
 
 ### Minor Changes
