@@ -51,6 +51,21 @@ export const categories = table('categories', {
 
 Written as `() => categories.id`, the const would reference itself in its own initializer, which TypeScript rejects (TS7022) unless the thunk is annotated `(): ColumnRef => categories.id`. `selfRef` needs no annotation, and a column name that doesn't exist fails when the table is declared.
 
+Wrap it in `fk()` to have the compiler check it too — that the column exists and holds the same type:
+
+```ts
+import { fk, selfRef } from '@forinda/kickjs-db'
+
+export const categories = table('categories', {
+  id: uuid().primaryKey().defaultRandom(),
+  parentId: fk(uuid(), selfRef('id'), { onDelete: 'set_null' }),
+  // fk(uuid(), selfRef('idd'))   ✗ selfRef('idd'): this table has no such column
+  // fk(integer(), selfRef('id')) ✗ selfRef('id'): that column's type doesn't match this one
+})
+```
+
+`table()`, `pgSchema().table()` and `TableBase()` all check it. `.references(selfRef('id'))` is checked only when the table is declared, at runtime.
+
 ### Typed foreign keys and cycles
 
 `fk(builder, () => target)` is `.references()` that checks both sides hold the same type — a `uuid()` column pointing at a `serial()` key is a type error:

@@ -46,6 +46,36 @@ export type TypedColumnRefs<C> = {
   [K in keyof C]: TypedColumnRef<C[K] extends ColumnBuilder<infer T> ? T : never>
 }
 
+declare const SELF_REF: unique symbol
+declare const SELF_REF_TO: unique symbol
+
+/** What `selfRef('id')` returns: a target thunk that names a column of this table. */
+export type SelfRef<K extends string> = (() => ColumnRef) & { readonly [SELF_REF]: K }
+
+/**
+ * A column whose foreign key is `fk(builder, selfRef(K))`, checked by `table()`
+ * against its own columns. `.references()` can't carry it: a generic or
+ * overloaded `.references()` makes a plain thunk in a class field circular (TS7022).
+ */
+export type SelfRefTo<K extends string> = { readonly [SELF_REF_TO]: K }
+
+type SelfRefTarget<B> = B extends SelfRefTo<infer K> ? K : never
+type ValueOf<B> = B extends ColumnBuilder<infer T> ? T : never
+
+/**
+ * `table()`'s check on its columns: each `selfRef(K)` names one of them, of a
+ * type this column can hold. A failing column reads as the reason.
+ */
+export type CheckSelfRefs<C> = {
+  [P in keyof C]: [SelfRefTarget<C[P]>] extends [never]
+    ? C[P]
+    : SelfRefTarget<C[P]> extends keyof C
+      ? [ValueOf<C[SelfRefTarget<C[P]>]>] extends [ValueOf<C[P]>]
+        ? C[P]
+        : `selfRef('${SelfRefTarget<C[P]>}'): that column's type doesn't match this one`
+      : `selfRef('${SelfRefTarget<C[P]>}'): this table has no such column`
+}
+
 export interface FkSpec {
   thunk: () => ColumnRef
   onDelete: FkAction

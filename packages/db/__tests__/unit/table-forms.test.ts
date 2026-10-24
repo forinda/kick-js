@@ -289,7 +289,12 @@ describe('self-references, cycles and typed foreign keys', () => {
       .column('id', uuid().primaryKey())
       .column('parentId', (t) => fk(uuid(), () => t.id))
       .build()
-    for (const t of [viaTable, Category.table, viaCallback]) {
+    // fk() adds the compile-time check; at runtime it binds the same way.
+    const viaFk = table('categories', {
+      id: uuid().primaryKey(),
+      parentId: fk(uuid(), selfRef('id')),
+    })
+    for (const t of [viaTable, Category.table, viaCallback, viaFk]) {
       expect(extractSnapshot({ t }, 'postgres')).toEqual(expectedTree())
     }
   })

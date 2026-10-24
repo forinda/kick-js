@@ -1,4 +1,4 @@
-import type { ColumnBuilder, ColumnRef } from './columns/types'
+import type { ColumnBuilder, ColumnRef, SelfRef } from './columns/types'
 
 const SELF = Symbol.for('@forinda/kickjs-db/self-ref')
 
@@ -11,17 +11,20 @@ const SELF = Symbol.for('@forinda/kickjs-db/self-ref')
  * annotated `(): ColumnRef => categories.id`. Tables that point at each other
  * use `link()`.
  *
+ * Inside `fk()` the compiler checks it too: the column exists and holds the
+ * same type. `.references(selfRef(...))` is checked only at runtime.
+ *
  * @example
  * const categories = table('categories', {
  *   id: uuid().primaryKey().defaultRandom(),
- *   parentId: uuid().references(selfRef('id'), { onDelete: 'set_null' }),
+ *   parentId: fk(uuid(), selfRef('id'), { onDelete: 'set_null' }),
  * })
  */
-export function selfRef(column: string): () => ColumnRef {
+export function selfRef<const K extends string>(column: K): SelfRef<K> {
   const thunk = () => {
     throw new Error(`selfRef('${column}') is not bound to a table`)
   }
-  return Object.assign(thunk, { [SELF]: column })
+  return Object.assign(thunk, { [SELF]: column }) as unknown as SelfRef<K>
 }
 
 /**

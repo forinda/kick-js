@@ -1,3 +1,4 @@
+import type { CheckSelfRefs, SelfRef, SelfRefTo } from './columns/types'
 /**
  * Other ways to declare a table. Each one hands the same builders to
  * `table()` / `pgSchema(schema).table()`, so what comes out is an ordinary
@@ -177,7 +178,7 @@ export function TableBase<
   const S extends string | undefined = undefined,
 >(
   name: N,
-  columns: C,
+  columns: C & CheckSelfRefs<C>,
   options: {
     schema?: S
     rules?: { [K in keyof C]?: RuleFor<C[K]> }
@@ -311,7 +312,20 @@ export function defineTable<const N extends string, const S extends string | und
  * A foreign key whose target must hold the same type:
  * `authorId: fk(uuid().notNull(), () => users.id)` — a uuid column pointing
  * at a serial key is a type error. Same as `.references()` at runtime.
+ *
+ * With `selfRef('id')`, `table()` checks that the column exists and holds the
+ * same type: `parentId: fk(uuid(), selfRef('id'), { onDelete: 'set_null' })`.
  */
+export function fk<const K extends string, B extends ColumnBuilder>(
+  builder: B,
+  target: SelfRef<K>,
+  options?: Parameters<ColumnBuilder['references']>[1],
+): B & SelfRefTo<K>
+export function fk<T, B extends ColumnBuilder<T>>(
+  builder: B & ColumnBuilder<T>,
+  target: () => TypedColumnRef<NoInfer<T>>,
+  options?: Parameters<ColumnBuilder['references']>[1],
+): B
 export function fk<T, B extends ColumnBuilder<T>>(
   builder: B & ColumnBuilder<T>,
   target: () => TypedColumnRef<NoInfer<T>>,
