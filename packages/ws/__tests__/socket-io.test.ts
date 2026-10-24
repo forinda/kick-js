@@ -402,6 +402,40 @@ describe('SocketIoAdapter reload on a shared server (dev HMR)', () => {
     expect(server.listeners('upgrade')).toContain(laterUpgrade)
     expect(server.listeners('request')).toContain(laterRequest)
   })
+
+  it('a teardown that finishes after the next adapter attached does not run the app twice', async () => {
+    // A slow shutdown (past the reload's time box) detaches after the next
+    // adapter wrapped the first one's wrapper. Re-adding the app's request
+    // listener then left it on the server twice — every request, a CSS file
+    // from Vite included, answered twice until the dev server restarted.
+    let calls = 0
+    const server = http.createServer((_req, res) => {
+      calls++
+      if (!res.headersSent) res.end('app')
+    })
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    cleanups.push(() => {
+      server.closeAllConnections()
+      server.close()
+    })
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
+    const first = SocketIoAdapter({}) as any
+    await first.beforeStart({ container: Container.getInstance() })
+    await first.afterStart({ server })
+    Container.reset()
+    const second = SocketIoAdapter({}) as any
+    await second.beforeStart({ container: Container.getInstance() })
+    await second.afterStart({ server })
+    cleanups.push(() => second.shutdown())
+    await first.shutdown()
+
+    expect(await (await fetch(`${origin}/app.css`)).text()).toBe('app')
+    expect(calls).toBe(1)
+    const c = await client(`${origin}/chat`)
+    c.socket.emit('echo', 'still-live')
+    await waitFor(() => c.got.includes('echo:still-live'))
+  })
 })
 
 describe('SocketIoContext.join limits', () => {

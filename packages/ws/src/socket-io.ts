@@ -344,7 +344,13 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
         })
         detachFromServer = () => {
           for (const { event, added, displaced } of changes) {
+            const current = server.listeners(event)
+            // A later attach() swapped our wrapper into its own, which still
+            // calls the listeners we displaced: re-adding them would run the
+            // app twice per request. Leave them where the wrapper reaches them.
+            const wrapped = added.some((listener) => !current.includes(listener))
             for (const listener of added) server.off(event, listener as (...args: any[]) => void)
+            if (wrapped) continue
             for (const listener of displaced) {
               if (!server.listeners(event).includes(listener)) {
                 server.on(event, listener as (...args: any[]) => void)

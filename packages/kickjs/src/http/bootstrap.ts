@@ -123,6 +123,16 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
     g.__kickBootstrapped = true
   }
 
+  // One boot at a time. A save before the last reload finished ran a second
+  // bootstrap() alongside it: it shut down an app still starting (whose
+  // afterStart ran anyway, leaving e.g. a socket.io server attached for good)
+  // and its Container.reset() swapped the container under the other boot.
+  const run = (g.__kickBoot ?? Promise.resolve()).then(() => boot(options, g))
+  g.__kickBoot = run.catch(() => {})
+  return run
+}
+
+async function boot(options: ApplicationOptions, g: any): Promise<Application> {
   // ── HMR rebuild ──────────────────────────────────────────────────────
   if (g.__app) {
     log.debug('HMR rebuild triggered')
