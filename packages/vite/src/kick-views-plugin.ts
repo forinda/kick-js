@@ -443,7 +443,12 @@ async function bundleClientScripts(
       {
         name: 'kickjs:client-scripts',
         resolveId: (id: string) => (byId.has(id) ? id : undefined),
-        load: (id: string) => byId.get(id),
+        load: (id: string) => {
+          // Every module read, tree-shaken or not: a later edit may bring it in.
+          if (!id.startsWith('\0') && !byId.has(id) && !id.includes('/node_modules/'))
+            watch(id.split('?')[0]!)
+          return byId.get(id)
+        },
       },
     ],
     build: {
@@ -486,9 +491,6 @@ async function bundleClientScripts(
   }
   for (const f of output) {
     if (f.type === 'chunk') {
-      for (const id of f.moduleIds ?? [])
-        if (!id.startsWith('\0') && !id.endsWith(CLIENT_SUFFIX) && !id.includes('/node_modules/'))
-          watch(id)
       files[f.fileName] = f.code!
       if (f.isEntry && f.name) entries[f.name] = f.fileName
     } else if (f.fileName.endsWith('.css')) {
@@ -514,7 +516,6 @@ type OutputFile = {
   isEntry?: boolean
   name?: string
   imports?: string[]
-  moduleIds?: string[]
   viteMetadata?: { importedCss?: Set<string> }
 }
 

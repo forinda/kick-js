@@ -170,6 +170,10 @@ describe('kick add views', () => {
     expect(configSnippet(plan.integrations, 'export default defineConfig({})\n')).toContain(
       'plugins: [viewCliPlugin]',
     )
+    // Imported but not in plugins: still needs registering.
+    const importedOnly =
+      "import { viewCliPlugin } from '@forinda/kickjs-view/cli'\nexport default defineConfig({ plugins: [] })\n"
+    expect(configSnippet(plan.integrations, importedOnly)).toContain('plugins: [viewCliPlugin]')
   })
 })
 

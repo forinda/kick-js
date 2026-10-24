@@ -198,17 +198,19 @@ function readPackageJson(cwd: string): Record<string, unknown> {
 /**
  * What to add to kick.config.ts for a layer's CLI plugins (`config-plugin`
  * entries): `kick add` edits only the entry file. Undefined when there are none,
- * or when `config` (kick.config.ts's source) already names each of them.
+ * or when `config` (kick.config.ts's source) already lists each in `plugins`.
  */
 export function configSnippet(
   integrations: readonly Integration[],
   config = '',
 ): string | undefined {
+  // What's inside `plugins: [ ... ]`: an import alone doesn't register a plugin.
+  const registered = /\bplugins\s*:\s*\[([^\]]*)\]/.exec(config)?.[1] ?? ''
   const plugins = integrations.filter(
     (i) =>
       i.slot === 'config-plugin' &&
       i.code &&
-      !new RegExp(`\\b${i.code.split('\n').at(-1)!.trim()}\\b`).test(config),
+      !new RegExp(`\\b${i.code.split('\n').at(-1)!.trim()}\\b`).test(registered),
   )
   if (!plugins.length) return undefined
   const imports = plugins.flatMap((i) =>

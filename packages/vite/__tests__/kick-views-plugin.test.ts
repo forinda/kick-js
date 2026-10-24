@@ -435,12 +435,15 @@ describe('validators.ts', () => {
     }
     const withIt = project({
       'src/views/page.kick': '<input name="p" validate="phone">',
-      'src/views/validators.ts': PHONE,
+      // `unused` is tree-shaken out: its file is still watched, a later edit may use it.
+      'src/views/validators.ts': `import { unused } from './unused'\nconst dead = () => unused\n${PHONE}`,
       'src/views/digits.ts': DIGITS,
+      'src/views/unused.ts': 'export const unused = 1\n',
     })
     const files = await watched(withIt)
     expect(files).toContain(join(withIt, 'src/views/validators.ts'))
     expect(files).toContain(join(withIt, 'src/views/digits.ts'))
+    expect(files).toContain(join(withIt, 'src/views/unused.ts'))
     const without = project({ 'src/views/page.kick': '<input name="p" validate="required">' })
     expect(await watched(without)).toContain(join(without, 'src/views/validators.ts'))
   })
