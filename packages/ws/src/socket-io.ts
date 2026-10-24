@@ -152,6 +152,17 @@ export class SocketIoContext {
  * Registers {@link SOCKET_IO} and `WS_USER_BROADCASTER`. Not `WS_ROOM_MANAGER`:
  * Socket.IO keeps its own rooms — reach them through `SOCKET_IO`.
  */
+type Listener = (...args: any[]) => void
+
+/**
+ * A detached adapter's wrapper that a later attach() captured → the listeners
+ * it displaced. When that later adapter detaches, it restores these, not the
+ * dead wrapper.
+ */
+const retired = new WeakMap<Listener, Listener[]>()
+const unwrap = (listener: Listener): Listener[] =>
+  retired.get(listener)?.flatMap(unwrap) ?? [listener]
+
 export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
   name: 'SocketIoAdapter',
   build: ({ auth, ...serverOptions }) => {
@@ -344,10 +355,21 @@ export const SocketIoAdapter = defineAdapter<SocketIoAdapterOptions>({
         })
         detachFromServer = () => {
           for (const { event, added, displaced } of changes) {
-            for (const listener of added) server.off(event, listener as (...args: any[]) => void)
-            for (const listener of displaced) {
+            const current = server.listeners(event)
+            // A later attach() swapped our wrapper into its own, which still
+            // calls the listeners we displaced: re-adding them would run the
+            // app twice per request. Leave them where the wrapper reaches them,
+            // and note them so that adapter's own detach restores them, not us.
+            const gone = added.filter((listener) => !current.includes(listener))
+            for (const listener of added) server.off(event, listener as Listener)
+            if (gone.length) {
+              for (const listener of gone)
+                retired.set(listener as Listener, displaced as Listener[])
+              continue
+            }
+            for (const listener of (displaced as Listener[]).flatMap(unwrap)) {
               if (!server.listeners(event).includes(listener)) {
-                server.on(event, listener as (...args: any[]) => void)
+                server.on(event, listener)
               }
             }
           }

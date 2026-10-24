@@ -353,4 +353,65 @@ describe('bootstrap() HMR rebuild', () => {
     // And the shared dev server must survive the rebuild.
     expect(server.listening).toBe(true)
   })
+
+  it('a save during a reload leaves one app running, not two', async () => {
+    // Saving again before the last reload finished ran a second bootstrap()
+    // alongside the first: it shut down an app still starting, whose
+    // afterStart then ran anyway — a socket.io server attached for good —
+    // and its Container.reset() swapped the container under the other one,
+    // so a lookup found no DB registered yet.
+    const { bootstrap } = await import('../src/http/bootstrap')
+    const server = http.createServer()
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    g.__kickjs_httpServer = server
+
+    const events: string[] = []
+    const opts = () => ({
+      modules: [],
+      port: 0,
+      adapters: [
+        {
+          name: 'Io',
+          // Slow, like migrations applied on boot.
+          beforeStart: () => new Promise<void>((r) => setTimeout(r, 80)),
+          afterStart: () => void events.push('attach'),
+          shutdown: () =>
+            new Promise<void>((r) => setTimeout(r, 30)).then(() => void events.push('detach')),
+        },
+      ],
+    })
+    await bootstrap(opts())
+    // Two saves, the second while the first reload is still starting.
+    const first = bootstrap(opts())
+    await new Promise((r) => setTimeout(r, 50))
+    await Promise.all([first, bootstrap(opts())])
+
+    expect(events).toEqual(['attach', 'detach', 'attach', 'detach', 'attach'])
+  })
+})
+
+describe('shutdown() called twice', () => {
+  it('the second call waits for the first to finish', async () => {
+    // It returned at once, so a reload that found a teardown under way went
+    // on building the next app while the last one still held its resources.
+    const log: string[] = []
+    const app = new Application({
+      modules: [],
+      port: 0,
+      adapters: [
+        {
+          name: 'Slow',
+          shutdown: () =>
+            new Promise<void>((r) => setTimeout(r, 30)).then(() => void log.push('closed')),
+        },
+      ],
+    })
+    await app.setup()
+
+    void app.shutdown({ closeServer: false })
+    await app.shutdown({ closeServer: false })
+
+    expect(log).toEqual(['closed'])
+  })
 })

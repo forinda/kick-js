@@ -866,8 +866,8 @@ export class Application {
    * stays `'idle'`.
    */
   readonly status: ComputedRef<AppStatus> = computed(() => this._status.value)
-  /** Whether shutdown has already been initiated (prevents double-shutdown) */
-  private _shutdownInitiated = false
+  /** The shutdown under way, if any — later calls return it. */
+  private _shutdown: Promise<void> | null = null
   /** Resolvers waiting for in-flight requests to reach zero */
   private _drainResolvers: Array<() => void> = []
 
@@ -2138,19 +2138,24 @@ export class Application {
    *
    * Safe to call multiple times — subsequent calls return the same promise.
    */
-  async shutdown(options: ShutdownOptions = {}): Promise<void> {
+  shutdown(options: ShutdownOptions = {}): Promise<void> {
+    // A second call waits on the first: returning at once let an HMR reload
+    // build the next app while this one still held its sockets.
+    if (this._shutdown) {
+      log.debug('Shutdown already in progress, waiting on it')
+      return this._shutdown
+    }
+    this._shutdown = this.runShutdown(options)
+    return this._shutdown
+  }
+
+  private async runShutdown(options: ShutdownOptions): Promise<void> {
     // `closeServer: false` is the HMR reload path. In dev the HTTP server is
     // SHARED across rebuilds via `globalThis.__kickjs_httpServer`, so closing
     // it would kill the dev server on the first save — which is why the reload
     // path used to skip teardown entirely, leaking an adapter set per reload.
     // Everything below Step 2 is what a reload actually needs.
     const closeServer = options.closeServer ?? true
-    // Prevent double-shutdown — return immediately if already initiated
-    if (this._shutdownInitiated) {
-      log.debug('Shutdown already in progress, skipping duplicate call')
-      return
-    }
-    this._shutdownInitiated = true
     this._status.value = 'draining'
 
     // Readiness already answers 503; keep serving while the balancers notice.
