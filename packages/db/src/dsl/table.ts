@@ -1,3 +1,4 @@
+import type { CheckSelfRefs } from './columns/types'
 import type { ColumnBuilder, ColumnRef, TypedColumnRefs } from './columns/types'
 import type { CheckDecl, IndexDecl, PrimaryKeyDecl, TableConstraint } from './constraints'
 import type { IndexSnapshot, PolicySnapshot } from '../snapshot/types'
@@ -96,7 +97,7 @@ export type TableOptions<C extends Record<string, ColumnBuilder>> =
  */
 export function table<TName extends string, C extends Record<string, ColumnBuilder>>(
   name: TName,
-  columns: C,
+  columns: C & CheckSelfRefs<C>,
   options?: TableOptions<C>,
 ): TableRefs<TName, C> {
   return buildTable(name, columns, options, undefined)
