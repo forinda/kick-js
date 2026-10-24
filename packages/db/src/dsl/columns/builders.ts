@@ -276,7 +276,11 @@ export function time(opts?: TimeOptions): ColumnBuilder<string> {
   return new ColumnBuilder<string>(withPrecision('time', opts))
 }
 
-/** A duration (`interval`, Postgres), typed `string` as the driver returns it (`'1 day'`). */
+/**
+ * A duration (`interval`, Postgres). Typed `string`, but node-postgres parses
+ * it into an object (`{ days: 1, hours: 2 }`); select it as `::text` to get
+ * the string (`'1 day 02:00:00'`).
+ */
 export function interval(): ColumnBuilder<string> {
   return new ColumnBuilder<string>('interval')
 }
