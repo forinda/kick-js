@@ -1,5 +1,11 @@
 # @forinda/kickjs-devtools
 
+## 7.18.2
+
+### Patch Changes
+
+- [#1077](https://github.com/forinda/kick-js/pull/1077) [`984ab71`](https://github.com/forinda/kick-js/commit/984ab7169a5fe5b7d3af6d3dcaaab5e41ce132eb) Thanks [@forinda](https://github.com/forinda)! - The Routes tab shows controller names as written (`NotesController`) instead of in capitals with wide letter-spacing, which made multi-word names hard to read.
+
 ## 7.18.1
 
 ### Patch Changes
