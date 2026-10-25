@@ -104,6 +104,42 @@ git push --tags
 
 Then re-run the workflow via **Actions → Release → Run workflow**. The trusted-publisher OIDC still applies — no token to manage.
 
+## VS Code extension
+
+`packages/vscode-extension` (`forinda-kickjs-devtools` on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=forinda.forinda-kickjs-devtools), publisher `forinda`) is private to the workspace, so Changesets and the release workflow skip it. It's versioned and published by hand. The language server and its copy of `@forinda/kickjs-view` are bundled into it, so changes to `packages/view-language-server` or `packages/view` reach editors only with the next extension release.
+
+1. **Changelog and version** — in a PR named `chore(vscode): release X.Y.Z`:
+   - add `## X.Y.Z` at the top of `packages/vscode-extension/CHANGELOG.md`, written for users like the entries below it, covering the extension's own changes and what it now bundles;
+   - set `"version"` in `packages/vscode-extension/package.json`.
+
+   A new feature is a minor bump, a fix a patch. Commits since the last release: `git log --oneline <last release commit>.. -- packages/vscode-extension packages/view-language-server packages/view/src`.
+
+2. **Package** — after the PR merges:
+
+   ```bash
+   git checkout main && git pull
+   pnpm install
+   pnpm build
+   pnpm --filter forinda-kickjs-devtools package   # → packages/vscode-extension/forinda-kickjs-devtools-X.Y.Z.vsix
+   ```
+
+   `.vsix` files are git-ignored. To check what goes in: `cd packages/vscode-extension && npx vsce ls --no-dependencies`.
+
+3. **Try it** — `code --install-extension packages/vscode-extension/forinda-kickjs-devtools-X.Y.Z.vsix`, reload the window, then open a `.kick` file (highlighting, diagnostics, a `kick-` snippet) and connect to a running app.
+
+4. **Publish** — either:
+   - from the CLI, with an Azure DevOps personal access token that has **Marketplace → Manage** scope for the `forinda` publisher:
+
+     ```bash
+     cd packages/vscode-extension
+     npx vsce login forinda    # once per machine; asks for the token
+     npx vsce publish --packagePath forinda-kickjs-devtools-X.Y.Z.vsix
+     ```
+
+   - or in the browser: [manage the publisher](https://marketplace.visualstudio.com/manage/publishers/forinda), open the extension's **⋯** menu → **Update**, and upload the `.vsix`.
+
+   Publishing the packaged file (rather than `vsce publish` with no file) ships exactly what you tried in step 3. The Marketplace takes a few minutes to show the new version.
+
 ## Migrating from the old release script
 
 The previous `scripts/release.js` (lockstep versioning) is removed. If you have a long-running branch with `pnpm release:patch` muscle memory, the new equivalent is:

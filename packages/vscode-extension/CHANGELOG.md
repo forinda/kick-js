@@ -1,5 +1,11 @@
 # kickjs-devtools
 
+## 5.7.0
+
+- `.kick` snippets for whole blocks: type `kick-` for `kick-page`, `kick-layout`, `kick-component`, `kick-component-script`, `kick-for`, `kick-form`, `kick-field` and `kick-flash`.
+- Your own browser validators from `validators.ts` count in diagnostics, and validator names, built-in and yours, complete inside `validate="…"`. The file is watched like `pipes.ts`.
+- The bundled `@forinda/kickjs-view` is 0.4.1, so projects without their own copy get the `kvRoute` and `kvQuery` pipes in completion and checks.
+
 ## 5.6.0
 
 - `.kick` templates: `@error('field')` is highlighted and completed, with `$message` inside it; `$errors`, `$old` and `$flash` complete everywhere.
