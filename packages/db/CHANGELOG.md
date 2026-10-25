@@ -1,5 +1,11 @@
 # @forinda/kickjs-db
 
+## 8.12.1
+
+### Patch Changes
+
+- [#1072](https://github.com/forinda/kick-js/pull/1072) [`07677f8`](https://github.com/forinda/kick-js/commit/07677f8a186dd83f0f1f8a8bfc6ff518457830e2) Thanks [@forinda](https://github.com/forinda)! - `inArray()` / `notInArray()` read their type from the column, not the list. Inside `and()` / `or()` or a `db.query` `where`, a list held in a variable (`ids: string[]`) used to win the inference and reject the column (`TypedColumnRef<string>` is not assignable to `string`); a list of the wrong type is still a compile error.
+
 ## 8.12.0
 
 ### Minor Changes
