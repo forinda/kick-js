@@ -146,6 +146,20 @@ it('reads the bearer token', async () => {
 
 More in [Testing Contributors, Middleware and Plugins](./contributors.md).
 
+A contributor that reads route flags gets them from a `route` you pass in:
+
+```ts
+it('enforces the roles a route declares', async () => {
+  const route = { flags: new Map([['auth.roles', ['admin']]]) }
+  await expect(
+    runContributor(Authorize, {
+      ctx: { route },
+      initial: { user: { id: 'u1', roles: ['member'] } },
+    }),
+  ).rejects.toThrow()
+})
+```
+
 ## Sessions
 
 A session lives in a cookie, so use a client that keeps cookies. Sign in once, and the next requests carry the session:
