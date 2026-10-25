@@ -160,6 +160,8 @@ COPY . .
 RUN ${p.run('build')}
 # The generated Prisma client lands beside whichever install holds @prisma/client.
 RUN mkdir -p node_modules/.prisma server/node_modules/.prisma
+# kick/db migrations and seeds, read at runtime (empty without kick/db).
+RUN mkdir -p server/db
 
 FROM ${NODE_IMAGE}
 ENV NODE_ENV=production PORT=3000
@@ -171,6 +173,7 @@ COPY --from=build /app/server/node_modules/.prisma ./server/node_modules/.prisma
 COPY --from=build /app/package.json ./
 COPY --from=build /app/server/package.json ./server/
 COPY --from=build /app/server/dist ./server/dist
+COPY --from=build /app/server/db ./server/db
 # SpaAdapter serves ../web/dist relative to the server.
 COPY --from=build /app/web/dist ./web/dist
 WORKDIR /app/server
@@ -200,6 +203,8 @@ RUN ${p.install}
 COPY . .
 RUN ${p.run('build')}
 RUN mkdir -p node_modules/.prisma
+# kick/db migrations and seeds, read at runtime (empty without kick/db).
+RUN mkdir -p db
 
 FROM ${NODE_IMAGE}
 ENV NODE_ENV=production PORT=3000
@@ -209,6 +214,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/package.json ./
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/db ./db
 # The image's filesystem is replaced on every deploy. Keep a SQLite file (or
 # uploads) in /app/data and mount a volume there: docker run -v ${name}-data:/app/data
 RUN mkdir -p data && chown node:node data
