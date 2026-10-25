@@ -522,6 +522,12 @@ where it was skipped. That is the intended pairing: use `ctx.get('user')` on
 routes that can be public, and `ctx.require('user')` only where the flag
 guarantees the contributor ran.
 
+### Reading flags inside `resolve()`
+
+`skipWhen` / `onlyWhen` decide whether a contributor runs. To decide what it does, read the matched route in `resolve()`: `ctx.route.flags` (with values), `method`, `pattern`, `controller` and `handlerName`. One contributor can then enforce whatever the routes declare — see [Authorization → Access rules as route flags](./authorization.md#flag-driven).
+
+An `async` resolver that returns a literal — `return true` for a key declared `true` on `ContextMeta` — is inferred as `Promise<boolean>`; write `return true as const`.
+
 ## How values flow: instances, ALS, and what survives
 
 A contributor and the controller method it feeds are typed against the **same `RequestContext` type** but they don't share the **same instance**. The framework wraps each request stage in its own `RequestContext`:

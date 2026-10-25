@@ -90,7 +90,26 @@ const LoadAuthUser = defineHttpContextDecorator({
 
 This is what makes exemption composable. Without it, the only way to opt out of a contributor is to register a permissive twin under the same key — which requires owning that key, so you cannot exempt a contributor a plugin shipped. A flag lives on the route, so you can.
 
-`onlyWhen` is the inverse: run **only** where the flag is present.
+`onlyWhen` is the inverse: run **only** where the flag is present. Both take a name, a list or a predicate (see [Matching](#matching-name-list-or-predicate)).
+
+They are a shortcut, not the only way in. A contributor runs after the route is matched, so `resolve()` can read `ctx.route` itself — the flags with their values, and the route's `method`, `pattern`, `controller` and `handlerName`. That lets one contributor enforce rules the routes declare as data:
+
+```ts
+const Roles = defineRouteFlag<readonly string[]>('auth.roles')
+
+const Authorize = defineHttpContextDecorator({
+  key: 'access',
+  dependsOn: ['user'],
+  resolve: (ctx) => {
+    const roles = ctx.route!.flags.get('auth.roles') ?? []
+    if (roles.length && !roles.some((r) => ctx.get('user')?.roles.includes(r)))
+      throw HttpException.forbidden()
+    return { roles }
+  },
+})
+```
+
+The full shape — roles, permissions, named policies, mount-level rules — is [Authorization → Access rules as route flags](./authorization.md#flag-driven).
 
 ### Guards and middleware
 
@@ -283,6 +302,8 @@ at boot — a declaration has no negative form; remove the flag instead.
 
 Since it is the lowest level, a class or method declaration of the same flag
 wins and `@Flag.off` on a method still removes it.
+
+A higher site **replaces** a lower one's value; values are never merged. `@Roles(['staff'])` on a class and `@Roles(['admin'])` on a method resolve to `['admin']` on that method. To require both, use two flags, or compose in code — see [Authorization → One value per flag](./authorization.md#one-value-per-flag-precedence-replaces).
 
 ### The built-in health probes
 
