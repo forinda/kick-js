@@ -207,7 +207,7 @@ export const orders = table('orders', {
 })
 ```
 
-- **Stored or virtual.** Stored (the default) computes the value on write and keeps it, so it can be indexed. `{ stored: false }` computes it on read: MySQL, SQLite and Postgres 18+.
+- **Stored or virtual.** Stored (the default) computes the value on write and keeps it. `{ stored: false }` computes it on read: MySQL, SQLite and Postgres 18+. Both can be indexed on MySQL and SQLite; on Postgres only a stored one can.
 - **Read-only.** Its type makes `insertInto` / `updateTable` reject it at compile time. `insertSchema` and `updateSchema` leave it out, and the database refuses a write to it.
 - **The SQL is passed through.** Name columns as the database knows them, and write the expression for your dialect. Without [`casing`](#column-names-casing) a key is the column's name, so `firstName` is a mixed-case column the SQL must quote: `"firstName"` (`` `firstName` `` on MySQL). With `casing: 'snake_case'` it's `first_name`.
 - **Changing it.**

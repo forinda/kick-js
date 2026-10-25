@@ -81,12 +81,12 @@ createUser.safeParse({ email: 'nope' }) // fails: not an email
 
 A value computed from other columns — a `fullName` from `firstName` and `lastName` — can live in three places:
 
-|                                | Getter on a base class   | Result extension                  | Generated column               |
-| ------------------------------ | ------------------------ | --------------------------------- | ------------------------------ |
-| Computed                       | in TypeScript, on access | in TypeScript, after each select  | by the database                |
-| On rows a query returns        | after `Person.from(row)` | yes — every select and `db.query` | yes — it's a column            |
-| `where` / `orderBy` / an index | no                       | no                                | yes (an index needs it stored) |
-| Migration                      | none                     | none                              | yes                            |
+|                                | Getter on a base class   | Result extension                                                                  | Generated column                            |
+| ------------------------------ | ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------- |
+| Computed                       | in TypeScript, on access | in TypeScript, after each select                                                  | by the database                             |
+| On rows a query returns        | after `Person.from(row)` | single-table selects and `db.query`; with joins, when the row has what it `needs` | yes — it's a column                         |
+| `where` / `orderBy` / an index | no                       | no                                                                                | yes (on Postgres, an index needs it stored) |
+| Migration                      | none                     | none                                                                              | yes                                         |
 
 **Getter** — methods and getters on a [base-class](#the-four-forms) table. Queries return plain objects, so turn a row into an instance first:
 
@@ -105,7 +105,7 @@ const people = (await db.selectFrom('people').selectAll().execute()).map((r) => 
 people[0].fullName // 'Ada Lovelace'
 ```
 
-**Result extension** — the field arrives on every row, typed, with no `from()`. The columns it `needs` are fetched even when a select leaves them out:
+**Result extension** — the field arrives on the rows a select returns, typed, with no `from()`. On a single-table select or `db.query`, the columns it `needs` are fetched even when the select leaves them out:
 
 ```ts
 export const db = createDbClient({ schema, dialect }).$extends({
@@ -123,9 +123,9 @@ const rows = await db.selectFrom('people').select(['id']).execute()
 rows[0].fullName // 'Ada Lovelace'
 ```
 
-`compute` is synchronous, and a select with joins only fills the field when the row already has what it needs. [Extensions](./db-extensions.md#result-extensions) has the details.
+`compute` is synchronous. A select with joins doesn't fetch what the field `needs`, so it's filled only when the row already has those columns, and left off otherwise. [Extensions](./db-extensions.md#result-extensions) has the details.
 
-**Generated column** — the database computes and stores it, so you can filter, sort and index by it. It's a column like any other in every form, read-only on insert and update:
+**Generated column** — the database computes it, stored on write or (`{ stored: false }`) on read, so you can filter, sort and index by it — on Postgres, only a stored one can be indexed. It's a column like any other in every form, read-only on insert and update:
 
 ```ts
 fullName: text().generatedAlwaysAs(`"firstName" || coalesce(' ' || "lastName", '')`),
