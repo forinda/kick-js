@@ -156,7 +156,7 @@ export const RoutesTab: Component = () => {
                   type="button"
                   aria-expanded={isOpen(controller)}
                   onClick={() => toggle(controller)}
-                  class="sticky top-0 z-1 flex w-full cursor-pointer items-center gap-1.5 border-0 border-b border-border bg-surface-2 px-2.5 py-1 text-left text-[0.66rem] font-bold uppercase tracking-wide text-text-muted hover:text-text-body"
+                  class="sticky top-0 z-1 flex w-full cursor-pointer items-center gap-1.5 border-0 border-b border-border bg-surface-2 px-2.5 py-1 text-left text-[0.72rem] font-semibold text-text-muted hover:text-text-body"
                 >
                   <span class="inline-block w-2.5">{isOpen(controller) ? '▾' : '▸'}</span>
                   {controller} <span class="font-normal">({routes.length})</span>
