@@ -1,0 +1,111 @@
+{
+  "Page": {
+    "prefix": "kick-page",
+    "description": "Page rendered into a layout: ctx.render('…')",
+    "body": [
+      "@layout('${1:layouts/main}')",
+      "@slot('head') {",
+      "\t<title>${2:Title}</title>",
+      "}",
+      "<h1>${3:$2}</h1>",
+      "$0"
+    ]
+  },
+  "Layout": {
+    "prefix": "kick-layout",
+    "description": "Layout with a head slot and the page slot",
+    "body": [
+      "<!doctype html>",
+      "<html lang=\"${1:en}\">",
+      "\t<head>",
+      "\t\t<meta charset=\"utf-8\" />",
+      "\t\t<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
+      "\t\t<slot name=\"head\">",
+      "\t\t\t<title>${2:App}</title>",
+      "\t\t</slot>",
+      "\t</head>",
+      "\t<body>",
+      "\t\t<slot />$0",
+      "\t</body>",
+      "</html>"
+    ]
+  },
+  "Component": {
+    "prefix": "kick-component",
+    "description": "Component with inputs and a default slot",
+    "body": [
+      "@input ${1:item}",
+      "@input ${2:compact} = ${3:false}",
+      "<div class=\"${4:card}\">",
+      "\t$0",
+      "\t<slot />",
+      "</div>"
+    ]
+  },
+  "Component with script": {
+    "prefix": "kick-component-script",
+    "description": "Component whose custom element runs in the browser (<script client>)",
+    "body": [
+      "@input ${1:message}",
+      "<${2:kick-widget}>",
+      "\t{{ $1 }}",
+      "</$2>",
+      "",
+      "<script client>",
+      "\tclass ${3:KickWidget} extends HTMLElement {",
+      "\t\tconnectedCallback(): void {",
+      "\t\t\t$0",
+      "\t\t}",
+      "\t}",
+      "\tcustomElements.get('$2') || customElements.define('$2', $3)",
+      "</script>"
+    ]
+  },
+  "For with empty": {
+    "prefix": "kick-for",
+    "description": "@for loop with track and an @empty branch",
+    "body": [
+      "@for (${1:item} of ${2:items}; track $1.${3:id}) {",
+      "\t$0",
+      "} @empty {",
+      "\t<p>${4:Nothing here yet.}</p>",
+      "}"
+    ]
+  },
+  "Form": {
+    "prefix": "kick-form",
+    "description": "Form post with CSRF token and a field error",
+    "body": [
+      "<form method=\"post\" action=\"${1:/path}\">",
+      "\t<input type=\"hidden\" name=\"_csrf\" value=\"{{ csrfToken }}\">",
+      "\t@error('form') {",
+      "\t\t<p class=\"error\">{{ \\$message }}</p>",
+      "\t}",
+      "\t$0",
+      "\t<button>${2:Save}</button>",
+      "</form>"
+    ]
+  },
+  "Form field": {
+    "prefix": "kick-field",
+    "description": "Labelled input with browser checks and its @error spot",
+    "body": [
+      "<label>",
+      "\t${2:Label}",
+      "\t<input name=\"${1:field}\" validate=\"${3:required}\">",
+      "</label>",
+      "@error('$1') {",
+      "\t<p class=\"error\">{{ \\$message }}</p>",
+      "}"
+    ]
+  },
+  "Flash messages": {
+    "prefix": "kick-flash",
+    "description": "Show every flash message for this page",
+    "body": [
+      "@for ([kind, message] of \\$flash | entries; track kind) {",
+      "\t<p class=\"flash\" data-kind=\"{{ kind }}\" role=\"status\">{{ message }}</p>",
+      "}"
+    ]
+  }
+}

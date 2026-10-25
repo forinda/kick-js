@@ -460,6 +460,12 @@
         }
       }
     ],
+    "snippets": [
+      {
+        "language": "kick",
+        "path": "./snippets/kick.json"
+      }
+    ],
     "grammars": [
       {
         "language": "kick",
