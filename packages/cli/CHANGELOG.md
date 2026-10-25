@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 8.16.5
+
+### Patch Changes
+
+- [#1073](https://github.com/forinda/kick-js/pull/1073) [`2b11941`](https://github.com/forinda/kick-js/commit/2b11941c9337356619c458bc8d15b05b60372341) Thanks [@forinda](https://github.com/forinda)! - The Dockerfile from `kick g deploy docker` ships the `db/` folder (`server/db` in a fullstack workspace). kick/db reads its migrations at runtime — `kickDbAdapter`'s `migrationsOnBoot` check and `migrateLatest()` — and the image only carried `dist/`, so a boot or a release-step migration found no files. The build stage creates the folder, so projects without kick/db still build.
+- Updated dependencies [[`07677f8`](https://github.com/forinda/kick-js/commit/07677f8a186dd83f0f1f8a8bfc6ff518457830e2)]:
+  - @forinda/kickjs-db@8.12.1
+
 ## 8.16.4
 
 ### Patch Changes
