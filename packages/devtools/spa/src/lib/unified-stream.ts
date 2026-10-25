@@ -11,12 +11,20 @@
  * network themselves — keeps connection bookkeeping in one place.
  */
 
+import { coalesce } from './coalesce'
 import { rpc, subscribe, AuthRequiredError } from './rpc'
 import { store, storeActions } from './store'
 
 let _disposed = false
 let _pollTimer: ReturnType<typeof setInterval> | null = null
 let _unsubscribe: (() => void) | null = null
+/**
+ * Every DI resolve is a container change, so a busy app sends dozens a
+ * second; refetching on each one rebuilt the tabs faster than a click lands.
+ */
+const refetchSoon = coalesce(() => {
+  if (!_disposed) void refetchSnapshots()
+}, 1000)
 
 interface MetricsEvent {
   type: 'metrics'
@@ -63,7 +71,7 @@ export async function startUnifiedStream(): Promise<() => void> {
       if (data.type === 'container') {
         // Container changed — registry/routes/queues may have shifted.
         // Refetch in the background; don't block the SSE handler.
-        void refetchSnapshots()
+        refetchSoon()
         return
       }
     },
@@ -204,6 +212,7 @@ function stopPolling(): void {
 function dispose(): void {
   _disposed = true
   stopPolling()
+  refetchSoon.cancel()
   if (_unsubscribe) {
     _unsubscribe()
     _unsubscribe = null

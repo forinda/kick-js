@@ -111,7 +111,11 @@ const [authRequired, setAuthRequired] = createSignal(false)
 const [authError, setAuthError] = createSignal<string | null>(null)
 const [health, setHealth] = createSignal<HealthSnapshot | null>(null)
 const [metrics, setMetrics] = createSignal<MetricsSnapshot | null>(null)
-const [routes, setRoutes] = createSignal<RouteEntry[]>([])
+// Refetches mostly return the same routes; an unchanged list keeps the rows
+// (and a click in progress on one) instead of rebuilding them.
+const [routes, setRoutes] = createSignal<RouteEntry[]>([], {
+  equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+})
 const [container, setContainer] = createSignal<ContainerRegistration[]>([])
 const [queues, setQueues] = createSignal<{ enabled: boolean; queues: QueueStats[] }>({
   enabled: false,
