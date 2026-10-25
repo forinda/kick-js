@@ -59,6 +59,7 @@ declare module '@forinda/kickjs' {
   interface ContextMeta {
     user: AuthUser | null
     permissions: ReadonlySet<string>
+    roleCheck: true // what @RequireRole sets (step 4)
   }
 }
 

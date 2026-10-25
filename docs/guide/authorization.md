@@ -31,7 +31,19 @@ export const LoadAuthUser = defineContextDecorator({
 })
 ```
 
-Registered globally — `bootstrap({ contributors: [LoadAuthUser] })` — so every route has a resolved user before any role check runs. With that in place:
+Registered globally — `bootstrap({ contributors: [LoadAuthUser] })` — so every route has a resolved user before any role check runs. Every key a contributor sets is declared on `ContextMeta`, including the ones below; an undeclared `key` is a type error:
+
+```ts
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    user: AuthUser | null
+    roleCheck: true // @RequireRole
+    authorized: true // @Can (below)
+  }
+}
+```
+
+With that in place:
 
 ```ts
 export const RequireRole = defineHttpContextDecorator.withParams<{
