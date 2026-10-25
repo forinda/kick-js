@@ -1,5 +1,13 @@
 # @forinda/kickjs-devtools
 
+## 7.18.3
+
+### Patch Changes
+
+- [#1080](https://github.com/forinda/kick-js/pull/1080) [`7c4349b`](https://github.com/forinda/kick-js/commit/7c4349bff05aa9e08b3155cd4a5fc9ee76cfae99) Thanks [@forinda](https://github.com/forinda)! - Clicking a route on the Routes tab opens its runner every time. In a busy app, every DI resolve made the dashboard refetch all its data and rebuild the route list, sometimes many times a second, so a click could land on a row that was being replaced. The dashboard now refetches at most once a second after container changes, and keeps the list as it is when the routes haven't changed.
+
+- [#1081](https://github.com/forinda/kick-js/pull/1081) [`3de4946`](https://github.com/forinda/kick-js/commit/3de49467947467f42acd376017cf5429968cc1cd) Thanks [@forinda](https://github.com/forinda)! - The API runner's HTML preview runs the page's scripts, so pages that render with JavaScript — Swagger UI, ReDoc, an SPA — no longer show blank. They run in an isolated frame that can't reach the dashboard, its token or your app's cookies; a page that fetches data from your API may still fail there on CORS.
+
 ## 7.18.2
 
 ### Patch Changes
