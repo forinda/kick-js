@@ -209,13 +209,24 @@ export const orders = table('orders', {
 
 - **Stored or virtual.** Stored (the default) computes the value on write and keeps it, so it can be indexed. `{ stored: false }` computes it on read: MySQL, SQLite and Postgres 18+.
 - **Read-only.** Its type makes `insertInto` / `updateTable` reject it at compile time. `insertSchema` and `updateSchema` leave it out, and the database refuses a write to it.
-- **The SQL is passed through.** Name columns as the database knows them, and write the expression for your dialect.
+- **The SQL is passed through.** Name columns as the database knows them, and write the expression for your dialect. Without [`casing`](#column-names-casing) a key is the column's name, so `firstName` is a mixed-case column the SQL must quote: `"firstName"` (`` `firstName` `` on MySQL). With `casing: 'snake_case'` it's `first_name`.
 - **Changing it.**
   - On Postgres, a new expression is applied in place with `SET EXPRESSION` (Postgres 17+).
   - Removing `generatedAlwaysAs` keeps the values as a plain column (`DROP EXPRESSION`).
   - Making an existing column generated, or switching stored and virtual, re-creates the column. Its values are computed again, but an index on it is dropped with it.
   - On MySQL the column is restated in place.
   - On SQLite the table is rebuilt with its rows. SQLite also rebuilds to add a stored generated column, which `ALTER TABLE` can't.
+
+A full name joined from two columns, the last one optional, in each dialect:
+
+```ts
+// Postgres and SQLite
+fullName: text().generatedAlwaysAs(`"firstName" || coalesce(' ' || "lastName", '')`),
+// MySQL: || is OR there; CONCAT_WS joins and skips NULLs
+fullName: text().generatedAlwaysAs("CONCAT_WS(' ', `firstName`, `lastName`)"),
+```
+
+Postgres only accepts immutable expressions in a generated column, so `concat_ws()` and `concat()` are refused there; use `||`. For a value that's only displayed, a [result extension](../db-extensions.md#result-extensions) computes it in TypeScript with no migration — see [Derived fields](../db-table-forms.md#derived-fields) for the trade-offs.
 
 **Identity columns** (Postgres) are the SQL-standard replacement for `serial`:
 

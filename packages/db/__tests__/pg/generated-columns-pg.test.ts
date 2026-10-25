@@ -14,7 +14,9 @@ import {
   introspectPg,
   numeric,
   renderSchemaSource,
+  serial,
   table,
+  text,
 } from '@forinda/kickjs-db'
 
 let container: StartedPostgreSqlContainer
@@ -71,5 +73,36 @@ describe('generated and identity columns on Postgres', () => {
     expect(live.tables.orders.columns.total.generated).toMatchObject({ stored: true })
     await expect(checkDrift(live, v2, 'error')).resolves.toBeUndefined()
     expect(renderSchemaSource(live)).toContain('.generatedAlwaysAsIdentity()')
+  }, 60_000)
+
+  it('joins mixed-case columns with ||, and refuses concat_ws as not immutable', async () => {
+    const people = (fullName: string) =>
+      table('people', {
+        id: serial().primaryKey(),
+        firstName: text().notNull(),
+        lastName: text(),
+        fullName: text().generatedAlwaysAs(fullName),
+      })
+    const empty = { version: 1 as const, dialect: 'postgres' as const, tables: {} }
+    const refused = extractSnapshot(
+      { people: people(`concat_ws(' ', "firstName", "lastName")`) },
+      'postgres',
+    )
+    await expect(pool.query(emitPg(diff(empty, refused)))).rejects.toThrow(/immutable/)
+
+    const target = extractSnapshot(
+      { people: people(`"firstName" || coalesce(' ' || "lastName", '')`) },
+      'postgres',
+    )
+    await pool.query(emitPg(diff(empty, target)))
+    await pool.query(
+      `INSERT INTO people ("firstName", "lastName") VALUES ('Ada', 'Lovelace'), ('Cher', NULL)`,
+    )
+    const { rows } = await pool.query('SELECT "fullName" FROM people ORDER BY id')
+    expect(rows.map((r) => r.fullName)).toEqual(['Ada Lovelace', 'Cher'])
+    const live = await introspectPg(pool)
+    await expect(
+      checkDrift({ ...live, tables: { people: live.tables.people } }, target, 'error'),
+    ).resolves.toBeUndefined()
   }, 60_000)
 })

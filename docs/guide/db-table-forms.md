@@ -77,6 +77,64 @@ createUser.safeParse({ email: 'nope' }) // fails: not an email
 
 `insertSchema(usersFluent, { columns: { email: { ... } } })` still overrides one.
 
+## Derived fields
+
+A value computed from other columns — a `fullName` from `firstName` and `lastName` — can live in three places:
+
+|                                | Getter on a base class   | Result extension                  | Generated column               |
+| ------------------------------ | ------------------------ | --------------------------------- | ------------------------------ |
+| Computed                       | in TypeScript, on access | in TypeScript, after each select  | by the database                |
+| On rows a query returns        | after `Person.from(row)` | yes — every select and `db.query` | yes — it's a column            |
+| `where` / `orderBy` / an index | no                       | no                                | yes (an index needs it stored) |
+| Migration                      | none                     | none                              | yes                            |
+
+**Getter** — methods and getters on a [base-class](#the-four-forms) table. Queries return plain objects, so turn a row into an instance first:
+
+```ts
+export class Person extends TableBase('people', {
+  id: serial().primaryKey(),
+  firstName: text().notNull(),
+  lastName: text(),
+}) {
+  get fullName() {
+    return [this.firstName, this.lastName].filter(Boolean).join(' ')
+  }
+}
+
+const people = (await db.selectFrom('people').selectAll().execute()).map((r) => Person.from(r))
+people[0].fullName // 'Ada Lovelace'
+```
+
+**Result extension** — the field arrives on every row, typed, with no `from()`. The columns it `needs` are fetched even when a select leaves them out:
+
+```ts
+export const db = createDbClient({ schema, dialect }).$extends({
+  result: {
+    people: {
+      fullName: {
+        needs: { firstName: true, lastName: true },
+        compute: (r) => [r.firstName, r.lastName].filter(Boolean).join(' '),
+      },
+    },
+  },
+})
+
+const rows = await db.selectFrom('people').select(['id']).execute()
+rows[0].fullName // 'Ada Lovelace'
+```
+
+`compute` is synchronous, and a select with joins only fills the field when the row already has what it needs. [Extensions](./db-extensions.md#result-extensions) has the details.
+
+**Generated column** — the database computes and stores it, so you can filter, sort and index by it. It's a column like any other in every form, read-only on insert and update:
+
+```ts
+fullName: text().generatedAlwaysAs(`"firstName" || coalesce(' ' || "lastName", '')`),
+```
+
+The SQL is your dialect's and names the columns as the database does — quoted here, since the keys are mixed-case. [Generated columns](./database/schema.md#generated-columns) has the MySQL form and the Postgres rules.
+
+Display only: a getter or a result extension. Searched, sorted or indexed: a generated column.
+
 ## Postgres schemas
 
 A table in a named Postgres schema — `pgSchema('billing').table(...)` — in each form:

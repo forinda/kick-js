@@ -63,6 +63,29 @@ describe('generated columns on MySQL', () => {
     )
     await expect(checkDrift(await introspectMysql(pool), target, 'error')).resolves.toBeUndefined()
   }, 60_000)
+
+  it('joins mixed-case columns with CONCAT_WS, skipping a NULL', async () => {
+    const people = table('people', {
+      id: serial().primaryKey(),
+      firstName: text().notNull(),
+      lastName: text(),
+      fullName: text().generatedAlwaysAs("CONCAT_WS(' ', `firstName`, `lastName`)"),
+    })
+    const target = extractSnapshot({ people }, 'mysql')
+    await pool.query(emitMysql(diff({ version: 1, dialect: 'mysql', tables: {} }, target)))
+    await pool.query(
+      "INSERT INTO people (firstName, lastName) VALUES ('Ada', 'Lovelace'), ('Cher', NULL)",
+    )
+    const [rows] = await pool.query('SELECT fullName FROM people ORDER BY id')
+    expect((rows as Array<{ fullName: string }>).map((r) => r.fullName)).toEqual([
+      'Ada Lovelace',
+      'Cher',
+    ])
+    const live = await introspectMysql(pool)
+    await expect(
+      checkDrift({ ...live, tables: { people: live.tables.people! } }, target, 'error'),
+    ).resolves.toBeUndefined()
+  }, 60_000)
 })
 
 describe('defaults and serial keys on MySQL', () => {
