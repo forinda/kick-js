@@ -9,10 +9,13 @@ import {
   inArray,
   integer,
   isNull,
+  notInArray,
+  or,
   like,
   serial,
   table,
   text,
+  uuid,
   type KickDbClient,
   type SchemaToTypes,
 } from '@forinda/kickjs-db'
@@ -31,6 +34,25 @@ test('operands are checked against the column type', () => {
   eq(users.name, 1)
   // @ts-expect-error inArray takes values of the column type
   inArray(users.id, ['1'])
+  // A list held in a variable is checked against the column, not the other way round.
+  const ids: number[] = [1, 2]
+  const names: string[] = ['Ada']
+  const posts = table('posts', { id: uuid().primaryKey().defaultRandom() })
+  const postIds: string[] = ['a']
+  expectTypeOf(inArray(posts.id, postIds)).toMatchTypeOf<Expression<SqlBool>>()
+  expectTypeOf(or(eq(users.name, 'Ada'), inArray(users.id, ids))).toMatchTypeOf<
+    Expression<SqlBool>
+  >()
+  expectTypeOf(and(inArray(posts.id, postIds), undefined)).toMatchTypeOf<Expression<SqlBool>>()
+  // …and as a callback's return value, the shape of a `db.query` `where`.
+  const where: () => Expression<SqlBool> = () => inArray(posts.id, postIds)
+  expectTypeOf(where).returns.toMatchTypeOf<Expression<SqlBool>>()
+  const n: number = 1
+  expectTypeOf(or(eq(users.id, n), between(users.id, n, n))).toMatchTypeOf<Expression<SqlBool>>()
+  expectTypeOf(inArray(users.id, ids)).toMatchTypeOf<Expression<SqlBool>>()
+  expectTypeOf(notInArray(users.name, names)).toMatchTypeOf<Expression<SqlBool>>()
+  // @ts-expect-error a string list across from a number column
+  inArray(users.id, names)
   expectTypeOf(and(eq(users.id, 1), undefined)).toMatchTypeOf<Expression<SqlBool>>()
 })
 

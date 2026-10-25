@@ -114,15 +114,19 @@ export const isNotNull = (operand: Ref | ColumnRef): Condition => {
   return sql<SqlBool>`${toSql(operand)} is not null`
 }
 
-/** `left IN (…)`. An empty list matches nothing, rather than being invalid SQL. */
-export function inArray<L>(left: L, values: AcrossList<L>): Condition {
+/**
+ * `left IN (…)`. An empty list matches nothing, rather than being invalid SQL.
+ * `L` is read from `left` only: inside `and()` / `or()` a `string[]` list would
+ * otherwise win and reject the column (`TypedColumnRef<string>` vs `string`).
+ */
+export function inArray<L>(left: L, values: AcrossList<NoInfer<L>>): Condition {
   assertRef('inArray', left, ...values)
   if (values.length === 0) return sql<SqlBool>`1 = 0`
   return sql<SqlBool>`${toSql(left)} in (${sql.join(values.map(toSql))})`
 }
 
 /** `left NOT IN (…)`. An empty list matches everything. */
-export function notInArray<L>(left: L, values: AcrossList<L>): Condition {
+export function notInArray<L>(left: L, values: AcrossList<NoInfer<L>>): Condition {
   assertRef('notInArray', left, ...values)
   if (values.length === 0) return sql<SqlBool>`1 = 1`
   return sql<SqlBool>`${toSql(left)} not in (${sql.join(values.map(toSql))})`
