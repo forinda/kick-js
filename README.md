@@ -91,7 +91,10 @@ export const app = await bootstrap({ modules: defineModules().mount(HelloModule(
 - **End-to-end types** — `kick typegen` types `ctx.params/body/query`, env keys, and responses; [`@forinda/kickjs-client`](packages/client/) calls your API with the server's types.
 - **Context contributors** — `defineHttpContextDecorator()` populates `ctx` with typed, ordered values instead of ad-hoc middleware.
 - **Route flags** — `defineRouteFlag()` declares per-route policy (e.g. a `@Public` flag) once; auth, CSRF, rate limiting, and OpenAPI all read it.
-- **Batteries** — helmet, CORS, CSRF, rate limiting, uploads, request logging, OpenAPI, and a `/_debug` DevTools dashboard.
+- **Batteries** — helmet, CORS, CSRF, rate limiting, uploads, request logging, OpenAPI, and a `/_debug` [DevTools dashboard](https://kickjs.app/guide/devtools.html) — routes with an API runner, DI, requests, jobs and metrics:
+
+  [![A one-minute tour of KickJS DevTools](docs/guide/images/devtools/tour-poster.webp)](https://kickjs.app/guide/devtools.html)
+
 - **Vite HMR** — single-port dev server that keeps DB and socket connections across reloads.
 - **Generators** — `kick g module users` scaffolds a full module; `kick g agents` keeps AI-agent docs in sync.
 

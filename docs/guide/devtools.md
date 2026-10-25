@@ -2,6 +2,8 @@
 
 The DevTools adapter provides Vue-style reactive introspection for KickJS applications. It exposes debug endpoints that let you inspect routes, DI container state, request metrics, and application health — all powered by the [reactivity module](./reactivity.md).
 
+<video controls muted playsinline preload="none" poster="./images/devtools/tour-poster.webp" src="./images/devtools/tour.mp4" width="1280" style="width:100%;height:auto;border-radius:8px" aria-label="A one-minute tour of the DevTools dashboard: overview, a default Authorization header for every route, signing in and saving the token, a protected route using it, requests, config, the DI container and its graph, cron jobs, and metrics"></video>
+
 ## Quick Start
 
 ```ts
