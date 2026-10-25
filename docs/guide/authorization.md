@@ -114,6 +114,162 @@ Swap the engine implementation (CASL, a rules table, hardcoded checks) by re-bin
 
 ---
 
+## Access rules as route flags {#flag-driven}
+
+`@RequireRole` and `@Can` put a check on each route. The other way round: **declare** the rule on the route as [route flags](./route-flags.md), and let one contributor enforce every rule it finds. The rules become data — inherited from the class or the module mount, listed per route in DevTools' **Routes** tab, readable by Swagger — and the enforcement lives in one place.
+
+```ts
+// src/auth/flags.ts
+import { defineRouteFlag } from '@forinda/kickjs'
+
+export const Public = defineRouteFlag('auth.public')
+export const Roles = defineRouteFlag<readonly string[]>('auth.roles') // any of these
+export const Permissions = defineRouteFlag<readonly string[]>('auth.permissions') // all of these
+export const Policy = defineRouteFlag<string>('auth.policy') // a named policy
+```
+
+`kick typegen` reads these calls, so `flags.get('auth.roles')` comes back as `readonly string[] | undefined` and a misspelt name is a compile error.
+
+```ts
+// src/auth/authorize.ts
+import {
+  createToken,
+  defineHttpContextDecorator,
+  HttpException,
+  type RequestContext,
+} from '@forinda/kickjs'
+import type { AuthUser } from './context'
+
+export type PolicyFn = (input: {
+  user: AuthUser
+  ctx: RequestContext
+}) => boolean | Promise<boolean>
+export const POLICIES = createToken<Readonly<Record<string, PolicyFn>>>('app/auth/policies')
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    user: AuthUser | null
+    // What the check granted — services read it with getRequestValue('access').
+    access: { roles: readonly string[]; permissions: readonly string[]; policy?: string }
+  }
+}
+
+export const Authorize = defineHttpContextDecorator({
+  key: 'access',
+  dependsOn: ['user'],
+  deps: { policies: POLICIES },
+  resolve: async (ctx, { policies }) => {
+    const flags = ctx.route!.flags // contributors run after the route is matched
+    const roles = flags.get('auth.roles') ?? []
+    const permissions = flags.get('auth.permissions') ?? []
+    const policy = flags.get('auth.policy')
+
+    if (roles.length || permissions.length || policy) {
+      const user = ctx.get('user')
+      if (!user) throw HttpException.unauthorized()
+      if (roles.length && !roles.some((r) => user.roles.includes(r)))
+        throw HttpException.forbidden()
+      if (!permissions.every((p) => user.permissions.includes(p))) throw HttpException.forbidden()
+      if (policy) {
+        const check = policies[policy]
+        if (!check)
+          throw new Error(
+            `No policy named '${policy}' (${ctx.route!.method} ${ctx.route!.pattern})`,
+          )
+        if (!(await check({ user, ctx }))) throw HttpException.forbidden()
+      }
+    }
+    return { roles, permissions, policy }
+  },
+})
+```
+
+Register it once — `bootstrap({ contributors: [Authorize.registration] })`, or from your auth adapter's `contributors()` next to `LoadAuthUser` — and declare rules where they belong:
+
+```ts
+@Roles(['staff']) // every route below
+@Controller()
+export class ReportsController {
+  @Get('/')
+  list(ctx: RequestContext) {}
+
+  @Roles(['admin']) // replaces ['staff'] here — see below
+  @Permissions(['reports.delete'])
+  @Policy('report.notArchived')
+  @Delete('/:id')
+  remove(ctx: RequestContext) {}
+
+  @Roles.off // no role rule on this one
+  @Get('/summary')
+  summary(ctx: RequestContext) {}
+}
+
+// A whole module, without touching its controllers:
+routes: () => ({ path: '/admin', controller: AdminController, flags: { 'auth.roles': ['admin'] } })
+```
+
+### What the contributor can read
+
+`ctx.route` is the matched route, available in every contributor and `@Middleware()` guard:
+
+| Field                       | Example                                     |
+| --------------------------- | ------------------------------------------- |
+| `flags`                     | `flags.get('auth.roles')`, `flags.has(...)` |
+| `method`, `path`            | `DELETE`, `/:id` (as declared)              |
+| `pattern`                   | `/api/v1/reports/:id` — for logs and audits |
+| `controller`, `handlerName` | `ReportsController`, `remove`               |
+
+So the check can name the route in an audit record, or read metadata of your own off `controller.prototype` and `handlerName` with `getMethodMeta()`. `skipWhen` / `onlyWhen` are optional: reading the flags inside `resolve()` is enough, as above. Add one when you'd rather the contributor not run at all on routes without rules — it takes a flag list or a callback over the same route data:
+
+```ts
+onlyWhen: ['auth.roles', 'auth.permissions', 'auth.policy'],
+onlyWhen: ({ flags, route }) => flags.size > 0 || route?.path.startsWith('/admin') === true,
+```
+
+With `onlyWhen`, `access` is absent on unflagged routes — read it with `getRequestValue('access')`, not `ctx.require('access')`.
+
+The route is on the request, not in the request store: a service reaches it only through what a contributor sets. That's what `access` above is for.
+
+### One value per flag: precedence replaces
+
+A flag holds one value, resolved **method > class > mount** — the higher site replaces the lower, it doesn't add to it. `@Roles(['staff'])` on the class and `@Roles(['admin'])` on a method means _admin_, not _staff and admin_. To require both, put them in different flags (a role and a permission), or in a policy:
+
+```ts
+const allOf =
+  (...checks: PolicyFn[]): PolicyFn =>
+  async (input) => {
+    for (const check of checks) if (!(await check(input))) return false
+    return true
+  }
+const hasRole =
+  (role: string): PolicyFn =>
+  ({ user }) =>
+    user.roles.includes(role)
+
+container.registerInstance(POLICIES, {
+  'report.notArchived': async ({ ctx }) => !(await reports.isArchived(ctx.params.id)),
+  'report.delete': allOf(hasRole('staff'), hasRole('auditor')),
+})
+```
+
+Composition lives in code; the flag only names the policy.
+
+### Failing closed
+
+The flags do nothing until `Authorize` is registered, and a route with no flag has no rule. Pair it with a protected default — `LoadAuthUser` rejecting anonymous callers everywhere except `@Public` ([BYO Auth](./byo-recipes.md#auth)) — so a forgotten flag still means "signed in", never "open". The DevTools **Routes** tab lists every route's flags: check it for routes that should have a rule.
+
+### Flags or parameterised contributors?
+
+| Use                             | When                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| Route flags + one `Authorize`   | Rules are data: roles, permissions, policy names; set per class or per mount |
+| `@RequireRole` / `@Can` (above) | A one-off check, or one that needs the resource loaded first                 |
+| A `@Middleware()` guard         | The check must run before validation, or short-circuit with a custom reply   |
+
+They mix: a route can carry flags read by `Authorize` and a `@Can` that loads the resource.
+
+Unit-test the contributor without HTTP by handing it a route: `runContributor(Authorize, { ctx: { route: { flags: new Map([['auth.roles', ['admin']]]) } }, initial: { user } })` — see [Testing Authentication](./testing/auth.md).
+
 ## Guards (Custom Middleware)
 
 `kick g guard <name>` generates a middleware function for authorization logic that needs to **short-circuit the response** or run before route matching — the cases [context decorators deliberately don't cover](./context-decorators.md). For value-producing checks, prefer a contributor. The mechanics are in [Middleware → Guards](./middleware.md#guards); what follows is the authorization-specific shape.
@@ -174,13 +330,14 @@ Prefer this to a pathname allow-list: a flag is declared on the route and surviv
 
 ### When to Use What
 
-| Mechanism                         | Use when                                                         | Example                                     |
-| --------------------------------- | ---------------------------------------------------------------- | ------------------------------------------- |
-| `@RequireRole('admin')` (yours)   | The user needs a string role                                     | Admin panel access                          |
-| A policy resolved from DI (yours) | The check depends on the specific resource                       | "Can this user edit THIS post?"             |
-| `@Middleware(guard)`              | Logic not tied to roles or resources, or that must short-circuit | IP whitelist, feature flags, API versioning |
-| A [route flag](./route-flags.md)  | Recording a fact about the route that several checks read        | `auth.public` on webhooks and health probes |
-| `rateLimit()`                     | Throttle specific endpoints                                      | Login endpoint, search API                  |
+| Mechanism                         | Use when                                                               | Example                                     |
+| --------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------- |
+| `@RequireRole('admin')` (yours)   | The user needs a string role                                           | Admin panel access                          |
+| A policy resolved from DI (yours) | The check depends on the specific resource                             | "Can this user edit THIS post?"             |
+| `@Middleware(guard)`              | Logic not tied to roles or resources, or that must short-circuit       | IP whitelist, feature flags, API versioning |
+| A [route flag](./route-flags.md)  | Recording a fact about the route that several checks read              | `auth.public` on webhooks and health probes |
+| [Access flags](#flag-driven)      | Declaring roles, permissions or a policy that one contributor enforces | `@Roles(['admin'])` on a module mount       |
+| `rateLimit()`                     | Throttle specific endpoints                                            | Login endpoint, search API                  |
 
 The first two are code you own — see [BYO role checks](#byo-role-checks) and [Policies](#policies) above. The framework ships the primitives they are built from, not the checks themselves.
 

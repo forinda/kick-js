@@ -331,6 +331,16 @@ That's the whole auth surface. ~200 lines you own. Add CSRF, password
 hashing, OAuth, sessions the same way — each as a strategy or a
 parameterised contributor over the primitives the framework ships.
 
+### Optional — access rules as route flags
+
+`@RequireRole` checks the routes it decorates. To declare rules as data instead — `@Roles(['admin'])`, `@Permissions([...])`, `@Policy('name')` on a class, a method or a module mount — add one `Authorize` contributor that reads them from `ctx.route.flags`, and ship it from the same adapter, after `LoadAuthUser`:
+
+```ts
+contributors: () => [LoadAuthUser.with({ on401: 'reject' }).registration, Authorize.registration],
+```
+
+The contributor and the precedence rules (a method's value replaces the class's) are in [Authorization → Access rules as route flags](./authorization.md#flag-driven).
+
 ### What you give up (and why it's fine)
 
 - **No `@Authenticated()` decorator** — replaced by the adapter's
