@@ -54,7 +54,7 @@ It builds in three stages:
 
 1. **Production dependencies**, installed from the lockfile.
 2. **The build**, with every dependency: the `build` script, run with the project's package manager — for an Inertia app that includes the pages and the server-rendering bundle; for a fullstack workspace, both the server and the web app.
-3. **The runtime**: `node:22-slim` with the production dependencies and the build output, running `node dist/index.js` as the unprivileged `node` user on port 3000.
+3. **The runtime**: `node:22-slim` with the production dependencies, the build output and the `db/` folder (kick/db migrations and seeds, which `kickDbAdapter` and `migrateLatest()` read at runtime), running `node dist/index.js` as the unprivileged `node` user on port 3000. A `migrationsDir` outside `db/` needs its own `COPY` line.
 
 Two things the build expects:
 

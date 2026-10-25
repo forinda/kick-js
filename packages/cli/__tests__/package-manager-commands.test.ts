@@ -151,6 +151,18 @@ describe('Yarn 2+ and older Bun', () => {
     expect(file).toMatch(/RUN mkdir -p data && chown node:node data\nUSER node/)
   })
 
+  it('ships the kick/db migrations and seeds the runtime reads, for every project kind', () => {
+    for (const kind of ['api', 'inertia'] as const) {
+      const file = generateDockerfile(kind, 'pnpm', 'app')
+      // made in the build stage, so the COPY holds even without kick/db
+      expect(file).toContain('RUN mkdir -p db')
+      expect(file).toContain('COPY --from=build /app/db ./db')
+    }
+    const fullstack = generateDockerfile('fullstack', 'pnpm', 'app')
+    expect(fullstack).toContain('RUN mkdir -p server/db')
+    expect(fullstack).toContain('COPY --from=build /app/server/db ./server/db')
+  })
+
   it("copies the lockfile the project's Bun writes", () => {
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.1.38')).toContain('COPY bun.lockb ./')
     expect(generateDockerfile('api', 'bun', 'app', 'bun@1.2.5')).toContain('COPY bun.lock ./')
