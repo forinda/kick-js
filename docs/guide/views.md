@@ -841,6 +841,7 @@ The KickJS VS Code extension understands `.kick` files:
 
 - highlighting for `{{ }}`, `@if` / `@for` / `@switch`, bindings and comments, on top of HTML;
 - errors as you type, from the same checks as `kick check:views`, including in unsaved files;
+- snippets for whole blocks — type `kick-` for `kick-page`, `kick-layout`, `kick-component`, `kick-component-script`, `kick-for`, `kick-form`, `kick-field` and `kick-flash`;
 - completion for `@` keywords, pipes after `|`, components and their inputs, layout and slot names, and the names in scope inside `{{ }}`;
 - HTML, CSS and Emmet completion inside templates;
 - hover on a pipe or a component to see its parameters or inputs;
