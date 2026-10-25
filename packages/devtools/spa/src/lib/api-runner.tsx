@@ -1229,13 +1229,14 @@ export const ApiRunnerPanel: Component = () => {
                           </pre>
                         }
                       >
-                        {/* No sandbox permissions: the page's scripts don't run, and it
-                            can't reach DevTools or the app's cookies. Its CSS and images
-                            load, relative to the URL it came from. Truncated like Raw, so a
-                            huge page can't stall the runner. */}
+                        {/* Scripts run, so pages that render with JavaScript (Swagger UI,
+                            an SPA) show up; without allow-same-origin they run in an opaque
+                            origin and can't reach DevTools, its token or the app's cookies.
+                            CSS and images load relative to the URL the page came from.
+                            Truncated like Raw, so a huge page can't stall the runner. */}
                         <iframe
                           title="Response preview"
-                          sandbox=""
+                          sandbox="allow-scripts"
                           srcdoc={`<base href="${escapeAttr(res().url)}">${res().raw.slice(0, MAX_BODY_CHARS)}`}
                           class="w-full h-[50vh] bg-white border border-border rounded-lg"
                         />

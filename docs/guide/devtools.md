@@ -531,7 +531,7 @@ Selecting a route on the Routes tab opens the runner beside the list — drag th
 - **Settings** — the public flags, CSRF cookie and header names, OpenAPI URL and editor link. They apply to every route, not just the open one, and save as you type in this browser (`localStorage`). **Fill empty inputs from OpenAPI** is the exception: it fills only the open route.
 - **Code snippet** — the request as `curl` or `fetch`, rendered so you can read and select it; **Copy** is a shortcut.
 - **Save to variable** — a JSON path and a variable name; set it up before you send. See [Environments](#environments).
-- **Response** — status, time, headers and the body (JSON pretty-printed). Hover the body for **Copy**: the whole body, formatted, even when the view is truncated.
+- **Response** — status, time, headers and the body (JSON pretty-printed). Hover the body for **Copy**: the whole body, formatted, even when the view is truncated. An HTML response opens as **Preview**, the page itself, with **Raw** beside it. Its scripts run, so Swagger UI or an SPA renders, but in an isolated frame that can't reach the dashboard, its token or your app's cookies — a page that loads data from your API may fail there on CORS; open its URL in a tab instead.
 - **History** — the last 30 requests across all routes, with status and time. Click one to reopen its route with the inputs it was sent with. Entries keep `{{variables}}` as written, not their values.
 
 ![The sign-in route's Headers: on a public route the environment's Authorization starts unticked, and X-Tenant is sent](./images/devtools/route-defaults.webp)
