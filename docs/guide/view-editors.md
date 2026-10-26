@@ -9,7 +9,7 @@ pnpm add -D @forinda/kickjs-view-language-server
 npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio
 ```
 
-`kick-view-ls` is the command, not a package: name the package with `-p`, or `npx` looks for a package called `kick-view-ls`, gets a 404 and the server exits before it starts. With `-p`, `npx` uses the project's installed copy, and otherwise downloads it once, whatever folder the editor starts it in. `-y` keeps `npx` from asking to install on the server's own stdin. The setups below all run it this way.
+`kick-view-ls` is the command, not a package. A bare `npx kick-view-ls` works only when `npx` finds the command locally, in the project the editor starts it in; otherwise it looks for a package called `kick-view-ls`, gets a 404 and the server exits before it starts. With `-p`, `npx` uses the project's installed copy when there is one and otherwise downloads it once, whatever folder the editor starts it in. `-y` keeps `npx` from asking to install on the server's own stdin. The editor setups below run it this way, except Zed, whose extension downloads the server and runs it with Zed's Node.
 
 - It speaks LSP over stdio. Start it from the project root, or send the project as the workspace folder. It reads the first workspace folder only.
 - It treats any file ending in `.kick` as a template, whatever language ID the editor sends. Send `kick` when your editor lets you choose.

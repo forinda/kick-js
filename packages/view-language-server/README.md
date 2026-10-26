@@ -21,7 +21,7 @@ pnpm add -D @forinda/kickjs-view-language-server
 npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio
 ```
 
-`kick-view-ls` is the command, not a package name: without `-p`, `npx` looks for a package called `kick-view-ls` and fails with a 404.
+`kick-view-ls` is the command, not a package name. Without `-p`, `npx` finds it only when it's installed in the project the editor starts it in; otherwise `npx` looks for a package called `kick-view-ls` and fails with a 404.
 
 Initialization options, relative to the workspace folder:
 
