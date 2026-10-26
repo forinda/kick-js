@@ -11,6 +11,15 @@ export enum Scope {
 /** Generic constructor type */
 export type Constructor<T = any> = new (...args: any[]) => T
 
+/** A class, abstract or not — what `container.resolve(SomeClass)` infers `T` from. */
+export type AbstractConstructor<T = any> = abstract new (...args: any[]) => T
+
+/**
+ * A class whose constructor isn't public (private / protected), which
+ * `abstract new` can't describe. Matched by its prototype instead.
+ */
+export type ClassWithPrototype<T = any> = { readonly prototype: T } & Function
+
 /** Options for @Service, @Repository, @Component decorators */
 export interface ServiceOptions {
   scope?: Scope

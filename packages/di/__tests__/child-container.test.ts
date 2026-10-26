@@ -69,7 +69,7 @@ describe('Container.createChild', () => {
   it("keeps the parent's binding ahead of its own fallback after HMR re-creates the class", () => {
     const make = () =>
       class Reloaded {
-        readonly from = 'parent'
+        readonly from: string = 'parent'
       }
     const Before = make()
     const root = Container.create()

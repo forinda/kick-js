@@ -41,6 +41,8 @@ export {
   Scope,
   DI_METADATA,
   type Constructor,
+  type AbstractConstructor,
+  type ClassWithPrototype,
   type ServiceOptions,
   type BuilderOf,
   type Buildable,
