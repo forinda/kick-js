@@ -34,7 +34,7 @@
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
-    "@swc/core": "^1.16.18",
+    "@swc/core": "^1.16.20",
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
     "unplugin-swc": "^2.0.0",

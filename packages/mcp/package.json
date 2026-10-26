@@ -58,7 +58,7 @@
     "@forinda/kickjs": "workspace:*",
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/server": "^2.3.1",
-    "@swc/core": "^1.16.18",
+    "@swc/core": "^1.16.20",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
     "@types/supertest": "^7.2.1",
