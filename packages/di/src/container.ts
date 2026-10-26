@@ -3,6 +3,7 @@ import {
   Constructor,
   type AbstractConstructor,
   type ClassWithPrototype,
+  type NotCallable,
   Scope,
   DI_METADATA as METADATA,
   type ClassKind,
@@ -117,8 +118,12 @@ export type ContainerChangeListener = (changes: ContainerChangeEvent[]) => void
  */
 export interface KickJsRegistry {}
 
-/** Every kind of token `resolve()` accepts. */
-type ResolveToken = string | symbol | InjectionToken<any> | AbstractConstructor | ClassWithPrototype
+/**
+ * The tokens an explicit `resolve<T>(token)` takes. A class with a private
+ * constructor isn't here: with `T` given, `A` isn't inferred, and a
+ * `ClassWithPrototype` default would let plain functions through.
+ */
+type ResolveToken = string | symbol | InjectionToken<any> | AbstractConstructor
 
 interface PersistentStore {
   factories: Array<{ token: any; factory: () => any; scope: Scope }>
@@ -673,16 +678,19 @@ export class Container {
    *   overrides the type of any other token: `resolve<Wider>(TOKEN)`.
    *
    * Anything else — a Promise from an un-awaited `import()`, a plain
-   * object — is a compile error rather than a silent `any`.
+   * object, a function that isn't a class — is a compile error rather than
+   * a silent `any`.
    */
   resolve<T>(token: InjectionToken<T>): T
   resolve<T>(token: AbstractConstructor<T>): T
-  resolve<T>(token: ClassWithPrototype<T>): T
+  resolve<C extends ClassWithPrototype>(token: C & NotCallable<C>): C['prototype']
   resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
   // Any token kind, so an explicit `T` can still override or widen a typed
   // token (`resolve<ServerBus>(DEVTOOLS_BUS)`). Generic over the token so an
   // `any`-typed one matches exactly and returns `any`, as when this took `any`.
-  resolve<T = any, A extends ResolveToken = ResolveToken>(token: A): T
+  resolve<T = any, A extends ResolveToken | ClassWithPrototype = ResolveToken>(
+    token: A & NotCallable<A>,
+  ): T
   resolve<T = any>(token: any): T {
     // HMR fallback: when Vite re-evaluates a module, decorated classes get new
     // identity — normalBinding() also looks the class up by name.

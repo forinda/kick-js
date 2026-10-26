@@ -56,10 +56,31 @@ describe('container.resolve() types', () => {
     expectTypeOf(c.resolve<Plain>('Plain')).toEqualTypeOf<Plain>()
   })
 
+  it('lets an explicit T override a class token', () => {
+    expectTypeOf(c.resolve<{ z: 1 }>(Plain)).toEqualTypeOf<{ z: 1 }>()
+    expectTypeOf(c.resolve<{ w: 1 }>(AbstractRepo)).toEqualTypeOf<{ w: 1 }>()
+  })
+
   it('refuses what is not a token', () => {
     // @ts-expect-error a Promise from an un-awaited import() is not a token
     c.resolve(Promise.resolve(Plain))
     // @ts-expect-error nor is a plain object
     c.resolve({ a: 1 })
+  })
+
+  it('refuses functions that are not classes, with or without an explicit T', () => {
+    function factory() {
+      return 1
+    }
+    // @ts-expect-error an arrow function has a prototype but isn't a class
+    c.resolve(() => 1)
+    // @ts-expect-error nor is a function expression
+    c.resolve(function f() {
+      return 1
+    })
+    // @ts-expect-error nor a declared function
+    c.resolve(factory)
+    // @ts-expect-error an explicit T doesn't let one through
+    c.resolve<number>(() => 1)
   })
 })

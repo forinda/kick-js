@@ -16,9 +16,13 @@ export type AbstractConstructor<T = any> = abstract new (...args: any[]) => T
 
 /**
  * A class whose constructor isn't public (private / protected), which
- * `abstract new` can't describe. Matched by its prototype instead.
+ * `abstract new` can't describe. Matched by its prototype instead — a plain
+ * function has one too, so pair it with {@link NotCallable}.
  */
 export type ClassWithPrototype<T = any> = { readonly prototype: T } & Function
+
+/** `C`, unless it can be called: rules plain functions out where a class is wanted. */
+export type NotCallable<C> = C extends (...args: any[]) => any ? never : C
 
 /** Options for @Service, @Repository, @Component decorators */
 export interface ServiceOptions {

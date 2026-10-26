@@ -43,6 +43,7 @@ export {
   type Constructor,
   type AbstractConstructor,
   type ClassWithPrototype,
+  type NotCallable,
   type ServiceOptions,
   type BuilderOf,
   type Buildable,
