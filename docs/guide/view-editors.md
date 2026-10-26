@@ -161,11 +161,13 @@ With the free [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin
    npm i -g @forinda/kickjs-view-language-server
    ```
 
-   then use, with your paths (`command -v node` — `where node` on Windows — and `npm root -g` print them):
+   then use:
 
    ```text
-   /home/you/.nvm/versions/node/v24.11.0/bin/node /home/you/.nvm/versions/node/v24.11.0/lib/node_modules/@forinda/kickjs-view-language-server/bin/kick-view-ls.js --stdio
+   <path-to-node> <npm-root>/@forinda/kickjs-view-language-server/bin/kick-view-ls.js --stdio
    ```
+
+   `command -v node` (`where node` on Windows) prints `<path-to-node>`, and `npm root -g` prints `<npm-root>`.
 
    With nvm, fnm or another version manager, both paths change when you switch Node versions: install again and update them.
 
