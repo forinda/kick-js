@@ -917,8 +917,8 @@ importers:
   packages/vscode-extension:
     dependencies:
       vscode-languageclient:
-        specifier: ^9.0.1
-        version: 9.0.1
+        specifier: ^11.0.0
+        version: 11.0.0
     devDependencies:
       '@forinda/kickjs-view-language-server':
         specifier: workspace:*
@@ -6816,9 +6816,9 @@ packages:
     resolution: {integrity: sha512-qETYf9PCl1lVfwR+oBmMfc4vP2nqLNA35ABxorw3j06+xlKRgDVxbLgKm4Y/xPL0YWdeDjLoI4ImICIT3nB0zQ==}
     engines: {node: '>=14.0.0'}
 
-  vscode-languageclient@9.0.1:
-    resolution: {integrity: sha512-JZiimVdvimEuHh5olxhxkht09m3JzUGwggb5eRUkzzJhZ2KjCN0nh55VfiED9oez9DyF8/fz1g1iBV3h+0Z2EA==}
-    engines: {vscode: ^1.82.0}
+  vscode-languageclient@11.0.0:
+    resolution: {integrity: sha512-kVyeGLfyd1M74PbMNPfFkgRnhMYgnt6YGc5uXr/tNMzCpfZ0wFtfiqmqX1M05kkdNgV0HSozEUPvgggJbyIAYw==}
+    engines: {vscode: ^1.91.0}
 
   vscode-languageserver-protocol@3.17.5:
     resolution: {integrity: sha512-mb1bvRJN8SVznADSGWM9u/b07H7Ecg0I3OgXDuLdn307rl/J3A9YD6/eYOssqhecL27hK1IPZAsaqh00i/Jljg==}
@@ -12732,11 +12732,12 @@ snapshots:
 
   vscode-jsonrpc@9.0.3: {}
 
-  vscode-languageclient@9.0.1:
+  vscode-languageclient@11.0.0:
     dependencies:
-      minimatch: 5.1.9
+      minimatch: 10.2.6
       semver: 7.8.5
-      vscode-languageserver-protocol: 3.17.5
+      vscode-languageserver-protocol: 3.18.5
+      vscode-languageserver-textdocument: 1.0.16
 
   vscode-languageserver-protocol@3.17.5:
     dependencies:

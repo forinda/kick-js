@@ -535,6 +535,6 @@
   },
   "private": true,
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^11.0.0"
   }
 }
