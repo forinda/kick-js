@@ -155,7 +155,10 @@ Eglot runs one server per buffer, so it can't add this one to TypeScript files n
 With the free [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin, which works in Community editions too:
 
 1. Open **Settings → Languages & Frameworks → Language Servers** and click **+**.
-2. **Server:** name it `KickJS Views`, with the command `npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio`. If `npx` isn't found (the IDE doesn't see your shell's `PATH`), use `sh -c "npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio"`, or `cmd /c npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio` on Windows. If the server stops with `npm error 404 … kick-view-ls`, the command is missing `-p @forinda/kickjs-view-language-server`.
+2. **Server:** name it `KickJS Views`, with the command `npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio`. If the server stops with `npm error 404 … kick-view-ls`, the command is missing `-p @forinda/kickjs-view-language-server`.
+
+   `Cannot run program "npx"` means the IDE can't see Node: one installed with nvm, fnm, Volta or asdf is set up by your shell's startup files, which an IDE started from the desktop doesn't read. Under **Environment variables**, set `PATH` to Node's `bin` folder followed by the usual ones, for example `PATH=/home/you/.nvm/versions/node/v24.11.0/bin:/usr/local/bin:/usr/bin:/bin` (`dirname "$(command -v node)"` in a terminal prints the folder). Pointing the command at `npx` by its full path isn't enough on its own: `npx` starts `node` from the `PATH` too. Starting the IDE from a terminal also works, as it inherits the terminal's `PATH`. On Windows, `cmd /c npx …` finds an `npx` that's on the system `PATH`.
+
 3. **Mappings → File name patterns:** add `*.kick`, with the language ID `kick`. For template names in controllers, also add `*.ts` and `*.js`, with the language IDs `typescript` and `javascript`.
 4. **Configuration → Initialization options:** `{ "trusted": true }`.
 
