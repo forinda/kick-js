@@ -155,9 +155,26 @@ Eglot runs one server per buffer, so it can't add this one to TypeScript files n
 With the free [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin, which works in Community editions too:
 
 1. Open **Settings → Languages & Frameworks → Language Servers** and click **+**.
-2. **Server:** name it `KickJS Views`, with the command `npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio`. If the server stops with `npm error 404 … kick-view-ls`, the command is missing `-p @forinda/kickjs-view-language-server`.
+2. **Server:** name it `KickJS Views`. The most reliable command runs the server with Node, both by full path, so it doesn't depend on the IDE's `PATH` or on `npx`. Install the server once:
 
-   `Cannot run program "npx"` means the IDE can't see Node: one installed with nvm, fnm, Volta or asdf is set up by your shell's startup files, which an IDE started from the desktop doesn't read. Under **Environment variables**, set `PATH` to Node's `bin` folder followed by the usual ones, for example `PATH=/home/you/.nvm/versions/node/v24.11.0/bin:/usr/local/bin:/usr/bin:/bin` (`dirname "$(command -v node)"` in a terminal prints the folder). Pointing the command at `npx` by its full path isn't enough on its own: `npx` starts `node` from the `PATH` too. Starting the IDE from a terminal also works, as it inherits the terminal's `PATH`. On Windows, `cmd /c npx …` finds an `npx` that's on the system `PATH`.
+   ```bash
+   npm i -g @forinda/kickjs-view-language-server
+   ```
+
+   then use:
+
+   ```text
+   <path-to-node> <npm-root>/@forinda/kickjs-view-language-server/bin/kick-view-ls.js --stdio
+   ```
+
+   `command -v node` (`where node` on Windows) prints `<path-to-node>`, and `npm root -g` prints `<npm-root>`.
+
+   With nvm, fnm or another version manager, both paths change when you switch Node versions: install again and update them.
+
+   `npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio` is shorter, but depends on what the IDE can see:
+   - `Cannot run program "npx"` means it can't see Node. One installed with nvm, fnm, Volta or asdf is set up by your shell's startup files, which an IDE started from the desktop doesn't read. Set `PATH` to Node's `bin` folder under **Environment variables**, or start the IDE from a terminal. A full path to `npx` alone isn't enough: `npx` starts `node` from the `PATH` too.
+   - `npm error 404 … kick-view-ls` means the command is missing `-p @forinda/kickjs-view-language-server`.
+   - If the server still stops, use the full-path command above, and look in the **Language Servers** tool window's **Log** tab for the reason.
 
 3. **Mappings → File name patterns:** add `*.kick`, with the language ID `kick`. For template names in controllers, also add `*.ts` and `*.js`, with the language IDs `typescript` and `javascript`.
 4. **Configuration → Initialization options:** `{ "trusted": true }`.
