@@ -55,9 +55,9 @@
   },
   "dependencies": {
     "@forinda/kickjs-view": "workspace:^",
-    "@volar/language-core": "~2.4.28",
-    "@volar/language-server": "~2.4.28",
-    "@volar/language-service": "~2.4.28",
+    "@volar/language-core": "~2.4.30",
+    "@volar/language-server": "~2.4.30",
+    "@volar/language-service": "~2.4.30",
     "volar-service-css": "~0.0.71",
     "volar-service-emmet": "~0.0.71",
     "volar-service-html": "~0.0.71",
