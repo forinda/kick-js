@@ -1,5 +1,12 @@
 # @forinda/kickjs
 
+## 10.13.3
+
+### Patch Changes
+
+- Updated dependencies [[`ffc912a`](https://github.com/forinda/kick-js/commit/ffc912a0c7e73f9c71eb2a426b7252031c848ebe)]:
+  - @forinda/kickjs-di@0.3.1
+
 ## 10.13.2
 
 ### Patch Changes
