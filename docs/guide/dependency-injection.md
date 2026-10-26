@@ -97,7 +97,7 @@ Pick the name that reads better at the call site; the framework treats them iden
 
 KickJS supports four kinds of DI tokens. Pick the safest one that fits your case — the list below is ordered from safest to riskiest.
 
-- **Class identity** — `container.resolve(UserService)` returns `UserService`. JS reference equality means two classes can never collide; type safety comes from the `Constructor<T>` overload on `Container.resolve`. Use this whenever the thing you want to resolve **is** a class.
+- **Class identity** — `container.resolve(UserService)` returns `UserService`. JS reference equality means two classes can never collide, and the type is inferred for any class: abstract ones, ones with a private or protected constructor, and one loaded with `(await import('./user.service')).UserService`. Use this whenever the thing you want to resolve **is** a class. Passing something that isn't a token — say an `import()` you forgot to `await` — is a compile error rather than an untyped `any`.
 
 - **`createToken<T>(name)`** — `container.resolve(USER_REPO)` returns `IUserRepository`. Each call returns a unique frozen object identified by reference, not by the `name` string, so two `createToken<X>('foo')` calls in different files produce two distinct tokens. Type safety comes from the `InjectionToken<T>` overload. **Use this for interface bindings, third-party clients, factory results, and anything else that isn't a class.**
 

@@ -1,6 +1,9 @@
 import 'reflect-metadata'
 import {
   Constructor,
+  type AbstractConstructor,
+  type ClassWithPrototype,
+  type NotCallable,
   Scope,
   DI_METADATA as METADATA,
   type ClassKind,
@@ -114,6 +117,13 @@ export type ContainerChangeListener = (changes: ContainerChangeEvent[]) => void
  * tokens are typed already. In KickJS, `kick typegen` writes this augmentation.
  */
 export interface KickJsRegistry {}
+
+/**
+ * The tokens an explicit `resolve<T>(token)` takes. A class with a private
+ * constructor isn't here: with `T` given, `A` isn't inferred, and a
+ * `ClassWithPrototype` default would let plain functions through.
+ */
+type ResolveToken = string | symbol | InjectionToken<any> | AbstractConstructor
 
 interface PersistentStore {
   factories: Array<{ token: any; factory: () => any; scope: Scope }>
@@ -656,20 +666,31 @@ export class Container {
   /**
    * Resolve a dependency by its token.
    *
-   * Four overloads, in order of preference:
+   * Overloads, in order of preference:
    * - **`InjectionToken<T>`** (from `createToken<T>(name)`) → returns `T`.
    *   Collision-safe by construction; no codegen required.
-   * - **Class constructor** → returns an instance of that class. Always
-   *   type-safe; no codegen required.
+   * - **Class** → returns an instance of that class: concrete, abstract,
+   *   or with a private / protected constructor. No codegen required.
    * - **String token in `KickJsRegistry`** (populated by `kick typegen`) →
    *   returns the augmented type.
-   * - **Anything else** → returns `any`. Use this only for legacy code or
-   *   string tokens that haven't been registered with typegen yet.
+   * - **Any other string or symbol** → returns `T` (default `any`), for
+   *   string tokens typegen hasn't registered yet. An explicit `T` also
+   *   overrides the type of any other token: `resolve<Wider>(TOKEN)`.
+   *
+   * Anything else — a Promise from an un-awaited `import()`, a plain
+   * object, a function that isn't a class — is a compile error rather than
+   * a silent `any`.
    */
   resolve<T>(token: InjectionToken<T>): T
-  resolve<T>(token: Constructor<T>): T
+  resolve<T>(token: AbstractConstructor<T>): T
+  resolve<C extends ClassWithPrototype>(token: C & NotCallable<C>): C['prototype']
   resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
-  resolve<T = any>(token: any): T
+  // Any token kind, so an explicit `T` can still override or widen a typed
+  // token (`resolve<ServerBus>(DEVTOOLS_BUS)`). Generic over the token so an
+  // `any`-typed one matches exactly and returns `any`, as when this took `any`.
+  resolve<T = any, A extends ResolveToken | ClassWithPrototype = ResolveToken>(
+    token: A & NotCallable<A>,
+  ): T
   resolve<T = any>(token: any): T {
     // HMR fallback: when Vite re-evaluates a module, decorated classes get new
     // identity — normalBinding() also looks the class up by name.
