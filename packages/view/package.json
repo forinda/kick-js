@@ -54,10 +54,10 @@
     }
   },
   "devDependencies": {
-    "@fastify/middie": "^9.3.5",
+    "@fastify/middie": "^9.3.6",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-cli-kit": "workspace:*",
-    "@swc/core": "^1.16.18",
+    "@swc/core": "^1.16.20",
     "@types/ejs": "^3.1.5",
     "@types/node": "^26.6.5",
     "@types/supertest": "^7.2.1",
@@ -65,7 +65,7 @@
     "ejs": "^3.1.10",
     "express": "^5.3.0",
     "fastify": "^5.12.7",
-    "h3": "2.0.2",
+    "h3": "2.0.8",
     "happy-dom": "^21.0.4",
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.3.1",
