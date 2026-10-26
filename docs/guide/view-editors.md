@@ -6,8 +6,10 @@ The VS Code extension bundles the `.kick` language server. Any editor with an LS
 
 ```bash
 pnpm add -D @forinda/kickjs-view-language-server
-npx kick-view-ls --stdio
+npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio
 ```
+
+`kick-view-ls` is the command, not a package: name the package with `-p`, or `npx` looks for a package called `kick-view-ls`, gets a 404 and the server exits before it starts. With `-p`, `npx` uses the project's installed copy, and otherwise downloads it once, whatever folder the editor starts it in. `-y` keeps `npx` from asking to install on the server's own stdin. The setups below all run it this way.
 
 - It speaks LSP over stdio. Start it from the project root, or send the project as the workspace folder. It reads the first workspace folder only.
 - It treats any file ending in `.kick` as a template, whatever language ID the editor sends. Send `kick` when your editor lets you choose.
@@ -57,7 +59,7 @@ vim.filetype.add({ extension = { kick = 'kick' } })
 vim.treesitter.language.register('html', 'kick')
 
 vim.lsp.config('kick_views', {
-  cmd = { 'npx', 'kick-view-ls', '--stdio' },
+  cmd = { 'npx', '-y', '-p', '@forinda/kickjs-view-language-server', 'kick-view-ls', '--stdio' },
   -- TS / JS too, for template names in ctx.render('…')
   filetypes = { 'kick', 'typescript', 'javascript', 'typescriptreact', 'javascriptreact' },
   root_markers = { 'kick.config.ts', 'package.json' },
@@ -79,7 +81,7 @@ With [vim-lsp](https://github.com/prabirshrestha/vim-lsp):
 ```vim
 autocmd User lsp_setup call lsp#register_server({
   \ 'name': 'kick-views',
-  \ 'cmd': {server_info -> ['npx', 'kick-view-ls', '--stdio']},
+  \ 'cmd': {server_info -> ['npx', '-y', '-p', '@forinda/kickjs-view-language-server', 'kick-view-ls', '--stdio']},
   \ 'allowlist': ['kick', 'typescript', 'javascript'],
   \ 'initialization_options': {'trusted': v:true},
   \ })
@@ -92,7 +94,7 @@ With [coc.nvim](https://github.com/neoclide/coc.nvim), in `coc-settings.json`:
   "languageserver": {
     "kick-views": {
       "command": "npx",
-      "args": ["kick-view-ls", "--stdio"],
+      "args": ["-y", "-p", "@forinda/kickjs-view-language-server", "kick-view-ls", "--stdio"],
       "filetypes": ["kick", "typescript", "javascript"],
       "rootPatterns": ["kick.config.ts", "package.json"],
       "initializationOptions": { "trusted": true }
@@ -108,7 +110,7 @@ In `~/.config/helix/languages.toml`:
 ```toml
 [language-server.kick-views]
 command = "npx"
-args = ["kick-view-ls", "--stdio"]
+args = ["-y", "-p", "@forinda/kickjs-view-language-server", "kick-view-ls", "--stdio"]
 config = { trusted = true }
 
 [[language]]
@@ -139,7 +141,8 @@ With Eglot (built in since Emacs 29):
 
 (with-eval-after-load 'eglot
   (add-to-list 'eglot-server-programs
-               '(kick-mode . ("npx" "kick-view-ls" "--stdio"
+               '(kick-mode . ("npx" "-y" "-p" "@forinda/kickjs-view-language-server"
+                              "kick-view-ls" "--stdio"
                               :initializationOptions (:trusted t)))))
 ```
 
@@ -152,7 +155,7 @@ Eglot runs one server per buffer, so it can't add this one to TypeScript files n
 With the free [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin, which works in Community editions too:
 
 1. Open **Settings → Languages & Frameworks → Language Servers** and click **+**.
-2. **Server:** name it `KickJS Views`, with the command `npx kick-view-ls --stdio`. If `npx` isn't found, use `sh -c "npx kick-view-ls --stdio"`, or `cmd /c npx kick-view-ls --stdio` on Windows.
+2. **Server:** name it `KickJS Views`, with the command `npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio`. If `npx` isn't found (the IDE doesn't see your shell's `PATH`), use `sh -c "npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio"`, or `cmd /c npx -y -p @forinda/kickjs-view-language-server kick-view-ls --stdio` on Windows. If the server stops with `npm error 404 … kick-view-ls`, the command is missing `-p @forinda/kickjs-view-language-server`.
 3. **Mappings → File name patterns:** add `*.kick`, with the language ID `kick`. For template names in controllers, also add `*.ts` and `*.js`, with the language IDs `typescript` and `javascript`.
 4. **Configuration → Initialization options:** `{ "trusted": true }`.
 
