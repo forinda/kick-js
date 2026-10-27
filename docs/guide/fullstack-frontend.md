@@ -187,7 +187,7 @@ export const adapters = [SpaAdapter({ clientDir: '../web/build' })]
 ```toml
 # 3. netlify.toml — what Netlify publishes
 [build]
-  publish = "web/build"
+publish = "web/build"
 ```
 
 `kick build:netlify` warns when `netlify.toml` and the deploy config disagree, so a missed one shows up at build time rather than in production.

@@ -239,13 +239,13 @@ For a web app in the same repo, publish its build and let the function take `/ap
 ```toml
 # netlify.toml
 [build]
-  command = "pnpm build && pnpm --filter ./server exec vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs"
-  publish = "web/dist"
+command = "pnpm build && pnpm --filter ./server exec vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs"
+publish = "web/dist"
 
 [[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+from = "/*"
+to = "/index.html"
+status = 200
 ```
 
 **API only:** set `bundle` in the script to `'../../../dist/serverless/server.mjs'`, build with `vite build --config vite.serverless.config.ts && node scripts/write-netlify-function.mjs`, and drop the SPA redirect. Set `publish` to an empty folder (a `public/` with a `.gitkeep`): without it, Netlify publishes the project's base directory as static files.
@@ -386,12 +386,12 @@ Nothing to register: an API-only project is what the commands assume when there 
 ```toml
 # netlify.toml
 [build]
-  # Writes .netlify/v1/functions/api.mjs (every path) and dist/public.
-  command = "pnpm run build:netlify"
-  publish = "dist/public"
+# Writes .netlify/v1/functions/api.mjs (every path) and dist/public.
+command = "pnpm run build:netlify"
+publish = "dist/public"
 
 [build.environment]
-  NODE_VERSION = "22"
+NODE_VERSION = "22"
 ```
 
 ```json
@@ -413,9 +413,9 @@ A fullstack workspace can also deploy as two projects: the API (API-only setup a
 ```toml
 # web site netlify.toml, before the SPA redirect
 [[redirects]]
-  from = "/api/*"
-  to = "https://your-api.netlify.app/api/:splat"
-  status = 200
+from = "/api/*"
+to = "https://your-api.netlify.app/api/:splat"
+status = 200
 ```
 
 ```json
