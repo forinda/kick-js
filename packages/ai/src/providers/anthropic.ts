@@ -89,6 +89,12 @@ const FALLBACK_MODELS = /^claude-(opus-5|fable-5|mythos-5)/
 /** Models that reject `temperature` / `top_p` with a 400. */
 const NO_SAMPLING_MODELS = /^claude-(opus-5|opus-4-7|opus-4-8|sonnet-5|fable|mythos)/
 
+/**
+ * `temperature` / `top_p`, which SDK 1.x (API version `2026-10-21`) no longer
+ * types — that version rejects them on every model. Set only under SDK 0.x.
+ */
+type LegacySampling = { temperature?: number; top_p?: number }
+
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01'
 
 /**
@@ -107,7 +113,8 @@ const FALLBACK_BETA = 'server-side-fallback-2026-07-01'
  *   `length`, `tool_use` → `tool_call`, `refusal` → `content_filter` with
  *   `ChatResponse.refusal`).
  * - **Sampling parameters** are dropped, with a warning, for models that
- *   reject them.
+ *   reject them, and on every model under `@anthropic-ai/sdk` 1.x, whose API
+ *   version (`2026-10-21`) rejects them.
  *
  * Every request streams (`chat()` collects the final message), so large
  * `max_tokens` values don't hit HTTP timeouts. API errors are rethrown as
@@ -132,6 +139,7 @@ export class AnthropicProvider implements AiProvider {
   private readonly defaultChatModel: string
   private readonly defaultMaxTokens: number
   private clientPromise?: Promise<Anthropic>
+  private samplingPromise?: Promise<boolean>
   private readonly warned = new Set<string>()
   private warnedFull = false
 
@@ -175,9 +183,10 @@ export class AnthropicProvider implements AiProvider {
     options: ChatOptions,
     schema?: OutputSchema,
   ): Promise<ChatResponse> {
-    const client = await this.client()
+    const [client, sampling] = await Promise.all([this.client(), this.sdkAcceptsSampling()])
     try {
-      const stream = client.beta.messages.stream(this.buildParams(input, options, false, schema), {
+      const params = this.buildParams(input, options, false, sampling, schema)
+      const stream = client.beta.messages.stream(params, {
         signal: options.signal,
       })
       return this.normalize(await stream.finalMessage())
@@ -188,10 +197,10 @@ export class AnthropicProvider implements AiProvider {
 
   async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
     if (input.schema !== undefined) throw new Error(SCHEMA_STREAM_ERROR)
-    const client = await this.client()
+    const [client, sampling] = await Promise.all([this.client(), this.sdkAcceptsSampling()])
     const toolIds = new Map<number, string>()
     try {
-      const stream = client.beta.messages.stream(this.buildParams(input, options, true), {
+      const stream = client.beta.messages.stream(this.buildParams(input, options, true, sampling), {
         signal: options.signal,
       })
       for await (const event of stream) {
@@ -260,10 +269,25 @@ export class AnthropicProvider implements AiProvider {
     return this.clientPromise
   }
 
+  /**
+   * Whether the installed SDK sends an API version that takes `temperature` /
+   * `top_p`. 1.x sends `2026-10-21`, which rejects them on every model; 0.x
+   * sends `2023-06-01`. Read from the SDK's own `VERSION` export.
+   */
+  private sdkAcceptsSampling(): Promise<boolean> {
+    this.samplingPromise ??= import('@anthropic-ai/sdk/version').then(
+      (mod) => Number.parseInt(mod.VERSION, 10) < 1,
+      // No version export: an SDK too old to know `2026-10-21`.
+      () => true,
+    )
+    return this.samplingPromise
+  }
+
   private buildParams(
     input: ChatInput,
     options: ChatOptions,
     eagerToolInput: boolean,
+    sdkSampling: boolean,
     schema?: OutputSchema,
   ): StreamParams {
     const model = input.model ?? this.defaultChatModel
@@ -287,18 +311,21 @@ export class AnthropicProvider implements AiProvider {
       params.thinking = { type: 'adaptive', display: this.options.thinkingDisplay }
     }
 
-    if (NO_SAMPLING_MODELS.test(model)) {
+    const sampling = params as StreamParams & LegacySampling
+    if (!sdkSampling || NO_SAMPLING_MODELS.test(model)) {
       if (options.temperature !== undefined || options.topP !== undefined) {
         this.warnOnce(
-          `sampling:${model}`,
-          `AnthropicProvider: ${model} does not accept temperature/topP; they were not sent. Use effort instead.`,
+          `sampling:${sdkSampling ? model : 'sdk'}`,
+          sdkSampling
+            ? `AnthropicProvider: ${model} does not accept temperature/topP; they were not sent. Use effort instead.`
+            : 'AnthropicProvider: @anthropic-ai/sdk 1.x (API version 2026-10-21) does not accept temperature/topP on any model; they were not sent. Use effort instead.',
         )
       }
     } else if (options.temperature !== undefined) {
       // Claude 4.x accepts one of temperature / top_p, not both.
-      params.temperature = options.temperature
+      sampling.temperature = options.temperature
     } else if (options.topP !== undefined) {
-      params.top_p = options.topP
+      sampling.top_p = options.topP
     }
 
     if (Array.isArray(input.tools) && input.tools.length > 0) {

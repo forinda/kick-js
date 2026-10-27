@@ -285,9 +285,10 @@ What the provider handles for you:
 - **Refusals** set `finishReason: 'content_filter'` and `refusal` (category
   and explanation). `runAgent` stops there, and also on `'length'`, without
   running that turn's tool calls, since they may be truncated.
-- **Sampling parameters** (`temperature`, `topP`) are rejected by Claude
-  Opus 4.7 and later, Sonnet 5 and Fable; the provider drops them with a
-  warning. Use `effort` instead.
+- **Sampling parameters** (`temperature`, `topP`) are dropped with a
+  warning wherever Claude would reject them: on every model with
+  `@anthropic-ai/sdk` 1.x, which sends API version `2026-10-21`, and with 0.x
+  on Claude Opus 4.7 and later, Sonnet 5 and Fable. Use `effort` instead.
 - **Tool results** are sent back together, failed calls marked as errors.
 - **Usage** includes `cacheReadTokens` and `cacheWriteTokens`.
 

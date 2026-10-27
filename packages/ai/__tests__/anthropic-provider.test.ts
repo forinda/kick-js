@@ -151,7 +151,10 @@ describe('AnthropicProvider — request', () => {
 
     const [request] = requests
     expect(request.url).toContain('/v1/messages')
-    expect(request.headers.get('x-api-key')).toBe('sk-test')
+    // SDK 1.x: API version 2026-10-21, with the API key as a bearer token.
+    expect(request.headers.get('authorization')).toBe('Bearer sk-test')
+    expect(request.headers.get('x-api-key')).toBeNull()
+    expect(request.headers.get('anthropic-version')).toBe('2026-10-21')
     expect(request.headers.get('anthropic-beta')).toBe('server-side-fallback-2026-07-01')
     expect(request.body).toMatchObject({
       model: 'claude-opus-5-5',
@@ -181,7 +184,8 @@ describe('AnthropicProvider — request', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
-  it('sends one sampling parameter, and no fallbacks, on older models', async () => {
+  it('drops sampling parameters on every model under SDK 1.x, and sends no fallbacks to older models', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { provider, requests } = setup([
       sseResponse(eventsFor({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' })),
     ])
@@ -193,13 +197,37 @@ describe('AnthropicProvider — request', () => {
 
     expect(requests[0].body).toMatchObject({
       model: 'claude-sonnet-4-6',
-      temperature: 0.2,
       max_tokens: 1000,
       stop_sequences: ['END'],
     })
+    expect(requests[0].body.temperature).toBeUndefined()
     expect(requests[0].body.top_p).toBeUndefined()
     expect(requests[0].body.fallbacks).toBeUndefined()
     expect(requests[0].headers.get('anthropic-beta')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('2026-10-21')
+  })
+
+  it('sends one sampling parameter to older models under SDK 0.x', async () => {
+    // SDK 0.x sends API version 2023-06-01, which still takes temperature / top_p.
+    vi.doMock('@anthropic-ai/sdk/version', () => ({ VERSION: '0.135.0' }))
+    try {
+      const { provider, requests } = setup([
+        sseResponse(
+          eventsFor({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }),
+        ),
+      ])
+
+      await provider.chat(
+        { messages: [user('a')], model: 'claude-sonnet-4-6' },
+        { temperature: 0.2, topP: 0.9 },
+      )
+
+      expect(requests[0].body.temperature).toBe(0.2)
+      expect(requests[0].body.top_p).toBeUndefined()
+    } finally {
+      vi.doUnmock('@anthropic-ai/sdk/version')
+    }
   })
 
   it('applies effort, thinking display, and turns off cache and fallbacks', async () => {
