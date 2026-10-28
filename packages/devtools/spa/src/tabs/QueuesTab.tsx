@@ -89,9 +89,12 @@ export const QueuesTab: Component = () => {
       setLoadError(err instanceof Error ? err.message : String(err))
     }
   }
+  /** Bumped per list request: only the newest one's answer is shown. */
+  let listRequest = 0
   const loadJobs = async (): Promise<void> => {
     const p = pick()
     if (!p) return
+    const request = ++listRequest
     const q = query()
     // The state shrank under the page we were on (jobs retried, cleaned, finished).
     const last = lastPage()
@@ -105,10 +108,13 @@ export const QueuesTab: Component = () => {
         end: start + pageSize() - 1,
         ...(q ? { q } : {}),
       })
+      // The queue, state, filter or page changed while this was in flight.
+      if (request !== listRequest) return
       setJobs(r.jobs)
       setScan(q ? { next: r.next ?? null, scanned: r.scanned ?? 0 } : null)
       setListError(null)
     } catch (err) {
+      if (request !== listRequest) return
       setJobs([])
       setListError(err instanceof Error ? err.message : String(err))
     }
@@ -126,11 +132,14 @@ export const QueuesTab: Component = () => {
       setDetail(null) // removed or moved on
     }
   }
-  const refresh = async (): Promise<void> => {
+  /**
+   * A filtered list is a scan of up to a thousand jobs: the timer leaves it
+   * alone, and it reloads when the filter or page changes — or, with `list`,
+   * after an action changed the jobs in it.
+   */
+  const refresh = async (opts: { list?: boolean } = {}): Promise<void> => {
     await loadSources()
-    // A filtered list is a scan of up to a thousand jobs: it reloads when the
-    // filter or page changes, not on every tick.
-    await Promise.all([query() ? Promise.resolve() : loadJobs(), loadDetail()])
+    await Promise.all([query() && !opts.list ? Promise.resolve() : loadJobs(), loadDetail()])
   }
   onMount(() => {
     void refresh()
@@ -239,7 +248,7 @@ export const QueuesTab: Component = () => {
                   : 'Queue resumed',
       )
       if (action === 'remove' || action === 'retry') setSelected(null)
-      await refresh()
+      await refresh({ list: true })
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err))
     } finally {

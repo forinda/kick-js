@@ -5,7 +5,17 @@
  * remembered.
  */
 
-import { createMemo, createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  Index,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  type Component,
+} from 'solid-js'
 import { rpc, type CronJobEntry } from '../lib/rpc'
 import { store, storeActions } from '../lib/store'
 import { ago, formatMs, formatUptime } from '../lib/format'
@@ -88,6 +98,17 @@ const CronPanel: Component = () => {
         ),
       )
   })
+  // <Index> keeps rows by position: when the filter or a reload changes which
+  // job sits in a row, an armed Run now could end up on another job's button.
+  // Disarm whenever the visible jobs change; a refresh of the same jobs keeps it.
+  // A memo, so the effect sees a change only when the names do: `on` alone
+  // fires on every refresh, which brings new objects for the same jobs.
+  const visibleNames = createMemo(() =>
+    shown()
+      .map((job) => job.name)
+      .join('\n'),
+  )
+  createEffect(on(visibleNames, () => setArmed(null), { defer: true }))
 
   const refresh = async (): Promise<void> => {
     try {
