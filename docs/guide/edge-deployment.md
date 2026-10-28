@@ -53,7 +53,7 @@ not using the subpath.
 name = "my-kick-app"
 main = "src/worker.ts"
 compatibility_date = "2026-01-01"
-compatibility_flags = ["nodejs_compat"]   # required — AsyncLocalStorage
+compatibility_flags = ["nodejs_compat"] # required — AsyncLocalStorage
 ```
 
 ```ts
