@@ -1,11 +1,11 @@
 /**
  * Queues — browse and manage background jobs through whatever runs them.
  * Pick a queue, then a state (each with its count); the jobs list beside the
- * selected job's data, result, error and attempts. The list is paged; the
- * filter matches id, name or error, scanning the state on the server a
- * thousand jobs at a time, and `#id` opens a job directly. Retry, remove, retry all
- * failed, clean a state, and pause / resume are offered when the job tool
- * supports them.
+ * selected job's data, result, error and attempts. The list is paged — 10, 25
+ * or 50 to a page, remembered in this browser. The filter matches id, name or
+ * error, scanning the state on the server a thousand jobs at a time, and `#id`
+ * opens a job directly. Retry, remove, retry all failed, clean a state, and
+ * pause / resume are offered when the job tool supports them.
  *
  * Reads `/_debug/jobs*`, served from any adapter's or plugin's
  * `jobInspector()` — `QueueAdapter` provides one for BullMQ.
@@ -18,7 +18,18 @@ import { ago, formatMs } from '../lib/format'
 import { SplitPane } from '../lib/split-pane'
 
 const STATES: JobState[] = ['failed', 'active', 'waiting', 'delayed', 'completed', 'paused']
-const PAGE = 50
+/** Jobs per page; the largest is the default. */
+const PAGE_SIZES = [10, 25, 50] as const
+const PAGE_SIZE_KEY = 'kickjs-devtools:jobs:page-size'
+
+function readPageSize(): number {
+  try {
+    const n = Number(localStorage.getItem(PAGE_SIZE_KEY))
+    return (PAGE_SIZES as readonly number[]).includes(n) ? n : 50
+  } catch {
+    return 50 // storage unavailable
+  }
+}
 /** How many jobs the server looks at per filtered request (its MAX_SCAN). */
 const SCAN = 1000
 
@@ -40,6 +51,7 @@ export const QueuesTab: Component = () => {
   const [listError, setListError] = createSignal<string | null>(null)
   /** Unfiltered: which page of the state. */
   const [page, setPage] = createSignal(0)
+  const [pageSize, setPageSize] = createSignal(readPageSize())
   /** What's typed in the filter box, and the filter in force (debounced). */
   const [filterText, setFilterText] = createSignal('')
   const [query, setQuery] = createSignal('')
@@ -61,7 +73,7 @@ export const QueuesTab: Component = () => {
   const total = createMemo(() => queue()?.counts[state()])
   const lastPage = createMemo(() => {
     const t = total()
-    return t === undefined ? undefined : Math.max(0, Math.ceil(t / PAGE) - 1)
+    return t === undefined ? undefined : Math.max(0, Math.ceil(t / pageSize()) - 1)
   })
 
   const loadSources = async (): Promise<void> => {
@@ -84,13 +96,13 @@ export const QueuesTab: Component = () => {
     // The state shrank under the page we were on (jobs retried, cleaned, finished).
     const last = lastPage()
     if (!q && last !== undefined && page() > last) setPage(last)
-    const start = q ? cursor() : page() * PAGE
+    const start = q ? cursor() : page() * pageSize()
     try {
       const r = await rpc.jobList({
         ...p,
         state: state(),
         start,
-        end: start + PAGE - 1,
+        end: start + pageSize() - 1,
         ...(q ? { q } : {}),
       })
       setJobs(r.jobs)
@@ -159,6 +171,17 @@ export const QueuesTab: Component = () => {
     const text = filterText().trim()
     if (text.startsWith('#') && text.length > 1) open(text.slice(1))
     else applyFilter(text)
+  }
+  const changePageSize = (n: number): void => {
+    setPageSize(n)
+    try {
+      localStorage.setItem(PAGE_SIZE_KEY, String(n))
+    } catch {
+      /* storage unavailable */
+    }
+    // From the top: the old page number means different jobs at the new size.
+    resetPaging()
+    void loadJobs()
   }
   const goPage = (n: number): void => {
     setPage(n)
@@ -405,7 +428,9 @@ export const QueuesTab: Component = () => {
             fallback={
               <>
                 <span class="tabular-nums">
-                  {jobs().length ? `${page() * PAGE + 1}–${page() * PAGE + jobs().length}` : '0'}
+                  {jobs().length
+                    ? `${page() * pageSize() + 1}–${page() * pageSize() + jobs().length}`
+                    : '0'}
                   {total() !== undefined ? ` of ${total()}` : ''}
                 </span>
                 <span class="flex-1" />
@@ -434,7 +459,9 @@ export const QueuesTab: Component = () => {
                 <button
                   type="button"
                   class={button()}
-                  disabled={lastPage() !== undefined ? page() >= lastPage()! : jobs().length < PAGE}
+                  disabled={
+                    lastPage() !== undefined ? page() >= lastPage()! : jobs().length < pageSize()
+                  }
                   onClick={() => goPage(page() + 1)}
                   aria-label="Next page"
                 >
@@ -479,6 +506,15 @@ export const QueuesTab: Component = () => {
               {jobs().length ? '›' : `Search the next ${SCAN}`}
             </button>
           </Show>
+          <select
+            class="rounded-md border border-border-strong bg-surface-2 px-1 py-0.5 text-[0.7rem] text-text-secondary"
+            aria-label="Jobs per page"
+            title="Jobs per page"
+            value={pageSize()}
+            onChange={(e) => changePageSize(Number(e.currentTarget.value))}
+          >
+            <For each={PAGE_SIZES}>{(n) => <option value={n}>{n} / page</option>}</For>
+          </select>
         </div>
       </Show>
     </>
