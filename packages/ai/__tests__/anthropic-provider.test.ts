@@ -125,7 +125,7 @@ function setup(
     return next
   })
   const client = new Anthropic({ apiKey: 'sk-test', fetch: fakeFetch as never, maxRetries: 0 })
-  return { provider: new AnthropicProvider({ client, ...options }), requests }
+  return { provider: new AnthropicProvider({ client, ...options }), requests, client }
 }
 
 const user = (content: string): ChatMessage => ({ role: 'user', content })
@@ -151,7 +151,10 @@ describe('AnthropicProvider — request', () => {
 
     const [request] = requests
     expect(request.url).toContain('/v1/messages')
-    expect(request.headers.get('x-api-key')).toBe('sk-test')
+    // SDK 1.x: API version 2026-10-21, with the API key as a bearer token.
+    expect(request.headers.get('authorization')).toBe('Bearer sk-test')
+    expect(request.headers.get('x-api-key')).toBeNull()
+    expect(request.headers.get('anthropic-version')).toBe('2026-10-21')
     expect(request.headers.get('anthropic-beta')).toBe('server-side-fallback-2026-07-01')
     expect(request.body).toMatchObject({
       model: 'claude-opus-5-5',
@@ -181,7 +184,8 @@ describe('AnthropicProvider — request', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
-  it('sends one sampling parameter, and no fallbacks, on older models', async () => {
+  it('drops sampling parameters on every model under SDK 1.x, and sends no fallbacks to older models', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { provider, requests } = setup([
       sseResponse(eventsFor({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' })),
     ])
@@ -193,13 +197,83 @@ describe('AnthropicProvider — request', () => {
 
     expect(requests[0].body).toMatchObject({
       model: 'claude-sonnet-4-6',
-      temperature: 0.2,
       max_tokens: 1000,
       stop_sequences: ['END'],
     })
+    expect(requests[0].body.temperature).toBeUndefined()
     expect(requests[0].body.top_p).toBeUndefined()
     expect(requests[0].body.fallbacks).toBeUndefined()
     expect(requests[0].headers.get('anthropic-beta')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('2026-10-21')
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain('effort')
+  })
+
+  describe('sampling follows the API version the client sends', () => {
+    const reply = () =>
+      sseResponse(eventsFor({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }))
+    /** The SDK version a client reports, read from its user agent. */
+    const reportVersion = (client: Anthropic, agent: string) =>
+      vi.spyOn(client as never, 'getUserAgent' as never).mockReturnValue(agent as never)
+    const ask = (provider: AnthropicProvider) =>
+      provider.chat(
+        { messages: [user('a')], model: 'claude-sonnet-4-6' },
+        { temperature: 0.2, topP: 0.9 },
+      )
+
+    it('sends one sampling parameter to older models through an SDK 0.x client', async () => {
+      // SDK 0.x sends API version 2023-06-01, which still takes temperature / top_p.
+      const { provider, requests, client } = setup([reply()])
+      reportVersion(client, 'Anthropic/JS 0.135.0')
+      await ask(provider)
+      expect(requests[0].body.temperature).toBe(0.2)
+      expect(requests[0].body.top_p).toBeUndefined()
+    })
+
+    it('reads the version from the client, not the SDK this package resolves', async () => {
+      // A client from another copy of the SDK: here 1.x, which this package also resolves,
+      // reporting 0.x — the client's own answer wins.
+      const { provider, requests, client } = setup([reply()])
+      const spy = reportVersion(client, 'Anthropic/JS 0.126.0')
+      await ask(provider)
+      expect(spy).toHaveBeenCalled()
+      expect(requests[0].body.temperature).toBe(0.2)
+    })
+
+    it('follows an explicit sampling option over the client version', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const on = setup([reply()], { sampling: true })
+      await ask(on.provider)
+      expect(on.requests[0].body.temperature).toBe(0.2)
+
+      const off = setup([reply()], { sampling: false })
+      reportVersion(off.client, 'Anthropic/JS 0.135.0')
+      await ask(off.provider)
+      expect(off.requests[0].body.temperature).toBeUndefined()
+    })
+
+    it.each([
+      ['AnthropicBedrock/JS 0.135.0', 0.2],
+      ['AnthropicBedrockMantle/JS 0.135.0', 0.2],
+      ['AnthropicVertex/JS 0.126.0', 0.2],
+      ['AnthropicBedrock/JS 1.1.0', undefined],
+      ['AnthropicVertex/JS 1.1.0', undefined],
+    ])('reads platform clients too: %s', async (agent, temperature) => {
+      // Bedrock and Vertex clients report the main SDK's version under their own name.
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { provider, requests, client } = setup([reply()])
+      reportVersion(client, agent)
+      await ask(provider)
+      expect(requests[0].body.temperature).toBe(temperature)
+    })
+
+    it("drops them when the client's version can't be read", async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { provider, requests, client } = setup([reply()])
+      reportVersion(client, 'custom-client')
+      await ask(provider)
+      expect(requests[0].body.temperature).toBeUndefined()
+    })
   })
 
   it('applies effort, thinking display, and turns off cache and fallbacks', async () => {
