@@ -1,5 +1,11 @@
 # @forinda/kickjs-devtools
 
+## 7.19.0
+
+### Minor Changes
+
+- [#1098](https://github.com/forinda/kick-js/pull/1098) [`fbdb688`](https://github.com/forinda/kick-js/commit/fbdb6880928bb3f7360061d320c32b1a68df7a34) Thanks [@forinda](https://github.com/forinda)! - The Jobs tab handles large queues. Queued jobs are paged — 10, 25 or 50 to a page (remembered in the browser), with first / previous / next / last and "1–50 of 12,340" — where "Load more" stopped at the first 100 jobs of a state. A filter matches id, name or failure reason: `/_debug/jobs/list?q=` scans the state on the server, a thousand jobs per request, and says how far it got so the tab can search further; `#id` opens a job directly. The Scheduled view filters by name, handler, description or schedule. A filtered queue list reloads when you page or change the filter instead of every few seconds.
+
 ## 7.18.3
 
 ### Patch Changes
