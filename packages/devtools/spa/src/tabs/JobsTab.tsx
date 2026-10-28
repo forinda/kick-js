@@ -5,7 +5,7 @@
  * remembered.
  */
 
-import { createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js'
+import { createMemo, createSignal, Index, onCleanup, onMount, Show, type Component } from 'solid-js'
 import { rpc, type CronJobEntry } from '../lib/rpc'
 import { store, storeActions } from '../lib/store'
 import { ago, formatMs, formatUptime } from '../lib/format'
@@ -75,6 +75,19 @@ const CronPanel: Component = () => {
   const [note, setNote] = createSignal<string | null>(null)
   const [armed, setArmed] = createSignal<string | null>(null)
   const [error, setError] = createSignal<string | null>(null)
+  const [filter, setFilter] = createSignal('')
+  /** Jobs whose name, class, handler, description or schedule contains the filter. */
+  const shown = createMemo(() => {
+    const needle = filter().trim().toLowerCase()
+    if (!needle) return store.cron()
+    return store
+      .cron()
+      .filter((job) =>
+        [job.name, job.className, job.handler, job.description, job.expression].some((v) =>
+          v?.toLowerCase().includes(needle),
+        ),
+      )
+  })
 
   const refresh = async (): Promise<void> => {
     try {
@@ -131,6 +144,24 @@ const CronPanel: Component = () => {
           </div>
         }
       >
+        <div class="mb-2 flex items-center gap-2">
+          <input
+            type="search"
+            class="w-full max-w-sm rounded-md border border-border-strong bg-surface-2 px-2 py-1 text-xs text-text-body placeholder:text-text-muted"
+            placeholder="Filter by name, handler, description or schedule"
+            aria-label="Filter scheduled jobs"
+            value={filter()}
+            onInput={(e) => setFilter(e.currentTarget.value)}
+          />
+          <Show when={filter().trim()}>
+            <span class="text-xs text-text-muted tabular-nums">
+              {shown().length} of {store.cron().length}
+            </span>
+          </Show>
+        </div>
+        <Show when={shown().length === 0}>
+          <div class="empty">No scheduled job matches “{filter().trim()}”</div>
+        </Show>
         <table class="w-full border-collapse text-[0.78rem]">
           <thead>
             <tr class="text-left text-[0.66rem] uppercase tracking-wider text-text-muted">
@@ -144,7 +175,7 @@ const CronPanel: Component = () => {
           </thead>
           <tbody>
             {/* <Index>: a refresh brings new objects; rows update in place, so an armed Run now keeps focus. */}
-            <Index each={store.cron()}>
+            <Index each={shown()}>
               {(job) => (
                 <tr
                   class={`border-t border-border/60 align-top ${job().enabled ? '' : 'opacity-60'}`}

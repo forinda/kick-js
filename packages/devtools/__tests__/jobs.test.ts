@@ -56,6 +56,66 @@ describe('job management endpoints', () => {
     expect((await listJobs(found, { source: 'nope' })).status).toBe(404)
   })
 
+  describe('filtering with q', () => {
+    /** A queue of `total` failed jobs: every 10th is an invoice, every 7th failed on SMTP. */
+    const queueOf = (total: number): Map<string, JobInspector> => {
+      const all = Array.from({ length: total }, (_, i) => ({
+        id: String(i),
+        name: i % 10 === 0 ? 'Invoice' : 'welcome',
+        state: 'failed' as const,
+        attempts: 1,
+        failedReason: i % 7 === 0 ? 'SMTP refused' : 'timeout',
+      }))
+      return new Map([
+        [
+          'Q',
+          {
+            queues: async () => [],
+            job: async () => null,
+            jobs: vi.fn(async (_q, _s, { start, end }) => all.slice(start, end + 1)),
+          },
+        ],
+      ])
+    }
+    type Page = { jobs: { id: string }[]; next: number | null; scanned: number }
+    const list = async (found: Map<string, JobInspector>, q: Record<string, unknown>) =>
+      (await listJobs(found, { source: 'Q', queue: 'email', state: 'failed', ...q })).body as Page
+
+    it('returns a page of matches from across chunks, and where to carry on', async () => {
+      const found = queueOf(2500)
+      const first = await list(found, { q: 'invoice', start: 0, end: 49 })
+      expect(first.jobs.map((j) => j.id)).toEqual(
+        Array.from({ length: 50 }, (_, i) => String(i * 10)),
+      )
+      // The 50th match is job 490; the scan stops right after it.
+      expect(first.next).toBe(491)
+      expect(first.scanned).toBe(491)
+
+      const second = await list(found, { q: 'invoice', start: first.next, end: first.next! + 49 })
+      expect(second.jobs[0]!.id).toBe('500')
+      expect(second.jobs).toHaveLength(50)
+    })
+
+    it('reports the end of the state, and matches id and failure reason, ignoring case', async () => {
+      const found = queueOf(30)
+      const smtp = await list(found, { q: 'smtp', start: 0, end: 49 })
+      expect(smtp.jobs.map((j) => j.id)).toEqual(['0', '7', '14', '21', '28'])
+      expect(smtp.next).toBeNull()
+      expect(smtp.scanned).toBe(30)
+      expect((await list(found, { q: '29', start: 0, end: 49 })).jobs.map((j) => j.id)).toEqual([
+        '29',
+      ])
+    })
+
+    it('stops after scanning 1000 jobs', async () => {
+      const found = queueOf(5000)
+      const page = await list(found, { q: 'nothing matches this', start: 0, end: 49 })
+      expect(page.jobs).toEqual([])
+      expect(page.scanned).toBe(1000)
+      expect(page.next).toBe(1000)
+    })
+  })
+
   it('returns one job, or 404', async () => {
     const found = new Map([['Q', inspector()]])
     expect((await getJob(found, { source: 'Q', queue: 'email', id: '1' })).status).toBe(200)

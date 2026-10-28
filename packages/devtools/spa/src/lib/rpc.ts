@@ -240,8 +240,15 @@ export interface ConfigOrigins {
 
 export const rpc = {
   jobs: () => get<{ sources: JobSource[] }>('/jobs'),
-  jobList: (p: { source: string; queue: string; state: JobState; start: number; end: number }) =>
-    get<{ jobs: JobSummary[] }>(`/jobs/list?${qs(p)}`),
+  /** With `q`, a filtered scan: `next` is where to carry on (`null` at the end), `scanned` how many it looked at. */
+  jobList: (p: {
+    source: string
+    queue: string
+    state: JobState
+    start: number
+    end: number
+    q?: string
+  }) => get<{ jobs: JobSummary[]; next?: number | null; scanned?: number }>(`/jobs/list?${qs(p)}`),
   job: (p: { source: string; queue: string; id: string }) => get<JobDetail>(`/jobs/job?${qs(p)}`),
   jobAction: async (p: {
     source: string
