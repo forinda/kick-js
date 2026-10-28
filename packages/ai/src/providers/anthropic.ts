@@ -288,10 +288,12 @@ export class AnthropicProvider implements AiProvider {
    */
   private acceptsSampling(client: Anthropic): boolean {
     if (this.options.sampling !== undefined) return this.options.sampling
-    // `getUserAgent()` is protected in the SDK's types but public at runtime,
-    // and returns `Anthropic/JS <version>` in every supported release.
+    // `getUserAgent()` is protected in the SDK's types but public at runtime.
+    // It returns `Anthropic/JS <version>`, or `AnthropicBedrock/JS`,
+    // `AnthropicBedrockMantle/JS` or `AnthropicVertex/JS` for the platform
+    // clients — all with the main SDK's version, whose major they share.
     const agent = (client as unknown as { getUserAgent?: () => string }).getUserAgent?.()
-    const major = agent ? /^Anthropic\/JS (\d+)\./.exec(agent)?.[1] : undefined
+    const major = agent ? /^Anthropic\w*\/JS (\d+)\./.exec(agent)?.[1] : undefined
     return major !== undefined && Number(major) < 1
   }
 

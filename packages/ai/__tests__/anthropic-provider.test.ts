@@ -252,6 +252,21 @@ describe('AnthropicProvider — request', () => {
       expect(off.requests[0].body.temperature).toBeUndefined()
     })
 
+    it.each([
+      ['AnthropicBedrock/JS 0.135.0', 0.2],
+      ['AnthropicBedrockMantle/JS 0.135.0', 0.2],
+      ['AnthropicVertex/JS 0.126.0', 0.2],
+      ['AnthropicBedrock/JS 1.1.0', undefined],
+      ['AnthropicVertex/JS 1.1.0', undefined],
+    ])('reads platform clients too: %s', async (agent, temperature) => {
+      // Bedrock and Vertex clients report the main SDK's version under their own name.
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { provider, requests, client } = setup([reply()])
+      reportVersion(client, agent)
+      await ask(provider)
+      expect(requests[0].body.temperature).toBe(temperature)
+    })
+
     it("drops them when the client's version can't be read", async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       const { provider, requests, client } = setup([reply()])

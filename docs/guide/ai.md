@@ -288,7 +288,7 @@ What the provider handles for you:
 - **Sampling parameters** (`temperature`, `topP`) are dropped with a
   warning wherever Claude would reject them: on every model with
   `@anthropic-ai/sdk` 1.x, which sends API version `2026-10-21`, and with 0.x
-  on Claude Opus 4.7 and later, Sonnet 5 and Fable. Nothing replaces them
+  on Claude Opus 4.7 and later, Sonnet 5, Fable and Mythos. Nothing replaces them
   there: requests use the model's default sampling. To keep them, use the 0.x
   SDK with a model that accepts them. The provider reads the SDK version from
   the client it uses; if your `client` sends a different `anthropic-version`
