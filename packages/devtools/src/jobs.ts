@@ -6,7 +6,7 @@
  * @module @forinda/kickjs-devtools/jobs
  */
 
-import type { JobInspector, JobQueueInfo, JobState } from '@forinda/kickjs-devtools-kit'
+import type { JobInspector, JobQueueInfo, JobState, JobSummary } from '@forinda/kickjs-devtools-kit'
 import type { TopologyApplicationLike } from './topology'
 
 const STATES: ReadonlySet<string> = new Set([
@@ -22,6 +22,12 @@ type Action = (typeof ACTIONS)[number]
 
 /** Most jobs one list request returns. */
 const MAX_PAGE = 100
+/**
+ * Most jobs one filtered request looks at. Job tools can't search, so a filter
+ * scans the state in pages; past this it returns what it found and where to
+ * carry on.
+ */
+const MAX_SCAN = 1000
 
 type Reply = { status: number; body: unknown }
 const bad = (error: string, status = 400): Reply => ({ status, body: { error } })
@@ -53,7 +59,15 @@ export async function listJobSources(inspectors: Map<string, JobInspector>): Pro
   return { status: 200, body: { sources } }
 }
 
-/** `GET /jobs/list?source&queue&state&start&end` */
+/**
+ * `GET /jobs/list?source&queue&state&start&end&q`
+ *
+ * Without `q`: the jobs at positions `start`–`end` (at most {@link MAX_PAGE}).
+ * With `q`: the first jobs from `start` on whose id, name or failure reason
+ * contains it (case-insensitive), up to `end - start + 1` of them, looking at no
+ * more than {@link MAX_SCAN} jobs. `next` is where to carry on — `null` once the
+ * state has no more jobs — and `scanned` how many were looked at.
+ */
 export async function listJobs(
   inspectors: Map<string, JobInspector>,
   q: Record<string, unknown>,
@@ -64,13 +78,43 @@ export async function listJobs(
   if (!STATES.has(state)) return bad(`unknown state '${state}'`)
   const start = Math.max(0, Number(q.start ?? 0) || 0)
   const end = Math.min(start + MAX_PAGE - 1, Math.max(start, Number(q.end ?? start + 49) || 0))
+  const queue = String(q.queue ?? '')
+  const needle = String(q.q ?? '')
+    .trim()
+    .toLowerCase()
   try {
-    const jobs = await inspector.jobs(String(q.queue ?? ''), state as JobState, { start, end })
-    return { status: 200, body: { jobs } }
+    if (!needle) {
+      const jobs = await inspector.jobs(queue, state as JobState, { start, end })
+      return { status: 200, body: { jobs } }
+    }
+    const want = end - start + 1
+    const jobs: JobSummary[] = []
+    let at = start
+    let next: number | null = start
+    while (jobs.length < want && at - start < MAX_SCAN) {
+      const chunk = await inspector.jobs(queue, state as JobState, {
+        start: at,
+        end: at + MAX_PAGE - 1,
+      })
+      let i = 0
+      for (; i < chunk.length && jobs.length < want; i++) {
+        if (matches(chunk[i]!, needle)) jobs.push(chunk[i]!)
+      }
+      at += i
+      if (chunk.length < MAX_PAGE && i === chunk.length) {
+        next = null // the state has no more jobs
+        break
+      }
+      next = at
+    }
+    return { status: 200, body: { jobs, next, scanned: at - start } }
   } catch (err) {
     return bad(message(err), 500)
   }
 }
+
+const matches = (job: JobSummary, needle: string): boolean =>
+  [job.id, job.name, job.failedReason].some((v) => v?.toLowerCase().includes(needle))
 
 /** `GET /jobs/job?source&queue&id` */
 export async function getJob(

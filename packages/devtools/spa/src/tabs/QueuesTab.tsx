@@ -1,9 +1,11 @@
 /**
  * Queues — browse and manage background jobs through whatever runs them.
  * Pick a queue, then a state (each with its count); the jobs list beside the
- * selected job's data, result, error and attempts. Retry, remove, retry all
- * failed, clean a state, and pause / resume are offered when the job tool
- * supports them.
+ * selected job's data, result, error and attempts. The list is paged — 10, 25
+ * or 50 to a page, remembered in this browser. The filter matches id, name or
+ * error, scanning the state on the server a thousand jobs at a time, and `#id`
+ * opens a job directly. Retry, remove, retry all failed, clean a state, and
+ * pause / resume are offered when the job tool supports them.
  *
  * Reads `/_debug/jobs*`, served from any adapter's or plugin's
  * `jobInspector()` — `QueueAdapter` provides one for BullMQ.
@@ -16,7 +18,20 @@ import { ago, formatMs } from '../lib/format'
 import { SplitPane } from '../lib/split-pane'
 
 const STATES: JobState[] = ['failed', 'active', 'waiting', 'delayed', 'completed', 'paused']
-const PAGE = 50
+/** Jobs per page; the largest is the default. */
+const PAGE_SIZES = [10, 25, 50] as const
+const PAGE_SIZE_KEY = 'kickjs-devtools:jobs:page-size'
+
+function readPageSize(): number {
+  try {
+    const n = Number(localStorage.getItem(PAGE_SIZE_KEY))
+    return (PAGE_SIZES as readonly number[]).includes(n) ? n : 50
+  } catch {
+    return 50 // storage unavailable
+  }
+}
+/** How many jobs the server looks at per filtered request (its MAX_SCAN). */
+const SCAN = 1000
 
 const stateTone: Record<JobState, string> = {
   failed: 'text-red-500',
@@ -34,7 +49,16 @@ export const QueuesTab: Component = () => {
   const [state, setState] = createSignal<JobState>('failed')
   const [jobs, setJobs] = createSignal<JobSummary[]>([])
   const [listError, setListError] = createSignal<string | null>(null)
-  const [limit, setLimit] = createSignal(PAGE)
+  /** Unfiltered: which page of the state. */
+  const [page, setPage] = createSignal(0)
+  const [pageSize, setPageSize] = createSignal(readPageSize())
+  /** What's typed in the filter box, and the filter in force (debounced). */
+  const [filterText, setFilterText] = createSignal('')
+  const [query, setQuery] = createSignal('')
+  /** Filtered: where this scan starts, the starts of earlier pages, and how it went. */
+  const [cursor, setCursor] = createSignal(0)
+  const [back, setBack] = createSignal<number[]>([])
+  const [scan, setScan] = createSignal<{ next: number | null; scanned: number } | null>(null)
   const [selected, setSelected] = createSignal<string | null>(null)
   const [detail, setDetail] = createSignal<JobDetail | null>(null)
   const [note, setNote] = createSignal<string | null>(null)
@@ -45,6 +69,12 @@ export const QueuesTab: Component = () => {
   const source = createMemo(() => sources()?.find((s) => s.source === pick()?.source))
   const queue = createMemo(() => source()?.queues.find((q) => q.name === pick()?.queue))
   const can = (a: JobSource['actions'][number]): boolean => !!source()?.actions.includes(a)
+  /** Jobs in the state, when the job tool reports it. */
+  const total = createMemo(() => queue()?.counts[state()])
+  const lastPage = createMemo(() => {
+    const t = total()
+    return t === undefined ? undefined : Math.max(0, Math.ceil(t / pageSize()) - 1)
+  })
 
   const loadSources = async (): Promise<void> => {
     try {
@@ -59,14 +89,32 @@ export const QueuesTab: Component = () => {
       setLoadError(err instanceof Error ? err.message : String(err))
     }
   }
+  /** Bumped per list request: only the newest one's answer is shown. */
+  let listRequest = 0
   const loadJobs = async (): Promise<void> => {
     const p = pick()
     if (!p) return
+    const request = ++listRequest
+    const q = query()
+    // The state shrank under the page we were on (jobs retried, cleaned, finished).
+    const last = lastPage()
+    if (!q && last !== undefined && page() > last) setPage(last)
+    const start = q ? cursor() : page() * pageSize()
     try {
-      const { jobs: list } = await rpc.jobList({ ...p, state: state(), start: 0, end: limit() - 1 })
-      setJobs(list)
+      const r = await rpc.jobList({
+        ...p,
+        state: state(),
+        start,
+        end: start + pageSize() - 1,
+        ...(q ? { q } : {}),
+      })
+      // The queue, state, filter or page changed while this was in flight.
+      if (request !== listRequest) return
+      setJobs(r.jobs)
+      setScan(q ? { next: r.next ?? null, scanned: r.scanned ?? 0 } : null)
       setListError(null)
     } catch (err) {
+      if (request !== listRequest) return
       setJobs([])
       setListError(err instanceof Error ? err.message : String(err))
     }
@@ -84,9 +132,14 @@ export const QueuesTab: Component = () => {
       setDetail(null) // removed or moved on
     }
   }
-  const refresh = async (): Promise<void> => {
+  /**
+   * A filtered list is a scan of up to a thousand jobs: the timer leaves it
+   * alone, and it reloads when the filter or page changes — or, with `list`,
+   * after an action changed the jobs in it.
+   */
+  const refresh = async (opts: { list?: boolean } = {}): Promise<void> => {
     await loadSources()
-    await Promise.all([loadJobs(), loadDetail()])
+    await Promise.all([query() && !opts.list ? Promise.resolve() : loadJobs(), loadDetail()])
   }
   onMount(() => {
     void refresh()
@@ -97,11 +150,68 @@ export const QueuesTab: Component = () => {
   const choose = (next: { source: string; queue: string } | null, nextState = state()): void => {
     setPick(next)
     setState(nextState)
-    setLimit(PAGE)
+    resetPaging()
     setSelected(null)
     setDetail(null)
     void loadJobs()
   }
+  function resetPaging(): void {
+    setPage(0)
+    setCursor(0)
+    setBack([])
+    setScan(null)
+  }
+  let debounce: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => clearTimeout(debounce))
+  const applyFilter = (text: string): void => {
+    clearTimeout(debounce)
+    setQuery(text.trim())
+    resetPaging()
+    void loadJobs()
+  }
+  const onFilterInput = (text: string): void => {
+    setFilterText(text)
+    clearTimeout(debounce)
+    if (text.trim().startsWith('#')) return // a job id: Enter opens it
+    debounce = setTimeout(() => applyFilter(text), 300)
+  }
+  const onFilterKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Enter') return
+    const text = filterText().trim()
+    if (text.startsWith('#') && text.length > 1) open(text.slice(1))
+    else applyFilter(text)
+  }
+  const changePageSize = (n: number): void => {
+    setPageSize(n)
+    try {
+      localStorage.setItem(PAGE_SIZE_KEY, String(n))
+    } catch {
+      /* storage unavailable */
+    }
+    // From the top: the old page number means different jobs at the new size.
+    resetPaging()
+    void loadJobs()
+  }
+  const goPage = (n: number): void => {
+    setPage(n)
+    void loadJobs()
+  }
+  /** Filtered: carry on from where the last scan stopped. */
+  const scanOn = (): void => {
+    const next = scan()?.next
+    if (next == null) return
+    setBack((b) => [...b, cursor()])
+    setCursor(next)
+    void loadJobs()
+  }
+  const scanBack = (): void => {
+    const b = back()
+    if (!b.length) return
+    setCursor(b[b.length - 1]!)
+    setBack(b.slice(0, -1))
+    void loadJobs()
+  }
+
   const open = (id: string): void => {
     setSelected(id)
     void loadDetail()
@@ -138,7 +248,7 @@ export const QueuesTab: Component = () => {
                   : 'Queue resumed',
       )
       if (action === 'remove' || action === 'retry') setSelected(null)
-      await refresh()
+      await refresh({ list: true })
     } catch (err) {
       setNote(err instanceof Error ? err.message : String(err))
     } finally {
@@ -256,6 +366,18 @@ export const QueuesTab: Component = () => {
             </Show>
           </div>
         </Show>
+        {/* Filter */}
+        <Show when={queue()}>
+          <input
+            type="search"
+            class="w-full rounded-md border border-border-strong bg-surface-2 px-2 py-1 text-xs text-text-body placeholder:text-text-muted"
+            placeholder={`Filter ${state()} jobs by id, name or error · #id opens a job`}
+            aria-label="Filter jobs"
+            value={filterText()}
+            onInput={(e) => onFilterInput(e.currentTarget.value)}
+            onKeyDown={onFilterKey}
+          />
+        </Show>
       </div>
       {/* Jobs */}
       <div class="min-h-0 flex-1 overflow-y-auto">
@@ -266,7 +388,9 @@ export const QueuesTab: Component = () => {
           when={jobs().length > 0}
           fallback={
             <Show when={queue() && !listError()}>
-              <div class="empty">No {state()} jobs</div>
+              <div class="empty">
+                {query() ? `No ${state()} jobs match “${query()}” here` : `No ${state()} jobs`}
+              </div>
             </Show>
           }
         >
@@ -303,20 +427,105 @@ export const QueuesTab: Component = () => {
               </button>
             )}
           </For>
-          <Show when={jobs().length >= limit()}>
-            <button
-              type="button"
-              class="w-full py-2 text-xs text-text-muted hover:text-text-strong"
-              onClick={() => {
-                setLimit((n) => n + PAGE)
-                void loadJobs()
-              }}
-            >
-              Load {PAGE} more
-            </button>
-          </Show>
         </Show>
       </div>
+      {/* Pages */}
+      <Show when={queue() && !listError()}>
+        <div class="flex items-center gap-1.5 border-t border-border px-2 py-1 text-[0.7rem] text-text-muted">
+          <Show
+            when={query()}
+            fallback={
+              <>
+                <span class="tabular-nums">
+                  {jobs().length
+                    ? `${page() * pageSize() + 1}–${page() * pageSize() + jobs().length}`
+                    : '0'}
+                  {total() !== undefined ? ` of ${total()}` : ''}
+                </span>
+                <span class="flex-1" />
+                <button
+                  type="button"
+                  class={button()}
+                  disabled={page() === 0}
+                  onClick={() => goPage(0)}
+                  aria-label="First page"
+                >
+                  «
+                </button>
+                <button
+                  type="button"
+                  class={button()}
+                  disabled={page() === 0}
+                  onClick={() => goPage(page() - 1)}
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <span class="tabular-nums">
+                  page {page() + 1}
+                  {lastPage() !== undefined ? ` of ${lastPage()! + 1}` : ''}
+                </span>
+                <button
+                  type="button"
+                  class={button()}
+                  disabled={
+                    lastPage() !== undefined ? page() >= lastPage()! : jobs().length < pageSize()
+                  }
+                  onClick={() => goPage(page() + 1)}
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+                <Show when={lastPage() !== undefined}>
+                  <button
+                    type="button"
+                    class={button()}
+                    disabled={page() >= lastPage()!}
+                    onClick={() => goPage(lastPage()!)}
+                    aria-label="Last page"
+                  >
+                    »
+                  </button>
+                </Show>
+              </>
+            }
+          >
+            <span class="tabular-nums">
+              {jobs().length} {jobs().length === 1 ? 'match' : 'matches'} in {state()} jobs{' '}
+              {cursor() + 1}–{cursor() + (scan()?.scanned ?? 0)}
+              {scan()?.next === null ? ' · end of list' : ''}
+            </span>
+            <span class="flex-1" />
+            <button
+              type="button"
+              class={button()}
+              disabled={!back().length}
+              onClick={scanBack}
+              aria-label="Previous matches"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              class={button()}
+              disabled={scan()?.next == null}
+              onClick={scanOn}
+              aria-label="Next matches"
+            >
+              {jobs().length ? '›' : `Search the next ${SCAN}`}
+            </button>
+          </Show>
+          <select
+            class="rounded-md border border-border-strong bg-surface-2 px-1 py-0.5 text-[0.7rem] text-text-secondary"
+            aria-label="Jobs per page"
+            title="Jobs per page"
+            value={pageSize()}
+            onChange={(e) => changePageSize(Number(e.currentTarget.value))}
+          >
+            <For each={PAGE_SIZES}>{(n) => <option value={n}>{n} / page</option>}</For>
+          </select>
+        </div>
+      </Show>
     </>
   )
 
