@@ -82,6 +82,14 @@ export interface AnthropicProviderOptions {
    * creates; ignored when you pass your own `client` (give it `fetch` there).
    */
   fetch?: typeof fetch
+  /**
+   * Whether requests may carry `temperature` / `top_p`. API version
+   * `2026-10-21` (`@anthropic-ai/sdk` 1.x) rejects them on every model;
+   * `2023-06-01` (0.x) takes them on the models that accept them. By default
+   * this follows the SDK version of the client in use. Set it when your
+   * `client` sends a different `anthropic-version` than its SDK's default.
+   */
+  sampling?: boolean
 }
 
 /** Models whose safety classifiers can decline a request, and that support `fallbacks`. */
@@ -139,7 +147,6 @@ export class AnthropicProvider implements AiProvider {
   private readonly defaultChatModel: string
   private readonly defaultMaxTokens: number
   private clientPromise?: Promise<Anthropic>
-  private samplingPromise?: Promise<boolean>
   private readonly warned = new Set<string>()
   private warnedFull = false
 
@@ -183,7 +190,8 @@ export class AnthropicProvider implements AiProvider {
     options: ChatOptions,
     schema?: OutputSchema,
   ): Promise<ChatResponse> {
-    const [client, sampling] = await Promise.all([this.client(), this.sdkAcceptsSampling()])
+    const client = await this.client()
+    const sampling = this.acceptsSampling(client)
     try {
       const params = this.buildParams(input, options, false, sampling, schema)
       const stream = client.beta.messages.stream(params, {
@@ -197,7 +205,8 @@ export class AnthropicProvider implements AiProvider {
 
   async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
     if (input.schema !== undefined) throw new Error(SCHEMA_STREAM_ERROR)
-    const [client, sampling] = await Promise.all([this.client(), this.sdkAcceptsSampling()])
+    const client = await this.client()
+    const sampling = this.acceptsSampling(client)
     const toolIds = new Map<number, string>()
     try {
       const stream = client.beta.messages.stream(this.buildParams(input, options, true, sampling), {
@@ -270,17 +279,20 @@ export class AnthropicProvider implements AiProvider {
   }
 
   /**
-   * Whether the installed SDK sends an API version that takes `temperature` /
-   * `top_p`. 1.x sends `2026-10-21`, which rejects them on every model; 0.x
-   * sends `2023-06-01`. Read from the SDK's own `VERSION` export.
+   * Whether this client's requests may carry `temperature` / `top_p`: the
+   * `sampling` option when set, else the client's own SDK major — 1.x sends API
+   * version `2026-10-21`, which rejects them on every model; 0.x sends
+   * `2023-06-01`. Read from the client itself, so a client built by another
+   * copy of the SDK reports its own version. Unknown → not sent: leaving them
+   * out never fails a request, sending them can.
    */
-  private sdkAcceptsSampling(): Promise<boolean> {
-    this.samplingPromise ??= import('@anthropic-ai/sdk/version').then(
-      (mod) => Number.parseInt(mod.VERSION, 10) < 1,
-      // No version export: an SDK too old to know `2026-10-21`.
-      () => true,
-    )
-    return this.samplingPromise
+  private acceptsSampling(client: Anthropic): boolean {
+    if (this.options.sampling !== undefined) return this.options.sampling
+    // `getUserAgent()` is protected in the SDK's types but public at runtime,
+    // and returns `Anthropic/JS <version>` in every supported release.
+    const agent = (client as unknown as { getUserAgent?: () => string }).getUserAgent?.()
+    const major = agent ? /^Anthropic\/JS (\d+)\./.exec(agent)?.[1] : undefined
+    return major !== undefined && Number(major) < 1
   }
 
   private buildParams(
@@ -315,10 +327,10 @@ export class AnthropicProvider implements AiProvider {
     if (!sdkSampling || NO_SAMPLING_MODELS.test(model)) {
       if (options.temperature !== undefined || options.topP !== undefined) {
         this.warnOnce(
-          `sampling:${sdkSampling ? model : 'sdk'}`,
+          `sampling:${sdkSampling ? model : 'api-version'}`,
           sdkSampling
-            ? `AnthropicProvider: ${model} does not accept temperature/topP; they were not sent. Use effort instead.`
-            : 'AnthropicProvider: @anthropic-ai/sdk 1.x (API version 2026-10-21) does not accept temperature/topP on any model; they were not sent. Use effort instead.',
+            ? `AnthropicProvider: ${model} does not accept temperature/topP, so they were not sent.`
+            : 'AnthropicProvider: temperature/topP were not sent — API version 2026-10-21 (@anthropic-ai/sdk 1.x) rejects them on every model, and it has no replacement for them. To keep them, use @anthropic-ai/sdk 0.x with a model that accepts them.',
         )
       }
     } else if (options.temperature !== undefined) {
