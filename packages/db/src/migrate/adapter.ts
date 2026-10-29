@@ -46,6 +46,12 @@ export interface MigrationAdapter {
    * holder's. Without, unconditionally (`kick db migrate unlock`).
    */
   releaseLock(owner?: string): Promise<void>
+  /**
+   * Who holds the lock, or `null` when it's free. Optional: with it, the
+   * runner releases a lock left by a process on this machine that has since
+   * exited (a dev server stopped mid-migration) instead of waiting it out.
+   */
+  lockHolder?(): Promise<string | null>
   /** Run arbitrary SQL inside a transaction. Used to apply up.sql / down.sql. */
   applySqlInTx(sql: string): Promise<void>
   /**

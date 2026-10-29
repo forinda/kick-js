@@ -20,4 +20,14 @@ describe('sqliteAdapter lock', () => {
     await adapter.refreshLock!('me')
     expect(await adapter.acquireLock('other', 60)).toBe(false)
   })
+
+  it('reports who holds the lock', async () => {
+    const adapter = sqliteAdapter({ database: new Database(':memory:') })
+    await adapter.ensureMigrationTables()
+    expect(await adapter.lockHolder!()).toBeNull()
+    await adapter.acquireLock('me')
+    expect(await adapter.lockHolder!()).toBe('me')
+    await adapter.releaseLock('me')
+    expect(await adapter.lockHolder!()).toBeNull()
+  })
 })

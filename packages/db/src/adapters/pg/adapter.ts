@@ -194,6 +194,13 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
       )
     },
 
+    async lockHolder() {
+      const r = await pool.query<{ locked_by: string | null }>(
+        `SELECT locked_by FROM ${L} WHERE id = 1 AND locked_at IS NOT NULL`,
+      )
+      return r.rows[0]?.locked_by ?? null
+    },
+
     async applySqlInTx(sql: string) {
       await this.applyMigrationInTx!(sql, null)
     },

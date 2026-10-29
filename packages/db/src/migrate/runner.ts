@@ -1,3 +1,5 @@
+import { readlinkSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { parseJournal, hashMigration, type JournalEntry } from './journal'
 import {
   MigrationFailedError,
@@ -120,15 +122,76 @@ async function folderOf(id: string, opts: RunnerOptions): Promise<MigrationFolde
   return entry.folder
 }
 
+/**
+ * Where this process's pids mean something: the host, and on Linux its pid
+ * namespace too — two containers can share a hostname but not pids. `null`
+ * when the namespace can't be read, so no pid is trusted.
+ */
+function pidSpace(): string | null {
+  if (process.platform !== 'linux') return hostname()
+  try {
+    return `${hostname()}:${readlinkSync('/proc/self/ns/pid')}`
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The default lock owner: `<pid>@<pid space>@<time>`, so a later run in the
+ * same pid space can tell whether the holder is still alive.
+ */
+function defaultOwner(): string {
+  return `${process.pid}@${pidSpace() ?? hostname()}@${new Date().toISOString()}`
+}
+
+/**
+ * True when `holder` is a default owner from this pid space whose process has
+ * exited — a dev server stopped mid-migration. Anything else (a custom owner,
+ * another host or container, a live process) is left to the lock's own rules.
+ */
+function heldByDeadProcess(holder: string): boolean {
+  const match = /^(\d+)@([^@]+)@\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.exec(holder)
+  const space = pidSpace()
+  if (!match || space === null || match[2] !== space) return false
+  try {
+    process.kill(Number(match[1]), 0)
+    return false
+  } catch (err) {
+    // EPERM: it exists, under another user.
+    return (err as NodeJS.ErrnoException).code === 'ESRCH'
+  }
+}
+
+/** Take the lock — releasing first one left by a process on this machine that has exited. */
+async function acquire(
+  opts: RunnerOptions,
+  owner: string,
+  staleAfter: number | undefined,
+  recoverDead: boolean,
+): Promise<boolean> {
+  const { adapter } = opts
+  if (await adapter.acquireLock(owner, staleAfter)) return true
+  if (!recoverDead) return false
+  const holder = await adapter.lockHolder?.()
+  if (!holder || !heldByDeadProcess(holder)) return false
+  ;(opts.log ?? console).warn(
+    `kickjs-db: releasing the migration lock held by ${holder}, a process on this machine that has exited.`,
+  )
+  // Only that holder's: a run that took the lock meanwhile keeps it.
+  await adapter.releaseLock(holder)
+  return adapter.acquireLock(owner, staleAfter)
+}
+
 async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T> {
-  const owner = opts.owner ?? `${process.pid}@${new Date().toISOString()}`
+  const owner = opts.owner ?? defaultOwner()
   const staleAfter = opts.lockStaleAfter ?? 600
   if (!Number.isInteger(staleAfter) || staleAfter < 0) {
     throw new Error('kickjs-db: lockStaleAfter must be a whole number of seconds, 0 or more')
   }
   const { adapter } = opts
   const takeOver = staleAfter > 0 && adapter.refreshLock !== undefined
-  const got = await adapter.acquireLock(owner, takeOver ? staleAfter : undefined)
+  // `lockStaleAfter: 0` means only `unlock` releases a lock — a dead holder's too.
+  const got = await acquire(opts, owner, takeOver ? staleAfter : undefined, staleAfter > 0)
   if (!got) {
     throw new MigrationLockError(
       takeOver

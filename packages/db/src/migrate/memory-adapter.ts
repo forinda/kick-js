@@ -51,6 +51,10 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
     if (owner === undefined || this.locked?.by === owner) this.locked = null
   }
 
+  async lockHolder(): Promise<string | null> {
+    return this.locked?.by ?? null
+  }
+
   async applySqlInTx(sql: string): Promise<void> {
     this.appliedSql.push(sql)
   }
