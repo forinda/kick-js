@@ -1,3 +1,4 @@
+import { readlinkSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { parseJournal, hashMigration, type JournalEntry } from './journal'
 import {
@@ -122,21 +123,36 @@ async function folderOf(id: string, opts: RunnerOptions): Promise<MigrationFolde
 }
 
 /**
- * The default lock owner: `<pid>@<host>@<time>`, so a later run on the same
- * machine can tell whether the holder is still alive.
+ * Where this process's pids mean something: the host, and on Linux its pid
+ * namespace too — two containers can share a hostname but not pids. `null`
+ * when the namespace can't be read, so no pid is trusted.
  */
-function defaultOwner(): string {
-  return `${process.pid}@${hostname()}@${new Date().toISOString()}`
+function pidSpace(): string | null {
+  if (process.platform !== 'linux') return hostname()
+  try {
+    return `${hostname()}:${readlinkSync('/proc/self/ns/pid')}`
+  } catch {
+    return null
+  }
 }
 
 /**
- * True when `holder` is a default owner from this machine whose process has
+ * The default lock owner: `<pid>@<pid space>@<time>`, so a later run in the
+ * same pid space can tell whether the holder is still alive.
+ */
+function defaultOwner(): string {
+  return `${process.pid}@${pidSpace() ?? hostname()}@${new Date().toISOString()}`
+}
+
+/**
+ * True when `holder` is a default owner from this pid space whose process has
  * exited — a dev server stopped mid-migration. Anything else (a custom owner,
- * another host, a live process) is left to the lock's own rules.
+ * another host or container, a live process) is left to the lock's own rules.
  */
 function heldByDeadProcess(holder: string): boolean {
-  const match = /^(\d+)@([^@]+)@/.exec(holder)
-  if (!match || match[2] !== hostname()) return false
+  const match = /^(\d+)@([^@]+)@\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.exec(holder)
+  const space = pidSpace()
+  if (!match || space === null || match[2] !== space) return false
   try {
     process.kill(Number(match[1]), 0)
     return false
@@ -151,9 +167,11 @@ async function acquire(
   opts: RunnerOptions,
   owner: string,
   staleAfter: number | undefined,
+  recoverDead: boolean,
 ): Promise<boolean> {
   const { adapter } = opts
   if (await adapter.acquireLock(owner, staleAfter)) return true
+  if (!recoverDead) return false
   const holder = await adapter.lockHolder?.()
   if (!holder || !heldByDeadProcess(holder)) return false
   ;(opts.log ?? console).warn(
@@ -172,7 +190,8 @@ async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T
   }
   const { adapter } = opts
   const takeOver = staleAfter > 0 && adapter.refreshLock !== undefined
-  const got = await acquire(opts, owner, takeOver ? staleAfter : undefined)
+  // `lockStaleAfter: 0` means only `unlock` releases a lock — a dead holder's too.
+  const got = await acquire(opts, owner, takeOver ? staleAfter : undefined, staleAfter > 0)
   if (!got) {
     throw new MigrationLockError(
       takeOver

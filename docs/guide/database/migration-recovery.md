@@ -143,7 +143,7 @@ Another process holds the migration lock and refreshed it within the last 600s. 
 
 A run takes a lock in the database so two deploys can't migrate at once; it releases it when it finishes or fails. A run that was killed — out of memory, `SIGKILL`, a cancelled CI job — can't. While it works, a run refreshes its lock every quarter of `lockStaleAfter` (default 600 seconds); a lock nobody has refreshed for that long belongs to a dead run, and the next run takes it over. So a killed run blocks migrations for at most ten minutes, with nothing to do by hand.
 
-A run killed on the same machine doesn't block even that long. The lock records the holder's process id and host, so the next run on that host sees the process has exited and releases its lock straight away, with a warning. That is the common case in development: stopping `kick dev` while it applies migrations on boot. A lock taken with a custom `owner`, or held by another host, waits out `lockStaleAfter` as before.
+A run killed on the same machine doesn't block even that long. The lock records the holder's process id, host and (on Linux) pid namespace, so the next run in the same place sees the process has exited and releases its lock straight away, with a warning. That is the common case in development: stopping `kick dev` while it applies migrations on boot. A lock taken with a custom `owner`, or held by another host or container, waits out `lockStaleAfter` as before.
 
 To release it sooner, check nothing is migrating, then:
 
@@ -153,7 +153,7 @@ To release it sooner, check nothing is migrating, then:
 Released the migration lock.
 ```
 
-`lockStaleAfter: 0` (on `migrateLatest()` or `kickDbAdapter`) turns the takeover off, so only `unlock` releases a lock. A single statement that runs longer than `lockStaleAfter` can't refresh the lock on a one-connection database (SQLite, PGlite): raise it for migrations that slow.
+`lockStaleAfter: 0` (on `migrateLatest()` or `kickDbAdapter`) turns the takeover off, the exited-process release included, so only `unlock` releases a lock. A single statement that runs longer than `lockStaleAfter` can't refresh the lock on a one-connection database (SQLite, PGlite): raise it for migrations that slow.
 
 A second run is refused immediately rather than waiting for the lock, so this error also appears when two instances try to migrate at the same moment — which is why migrations belong in one release step, not in every instance's boot ([CI and Deployment](./ci-deploy.md#several-instances)).
 
