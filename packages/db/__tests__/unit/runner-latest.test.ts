@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { spawnSync } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { migrateLatest, MemoryMigrationAdapter, MigrationLockError } from '@forinda/kickjs-db'
@@ -66,6 +67,35 @@ describe('migrateLatest', () => {
     const applied = await adapter.listApplied()
     expect(applied.find((row) => row.id === '20260427_010000_a')?.batch).toBe(1)
     expect(applied.find((row) => row.id === '20260427_020000_b')?.batch).toBe(2)
+  })
+
+  it('releases a lock left by a process on this machine that has exited', async () => {
+    await seedMigration(dir, '20260427_010000_a', 'a')
+    const adapter = new MemoryMigrationAdapter()
+    // A child that has exited: its pid is free.
+    const dead = spawnSync(process.execPath, ['-e', '']).pid!
+    expect(await adapter.acquireLock(`${dead}@${hostname()}@2026-10-29T10:00:00.000Z`)).toBe(true)
+    const log = { warn: vi.fn() }
+
+    const r = await migrateLatest({ adapter, migrationsDir: dir, log })
+
+    expect(r.applied).toEqual(['20260427_010000_a'])
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining(`${dead}@${hostname()}`))
+    expect(await adapter.lockHolder()).toBeNull()
+  })
+
+  it.each([
+    ['a live process', () => `${process.pid}@${hostname()}@2026-10-29T10:00:00.000Z`],
+    ['another machine', () => `1@not-${hostname()}@2026-10-29T10:00:00.000Z`],
+    ['a custom owner', () => 'deploy-42'],
+  ])('keeps a lock held by %s', async (_, holder) => {
+    await seedMigration(dir, '20260427_010000_a', 'a')
+    const adapter = new MemoryMigrationAdapter()
+    expect(await adapter.acquireLock(holder())).toBe(true)
+    await expect(migrateLatest({ adapter, migrationsDir: dir })).rejects.toBeInstanceOf(
+      MigrationLockError,
+    )
+    expect(await adapter.lockHolder()).toBe(holder())
   })
 
   it('releases lock even on failure (e.g. unreviewed migration)', async () => {

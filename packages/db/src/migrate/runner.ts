@@ -1,3 +1,4 @@
+import { hostname } from 'node:os'
 import { parseJournal, hashMigration, type JournalEntry } from './journal'
 import {
   MigrationFailedError,
@@ -120,15 +121,58 @@ async function folderOf(id: string, opts: RunnerOptions): Promise<MigrationFolde
   return entry.folder
 }
 
+/**
+ * The default lock owner: `<pid>@<host>@<time>`, so a later run on the same
+ * machine can tell whether the holder is still alive.
+ */
+function defaultOwner(): string {
+  return `${process.pid}@${hostname()}@${new Date().toISOString()}`
+}
+
+/**
+ * True when `holder` is a default owner from this machine whose process has
+ * exited — a dev server stopped mid-migration. Anything else (a custom owner,
+ * another host, a live process) is left to the lock's own rules.
+ */
+function heldByDeadProcess(holder: string): boolean {
+  const match = /^(\d+)@([^@]+)@/.exec(holder)
+  if (!match || match[2] !== hostname()) return false
+  try {
+    process.kill(Number(match[1]), 0)
+    return false
+  } catch (err) {
+    // EPERM: it exists, under another user.
+    return (err as NodeJS.ErrnoException).code === 'ESRCH'
+  }
+}
+
+/** Take the lock — releasing first one left by a process on this machine that has exited. */
+async function acquire(
+  opts: RunnerOptions,
+  owner: string,
+  staleAfter: number | undefined,
+): Promise<boolean> {
+  const { adapter } = opts
+  if (await adapter.acquireLock(owner, staleAfter)) return true
+  const holder = await adapter.lockHolder?.()
+  if (!holder || !heldByDeadProcess(holder)) return false
+  ;(opts.log ?? console).warn(
+    `kickjs-db: releasing the migration lock held by ${holder}, a process on this machine that has exited.`,
+  )
+  // Only that holder's: a run that took the lock meanwhile keeps it.
+  await adapter.releaseLock(holder)
+  return adapter.acquireLock(owner, staleAfter)
+}
+
 async function withLock<T>(opts: RunnerOptions, fn: () => Promise<T>): Promise<T> {
-  const owner = opts.owner ?? `${process.pid}@${new Date().toISOString()}`
+  const owner = opts.owner ?? defaultOwner()
   const staleAfter = opts.lockStaleAfter ?? 600
   if (!Number.isInteger(staleAfter) || staleAfter < 0) {
     throw new Error('kickjs-db: lockStaleAfter must be a whole number of seconds, 0 or more')
   }
   const { adapter } = opts
   const takeOver = staleAfter > 0 && adapter.refreshLock !== undefined
-  const got = await adapter.acquireLock(owner, takeOver ? staleAfter : undefined)
+  const got = await acquire(opts, owner, takeOver ? staleAfter : undefined)
   if (!got) {
     throw new MigrationLockError(
       takeOver

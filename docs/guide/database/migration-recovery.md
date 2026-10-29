@@ -143,6 +143,8 @@ Another process holds the migration lock and refreshed it within the last 600s. 
 
 A run takes a lock in the database so two deploys can't migrate at once; it releases it when it finishes or fails. A run that was killed — out of memory, `SIGKILL`, a cancelled CI job — can't. While it works, a run refreshes its lock every quarter of `lockStaleAfter` (default 600 seconds); a lock nobody has refreshed for that long belongs to a dead run, and the next run takes it over. So a killed run blocks migrations for at most ten minutes, with nothing to do by hand.
 
+A run killed on the same machine doesn't block even that long. The lock records the holder's process id and host, so the next run on that host sees the process has exited and releases its lock straight away, with a warning. That is the common case in development: stopping `kick dev` while it applies migrations on boot. A lock taken with a custom `owner`, or held by another host, waits out `lockStaleAfter` as before.
+
 To release it sooner, check nothing is migrating, then:
 
 <PmCommand exec="kick db migrate unlock" />

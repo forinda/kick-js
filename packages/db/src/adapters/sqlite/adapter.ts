@@ -163,6 +163,13 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
         .run(owner ?? null, owner ?? null)
     },
 
+    async lockHolder() {
+      const row = database
+        .prepare(`SELECT locked_by FROM ${L} WHERE id = 1 AND locked_at IS NOT NULL`)
+        .get() as { locked_by: string | null } | undefined
+      return row?.locked_by ?? null
+    },
+
     async applySqlInTx(sql: string) {
       await this.applyMigrationInTx!(sql, null)
     },

@@ -151,6 +151,13 @@ export function asyncSqliteAdapter(opts: AsyncSqliteAdapterOptions): MigrationAd
       )
     },
 
+    async lockHolder() {
+      const rows = (await driver.query(
+        `SELECT locked_by FROM ${L} WHERE id = 1 AND locked_at IS NOT NULL`,
+      )) as { locked_by: string | null }[]
+      return rows[0]?.locked_by ?? null
+    },
+
     async applySqlInTx(sql) {
       await this.applyMigrationInTx!(sql, null)
     },
