@@ -232,6 +232,12 @@ export function originsOf(
 const cached = new WeakMap<Settings<unknown>, unknown>()
 
 /**
+ * The env an optional section was declared against — the web entry's
+ * platform bindings — so `get()` reads that, not `process.env`, when it's used.
+ */
+const declaredEnv = new WeakMap<Settings<unknown>, NodeJS.ProcessEnv>()
+
+/**
  * Define a typed configuration section read from env variables with a prefix.
  * Each key path becomes one variable: `pool.max` under `'DB'` is `DB_POOL_MAX`,
  * `maxConnections` is `DB_MAX_CONNECTIONS`. A list reads a comma-separated
@@ -347,7 +353,7 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
       if (container.has(settings)) return container.resolve(settings) as T
       // Keyed by the section, not its prefix: two sections sharing a prefix
       // each parse their own schema.
-      if (!cached.has(settings)) cached.set(settings, load())
+      if (!cached.has(settings)) cached.set(settings, load(declaredEnv.get(settings)))
       return cached.get(settings) as T
     },
     scoped: (name: string): Settings<T> => {
@@ -388,7 +394,10 @@ export function loadSettings(
   const sections: Settings<unknown>[] = []
   for (const decl of declarations) {
     // Listed, not required: `get()` validates it when it's used.
-    if (isOptionalSettings(decl)) continue
+    if (isOptionalSettings(decl)) {
+      declaredEnv.set(decl.section, env)
+      continue
+    }
     if (isProvided(decl)) {
       // Two provides of one section would silently keep whichever came last.
       const earlier = provided.has(decl.section) ? provided : providedBefore

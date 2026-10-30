@@ -419,6 +419,17 @@ describe('optional sections', () => {
     expect(() => Smtp.get()).toThrow(/KT_SMTP_HOST/)
   })
 
+  it('read the platform env they were declared with on the web entry', () => {
+    const EdgeSmtp = defineSettings('KT_EDGE_SMTP', z.object({ host: z.string() }))
+    createWebApp({
+      h3: h3v2,
+      modules: [],
+      settings: [EdgeSmtp.optional()],
+      env: { KT_EDGE_SMTP_HOST: 'smtp.edge' },
+    })
+    expect(EdgeSmtp.get().host).toBe('smtp.edge')
+  })
+
   it('are required when also declared plainly', async () => {
     await expect(
       new Application({
