@@ -62,6 +62,18 @@ describe('reading env while describing', () => {
     expect(() => session({ secret, store: 'cookie' })).not.toThrow()
   })
 
+  it('treats an empty value as unset: a copied .env.example has NAME= for required variables', () => {
+    describing()
+    process.env.KD_SECRET = ''
+    try {
+      const secret = getEnv('KD_SECRET' as never) as string
+      expect(secret.length).toBeGreaterThan(0)
+      expect(() => session({ secret, store: 'cookie' })).not.toThrow()
+    } finally {
+      delete process.env.KD_SECRET
+    }
+  })
+
   it('still validates nothing, and leaves no values behind for a real load', () => {
     describing()
     expect(() => loadEnv()).not.toThrow()

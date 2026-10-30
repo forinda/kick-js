@@ -639,6 +639,10 @@ function describingConfig(): boolean {
  * `session({ secret: getEnv('SESSION_SECRET') })`, so a required variable with
  * neither gets a placeholder rather than `undefined`. Nothing serves requests
  * in this mode, so the placeholder is never used for real.
+ *
+ * Empty counts as unset, as in `originsOf`: `kick env example` writes required
+ * variables as `NAME=`, so a copied `.env` has empty values, and passing those on
+ * would fail the very load this mode exists to get through.
  */
 function describedEnv(schema: unknown): Record<string, unknown> {
   const env: Record<string, unknown> = {}
