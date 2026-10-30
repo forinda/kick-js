@@ -533,6 +533,116 @@ On a host with an IAM role, leave both keys unset and pass the provider as an op
 
 A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Pass it as `s3FromSettings(Backups)`; the adapter that takes that storage declares it.
 
+## Your own driver
+
+Storage on another service (Cloudinary, Azure Blob, Google Cloud Storage, an internal file API) doesn't need a driver from KickJS. A driver is any object with the methods of `Storage`, and `StorageAdapter({ storage })` binds it like the built-in ones: `@Autowired(STORAGE)`, the upload helpers and the `/health/ready` check work unchanged.
+
+Every driver keeps the same promises, which code that uses `Storage` relies on:
+
+| Method        | Must                                                                                                                                                                    |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| every method  | Refuse a key that could escape or alias with `checkKey(key)` — it throws `invalid key`.                                                                                 |
+| `put`         | Replace what's there. Take bytes, a string, or a stream (a web `ReadableStream` or a Node `Readable`); `collect(body)` turns any of them into bytes.                    |
+| `putIfAbsent` | Be atomic: of several callers racing for one key, exactly one gets `true`.                                                                                              |
+| `get`         | Return `null` for a missing key, never throw for it. So do `getStream` and `stat`.                                                                                      |
+| `getStream`   | Honour `range` (both ends included, as in HTTP); `checkRange(range)` validates it and throws `invalid range`.                                                           |
+| `delete`      | Treat a missing key as done.                                                                                                                                            |
+| `list`        | Return keys under `prefix` in plain string order, `limit` at a time (`checkLimit`), with `cursor` resuming after the last one; group by `delimiter` (`checkDelimiter`). |
+| `url`         | Return an absolute URL a browser can load. `encodeKey(key)` encodes it segment by segment.                                                                              |
+
+When the service can't keep one of them (no conditional write, a listing that isn't in key order), throw a clear error from that method rather than doing something weaker: a `putIfAbsent` that isn't atomic hands two callers the same key.
+
+```ts
+// src/storage/http-storage.ts — a driver for a file service with a plain HTTP API
+import { checkKey, checkRange, collect, encodeKey, type Storage } from '@forinda/kickjs-storage'
+
+export function httpStorage({ base, token }: { base: string; token: string }): Storage {
+  const at = (key: string) => `${base}/${encodeKey(checkKey(key))}`
+  const send = (key: string, init: RequestInit = {}) =>
+    fetch(at(key), { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } })
+  const unsupported = (method: string) => async (): Promise<never> => {
+    throw new Error(`httpStorage: ${method}() isn't supported by this service`)
+  }
+
+  return {
+    async put(key, body, options) {
+      const res = await send(key, {
+        method: 'PUT',
+        body: await collect(body),
+        headers: options?.contentType ? { 'content-type': options.contentType } : {},
+      })
+      if (!res.ok) throw new Error(`httpStorage: put ${key} failed with ${res.status}`)
+    },
+    async get(key) {
+      const res = await send(key)
+      if (res.status === 404) return null
+      return new Uint8Array(await res.arrayBuffer())
+    },
+    async getStream(key, range) {
+      const r = checkRange(range)
+      const res = await send(
+        key,
+        r ? { headers: { range: `bytes=${r.start}-${r.end ?? ''}` } } : {},
+      )
+      return res.status === 404 ? null : res.body
+    },
+    async stat(key) {
+      const res = await send(key, { method: 'HEAD' })
+      if (res.status === 404) return null
+      return {
+        key,
+        size: Number(res.headers.get('content-length')),
+        lastModified: new Date(res.headers.get('last-modified') ?? Date.now()),
+        contentType: res.headers.get('content-type') ?? undefined,
+      }
+    },
+    async exists(key) {
+      return (await this.stat(key)) !== null
+    },
+    async delete(key) {
+      const res = await send(key, { method: 'DELETE' })
+      if (!res.ok && res.status !== 404) throw new Error(`httpStorage: delete ${key} failed`)
+    },
+    async url(key) {
+      return at(key)
+    },
+    putIfAbsent: unsupported('putIfAbsent'),
+    list: unsupported('list'),
+  }
+}
+```
+
+```ts
+// src/adapters/storage.ts
+StorageAdapter({
+  storage: httpStorage({ base: getEnv('FILES_URL'), token: getEnv('FILES_TOKEN') }),
+  // The readiness check calls list(), which this driver doesn't support.
+  healthCheck: false,
+})
+```
+
+The example is a sketch: a real one handles an empty range (`start` past the end) and checks the response status on every call.
+
+### Checking a driver: `storageContract`
+
+The built-in drivers are tested by one shared suite. `@forinda/kickjs-storage/testing` exports it, so a driver of your own can run the same checks under Vitest:
+
+```ts
+// src/storage/http-storage.test.ts
+import { storageContract } from '@forinda/kickjs-storage/testing'
+import { httpStorage } from './http-storage'
+
+storageContract(
+  'httpStorage',
+  // Called once per test: hand back an empty storage — a fresh folder on a real service.
+  () =>
+    httpStorage({ base: `${process.env.FILES_URL}/test-${crypto.randomUUID()}`, token: 'test' }),
+  { skip: ['putIfAbsent', 'list', 'delimiter'] },
+)
+```
+
+`skip` leaves out what the driver deliberately doesn't do: `'putIfAbsent'`, `'range'`, `'list'`, `'delimiter'`, `'url'` or `'keys'`. Pass `baseUrl` when the driver builds URLs from one, and `url()` is checked against it exactly; otherwise it only has to return an absolute URL. The suite needs `vitest` installed.
+
 ## In tests
 
 Override `STORAGE` with `memoryStorage()` and read back what the handler stored:
