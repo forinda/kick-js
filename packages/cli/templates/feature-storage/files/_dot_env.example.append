@@ -1,7 +1,7 @@
 # ── S3 settings (optional, declared by adapter StorageAdapter) ──
 # Bucket name — required when used
 # S3_BUCKET=
-# Access key; set with S3_SECRET_ACCESS_KEY, or neither on a host with an IAM role
+# Access key; set with S3_SECRET_ACCESS_KEY, or neither and pass credentials to s3FromSettings() (an IAM role)
 # S3_ACCESS_KEY_ID=
 # Secret for S3_ACCESS_KEY_ID
 # S3_SECRET_ACCESS_KEY=
