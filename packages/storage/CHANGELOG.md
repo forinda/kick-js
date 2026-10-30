@@ -1,5 +1,13 @@
 # @forinda/kickjs-storage
 
+## 0.4.0
+
+### Minor Changes
+
+- [#1107](https://github.com/forinda/kick-js/pull/1107) [`30e5327`](https://github.com/forinda/kick-js/commit/30e53271dec8e80731a485b71f09671b01020228) Thanks [@forinda](https://github.com/forinda)! - Write your own storage driver. `@forinda/kickjs-storage/testing` exports `storageContract(name, make, { skip?, baseUrl? })`, the Vitest suite the built-in drivers run, so a driver for another service (Cloudinary, Azure Blob, an internal file API) can be checked against the same behaviour; `skip` leaves out what a backend deliberately can't do. The checks every driver makes are exported too, so a custom one throws the same errors: `checkKey`, `checkRange`, `checkLimit`, `checkDelimiter`, `collect` and `encodeKey`. The file storage guide has a new "Your own driver" section with the rules each method keeps and an example driver. `vitest` is an optional peer, needed only for `/testing`.
+
+- [#1105](https://github.com/forinda/kick-js/pull/1105) [`434d510`](https://github.com/forinda/kick-js/commit/434d510bc96ffeefdd4862931ce2d3284e14f4c6) Thanks [@forinda](https://github.com/forinda)! - `StorageAdapter` takes a `settings` option: more sections to declare beside the storage's own. The file `kick add storage` writes passes `settings: [S3Settings.optional()]`, so `kick env example` keeps listing the `S3_*` variables while files are on disk instead of dropping the lines `kick add storage` appended; with `S3_BUCKET` set, the section is still required at startup. Those appended lines now match what `kick env example` writes. `@forinda/kickjs-storage` now needs `@forinda/kickjs` 10.14 or later, for `.optional()`.
+
 ## 0.3.2
 
 ### Patch Changes

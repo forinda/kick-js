@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 8.17.1
+
+### Patch Changes
+
+- [#1105](https://github.com/forinda/kick-js/pull/1105) [`434d510`](https://github.com/forinda/kick-js/commit/434d510bc96ffeefdd4862931ce2d3284e14f4c6) Thanks [@forinda](https://github.com/forinda)! - `StorageAdapter` takes a `settings` option: more sections to declare beside the storage's own. The file `kick add storage` writes passes `settings: [S3Settings.optional()]`, so `kick env example` keeps listing the `S3_*` variables while files are on disk instead of dropping the lines `kick add storage` appended; with `S3_BUCKET` set, the section is still required at startup. Those appended lines now match what `kick env example` writes. `@forinda/kickjs-storage` now needs `@forinda/kickjs` 10.14 or later, for `.optional()`.
+- Updated dependencies [[`ae3de71`](https://github.com/forinda/kick-js/commit/ae3de71b7442c44159c5a4f020d6bd883a783f5b)]:
+  - @forinda/kickjs-db@8.12.3
+
 ## 8.17.0
 
 ### Minor Changes
