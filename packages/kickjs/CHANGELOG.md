@@ -1,5 +1,11 @@
 # @forinda/kickjs
 
+## 10.14.1
+
+### Patch Changes
+
+- [#1111](https://github.com/forinda/kick-js/pull/1111) [`6c54638`](https://github.com/forinda/kick-js/commit/6c546387d96089a87f0284e882f07ad6bf4fabef) Thanks [@forinda](https://github.com/forinda)! - `kick env example` no longer fails on an entry file that passes env values on as it loads. While describing, `getEnv()` and `loadEnv()` returned nothing, so `session({ secret: getEnv('SESSION_SECRET') })`, which every app from the inertia template has, threw "`secret` must be a non-empty string" and the command stopped. They now return the value that's set or the schema's default, with a placeholder for a required variable that has neither. Validation is still skipped.
+
 ## 10.14.0
 
 ### Minor Changes
