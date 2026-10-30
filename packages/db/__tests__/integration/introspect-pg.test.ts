@@ -463,6 +463,19 @@ describe('introspectPg()', () => {
     ])
   }, 60_000)
 
+  it('leaves out the index behind an EXCLUDE constraint, and keeps a plain gist index', async () => {
+    await client.query(`
+      CREATE TABLE "bookings" (
+        "id" serial PRIMARY KEY,
+        "span" tstzrange NOT NULL,
+        CONSTRAINT "bookings_free" EXCLUDE USING gist ("span" WITH &&)
+      );
+      CREATE INDEX "bookings_span_gist" ON "bookings" USING gist ("span");
+    `)
+    const snap = await introspectPg(client)
+    expect(snap.tables.bookings.indexes.map((i) => i.name)).toEqual(['bookings_span_gist'])
+  }, 60_000)
+
   it('skips kick_migrations + kick_migrations_lock tables', async () => {
     await client.query(`
       CREATE TABLE "kick_migrations" ("id" varchar(128) PRIMARY KEY);

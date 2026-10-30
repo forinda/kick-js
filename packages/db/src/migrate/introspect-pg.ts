@@ -64,6 +64,7 @@ interface IndexRow {
   is_included: boolean
   is_unique: boolean
   is_primary: boolean
+  is_exclusion: boolean
   method: string
   predicate: string | null
 }
@@ -452,6 +453,8 @@ async function readIndexes(
             k.ord > ix.indnkeyatts AS is_included,
             ix.indisunique AS is_unique,
             ix.indisprimary AS is_primary,
+            EXISTS (SELECT 1 FROM pg_constraint c
+                     WHERE c.conindid = ix.indexrelid AND c.contype = 'x') AS is_exclusion,
             am.amname AS method,
             pg_get_expr(ix.indpred, ix.indrelid, true) AS predicate
      FROM pg_class t
@@ -467,12 +470,17 @@ async function readIndexes(
   )
 
   // Group rows by index_name, preserve key order.
-  type Tagged = IndexSnapshot & { _isPrimary: boolean }
+  type Tagged = IndexSnapshot & { _skip: boolean }
   const byIndex = new Map<string, Tagged>()
   for (const r of rows.rows) {
     let entry = byIndex.get(r.index_name)
     if (!entry) {
-      entry = { name: r.index_name, columns: [], unique: r.is_unique, _isPrimary: r.is_primary }
+      entry = {
+        name: r.index_name,
+        columns: [],
+        unique: r.is_unique,
+        _skip: r.is_primary || r.is_exclusion,
+      }
       if (r.method !== 'btree') entry.using = r.method
       if (r.predicate) entry.where = r.predicate
       byIndex.set(r.index_name, entry)
@@ -481,10 +489,12 @@ async function readIndexes(
     else entry.columns.push(r.is_expression ? `(${r.key})` : r.key)
   }
 
-  // Drop PK-backing indexes — primaryKey is recorded on the column itself.
+  // Drop PK-backing indexes — primaryKey is recorded on the column itself —
+  // and the ones behind an EXCLUDE constraint, which the schema can't declare
+  // (they're written by hand in a migration, so drift would flag them as added).
   return [...byIndex.values()]
-    .filter((i) => !i._isPrimary)
-    .map(({ _isPrimary, ...rest }) => rest)
+    .filter((i) => !i._skip)
+    .map(({ _skip, ...rest }) => rest)
     .toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
