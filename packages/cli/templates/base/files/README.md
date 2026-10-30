@@ -69,7 +69,7 @@ Copy `.env.example` to `.env` and configure:
 | `NODE_ENV`  | `development` | Environment                    |
 | `LOG_LEVEL` | `info`        | Log level (`debug` shows more) |
 
-The env schema lives in `src/config/index.ts`. `src/index.ts` imports it once (`import './config'`) before `bootstrap()`, which registers and validates it — a missing or malformed value fails at startup with a clear message. To add a variable, add it to the schema (or to a settings section), set it in `.env`, then run `kick env example` to regenerate `.env.example` — it's written from the schema and every declared settings section, so don't edit it by hand. `kick env example --check` fails in CI when it's stale.
+The env schema lives in `src/config/index.ts`. `src/index.ts` imports it once (`import './config'`) before `bootstrap()`, which registers and validates it — a missing or malformed value fails at startup with a clear message. To add a variable, add it to the schema (or to a settings section), set it in `.env`, then run `kick env example` to regenerate `.env.example` — it's written from the schema and every declared settings section, so don't edit it by hand. `kick env example --check` fails in CI when it's stale. A section only some setups read — SMTP when `MAIL_DRIVER=smtp`, a bucket only production uses — goes in a `settings` list as `MySettings.optional()`: listed in `.env.example`, but required only when the code that reads it runs ([optional sections](https://kickjs.app/guide/configuration#read-only-on-some-paths-optional)).
 
 You don't import anything from `src/config` after that. Read values anywhere through the framework, not `process.env` — they come back parsed (`PORT` is a number, defaults applied) and typed:
 

@@ -74,6 +74,7 @@ import {
 import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timeline'
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
 import {
+  isOptionalSettings,
   loadSettings,
   originsOf,
   type ConfigVar,
@@ -190,8 +191,17 @@ export interface MountedRouteInfo {
 export interface ConfigDescription {
   /** The app's env schema (`loadEnv` / `loadEnvFromSchema`), or the base schema. */
   env: ConfigVar[]
-  /** Declared settings sections, in declaration order, each once. */
-  sections: Array<{ prefix: string; declaredBy: string; vars: ConfigVar[] }>
+  /**
+   * Declared settings sections, in declaration order, each once. `optional`
+   * when every declaration was `.optional()`: not validated at startup.
+   */
+  sections: Array<{
+    prefix: string
+    declaredBy: string
+    description?: string
+    optional?: boolean
+    vars: ConfigVar[]
+  }>
 }
 
 /** What `app.configOrigins()` returns. */
@@ -1227,14 +1237,27 @@ export class Application {
    */
   describeConfig(): ConfigDescription {
     const sections: ConfigDescription['sections'] = []
-    const seen = new Set<Settings<unknown>>()
+    const seen = new Map<Settings<unknown>, ConfigDescription['sections'][number]>()
     const add = (declaredBy: string, list: readonly SettingsDeclaration[] | undefined) => {
       for (const decl of list ?? []) {
         // A provided section still reads these variables when not provided.
         const section = 'section' in decl ? decl.section : decl
-        if (seen.has(section)) continue
-        seen.add(section)
-        sections.push({ prefix: section.prefix, declaredBy, vars: section.describe() })
+        const optional = isOptionalSettings(decl)
+        const listed = seen.get(section)
+        if (listed) {
+          // Required by any declaration: required.
+          if (!optional) delete listed.optional
+          continue
+        }
+        const entry: ConfigDescription['sections'][number] = {
+          prefix: section.prefix,
+          declaredBy,
+          ...(section.description ? { description: section.description } : {}),
+          ...(optional ? { optional: true } : {}),
+          vars: section.describe(),
+        }
+        seen.set(section, entry)
+        sections.push(entry)
       }
     }
     add('app', this.options.settings)
