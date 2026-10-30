@@ -7,8 +7,10 @@ import {
   Container,
   defineModule,
   defineSettings,
+  getEnv,
   loadEnv,
   resetEnvCache,
+  session,
 } from '../src/index'
 
 beforeEach(() => Container.reset())
@@ -27,6 +29,59 @@ const Db = defineSettings(
   }),
 )
 const Mail = defineSettings('KD_MAIL', z.object({ host: z.string() }))
+
+describe('reading env while describing', () => {
+  const describing = () => {
+    ;(globalThis as Record<symbol, unknown>)[flag] = true
+    loadEnv(
+      z.object({
+        KD_PORT: z.coerce.number().default(3000),
+        KD_FROM_ENV: z.string().default('schema'),
+        KD_SECRET: z.string().min(32),
+      }),
+    )
+  }
+
+  it('gives load-time code the default, or the value that is set', () => {
+    describing()
+    process.env.KD_FROM_ENV = 'set'
+    try {
+      expect(getEnv('KD_PORT' as never)).toBe(3000)
+      expect(getEnv('KD_FROM_ENV' as never)).toBe('set')
+    } finally {
+      delete process.env.KD_FROM_ENV
+    }
+  })
+
+  it('gives a required variable a placeholder, so an entry that passes it on still loads', () => {
+    describing()
+    const secret = getEnv('KD_SECRET' as never) as string
+    expect(typeof secret).toBe('string')
+    expect(secret.length).toBeGreaterThan(0)
+    // The inertia template's entry: this threw, and `kick env example` with it.
+    expect(() => session({ secret, store: 'cookie' })).not.toThrow()
+  })
+
+  it('treats an empty value as unset: a copied .env.example has NAME= for required variables', () => {
+    describing()
+    process.env.KD_SECRET = ''
+    try {
+      const secret = getEnv('KD_SECRET' as never) as string
+      expect(secret.length).toBeGreaterThan(0)
+      expect(() => session({ secret, store: 'cookie' })).not.toThrow()
+    } finally {
+      delete process.env.KD_SECRET
+    }
+  })
+
+  it('still validates nothing, and leaves no values behind for a real load', () => {
+    describing()
+    expect(() => loadEnv()).not.toThrow()
+    delete (globalThis as Record<symbol, unknown>)[flag]
+    resetEnvCache()
+    expect(() => loadEnv(z.object({ KD_SECRET: z.string().min(32) }))).toThrow()
+  })
+})
 
 describe('app.describeConfig', () => {
   it('lists env and declared sections without reading or validating the environment', () => {
