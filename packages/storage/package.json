@@ -60,7 +60,7 @@
     "@forinda/kickjs-schema": "workspace:^"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=10.1.0",
+    "@forinda/kickjs": ">=10.14.0",
     "vitest": ">=3.0.0"
   },
   "peerDependenciesMeta": {

@@ -1,6 +1,15 @@
-# File storage: set S3_BUCKET to use a bucket instead of the uploads/ folder
+# ── S3 settings (optional, declared by adapter StorageAdapter) ──
+# Bucket name — required when used
 # S3_BUCKET=
-# S3_REGION=
+# Access key; set with S3_SECRET_ACCESS_KEY, or neither and pass credentials to s3FromSettings() (an IAM role)
 # S3_ACCESS_KEY_ID=
+# Secret for S3_ACCESS_KEY_ID
 # S3_SECRET_ACCESS_KEY=
+# Region, e.g. eu-west-1 (auto for Cloudflare R2); default us-east-1
+# S3_REGION=
+# Endpoint of an S3-compatible service (Cloudflare R2, MinIO); unset for AWS
 # S3_ENDPOINT=
+# Session token for temporary credentials
+# S3_SESSION_TOKEN=
+# <endpoint>/<bucket>/<key> addressing; default true with S3_ENDPOINT, false for AWS
+# S3_FORCE_PATH_STYLE=
