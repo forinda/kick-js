@@ -27,6 +27,7 @@ export {
   loadSettings,
   originsOf,
   type ConfigVar,
+  type OptionalSettings,
   type ProvidedSettings,
   type Settings,
   type SettingsDeclaration,

@@ -38,6 +38,18 @@ const OPTIONAL = [
   'forcePathStyle',
 ]
 
+// What `kick env example` writes above each variable.
+const DESCRIPTIONS: Record<string, string> = {
+  bucket: 'Bucket name',
+  accessKeyId: 'Access key; set with S3_SECRET_ACCESS_KEY, or neither on a host with an IAM role',
+  secretAccessKey: 'Secret for S3_ACCESS_KEY_ID',
+  region: 'Region, e.g. eu-west-1 (auto for Cloudflare R2); default us-east-1',
+  endpoint: 'Endpoint of an S3-compatible service (Cloudflare R2, MinIO); unset for AWS',
+  sessionToken: 'Session token for temporary credentials',
+  forcePathStyle:
+    '<endpoint>/<bucket>/<key> addressing; default true with S3_ENDPOINT, false for AWS',
+}
+
 /** String fields, written out so the app can use any schema library or none. Empty is unset. */
 const schema: KickSchema<S3Fields> = {
   safeParse(data) {
@@ -73,7 +85,10 @@ const schema: KickSchema<S3Fields> = {
     properties: Object.fromEntries(
       [...REQUIRED, ...OPTIONAL].map((key) => [
         key,
-        { type: key === 'forcePathStyle' ? 'boolean' : 'string' },
+        {
+          type: key === 'forcePathStyle' ? 'boolean' : 'string',
+          description: DESCRIPTIONS[key],
+        },
       ]),
     ),
     required: REQUIRED,

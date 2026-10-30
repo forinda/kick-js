@@ -89,6 +89,36 @@ describe('app.describeConfig', () => {
   })
 })
 
+describe('optional sections in describeConfig', () => {
+  const Smtp = defineSettings(
+    'KD_SMTP',
+    z.object({ host: z.string() }).describe('With MAIL_DRIVER=smtp: any SMTP relay.'),
+  )
+  const Resend = defineSettings('KD_RESEND', z.object({ apiKey: z.string() }))
+
+  it('lists them flagged optional, with the schema description; a plain declaration makes one required', () => {
+    const app = new Application({
+      modules: [],
+      settings: [Resend.optional()],
+      adapters: [{ name: 'MailAdapter', settings: () => [Smtp.optional(), Resend] }] as never,
+    })
+    expect(app.describeConfig().sections).toEqual([
+      {
+        prefix: 'KD_RESEND',
+        declaredBy: 'app',
+        vars: [{ name: 'KD_RESEND_API_KEY', required: true, list: false }],
+      },
+      {
+        prefix: 'KD_SMTP',
+        declaredBy: 'adapter MailAdapter',
+        description: 'With MAIL_DRIVER=smtp: any SMTP relay.',
+        optional: true,
+        vars: [{ name: 'KD_SMTP_HOST', required: true, list: false }],
+      },
+    ])
+  })
+})
+
 describe('APPLICATION token', () => {
   it('resolves the constructed Application, and the new one after setup()', async () => {
     const app = new Application({ modules: [] })

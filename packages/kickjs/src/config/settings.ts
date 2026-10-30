@@ -33,6 +33,8 @@ export interface Settings<T> extends InjectionToken<T> {
   readonly prefix: string
   /** Every env name the section reads, e.g. `['DB_URL', 'DB_POOL_MAX']`. */
   readonly envNames: readonly string[]
+  /** The schema's own description (`.describe('…')` on the object in Zod). */
+  readonly description?: string
   /**
    * The section's value — validated at startup, then cached. Before startup
    * (a script, a CLI command) the first call loads and validates it.
@@ -57,6 +59,19 @@ export interface Settings<T> extends InjectionToken<T> {
    */
   provide(value: unknown): ProvidedSettings<T>
   /**
+   * Declare the section without requiring it: it's listed (`kick env example`,
+   * `describeConfig()`) but not validated or bound at startup — `get()`
+   * validates it when the code that needs it runs. For a section only one
+   * driver reads, picked at runtime:
+   *
+   * ```ts
+   * settings: () => [SmtpSettings.optional(), ResendSettings.optional()]
+   * ```
+   *
+   * Declared plainly anywhere else too, it's required.
+   */
+  optional(): OptionalSettings<T>
+  /**
    * The same schema under another prefix, for a second instance:
    * `DbSettings.scoped('ANALYTICS')` reads `ANALYTICS_DB_*` beside `DB_*`.
    * Returns the same token for the same name.
@@ -73,11 +88,27 @@ export interface ProvidedSettings<T> {
   readonly value: unknown
 }
 
-/** What a `settings` list accepts: a section (read from env) or a provided one. */
-export type SettingsDeclaration = Settings<unknown> | ProvidedSettings<unknown>
+const OPTIONAL = Symbol.for('kickjs.settings.optional')
+
+/** A section declared without being required — see {@link Settings.optional}. */
+export interface OptionalSettings<T> {
+  readonly [OPTIONAL]: true
+  readonly section: Settings<T>
+}
+
+/** What a `settings` list accepts: a section (read from env), a provided one, or an optional one. */
+export type SettingsDeclaration =
+  | Settings<unknown>
+  | ProvidedSettings<unknown>
+  | OptionalSettings<unknown>
 
 function isProvided(decl: SettingsDeclaration): decl is ProvidedSettings<unknown> {
   return (decl as Partial<ProvidedSettings<unknown>>)[PROVIDED] === true
+}
+
+/** @internal True for a declaration made with {@link Settings.optional}. */
+export function isOptionalSettings(decl: SettingsDeclaration): decl is OptionalSettings<unknown> {
+  return (decl as Partial<OptionalSettings<unknown>>)[OPTIONAL] === true
 }
 
 /** The value type of a section: `SettingsOf<typeof DbSettings>`. */
@@ -301,10 +332,13 @@ function createSection<S>(prefix: string, schema: S): Settings<InferSchemaOutput
     name: `Settings(${prefix})`,
     prefix,
     envNames,
+    ...(shape.description ? { description: shape.description } : {}),
     load,
     parse: (value: unknown): T => validate(value),
     provide: (value: unknown): ProvidedSettings<T> =>
       Object.freeze({ [PROVIDED]: true as const, section: settings, value }),
+    optional: (): OptionalSettings<T> =>
+      Object.freeze({ [OPTIONAL]: true as const, section: settings }),
     describe: () => leaves.map(toConfigVar),
     get: (): T => {
       // What injected code sees: the container's binding, which a module or a
@@ -353,6 +387,8 @@ export function loadSettings(
   const provided = new Map<Settings<unknown>, unknown>()
   const sections: Settings<unknown>[] = []
   for (const decl of declarations) {
+    // Listed, not required: `get()` validates it when it's used.
+    if (isOptionalSettings(decl)) continue
     if (isProvided(decl)) {
       // Two provides of one section would silently keep whichever came last.
       const earlier = provided.has(decl.section) ? provided : providedBefore

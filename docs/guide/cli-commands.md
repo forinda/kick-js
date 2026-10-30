@@ -314,7 +314,7 @@ DB_URL=
 # DB_POOL_MAX=10
 ```
 
-Required variables are written bare; optional ones are commented, with their default. Descriptions come from the schema (`.describe('…')` in Zod).
+Required variables are written bare; optional ones are commented, with their default. Descriptions come from the schema (`.describe('…')` in Zod) — on a field, above its variable; on a section's object, under its heading. A section declared [`.optional()`](./configuration.md#read-only-on-some-paths-optional) is listed with every variable commented, the required ones marked _required when used_. A section nothing declares isn't listed.
 
 It loads `src/index.ts` through your `vite.config.ts` — the same way `kick dev` does — with `bootstrap()` captured instead of started and the env loaders recording the schema without validating it. Nothing listens and no environment is needed, so it works on a fresh clone. Options: `--entry <file>` (default `src/index.ts`), `--out <file>` (default `.env.example`).
 

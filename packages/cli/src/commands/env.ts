@@ -16,7 +16,13 @@ export interface ConfigVar {
 /** What `app.describeConfig()` returns. */
 export interface ConfigDescription {
   env: ConfigVar[]
-  sections: Array<{ prefix: string; declaredBy: string; vars: ConfigVar[] }>
+  sections: Array<{
+    prefix: string
+    declaredBy: string
+    description?: string
+    optional?: boolean
+    vars: ConfigVar[]
+  }>
 }
 
 /** Same symbols `@forinda/kickjs` reads — `Symbol.for`, so no import is needed. */
@@ -37,15 +43,20 @@ function formatDefault(value: unknown): string {
   return String(value)
 }
 
-function renderVars(vars: ConfigVar[]): string[] {
+/** Each line of `text` as a comment — a newline would end a commented line. */
+const commentLines = (text: string) => text.split(/\r?\n/).map((line) => `# ${line}`)
+
+function renderVars(vars: ConfigVar[], optional = false): string[] {
   const lines: string[] = []
   for (const v of vars) {
-    const notes = [v.description, v.list ? 'comma-separated list' : undefined].filter(Boolean)
-    // Every line of a multi-line description stays a comment.
-    for (const line of notes.length > 0 ? notes.join(' — ').split(/\r?\n/) : []) {
-      lines.push(`# ${line}`)
-    }
-    if (v.required) lines.push(`${v.name}=`)
+    const notes = [
+      v.description,
+      v.list ? 'comma-separated list' : undefined,
+      // An optional section's required variables stay commented: needed once it's used.
+      optional && v.required ? 'required when used' : undefined,
+    ].filter(Boolean)
+    if (notes.length > 0) lines.push(...commentLines(notes.join(' — ')))
+    if (v.required && !optional) lines.push(`${v.name}=`)
     else lines.push(`# ${v.name}=${v.default === undefined ? '' : formatDefault(v.default)}`)
   }
   return lines
@@ -60,8 +71,9 @@ export function renderEnvExample(config: ConfigDescription): string {
   for (const section of config.sections) {
     blocks.push(
       [
-        `# ── ${section.prefix} settings (declared by ${section.declaredBy}) ──`,
-        ...renderVars(section.vars),
+        `# ── ${section.prefix} settings (${section.optional ? 'optional, ' : ''}declared by ${section.declaredBy}) ──`,
+        ...(section.description ? commentLines(section.description) : []),
+        ...renderVars(section.vars, section.optional),
       ].join('\n'),
     )
   }

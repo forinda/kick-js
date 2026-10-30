@@ -501,8 +501,34 @@ Settings 'DB' are invalid:
 
 - **Only what's mounted is required.** A module that isn't loaded doesn't need its variables — including in tests, which give the values for what they mount (`.env.test`, or schema defaults).
 - **Declaring twice is fine** — a section shared by a module and an adapter is loaded once. Two _different_ sections with the same prefix would read the same variables and are refused.
-- **Undeclared sections** aren't validated at startup; `get()` validates one on first use.
+- **Undeclared sections** aren't validated at startup; `get()` validates one on first use. They're also missing from `.env.example` — declare them `.optional()` (below) to list them.
 - On the [web entry](./edge-deployment.md), `createWebApp({ settings })` and its modules' sections read the `env` you pass (the Workers bindings).
+
+### Read only on some paths: `.optional()`
+
+A section that only one driver reads, picked at run time — SMTP when `MAIL_DRIVER=smtp`, Resend when it's `resend`, ClamAV when `CLAMAV_HOST` is set — can't be declared plainly: startup would require `SMTP_HOST` in an app that prints its mail. Left undeclared, it works (`get()` validates it when the driver is built) but [`kick env example`](./cli-commands.md#kick-env-example) never lists it. Declare it `.optional()`:
+
+```ts
+export const MailAdapter = defineAdapter({
+  name: 'MailAdapter',
+  build: () => ({
+    settings: () => [SmtpSettings.optional(), ResendSettings.optional()],
+    // …picks a driver from MAIL_DRIVER, which calls SmtpSettings.get() or ResendSettings.get()
+  }),
+})
+```
+
+An optional section is listed by `kick env example` and `app.describeConfig()` — every variable commented, the required ones marked _required when used_ — but isn't validated or bound at startup; `get()` validates it on use. `.optional()` works in every `settings` list: `bootstrap({ settings })`, a module's, an adapter's, a plugin's. Declared plainly anywhere as well, the section is required.
+
+A library's section that your app reads conditionally is declared the same way, from your app — for a bucket only production uses:
+
+```ts
+import { S3Settings } from '@forinda/kickjs-storage/settings'
+
+bootstrap({ modules, settings: [S3Settings.optional()] })
+```
+
+A description on the section's schema — `z.object({ … }).describe('With MAIL_DRIVER=smtp: any SMTP relay.')` — is written under its heading in `.env.example`.
 
 ### Several instances: `.scoped()`
 
