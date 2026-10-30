@@ -616,6 +616,8 @@ export function httpStorage({ base, token }: { base: string; token: string }): S
 // src/adapters/storage.ts
 StorageAdapter({
   storage: httpStorage({ base: getEnv('FILES_URL'), token: getEnv('FILES_TOKEN') }),
+  // The readiness check calls list(), which this driver doesn't support.
+  healthCheck: false,
 })
 ```
 

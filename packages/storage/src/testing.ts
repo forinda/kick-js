@@ -200,8 +200,18 @@ export function storageContract(
 
     can('keys')('refuses keys that could escape or alias', async () => {
       const files = await make()
+      const calls: ((key: string) => Promise<unknown>)[] = [
+        (key) => files.put(key, 'x'),
+        (key) => files.get(key),
+        (key) => files.getStream(key),
+        (key) => files.stat(key),
+        (key) => files.exists(key),
+        (key) => files.delete(key),
+      ]
+      if (!skip.has('putIfAbsent')) calls.push((key) => files.putIfAbsent(key, 'x'))
+      if (!skip.has('url')) calls.push((key) => files.url(key))
       for (const key of ['', '/etc/passwd', '../x', 'a/../../x', 'a//b', 'a/./b', 'a\\b', 'a/']) {
-        await expect(files.put(key, 'x')).rejects.toThrow('invalid key')
+        for (const call of calls) await expect(call(key)).rejects.toThrow('invalid key')
       }
     })
   })
