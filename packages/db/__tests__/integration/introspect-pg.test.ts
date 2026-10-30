@@ -422,6 +422,47 @@ describe('introspectPg()', () => {
     ])
   }, 60_000)
 
+  it('reads composite foreign keys column by column, and one constraint name on two tables apart', async () => {
+    await client.query(`
+      CREATE TABLE "orgs" ("id" integer NOT NULL, "region" text NOT NULL, PRIMARY KEY ("id", "region"));
+      CREATE TABLE "teams" (
+        "id" serial PRIMARY KEY,
+        "org_id" integer NOT NULL,
+        "org_region" text NOT NULL,
+        CONSTRAINT "owner_fk" FOREIGN KEY ("org_region", "org_id")
+          REFERENCES "orgs" ("region", "id") ON DELETE SET NULL ON UPDATE RESTRICT
+      );
+      CREATE TABLE "projects" (
+        "id" serial PRIMARY KEY,
+        "team_id" integer,
+        CONSTRAINT "owner_fk" FOREIGN KEY ("team_id") REFERENCES "teams" ("id") ON DELETE SET DEFAULT
+      );
+    `)
+
+    const snap = await introspectPg(client)
+
+    expect(snap.tables.teams.foreignKeys).toEqual([
+      {
+        name: 'owner_fk',
+        columns: ['org_region', 'org_id'],
+        refTable: 'orgs',
+        refColumns: ['region', 'id'],
+        onDelete: 'set_null',
+        onUpdate: 'restrict',
+      },
+    ])
+    expect(snap.tables.projects.foreignKeys).toEqual([
+      {
+        name: 'owner_fk',
+        columns: ['team_id'],
+        refTable: 'teams',
+        refColumns: ['id'],
+        onDelete: 'set_default',
+        onUpdate: 'no_action',
+      },
+    ])
+  }, 60_000)
+
   it('skips kick_migrations + kick_migrations_lock tables', async () => {
     await client.query(`
       CREATE TABLE "kick_migrations" ("id" varchar(128) PRIMARY KEY);

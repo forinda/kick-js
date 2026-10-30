@@ -488,32 +488,35 @@ async function readIndexes(
     .toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
+/** A `pg_constraint` action code as the rule name information_schema reports. */
+const FK_RULE = (column: string) =>
+  `CASE ${column} WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT'
+     WHEN 'r' THEN 'RESTRICT' ELSE 'NO ACTION' END`
+
 async function readForeignKeys(
   client: PgQueryRunner,
   schema: string,
   table: string,
 ): Promise<ForeignKeySnapshot[]> {
+  // pg_catalog, not information_schema: its constraint views take seconds to
+  // minutes per call on a schema with a few hundred tables, once per table.
+  // `unnest(conkey, confkey)` pairs each column with the one it references.
   const rows = await client.query<FkRow>(
-    `SELECT tc.constraint_name,
-            kcu.column_name,
-            ccu.table_name AS ref_table,
-            ccu.column_name AS ref_column,
-            rc.delete_rule,
-            rc.update_rule
-     FROM information_schema.table_constraints tc
-     JOIN information_schema.key_column_usage kcu
-       ON kcu.constraint_name = tc.constraint_name
-      AND kcu.table_schema = tc.table_schema
-     JOIN information_schema.referential_constraints rc
-       ON rc.constraint_name = tc.constraint_name
-      AND rc.constraint_schema = tc.table_schema
-     JOIN information_schema.constraint_column_usage ccu
-       ON ccu.constraint_name = rc.unique_constraint_name
-      AND ccu.constraint_schema = rc.unique_constraint_schema
-     WHERE tc.table_schema = $1
-       AND tc.table_name = $2
-       AND tc.constraint_type = 'FOREIGN KEY'
-     ORDER BY tc.constraint_name, kcu.ordinal_position`,
+    `SELECT c.conname AS constraint_name,
+            a.attname AS column_name,
+            ref.relname AS ref_table,
+            ra.attname AS ref_column,
+            ${FK_RULE('c.confdeltype')} AS delete_rule,
+            ${FK_RULE('c.confupdtype')} AS update_rule
+     FROM pg_constraint c
+     JOIN pg_class t ON t.oid = c.conrelid
+     JOIN pg_namespace n ON n.oid = t.relnamespace
+     JOIN pg_class ref ON ref.oid = c.confrelid
+     JOIN unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(attnum, refattnum, ord) ON true
+     JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+     JOIN pg_attribute ra ON ra.attrelid = c.confrelid AND ra.attnum = k.refattnum
+     WHERE c.contype = 'f' AND n.nspname = $1 AND t.relname = $2
+     ORDER BY c.conname, k.ord`,
     [schema, table],
   )
 
