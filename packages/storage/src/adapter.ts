@@ -18,7 +18,12 @@
  *
  * @module @forinda/kickjs-storage/adapter
  */
-import { createToken, defineAdapter, type InjectionToken } from '@forinda/kickjs'
+import {
+  createToken,
+  defineAdapter,
+  type InjectionToken,
+  type SettingsDeclaration,
+} from '@forinda/kickjs'
 import type { Storage } from './types'
 
 /** The app's storage, bound by {@link StorageAdapter}. */
@@ -36,6 +41,12 @@ export interface StorageAdapterOptions {
    * check lists one key, which on S3 needs list permission on the bucket.
    */
   healthCheck?: boolean
+  /**
+   * More sections to declare beside the storage's own — for a bucket the app
+   * only uses sometimes, `[S3Settings.optional()]`, so `kick env example`
+   * lists its variables while the app runs on disk.
+   */
+  settings?: readonly SettingsDeclaration[]
 }
 
 export const StorageAdapter = defineAdapter<StorageAdapterOptions>({
@@ -43,7 +54,7 @@ export const StorageAdapter = defineAdapter<StorageAdapterOptions>({
   build: (config, { name }) => ({
     settings: () => {
       const section = (config.storage as unknown as Record<symbol, unknown>)[SETTINGS]
-      return section ? [section as never] : []
+      return [...(section ? [section as never] : []), ...(config.settings ?? [])]
     },
     beforeStart({ container }) {
       container.registerInstance(config.token ?? STORAGE, config.storage)
