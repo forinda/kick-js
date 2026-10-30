@@ -366,7 +366,7 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
   // Re-parse if schema changed or no cache yet
   if (cachedEnv && cachedSchema === s) return overlaid(cachedEnv)
   cachedSchema = s
-  if (describingConfig()) return {}
+  if (describingConfig()) return describedEnv(s)
   cachedEnv = s.parse(withSecretFiles(process.env, Object.keys(s.shape ?? {})))
 
   // Register env resolver so @Value() reads validated values
@@ -548,7 +548,7 @@ export function loadEnvFromSchema<TSchema>(
 export function loadEnvFromSchema(schema: unknown): unknown {
   if (describingConfig()) {
     cachedSchema = schema
-    return {}
+    return describedEnv(schema)
   }
   const wrapped = detectSchema(schema)
   const declared = Object.keys(
@@ -631,6 +631,23 @@ export const DESCRIBE_CONFIG = Symbol.for('kickjs.config.describe')
 
 function describingConfig(): boolean {
   return (globalThis as Record<symbol, unknown>)[DESCRIBE_CONFIG] === true
+}
+
+/**
+ * What env reads return while describing, unvalidated: the value that's set,
+ * or the schema's default. Entry files pass these on as they load, as in
+ * `session({ secret: getEnv('SESSION_SECRET') })`, so a required variable with
+ * neither gets a placeholder rather than `undefined`. Nothing serves requests
+ * in this mode, so the placeholder is never used for real.
+ */
+function describedEnv(schema: unknown): Record<string, unknown> {
+  const env: Record<string, unknown> = {}
+  for (const v of describeSchemaVars(schema)) {
+    const value = process.env[v.name] || v.default
+    if (value !== undefined) env[v.name] = value
+    else if (v.required) env[v.name] = 'kick-env-example-placeholder'
+  }
+  return env
 }
 
 /**
