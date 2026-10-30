@@ -522,7 +522,9 @@ import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
 ```
 
-`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. A missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. Declared either way, a missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+
+When the app only uses the bucket sometimes — `S3_BUCKET ? s3FromSettings() : diskStorage(…)` — declare it `S3Settings.optional()` so `kick env example` still lists the variables ([optional sections](./configuration.md#read-only-on-some-paths-optional)). An optional section doesn't stop startup: the same problems are reported when the bucket is first used.
 
 On a host with an IAM role, leave both keys unset and pass the provider as an option: `s3FromSettings(S3Settings, { credentials: fromNodeProviderChain(), timeoutMs: 5000 })`. Keys set in the environment win over `credentials`. With neither, the first call fails.
 

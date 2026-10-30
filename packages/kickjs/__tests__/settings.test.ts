@@ -403,3 +403,40 @@ describe('a failed rebuild', () => {
     expect(app.configOrigins().sections.map((s) => s.prefix)).toContain('KT_DB')
   })
 })
+
+describe('optional sections', () => {
+  const Smtp = defineSettings('KT_SMTP', z.object({ host: z.string() }))
+
+  it('are not validated at startup from any declaration site; get() validates on use', async () => {
+    const app = new Application({
+      modules: [{ settings: () => [Smtp.optional()], routes: () => null } as never],
+      settings: [Smtp.optional()],
+      plugins: [{ name: 'P', settings: () => [Smtp.optional()] }],
+      adapters: [{ name: 'A', settings: () => [Smtp.optional()] }],
+    })
+    await expect(app.setup()).resolves.toBeUndefined()
+    expect(app.getContainer().has(Smtp)).toBe(false)
+    expect(() => Smtp.get()).toThrow(/KT_SMTP_HOST/)
+  })
+
+  it('read the platform env they were declared with on the web entry', () => {
+    const EdgeSmtp = defineSettings('KT_EDGE_SMTP', z.object({ host: z.string() }))
+    createWebApp({
+      h3: h3v2,
+      modules: [],
+      settings: [EdgeSmtp.optional()],
+      env: { KT_EDGE_SMTP_HOST: 'smtp.edge' },
+    })
+    expect(EdgeSmtp.get().host).toBe('smtp.edge')
+  })
+
+  it('are required when also declared plainly', async () => {
+    await expect(
+      new Application({
+        modules: [],
+        settings: [Smtp.optional()],
+        adapters: [{ name: 'A', settings: () => [Smtp] }],
+      }).setup(),
+    ).rejects.toThrow(/KT_SMTP_HOST/)
+  })
+})

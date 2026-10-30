@@ -45,6 +45,30 @@ describe('renderEnvExample', () => {
     expect(text).toContain('# Shown on\n# the home page\n# GREETING="hi\\nthere"\n')
   })
 
+  it('comments every variable of an optional section, noting the required ones', () => {
+    const text = renderEnvExample({
+      env: [],
+      sections: [
+        {
+          prefix: 'SMTP',
+          declaredBy: 'adapter MailAdapter',
+          description: 'With MAIL_DRIVER=smtp.',
+          optional: true,
+          vars: [
+            { name: 'SMTP_HOST', required: true, list: false },
+            { name: 'SMTP_PORT', required: false, default: 587, list: false },
+          ],
+        },
+      ],
+    })
+    expect(text).toContain(
+      '# ── SMTP settings (optional, declared by adapter MailAdapter) ──\n' +
+        '# With MAIL_DRIVER=smtp.\n' +
+        '# required when used\n# SMTP_HOST=\n' +
+        '# SMTP_PORT=587\n',
+    )
+  })
+
   it('omits the env block when there is no schema', () => {
     expect(renderEnvExample({ env: [], sections: [] })).not.toContain('App env schema')
   })
