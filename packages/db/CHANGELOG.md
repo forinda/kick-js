@@ -1,5 +1,13 @@
 # @forinda/kickjs-db
 
+## 8.12.4
+
+### Patch Changes
+
+- [#1109](https://github.com/forinda/kick-js/pull/1109) [`95475f4`](https://github.com/forinda/kick-js/commit/95475f428f324b4a82bf22a9c0f3cf55d6721707) Thanks [@forinda](https://github.com/forinda)! - Postgres drift check no longer reports the index behind an `EXCLUDE` constraint as an added index. The schema can't declare exclusion constraints, so they're added by hand in a migration, and `kick dev` refused to start with "Schema drift detected: … added" once one was applied.
+  
+  A schema rendered by `kick db introspect` before this fix may declare such an index as a plain one; the drift check now reports it as removed. Drop it from the schema (it's the constraint's, not yours), or leave it out with `driftIgnore: { indexes: /^name$/ }`.
+
 ## 8.12.3
 
 ### Patch Changes
