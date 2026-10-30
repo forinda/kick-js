@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Application, Container, createToken } from '@forinda/kickjs'
 import { memoryStorage, type Storage } from '../src/index'
 import { STORAGE, StorageAdapter } from '../src/adapter'
-import { s3FromSettings } from '../src/settings'
+import { S3Settings, s3FromSettings } from '../src/settings'
 
 beforeEach(() => Container.reset())
 afterEach(() => vi.unstubAllEnvs())
@@ -39,6 +39,24 @@ it("declares s3FromSettings' section, so missing variables stop startup", async 
   await expect(app.setup()).rejects.toThrow(/S3_BUCKET/)
   const section = app.describeConfig().sections.find((s) => s.prefix === 'S3')
   expect(section?.declaredBy).toBe('adapter StorageAdapter')
+})
+
+it('declares extra sections: an optional bucket is listed, not required, until it is used', async () => {
+  for (const name of ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY']) vi.stubEnv(name, '')
+  const onDisk = new Application({
+    modules: [],
+    adapters: [StorageAdapter({ storage: memoryStorage(), settings: [S3Settings.optional()] })],
+  })
+  await expect(onDisk.setup()).resolves.toBeUndefined()
+  expect(onDisk.describeConfig().sections.find((s) => s.prefix === 'S3')?.optional).toBe(true)
+
+  // On the bucket, s3FromSettings declares the section plainly: still required.
+  Container.reset()
+  const onS3 = new Application({
+    modules: [],
+    adapters: [StorageAdapter({ storage: s3FromSettings(), settings: [S3Settings.optional()] })],
+  })
+  await expect(onS3.setup()).rejects.toThrow(/S3_BUCKET/)
 })
 
 it('reports the storage to /health/ready with a one-key list', async () => {

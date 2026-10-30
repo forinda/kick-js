@@ -41,7 +41,8 @@ const OPTIONAL = [
 // What `kick env example` writes above each variable.
 const DESCRIPTIONS: Record<string, string> = {
   bucket: 'Bucket name',
-  accessKeyId: 'Access key; set with S3_SECRET_ACCESS_KEY, or neither on a host with an IAM role',
+  accessKeyId:
+    'Access key; set with S3_SECRET_ACCESS_KEY, or neither and pass credentials to s3FromSettings() (an IAM role)',
   secretAccessKey: 'Secret for S3_ACCESS_KEY_ID',
   region: 'Region, e.g. eu-west-1 (auto for Cloudflare R2); default us-east-1',
   endpoint: 'Endpoint of an S3-compatible service (Cloudflare R2, MinIO); unset for AWS',
