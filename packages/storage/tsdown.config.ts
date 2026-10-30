@@ -10,11 +10,12 @@ export default defineConfig({
     settings: 'src/settings.ts',
     tus: 'src/tus.ts',
     adapter: 'src/adapter.ts',
+    testing: 'src/testing.ts',
   },
   format: ['esm'],
   platform: 'node',
   minify: { compress: true, mangle: false },
   dts: true,
-  external: ['@forinda/kickjs', '@forinda/kickjs-schema', /^node:/],
+  external: ['@forinda/kickjs', '@forinda/kickjs-schema', 'vitest', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

@@ -19,7 +19,16 @@
  *
  * @module @forinda/kickjs-storage
  */
-export { checkKey, type Body } from './keys'
+// The checks every driver makes, for writing your own: the same errors the built-in ones throw.
+export {
+  checkDelimiter,
+  checkKey,
+  checkLimit,
+  checkRange,
+  collect,
+  encodeKey,
+  type Body,
+} from './keys'
 export { memoryStorage, type MemoryStorageOptions } from './memory'
 export {
   s3Storage,

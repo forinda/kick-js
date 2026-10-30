@@ -39,6 +39,10 @@
     "./adapter": {
       "import": "./dist/adapter.mjs",
       "types": "./dist/adapter.d.mts"
+    },
+    "./testing": {
+      "import": "./dist/testing.mjs",
+      "types": "./dist/testing.d.mts"
     }
   },
   "files": [
@@ -56,10 +60,14 @@
     "@forinda/kickjs-schema": "workspace:^"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=10.1.0"
+    "@forinda/kickjs": ">=10.1.0",
+    "vitest": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "@forinda/kickjs": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   },
