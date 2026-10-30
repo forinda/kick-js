@@ -1,5 +1,18 @@
 # @forinda/kickjs-cli
 
+## 8.17.0
+
+### Minor Changes
+
+- [#1103](https://github.com/forinda/kick-js/pull/1103) [`580cd20`](https://github.com/forinda/kick-js/commit/580cd207b6fa08bdc617c37497733ee9733f8b27) Thanks [@forinda](https://github.com/forinda)! - Settings sections can be declared `.optional()`: listed by `kick env example` and `app.describeConfig()`, but not validated or bound at startup — `get()` validates one when it's used. For a section only one driver reads, picked at run time (SMTP or Resend by `MAIL_DRIVER`, a bucket only production uses), which until now either had to be required at startup or was left out of `.env.example`. Works in every `settings` list: `bootstrap()`, modules, adapters and plugins. `kick env example` comments every variable of an optional section, marks the required ones "required when used", and writes a section schema's own description under its heading. The `S3Settings` variables now carry descriptions.
+
+### Patch Changes
+
+- [#1102](https://github.com/forinda/kick-js/pull/1102) [`3052dcc`](https://github.com/forinda/kick-js/commit/3052dcc8c68a55624ff15ff9c6be42f751214ac9) Thanks [@forinda](https://github.com/forinda)! - The README `kick new` writes now says to regenerate `.env.example` with `kick env example` after adding a variable, instead of editing it by hand.
+- Updated dependencies [[`580cd20`](https://github.com/forinda/kick-js/commit/580cd207b6fa08bdc617c37497733ee9733f8b27)]:
+  - @forinda/kickjs@10.14.0
+  - @forinda/kickjs-db@8.12.2
+
 ## 8.16.7
 
 ### Patch Changes
