@@ -344,6 +344,8 @@ export interface DevToolsAdapterExtensions {
  * })
  * ```
  */
+let generatedSecret: string | undefined
+
 export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExtensions>({
   name: 'DevToolsAdapter',
   defaults: {
@@ -374,7 +376,9 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     } else if (options.secret) {
       secret = options.secret
     } else {
-      secret = randomBytes(16).toString('hex')
+      // One per process, so a dashboard left open keeps working after a dev reload.
+      generatedSecret ??= randomBytes(16).toString('hex')
+      secret = generatedSecret
     }
 
     // ── Runtime sampler + memory analyzer (kit) ────────────────────
@@ -412,8 +416,14 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // close / clientCount). Explicit generic on resolve avoids the
         // structural-cast — Container.resolve's last overload accepts
         // an explicit T and returns it.
-        bus = container.resolve<ServerBus>(DEVTOOLS_BUS)
-        return bus
+        const existing = container.resolve<ServerBus>(DEVTOOLS_BUS)
+        // A dev reload shuts this bus down, and `registerInstance` carries it
+        // over `Container.reset()` anyway. Reusing it would leave the new app
+        // on a closed server that only knows the previous token.
+        if (!existing.isClosed?.()) {
+          bus = existing
+          return bus
+        }
       }
       bus = enabled
         ? createServerBus({
@@ -427,6 +437,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             attachUpgrade: () => {},
             close: () => {},
             clientCount: () => 0,
+            isClosed: () => false,
           } as ServerBus)
       container.registerInstance(DEVTOOLS_BUS, bus)
       return bus
