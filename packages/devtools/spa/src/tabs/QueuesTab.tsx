@@ -15,21 +15,11 @@ import { createMemo, createSignal, For, onCleanup, onMount, Show, type Component
 import type { JobDetail, JobState, JobSummary } from '@forinda/kickjs-devtools-kit'
 import { rpc, type JobSource } from '../lib/rpc'
 import { ago, formatMs } from '../lib/format'
+import { Pager, PageSizeSelect } from '../lib/pager'
+import { lastPageOf, rangeLabel, readPageSize, savePageSize } from '../lib/paging'
 import { SplitPane } from '../lib/split-pane'
 
 const STATES: JobState[] = ['failed', 'active', 'waiting', 'delayed', 'completed', 'paused']
-/** Jobs per page; the largest is the default. */
-const PAGE_SIZES = [10, 25, 50] as const
-const PAGE_SIZE_KEY = 'kickjs-devtools:jobs:page-size'
-
-function readPageSize(): number {
-  try {
-    const n = Number(localStorage.getItem(PAGE_SIZE_KEY))
-    return (PAGE_SIZES as readonly number[]).includes(n) ? n : 50
-  } catch {
-    return 50 // storage unavailable
-  }
-}
 /** How many jobs the server looks at per filtered request (its MAX_SCAN). */
 const SCAN = 1000
 
@@ -73,7 +63,7 @@ export const QueuesTab: Component = () => {
   const total = createMemo(() => queue()?.counts[state()])
   const lastPage = createMemo(() => {
     const t = total()
-    return t === undefined ? undefined : Math.max(0, Math.ceil(t / pageSize()) - 1)
+    return t === undefined ? undefined : lastPageOf(t, pageSize())
   })
 
   const loadSources = async (): Promise<void> => {
@@ -183,11 +173,7 @@ export const QueuesTab: Component = () => {
   }
   const changePageSize = (n: number): void => {
     setPageSize(n)
-    try {
-      localStorage.setItem(PAGE_SIZE_KEY, String(n))
-    } catch {
-      /* storage unavailable */
-    }
+    savePageSize(n)
     // From the top: the old page number means different jobs at the new size.
     resetPaging()
     void loadJobs()
@@ -435,59 +421,15 @@ export const QueuesTab: Component = () => {
           <Show
             when={query()}
             fallback={
-              <>
-                <span class="tabular-nums">
-                  {jobs().length
-                    ? `${page() * pageSize() + 1}–${page() * pageSize() + jobs().length}`
-                    : '0'}
-                  {total() !== undefined ? ` of ${total()}` : ''}
-                </span>
-                <span class="flex-1" />
-                <button
-                  type="button"
-                  class={button()}
-                  disabled={page() === 0}
-                  onClick={() => goPage(0)}
-                  aria-label="First page"
-                >
-                  «
-                </button>
-                <button
-                  type="button"
-                  class={button()}
-                  disabled={page() === 0}
-                  onClick={() => goPage(page() - 1)}
-                  aria-label="Previous page"
-                >
-                  ‹
-                </button>
-                <span class="tabular-nums">
-                  page {page() + 1}
-                  {lastPage() !== undefined ? ` of ${lastPage()! + 1}` : ''}
-                </span>
-                <button
-                  type="button"
-                  class={button()}
-                  disabled={
-                    lastPage() !== undefined ? page() >= lastPage()! : jobs().length < pageSize()
-                  }
-                  onClick={() => goPage(page() + 1)}
-                  aria-label="Next page"
-                >
-                  ›
-                </button>
-                <Show when={lastPage() !== undefined}>
-                  <button
-                    type="button"
-                    class={button()}
-                    disabled={page() >= lastPage()!}
-                    onClick={() => goPage(lastPage()!)}
-                    aria-label="Last page"
-                  >
-                    »
-                  </button>
-                </Show>
-              </>
+              <Pager
+                range={rangeLabel(page(), pageSize(), jobs().length, total())}
+                page={page()}
+                lastPage={lastPage()}
+                hasNext={
+                  lastPage() !== undefined ? page() < lastPage()! : jobs().length >= pageSize()
+                }
+                onPage={goPage}
+              />
             }
           >
             <span class="tabular-nums">
@@ -515,15 +457,7 @@ export const QueuesTab: Component = () => {
               {jobs().length ? '›' : `Search the next ${SCAN}`}
             </button>
           </Show>
-          <select
-            class="rounded-md border border-border-strong bg-surface-2 px-1 py-0.5 text-[0.7rem] text-text-secondary"
-            aria-label="Jobs per page"
-            title="Jobs per page"
-            value={pageSize()}
-            onChange={(e) => changePageSize(Number(e.currentTarget.value))}
-          >
-            <For each={PAGE_SIZES}>{(n) => <option value={n}>{n} / page</option>}</For>
-          </select>
+          <PageSizeSelect value={pageSize()} label="Jobs per page" onChange={changePageSize} />
         </div>
       </Show>
     </>
