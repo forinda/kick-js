@@ -73,6 +73,8 @@ export interface ServerBus extends KickEventBus {
   close(): void
   /** Currently connected client count. Useful for the devtools health card. */
   clientCount(): number
+  /** Whether `close()` ran. A closed bus can't accept connections again. */
+  isClosed(): boolean
 }
 
 export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
@@ -83,6 +85,7 @@ export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
   const clients = new Set<WebSocket>()
   let attachedServer: KickServer | null = null
   let upgradeHandler: ((req: IncomingMessage, socket: Socket, head: Buffer) => void) | null = null
+  let closed = false
 
   wss.on('connection', (ws: WebSocket) => {
     clients.add(ws)
@@ -173,6 +176,8 @@ export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
   }
 
   const close = (): void => {
+    if (closed) return
+    closed = true
     if (attachedServer && upgradeHandler) {
       attachedServer.off('upgrade', upgradeHandler)
     }
@@ -209,5 +214,6 @@ export function createServerBus(opts: ServerBusOptions = {}): ServerBus {
     attachUpgrade,
     close,
     clientCount: () => clients.size,
+    isClosed: () => closed,
   } as ServerBus
 }
