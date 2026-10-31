@@ -1,5 +1,13 @@
 # @forinda/kickjs-devtools
 
+## 7.19.1
+
+### Patch Changes
+
+- [#1113](https://github.com/forinda/kick-js/pull/1113) [`0aaa4ac`](https://github.com/forinda/kick-js/commit/0aaa4ac04069c4226d1f10217b48430bdc789751) Thanks [@forinda](https://github.com/forinda)! - The DevTools event bus keeps working after a dev reload. `Container.reset()` carried the closed bus over to the new app, so `/_debug/_bus` refused every connection until the server restarted, which left the Activity tab and other live updates quiet. A generated token now also lasts for the whole process, so a dashboard left open stays signed in across reloads.
+
+- [#1115](https://github.com/forinda/kick-js/pull/1115) [`1805821`](https://github.com/forinda/kick-js/commit/18058214cbcd09282f79062209d14ac3bf6cae19) Thanks [@forinda](https://github.com/forinda)! - The Jobs tab shows its page controls where you land. An app whose only queues come from a `jobInspector()` now opens on **Queues**, with the right count on the chip, instead of an empty **Scheduled** view reading "Queues 0". **Scheduled** now pages too, with the same controls and page size as **Queues**.
+
 ## 7.19.0
 
 ### Minor Changes
