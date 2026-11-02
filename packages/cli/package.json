@@ -46,7 +46,7 @@
     "@forinda/kickjs-cli-kit": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "commander": "^15.0.0",
-    "glob": "^13.0.6",
+    "glob": "^14.0.3",
     "jiti": "^2.7.0",
     "oxc-parser": "^0.155.0",
     "oxfmt": "^0.74.0",
