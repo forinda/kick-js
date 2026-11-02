@@ -85,7 +85,7 @@ Templates live in `src/views/**/*.kick`. `ctx.render('users/show')` renders `src
 | `Date`                  | ISO string — use `\| date` for display                        |
 | array, object, Promise  | nothing, with a warning in dev (an error with `strict: true`) |
 
-`{{ html | raw }}` prints trusted HTML unescaped. `raw` must be the whole expression's last pipe, and it isn't allowed in attributes, `<title>` or `<textarea>`.
+`{{ html | raw }}` prints trusted HTML unescaped. `raw` must be the whole expression's last pipe, and it isn't allowed in attributes, `<title>` or `<textarea>`. Inside `<style>` it's allowed only as the element's whole content: `<style>{{ css | raw }}</style>`.
 
 ### Expressions
 
@@ -183,6 +183,7 @@ A name the data doesn't have prints nothing and logs a warning in dev. With `str
 | a quoted attribute                                                                                                                                                 | HTML-escaped                                                                                     |
 | a URL attribute (`href`, `src`, `action`, `srcset`, …)                                                                                                             | also scheme-checked: anything but `http`, `https`, `mailto`, `tel` or a relative URL becomes `#` |
 | `<script type="application/json">{{ data \| json }}</script>`                                                                                                      | JSON escaped so it can't close the script                                                        |
+| `<style>{{ css \| raw }}</style>`, as the whole content (CSS inlined for a PDF or an email)                                                                        | printed as is; the render fails if it contains `</style`                                         |
 | any other `<script>` / `<style>` content, `on*` attributes, `style`, `srcdoc`, a refresh `<meta>`, an HTML comment, an unquoted attribute, a tag or attribute name | compile error                                                                                    |
 
 `<script src="{{ cdn }}" nonce="{{ cspNonce }}">` is fine: only a script's content is refused.
@@ -415,6 +416,8 @@ kick-toast[kind='error'] {
 | `currency:code:digits?`               | `{{ price \| currency:'KES' }}`                                                                                                              |
 | `percent:digits?`                     | `{{ ratio \| percent }}`                                                                                                                     |
 | `slice:start:end`                     | `{{ items \| slice:0:3 }}`                                                                                                                   |
+| `join:separator?`                     | `{{ names \| join:', ' }}` — a list as text; `', '` by default                                                                               |
+| `compact`                             | `{{ addressLines \| compact \| join:' · ' }}` — drops `null`, `undefined`, `false` and `''`, keeps `0`                                       |
 | `keys`, `entries`                     | `@for ([k, v] of obj \| entries) { … }`                                                                                                      |
 | `json`                                | `{{ data \| json }}`                                                                                                                         |
 | `url`                                 | `href="/search?q={{ term \| url }}"`                                                                                                         |

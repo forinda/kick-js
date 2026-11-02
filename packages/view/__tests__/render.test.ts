@@ -190,6 +190,17 @@ describe('render', () => {
     expect(r({ page: "{{ show ?? 'yes' }}" }, { show: false }, { strict: true }).html).toBe('false')
   })
 
+  it('trusted CSS as the whole content of <style>', () => {
+    const css = 'p > a { color: red } .x::after { content: "&" }'
+    expect(html('<style>{{ css | raw }}</style>', { css })).toBe(`<style>${css}</style>`)
+    expect(html('<style>\n  {{ css | raw }}\n</style>', { css })).toBe(
+      `<style>\n  ${css}\n</style>`,
+    )
+    expect(() =>
+      html('<style>{{ css | raw }}</style>', { css: 'a{}</STYLE><script>x()</script>' }),
+    ).toThrow(RenderError)
+  })
+
   it('a missing name is still an error anywhere else in strict mode', () => {
     for (const page of [
       '{{ a ?? b }}',
