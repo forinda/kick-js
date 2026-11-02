@@ -190,6 +190,17 @@ describe('render', () => {
     expect(r({ page: "{{ show ?? 'yes' }}" }, { show: false }, { strict: true }).html).toBe('false')
   })
 
+  it('in a ?? chain only the last fallback must exist', () => {
+    const page = "{{ a ?? b ?? 'last' }}|{{ a ?? b?.c ?? b ?? 1 }}"
+    for (const strict of [true, false]) {
+      const { html, warn } = r({ page }, {}, { strict })
+      expect(html).toBe('last|1')
+      expect(warn).not.toHaveBeenCalled()
+    }
+    expect(r({ page: '{{ a ?? b ?? c }}' }, { b: 'b' }, { strict: true }).html).toBe('b')
+    expect(() => r({ page: '{{ a ?? b ?? c }}' }, {}, { strict: true })).toThrow(RenderError)
+  })
+
   it('trusted CSS as the whole content of <style>', () => {
     const css = 'p > a { color: red } .x::after { content: "&" }'
     expect(html('<style>{{ css | raw }}</style>', { css })).toBe(`<style>${css}</style>`)

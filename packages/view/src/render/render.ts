@@ -138,7 +138,9 @@ class Renderer {
       case 'b': {
         if (e.o === '&&') return this.value(e.l, inst) && this.value(e.r, inst)
         if (e.o === '||') return this.value(e.l, inst) || this.value(e.r, inst)
-        if (e.o === '??') return this.value(e.l, inst, true) ?? this.value(e.r, inst)
+        // The right side stays optional inside an outer ?? (`a ?? b ?? 'x'` groups
+        // as `(a ?? b) ?? 'x'`), so only the last fallback must exist.
+        if (e.o === '??') return this.value(e.l, inst, true) ?? this.value(e.r, inst, optional)
         const l = this.value(e.l, inst) as never
         const r = this.value(e.r, inst) as never
         switch (e.o) {
