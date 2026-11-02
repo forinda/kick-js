@@ -421,8 +421,14 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     return fail(res, method, key)
   }
 
-  async function fail(res: Response, method: string, key: string | typeof BUCKET): Promise<never> {
-    const text = await res.text().catch(() => '')
+  /** `body`: the response text when it was already read. */
+  async function fail(
+    res: Response,
+    method: string,
+    key: string | typeof BUCKET,
+    body?: string,
+  ): Promise<never> {
+    const text = body ?? (await res.text().catch(() => ''))
     throw new Error(
       `s3Storage: ${method} '${String(key === BUCKET ? options.bucket : key)}' failed with ${res.status}: ${text.slice(0, 300)}`,
     )
@@ -856,10 +862,9 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       const created = await send('PUT', BUCKET, { body })
       if (created.ok) return true
       // Another process created it between the two calls.
-      if (created.status === 409 && (await created.text()).includes('BucketAlreadyOwnedByYou')) {
-        return false
-      }
-      return fail(created, 'PUT', BUCKET)
+      const text = created.status === 409 ? await created.text() : undefined
+      if (text?.includes('BucketAlreadyOwnedByYou')) return false
+      return fail(created, 'PUT', BUCKET, text)
     },
   }
   return storage

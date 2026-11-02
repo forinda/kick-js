@@ -114,7 +114,7 @@ describe('s3Storage', () => {
           endpoint: 'http://localhost:9000',
           fetch: taken.fetch,
         }).ensureBucket(),
-      ).rejects.toThrow(/PUT 'files' failed with 409/)
+      ).rejects.toThrow(/PUT 'files' failed with 409: .*BucketAlreadyExists/)
       const denied = server([[403]])
       await expect(
         s3Storage({
