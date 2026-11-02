@@ -61,6 +61,71 @@ describe('s3Storage', () => {
     return { fetch, calls }
   }
 
+  describe('ensureBucket', () => {
+    function server(responses: Array<[number, string?]>) {
+      const calls: Array<{ method: string; url: string; body: string }> = []
+      const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const req = new Request(input, init)
+        calls.push({ method: req.method, url: req.url, body: await req.text() })
+        const [status, text] = responses.shift()!
+        return new Response(req.method === 'HEAD' ? null : (text ?? null), { status })
+      }) as unknown as typeof globalThis.fetch
+      return { fetch, calls }
+    }
+
+    it('leaves a bucket that exists alone', async () => {
+      const { fetch, calls } = server([[200]])
+      const files = s3Storage({ ...options, endpoint: 'http://localhost:9000', fetch })
+      expect(await files.ensureBucket()).toBe(false)
+      expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+        'HEAD http://localhost:9000/files/',
+      ])
+    })
+
+    it('creates a missing bucket, naming the region except us-east-1', async () => {
+      const east = server([[404], [200]])
+      const files = s3Storage({ ...options, endpoint: 'http://localhost:9000', fetch: east.fetch })
+      expect(await files.ensureBucket()).toBe(true)
+      expect(east.calls[1]).toMatchObject({
+        method: 'PUT',
+        url: 'http://localhost:9000/files/',
+        body: '',
+      })
+
+      const eu = server([[404], [200]])
+      await s3Storage({ ...options, region: 'eu-west-1', fetch: eu.fetch }).ensureBucket()
+      expect(eu.calls[1]!.body).toContain('<LocationConstraint>eu-west-1</LocationConstraint>')
+    })
+
+    it('treats losing a race to create it as existing', async () => {
+      const { fetch } = server([
+        [404],
+        [409, '<Error><Code>BucketAlreadyOwnedByYou</Code></Error>'],
+      ])
+      const files = s3Storage({ ...options, endpoint: 'http://localhost:9000', fetch })
+      expect(await files.ensureBucket()).toBe(false)
+    })
+
+    it('throws when the bucket belongs to someone else or access is denied', async () => {
+      const taken = server([[404], [409, '<Error><Code>BucketAlreadyExists</Code></Error>']])
+      await expect(
+        s3Storage({
+          ...options,
+          endpoint: 'http://localhost:9000',
+          fetch: taken.fetch,
+        }).ensureBucket(),
+      ).rejects.toThrow(/PUT 'files' failed with 409/)
+      const denied = server([[403]])
+      await expect(
+        s3Storage({
+          ...options,
+          endpoint: 'http://localhost:9000',
+          fetch: denied.fetch,
+        }).ensureBucket(),
+      ).rejects.toThrow(/HEAD 'files' failed with 403/)
+    })
+  })
+
   it('puts, gets, checks and deletes over signed requests', async () => {
     const { fetch, calls } = bucket()
     const files = s3Storage({ ...options, endpoint: 'http://localhost:9000/', fetch })

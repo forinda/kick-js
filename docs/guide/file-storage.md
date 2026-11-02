@@ -485,6 +485,23 @@ Without `endpoint`, the driver uses AWS's virtual-hosted address, `https://<buck
 
 Temporary credentials take a `sessionToken`. `fetch` replaces the global one, for a proxy or a test.
 
+### Creating the bucket: `ensureBucket()`
+
+A fresh MinIO starts without your buckets. `ensureBucket()` creates the bucket when it's missing and returns `true` when it did, `false` when it was already there:
+
+```ts
+const files = s3Storage({
+  bucket: 'avatars',
+  endpoint: 'http://localhost:9000',
+  accessKeyId,
+  secretAccessKey,
+})
+
+if (process.env.NODE_ENV !== 'production') await files.ensureBucket()
+```
+
+Outside `us-east-1` (and R2's `auto`) it creates the bucket in `region`. Two processes calling it at once both succeed. It throws when the name belongs to another account or the keys can't read the bucket. A production bucket usually comes with policies, CORS and lifecycle rules, so provision it with those rather than at boot.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:

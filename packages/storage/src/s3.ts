@@ -243,6 +243,12 @@ export interface S3Storage extends Storage {
    * that (other than the last) are streamed through instead.
    */
   compose(key: string, sources: readonly string[], options?: PutOptions): Promise<void>
+  /**
+   * Create the bucket if it doesn't exist: `true` when this call created it.
+   * For a fresh MinIO in development or tests; a production bucket is
+   * provisioned with its policies, not at boot.
+   */
+  ensureBucket(): Promise<boolean>
   /** The bucket's address, e.g. `https://avatars.s3.eu-west-1.amazonaws.com`: equal for two storages on one bucket. */
   readonly location: string
 }
@@ -818,6 +824,25 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       })
     },
     multipart,
+    async ensureBucket() {
+      const head = await send('HEAD', BUCKET)
+      if (head.ok) return false
+      if (head.status !== 404) return fail(head, 'HEAD', BUCKET)
+      // us-east-1 is the default and must not be named; R2's 'auto' isn't a location.
+      const body =
+        region === 'us-east-1' || region === 'auto'
+          ? undefined
+          : new TextEncoder().encode(
+              `<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${region}</LocationConstraint></CreateBucketConfiguration>`,
+            )
+      const created = await send('PUT', BUCKET, { body })
+      if (created.ok) return true
+      // Another process created it between the two calls.
+      if (created.status === 409 && (await created.text()).includes('BucketAlreadyOwnedByYou')) {
+        return false
+      }
+      return fail(created, 'PUT', BUCKET)
+    },
   }
   return storage
 }
