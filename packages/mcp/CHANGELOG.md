@@ -1,5 +1,11 @@
 # @forinda/kickjs-mcp
 
+## 9.1.3
+
+### Patch Changes
+
+- [#1116](https://github.com/forinda/kick-js/pull/1116) [`ac55793`](https://github.com/forinda/kick-js/commit/ac5579300eac5e15dc54bac3007e96b7db2ee243) Thanks [@forinda](https://github.com/forinda)! - `WS_ROOM_MANAGER`, `QUEUE_MANAGER`, `GRPC_ADAPTER`, `MCP_ADAPTER` and the other tokens these packages export now type-check with `container.resolve()` and `@Inject()`. Their published types no longer carry a private copy of `InjectionToken`, so an `as never` cast around them can go.
+
 ## 9.1.2
 
 ### Patch Changes
