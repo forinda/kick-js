@@ -502,6 +502,28 @@ if (process.env.NODE_ENV !== 'production') await files.ensureBucket()
 
 Outside `us-east-1` (and R2's `auto`) it creates the bucket in `region`. Two processes calling it at once both succeed. It throws when the name belongs to another account or the keys can't read the bucket. A production bucket usually comes with policies, CORS and lifecycle rules, so provision it with those rather than at boot.
 
+### Encryption at rest: `serverSideEncryption`
+
+Ask the bucket to encrypt what this storage writes:
+
+```ts
+// Keys S3 manages (SSE-S3)
+s3Storage({ bucket: 'files', region, serverSideEncryption: { type: 'AES256' } })
+
+// A KMS key (SSE-KMS): reading the file then needs kms:Decrypt on that key too
+s3Storage({
+  bucket: 'backups',
+  region,
+  serverSideEncryption: { type: 'aws:kms', keyId: 'arn:aws:kms:eu-west-1:123456789012:key/…' },
+})
+```
+
+Without `keyId`, `aws:kms` uses the account's default S3 key. The headers go, signed, on `put`, `putIfAbsent`, `compose`, `multipart.create` (so every part of that upload) and the fields of `uploadForm`. Reads need nothing extra.
+
+`uploadUrl()` doesn't carry them: the browser's own `PUT` would have to send the headers. For browser uploads that must be encrypted, use `uploadForm()` or `multipart`, or set default encryption on the bucket.
+
+AWS S3 supports both types. MinIO supports them only with a KMS configured. Some S3-compatible services support neither and reject the write, so check the provider before turning this on.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
