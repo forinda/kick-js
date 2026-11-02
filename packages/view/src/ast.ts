@@ -157,7 +157,7 @@ export type CNode =
   /** static output */
   | { k: 's'; t: string }
   /** `{{ e }}`: `text` escapes HTML (trusted HTML prints as is), `rcdata` (`<title>`, `<textarea>`) escapes everything, `json` is the one value of a JSON script */
-  | { k: 'i'; c: 'text' | 'rcdata' | 'json'; e: CExpr; at: At }
+  | { k: 'i'; c: 'text' | 'rcdata' | 'json' | 'css'; e: CExpr; at: At }
   /** the attributes of an element (between `<tag` and `>`); `f` takes a component caller's fallthrough attributes */
   | { k: 'A'; tag: string; a: CAttr[]; f?: 1; at: At }
   | { k: 'if'; br: Array<{ c?: CExpr; a?: number; b: CNode[] }> }

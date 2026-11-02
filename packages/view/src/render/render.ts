@@ -239,6 +239,11 @@ class Renderer {
           this.out.push(
             escapeJsonForScript(typeof v === 'string' ? v : (JSON.stringify(v) ?? 'null')),
           )
+        } else if (n.c === 'css') {
+          const css = v instanceof SafeHtml ? v.html : this.text(v, inst)
+          // Trusted, but it still mustn't end the element early.
+          if (/<\/style/i.test(css)) this.fail(inst, "CSS for <style> can't contain '</style'")
+          this.out.push(css)
         } else if (v instanceof SafeHtml && n.c === 'text') {
           // Trusted HTML prints as is in text — never in <title>/<textarea>,
           // where it could close the element.
