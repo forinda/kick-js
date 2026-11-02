@@ -35,6 +35,8 @@ describe('pipes', () => {
         'date',
         'entries',
         'json',
+        'compact',
+        'join',
         'keys',
         'lowercase',
         'number',
@@ -92,6 +94,14 @@ describe('pipes', () => {
     expect(p.percent!(0.256, '1.0-1')).toBe('25.6%')
     expect(p.slice!('abcd', 1, 3)).toBe('bc')
     expect(p.slice!([1, 2, 3], 1)).toEqual([2, 3])
+    expect(p.join!(['a', null, 'b', 2])).toBe('a, , b, 2')
+    expect(p.join!(new Set(['x', 'y']), ' | ')).toBe('x | y')
+    expect(p.join!('as is')).toBe('as is')
+    expect(p.compact!(['a', null, '', undefined, false, 0, 'b'])).toEqual(['a', 0, 'b'])
+    expect(p.compact!('as is')).toBe('as is')
+    expect(
+      renderWith("{{ parts | compact | join:' | ' }}", { parts: ['Box 1', '', null, '0700'] }),
+    ).toBe('Box 1 | 0700')
     expect(p.url!('a b&c')).toBe('a%20b%26c')
     expect(p.uppercase!('ab')).toBe('AB')
     expect(p.lowercase!('AB')).toBe('ab')

@@ -14,6 +14,8 @@ const BUILTIN: Record<string, string> = {
   currency: "`currency:code:digits?` — e.g. `currency:'KES'`",
   percent: '`percent:digits?` — a ratio as a percentage',
   slice: '`slice:start:end` — part of a list or string',
+  join: "`join:separator?` — a list as text, e.g. `join:', '` (the default)",
+  compact: '`compact` — a list without `null`, `undefined`, `false` or empty strings; `0` stays',
   keys: '`keys` — an object’s keys',
   entries: '`entries` — an object’s `[key, value]` pairs',
   json: '`json` — the value as JSON',
