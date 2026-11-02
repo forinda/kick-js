@@ -1,4 +1,4 @@
-import { createToken, type ContributorRegistrations } from '@forinda/kickjs'
+import { createToken, type InjectionToken, type ContributorRegistrations } from '@forinda/kickjs'
 import type { DescService } from '@bufbuild/protobuf'
 import type { ConnectRouter } from '@connectrpc/connect'
 import type { IncomingMessage } from 'node:http'
@@ -37,7 +37,8 @@ export interface GrpcStats {
 }
 
 /** DI token exposing the adapter's public surface (stats, registry). */
-export const GRPC_ADAPTER = createToken<GrpcAdapterExtensions>('kick/grpc/Adapter')
+export const GRPC_ADAPTER: InjectionToken<GrpcAdapterExtensions> =
+  createToken<GrpcAdapterExtensions>('kick/grpc/Adapter')
 
 /** Public surface an adapter instance exposes beyond the `AppAdapter` contract. */
 export interface GrpcAdapterExtensions {
