@@ -567,3 +567,95 @@ describe('s3Storage', () => {
     })
   })
 })
+
+describe('s3Storage serverSideEncryption', () => {
+  const kms = { type: 'aws:kms', keyId: 'arn:aws:kms:eu-west-1:1:key/abc' } as const
+  function server(
+    serverSideEncryption: { type: 'AES256' } | { type: 'aws:kms'; keyId?: string },
+    ...replies: Array<[number, string, Record<string, string>?]>
+  ) {
+    const calls: Request[] = []
+    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push(new Request(input, init))
+      const [status, body, headers] = replies.shift() ?? [200, '']
+      return new Response(status === 204 ? null : body, { status, headers })
+    }) as unknown as typeof globalThis.fetch
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      serverSideEncryption,
+      fetch,
+    })
+    return { files, calls }
+  }
+  /** The encryption headers a request sent, and whether they were signed. */
+  const sent = (req: Request) => ({
+    sse: req.headers.get('x-amz-server-side-encryption'),
+    key: req.headers.get('x-amz-server-side-encryption-aws-kms-key-id'),
+    signed: /SignedHeaders=[^,]*x-amz-server-side-encryption/.test(
+      req.headers.get('authorization') ?? '',
+    ),
+  })
+
+  it('sends signed headers on put, putIfAbsent and copies', async () => {
+    const { files, calls } = server(
+      kms,
+      [200, ''],
+      [200, ''],
+      [200, '', { 'content-length': '10' }],
+      [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+    )
+    await files.put('a', 'x')
+    await files.putIfAbsent('b', 'y')
+    await files.compose('c', ['a'])
+    const expected = { sse: 'aws:kms', key: kms.keyId, signed: true }
+    expect(sent(calls[0]!)).toEqual(expected)
+    expect(sent(calls[1]!)).toEqual(expected)
+    expect(calls[2]!.method).toBe('HEAD')
+    expect(sent(calls[3]!)).toEqual(expected) // the CopyObject
+  })
+
+  it('starts a multipart upload encrypted; parts carry no headers', async () => {
+    const { files, calls } = server(
+      { type: 'AES256' },
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '', { etag: '"p1"' }],
+      [200, '', { etag: '"p2"' }],
+      [200, '<CompleteMultipartUploadResult/>'],
+    )
+    await files.put('big', Readable.from([new Uint8Array(5 * 1024 * 1024), new Uint8Array(10)]))
+    expect(sent(calls[0]!)).toEqual({ sse: 'AES256', key: null, signed: true })
+    expect(calls.slice(1).map((c) => sent(c).sse)).toEqual([null, null, null])
+  })
+
+  it('puts the headers in an upload form and its policy, not in uploadUrl', async () => {
+    const { files } = server(kms)
+    const form = await files.uploadForm('up/a', { maxSize: 10 })
+    expect(form.fields['x-amz-server-side-encryption']).toBe('aws:kms')
+    expect(form.fields['x-amz-server-side-encryption-aws-kms-key-id']).toBe(kms.keyId)
+    const policy = JSON.parse(atob(form.fields.policy!))
+    expect(policy.conditions).toContainEqual({ 'x-amz-server-side-encryption': 'aws:kms' })
+    expect(await files.uploadUrl('up/b')).not.toContain('server-side-encryption')
+  })
+
+  it('leaves the key out for the default KMS key', async () => {
+    const { files, calls } = server({ type: 'aws:kms' })
+    await files.put('a', 'x')
+    expect(sent(calls[0]!)).toEqual({ sse: 'aws:kms', key: null, signed: true })
+  })
+
+  it('refuses settings S3 would reject', () => {
+    const base = { bucket: 'files', accessKeyId: 'id', secretAccessKey: 'secret' }
+    expect(() =>
+      s3Storage({ ...base, serverSideEncryption: { type: 'AES256', keyId: 'k' } as never }),
+    ).toThrow("keyId is only for type 'aws:kms'")
+    expect(() =>
+      s3Storage({ ...base, serverSideEncryption: { type: 'aws:kms', keyId: ' ' } }),
+    ).toThrow('non-empty')
+    expect(() => s3Storage({ ...base, serverSideEncryption: { type: 'sse-c' } as never })).toThrow(
+      "'AES256' or 'aws:kms'",
+    )
+  })
+})

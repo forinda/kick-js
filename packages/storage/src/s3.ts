@@ -52,6 +52,16 @@ export interface S3StorageOptions {
    * stream is 10,000 × `partSize`: raise it for files over ~48 GiB.
    */
   partSize?: number
+  /**
+   * Encrypt what this storage writes, at rest in the bucket: `{ type: 'AES256' }`
+   * with keys S3 manages, or `{ type: 'aws:kms', keyId? }` with a KMS key (the
+   * account's default S3 key when `keyId` is left out). Applies to `put`,
+   * `putIfAbsent`, `compose`, `multipart.create` and `uploadForm`; not to
+   * `uploadUrl`, whose browser request would have to send the headers itself.
+   * AWS S3 supports both; MinIO needs KMS configured, and some S3-compatible
+   * services support neither.
+   */
+  serverSideEncryption?: { type: 'AES256' } | { type: 'aws:kms'; keyId?: string }
   /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */
   partConcurrency?: number
 }
@@ -318,6 +328,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       : origin.replace('://', `://${options.bucket}.`)
   const fetchFn = options.fetch ?? globalThis.fetch
   const partSize = options.partSize ?? PART_SIZE
+  const sse = encryptionHeaders(options.serverSideEncryption)
   const partConcurrency = options.partConcurrency ?? 4
   if (!Number.isInteger(partSize) || partSize < PART_SIZE) {
     throw new Error(`s3Storage: partSize must be a whole number of bytes, at least ${PART_SIZE}`)
@@ -469,6 +480,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   async function putOnce(key: string, bytes: Uint8Array, contentType?: string, createOnly = false) {
     const res = await send('PUT', key, {
       body: bytes,
+      amz: sse,
       contentType,
       ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
     })
@@ -485,6 +497,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     async create(key, createOptions = {}) {
       const res = await call('POST', key, {
         query: { uploads: '' },
+        amz: sse,
         contentType: createOptions.contentType,
       })
       const uploadId = tag(await res.text(), 'UploadId')
@@ -618,7 +631,11 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
 
     if (sources.length === 1 && sizes[0] <= MAX_COPY) {
       const res = await call('PUT', key, {
-        amz: { 'x-amz-copy-source': copySource(sources[0]), 'x-amz-metadata-directive': 'REPLACE' },
+        amz: {
+          'x-amz-copy-source': copySource(sources[0]),
+          'x-amz-metadata-directive': 'REPLACE',
+          ...sse,
+        },
         contentType: putOptions.contentType ?? 'application/octet-stream',
       })
       const xml = await res.text()
@@ -693,6 +710,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       'x-amz-credential': credential,
       'x-amz-date': stamp,
       ...(keys.sessionToken ? { 'x-amz-security-token': keys.sessionToken } : {}),
+      ...sse,
     }
     if (contentType !== undefined) {
       if (!/^[\w.+-]+\/[\w.+-]+$/.test(contentType)) {
@@ -743,7 +761,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         await putStream(key, body, putOptions.contentType)
         return
       }
-      await call('PUT', key, { body: toBytes(body), contentType: putOptions.contentType })
+      await call('PUT', key, { body: toBytes(body), amz: sse, contentType: putOptions.contentType })
     },
     async putIfAbsent(key, body, putOptions = {}) {
       // S3 conditional writes: 412 when the key exists, 409 when another
@@ -845,6 +863,30 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
   }
   return storage
+}
+
+/** The headers S3 reads `serverSideEncryption` from, checked once up front. */
+function encryptionHeaders(
+  encryption: S3StorageOptions['serverSideEncryption'],
+): Record<string, string> {
+  if (!encryption) return {}
+  if (encryption.type === 'AES256') {
+    if ('keyId' in encryption) throw new Error("s3Storage: keyId is only for type 'aws:kms'")
+    return { 'x-amz-server-side-encryption': 'AES256' }
+  }
+  if (encryption.type !== 'aws:kms') {
+    throw new Error(
+      `s3Storage: serverSideEncryption.type must be 'AES256' or 'aws:kms', not '${String((encryption as { type: unknown }).type)}'`,
+    )
+  }
+  const { keyId } = encryption
+  if (keyId !== undefined && (typeof keyId !== 'string' || !keyId.trim())) {
+    throw new Error('s3Storage: serverSideEncryption.keyId must be a non-empty string')
+  }
+  return {
+    'x-amz-server-side-encryption': 'aws:kms',
+    ...(keyId ? { 'x-amz-server-side-encryption-aws-kms-key-id': keyId } : {}),
+  }
 }
 
 function sizeHeader(size: number | undefined): Record<string, string> {

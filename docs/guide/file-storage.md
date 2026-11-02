@@ -502,6 +502,28 @@ if (process.env.NODE_ENV !== 'production') await files.ensureBucket()
 
 Outside `us-east-1` (and R2's `auto`) it creates the bucket in `region`. Two processes calling it at once both succeed. It throws when the name belongs to another account or the keys can't read the bucket. A production bucket usually comes with policies, CORS and lifecycle rules, so provision it with those rather than at boot.
 
+### Encryption at rest: `serverSideEncryption`
+
+Ask the bucket to encrypt what this storage writes:
+
+```ts
+// Keys S3 manages (SSE-S3)
+s3Storage({ bucket: 'files', region, serverSideEncryption: { type: 'AES256' } })
+
+// A KMS key (SSE-KMS): reading the file then needs kms:Decrypt on that key too
+s3Storage({
+  bucket: 'backups',
+  region,
+  serverSideEncryption: { type: 'aws:kms', keyId: 'arn:aws:kms:eu-west-1:123456789012:key/…' },
+})
+```
+
+Without `keyId`, `aws:kms` uses the account's default S3 key. The headers go, signed, on `put`, `putIfAbsent`, `compose`, `multipart.create` (so every part of that upload) and the fields of `uploadForm`. Reads need nothing extra.
+
+`uploadUrl()` doesn't carry them: the browser's own `PUT` would have to send the headers. For browser uploads that must be encrypted, use `uploadForm()` or `multipart`, or set default encryption on the bucket.
+
+AWS S3 supports both types. MinIO supports them only with a KMS configured. Some S3-compatible services support neither and reject the write, so check the provider before turning this on.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
@@ -549,6 +571,46 @@ When the app only uses the bucket sometimes — `S3_BUCKET ? s3FromSettings() : 
 On a host with an IAM role, leave both keys unset and pass the provider as an option: `s3FromSettings(S3Settings, { credentials: fromNodeProviderChain(), timeoutMs: 5000 })`. Keys set in the environment win over `credentials`. With neither, the first call fails.
 
 A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Pass it as `s3FromSettings(Backups)`; the adapter that takes that storage declares it.
+
+## One storage per tenant
+
+When each tenant's bucket, keys or KMS key live in your database, build a storage per tenant from its row and keep it. `s3Storage()` opens no connection and holds no client, so building one is cheap, and a tenant's storage carries its own encryption setting:
+
+```ts
+@Service()
+export class TenantFiles {
+  @Autowired(TENANT_CONFIG) private config!: TenantConfigRepo
+  private storages = new Map<string, Promise<S3Storage>>()
+
+  for(tenantId: string): Promise<S3Storage> {
+    let storage = this.storages.get(tenantId)
+    if (!storage) {
+      storage = this.config.storageFor(tenantId).then((row) =>
+        s3Storage({
+          bucket: row.bucket,
+          region: row.region,
+          endpoint: row.endpoint ?? undefined,
+          // Fetched per request, so rotated keys apply without a restart.
+          credentials: () => this.config.credentialsFor(tenantId),
+          ...(row.kmsKeyId
+            ? { serverSideEncryption: { type: 'aws:kms' as const, keyId: row.kmsKeyId } }
+            : {}),
+        }),
+      )
+      storage.catch(() => this.storages.delete(tenantId))
+      this.storages.set(tenantId, storage)
+    }
+    return storage
+  }
+
+  /** Call when a tenant's storage settings change. */
+  forget(tenantId: string) {
+    this.storages.delete(tenantId)
+  }
+}
+```
+
+Inject `TenantFiles` where you'd inject `STORAGE`: `StorageAdapter` binds one storage to one token, so it isn't the tool here. `credentials` is called before every request, so cache inside `credentialsFor` rather than reading the database each time.
 
 ## Your own driver
 
