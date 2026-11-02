@@ -121,6 +121,10 @@ describe('safety corpus', () => {
     for (const src of [
       '<script>{{ x }}</script>',
       '<style>{{ x }}</style>',
+      '<style>a{}{{ x | raw }}</style>',
+      '<style>{{ x | raw }}{{ x | raw }}</style>',
+      '<svg><style>{{ x | raw }}</style></svg>',
+      '<script>{{ x | raw }}</script>',
       '<svg><script>{{ x }}</script></svg>',
       '<p onclick="{{ x }}">t</p>',
       '<p [onclick]="x">t</p>',

@@ -180,6 +180,50 @@ describe('render', () => {
     expect(() => r({ page: '{{ nope }}' }, {}, { strict: true })).toThrow(RenderError)
   })
 
+  it('a missing name before ?? or ?. is optional, strict or not', () => {
+    const page = "{{ show ?? 'yes' }}|{{ a.b ?? 'deep' }}|{{ user?.name }}|{{ n ?? 0 }}"
+    for (const strict of [true, false]) {
+      const { html, warn } = r({ page }, { n: null }, { strict })
+      expect(html).toBe('yes|deep||0')
+      expect(warn).not.toHaveBeenCalled()
+    }
+    expect(r({ page: "{{ show ?? 'yes' }}" }, { show: false }, { strict: true }).html).toBe('false')
+  })
+
+  it('in a ?? chain only the last fallback must exist', () => {
+    const page = "{{ a ?? b ?? 'last' }}|{{ a ?? b?.c ?? b ?? 1 }}"
+    for (const strict of [true, false]) {
+      const { html, warn } = r({ page }, {}, { strict })
+      expect(html).toBe('last|1')
+      expect(warn).not.toHaveBeenCalled()
+    }
+    expect(r({ page: '{{ a ?? b ?? c }}' }, { b: 'b' }, { strict: true }).html).toBe('b')
+    expect(() => r({ page: '{{ a ?? b ?? c }}' }, {}, { strict: true })).toThrow(RenderError)
+  })
+
+  it('trusted CSS as the whole content of <style>', () => {
+    const css = 'p > a { color: red } .x::after { content: "&" }'
+    expect(html('<style>{{ css | raw }}</style>', { css })).toBe(`<style>${css}</style>`)
+    expect(html('<style>\n  {{ css | raw }}\n</style>', { css })).toBe(
+      `<style>\n  ${css}\n</style>`,
+    )
+    expect(() =>
+      html('<style>{{ css | raw }}</style>', { css: 'a{}</STYLE><script>x()</script>' }),
+    ).toThrow(RenderError)
+  })
+
+  it('a missing name is still an error anywhere else in strict mode', () => {
+    for (const page of [
+      '{{ a ?? b }}',
+      '{{ (x ?? 1) + y }}',
+      "{{ user.name ?? 'n' }}{{ user.name }}",
+      '@if (flag) {y}',
+      "{{ flag ? 'a' : 'b' }}",
+    ]) {
+      expect(() => r({ page }, {}, { strict: true }), page).toThrow(RenderError)
+    }
+  })
+
   it('layouts', () => {
     const files = {
       page: "@layout('main')\n@slot('head') {<meta name=x>}\n<h1>{{ t }}</h1>",

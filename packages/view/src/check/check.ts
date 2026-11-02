@@ -142,11 +142,11 @@ class Checker {
   // ── expressions ───────────────────────────────────────────────────────
 
   /**
-   * `whole` is true only for the whole expression of a text `{{ }}` — the one
-   * place `raw` may appear (as its outermost pipe). Nested anywhere else, raw
+   * `whole` is true only for the whole expression of a text `{{ }}` or of a
+   * `<style>`'s content — the places `raw` may appear (as its outermost pipe). Nested anywhere else, raw
    * could smuggle markup into an attribute or another context.
    */
-  expr(e: Expr, where: 'text' | 'attr' | 'rcdata' | 'json' = 'text', whole = false): CExpr {
+  expr(e: Expr, where: 'text' | 'attr' | 'rcdata' | 'json' | 'css' = 'text', whole = false): CExpr {
     switch (e.kind) {
       case 'literal':
         return { k: 'l', v: e.value }
@@ -159,12 +159,12 @@ class Checker {
         return { k: 'c', t: this.expr(e.test), y: this.expr(e.whenTrue), n: this.expr(e.whenFalse) }
       case 'pipe': {
         if (!this.project.pipes.has(e.name)) this.err(e.span, `unknown pipe '${e.name}'`)
-        if (e.name === 'raw' && !(whole && where === 'text')) {
+        if (e.name === 'raw' && !(whole && (where === 'text' || where === 'css'))) {
           this.err(
             e.span,
             where === 'attr'
               ? "raw isn't allowed in an attribute: it could break out of the quotes"
-              : where === 'text'
+              : where === 'text' || where === 'css'
                 ? 'raw must be the last pipe of the whole {{ }}: {{ value | raw }}'
                 : `raw isn't allowed inside <${where === 'rcdata' ? 'title> or <textarea' : 'script'}>`,
           )
@@ -379,11 +379,24 @@ class Checker {
     if (isJson && only && n.expr.kind === 'pipe' && n.expr.name === 'json') {
       return [{ k: 'i', c: 'json', e: this.expr(n.expr, 'json'), at: at(n.span) }]
     }
+    // Trusted CSS (inlined for PDFs and emails): the whole content of an HTML
+    // <style>, through raw. In SVG a browser reads style content as markup.
+    if (
+      tag === 'style' &&
+      !parent!.foreign &&
+      only &&
+      n.expr.kind === 'pipe' &&
+      n.expr.name === 'raw'
+    ) {
+      return [{ k: 'i', c: 'css', e: this.expr(n.expr, 'css', true), at: at(n.span) }]
+    }
     this.err(
       n.span,
       tag === 'script'
         ? '{{ }} isn\'t allowed inside <script>: pass data as <script type="application/json">{{ value | json }}</script>'
-        : `{{ }} isn't allowed inside <${tag}>`,
+        : tag === 'style' && !parent!.foreign
+          ? "{{ }} isn't allowed inside <style>, except trusted CSS as its whole content: <style>{{ css | raw }}</style>"
+          : `{{ }} isn't allowed inside <${tag}>`,
     )
     return []
   }

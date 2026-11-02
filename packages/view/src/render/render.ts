@@ -106,7 +106,11 @@ class Renderer {
     return value
   }
 
-  value(e: CExpr, inst: Inst): unknown {
+  /**
+   * `optional`: the left of `??`, where a name the data doesn't have reads as
+   * `undefined` instead of counting as missing. `name?.x` does the same.
+   */
+  value(e: CExpr, inst: Inst, optional = false): unknown {
     switch (e.k) {
       case 'l':
         return e.v
@@ -118,6 +122,7 @@ class Renderer {
         if (!(e.n in data)) {
           // Rendered without form state (render() on its own): empty, not missing.
           if (FORM_GLOBALS.has(e.n)) return this.path({}, e.p, inst)
+          if (optional || e.p[0]?.o) return undefined
           this.unresolved(e.n, inst)
         }
         return this.path(read(data, e.n), e.p, inst)
@@ -133,7 +138,9 @@ class Renderer {
       case 'b': {
         if (e.o === '&&') return this.value(e.l, inst) && this.value(e.r, inst)
         if (e.o === '||') return this.value(e.l, inst) || this.value(e.r, inst)
-        if (e.o === '??') return this.value(e.l, inst) ?? this.value(e.r, inst)
+        // The right side stays optional inside an outer ?? (`a ?? b ?? 'x'` groups
+        // as `(a ?? b) ?? 'x'`), so only the last fallback must exist.
+        if (e.o === '??') return this.value(e.l, inst, true) ?? this.value(e.r, inst, optional)
         const l = this.value(e.l, inst) as never
         const r = this.value(e.r, inst) as never
         switch (e.o) {
@@ -234,6 +241,11 @@ class Renderer {
           this.out.push(
             escapeJsonForScript(typeof v === 'string' ? v : (JSON.stringify(v) ?? 'null')),
           )
+        } else if (n.c === 'css') {
+          const css = v instanceof SafeHtml ? v.html : this.text(v, inst)
+          // Trusted, but it still mustn't end the element early.
+          if (/<\/style/i.test(css)) this.fail(inst, "CSS for <style> can't contain '</style'")
+          this.out.push(css)
         } else if (v instanceof SafeHtml && n.c === 'text') {
           // Trusted HTML prints as is in text — never in <title>/<textarea>,
           // where it could close the element.
