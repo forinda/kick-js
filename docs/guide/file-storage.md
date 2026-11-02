@@ -572,6 +572,46 @@ On a host with an IAM role, leave both keys unset and pass the provider as an op
 
 A second bucket reads its own variables through `S3Settings.scoped('BACKUPS')`, which reads `BACKUPS_S3_BUCKET`, `BACKUPS_S3_ACCESS_KEY_ID`, and so on. Pass it as `s3FromSettings(Backups)`; the adapter that takes that storage declares it.
 
+## One storage per tenant
+
+When each tenant's bucket, keys or KMS key live in your database, build a storage per tenant from its row and keep it. `s3Storage()` opens no connection and holds no client, so building one is cheap, and a tenant's storage carries its own encryption setting:
+
+```ts
+@Service()
+export class TenantFiles {
+  @Autowired(TENANT_CONFIG) private config!: TenantConfigRepo
+  private storages = new Map<string, Promise<S3Storage>>()
+
+  for(tenantId: string): Promise<S3Storage> {
+    let storage = this.storages.get(tenantId)
+    if (!storage) {
+      storage = this.config.storageFor(tenantId).then((row) =>
+        s3Storage({
+          bucket: row.bucket,
+          region: row.region,
+          endpoint: row.endpoint ?? undefined,
+          // Fetched per request, so rotated keys apply without a restart.
+          credentials: () => this.config.credentialsFor(tenantId),
+          ...(row.kmsKeyId
+            ? { serverSideEncryption: { type: 'aws:kms', keyId: row.kmsKeyId } }
+            : {}),
+        }),
+      )
+      storage.catch(() => this.storages.delete(tenantId))
+      this.storages.set(tenantId, storage)
+    }
+    return storage
+  }
+
+  /** Call when a tenant's storage settings change. */
+  forget(tenantId: string) {
+    this.storages.delete(tenantId)
+  }
+}
+```
+
+Inject `TenantFiles` where you'd inject `STORAGE`: `StorageAdapter` binds one storage to one token, so it isn't the tool here. `credentials` is called before every request, so cache inside `credentialsFor` rather than reading the database each time.
+
 ## Your own driver
 
 Storage on another service (Cloudinary, Azure Blob, Google Cloud Storage, an internal file API) doesn't need a driver from KickJS. A driver is any object with the methods of `Storage`, and `StorageAdapter({ storage })` binds it like the built-in ones: `@Autowired(STORAGE)`, the upload helpers and the `/health/ready` check work unchanged.
