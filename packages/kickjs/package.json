@@ -189,7 +189,7 @@
     "@types/compression": "1.8.1",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/serve-static": "^2.2.0",
     "@valibot/to-json-schema": "1.8.0",
     "compression": "1.8.2",

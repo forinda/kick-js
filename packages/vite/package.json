@@ -55,7 +55,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-cli": "workspace:*",
     "@forinda/kickjs-view": "workspace:*",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "miniflare": "^4.20260730.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",

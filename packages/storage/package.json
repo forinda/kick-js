@@ -75,7 +75,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-testing": "workspace:*",
     "@swc/core": "^1.16.20",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/supertest": "^7.2.1",
     "supertest": "^7.3.1",
     "testcontainers": "12.2.1",

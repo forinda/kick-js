@@ -104,7 +104,7 @@
     }
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.11",
+    "@electric-sql/pglite": "0.5.13",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@forinda/kickjs-schema": "workspace:*",
@@ -113,7 +113,7 @@
     "@testcontainers/mysql": "^12.2.1",
     "@testcontainers/postgresql": "^12.2.1",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
     "kysely": "^0.29.7",
