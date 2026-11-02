@@ -115,7 +115,7 @@ Pipes bind loosest: `a ? b : c | upper` pipes the whole conditional. A condition
 | `!` `-` (unary)         |
 | `.` `?.` `[]`           |
 
-A name the data doesn't have prints nothing and logs a warning in dev. With `strict: true` it's an error.
+A name the data doesn't have prints nothing and logs a warning in dev. With `strict: true` it's an error, except on the left of `??` or before `?.`: `{{ showPositions ?? true }}` and `{{ fees?.paid }}` read a missing name as `undefined`, so an optional field needs no placeholder in the data.
 
 ### Control flow
 
