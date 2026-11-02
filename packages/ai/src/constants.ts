@@ -12,7 +12,8 @@ import type { AiAdapterInstance, AiProvider, AiToolOptions } from './types'
  * reserved `kick/` prefix prevents two separate definitions from
  * shadowing each other even if the package is loaded more than once.
  */
-export const AI_TOOL_METADATA = createToken<AiToolOptions>('kick/ai/tool')
+export const AI_TOOL_METADATA: InjectionToken<AiToolOptions> =
+  createToken<AiToolOptions>('kick/ai/tool')
 
 /**
  * DI token for the active AI provider.
@@ -39,7 +40,7 @@ export const AI_TOOL_METADATA = createToken<AiToolOptions>('kick/ai/tool')
  * }
  * ```
  */
-export const AI_PROVIDER = createToken<AiProvider>('kick/ai/provider')
+export const AI_PROVIDER: InjectionToken<AiProvider> = createToken<AiProvider>('kick/ai/provider')
 
 /**
  * DI token for the AiAdapter instance — exposes the agent loop (`runAgent`,
@@ -66,7 +67,8 @@ export const AI_PROVIDER = createToken<AiProvider>('kick/ai/provider')
  * }
  * ```
  */
-export const AI_ADAPTER = createToken<AiAdapterInstance>('kick/ai/adapter')
+export const AI_ADAPTER: InjectionToken<AiAdapterInstance> =
+  createToken<AiAdapterInstance>('kick/ai/adapter')
 
 const scopedAdapterTokens = new Map<string, InjectionToken<AiAdapterInstance>>()
 const scopedProviderTokens = new Map<string, InjectionToken<AiProvider>>()
@@ -137,7 +139,8 @@ export function aiProviderToken(scope: string): InjectionToken<AiProvider> {
  * })
  * ```
  */
-export const VECTOR_STORE = createToken<VectorStore>('kick/ai/vector-store')
+export const VECTOR_STORE: InjectionToken<VectorStore> =
+  createToken<VectorStore>('kick/ai/vector-store')
 
 /**
  * Where a provider built from settings (`@forinda/kickjs-ai/settings`) keeps

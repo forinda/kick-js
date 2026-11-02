@@ -17,6 +17,7 @@ import { Server, type Namespace, type ServerOptions, type Socket } from 'socket.
 import {
   createLogger,
   createToken,
+  type InjectionToken,
   defineAdapter,
   getClassMeta,
   getClassMetaOrUndefined,
@@ -40,7 +41,7 @@ const MAX_PENDING_BEFORE_CONNECT = 64
 const MAX_PENDING_BYTES_BEFORE_CONNECT = 1024 * 1024
 
 /** DI token for the Socket.IO `Server`. */
-export const SOCKET_IO = createToken<Server>('kick/ws/SocketIo')
+export const SOCKET_IO: InjectionToken<Server> = createToken<Server>('kick/ws/SocketIo')
 
 /** Socket.IO server options (`cors`, `path`, `adapter`, …) plus the shared auth hook. */
 export interface SocketIoAdapterOptions extends Partial<ServerOptions> {

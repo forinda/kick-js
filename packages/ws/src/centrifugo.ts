@@ -21,7 +21,7 @@
  * @module @forinda/kickjs-ws/centrifugo
  */
 import { createHmac } from 'node:crypto'
-import { createLogger, createToken, defineAdapter } from '@forinda/kickjs'
+import { createLogger, createToken, type InjectionToken, defineAdapter } from '@forinda/kickjs'
 import { WS_USER_BROADCASTER, type WsAuthenticatedUser, type WsUserBroadcaster } from './interfaces'
 
 const log = createLogger('CentrifugoAdapter')
@@ -168,7 +168,8 @@ export async function centrifugoConnect<Req>(
 }
 
 /** DI token for the {@link CentrifugoClient} registered by {@link CentrifugoAdapter}. */
-export const CENTRIFUGO = createToken<CentrifugoClient>('kick/ws/Centrifugo')
+export const CENTRIFUGO: InjectionToken<CentrifugoClient> =
+  createToken<CentrifugoClient>('kick/ws/Centrifugo')
 
 export interface CentrifugoAdapterOptions extends CentrifugoClientOptions {
   /**

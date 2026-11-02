@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http'
-import { createToken } from '@forinda/kickjs'
+import { createToken, type InjectionToken } from '@forinda/kickjs'
 import type { RoomManager } from './room-manager'
 
 type Constructor = new (...args: any[]) => any
@@ -144,11 +144,13 @@ export interface WsUserBroadcaster {
 }
 
 /** DI token for the live {@link WsAdapter} instance. */
-export const WS_ADAPTER = createToken<unknown>('kick/ws/Adapter')
+export const WS_ADAPTER: InjectionToken<unknown> = createToken<unknown>('kick/ws/Adapter')
 /** DI token for the shared {@link RoomManager}. */
-export const WS_ROOM_MANAGER = createToken<RoomManager>('kick/ws/RoomManager')
+export const WS_ROOM_MANAGER: InjectionToken<RoomManager> =
+  createToken<RoomManager>('kick/ws/RoomManager')
 /** DI token for the per-user broadcaster helper. */
-export const WS_USER_BROADCASTER = createToken<WsUserBroadcaster>('kick/ws/UserBroadcaster')
+export const WS_USER_BROADCASTER: InjectionToken<WsUserBroadcaster> =
+  createToken<WsUserBroadcaster>('kick/ws/UserBroadcaster')
 
 /** Registry of all @WsController classes — populated at decorator time */
 export const wsControllerRegistry = new Set<Constructor>()

@@ -27,7 +27,7 @@ import {
 import type { Storage } from './types'
 
 /** The app's storage, bound by {@link StorageAdapter}. */
-export const STORAGE = createToken<Storage>('kick/storage/default')
+export const STORAGE: InjectionToken<Storage> = createToken<Storage>('kick/storage/default')
 
 // Set by s3FromSettings: the section a storage reads, for the adapter to declare.
 const SETTINGS = Symbol.for('kickjs-storage.settings')

@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { createToken, JOB_META } from '@forinda/kickjs'
+import { createToken, type InjectionToken, JOB_META } from '@forinda/kickjs'
 import type { QueueService } from './queue.service'
 
 /**
@@ -40,7 +40,8 @@ interface QueueAdapterCommon {
 }
 
 /** DI token for resolving the QueueService from the container. */
-export const QUEUE_MANAGER = createToken<QueueService>('kick/queue/Manager')
+export const QUEUE_MANAGER: InjectionToken<QueueService> =
+  createToken<QueueService>('kick/queue/Manager')
 
 /**
  * Abstract interface for queue providers.
