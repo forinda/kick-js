@@ -593,7 +593,7 @@ export class TenantFiles {
           // Fetched per request, so rotated keys apply without a restart.
           credentials: () => this.config.credentialsFor(tenantId),
           ...(row.kmsKeyId
-            ? { serverSideEncryption: { type: 'aws:kms', keyId: row.kmsKeyId } }
+            ? { serverSideEncryption: { type: 'aws:kms' as const, keyId: row.kmsKeyId } }
             : {}),
         }),
       )
