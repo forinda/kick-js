@@ -11,6 +11,8 @@ export const BUILTIN_PIPES: readonly string[] = [
   'titlecase',
   'json',
   'slice',
+  'join',
+  'compact',
   'keys',
   'entries',
   'url',
@@ -117,6 +119,14 @@ export function builtinPipes(env: PipeEnv): Record<string, Pipe> {
     slice: (v, start, end) =>
       typeof v === 'string' || Array.isArray(v)
         ? v.slice(start as number | undefined, end as number | undefined)
+        : v,
+    // `{{ names | join:', ' }}`: a list (or Set) as text, empty items as ''.
+    join: (v, separator = ', ') =>
+      Array.isArray(v) || v instanceof Set ? [...v].map(str).join(str(separator)) : str(v),
+    // Drops null, undefined, false and '' — keeps 0, unlike filter(Boolean).
+    compact: (v) =>
+      Array.isArray(v) || v instanceof Set
+        ? [...v].filter((x) => x !== null && x !== undefined && x !== false && x !== '')
         : v,
     keys: (v) =>
       v instanceof Map ? [...v.keys()] : v && typeof v === 'object' ? Object.keys(v) : [],

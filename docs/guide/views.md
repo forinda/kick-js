@@ -416,6 +416,8 @@ kick-toast[kind='error'] {
 | `currency:code:digits?`               | `{{ price \| currency:'KES' }}`                                                                                                              |
 | `percent:digits?`                     | `{{ ratio \| percent }}`                                                                                                                     |
 | `slice:start:end`                     | `{{ items \| slice:0:3 }}`                                                                                                                   |
+| `join:separator?`                     | `{{ names \| join:', ' }}` — a list as text; `', '` by default                                                                               |
+| `compact`                             | `{{ addressLines \| compact \| join:' · ' }}` — drops `null`, `undefined`, `false` and `''`, keeps `0`                                       |
 | `keys`, `entries`                     | `@for ([k, v] of obj \| entries) { … }`                                                                                                      |
 | `json`                                | `{{ data \| json }}`                                                                                                                         |
 | `url`                                 | `href="/search?q={{ term \| url }}"`                                                                                                         |
