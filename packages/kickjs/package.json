@@ -141,7 +141,7 @@
   "peerDependencies": {
     "@fastify/middie": "^9.0.0",
     "@fastify/multipart": "^10.1.6",
-    "croner": "^10.0.1",
+    "croner": "^11.0.0",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "fastify": "^5.0.0",
@@ -193,7 +193,7 @@
     "@types/serve-static": "^2.2.0",
     "@valibot/to-json-schema": "1.8.0",
     "compression": "1.8.2",
-    "croner": "^10.0.1",
+    "croner": "^11.0.0",
     "fastify": "^5.12.7",
     "h3": "2.0.8",
     "multer": "^2.5.0",
