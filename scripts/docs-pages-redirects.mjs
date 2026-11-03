@@ -40,6 +40,7 @@ const stub = (url) => `<!doctype html>
 <meta charset="utf-8">
 <title>Moved to kickjs.app</title>
 <link rel="canonical" href="${url}">
+<script>location.replace('${url}' + location.search + location.hash)</script>
 <meta http-equiv="refresh" content="0; url=${url}">
 </head>
 <body><p>The KickJS docs moved to <a href="${url}">${url}</a>.</p></body>
