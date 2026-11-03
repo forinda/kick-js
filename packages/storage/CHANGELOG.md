@@ -1,5 +1,13 @@
 # @forinda/kickjs-storage
 
+## 0.5.0
+
+### Minor Changes
+
+- [#1125](https://github.com/forinda/kick-js/pull/1125) [`99fd210`](https://github.com/forinda/kick-js/commit/99fd210e345bdc116194b1f59588c48b47663926) Thanks [@forinda](https://github.com/forinda)! - `ensureBucket()` on an S3 storage creates the bucket when it's missing, returning `true` when it did. It names the region outside `us-east-1`, treats a concurrent create as success, and throws when the name is taken by another account or access is denied. Useful for a fresh MinIO in development and tests.
+
+- [#1126](https://github.com/forinda/kick-js/pull/1126) [`2c830cf`](https://github.com/forinda/kick-js/commit/2c830cfdb747dafdd0553b49c9205b6fc5efba39) Thanks [@forinda](https://github.com/forinda)! - `s3Storage({ serverSideEncryption })` encrypts what the storage writes, with keys S3 manages (`{ type: 'AES256' }`) or a KMS key (`{ type: 'aws:kms', keyId? }`). The signed headers go on `put`, `putIfAbsent`, `compose`, `multipart.create` and `uploadForm`; `uploadUrl` doesn't carry them.
+
 ## 0.4.0
 
 ### Minor Changes

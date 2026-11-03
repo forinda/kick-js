@@ -1,5 +1,13 @@
 # @forinda/kickjs-view-language-server
 
+## 0.4.1
+
+### Patch Changes
+
+- [#1124](https://github.com/forinda/kick-js/pull/1124) [`4f3c37f`](https://github.com/forinda/kick-js/commit/4f3c37f1e67493c2ab3771c3a99dcbca1fd0a3fb) Thanks [@forinda](https://github.com/forinda)! - Two built-in pipes: `join:separator?` prints a list as text (`{{ names | join:', ' }}`), and `compact` drops `null`, `undefined`, `false` and empty strings from a list while keeping `0`. An app pipe already named `join` or `compact` now fails `kick check:views` as a clash with a built-in; rename it.
+- Updated dependencies [[`718d6db`](https://github.com/forinda/kick-js/commit/718d6db09b63cd1ce7b944bd62c6684fa04a1e87), [`4f3c37f`](https://github.com/forinda/kick-js/commit/4f3c37f1e67493c2ab3771c3a99dcbca1fd0a3fb), [`6be9abf`](https://github.com/forinda/kick-js/commit/6be9abf2a488604814f99b4b6b1cfe029d4de2e7)]:
+  - @forinda/kickjs-view@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
