@@ -1,3 +1,7 @@
+---
+title: REST Module Architecture with Decorators
+---
+
 # REST Module Architecture with a Decorator-Driven Framework
 
 _Part of "Building a Shared Task App with KickJS"_

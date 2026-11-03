@@ -7,6 +7,8 @@ series: 'Building with KickJS'
 cover_image: ''
 ---
 
+# The Case for a tRPC-like Typed Client in KickJS
+
 ## TL;DR
 
 - Decorator-driven backends like KickJS already have all the metadata for a typed client: Zod DTOs, route decorators, Swagger annotations

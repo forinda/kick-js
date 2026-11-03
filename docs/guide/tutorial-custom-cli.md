@@ -1,5 +1,5 @@
 ---
-title: 'KickJS Custom CLI Commands for Seeding, Resetting, and Testing — Zero Extra Dependencies'
+title: 'Custom CLI Commands for Seeding and Testing'
 description: "How I replaced a mess of npm scripts with custom CLI commands in KickJS's kick.config.ts, using tsx for path alias support and keeping developer experience tight."
 tags: ['kickjs', 'nodejs', 'typescript', 'mongodb', 'cli']
 canonical_url: ''
