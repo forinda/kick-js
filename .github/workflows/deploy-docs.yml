@@ -31,6 +31,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm docs:build
+        env:
+          DOCS_GA_ID: ${{ vars.DOCS_GA_ID }}
 
       # The docs live on kickjs.app (Netlify). This mirror only redirects there,
       # so search engines move its rankings to kickjs.app.
