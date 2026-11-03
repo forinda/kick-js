@@ -368,7 +368,7 @@ if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
 
 const SITE_OG_TITLE = 'KickJS — Modern type-safe backend framework, powered by Vite'
 const SITE_OG_DESCRIPTION =
-  'A modern type-safe backend framework for TypeScript, powered by Vite. Built for developer experience and pluggable as you need: database, jobs, real-time, AI and a typed client, on Express, Fastify or h3.'
+  'Type-safe TypeScript backend framework powered by Vite: decorators, DI, database, jobs, real-time, AI and a typed client, on Express, Fastify or h3.'
 
 /**
  * A page's first prose paragraph as plain text, for its meta description when
@@ -422,8 +422,9 @@ export default defineConfig({
   // oxfmt from reflowing them (it reformats `html` fences).
   markdown: { languageAlias: { kick: 'html' } },
   title: 'KickJS',
-  description:
-    'A modern type-safe backend framework for TypeScript, powered by Vite. Built for developer experience and pluggable as you need: database, jobs, real-time, AI and a typed client, on Express, Fastify or h3.',
+  description: SITE_OG_DESCRIPTION,
+  // The docs package's own README isn't a docs page.
+  srcExclude: ['README.md'],
   base,
   ignoreDeadLinks: true,
   lastUpdated: true,

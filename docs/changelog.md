@@ -1,10 +1,14 @@
+---
+description: KickJS release history through v5.2.0. Later releases are versioned per package, each with its own CHANGELOG.
+---
+
 # Changelog
 
 All notable changes to KickJS are documented here.
 
-# Release v5.2.0
+## Release v5.2.0
 
-## New Features
+### New Features
 
 - feat(kickjs): tenant-flow integration test across all 5 registration sites ([ffccd39](https://github.com/forinda/kick-js/commit/ffccd39c0c51bab8c97460f6fbeead37f6becae7)) — [@forinda](https://github.com/forinda)
 - feat(kickjs): parameterised context contributors v1 ([fbb863d](https://github.com/forinda/kick-js/commit/fbb863db7f718c0189902b7be72f1b0cda8edb14)) — [@forinda](https://github.com/forinda)
@@ -29,7 +33,7 @@ All notable changes to KickJS are documented here.
 - feat(cli): kick new --yes / --non-interactive + 3-core showcase for kick list ([82459ec](https://github.com/forinda/kick-js/commit/82459ec99b54fa47201a55ba2a982b878dd2e6f5)) — [@forinda](https://github.com/forinda)
 - feat(db): auto-apply customType.toDriver on INSERT + UPDATE (M2.F-T16 follow-up) ([3512a0a](https://github.com/forinda/kick-js/commit/3512a0a66f9025059a09b400d27bbc5d362d6544)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(kickjs): SourcedRegistration / ContributorPipeline use AnyContributorRegistration ([0304291](https://github.com/forinda/kick-js/commit/03042915b5487a86e12d55045125d4cb9092d57b)) — [@forinda](https://github.com/forinda)
 - fix(kickjs): freeze per-call params + tighten plain-object guard + dedup JSDoc ([93a8829](https://github.com/forinda/kick-js/commit/93a8829c09875693089a17ef82b626c737d4f3af)) — [@forinda](https://github.com/forinda)
@@ -44,7 +48,7 @@ All notable changes to KickJS are documented here.
 - fix(devtools+db): apply Copilot review feedback from PR #150 ([9548a65](https://github.com/forinda/kick-js/commit/9548a651a195be088a63e9738114182e9b67888c)) — [@forinda](https://github.com/forinda)
 - fix(cli): kick add walks up for lockfile + corepack pm; register db / db-pg ([ba69d63](https://github.com/forinda/kick-js/commit/ba69d639f744be155ac6a18d806d1d2f50f180bb)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: deprecate @forinda/kickjs-auth + 4 review fixes ([6aa984a](https://github.com/forinda/kick-js/commit/6aa984aba3bd7f88ce4b4041c2cf4bee2ce77a36)) — [@forinda](https://github.com/forinda)
 - docs(context-decorators): add tenant-scoped DB worked example ([5ff3f68](https://github.com/forinda/kick-js/commit/5ff3f683c1b534f797c5628d521464bf8d99627a)) — [@forinda](https://github.com/forinda)
@@ -56,13 +60,13 @@ All notable changes to KickJS are documented here.
 - docs(db): tighten needs-injection wording for $extends({ result }) ([95fb88c](https://github.com/forinda/kick-js/commit/95fb88cfd8e110818d64b17897403430bc1b1b47)) — [@forinda](https://github.com/forinda)
 - docs: thin old docs ([8387ed8](https://github.com/forinda/kick-js/commit/8387ed8582a42b0f77217a811892bd4b99425c7c)) — [@forinda](https://github.com/forinda)
 
-## CI / Infrastructure
+### CI / Infrastructure
 
 - ci: build before typecheck + lint-tokens (cross-package dist deps) ([677d1d9](https://github.com/forinda/kick-js/commit/677d1d9d74ce8f69361d8cb52e3a7911b5869728)) — [@forinda](https://github.com/forinda)
 - ci: build before test in the matrix test job ([b8b52c4](https://github.com/forinda/kick-js/commit/b8b52c4417863166295781a5d2fe7e49a1e7135e)) — [@forinda](https://github.com/forinda)
 - ci: split lint-build-test into parallel independent jobs ([cb9aa21](https://github.com/forinda/kick-js/commit/cb9aa21e348c7cf3666e384268852984d7b94b90)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: format docs and changelog pre-commit ([8625c41](https://github.com/forinda/kick-js/commit/8625c41938511b9fe9f679d698b1f2907a271f24)) — [@forinda](https://github.com/forinda)
 - Add benchmark guide to README ([f418a7e](https://github.com/forinda/kick-js/commit/f418a7e29715084ca7f9a1e8ed348f5499185293)) — @Felix Orinda
@@ -70,12 +74,12 @@ All notable changes to KickJS are documented here.
 - chore: replace husky with lefthook + slim pre-commit ([a548c83](https://github.com/forinda/kick-js/commit/a548c83e3f1a502fcff94827c1713710496a3bc1)) — [@forinda](https://github.com/forinda)
 - chore: ignore devtools SPA bundle in prettier + kick-lint ([1775950](https://github.com/forinda/kick-js/commit/1775950ed46275a064f67bdf722e0f8062c36eb3)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 - Felix Orinda
 
-## Stats
+### Stats
 
 - **51** commits
 - **2** contributor(s)
@@ -86,9 +90,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v5.1.0...v5.2.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-db`, `@forinda/kickjs-db-pg`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mcp`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v5.1.0
+## Release v5.1.0
 
-## New Features
+### New Features
 
 - feat(db): \$extends({ model }) per-table method extension (M2.F-T17, v1) ([10a3c07](https://github.com/forinda/kick-js/commit/10a3c070edf64765c674d7881a5f54aa2982c60d)) — [@forinda](https://github.com/forinda)
 - feat(db): pgEnum snapshot + diff + emit pipeline — CREATE TYPE flows through migrations ([2e6575b](https://github.com/forinda/kick-js/commit/2e6575b09ca090e7e6790cebcdf5d087da8cb86d)) — [@forinda](https://github.com/forinda)
@@ -160,7 +164,7 @@ All notable changes to KickJS are documented here.
 - feat(db): add SchemaSnapshot IR with JSON roundtrip test (M0-S1) ([86b8bb5](https://github.com/forinda/kick-js/commit/86b8bb5ca93f5f5a2846f6d41c1cd61837376ef3)) — [@forinda](https://github.com/forinda)
 - feat(db): bootstrap @forinda/kickjs-db package skeleton (M0-S1) ([5debbad](https://github.com/forinda/kick-js/commit/5debbad2de4e816de31c79a78e1cd449bf29a6db)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(db): rename .kysely → .qb in tests/docs + sidestep \$extends `this:` self-reference pitfall ([b6ca93d](https://github.com/forinda/kick-js/commit/b6ca93d9039e06100e7df29bc686395a1f2249dd)) — [@forinda](https://github.com/forinda)
 - fix(db): pgEnum() variadic rest API + restore string keys in contributor test ([c058ddf](https://github.com/forinda/kick-js/commit/c058ddf7e55b09dc3be243293eabc852d77aacb2)) — [@forinda](https://github.com/forinda)
@@ -176,7 +180,7 @@ All notable changes to KickJS are documented here.
 - fix(db): emit CREATE TABLEs before any FK in initial diff ([342096d](https://github.com/forinda/kick-js/commit/342096d0e920753eedf417df0ed9bf67ddd16b1f)) — [@forinda](https://github.com/forinda)
 - fix(cli): accept empty --packages for non-interactive scaffolding ([1f653c6](https://github.com/forinda/kick-js/commit/1f653c657ef9f19bf8a0536974150cd9a4005942)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: register cli-plugins + db guides in VitePress sidebar ([d2f2727](https://github.com/forinda/kick-js/commit/d2f2727af2c5e37c6c65bc7410e8155909de14ba)) — [@forinda](https://github.com/forinda)
 - docs: M2 release notes (M2.G-T22) ([7b7be21](https://github.com/forinda/kick-js/commit/7b7be21635eb1eb8cb6bdd0c20ed6fb6eac5e81d)) — [@forinda](https://github.com/forinda)
@@ -192,13 +196,13 @@ All notable changes to KickJS are documented here.
 - docs(db): add M1 (Walking Skeleton) implementation plan ([80a6668](https://github.com/forinda/kick-js/commit/80a666860057a31733847223f6c44c4c91826776)) — [@forinda](https://github.com/forinda)
 - docs(db): add design spec, story backlog, and M0 implementation plan ([55d12de](https://github.com/forinda/kick-js/commit/55d12dea0aac94ae4ed7279035c9df7b049b6cc8)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test(db-pg): kickDbAdapter migrationsOnBoot {fail-if-pending,apply,ignore} (M1-S7) ([80cdce7](https://github.com/forinda/kick-js/commit/80cdce767c77db278088b6813927c1343e3274dd)) — [@forinda](https://github.com/forinda)
 - test(db): generate() end-to-end (M0-S6) ([9c2efc3](https://github.com/forinda/kick-js/commit/9c2efc3c928d1623c392726c0af1e7965ac109d3)) — [@forinda](https://github.com/forinda)
 - test(db): full-pipeline integration test on real PG (M0-S5) ([381b8ef](https://github.com/forinda/kick-js/commit/381b8ef6c1412f9a9e8bb4f093e3e2dcbd569fce)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - refactor(db): rename adopter-facing surface to drop Kysely-named exports ([3951cf9](https://github.com/forinda/kick-js/commit/3951cf9424f47151dab30ba007d134409c125fd1)) — [@forinda](https://github.com/forinda)
 - chore(db): pin kysely as direct dep + ship pgDialect() so adopters never import from 'kysely' ([97e3a4a](https://github.com/forinda/kick-js/commit/97e3a4a201f2118992682eff19871ca9add2f802)) — [@forinda](https://github.com/forinda)
@@ -208,11 +212,11 @@ All notable changes to KickJS are documented here.
 - chore(db): mark @forinda/kickjs-db as private ([4392798](https://github.com/forinda/kick-js/commit/43927985a4ca3b2383c806bccaf152cb671488c2)) — [@forinda](https://github.com/forinda)
 - example(db-spike-api): smoke-test fixture for the M0 diff engine ([2582560](https://github.com/forinda/kick-js/commit/2582560eedb7fff4a8e9adbe8596ae4e53e5d19d)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **105** commits
 - **1** contributor(s)
@@ -223,21 +227,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v5.0.2...v5.1.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-db`, `@forinda/kickjs-db-pg`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mcp`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v5.0.1
+## Release v5.0.1
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(container): invoke factory in REQUEST scope resolve path (#143) ([39974e2](https://github.com/forinda/kick-js/commit/39974e2fdfb00051792f4068ecb4b3efbca54949)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: thin old docs ([152d81d](https://github.com/forinda/kick-js/commit/152d81db9b197c5a12f1f46978ac6afbc02962ec)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -248,23 +252,23 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v5.0.0...v5.0.1
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mcp`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v5.0.0
+## Release v5.0.0
 
-## Breaking Changes
+### Breaking Changes
 
 - feat!: remove otel/cron/mailer/multi-tenant/notifications for v5 ([71b6738](https://github.com/forinda/kick-js/commit/71b6738c4c1aa9414c63650d9996777644853fa0)) — [@forinda](https://github.com/forinda)
 - feat!: remove @forinda/kickjs-graphql for v5 ([ae96e7e](https://github.com/forinda/kick-js/commit/ae96e7ec9d7c4e3f5a7f17a3855a4aaa96670072)) — [@forinda](https://github.com/forinda)
 - refactor(prisma,drizzle)!: tenant adapters read getRequestValue('tenant') instead of importing kickjs-multi-tenant ([96ae13d](https://github.com/forinda/kick-js/commit/96ae13d752e905c0e6cd3323afb5e9e004e8406b)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore(examples,packages,docs): migrate examples to BYO + scrub deprecated cross-refs + queue v5 sketch ([7137891](https://github.com/forinda/kick-js/commit/71378913151a0bc1c8c0469321fcef97d5159e6a)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **4** commits
 - **1** contributor(s)
@@ -275,31 +279,31 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v4.2.0...v5.0.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mcp`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v4.2.0
+## Release v4.2.0
 
-## New Features
+### New Features
 
 - feat(kickjs): bootstrap({ processHooks }) + getRequestValue/getRequestStore ([93d09af](https://github.com/forinda/kick-js/commit/93d09af1b9b32ba75e97c9551c199af73edb0dbd)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli): defineAugmentation extractor preserves backtick strings + escapes ([96272bf](https://github.com/forinda/kick-js/commit/96272bf27f7db09a68c7eb0d5b871e358fb99a85)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: BYO recipes for v5 deprecation cohort + lifecycle/context rewrites + comparison.md ([e6f9579](https://github.com/forinda/kick-js/commit/e6f957903e140c92773f9a44df07ca82393cd4c2)) — [@forinda](https://github.com/forinda)
 - docs,cli: sweep adapter/plugin examples to defineAdapter/definePlugin + bulk-up generators ([00c3391](https://github.com/forinda/kick-js/commit/00c339152419d3d84e2e3edfa62e20361a9129d9)) — [@forinda](https://github.com/forinda)
 - docs: drop @Controller('path') from examples + rewrite context-decorators guide ([67e18bd](https://github.com/forinda/kick-js/commit/67e18bd2b4faee4b5e8f2d62316c0abb4194814a)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore(packages,cli): mark 6 wrappers deprecated for v5 cutover + drop GraphQL CLI surface ([745ee43](https://github.com/forinda/kick-js/commit/745ee433dd9272ed160f7ee371f3590eb3a202aa)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **6** commits
 - **1** contributor(s)
@@ -310,9 +314,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v4.1.0...v4.2.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v4.1.0
+## Release v4.1.0
 
-## Breaking Changes
+### Breaking Changes
 
 - refactor!: finish Symbol→string migration across remaining packages ([e06d56b](https://github.com/forinda/kick-js/commit/e06d56bc90b4cf342c9ff3a2be228853d6c5b10c)) — [@forinda](https://github.com/forinda)
 - fix(swagger,auth)!: migrate metadata keys to §22 strings + harden auth bridge ([3fc7dd6](https://github.com/forinda/kick-js/commit/3fc7dd6099324cdd674aaca9aa1a8310094ba4a7)) — [@forinda](https://github.com/forinda)
@@ -320,7 +324,7 @@ All notable changes to KickJS are documented here.
 - fix(cli)!: kick g adapter emits defineAdapter() factory, not legacy class ([58324a5](https://github.com/forinda/kick-js/commit/58324a53ebad46454395ad0173c30de8264bd240)) — [@forinda](https://github.com/forinda)
 - fix(ws)!: prefix WS DI tokens with kick/ per §22 convention ([71fb0b8](https://github.com/forinda/kick-js/commit/71fb0b84dcc5aae157a5c802c0f9990b2b0602ed)) — [@forinda](https://github.com/forinda)
 
-## New Features
+### New Features
 
 - feat(kickjs,vite,cli): stabilize Context Contributors + broaden HMR + customizable log ([1ed4352](https://github.com/forinda/kick-js/commit/1ed4352032a5116f346ade8176b08aaf39c7ac15)) — [@forinda](https://github.com/forinda)
 - feat(swagger): pluggable UI renderer for custom branding / third-party UIs ([bb6816a](https://github.com/forinda/kick-js/commit/bb6816a0fc8de38b50a410db7a1e4119263a5aba)) — [@forinda](https://github.com/forinda)
@@ -340,7 +344,7 @@ All notable changes to KickJS are documented here.
 - feat(assets): auto-rebuild on dev file change — no restart, no manual build ([59bb801](https://github.com/forinda/kick-js/commit/59bb8019185105e7d11b7a52f9eb41be06561871)) — [@forinda](https://github.com/forinda)
 - feat(cli): writeFileSafe formats output via prettier post-write ([635f397](https://github.com/forinda/kick-js/commit/635f3971d06244dd6cb5e175535849a454f5eb03)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(swagger): tighten CSP — drop CDN entries when not actually needed ([914730c](https://github.com/forinda/kick-js/commit/914730c07cd799f57433dbbd3b181b878574425e)) — [@forinda](https://github.com/forinda)
 - fix(swagger): identifier-rule path regex + warn on body-on-read + drop dead branch ([23edadf](https://github.com/forinda/kick-js/commit/23edadf40084673c4a2e9188fea537ac4096e847)) — [@forinda](https://github.com/forinda)
@@ -349,21 +353,21 @@ All notable changes to KickJS are documented here.
 - fix(swagger): snapshot user-supplied servers, rebuild auto block on each afterStart ([fe4f510](https://github.com/forinda/kick-js/commit/fe4f5100f46b49e6058f5e9d4ff2e6430f7eb589)) — [@forinda](https://github.com/forinda)
 - fix(cli): generators emit slash-delimited DI tokens, not PascalCase ([72a9d4c](https://github.com/forinda/kick-js/commit/72a9d4c2863f56ed98d125ed91a35246ac0ee828)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs(guide): document kick g agents + the AGENTS/CLAUDE/skills trio ([e89b5e0](https://github.com/forinda/kick-js/commit/e89b5e0e3238a709797bd195e498da105712a51c)) — [@forinda](https://github.com/forinda)
 - docs(cli): make AGENTS.md canonical + add kick g agents regen + ship kickjs-skills.md ([a072598](https://github.com/forinda/kick-js/commit/a0725985866f2f3e818ac19537974911b925a929)) — [@forinda](https://github.com/forinda)
 - docs(devtools): document the new browser dashboard — tabs, modal, auth, tooltips ([6a51e86](https://github.com/forinda/kick-js/commit/6a51e863f8325f130b19a5ebd45dd20983b9900b)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - perf(swagger): memoise buildOpenAPISpec output, invalidate on registry change ([44edcbd](https://github.com/forinda/kick-js/commit/44edcbd078710367e7a248e09c2593ffed071067)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **32** commits
 - **1** contributor(s)
@@ -374,9 +378,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v4.0.0...v4.1.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v4.0.0
+## Release v4.0.0
 
-## Breaking Changes
+### Breaking Changes
 
 - refactor(core)!: drop dead getControllerPath helper + CONTROLLER_PATH metadata ([2a0002a](https://github.com/forinda/kick-js/commit/2a0002af7a778d3a2511280712ceb9aa34263fcf)) — [@forinda](https://github.com/forinda)
 - refactor(core)!: drop the @Controller(path) parameter ([5f7af4f](https://github.com/forinda/kick-js/commit/5f7af4fe56358e41820754b2f6c5b210a5c23607)) — [@forinda](https://github.com/forinda)
@@ -387,7 +391,7 @@ All notable changes to KickJS are documented here.
 - refactor(kickjs)!: migrate ViewAdapter to defineAdapter factory (v4) ([3ce8707](https://github.com/forinda/kick-js/commit/3ce870776d0dac0289fa39017a296bc806e7ce3e)) — [@forinda](https://github.com/forinda)
 - feat(v4)!: kick/ DI token convention + @forinda/kickjs-lint package ([50d40e3](https://github.com/forinda/kick-js/commit/50d40e3408d4e80dcb499af3a4d367d80e355bef)) — [@forinda](https://github.com/forinda)
 
-## New Features
+### New Features
 
 - feat(vscode): connection-aware status bar action ([87b3f19](https://github.com/forinda/kick-js/commit/87b3f196daebb2d99d755e3e7fb37865dc8cbe9d)) — [@forinda](https://github.com/forinda)
 - feat(vscode): react to settings changes without window reload ([bb8c35e](https://github.com/forinda/kick-js/commit/bb8c35e0e6657d91a2c61da29e12ed0daad27995)) — [@forinda](https://github.com/forinda)
@@ -433,7 +437,7 @@ All notable changes to KickJS are documented here.
 - feat(core): definePlugin / defineAdapter factories (architecture.md §21.2.2 + §21.3.1 + §21.3.4) ([06f9cb4](https://github.com/forinda/kick-js/commit/06f9cb4fdcc8f30b2cc3227d9f76c5bb33486d34)) — [@forinda](https://github.com/forinda)
 - feat(core): KickPlugin/AppAdapter dependsOn + mount-sort topo ordering ([d6871e1](https://github.com/forinda/kick-js/commit/d6871e1df8872dfa5ff781a1d82c88eafa600094)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(release): use packages/kickjs as version source ([b191352](https://github.com/forinda/kick-js/commit/b191352ecefc7a4a9f9cba98511f6ecea6d8bfb6)) — [@forinda](https://github.com/forinda)
 - fix(assets): Copilot review on PR #139 ([8e8afdf](https://github.com/forinda/kick-js/commit/8e8afdfcaa039ce6ac518c1a7a2dc2507912414a)) — [@forinda](https://github.com/forinda)
@@ -441,7 +445,7 @@ All notable changes to KickJS are documented here.
 - fix(cron): finish dropping `new` from jira-\* example apps + cron docs guide ([9f645eb](https://github.com/forinda/kick-js/commit/9f645eb6721825eaa2e3b51f107a23c922565fa2)) — [@forinda](https://github.com/forinda)
 - fix(core): address Copilot review nits on Context Contributor pipeline ([997cdbf](https://github.com/forinda/kick-js/commit/997cdbfee806d4c37168b3538d1aeb93290ac4e7)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: remove v3.1.2 docs to thin docs heap size ([20ba5ed](https://github.com/forinda/kick-js/commit/20ba5ede3bb53072b968b326155da520c29a30cb)) — [@forinda](https://github.com/forinda)
 - docs(migration): cover @Controller parameter removal in v3-to-v4 guide ([7b164d7](https://github.com/forinda/kick-js/commit/7b164d76830473e1e112c2b77ee8a4be5ff79042)) — [@forinda](https://github.com/forinda)
@@ -451,12 +455,12 @@ All notable changes to KickJS are documented here.
 - docs(mailer): use getEnv() instead of process.env in mailer guide + smtp JSDoc ([f1a0ab5](https://github.com/forinda/kick-js/commit/f1a0ab521ca34f23f0fab2a85f7ec21c54cb01d3)) — [@forinda](https://github.com/forinda)
 - docs(architecture): plugin ecosystem improvement landscape (§21) ([32badcf](https://github.com/forinda/kick-js/commit/32badcfb1692f508489b104b3b17f706abc5f456)) — [@forinda](https://github.com/forinda)
 
-## CI / Infrastructure
+### CI / Infrastructure
 
 - ci: bump actions/upload-pages-artifact from 4 to 5 ([cc43af4](https://github.com/forinda/kick-js/commit/cc43af4bcd4ae0b87d1a6ac941f313db6a839063)) — [@forinda](https://github.com/forinda)
 - ci: bump pnpm/action-setup from 5 to 6 ([1a5b13c](https://github.com/forinda/kick-js/commit/1a5b13c083643c6406ea2b60a5163e72f2de2619)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: Update package dependencies ([7109f0c](https://github.com/forinda/kick-js/commit/7109f0c3a7f5fbe569f16f197a43190d77904b74)) — [@forinda](https://github.com/forinda)
 - chore(examples): drop 8 single-feature/legacy example apps ([4146c54](https://github.com/forinda/kick-js/commit/4146c54b7729b22a99627840b978d7ba1a7897d2)) — [@forinda](https://github.com/forinda)
@@ -468,11 +472,11 @@ All notable changes to KickJS are documented here.
 - refactor(core): drop NestJS-style aliases from definePlugin / defineAdapter ([b533037](https://github.com/forinda/kick-js/commit/b533037cc953a3e35b2120e81fa8f4289be7a5c7)) — [@forinda](https://github.com/forinda)
 - chore: cleanup docs ([2ac22b3](https://github.com/forinda/kick-js/commit/2ac22b3ae554cab3e74ea383f534590ad6b53de6)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **74** commits
 - **1** contributor(s)
@@ -483,9 +487,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.2.0...v4.0.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.2.0
+## Release v3.2.0
 
-## New Features
+### New Features
 
 - feat(auth): type-narrow @Roles + @Can via AuthUser/PolicyRegistry augmentation ([a065add](https://github.com/forinda/kick-js/commit/a065addaec96d5f7eb244ca1838bd03c24864316)) — [@forinda](https://github.com/forinda)
 - feat(http): KickPlugin.contributors?() — plugin-level contributor hook (#107) ([0e4dd4e](https://github.com/forinda/kick-js/commit/0e4dd4e2be0db7c639bb20a1e2960f72897a96aa)) — [@forinda](https://github.com/forinda)
@@ -520,12 +524,12 @@ All notable changes to KickJS are documented here.
 - feat(core): introduce ExecutionContext + move ContextMeta into core/ (#107) ([b2c0d1c](https://github.com/forinda/kick-js/commit/b2c0d1ce68d64a8c85172689ecbb6a13ab437153)) — [@forinda](https://github.com/forinda)
 - feat(core): add CLASS_CONTRIBUTORS and METHOD_CONTRIBUTORS metadata keys (#107) ([5f73b1a](https://github.com/forinda/kick-js/commit/5f73b1a34db2f01ecced0f57b5e37c93ec009091)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(testing): runContributor accepts decorators with typed deps (#107) ([c496795](https://github.com/forinda/kick-js/commit/c4967956fe279c86f17b91515facfba7810737e3)) — [@forinda](https://github.com/forinda)
 - fix(testing): runContributor accepts decorators with typed deps (#107) ([1f514ff](https://github.com/forinda/kick-js/commit/1f514ff05baa6fdf5dd5517455e0ccc059739969)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: CLAUDE.md points to AGENTS.md as canonical reference ([510dfa4](https://github.com/forinda/kick-js/commit/510dfa49718971a2d67dbf2ca0a3af3be2c9560f)) — [@forinda](https://github.com/forinda)
 - docs(agents): flip canonical convention — CLAUDE.md is the source of truth ([2b86b36](https://github.com/forinda/kick-js/commit/2b86b363d8ffd2bf4cdbfccd836964c34cbac784)) — [@forinda](https://github.com/forinda)
@@ -535,12 +539,12 @@ All notable changes to KickJS are documented here.
 - docs(guide): Context Contributor pipeline guide + cross-links (#107) ([4594f9d](https://github.com/forinda/kick-js/commit/4594f9db6d5bb2c5cf89ab631278dc67d4e69b00)) — [@forinda](https://github.com/forinda)
 - docs(architecture): Context Contributor pipeline design (#107) ([3d22e7d](https://github.com/forinda/kick-js/commit/3d22e7da69bec23e99e47c76a12547e21cdcbd79)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test(core): cover defineContextDecorator and contributor errors (#107) ([0340f90](https://github.com/forinda/kick-js/commit/0340f904dd2b78851b7dc838e710572a8f5623f1)) — [@forinda](https://github.com/forinda)
 - test(core): cover defineContextDecorator and contributor errors (#107) ([841667c](https://github.com/forinda/kick-js/commit/841667c8ea6d98681017cfe7e1d8132d2b234781)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - refactor(auth): address Copilot review on #132 ([ae80dc2](https://github.com/forinda/kick-js/commit/ae80dc21883141c6ad8ebd6d883a456b0d1acb87)) — [@forinda](https://github.com/forinda)
 - Revert "docs(agents): flip canonical convention — CLAUDE.md is the source of truth" ([c60e46e](https://github.com/forinda/kick-js/commit/c60e46e238fcbd34ee0324f346e3544e0f2ee91f)) — [@forinda](https://github.com/forinda)
@@ -567,12 +571,12 @@ All notable changes to KickJS are documented here.
 - Revert "refactor(core): address Copilot review on #131" ([be93292](https://github.com/forinda/kick-js/commit/be9329240aac09f78d6cc9747ed44f39d38da968)) — @Felix Orinda
 - refactor(core): address Copilot review on #131 ([35d9ad8](https://github.com/forinda/kick-js/commit/35d9ad802f7b317ba0065d4baf7f870e993279bb)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 - Felix Orinda
 
-## Stats
+### Stats
 
 - **67** commits
 - **2** contributor(s)
@@ -583,17 +587,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.1.3...v3.2.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.1.3
+## Release v3.1.3
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(http): validate() middleware breaks on Express 5 query schemas (#130) ([5428df1](https://github.com/forinda/kick-js/commit/5428df12995bb160c2681df39eacb52e429fbfe1)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -604,9 +608,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.1.2...v3.1.3
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.1.2
+## Release v3.1.2
 
-## New Features
+### New Features
 
 - feat(otel): sensitiveKeys contract for span-attribute redaction ([b1bbccd](https://github.com/forinda/kick-js/commit/b1bbccd77931e520624fc433d54cf26d7f89074e)) — [@forinda](https://github.com/forinda)
 - feat(auth): AuthorizationService.listObjects seam for ReBAC engines ([89b7f3c](https://github.com/forinda/kick-js/commit/89b7f3cb2579bc986ab8383642a98996e6e5a057)) — [@forinda](https://github.com/forinda)
@@ -615,15 +619,15 @@ All notable changes to KickJS are documented here.
 - feat(auth): forward jsonwebtoken VerifyOptions via JwtStrategyOptions.verifyOptions ([20017a7](https://github.com/forinda/kick-js/commit/20017a74ba802e84095305ae0e5a86d2f47743d2)) — [@forinda](https://github.com/forinda)
 - feat(auth): warn on missing @Policy / action method, add strict mode ([1138fee](https://github.com/forinda/kick-js/commit/1138feea983fb94c2dc61bcdd0111e68ac650b54)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs(auth): document AuthorizationService, PasswordService, @Policy, and @Can ([21fa5b6](https://github.com/forinda/kick-js/commit/21fa5b6b99cb674aa9882c2b6809351ff117a4ed)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **7** commits
 - **1** contributor(s)
@@ -634,30 +638,30 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.1.1...v3.1.2
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.1.1
+## Release v3.1.1
 
-## New Features
+### New Features
 
 - feat(cli): add bun as supported package manager ([ce15ceb](https://github.com/forinda/kick-js/commit/ce15cebaee0eaac3bdd56fc7e79c4ccd471da8b9)) — [@forinda](https://github.com/forinda)
 - feat(cli/generate): add bare shortcut and type action signatures ([c82bc56](https://github.com/forinda/kick-js/commit/c82bc56a6ef56f89cd2c93f1d1c157d75c50b909)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli/generate): emit &lt;name&gt;.module.ts so vite plugin can discover it ([d2d28b8](https://github.com/forinda/kick-js/commit/d2d28b8b7ef6b58150a920ee48ceb42e5b264765)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: tighten bootstrap snippets on homepage and vite README ([2cd6791](https://github.com/forinda/kick-js/commit/2cd67917b3484e937ad7c22f477d0662575575c6)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - refactor(mailer): use reactive ref for console provider counter ([02d8f00](https://github.com/forinda/kick-js/commit/02d8f00fbe02377e137f915340849d4cfd1f2699)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **5** commits
 - **1** contributor(s)
@@ -668,14 +672,14 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.1.0...v3.1.1
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.1.0
+## Release v3.1.0
 
-## New Features
+### New Features
 
 - feat(ws): expose upgrade request, DI tokens, and authenticated handshake (#101 #102 #103) ([75ccdf7](https://github.com/forinda/kick-js/commit/75ccdf721561bc16dc9ad65b3dfd8cc7f00c19dd)) — [@forinda](https://github.com/forinda)
 - feat(cli): honor packageManager from kick.config for kick add ([5b79d2a](https://github.com/forinda/kick-js/commit/5b79d2ad65d2cb1b04abbac00cff4e33371edbc4)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(http): hide HttpException details in production by default ([4b390cb](https://github.com/forinda/kick-js/commit/4b390cb4daac6675a08cbf8dfc46e7f364562d8d)) — [@forinda](https://github.com/forinda)
 - fix(http): HttpException headers + free-form details (#106) ([21556d1](https://github.com/forinda/kick-js/commit/21556d15c91cf1a3b32d0e230d4f3d82dfd91ff1)) — [@forinda](https://github.com/forinda)
@@ -683,19 +687,19 @@ All notable changes to KickJS are documented here.
 - fix(cli/typegen): preserve method names when swagger decorators stack (#108) ([dd76447](https://github.com/forinda/kick-js/commit/dd7644717bbbbf727c66d33426e7f4bab229c3f6)) — [@forinda](https://github.com/forinda)
 - fix(adapters): align lifecycle hook usage with test-mode contract (#104) ([a4aca3c](https://github.com/forinda/kick-js/commit/a4aca3cedf83e2180025e59a115df075b2d46302)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs(auth): document CSRF gotcha with mixed strategies (BFF / gateway) ([27d2054](https://github.com/forinda/kick-js/commit/27d2054e0914a9a3b78fc28e893e96e042b77d4a)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: keep docs lean remove old docs ([0fe3cb5](https://github.com/forinda/kick-js/commit/0fe3cb5090d991ab9af2222ba9d4db76394dcd89)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **9** commits
 - **1** contributor(s)
@@ -706,17 +710,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.8...v3.1.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.8
+## Release v3.0.8
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(http): route validate() failures through next(err) for uniform envelopes (#100) ([3dd5342](https://github.com/forinda/kick-js/commit/3dd53423d40ef8c1b29d7efc84d91515da22fd0e)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -727,30 +731,30 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.7...v3.0.8
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.7
+## Release v3.0.7
 
-## New Features
+### New Features
 
 - feat(testing): forward onError/onNotFound (and other bootstrap options) through createTestApp (#99) ([be336ee](https://github.com/forinda/kick-js/commit/be336eeacfb5465fb76984ec2a369ccbf384dbaa)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(http): session() auto-parses cookies without upstream cookie-parser (#98) ([0fb355a](https://github.com/forinda/kick-js/commit/0fb355a9aee0e5727a6e8ac583bb274865dfa16a)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: Update inspiration page ([5934832](https://github.com/forinda/kick-js/commit/59348325c9e4737b0346d6f0fd1fb0e40d27abeb)) — [@forinda](https://github.com/forinda)
 - docs: remove inertia link ([432cace](https://github.com/forinda/kick-js/commit/432cacee5e1052eb93de666c3888eff2f45f2934)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: clean old docs to fix deploy memory overflow ([6cd3c94](https://github.com/forinda/kick-js/commit/6cd3c94349e7972a5e17b1ce7101d2f62698847c)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **5** commits
 - **1** contributor(s)
@@ -761,9 +765,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.6...v3.0.7
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.6
+## Release v3.0.6
 
-## New Features
+### New Features
 
 - feat(http): per-module prefix: false to skip apiPrefix + version ([cd26f41](https://github.com/forinda/kick-js/commit/cd26f41052f22172b8d7d3058867be5479682544)) — [@forinda](https://github.com/forinda)
 - feat(http): allow apiPrefix: false to mount routes without prefix ([550bc37](https://github.com/forinda/kick-js/commit/550bc37fe5fe2e74dd7f4c3fa36883c270e616db)) — [@forinda](https://github.com/forinda)
@@ -773,7 +777,7 @@ All notable changes to KickJS are documented here.
 - feat(inertia): add symbols, types, prop helpers, and defineInertiaConfig ([f08e83e](https://github.com/forinda/kick-js/commit/f08e83ed3515f745267517fc63245d29731aeeb5)) — [@forinda](https://github.com/forinda)
 - feat(inertia): scaffold @forinda/kickjs-inertia package ([52868ea](https://github.com/forinda/kick-js/commit/52868ea905b33547cfdc66aba242ce7e1271ac66)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(inertia): migrate example to @forinda/kickjs and fix lazy ctx.inertia ([5007290](https://github.com/forinda/kick-js/commit/5007290891bd2ab9ea40bc24f2e29b4ed30aee2a)) — [@forinda](https://github.com/forinda)
 - fix(inertia): suppress Vite dynamic import warning in ServerRenderer ([e09a92c](https://github.com/forinda/kick-js/commit/e09a92c8a398e89d8f63e98480bcf715a4461c69)) — [@forinda](https://github.com/forinda)
@@ -788,21 +792,21 @@ All notable changes to KickJS are documented here.
 - fix(auth): resolve typecheck errors for bcrypt import and JWKS response type ([30e5e9d](https://github.com/forinda/kick-js/commit/30e5e9df002fece337797298807a9c4511bdb0c3)) — [@forinda](https://github.com/forinda)
 - fix(inertia): use type assertion for createViteRuntime import ([fd31f7c](https://github.com/forinda/kick-js/commit/fd31f7ce59e67039babee4bd1dbf4ed5099a74ef)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: document apiPrefix: false option ([8f6498a](https://github.com/forinda/kick-js/commit/8f6498a2ed36d7f2528a9783717395fed62a464b)) — [@forinda](https://github.com/forinda)
 - docs: add inertia guide, update auth/config/architecture docs, fix CLI registry ([69046f4](https://github.com/forinda/kick-js/commit/69046f4f76b7e5543c309e9c8ffeb1776ad472a1)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: remove @forinda/kickjs-inertia package and example ([054c6aa](https://github.com/forinda/kick-js/commit/054c6aaed561e949626bfa7e8e5530327d2f55ec)) — [@forinda](https://github.com/forinda)
 - chore: Update inertia example ([e57c6d7](https://github.com/forinda/kick-js/commit/e57c6d7a1b25a092ffe58c4c2a2371aed98e25ed)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **23** commits
 - **1** contributor(s)
@@ -813,17 +817,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.5...v3.0.6
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.5
+## Release v3.0.5
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli): resolve custom command collision with built-in 'check' command ([c56e6c8](https://github.com/forinda/kick-js/commit/c56e6c8f62ae59fb6394a90b2ebaef1141821f60)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -834,17 +838,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.4...v3.0.5
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.4
+## Release v3.0.4
 
-## New Features
+### New Features
 
 - feat(auth): add JWKS URI support + keycloakMapPayload helper ([5e37991](https://github.com/forinda/kick-js/commit/5e37991e15571ed99e9bd2a14ae20267e4aa1512)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -855,18 +859,18 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.3...v3.0.4
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.3
+## Release v3.0.3
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(auth): auto-exempt @Public() routes from CSRF validation ([7b24b70](https://github.com/forinda/kick-js/commit/7b24b70f202c9a33eda3a435f39cceb8b441c3f8)) — [@forinda](https://github.com/forinda)
 - fix(auth): fix revokeAllForUser — was un-revoking instead of revoking ([2490d3d](https://github.com/forinda/kick-js/commit/2490d3da5777a8140a1be8320d5b36803330c1f7)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -877,25 +881,25 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.2...v3.0.3
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.2
+## Release v3.0.2
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: add workspace:\* devDependency for local @forinda/kickjs resolution ([6d2a307](https://github.com/forinda/kick-js/commit/6d2a3074c0c80c114817f2d3fc5afb2953dea21a)) — [@forinda](https://github.com/forinda)
 - fix: move @forinda/kickjs from dependencies to peerDependencies ([f688c00](https://github.com/forinda/kick-js/commit/f688c00e6f88358e483c91ecbcc2f34319a9c35e)) — [@forinda](https://github.com/forinda)
 - fix(vscode): add repository, LICENSE, .vscodeignore for vsce packaging ([bc3e94e](https://github.com/forinda/kick-js/commit/bc3e94e7ce172746d23151049843650c06a7e943)) — [@forinda](https://github.com/forinda)
 - fix(auth): remove unused @ts-expect-error directives (TS 5.9 compat) ([9aef939](https://github.com/forinda/kick-js/commit/9aef939e2e42dbacb13790519b95f55854dd54c3)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: re-add private:true to deprecated core/http/config after final publish ([8aeaaf8](https://github.com/forinda/kick-js/commit/8aeaaf8b4ed6946f09e8fc31142826d062f9097b)) — [@forinda](https://github.com/forinda)
 - chore: deprecate core, http, config packages (merged into @forinda/kickjs) ([5da7608](https://github.com/forinda/kick-js/commit/5da76085f4c21092d228c65c03133c95959a58f0)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **6** commits
 - **1** contributor(s)
@@ -906,9 +910,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v3.0.0...v3.0.2
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v3.0.0
+## Release v3.0.0
 
-## New Features
+### New Features
 
 - feat: improve AI retry, VSCode DX, MCP auth forwarding ([7c45493](https://github.com/forinda/kick-js/commit/7c454938e49ca809ba9722f1808fd1ab65853de1)) — [@forinda](https://github.com/forinda)
 - feat(auth): add loadPolicies() auto-discovery + docs for guards vs decorators ([cf3e980](https://github.com/forinda/kick-js/commit/cf3e980bc622a15d34f253ab27d062918df8c7d0)) — [@forinda](https://github.com/forinda)
@@ -926,12 +930,12 @@ All notable changes to KickJS are documented here.
 - feat(auth): make PasswordService injectable via @Service() ([e83b9e0](https://github.com/forinda/kick-js/commit/e83b9e0b4f0f7b44b74f31e39ed8cd22a247eed3)) — [@forinda](https://github.com/forinda)
 - feat(auth): Phase 1 — ctx.user, PasswordService, CSRF integration, ContextMeta ([8faf32d](https://github.com/forinda/kick-js/commit/8faf32d8dcda63cc1650da49b930d9211735861d)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli): address code review findings ([420e1ef](https://github.com/forinda/kick-js/commit/420e1ef5e5362b6f5937f4c63cfc5a474259ad5a)) — [@forinda](https://github.com/forinda)
 - fix(cli): only add adapters/deps when user selects packages ([abb5316](https://github.com/forinda/kick-js/commit/abb5316d7c45ee6a365b2fab6cc5428bfb055162)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: update package READMEs for recent features ([f20c953](https://github.com/forinda/kick-js/commit/f20c9539a429a7986f9ee68ffb8904e0df0f1807)) — [@forinda](https://github.com/forinda)
 - docs: add lifecycle page, remove mermaid plugin ([bbebc7e](https://github.com/forinda/kick-js/commit/bbebc7e8f7cfa621bdec26d67a0df3b29a1e33bf)) — [@forinda](https://github.com/forinda)
@@ -939,20 +943,20 @@ All notable changes to KickJS are documented here.
 - docs: auth, authorization, multi-tenancy guide, CLI, package READMEs ([02a0722](https://github.com/forinda/kick-js/commit/02a07227579b978128640d42de6bf682b879de8f)) — [@forinda](https://github.com/forinda)
 - docs: update auth, authorization, multi-tenant, CLI for v3 ([f9c3244](https://github.com/forinda/kick-js/commit/f9c32449fcf071ef8e647c6a921c182f9ab109bc)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test(vscode): add unit tests for tree providers and utils ([5931aa7](https://github.com/forinda/kick-js/commit/5931aa74483128bd984e58f24d15d2414e493cd9)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore(cli): add @clack/prompts and picocolors dependencies ([7e4a8b5](https://github.com/forinda/kick-js/commit/7e4a8b5206bbc57000e58907267f17c23fdefa94)) — [@forinda](https://github.com/forinda)
 - Remove old API docs ([1a8de4a](https://github.com/forinda/kick-js/commit/1a8de4a5c6b00159ee545202a53078154ffd1a04)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **25** commits
 - **1** contributor(s)
@@ -963,18 +967,18 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.3.3...v3.0.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.3.3
+## Release v2.3.3
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli): kick start on Windows — env vars via spawn, not POSIX prefix ([7d07705](https://github.com/forinda/kick-js/commit/7d07705caecd6e3897f666f532a5386dc511c149)) — [@forinda](https://github.com/forinda)
 - fix: windows dev server, hmr env reload, swagger url crash ([6e2947b](https://github.com/forinda/kick-js/commit/6e2947ba7eee7e8d99c568a7afed144a5a9d84fa)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -985,17 +989,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.3.2...v2.3.3
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.3.2
+## Release v2.3.2
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli): plugin generator emits valid JSDoc example ([a104e9f](https://github.com/forinda/kick-js/commit/a104e9fed9791bd5e1f8d00be5d219b8a51e49ca)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1006,18 +1010,18 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.3.1...v2.3.2
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.3.1
+## Release v2.3.1
 
-## Documentation
+### Documentation
 
 - docs: list ai + mcp in package indexes, widen keyword coverage ([0587a45](https://github.com/forinda/kick-js/commit/0587a45508e3cd382c918052305c1700db27e11a)) — [@forinda](https://github.com/forinda)
 - docs: refresh AI and MCP package READMEs ([d748825](https://github.com/forinda/kick-js/commit/d74882568bafae0ce596c9faebe2ea359074da76)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1028,9 +1032,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.3.0...v2.3.1
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.3.0
+## Release v2.3.0
 
-## New Features
+### New Features
 
 - feat(cli): kick g plugin — scaffold KickPlugin factories ([b4883b5](https://github.com/forinda/kick-js/commit/b4883b5430818529ad0dbb9cd20d9a07d88e401c)) — [@forinda](https://github.com/forinda)
 - feat(ai): Qdrant + Pinecone vector stores + AI/MCP docs ([3bf6569](https://github.com/forinda/kick-js/commit/3bf6569175937669ef88260d45ce22c4474e08ad)) — [@forinda](https://github.com/forinda)
@@ -1047,11 +1051,11 @@ All notable changes to KickJS are documented here.
 - feat(mcp): wire @modelcontextprotocol/sdk StreamableHTTP transport ([ccfeef3](https://github.com/forinda/kick-js/commit/ccfeef38bff04c8adae3e3215a32061cce4d275b)) — [@forinda](https://github.com/forinda)
 - feat(mcp,ai): scaffold @forinda/kickjs-mcp and @forinda/kickjs-ai packages ([c5ddde4](https://github.com/forinda/kick-js/commit/c5ddde4d98a813c7d0e3083fd0518fe230537d5b)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **14** commits
 - **1** contributor(s)
@@ -1062,34 +1066,34 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.2.5...v2.3.0
 **Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-mcp`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.2.5
+## Release v2.2.5
 
-## New Features
+### New Features
 
 - feat(cli): use pluralize npm package for correct English pluralization ([4050a74](https://github.com/forinda/kick-js/commit/4050a745334e716840b3437a7aae45aa67b6d874)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(http): skip cluster mode in Vite dev to prevent duplicate servers ([f0519b2](https://github.com/forinda/kick-js/commit/f0519b229e2b4c37d96a05bfd396099a4bb4f5b1)) — [@forinda](https://github.com/forinda)
 - fix(cli): update generated CLAUDE.md/AGENTS.md templates ([fb1db5c](https://github.com/forinda/kick-js/commit/fb1db5ce8eca386ff9cd381ec0a99da1083772f2)) — [@forinda](https://github.com/forinda)
 - fix(cli): install deps before git init so lockfile is in first commit ([a89f699](https://github.com/forinda/kick-js/commit/a89f699b3c51815c625a3cc8b7875638399bc1fe)) — [@forinda](https://github.com/forinda)
 - fix(cli): add :optional syntax and respect pluralize config in generators ([c2918fa](https://github.com/forinda/kick-js/commit/c2918faea458ca71d319bfcf9c7c27584705ef04)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: show real generated code in README and getting-started guides ([00a9b32](https://github.com/forinda/kick-js/commit/00a9b32bbdb45826f508741da6338a86a90e16de)) — [@forinda](https://github.com/forinda)
 - docs: add scaffold section, fix outdated concepts in VitePress docs ([f9d0488](https://github.com/forinda/kick-js/commit/f9d04888d7aae319bbaa03cdf087fbc53ad2f2a5)) — [@forinda](https://github.com/forinda)
 - docs: update example app setup guide in README, CLAUDE.md, AGENTS.md ([3a922a6](https://github.com/forinda/kick-js/commit/3a922a6ce6743b9543ad5d118a1dcbaa5be44b09)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - refactor: reduce logging verbosity, clean bootstrap JSDoc ([f5c45cd](https://github.com/forinda/kick-js/commit/f5c45cdee54d50c7a48d4860aebd59ed04ecf7df)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **9** commits
 - **1** contributor(s)
@@ -1100,21 +1104,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.2.4...v2.2.5
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.2.4
+## Release v2.2.4
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(config): reloadEnv preserves the registered schema across .env reloads ([0a832c4](https://github.com/forinda/kick-js/commit/0a832c4bf3599e3ff9d56d8c7377b94a553d4def)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: remove old docs ([94d7c11](https://github.com/forinda/kick-js/commit/94d7c11de2006ec08e322cb282cd374803a352f1)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1125,17 +1129,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.2.3...v2.2.4
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.2.3
+## Release v2.2.3
 
-## New Features
+### New Features
 
 - feat(cli,config): scaffold env into src/config/, auto-wire envWatchPlugin, document the side-effect import ([b5f24ac](https://github.com/forinda/kick-js/commit/b5f24ac03fcc50a7bd112979274a341e6a2093c6)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1146,21 +1150,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.2.2...v2.2.3
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.2.2
+## Release v2.2.2
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(docs): escape generic angle brackets in changelog so VitePress builds ([600955a](https://github.com/forinda/kick-js/commit/600955aeb61df2e6a30180e5a540b3c414206125)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - refactor(config): merge @forinda/kickjs-config into @forinda/kickjs ([b8469cc](https://github.com/forinda/kick-js/commit/b8469cc6230f85d2d2ad87715351e505e5657fba)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1171,17 +1175,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.2.1...v2.2.2
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.2.1
+## Release v2.2.1
 
-## Documentation
+### Documentation
 
 - docs(vite): add README; chore(packages): cross-link siblings in keywords ([19b5b12](https://github.com/forinda/kick-js/commit/19b5b127711a05989ab36ff0bdecda578b9914fb)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1192,9 +1196,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.2.0...v2.2.1
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.2.0
+## Release v2.2.0
 
-## New Features
+### New Features
 
 - feat: add v3 preview for the new APIs ([c36fffc](https://github.com/forinda/kick-js/commit/c36fffc3fa6febc28002bc31fd9e5294b627a02b)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat(config): defineEnv always merges base schema ([118e84e](https://github.com/forinda/kick-js/commit/118e84e69a946c85d28460ac5cb89e8e860deb9c)) — [@Felix Orinda](https://github.com/Felix Orinda)
@@ -1208,28 +1212,28 @@ All notable changes to KickJS are documented here.
 - feat: add createToken&lt;T&gt; for collision-safe DI tokens ([068ff45](https://github.com/forinda/kick-js/commit/068ff45da1738f0d3f6dc0533d3e8f62594d9f26)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat: add static typegen for type-safe DI resolution ([17e5a33](https://github.com/forinda/kick-js/commit/17e5a3345dcee34ae19ad4d1bdea148aeef0169d)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(swagger): unblock Try-it-out CSP and add disableInProd ([5fb7d26](https://github.com/forinda/kick-js/commit/5fb7d268267ed7861f2a2c3f4ab0b08ef7e3e196)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - fix: AppModule.register optional + scaffold emits valid module shape ([7a968f9](https://github.com/forinda/kick-js/commit/7a968f90d401f3adff6f2654cf297338c4a85027)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - fix(cli): typegen detects token collisions and discovers createToken/Inject ([a3941f6](https://github.com/forinda/kick-js/commit/a3941f6241741fe9490edfbce99d522cf8eeae21)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
-## Documentation
+### Documentation
 
 - docs(readme): refresh hello world and example list ([2b42fb2](https://github.com/forinda/kick-js/commit/2b42fb226e394e2fe12adb0711f3b07582add377)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs(readmes): refresh kickjs/swagger/config READMEs ([2866d94](https://github.com/forinda/kick-js/commit/2866d94461f53186e96267919967d7b626b123c3)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs: replace overflowing token-hardening table with a list ([52acd95](https://github.com/forinda/kick-js/commit/52acd950758176d541eb51c0465ee7ddb2e6583b)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs: lead with createToken&lt;T&gt; instead of raw Symbol() for DI tokens ([e977234](https://github.com/forinda/kick-js/commit/e977234c8b5d54fb2fdf79f65381d919603b518b)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
-## Tests
+### Tests
 
 - test(cli): end-to-end suite covering every generator + typegen ([eb0232e](https://github.com/forinda/kick-js/commit/eb0232e2423e005e937697e73466862ad32946b1)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
-## Contributors
+### Contributors
 
 - [Felix Orinda](https://github.com/Felix Orinda)
 
-## Stats
+### Stats
 
 - **19** commits
 - **1** contributor(s)
@@ -1240,9 +1244,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.1.0...v2.2.0
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.1.0
+## Release v2.1.0
 
-## New Features
+### New Features
 
 - feat: add fallback if one does not have swagger ui dist to resolve CDN ([9358af7](https://github.com/forinda/kick-js/commit/9358af794baa892e3b60cf03e1f3b714f878bd69)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat: add customizable onNotFound and onError handlers (#85) ([bee7351](https://github.com/forinda/kick-js/commit/bee735144c25079a97cac331446845ad731e6fbf)) — [@Felix Orinda](https://github.com/Felix Orinda)
@@ -1265,7 +1269,7 @@ All notable changes to KickJS are documented here.
 - feat: HMR stability, async lifecycle, DI observability (Phases 1-3) (#85) ([eb48907](https://github.com/forinda/kick-js/commit/eb48907bb0802ba668ee3f0f555cb70bda1a70a5)) — [@forinda](https://github.com/forinda)
 - feat: add bolt logo/banner, sample hello module in starter template ([f5932c2](https://github.com/forinda/kick-js/commit/f5932c25c24396d56fe5091781c3feea0f52d6a0)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: Update fixes for vitest and cli bin ([5e7702d](https://github.com/forinda/kick-js/commit/5e7702dfd1be59cb2e31f9697e68ec84198053f8)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - fix: harden request headers, cluster state tracking, and W3C trace validation ([ebcca9b](https://github.com/forinda/kick-js/commit/ebcca9b6712e6cd79611c30a08f07274a67ca33e)) — [@Felix Orinda](https://github.com/Felix Orinda)
@@ -1291,7 +1295,7 @@ All notable changes to KickJS are documented here.
 - fix: CLI generator uses object repo for custom types, dev runs vite (#85) ([7473251](https://github.com/forinda/kick-js/commit/7473251e649e68239b0fd2399676a846742add2d)) — [@forinda](https://github.com/forinda)
 - fix: README hello world registers HelloModule instead of empty array ([2c323b4](https://github.com/forinda/kick-js/commit/2c323b466c0793d397c3620a759ab522366ded8c)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: custom homepage layout, inspiration grid, cleanup nav ([05ee733](https://github.com/forinda/kick-js/commit/05ee7335aeae6ff914f7a2155cf67f8a4a6cf9aa)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs: improve docs theme and landing page ([b6c7cc8](https://github.com/forinda/kick-js/commit/b6c7cc87cf182cea56e4c1ba687e206dc0f08be5)) — [@Felix Orinda](https://github.com/Felix Orinda)
@@ -1300,11 +1304,11 @@ All notable changes to KickJS are documented here.
 - docs: update more benchmark docs ([cee1b09](https://github.com/forinda/kick-js/commit/cee1b097abfa2c3615ffe456af0af92a4c3a6054)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs: add lifecycle audit, request-scoped DI, build banners, devtools and production readiness sections ([2a09f09](https://github.com/forinda/kick-js/commit/2a09f09b18c545d5927f685b70f7117aa84ad78a)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test: restructure test infrastructure and add unit tests for all packages ([c53c448](https://github.com/forinda/kick-js/commit/c53c4489234c59e9c0bf6333349f0efcdb652a65)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
-## Maintenance
+### Maintenance
 
 - chore: update release scripts ([c2d7b9c](https://github.com/forinda/kick-js/commit/c2d7b9c4fbefa38ff0b14c99df0f7a192bef7e92)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - chore: Update cluster to use NodeJS docs ([5fca3bd](https://github.com/forinda/kick-js/commit/5fca3bdd8586337e76a2977de7407e3bf8e7d3d6)) — [@Felix Orinda](https://github.com/Felix Orinda)
@@ -1325,12 +1329,12 @@ All notable changes to KickJS are documented here.
 - chore(deps): bump the production-dependencies group with 2 updates ([6a06ef0](https://github.com/forinda/kick-js/commit/6a06ef04e7e19dc92f02bd32b80e7842787ef34c)) — @dependabot[bot]
 - chore(deps-dev): bump the dev-dependencies group with 5 updates ([84cf95f](https://github.com/forinda/kick-js/commit/84cf95f84830a348333b062219bd4f6d050d7f71)) — @dependabot[bot]
 
-## Contributors
+### Contributors
 
 - [Felix Orinda](https://github.com/Felix Orinda)
 - dependabot[bot]
 
-## Stats
+### Stats
 
 - **68** commits
 - **2** contributor(s)
@@ -1341,21 +1345,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.0.1...v2.1.0
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.0.1
+## Release v2.0.1
 
-## Documentation
+### Documentation
 
 - docs: rewrite READMEs for v2.0 + fix remaining doc references ([c877dcd](https://github.com/forinda/kick-js/commit/c877dcd48f6ce7e959ef105bd38ebd02145521b0)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: Fix docs building ([1706a61](https://github.com/forinda/kick-js/commit/1706a61094469dc12ac14dccaa39adb1600e8a80)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1366,15 +1370,15 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v2.0.0...v2.0.1
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v2.0.0
+## Release v2.0.0
 
-## New Features
+### New Features
 
 - feat: export ViewAdapter + SpaAdapter from @forinda/kickjs ([1c1287f](https://github.com/forinda/kick-js/commit/1c1287f61b43e902f79d1c0532066379205d32c3)) — [@forinda](https://github.com/forinda)
 - feat(v2): Phase 6 — CLI generates @forinda/kickjs for new projects (#68) ([8e558f7](https://github.com/forinda/kick-js/commit/8e558f772143513385a3c8efa37f94a428fa5e1f)) — [@forinda](https://github.com/forinda)
 - feat(v2): Phase 4 — migrate all 16 packages to @forinda/kickjs (#68) ([9fe20c6](https://github.com/forinda/kick-js/commit/9fe20c67406fb156dd3b7ea8e09fb74edf5fed09)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: align versions, restore core vitest alias, fix migration guide ([bc73bc5](https://github.com/forinda/kick-js/commit/bc73bc52449d83424a74d90593b8b07bb75a086f)) — [@forinda](https://github.com/forinda)
 - fix: point vitest aliases to unified package + remove poolOptions ([219d0a0](https://github.com/forinda/kick-js/commit/219d0a0713dba8c5ad360ad3c337456b676c35a4)) — [@forinda](https://github.com/forinda)
@@ -1384,7 +1388,7 @@ All notable changes to KickJS are documented here.
 - fix: address Copilot review — docs, exports, changelog cleanup ([1f734ed](https://github.com/forinda/kick-js/commit/1f734ed3e8635ec21540f42596e8202946344caa)) — [@forinda](https://github.com/forinda)
 - fix: add @forinda/kickjs to vite externals in all packages ([a68ecb9](https://github.com/forinda/kick-js/commit/a68ecb978575a6441c9500aa422a34d42984357c)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: use alpha version in migration guide ([f9d79b0](https://github.com/forinda/kick-js/commit/f9d79b0ab32c88d7658faf6db371094a934c6b7d)) — [@forinda](https://github.com/forinda)
 - docs: use MiddlewareHandler\<RequestContext\> in JWT auth tutorial ([efbbfcd](https://github.com/forinda/kick-js/commit/efbbfcd972d7db168d101649b66c53782bb31d15)) — [@forinda](https://github.com/forinda)
@@ -1392,15 +1396,15 @@ All notable changes to KickJS are documented here.
 - docs(v2): add v1.x → v2.0 migration guide ([bcc2032](https://github.com/forinda/kick-js/commit/bcc2032729e124ac57a415531dbe780af09f137a)) — [@forinda](https://github.com/forinda)
 - docs(v2): Phase 7 — update all docs to @forinda/kickjs (#68) ([db6d4fa](https://github.com/forinda/kick-js/commit/db6d4faab36be53f98aaba82db512639da948d84)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - wip(v2): Phase 5 — examples keep core+http imports, add kickjs dep ([d02fe15](https://github.com/forinda/kick-js/commit/d02fe158c48ad4e19cb193a8422a0704b6f2dc08)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **16** commits
 - **1** contributor(s)
@@ -1411,34 +1415,34 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.7.1-alpha.0...v2.0.0
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v1.7.1-alpha.0
+## Release v1.7.1-alpha.0
 
-## New Features
+### New Features
 
 - feat(v2): Phase 3+4 — deprecated shims + migrate all 16 packages (#68) ([e8be927](https://github.com/forinda/kick-js/commit/e8be9272c2dafe7459ddfa6aa32e7c86c568093f)) — [@forinda](https://github.com/forinda)
 - feat(v2): unified @forinda/kickjs package — Phase 1+2 complete (#68) ([013b253](https://github.com/forinda/kick-js/commit/013b253ea231ca2073e348727d6a82c1c292faa3)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: update V2_PLAN.md — Phase 3 complete ([5aae35b](https://github.com/forinda/kick-js/commit/5aae35b277cda0921f3ef94800b33de4077d4961)) — [@forinda](https://github.com/forinda)
 - docs: update V2_PLAN.md with Phase 5 status and known Vitest issue ([d9b64dc](https://github.com/forinda/kick-js/commit/d9b64dc2d4b39aee484a874eda01a4e89ac97598)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test(v2): Phase 3 — unified package export tests + external project verification ([db385e1](https://github.com/forinda/kick-js/commit/db385e1a9bacf816f2afa8180247a8d941bca232)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore(v2): clean stale build artifacts + update V2_PLAN.md ([4dc062b](https://github.com/forinda/kick-js/commit/4dc062b6ed3310f6fc9b5a40e843a3cf1c8a4551)) — [@forinda](https://github.com/forinda)
 - refactor(v2): keep existing packages, build unified @forinda/kickjs alongside ([800b461](https://github.com/forinda/kick-js/commit/800b461990505253fc66b6311b9cff0b13ac7fd3)) — [@forinda](https://github.com/forinda)
 - wip(v2): Phase 5 — migrate example imports to @forinda/kickjs (#68) ([716e600](https://github.com/forinda/kick-js/commit/716e6004ced9fa6d1348b1a25cec5490655acd88)) — [@forinda](https://github.com/forinda)
 - wip(v2): Phase 3 — deprecated shims for core + http (#68) ([8463b7f](https://github.com/forinda/kick-js/commit/8463b7f49a97ea775269465bb438bbbb527df72c)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **9** commits
 - **1** contributor(s)
@@ -1449,14 +1453,14 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.7.0...v1.7.1-alpha.0
 **Packages**: `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-core`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-http`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v1.7.0
+## Release v1.7.0
 
-## New Features
+### New Features
 
 - feat: add @forinda/kickjs umbrella package (#61) ([e3a93a2](https://github.com/forinda/kick-js/commit/e3a93a2043e624fa25efdd7d83430b29ee8870df)) — @Felix Orinda
 - feat: print route summary on startup in dev mode (#31) (#45) ([96b082c](https://github.com/forinda/kick-js/commit/96b082ccf615e393eb25a52e28dc716762c4788e)) — @Felix Orinda
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: hoist methodOrder out of loop, fix Socket.IO adapter afterStart signature ([564b455](https://github.com/forinda/kick-js/commit/564b455c95636483d46e672290e7abf34f979b7d)) — [@forinda](https://github.com/forinda)
 - fix: correct ws and queue docs — ws not Socket.IO, bootstrap from http ([cba2fdd](https://github.com/forinda/kick-js/commit/cba2fdd2896779f6daccb7d7cdc7cc6cf28592fd)) — [@forinda](https://github.com/forinda)
@@ -1466,22 +1470,22 @@ All notable changes to KickJS are documented here.
 - fix: add files entry to @forinda/kickjs umbrella package ([f024f9d](https://github.com/forinda/kick-js/commit/f024f9dbce4b740bf75d1d3c89cafdfba777bbe3)) — [@forinda](https://github.com/forinda)
 - fix: correct clone URL, repo links, and contact info in CONTRIBUTING.md (#56) ([10635a9](https://github.com/forinda/kick-js/commit/10635a9c7fd1ee1b78497a9c9207c5eb3ee9d9f6)) — @Felix Orinda
 
-## Documentation
+### Documentation
 
 - docs: add third-party integrations hub + Sentry guide (#66) ([bf30381](https://github.com/forinda/kick-js/commit/bf3038110a54b06d52877bf8d3cf58d3a285c3f3)) — @Felix Orinda
 - docs: add Socket.IO custom adapter example to ws docs ([c3c8ec5](https://github.com/forinda/kick-js/commit/c3c8ec5387db6ff8d03da10f50c74564e15b2f5c)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: release v1.4.1-alpha.0 ([b7bcfcb](https://github.com/forinda/kick-js/commit/b7bcfcba9d74f234ed712e167c3391c19090adbf)) — [@forinda](https://github.com/forinda)
 - chore: upgrade vitest 3.x → 4.1.1 and @types/node 24.x → 25.x (#46) (#47) ([d93346c](https://github.com/forinda/kick-js/commit/d93346c51d70ebd07d493ddd1df5bbba85e8faa7)) — @Felix Orinda
 
-## Contributors
+### Contributors
 
 - Felix Orinda
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **13** commits
 - **2** contributor(s)
@@ -1492,21 +1496,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.6.0...v1.7.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v1.6.0
+## Release v1.6.0
 
-## Maintenance
+### Maintenance
 
 - chore: remove older versioned docs (keep only 1.5.0) ([7bdce50](https://github.com/forinda/kick-js/commit/7bdce50b7a10c98dd5dff20f16a3d30b5e9a2924)) — [@forinda](https://github.com/forinda)
 - refactor: auto-discover packages + simplify logging in release script ([45dc294](https://github.com/forinda/kick-js/commit/45dc294f1b0a283a6d012532896a953468202268)) — [@forinda](https://github.com/forinda)
 - release: Merge Dev to main for v1.6.0 release (#65) ([1dc9e67](https://github.com/forinda/kick-js/commit/1dc9e67ae14e2c29c636d652325ca1efb2ef1e73)) — @Felix Orinda
 - Release: merge dev into main for v1.6.0 (#63) ([a05190a](https://github.com/forinda/kick-js/commit/a05190a614626d946160329ca969f7636c2e451d)) — @Felix Orinda
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 - Felix Orinda
 
-## Stats
+### Stats
 
 - **4** commits
 - **2** contributor(s)
@@ -1517,32 +1521,32 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.5.0...v1.6.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
 
-# Release v1.5.0
+## Release v1.5.0
 
-## New Features
+### New Features
 
 - feat: add helmet and CORS middleware (#21, #22) ([36dc70a](https://github.com/forinda/kick-js/commit/36dc70a38de2d8f801858a36c36a6c3c8e557004)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: generate in-memory repo for testing when using drizzle/prisma ([b248e8d](https://github.com/forinda/kick-js/commit/b248e8d0b3381302369067e58cc5889618e891cb)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: add git workflow section to AGENTS.md (#43) ([5b122b3](https://github.com/forinda/kick-js/commit/5b122b336593a7780046c4aa22ca2d94583c4e8c)) — @Felix Orinda
 - docs: add security headers and CORS guide ([b560671](https://github.com/forinda/kick-js/commit/b5606711c8e5e0e3298ad7e67b6fb3288c7e0623)) — [@forinda](https://github.com/forinda)
 - docs: add generated tests section to testing guide ([953313f](https://github.com/forinda/kick-js/commit/953313f6ef13cc22fe57921c9e576e35bf0f1979)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: add dev branch + pre-release workflow (#44) ([cb3706b](https://github.com/forinda/kick-js/commit/cb3706b45d5845499c0bfdfbbaf9f2e9866fd27f)) — @Felix Orinda
 
-## Contributors
+### Contributors
 
 - Felix Orinda
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **6** commits
 - **2** contributor(s)
@@ -1553,9 +1557,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.4.0...v1.5.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.4.0
+## Release v1.4.0
 
-## New Features
+### New Features
 
 - feat: add built-in request logging middleware (#32) ([b157ed6](https://github.com/forinda/kick-js/commit/b157ed608e01cf74d4152292174e55ac1c578eec)) — [@forinda](https://github.com/forinda)
 - feat: add Container.create() for isolated test containers (#26) ([7dc752f](https://github.com/forinda/kick-js/commit/7dc752f63d9cc3e28b71ec3cffaea6d3bebcebcf)) — [@forinda](https://github.com/forinda)
@@ -1566,7 +1570,7 @@ All notable changes to KickJS are documented here.
 - feat(KICK-035): migrate @forinda/kickjs-config from tsup to Vite build ([52be8ec](https://github.com/forinda/kick-js/commit/52be8ecfea13e3c540cdfc9746de2cad82abf0b1)) — [@forinda](https://github.com/forinda)
 - feat: migrate kick dev from vite-node to Vite Environment Runner (KICK-034) ([34dc2ca](https://github.com/forinda/kick-js/commit/34dc2cacf9f89239d05d697821ffacd19f954bf8)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: restore colored pino-pretty logs + watch kick.config in dev mode ([31eca63](https://github.com/forinda/kick-js/commit/31eca637a77195672e38b31d3e1690815a84a7b1)) — [@forinda](https://github.com/forinda)
 - fix: suppress Vite 8 client environment warnings in kick dev ([8a3a7b0](https://github.com/forinda/kick-js/commit/8a3a7b01058cacb3078ed807bd6cad3c407dec10)) — [@forinda](https://github.com/forinda)
@@ -1579,7 +1583,7 @@ All notable changes to KickJS are documented here.
 - fix: add both ci and dependencies labels to dependabot github-actions config ([243e779](https://github.com/forinda/kick-js/commit/243e7791e76d0493ccd3dec35e05c49e5e8c2205)) — [@forinda](https://github.com/forinda)
 - fix: use existing 'dependencies' label in dependabot.yml for github-actions ([1a22172](https://github.com/forinda/kick-js/commit/1a22172a84a79cb6ade57b38e0cd5fe08b112be3)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: remove vite-node references from current guide pages ([cb4cb96](https://github.com/forinda/kick-js/commit/cb4cb96bab5cc7421ae7a36e869b2c1efd1729b9)) — [@forinda](https://github.com/forinda)
 - docs: complete testing guide + pino-pretty troubleshooting (#41, #42) ([4b86653](https://github.com/forinda/kick-js/commit/4b86653672f1875d1ec8d6087bdecdb2d9a733cf)) — [@forinda](https://github.com/forinda)
@@ -1587,7 +1591,7 @@ All notable changes to KickJS are documented here.
 - docs: add KICK-035 roadmap — migrate package builds from tsup to Vite ([2d1020a](https://github.com/forinda/kick-js/commit/2d1020a3ec648cc769dc889f01fb11c1527a0150)) — [@forinda](https://github.com/forinda)
 - docs: expand KICK-034 roadmap with Vite Environment migration vision ([2e9a820](https://github.com/forinda/kick-js/commit/2e9a8202492955d10504c55e92dd7777ad9f4e0f)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test: replace all stubs with real tests across jira examples (#24) ([ac63e88](https://github.com/forinda/kick-js/commit/ac63e88be1909b6e99a9524d6929f5a7704021bb)) — [@forinda](https://github.com/forinda)
 - test: add real tests for jira-mongoose-api (#24) ([b35e613](https://github.com/forinda/kick-js/commit/b35e613e09beb4b3d0a8077c7e6b4c5594bbd43c)) — [@forinda](https://github.com/forinda)
@@ -1597,7 +1601,7 @@ All notable changes to KickJS are documented here.
 - test: add integration tests for 4 example APIs (#24) ([64e0933](https://github.com/forinda/kick-js/commit/64e0933b4115acab9bb846258e934ef51f412ec9)) — [@forinda](https://github.com/forinda)
 - test: add integration tests for minimal-api example (#24) ([aa944a0](https://github.com/forinda/kick-js/commit/aa944a0c0981e5e3e21efa93423672c4ca8d7865)) — [@forinda](https://github.com/forinda)
 
-## CI / Infrastructure
+### CI / Infrastructure
 
 - ci: bump actions/setup-node from 4 to 6 ([453bcf0](https://github.com/forinda/kick-js/commit/453bcf0b921a44b62a815253a3382a326a245aec)) — @dependabot[bot]
 - ci: bump pnpm/action-setup from 4 to 5 ([9e7b914](https://github.com/forinda/kick-js/commit/9e7b9147a0b77815cef875ff5efed092b0b71b42)) — @dependabot[bot]
@@ -1605,7 +1609,7 @@ All notable changes to KickJS are documented here.
 - ci: bump actions/upload-pages-artifact from 3 to 4 ([577ccaf](https://github.com/forinda/kick-js/commit/577ccaf06ec55e8f55fdbddae914f6704122f531)) — @dependabot[bot]
 - ci: bump actions/checkout from 4 to 6 ([d762633](https://github.com/forinda/kick-js/commit/d762633d71787c5f41015d72d161573b112b1b71)) — @dependabot[bot]
 
-## Maintenance
+### Maintenance
 
 - chore(KICK-035): remove tsup, hoist vite to workspace root ([13f7287](https://github.com/forinda/kick-js/commit/13f7287678247bfde9b5771816ecca42729e3531)) — [@forinda](https://github.com/forinda)
 - chore: bump vite-node to ^6.0.0 in project template + file KICK-034 ([3471778](https://github.com/forinda/kick-js/commit/3471778af7fe96e6a940252857a37c90c360b9d0)) — [@forinda](https://github.com/forinda)
@@ -1616,12 +1620,12 @@ All notable changes to KickJS are documented here.
 - chore(deps): bump joi from 17.13.3 to 18.0.2 ([3f02956](https://github.com/forinda/kick-js/commit/3f0295659c473c7469f1753b2a00aa308afd7c00)) — @dependabot[bot]
 - chore(deps): bump commander from 13.1.0 to 14.0.3 ([ed5db87](https://github.com/forinda/kick-js/commit/ed5db87a16025f3ccb8e28012a52a4cf5cc5f179)) — @dependabot[bot]
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 - dependabot[bot]
 
-## Stats
+### Stats
 
 - **43** commits
 - **2** contributor(s)
@@ -1632,17 +1636,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.3.2...v1.4.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.3.2
+## Release v1.3.2
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: add default DATABASE_URL fallback in jira-prisma-v7-api prisma.config.ts ([58a939f](https://github.com/forinda/kick-js/commit/58a939f7d0d13a82ca33cd6813b94ffd09b96610)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1653,22 +1657,22 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.3.1...v1.3.2
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.3.1
+## Release v1.3.1
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: set DATABASE_URL in CI for Prisma 7 postinstall generate ([bd45452](https://github.com/forinda/kick-js/commit/bd4545298b85b4d271527373e2850851b7ec767f)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: add all 18 packages to README packages table ([3ded0ce](https://github.com/forinda/kick-js/commit/3ded0cef173e9809f5c7740c9c429cfca20ca02d)) — [@forinda](https://github.com/forinda)
 - docs: update bundle sizes in README (cli 173→222 kB, prisma 2.1→2.4 kB) ([0ed2dda](https://github.com/forinda/kick-js/commit/0ed2dda1ff9a71cb22512e80d991a018617c0e4a)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **3** commits
 - **1** contributor(s)
@@ -1679,9 +1683,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.3.0...v1.3.1
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.3.0
+## Release v1.3.0
 
-## New Features
+### New Features
 
 - feat: kick new generates CLAUDE.md and AGENTS.md for AI-assisted development (KICK-033) ([9d72fe1](https://github.com/forinda/kick-js/commit/9d72fe10f54af7cb39c1f38774f22e568c25549f)) — [@forinda](https://github.com/forinda)
 - feat: support multiple module names in kick g module and kick rm module ([e4cc73b](https://github.com/forinda/kick-js/commit/e4cc73b3b25cd21c72b597c9bb7306094b6c71b0)) — [@forinda](https://github.com/forinda)
@@ -1693,30 +1697,30 @@ All notable changes to KickJS are documented here.
 - feat: extensible repo types, working Prisma template, pluralize config, modules config block ([ad8e460](https://github.com/forinda/kick-js/commit/ad8e4602d907f8ed68d9afd89d634d6c1582ad0b)) — [@forinda](https://github.com/forinda)
 - feat: add jira-prisma-api example — Jira clone with Prisma ORM and PostgreSQL ([c8d4fb8](https://github.com/forinda/kick-js/commit/c8d4fb8c936840b7b0f74e6d080177c583b17cb6)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: pass defaultRepo from -r flag to initProject in kick new ([3a30154](https://github.com/forinda/kick-js/commit/3a301549f52679dd7ef4d5bbf3ef9a0ccd2208eb)) — [@forinda](https://github.com/forinda)
 - fix: add -t flag to kick new examples in AGENTS.md to avoid interactive prompt ([b0cea6a](https://github.com/forinda/kick-js/commit/b0cea6a1b19a599e6882343ef3dd78dcd5a565ca)) — [@forinda](https://github.com/forinda)
 - fix: update jira-prisma-v7-api kick.config.ts to use modules block with prismaClientPath ([a2c5345](https://github.com/forinda/kick-js/commit/a2c5345480ae248540ab31de155e7246a8db2a47)) — [@forinda](https://github.com/forinda)
 - fix: warn when modules.repo is an unknown string instead of object form (KICK-024) ([2cdd776](https://github.com/forinda/kick-js/commit/2cdd776286e3ad6cf50848f7088d21cffb51476c)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: update CLAUDE.md and AGENTS.md with current project state ([319559b](https://github.com/forinda/kick-js/commit/319559b180319f9f31a66c36560c750d3a8399b4)) — [@forinda](https://github.com/forinda)
 - docs: update CLAUDE.md with full framework context + file KICK-032, KICK-033 ([bd83309](https://github.com/forinda/kick-js/commit/bd8330902d2e259e466463f9d5b745c8741c7547)) — [@forinda](https://github.com/forinda)
 - docs: add side-by-side PrismaModelDelegate vs full PrismaClient examples ([3e41e51](https://github.com/forinda/kick-js/commit/3e41e51ab0536c71fa8ea32a85233cead04508b8)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: standardize keywords across all 18 packages for npm discoverability ([7674f45](https://github.com/forinda/kick-js/commit/7674f45241baa7df63db6e057d4aa60f4f8d9155)) — [@forinda](https://github.com/forinda)
 - chore: remove old versioned docs to reduce build size ([bbbc69b](https://github.com/forinda/kick-js/commit/bbbc69ba301d206a9008a1433d0b79fa58f7de14)) — [@forinda](https://github.com/forinda)
 - refactor: CLI generator architecture — TemplateContext, ORM folders, pattern splitting (KICK-030) ([f463db8](https://github.com/forinda/kick-js/commit/f463db8f743119799f4307f91e3199fca29e525d)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **19** commits
 - **1** contributor(s)
@@ -1727,17 +1731,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.13...v1.3.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.13
+## Release v1.2.13
 
-## Documentation
+### Documentation
 
 - docs: update example docs and add missing package READMEs ([36f1538](https://github.com/forinda/kick-js/commit/36f15387aad453ab4f789b1cac6067d0b1f7c047)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1748,17 +1752,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.12...v1.2.13
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.12
+## Release v1.2.12
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: reduce npm bundle sizes by disabling sourcemaps, enabling minification, and externalizing deps ([c86d4c8](https://github.com/forinda/kick-js/commit/c86d4c825c8a4279ca8f60b6a65b6c95874b392b)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1769,27 +1773,27 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.11...v1.2.12
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.11
+## Release v1.2.11
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: use type-only import for AppDatabase to fix Rollup build ([9ce483a](https://github.com/forinda/kick-js/commit/9ce483a3d16e2956d1b00ce1be2d2a0b7731b6dd)) — [@forinda](https://github.com/forinda)
 - fix: upgrade nodemailer to >=7.0.11 to fix CVE-2025-14874 DoS vulnerability ([caeeb03](https://github.com/forinda/kick-js/commit/caeeb03e4f536fec5b022f43653e09ac1280287c)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: add tutorial series to guide — Jira clone + framework deep dives ([0f60599](https://github.com/forinda/kick-js/commit/0f605995a04e8465db3d0bc36ab693d47b477e68)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: update lockfile after examples cleanup ([07fb95d](https://github.com/forinda/kick-js/commit/07fb95d6d5d2a59522e096b9f874e74b4fa834e7)) — [@forinda](https://github.com/forinda)
 - refactor: replace 11 single-feature examples with full Jira app showcases ([171c454](https://github.com/forinda/kick-js/commit/171c454cecff95b09451467addeeddd0a1d4ffac)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **5** commits
 - **1** contributor(s)
@@ -1800,22 +1804,22 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.10...v1.2.11
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.10
+## Release v1.2.10
 
-## New Features
+### New Features
 
 - feat(core,http,drizzle): @ApiQueryParams and ctx.paginate accept DrizzleQueryParamsConfig (KICK-023) ([7e31526](https://github.com/forinda/kick-js/commit/7e31526c36bf0dc0c7508544172b24901c4df1a6)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: add resolved issues (KICK-001 to KICK-023) to roadmap ([8095edf](https://github.com/forinda/kick-js/commit/8095edf4076b0ad7a90dffa7ce38c89399627038)) — [@forinda](https://github.com/forinda)
 - docs: update query parsing and decorators for column-object config support ([d8ecb07](https://github.com/forinda/kick-js/commit/d8ecb078efaf48afae869d4b2a757af62ec947c5)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **3** commits
 - **1** contributor(s)
@@ -1826,18 +1830,18 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.9...v1.2.10
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.9
+## Release v1.2.9
 
-## New Features
+### New Features
 
 - feat(cli): scaffold DrizzleQueryParamsConfig with Column objects (KICK-021) ([911e1e8](https://github.com/forinda/kick-js/commit/911e1e87d153d51575dd04c9e33fcda8f7986e48)) — [@forinda](https://github.com/forinda)
 - feat(drizzle): type-safe Column-based query building (KICK-020, KICK-022) ([5152cd7](https://github.com/forinda/kick-js/commit/5152cd79ed798d3c80d736f280b0f2380a19606a)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1848,17 +1852,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.8...v1.2.9
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.8
+## Release v1.2.8
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(cli): include vite/client types in generated tsconfig (KICK-019) ([45d1a33](https://github.com/forinda/kick-js/commit/45d1a3364b54b1e014f48a36d89d03bff614189f)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1869,21 +1873,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.7...v1.2.8
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.7
+## Release v1.2.7
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(core): persistent decorator registry survives Container.reset() (HMR) ([4596d00](https://github.com/forinda/kick-js/commit/4596d001a3e83cb7b9cd36ff662ca5b5c94f3b72)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore(core): remove unused @Bean and @Configuration decorators ([aa5d821](https://github.com/forinda/kick-js/commit/aa5d8218013a837848a54f2f0586af1a708f3e73)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1894,18 +1898,18 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.6...v1.2.7
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.6
+## Release v1.2.6
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(core): update decorator containerRef on Container.reset() (KICK-017) ([428a477](https://github.com/forinda/kick-js/commit/428a4771b6ccb1d4de05d50a98eed4bba91d7b29)) — [@forinda](https://github.com/forinda)
 - fix(queue): auto-register @Job classes before resolving in QueueAdapter (KICK-016) ([9f5a865](https://github.com/forinda/kick-js/commit/9f5a8652a23972375d05bb0a3b77389b19c1a83e)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1916,17 +1920,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.5...v1.2.6
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.5
+## Release v1.2.5
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(core): add normalizePath/joinPaths utilities, fix double-slash routes ([f75ace3](https://github.com/forinda/kick-js/commit/f75ace328f46d61bbceb798a85863c964a7a98cb)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -1937,21 +1941,21 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.4...v1.2.5
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.4
+## Release v1.2.4
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(http): normalize module path to prevent double-slash routes ([4ba0844](https://github.com/forinda/kick-js/commit/4ba084431fada4f1111566f192cda6debc9f2319)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: rewrite benchmarks guide for user apps, not monorepo ([8fa3464](https://github.com/forinda/kick-js/commit/8fa3464124f540949783e313e8fd2081c0ce0e3f)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -1962,13 +1966,13 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.3...v1.2.4
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.3
+## Release v1.2.3
 
-## New Features
+### New Features
 
 - feat(cli): generate README.md during kick new (KICK-015) ([a6240c7](https://github.com/forinda/kick-js/commit/a6240c724b8bbccf1b41746afd02cbd374a9933e)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix(core): use class name as fallback DI key for HMR (KICK-013) ([4ae3afb](https://github.com/forinda/kick-js/commit/4ae3afb5a2da8df4ac9ff667fb3a5cfe2183e1fb)) — [@forinda](https://github.com/forinda)
 - fix(devtools): discover peer adapters at request time (KICK-012) ([6e35fa1](https://github.com/forinda/kick-js/commit/6e35fa1bab25f2e8275f61ed28830cfc48620025)) — [@forinda](https://github.com/forinda)
@@ -1981,7 +1985,7 @@ All notable changes to KickJS are documented here.
 - fix(auth): resolve @Public() routes without req.route (KICK-010) ([4e00b26](https://github.com/forinda/kick-js/commit/4e00b26f3e43aa75cf6daf2c8ec158a59c38ea80)) — [@forinda](https://github.com/forinda)
 - fix(http): share RequestContext metadata across middleware and handler (KICK-009) ([337773c](https://github.com/forinda/kick-js/commit/337773ce08b1b0c0594533c86ca0d8d71b9f15c9)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs(cli): add CI/scriptable examples for kick new (KICK-001) ([81bf4e0](https://github.com/forinda/kick-js/commit/81bf4e091248aeb4ef687ff741b6b110da2bacf3)) — [@forinda](https://github.com/forinda)
 - docs(http): document global vs route middleware signature difference (KICK-008) ([275343c](https://github.com/forinda/kick-js/commit/275343c4f823f2c892197f8bad93a667e77686ca)) — [@forinda](https://github.com/forinda)
@@ -1989,15 +1993,15 @@ All notable changes to KickJS are documented here.
 - docs(config): document type-safe config patterns and createConfigService (KICK-004) ([015366d](https://github.com/forinda/kick-js/commit/015366d01ad5fe6b47068dee86def2584c3df5f5)) — [@forinda](https://github.com/forinda)
 - docs: use HMR-safe Mongoose model pattern in MongoDB guide (KICK-006) ([10217cd](https://github.com/forinda/kick-js/commit/10217cda3e4d016c37ef798330afd8ff8edc2dd9)) — [@forinda](https://github.com/forinda)
 
-## Tests
+### Tests
 
 - test: add workspace integration tests and testing infrastructure ([6384d45](https://github.com/forinda/kick-js/commit/6384d45275fafb26cd52842e49396e0cf31be6cf)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **17** commits
 - **1** contributor(s)
@@ -2008,17 +2012,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.2...v1.2.3
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.2
+## Release v1.2.2
 
-## New Features
+### New Features
 
 - feat(cli): add --dry-run flag to all generators ([0df87fe](https://github.com/forinda/kick-js/commit/0df87fe70c12889c973cd3fac401cec506cfcaca)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -2029,17 +2033,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.1...v1.2.2
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.1
+## Release v1.2.1
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: replace require('express') with ESM import in DevTools adapter ([413ba80](https://github.com/forinda/kick-js/commit/413ba80b74924298c7849a93efdb2710e3dc0f07)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -2050,22 +2054,22 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.2.0...v1.2.1
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.2.0
+## Release v1.2.0
 
-## New Features
+### New Features
 
 - feat(cli): add pattern-aware generators, CQRS pattern, config-driven defaults, and overwrite protection ([8c804d0](https://github.com/forinda/kick-js/commit/8c804d0a0dfe1c55bf361895e98085326c49a5ab)) — [@forinda](https://github.com/forinda)
 - feat: add benchmark suite with autocannon ([c05ca57](https://github.com/forinda/kick-js/commit/c05ca578ef105e92d7d53fabe7d5fd3b268c7b2c)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: add benchmarks guide with usage, metrics, and sample results ([32f6c28](https://github.com/forinda/kick-js/commit/32f6c28dd2d54a1982c6eaa4e000abe09f0a9ea0)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **3** commits
 - **1** contributor(s)
@@ -2076,17 +2080,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.1.3...v1.2.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.1.3
+## Release v1.1.3
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: escape angle brackets in changelog to fix VitePress build ([bfee0f3](https://github.com/forinda/kick-js/commit/bfee0f342d9792f6b790b3d6dd9759b9d4ae4521)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -2097,17 +2101,17 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.1.2...v1.1.3
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.1.2
+## Release v1.1.2
 
-## Documentation
+### Documentation
 
 - docs: add Socket.IO integration guide ([2dcd2e9](https://github.com/forinda/kick-js/commit/2dcd2e96237f62ecc9fa58e3249291f1facc118e)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **1** commits
 - **1** contributor(s)
@@ -2118,18 +2122,18 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.1.1...v1.1.2
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.1.1
+## Release v1.1.1
 
-## Documentation
+### Documentation
 
 - docs: add render, paginate, and SSE to controllers guide ([8b3c6d5](https://github.com/forinda/kick-js/commit/8b3c6d5184e9d3dd40de1adfac8c05181a185083)) — [@forinda](https://github.com/forinda)
 - docs: add render, paginate, and sse to HTTP API reference ([b364197](https://github.com/forinda/kick-js/commit/b3641971d193c84c6d1c3151c192f4adaa7e5c54)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **2** commits
 - **1** contributor(s)
@@ -2140,9 +2144,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.1.0...v1.1.1
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.1.0
+## Release v1.1.0
 
-## New Features
+### New Features
 
 - feat: MongoDB docs, queue monitoring in DevTools, notification system ([b77a1df](https://github.com/forinda/kick-js/commit/b77a1df0ef5d38fb767459d1e993bb62b940b013)) — [@forinda](https://github.com/forinda)
 - feat: add MaybePromise\<T\> utility type, use in adapter and drizzle ([7ceeea2](https://github.com/forinda/kick-js/commit/7ceeea2965aa69694382516b48808fa6a38e0960)) — [@forinda](https://github.com/forinda)
@@ -2153,7 +2157,7 @@ All notable changes to KickJS are documented here.
 - feat: pluggable cache/cron, HttpStatus constants, colocated tests ([9616029](https://github.com/forinda/kick-js/commit/9616029e447f4c31365ed3fdd1a268692214f180)) — [@forinda](https://github.com/forinda)
 - feat: add @Cron scheduler and @Cacheable decorator ([0ef496d](https://github.com/forinda/kick-js/commit/0ef496d03549957a54aa8ddcb54ca0bd34f7f3a9)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: widen onShutdown return type to accept any driver cleanup ([48c853a](https://github.com/forinda/kick-js/commit/48c853a31821bc4413b71aaef9eb527b55d8e068)) — [@forinda](https://github.com/forinda)
 - fix: skip HTTP server in kick tinker, clean REPL exit ([a96e643](https://github.com/forinda/kick-js/commit/a96e64395eaf297d19c96c5b639750554e331008)) — [@forinda](https://github.com/forinda)
@@ -2161,7 +2165,7 @@ All notable changes to KickJS are documented here.
 - fix: resolve @forinda/kickjs-core from user's project in kick tinker ([ea3410e](https://github.com/forinda/kick-js/commit/ea3410e08c2ffe16be490b89a4c343889117b909)) — [@forinda](https://github.com/forinda)
 - fix: rename auth docs to authentication.md to fix VitePress routing ([0533137](https://github.com/forinda/kick-js/commit/05331373b2b44dadaedb6a51ab8ab5e0d9a35f01)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: link author name to GitHub profile on Inspiration page ([274cc2a](https://github.com/forinda/kick-js/commit/274cc2af3a2356011d924bb742b796cdc1cb392c)) — [@forinda](https://github.com/forinda)
 - docs: add Inspiration page — project motivation and acknowledgements ([d5e968a](https://github.com/forinda/kick-js/commit/d5e968a280fc58a5afd19cb0cfc7a496b2e95729)) — [@forinda](https://github.com/forinda)
@@ -2172,7 +2176,7 @@ All notable changes to KickJS are documented here.
 - docs: clarify roadmap — separate core features from community patterns ([85dff04](https://github.com/forinda/kick-js/commit/85dff04526ec5e06b06406f0373cbf5617adc1f9)) — [@forinda](https://github.com/forinda)
 - docs: update roadmap with v1.x features inspired by Django/Spring/Laravel/Rails ([b386546](https://github.com/forinda/kick-js/commit/b3865466e9f31e97d4cde96dbf7566bde9922594)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: update release script with all 19 packages and 16 examples ([977d1bc](https://github.com/forinda/kick-js/commit/977d1bca7efd9813db0617ac992ac069d013f718)) — [@forinda](https://github.com/forinda)
 - chore: update pnpm-lock.yaml for devtools package extraction ([190040e](https://github.com/forinda/kick-js/commit/190040e4277d142892ed6ead1774d765a9dc2dc2)) — [@forinda](https://github.com/forinda)
@@ -2181,11 +2185,11 @@ All notable changes to KickJS are documented here.
 - chore: format graphql example resolver ([5bc7a8e](https://github.com/forinda/kick-js/commit/5bc7a8ebb9ba595642dad50c0da0ac7b4e2f27a2)) — [@forinda](https://github.com/forinda)
 - chore: Remove old docs ([6dd3028](https://github.com/forinda/kick-js/commit/6dd30281d430ae197e2c5b51a45a695230c57ce1)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **27** commits
 - **1** contributor(s)
@@ -2196,9 +2200,9 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v1.0.0...v1.1.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
 
-# Release v1.0.0
+## Release v1.0.0
 
-## New Features
+### New Features
 
 - feat: add build-time folder copying and pluggable template engine support ([e237d2a](https://github.com/forinda/kick-js/commit/e237d2aab8e235fc4fa4b191a68264d489a3a4f7)) — [@forinda](https://github.com/forinda)
 - feat: add GraphQL, queue, microservice, and minimal example APIs ([209a93f](https://github.com/forinda/kick-js/commit/209a93f7ab2aadbd9536bc078fea18c573bcc37e)) — [@forinda](https://github.com/forinda)
@@ -2207,22 +2211,22 @@ All notable changes to KickJS are documented here.
 - feat: add kick g resolver, kick g job, QueueProvider interface, and pattern config ([678b507](https://github.com/forinda/kick-js/commit/678b5078a210f24203e7c6d2516a024edb30d7aa)) — [@forinda](https://github.com/forinda)
 - feat: add BullMQ, RabbitMQ, Kafka, and Redis Pub/Sub queue providers ([c1746cc](https://github.com/forinda/kick-js/commit/c1746ccbee88df1347e189fc67e8b86e1603d5f6)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: reduce GraphQL bundle from 1.14MB to 8KB + rewrite docs with samples ([7856872](https://github.com/forinda/kick-js/commit/78568724da7570dfb5ebdcf8c9de2485deacfae5)) — [@forinda](https://github.com/forinda)
 - fix: GraphQL adapter accepts graphql module as constructor param ([d59c495](https://github.com/forinda/kick-js/commit/d59c495557b24c55b1be6a995f02932981f9796e)) — [@forinda](https://github.com/forinda)
 
-## Documentation
+### Documentation
 
 - docs: update landing page to reflect adaptive framework identity ([36fd0bd](https://github.com/forinda/kick-js/commit/36fd0bd78fa6a2c0b6cd5f72af852d33ba3a3cc3)) — [@forinda](https://github.com/forinda)
 - docs: add view engines guide and kick.config.ts reference ([e2a84f4](https://github.com/forinda/kick-js/commit/e2a84f402af02940f9c77389b0cbb7d707590080)) — [@forinda](https://github.com/forinda)
 - docs: add Express to KickJS migration guide ([25ecbd2](https://github.com/forinda/kick-js/commit/25ecbd267543abf9eed978f406f65cac19206f6f)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **11** commits
 - **1** contributor(s)
@@ -2233,28 +2237,28 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v0.7.0...v1.0.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-prisma`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`
 
-# Release v0.7.0
+## Release v0.7.0
 
-## New Features
+### New Features
 
 - feat: add VS Code extension + docs for GraphQL, queue, multi-tenant ([7508042](https://github.com/forinda/kick-js/commit/75080429619bbbe25aa1b53c3a19e4e505241158)) — [@forinda](https://github.com/forinda)
 - feat: add GraphQL, queue, multi-tenancy, and kick inspect ([3ba1403](https://github.com/forinda/kick-js/commit/3ba14031d861752636a7c2dd5053166340471a7a)) — [@forinda](https://github.com/forinda)
 - feat: add DevTools web dashboard at /\_debug with auto-refresh ([20276b1](https://github.com/forinda/kick-js/commit/20276b14410fa997c5a7c72d1e82a4ea68118b11)) — [@forinda](https://github.com/forinda)
 
-## Bug Fixes
+### Bug Fixes
 
 - fix: CLI reads version from package.json instead of hardcoding 0.1.0 ([e7f64a9](https://github.com/forinda/kick-js/commit/e7f64a9ee11bb1b148a7a7a2d337c07aaf8bb003)) — [@forinda](https://github.com/forinda)
 
-## Maintenance
+### Maintenance
 
 - chore: update lockfile ([5578b49](https://github.com/forinda/kick-js/commit/5578b4996b325ae8af10bea6569dda8c3a87ded2)) — [@forinda](https://github.com/forinda)
 - refactor: extract DevTools dashboard HTML into separate utility file ([4a858a2](https://github.com/forinda/kick-js/commit/4a858a23c77ff14f20276cdaed322c759c098a44)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **6** commits
 - **1** contributor(s)
@@ -2265,20 +2269,20 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v0.6.0...v0.7.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-prisma`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`
 
-# Release v0.6.0
+## Release v0.6.0
 
-## New Features
+### New Features
 
 - feat: auto-update docs/changelog.md during release ([1e6545b](https://github.com/forinda/kick-js/commit/1e6545b8da8e913c695e6b6333dc1147c680d540)) — [@forinda](https://github.com/forinda)
 - feat: add SSE and OpenTelemetry example APIs ([afa383d](https://github.com/forinda/kick-js/commit/afa383df044593b831e526f645004b671da14040)) — [@forinda](https://github.com/forinda)
 - feat: add plugin system for community extensions ([e074965](https://github.com/forinda/kick-js/commit/e0749656bcb93d270407e9494f3c09a09e02f1af)) — [@forinda](https://github.com/forinda)
 - feat: add OpenTelemetry adapter and SSE (Server-Sent Events) support ([327d116](https://github.com/forinda/kick-js/commit/327d1162b8c2a137bdbd5896ae367a088fced631)) — [@forinda](https://github.com/forinda)
 
-## Contributors
+### Contributors
 
 - [forinda](https://github.com/forinda)
 
-## Stats
+### Stats
 
 - **4** commits
 - **1** contributor(s)
@@ -2289,29 +2293,29 @@ All notable changes to KickJS are documented here.
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v0.5.2...v0.6.0
 **Packages**: `@forinda/kickjs`, `@forinda/kickjs-cli`, `@forinda/kickjs-config`, `@forinda/kickjs-prisma`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`
 
-## v0.3.2
+### v0.3.2
 
 - feat: add gh cli release option, typesafe config keys, and .env hot reload ([8a51fb0](https://github.com/forinda/kick-js/commit/8a51fb0)) — [@forinda](https://github.com/forinda)
 
 **Full Changelog**: [v0.3.1...v0.3.2](https://github.com/forinda/kick-js/compare/v0.3.1...v0.3.2)
 
-## v0.3.1
+### v0.3.1
 
 - docs: add README and LICENSE to each package for npm ([72b2d03](https://github.com/forinda/kick-js/commit/72b2d03)) — [@forinda](https://github.com/forinda)
 - chore: rename npm scope from @kickjs/\* to @forinda/kickjs-\* ([8368af5](https://github.com/forinda/kick-js/commit/8368af5)) — [@forinda](https://github.com/forinda)
 
 **Full Changelog**: [v0.3.0...v0.3.1](https://github.com/forinda/kick-js/compare/v0.3.0...v0.3.1)
 
-## v0.3.0
+### v0.3.0
 
-### New Features
+#### New Features
 
 - feat: add sub-path exports for @forinda/kickjs-core and @forinda/kickjs-http ([8bfb401](https://github.com/forinda/kick-js/commit/8bfb401)) — [@forinda](https://github.com/forinda)
 - feat: add monorepo release script with auto release notes ([4398824](https://github.com/forinda/kick-js/commit/4398824)) — [@forinda](https://github.com/forinda)
 - feat: add example applications showcasing framework features ([cbd6de3](https://github.com/forinda/kick-js/commit/cbd6de3)) — [@forinda](https://github.com/forinda)
 - feat: v0.3.0 monorepo rewrite — custom DI, Express 5, Zod, Vite HMR ([83d41fe](https://github.com/forinda/kick-js/commit/83d41fe)) — [@forinda](https://github.com/forinda)
 
-### Bug Fixes
+#### Bug Fixes
 
 - fix: address second round of PR review issues ([8f380f2](https://github.com/forinda/kick-js/commit/8f380f2)) — [@forinda](https://github.com/forinda)
 - fix: resolve controller per-request to respect DI scoping ([ef11683](https://github.com/forinda/kick-js/commit/ef11683)) — [@forinda](https://github.com/forinda)
@@ -2319,7 +2323,7 @@ All notable changes to KickJS are documented here.
 - fix: CI builds only framework packages, not examples ([1180d76](https://github.com/forinda/kick-js/commit/1180d76)) — [@forinda](https://github.com/forinda)
 - fix: enforce releases only from main branch ([ac109ab](https://github.com/forinda/kick-js/commit/ac109ab)) — [@forinda](https://github.com/forinda)
 
-### Documentation
+#### Documentation
 
 - docs: add RELEASE.md with release guide ([e1bb3cf](https://github.com/forinda/kick-js/commit/e1bb3cf)) — [@forinda](https://github.com/forinda)
 - docs: complete VitePress documentation — 26 pages ([ae90cc4](https://github.com/forinda/kick-js/commit/ae90cc4)) — [@forinda](https://github.com/forinda)
@@ -2327,7 +2331,7 @@ All notable changes to KickJS are documented here.
 
 **Full Changelog**: [v0.2.0...v0.3.0](https://github.com/forinda/kick-js/compare/v0.2.0...v0.3.0)
 
-## v0.2.0
+### v0.2.0
 
 - feat: enhance project initialization and CLI commands with improved structure and logging ([b795bf0](https://github.com/forinda/kick-js/commit/b795bf0)) — [@forinda](https://github.com/forinda)
 

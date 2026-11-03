@@ -1,5 +1,5 @@
 ---
-title: "KickJS DI Container Gotchas: When @Service() Doesn't Actually Register Your Class"
+title: 'DI Container Gotchas: Unregistered @Service()'
 description: 'Debugging silent DI failures in a decorator-driven Node.js backend — how @Service() metadata, @Job() processors, and container registration interact in unexpected ways.'
 tags: ['kickjs', 'nodejs', 'typescript', 'mongodb', 'dependency-injection']
 canonical_url: null

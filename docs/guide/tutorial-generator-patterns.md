@@ -1,3 +1,7 @@
+---
+title: 'Module Generator: Two Patterns'
+---
+
 # KickJS Module Generator: Two Patterns for Every Backend Need
 
 **Tags:** kickjs, typescript, nodejs, architecture

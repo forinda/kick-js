@@ -55,11 +55,11 @@ helmet({
 import { helmet } from '@forinda/kickjs/middleware/helmet'
 ```
 
-# CORS
+## CORS
 
 The `cors()` middleware handles Cross-Origin Resource Sharing with correct spec behavior.
 
-## Usage
+### Usage
 
 ```ts
 import { cors } from '@forinda/kickjs'
@@ -82,7 +82,7 @@ bootstrap({
 })
 ```
 
-## Options
+### Options
 
 ```ts
 interface CorsOptions {
@@ -96,7 +96,7 @@ interface CorsOptions {
 }
 ```
 
-## Origin Matching
+### Origin Matching
 
 | Value                            | Behavior                              |
 | -------------------------------- | ------------------------------------- |
@@ -108,7 +108,7 @@ interface CorsOptions {
 
 When reflecting origins (not `'*'`), the middleware sets `Vary: Origin` for correct CDN/proxy caching.
 
-## Credentials
+### Credentials
 
 When `credentials: true`, the browser sends cookies and authorization headers cross-origin. This requires a specific origin (not `'*'`):
 
@@ -119,17 +119,17 @@ cors({
 })
 ```
 
-## Preflight
+### Preflight
 
 `OPTIONS` requests are handled with `204 No Content`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age`.
 
-## Sub-path Import
+### Sub-path Import
 
 ```ts
 import { cors } from '@forinda/kickjs/middleware/cors'
 ```
 
-# Allowed Hosts
+## Allowed Hosts
 
 `Host` is chosen by the client. Code that builds absolute URLs from it — password-reset and verification links, redirects, `Location` headers — hands an attacker a link to their own domain, and a shared cache can store a response built for the wrong host. Name the hosts your app serves, and every other request answers `400` problem details:
 
