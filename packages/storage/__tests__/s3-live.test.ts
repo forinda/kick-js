@@ -32,6 +32,20 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
   const run = `run-${randomUUID()}/`
   const text = async (stream: ReadableStream<Uint8Array> | null) => new Response(stream).text()
 
+  it('ensureBucket creates a missing bucket once', async () => {
+    const fresh = s3Storage({
+      bucket: `ensure-${randomUUID().slice(0, 8)}`,
+      endpoint: endpoint ?? minio!.url,
+      accessKeyId: 'minioadmin',
+      secretAccessKey: 'minioadmin',
+    })
+    expect(await fresh.ensureBucket()).toBe(true)
+    expect(await fresh.ensureBucket()).toBe(false)
+    await fresh.put('a.txt', 'here')
+    expect(await fresh.exists('a.txt')).toBe(true)
+    expect(await files.ensureBucket()).toBe(false)
+  })
+
   it('stats, streams and lists', async () => {
     await files.put(`${run}a b.txt`, 'hello', { contentType: 'text/plain' })
     await files.put(`${run}dir/c.txt`, 'c')

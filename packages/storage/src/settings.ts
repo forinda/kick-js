@@ -143,6 +143,7 @@ export function s3FromSettings(
     uploadUrl: (...args) => real().uploadUrl(...args),
     uploadForm: (...args) => real().uploadForm(...args),
     compose: (...args) => real().compose(...args),
+    ensureBucket: () => real().ensureBucket(),
     get location() {
       return real().location
     },
