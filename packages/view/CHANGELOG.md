@@ -1,5 +1,17 @@
 # @forinda/kickjs-view
 
+## 0.5.0
+
+### Minor Changes
+
+- [#1123](https://github.com/forinda/kick-js/pull/1123) [`718d6db`](https://github.com/forinda/kick-js/commit/718d6db09b63cd1ce7b944bd62c6684fa04a1e87) Thanks [@forinda](https://github.com/forinda)! - `<style>{{ css | raw }}</style>` prints trusted CSS, for inlining a stylesheet into a PDF or an email. It must be the element's whole content, it's refused inside SVG, and the render fails if the CSS contains `</style`. Any other `{{ }}` inside `<style>` is still a compile error.
+
+- [#1124](https://github.com/forinda/kick-js/pull/1124) [`4f3c37f`](https://github.com/forinda/kick-js/commit/4f3c37f1e67493c2ab3771c3a99dcbca1fd0a3fb) Thanks [@forinda](https://github.com/forinda)! - Two built-in pipes: `join:separator?` prints a list as text (`{{ names | join:', ' }}`), and `compact` drops `null`, `undefined`, `false` and empty strings from a list while keeping `0`. An app pipe already named `join` or `compact` now fails `kick check:views` as a clash with a built-in; rename it.
+
+### Patch Changes
+
+- [#1122](https://github.com/forinda/kick-js/pull/1122) [`6be9abf`](https://github.com/forinda/kick-js/commit/6be9abf2a488604814f99b4b6b1cfe029d4de2e7) Thanks [@forinda](https://github.com/forinda)! - In strict mode, a name the data doesn't have no longer fails the render when it's on the left of `??` or before `?.`; in a chain like `a ?? b ?? 'none'` only the last fallback must exist. `{{ showPositions ?? true }}` and `{{ fees?.paid }}` now work for optional fields; a missing name anywhere else is still an error.
+
 ## 0.4.1
 
 ### Patch Changes
