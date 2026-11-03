@@ -7,7 +7,7 @@
 // permanent redirect. Unknown paths land on 404.html, which forwards the path.
 //
 //   node scripts/docs-pages-redirects.mjs <built dist> <out dir>
-import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 
 const [dist, out] = process.argv.slice(2)
@@ -18,8 +18,18 @@ const pages = []
 const walk = (dir) => {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name)
-    if (statSync(p).isDirectory()) walk(p)
-    else if (name.endsWith('.html') && name !== '404.html') pages.push(p)
+    if (statSync(p).isDirectory()) {
+      // The hashed JS/CSS bundle only served the pages, which are stubs now.
+      if (p !== join(dist, 'assets')) walk(p)
+    } else if (name.endsWith('.html')) {
+      if (name !== '404.html') pages.push(p)
+    } else {
+      // Images, llms.txt and the like: a meta refresh can't redirect them,
+      // so keep serving them where outside links expect them.
+      const file = join(out, relative(dist, p))
+      mkdirSync(dirname(file), { recursive: true })
+      copyFileSync(p, file)
+    }
   }
 }
 walk(dist)
