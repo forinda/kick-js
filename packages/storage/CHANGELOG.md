@@ -1,5 +1,37 @@
 # @forinda/kickjs-storage
 
+## 0.6.0
+
+### Minor Changes
+
+- [#1130](https://github.com/forinda/kick-js/pull/1130) [`0c163d4`](https://github.com/forinda/kick-js/commit/0c163d40062ea47f7afcebc5494500956c1d91ce) Thanks [@forinda](https://github.com/forinda)! - `acl` for S3 buckets: a canned ACL (`'public-read'`, …) sent, signed, on every write a storage makes — `put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadForm` and `uploadUrl` (signed into the URL). Each of those also takes its own `acl`, over the storage's. `S3Settings` reads it from `S3_ACL`.
+  
+  `s3Configured(section?)` from `@forinda/kickjs-storage/settings`: true when the section's bucket is set (`S3_BUCKET` or `S3_BUCKET_FILE`). The `kick add storage` file now picks its driver with it instead of reading `process.env.S3_BUCKET`, which missed a bucket kept in a secret file.
+
+- [#1133](https://github.com/forinda/kick-js/pull/1133) [`6fcf09c`](https://github.com/forinda/kick-js/commit/6fcf09c9b7c1a9bf92b47ad89786510f58b7d624) Thanks [@forinda](https://github.com/forinda)! - S3 buckets: `storageClass` (`'STANDARD_IA'`, `'GLACIER_IR'`, …) on the storage and on each write, returned by `stat()`; and `publicUrl(key)`, the unsigned address of a public file, from the bucket or a `publicUrl` option such as a CDN. `S3Settings` reads `S3_STORAGE_CLASS` and `S3_PUBLIC_URL`, and the `kick add storage` `.env.example` lists them.
+
+- [#1134](https://github.com/forinda/kick-js/pull/1134) [`daa15e8`](https://github.com/forinda/kick-js/commit/daa15e854a7cfcb69396a04275a55829a4cc429d) Thanks [@forinda](https://github.com/forinda)! - `deleteMany(keys)` on S3 buckets: up to 1000 files per request (DeleteObjects) instead of one request each, with the `Content-MD5` every S3 API accepts. Missing keys count as deleted. The error names keys the bucket refuses, those of earlier batches included when a later request fails.
+
+- [#1132](https://github.com/forinda/kick-js/pull/1132) [`fa1ccc6`](https://github.com/forinda/kick-js/commit/fa1ccc6e3bca26236a0ffd9d2c3617194f8accbf) Thanks [@forinda](https://github.com/forinda)! - S3 buckets:
+  
+  - **Retries:** a request that can't connect, times out, or gets 500/502/503/504 is sent again with backoff, up to `maxAttempts` (default 3; `1` turns retries off), as the AWS SDK does. `putIfAbsent` is retried only when S3 refused it before writing, so a write that may have landed isn't reported as taken.
+  - **Per-file headers and metadata:** `cacheControl`, `contentDisposition`, `contentEncoding`, `contentLanguage` and `metadata` (`x-amz-meta-*`) on `put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm`. `stat()` returns them.
+
+### Patch Changes
+
+- [#1135](https://github.com/forinda/kick-js/pull/1135) [`3c0ce8d`](https://github.com/forinda/kick-js/commit/3c0ce8d404186eeadc8111ae2311c7f8233ddb84) Thanks [@forinda](https://github.com/forinda)! - S3 buckets retry what the AWS SDK retries:
+  
+  - 429
+  - S3's 400 `RequestTimeout`
+  - a clock-skew error. The storage then signs with the bucket's time from then on, signed URLs included. A `HEAD` (`stat`, `exists`) carries no error code, so a 403 whose `Date` is more than 15 minutes off counts as skew.
+  - a CopyObject, UploadPartCopy or CompleteMultipartUpload that answers 200 with an error or with no body. An empty 200 used to count as success. Two exceptions:
+    - `PreconditionFailed`, a create-only write losing the race, is an answer, not a failure.
+    - A create-only (`putIfAbsent`) completion that fails this way isn't retried, since the write may have happened. It's reported as a failure, and the upload is aborted.
+  
+  `putIfAbsent` is retried only when S3 refused it before writing: 503, 429, `RequestTimeout`, clock skew.
+  
+  `get` and `getStream` return a file stored with `contentEncoding: 'gzip'` as stored: `fetch` decompressed it before. Header values with runs of spaces are signed as S3 checks them.
+
 ## 0.5.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @forinda/kickjs
 
+## 10.14.2
+
+### Patch Changes
+
+- [#1131](https://github.com/forinda/kick-js/pull/1131) [`bf2d2aa`](https://github.com/forinda/kick-js/commit/bf2d2aaa103528d60688ade5db015a9122c564f7) Thanks [@forinda](https://github.com/forinda)! - `app.configOrigins()` lists sections declared `.optional()` too, marked `optional: true`, after the bound ones. They were left out, so the devtools Config panel didn't show a section like the `kick add storage` file's `S3Settings.optional()` while files were on disk. The panel labels them "(optional)".
+
+- [#1136](https://github.com/forinda/kick-js/pull/1136) [`2d1cf0b`](https://github.com/forinda/kick-js/commit/2d1cf0b9f92d006fd1dd2e6f7c2f722865a51e57) Thanks [@forinda](https://github.com/forinda)! - An optional or undeclared settings section now follows a `.env` edit too. It isn't bound, so `get()` loaded it once and kept that value, through `kick dev` rebuilds, until a restart. Each start and rebuild, and `reloadEnv()`, now has it read again. The configuration guide has a new "After a `.env` edit" section on reading sections so reloads apply.
+
 ## 10.14.1
 
 ### Patch Changes
