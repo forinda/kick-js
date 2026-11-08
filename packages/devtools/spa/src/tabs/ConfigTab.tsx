@@ -57,7 +57,10 @@ export const ConfigTab: Component = () => {
     if (!o) return []
     return [
       { title: 'Env schema', vars: o.env },
-      ...o.sections.map((s) => ({ title: `${s.prefix} settings`, vars: s.vars })),
+      ...o.sections.map((s) => ({
+        title: `${s.prefix} settings${s.optional ? ' (optional)' : ''}`,
+        vars: s.vars,
+      })),
     ].filter((g) => g.vars.length > 0)
   })
   const unset = createMemo(
