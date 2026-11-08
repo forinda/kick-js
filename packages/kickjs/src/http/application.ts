@@ -209,8 +209,11 @@ export interface ConfigDescription {
 export interface ConfigOrigins {
   /** The app's env schema. */
   env: VarOrigin[]
-  /** The settings sections the app bound, in binding order. */
-  sections: Array<{ prefix: string; vars: VarOrigin[] }>
+  /**
+   * The settings sections the app bound, in binding order, then the ones it
+   * declared optional and didn't bind (`optional: true`).
+   */
+  sections: Array<{ prefix: string; optional?: true; vars: VarOrigin[] }>
 }
 
 export interface ApplicationOptions {
@@ -837,6 +840,8 @@ export class Application {
   /** Settings prefixes bound in this setup, across its two binding phases. */
   private settingsPrefixes = new Map<string, Settings<unknown>>()
   private settingsProvided = new Map<Settings<unknown>, unknown>()
+  /** Sections declared with `.optional()`: listed by configOrigins(), never bound. */
+  private settingsOptional = new Set<Settings<unknown>>()
   private handlerFor?: { app: unknown; handler: ReturnType<HttpRuntime['nodeHandler']> }
   private readonly adapters: AppAdapter[]
   /**
@@ -1280,17 +1285,30 @@ export class Application {
   configOrigins(): ConfigOrigins {
     return {
       env: originsOf(describeEnvSchema()),
-      sections: Array.from(this.settingsPrefixes.values(), (section) => ({
-        prefix: section.prefix,
-        vars: this.settingsProvided.has(section)
-          ? section.envNames.map((name) => ({ name, origin: 'provided' as const }))
-          : originsOf(section.describe()),
-      })),
+      sections: [
+        ...Array.from(this.settingsPrefixes.values(), (section) => ({
+          prefix: section.prefix,
+          vars: this.settingsProvided.has(section)
+            ? section.envNames.map((name) => ({ name, origin: 'provided' as const }))
+            : originsOf(section.describe()),
+        })),
+        // Required somewhere else too: listed once, as bound.
+        ...Array.from(this.settingsOptional)
+          .filter((section) => this.settingsPrefixes.get(section.prefix) !== section)
+          .map((section) => ({
+            prefix: section.prefix,
+            optional: true as const,
+            vars: originsOf(section.describe()),
+          })),
+      ],
     }
   }
 
   /** Validate settings sections and bind each under its token. */
   private bindSettings(sections: readonly SettingsDeclaration[]): void {
+    for (const decl of sections) {
+      if (isOptionalSettings(decl)) this.settingsOptional.add(decl.section)
+    }
     for (const [section, value] of loadSettings(
       sections,
       process.env,
@@ -1341,6 +1359,7 @@ export class Application {
     this.container.registerInstance(APPLICATION, this)
     this.settingsPrefixes = new Map()
     this.settingsProvided = new Map()
+    this.settingsOptional = new Set()
     // Optional and undeclared sections aren't bound: get() loads them, and
     // must load them again now, or a rebuild after a .env edit keeps the old value.
     _forgetLoadedSettings()
@@ -2121,6 +2140,7 @@ export class Application {
     // Likewise the settings bookkeeping configOrigins() reads.
     const prevSettingsPrefixes = this.settingsPrefixes
     const prevSettingsProvided = this.settingsProvided
+    const prevSettingsOptional = this.settingsOptional
     // Snapshot the outgoing app's disposables (session/rate-limit store
     // intervals) BEFORE setup() registers the incoming app's. On success the
     // stale set is disposed — without this, every HMR swap leaked one live
@@ -2143,6 +2163,7 @@ export class Application {
       this.routeUrls = prevRouteUrls
       this.settingsPrefixes = prevSettingsPrefixes
       this.settingsProvided = prevSettingsProvided
+      this.settingsOptional = prevSettingsOptional
       return
     }
 

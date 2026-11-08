@@ -420,6 +420,21 @@ describe('optional sections', () => {
     expect(() => Smtp.get()).toThrow(/KT_SMTP_HOST/)
   })
 
+  it('are listed by configOrigins, marked optional, once even when also required', async () => {
+    const Resend = defineSettings('KT_RESEND', z.object({ key: z.string() }))
+    vi.stubEnv('KT_SMTP_HOST', 'smtp.test')
+    vi.stubEnv('KT_RESEND_KEY', 'k')
+    const app = new Application({
+      modules: [],
+      settings: [Smtp.optional(), Resend.optional(), Resend],
+    })
+    await app.setup()
+    expect(app.configOrigins().sections).toEqual([
+      { prefix: 'KT_RESEND', vars: [{ name: 'KT_RESEND_KEY', origin: 'env' }] },
+      { prefix: 'KT_SMTP', optional: true, vars: [{ name: 'KT_SMTP_HOST', origin: 'env' }] },
+    ])
+  })
+
   it('read the platform env they were declared with on the web entry', () => {
     const EdgeSmtp = defineSettings('KT_EDGE_SMTP', z.object({ host: z.string() }))
     createWebApp({
