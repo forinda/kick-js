@@ -45,6 +45,16 @@ export interface S3StorageOptions {
    * the response, not reading a body already arriving. Default: no limit.
    */
   timeoutMs?: number
+  /**
+   * Tries per request, the first included: a request that fails to connect,
+   * times out, or gets 500, 502, 503 or 504 (S3's `SlowDown` is a 503) is
+   * sent again after a random wait that doubles each time (up to 20 s), as
+   * the AWS SDK does. A create-only write (`putIfAbsent`) is retried only on
+   * 503, which S3 sends before doing anything: after another failure the
+   * write may have happened, and a retry would find it taken. Default 3; 1
+   * turns retries off.
+   */
+  maxAttempts?: number
   /** Default the global `fetch`. */
   fetch?: typeof fetch
   /**
@@ -199,7 +209,35 @@ export async function signV4(
   }
 }
 
-export interface UploadUrlOptions {
+/**
+ * How a bucket stores and serves one file — sent with each write that
+ * creates it. All optional; unset leaves the bucket's default.
+ */
+export interface S3ObjectOptions {
+  /** This file's canned ACL, instead of the storage's `acl`. */
+  acl?: S3Acl
+  /** `Cache-Control` the file is served with, e.g. `public, max-age=31536000, immutable`. */
+  cacheControl?: string
+  /** `Content-Disposition` the file is served with, e.g. `attachment; filename="report.pdf"`. */
+  contentDisposition?: string
+  /** `Content-Encoding` the file is served with, e.g. `gzip` for bytes already gzipped. */
+  contentEncoding?: string
+  /** `Content-Language` the file is served with, e.g. `en`. */
+  contentLanguage?: string
+  /**
+   * Your own name/value pairs kept with the file (`x-amz-meta-*`), returned by
+   * `stat()`. Names are letters, digits, `-`, `_` and `.`; S3 stores them
+   * lowercase. Values are printable ASCII. At most 2 KB in all.
+   */
+  metadata?: Record<string, string>
+}
+
+/**
+ * `acl` and `metadata` are signed into the URL; `cacheControl`,
+ * `contentDisposition`, `contentEncoding` and `contentLanguage` are signed
+ * as headers, so the browser's `PUT` must send them as given, like `contentType`.
+ */
+export interface UploadUrlOptions extends S3ObjectOptions {
   /** Seconds the URL stays valid. Default 3600, at most 604800 (7 days). */
   expiresIn?: number
   /**
@@ -209,17 +247,23 @@ export interface UploadUrlOptions {
   size?: number
   /** Signed into the URL: the browser must send this `Content-Type`, and the file is served with it. */
   contentType?: string
-  /** This file's canned ACL, instead of the storage's `acl`. */
-  acl?: S3Acl
 }
 
 /** {@link PutOptions} plus what only a bucket keeps. */
-export interface S3PutOptions extends PutOptions {
-  /** This file's canned ACL, instead of the storage's `acl`. */
-  acl?: S3Acl
+export interface S3PutOptions extends PutOptions, S3ObjectOptions {}
+
+/** {@link FileInfo} plus what a bucket returns about a file. */
+export interface S3FileInfo extends FileInfo {
+  /** What was set with `metadata`, names lowercase. */
+  metadata: Record<string, string>
+  cacheControl?: string
+  contentDisposition?: string
+  contentEncoding?: string
+  contentLanguage?: string
 }
 
-export interface UploadFormOptions {
+/** The `S3ObjectOptions` go into the form's fields and its policy. */
+export interface UploadFormOptions extends S3ObjectOptions {
   /** Seconds the form stays valid. Default 3600, at most 604800 (7 days). */
   expiresIn?: number
   /** Largest file accepted, in bytes. The bucket refuses anything bigger. */
@@ -233,8 +277,6 @@ export interface UploadFormOptions {
    * allowlist, then sign that one.
    */
   contentType?: string
-  /** This file's canned ACL, instead of the storage's `acl`. */
-  acl?: S3Acl
 }
 
 /** What a browser form POSTs to: the URL, and fields to send before the file. */
@@ -270,7 +312,7 @@ export interface Multipart {
     key: string,
     uploadId: string,
     partNumber: number,
-    options?: Omit<UploadUrlOptions, 'contentType' | 'acl'>,
+    options?: Pick<UploadUrlOptions, 'expiresIn' | 'size'>,
   ): Promise<string>
   /** The parts the bucket has so far, in order. */
   listParts(key: string, uploadId: string): Promise<UploadedPart[]>
@@ -284,6 +326,7 @@ export interface Multipart {
 export interface S3Storage extends Storage {
   put(key: string, body: Body, options?: S3PutOptions): Promise<void>
   putIfAbsent(key: string, body: Body, options?: S3PutOptions): Promise<boolean>
+  stat(key: string): Promise<S3FileInfo | null>
   /** A signed URL the browser can `PUT` one file to, up to 5 GiB. */
   uploadUrl(key: string, options?: UploadUrlOptions): Promise<string>
   /**
@@ -363,6 +406,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
   }
   const { timeoutMs } = options
+  const maxAttempts = options.maxAttempts ?? 3
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+    throw new Error('s3Storage: maxAttempts must be a whole number, at least 1')
+  }
   if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs < 1)) {
     throw new Error('s3Storage: timeoutMs must be a whole number of milliseconds, at least 1')
   }
@@ -389,10 +436,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
     return own ?? acl
   }
-  /** Sent, signed, on every request that creates an object. */
-  const writeHeaders = (own?: S3Acl): Record<string, string> => {
-    const chosen = aclFor(own)
-    return { ...sse, ...(chosen ? { 'x-amz-acl': chosen } : {}) }
+  /** Sent, signed, on every request that creates an object: encryption, then the file's own. */
+  const writeHeaders = (own: S3ObjectOptions = {}): Record<string, string> => {
+    const chosen = aclFor(own.acl)
+    return { ...sse, ...(chosen ? { 'x-amz-acl': chosen } : {}), ...objectHeaders(own) }
   }
   const partConcurrency = options.partConcurrency ?? 4
   if (!Number.isInteger(partSize) || partSize < PART_SIZE) {
@@ -422,7 +469,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
 
   interface Request {
     query?: Record<string, string>
-    /** `x-amz-*` headers to send, signed. */
+    /** Headers to send, signed. */
     amz?: Record<string, string>
     /** Sent unsigned, besides the signed ones. */
     headers?: Record<string, string>
@@ -430,7 +477,29 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     contentType?: string
   }
 
+  /** {@link sendOnce}, again on a failure worth retrying — see `maxAttempts`. */
   async function send(method: string, key: string | typeof BUCKET, request: Request = {}) {
+    const createOnly = request.headers?.['if-none-match'] !== undefined
+    const retryable = (status: number) =>
+      createOnly ? status === 503 : status >= 500 && status <= 504 && status !== 501
+    for (let attempt = 1; ; attempt++) {
+      const last = attempt >= maxAttempts
+      let res: Response
+      try {
+        res = await sendOnce(method, key, request)
+      } catch (err) {
+        // No answer at all: a create-only write may have landed anyway.
+        if (last || createOnly) throw err
+        await backoff(attempt)
+        continue
+      }
+      if (last || !retryable(res.status)) return res
+      await res.body?.cancel()
+      await backoff(attempt)
+    }
+  }
+
+  async function sendOnce(method: string, key: string | typeof BUCKET, request: Request) {
     const url = urlOf(key, request.query)
     const payloadHash = request.body ? await sha256(request.body) : EMPTY_HASH
     const now = await signing()
@@ -556,7 +625,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   ) {
     const res = await send('PUT', key, {
       body: bytes,
-      amz: writeHeaders(putOptions.acl),
+      amz: writeHeaders(putOptions),
       contentType: putOptions.contentType,
       ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
     })
@@ -573,7 +642,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     async create(key, createOptions = {}) {
       const res = await call('POST', key, {
         query: { uploads: '' },
-        amz: writeHeaders(createOptions.acl),
+        amz: writeHeaders(createOptions),
         contentType: createOptions.contentType,
       })
       const uploadId = tag(await res.text(), 'UploadId')
@@ -710,7 +779,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         amz: {
           'x-amz-copy-source': copySource(sources[0]),
           'x-amz-metadata-directive': 'REPLACE',
-          ...writeHeaders(putOptions.acl),
+          ...writeHeaders(putOptions),
         },
         contentType: putOptions.contentType ?? 'application/octet-stream',
       })
@@ -786,10 +855,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       'x-amz-credential': credential,
       'x-amz-date': stamp,
       ...(keys.sessionToken ? { 'x-amz-security-token': keys.sessionToken } : {}),
-      // A POST form names the ACL `acl`, not `x-amz-acl`.
+      // A POST form names some fields differently from the headers.
       ...Object.fromEntries(
-        Object.entries(writeHeaders(formOptions.acl)).map(([name, value]) => [
-          name === 'x-amz-acl' ? 'acl' : name,
+        Object.entries(writeHeaders(formOptions)).map(([name, value]) => [
+          FORM_FIELDS[name] ?? name,
           value,
         ]),
       ),
@@ -823,14 +892,26 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
   }
 
-  const statOf = async (key: string): Promise<FileInfo | null> => {
+  const statOf = async (key: string): Promise<S3FileInfo | null> => {
     const res = await call('HEAD', key, {}, true)
     if (res.status === 404) return null
+    const metadata: Record<string, string> = {}
+    for (const [name, value] of res.headers) {
+      if (name.startsWith('x-amz-meta-')) metadata[name.slice('x-amz-meta-'.length)] = value
+    }
+    const header = (name: string) => res.headers.get(name) ?? undefined
     return {
       key,
       size: Number(res.headers.get('content-length') ?? 0),
       lastModified: new Date(res.headers.get('last-modified') ?? 0),
-      contentType: res.headers.get('content-type') ?? undefined,
+      contentType: header('content-type'),
+      metadata,
+      ...(header('cache-control') ? { cacheControl: header('cache-control') } : {}),
+      ...(header('content-disposition')
+        ? { contentDisposition: header('content-disposition') }
+        : {}),
+      ...(header('content-encoding') ? { contentEncoding: header('content-encoding') } : {}),
+      ...(header('content-language') ? { contentLanguage: header('content-language') } : {}),
     }
   }
 
@@ -845,7 +926,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       }
       await call('PUT', key, {
         body: toBytes(body),
-        amz: writeHeaders(putOptions.acl),
+        amz: writeHeaders(putOptions),
         contentType: putOptions.contentType,
       })
     },
@@ -922,12 +1003,19 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       return presignFor('GET', urlOf(key, query), urlOptions.expiresIn ?? 3600)
     },
     async uploadUrl(key, uploadOptions = {}) {
-      // In the query, so it's signed without the browser having to send a header.
+      // `x-amz-*` go in the query, signed without the browser having to send
+      // them; other headers can't, so the browser sends those as signed.
       const chosen = aclFor(uploadOptions.acl)
       const query: Record<string, string> = chosen ? { 'x-amz-acl': chosen } : {}
+      const headers: Record<string, string> = {}
+      for (const [name, value] of Object.entries(objectHeaders(uploadOptions))) {
+        if (name.startsWith('x-amz-')) query[name] = value
+        else headers[name] = value
+      }
       return presignFor('PUT', urlOf(key, query), uploadOptions.expiresIn ?? 3600, {
         ...sizeHeader(uploadOptions.size),
         ...(uploadOptions.contentType ? { 'content-type': uploadOptions.contentType } : {}),
+        ...headers,
       })
     },
     multipart,
@@ -951,6 +1039,53 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
   }
   return storage
+}
+
+/** Full jitter: a random wait up to 100 ms × 2^(attempt − 1), at most 20 s. */
+const backoff = (attempt: number) =>
+  new Promise((done) =>
+    setTimeout(done, Math.random() * Math.min(20_000, 100 * 2 ** (attempt - 1))),
+  )
+
+/** A POST form's field for a header, where the two differ. */
+const FORM_FIELDS: Record<string, string> = {
+  'x-amz-acl': 'acl',
+  'cache-control': 'Cache-Control',
+  'content-disposition': 'Content-Disposition',
+  'content-encoding': 'Content-Encoding',
+  'content-language': 'Content-Language',
+}
+
+/** The headers a file's {@link S3ObjectOptions} (but `acl`) are sent as, checked. */
+function objectHeaders(own: S3ObjectOptions): Record<string, string> {
+  const out: Record<string, string> = {}
+  const plain: Array<[keyof S3ObjectOptions, string]> = [
+    ['cacheControl', 'cache-control'],
+    ['contentDisposition', 'content-disposition'],
+    ['contentEncoding', 'content-encoding'],
+    ['contentLanguage', 'content-language'],
+  ]
+  for (const [option, header] of plain) {
+    const value = own[option]
+    if (value === undefined) continue
+    if (typeof value !== 'string' || !/^[\x20-\x7e]*$/.test(value)) {
+      throw new Error(`s3Storage: ${option} must be printable ASCII`)
+    }
+    out[header] = value
+  }
+  let bytes = 0
+  for (const [name, value] of Object.entries(own.metadata ?? {})) {
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
+      throw new Error(`s3Storage: metadata name '${name}' must be letters, digits, '-', '_' or '.'`)
+    }
+    if (typeof value !== 'string' || !/^[\x20-\x7e]*$/.test(value)) {
+      throw new Error(`s3Storage: metadata '${name}' must be printable ASCII`)
+    }
+    bytes += name.length + value.length
+    out[`x-amz-meta-${name.toLowerCase()}`] = value
+  }
+  if (bytes > 2048) throw new Error("s3Storage: metadata is over S3's 2 KB limit")
+  return out
 }
 
 /** The headers S3 reads `serverSideEncryption` from, checked once up front. */

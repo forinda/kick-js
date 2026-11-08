@@ -547,6 +547,31 @@ The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticate
 
 New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control`. There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
 
+### Per-file headers and metadata
+
+`put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm` also take how the bucket serves the file, and your own name/value pairs kept with it:
+
+```ts
+await files.put(`avatars/${id}.png`, bytes, {
+  contentType: 'image/png',
+  cacheControl: 'public, max-age=31536000, immutable',
+  metadata: { owner: userId },
+})
+await files.put(`exports/${id}.csv.gz`, gzipped, {
+  contentType: 'text/csv',
+  contentEncoding: 'gzip',
+  contentDisposition: 'attachment; filename="export.csv"',
+})
+
+const info = await files.stat(`avatars/${id}.png`)
+info?.metadata.owner // 'u1'; names come back lowercase
+info?.cacheControl
+```
+
+`cacheControl`, `contentDisposition`, `contentEncoding` and `contentLanguage` are the headers the bucket serves the file with. `metadata` is sent as `x-amz-meta-*`: names are letters, digits, `-`, `_` and `.`, values printable ASCII, at most 2 KB in all. Anything else throws before the request is sent. `compose` replaces what the sources had with what you pass.
+
+Through `uploadUrl`, `metadata` and `acl` are signed into the URL. The four headers are signed as headers, so the browser's `PUT` must send them as given, like `contentType`. Through `uploadForm` they're form fields, and part of the policy.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
@@ -564,6 +589,12 @@ s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials: fromNodeProvide
 ```ts
 s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials, timeoutMs: 5000 })
 ```
+
+### Retries
+
+A request that can't connect, times out, or gets a 500, 502, 503 or 504 is sent again, up to `maxAttempts` tries (default 3), after a random wait that doubles each time. That's what the AWS SDK does, and it rides out S3's `SlowDown` (a 503) and a dropped connection. Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
+
+`putIfAbsent` is retried only on a 503, which S3 sends before writing. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote.
 
 ## Config from the environment
 

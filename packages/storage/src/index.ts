@@ -35,6 +35,8 @@ export {
   isS3Acl,
   type S3Acl,
   type S3PutOptions,
+  type S3ObjectOptions,
+  type S3FileInfo,
   type CompletedPart,
   type S3Credentials,
   type Multipart,
