@@ -32,6 +32,12 @@ export {
 export { memoryStorage, type MemoryStorageOptions } from './memory'
 export {
   s3Storage,
+  isS3Acl,
+  type S3Acl,
+  type S3PutOptions,
+  type S3ObjectOptions,
+  type S3FileInfo,
+  type S3StorageClass,
   type CompletedPart,
   type S3Credentials,
   type Multipart,

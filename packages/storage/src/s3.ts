@@ -1,4 +1,5 @@
 import type { FileInfo, PutOptions, Storage } from './types'
+import { md5 } from './md5'
 import {
   checkDelimiter,
   checkKey,
@@ -9,6 +10,7 @@ import {
   encodeSegment,
   isStream,
   toBytes,
+  type Body,
 } from './keys'
 
 export interface S3StorageOptions {
@@ -44,6 +46,18 @@ export interface S3StorageOptions {
    * the response, not reading a body already arriving. Default: no limit.
    */
   timeoutMs?: number
+  /**
+   * Tries per request, the first included: a request that fails to connect,
+   * times out, or gets 500, 502, 503 or 504 (S3's `SlowDown` is a 503) is
+   * sent again after a random wait that doubles each time (up to 20 s), as
+   * the AWS SDK does; also 429, S3's 400 `RequestTimeout`, a clock-skew
+   * error, and a copy or multipart completion that answers 200 with an error
+   * or no body. A create-only write (`putIfAbsent`) is retried only when S3
+   * refused it before writing (503, 429, `RequestTimeout`, clock skew): after
+   * another failure the write may have happened, and a retry would find it
+   * taken. Default 3; 1 turns retries off.
+   */
+  maxAttempts?: number
   /** Default the global `fetch`. */
   fetch?: typeof fetch
   /**
@@ -62,9 +76,75 @@ export interface S3StorageOptions {
    * services support neither.
    */
   serverSideEncryption?: { type: 'AES256' } | { type: 'aws:kms'; keyId?: string }
+  /**
+   * The canned ACL every file this storage writes gets, e.g. `'public-read'`
+   * for files served straight from the bucket or its CDN. Without it the
+   * bucket's default ACL applies, which is private on AWS, DigitalOcean Spaces
+   * and MinIO (a bucket policy can still make files readable). Applies to
+   * `put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadForm` and
+   * `uploadUrl` (signed into the URL's query, as the AWS SDK's presigner does).
+   * AWS buckets with Object Ownership set to "bucket owner enforced" (the
+   * default for new buckets) refuse every ACL but `bucket-owner-full-control`,
+   * and Block Public Access (also on by default) refuses public ones: see the
+   * guide's "Public files".
+   */
+  acl?: S3Acl
+  /**
+   * The storage class every file this storage writes gets, e.g.
+   * `'STANDARD_IA'` for files read rarely. Unset, the bucket's default
+   * (`STANDARD` on AWS). A write's own `storageClass` wins.
+   */
+  storageClass?: S3StorageClass
+  /**
+   * Where public files are served from, for {@link S3Storage.publicUrl}: a CDN
+   * or custom domain, e.g. `https://cdn.example.com` or
+   * `https://files.example.com/avatars`. Default the bucket's own address.
+   */
+  publicUrl?: string
   /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */
   partConcurrency?: number
 }
+
+/**
+ * S3's storage classes. Other S3 APIs have their own (R2: `STANDARD`,
+ * `STANDARD_IA`), so any UPPER_SNAKE name is accepted. A file in `GLACIER`
+ * or `DEEP_ARCHIVE` has to be restored before it can be read.
+ */
+export type S3StorageClass =
+  | 'STANDARD'
+  | 'STANDARD_IA'
+  | 'ONEZONE_IA'
+  | 'INTELLIGENT_TIERING'
+  | 'GLACIER_IR'
+  | 'GLACIER'
+  | 'DEEP_ARCHIVE'
+  | 'REDUCED_REDUNDANCY'
+  | 'EXPRESS_ONEZONE'
+  | (string & {})
+
+/** S3's canned ACLs. */
+export type S3Acl =
+  | 'private'
+  | 'public-read'
+  | 'public-read-write'
+  | 'authenticated-read'
+  | 'aws-exec-read'
+  | 'bucket-owner-read'
+  | 'bucket-owner-full-control'
+
+const ACLS: readonly string[] = [
+  'private',
+  'public-read',
+  'public-read-write',
+  'authenticated-read',
+  'aws-exec-read',
+  'bucket-owner-read',
+  'bucket-owner-full-control',
+] satisfies S3Acl[]
+
+/** True for one of S3's canned ACLs. */
+export const isS3Acl = (value: unknown): value is S3Acl =>
+  typeof value === 'string' && ACLS.includes(value)
 
 export interface S3Credentials {
   accessKeyId: string
@@ -139,7 +219,8 @@ export async function signV4(
   const stamp = amzDate(signing.date)
   const scope = `${stamp.slice(0, 8)}/${signing.region}/s3/aws4_request`
   const signed = Object.entries({ host: url.host, ...headers })
-    .map(([name, value]) => [name, value.trim()] as const)
+    // SigV4 canonical form: trimmed, runs of spaces as one. The headers sent are unchanged.
+    .map(([name, value]) => [name, value.trim().replace(/ {2,}/g, ' ')] as const)
     .toSorted(([a], [b]) => (a < b ? -1 : 1))
   const query = [...url.searchParams]
     .map(([k, v]) => [encodeSegment(k), encodeSegment(v)])
@@ -164,7 +245,37 @@ export async function signV4(
   }
 }
 
-export interface UploadUrlOptions {
+/**
+ * How a bucket stores and serves one file — sent with each write that
+ * creates it. All optional; unset leaves the bucket's default.
+ */
+export interface S3ObjectOptions {
+  /** This file's canned ACL, instead of the storage's `acl`. */
+  acl?: S3Acl
+  /** `Cache-Control` the file is served with, e.g. `public, max-age=31536000, immutable`. */
+  cacheControl?: string
+  /** `Content-Disposition` the file is served with, e.g. `attachment; filename="report.pdf"`. */
+  contentDisposition?: string
+  /** `Content-Encoding` the file is served with, e.g. `gzip` for bytes already gzipped. */
+  contentEncoding?: string
+  /** `Content-Language` the file is served with, e.g. `en`. */
+  contentLanguage?: string
+  /**
+   * Your own name/value pairs kept with the file (`x-amz-meta-*`), returned by
+   * `stat()`. Names are letters, digits, `-`, `_` and `.`; S3 stores them
+   * lowercase. Values are printable ASCII. At most 2 KB in all.
+   */
+  metadata?: Record<string, string>
+  /** This file's storage class, instead of the storage's `storageClass`. */
+  storageClass?: S3StorageClass
+}
+
+/**
+ * `acl` and `metadata` are signed into the URL; `cacheControl`,
+ * `contentDisposition`, `contentEncoding` and `contentLanguage` are signed
+ * as headers, so the browser's `PUT` must send them as given, like `contentType`.
+ */
+export interface UploadUrlOptions extends S3ObjectOptions {
   /** Seconds the URL stays valid. Default 3600, at most 604800 (7 days). */
   expiresIn?: number
   /**
@@ -176,7 +287,23 @@ export interface UploadUrlOptions {
   contentType?: string
 }
 
-export interface UploadFormOptions {
+/** {@link PutOptions} plus what only a bucket keeps. */
+export interface S3PutOptions extends PutOptions, S3ObjectOptions {}
+
+/** {@link FileInfo} plus what a bucket returns about a file. */
+export interface S3FileInfo extends FileInfo {
+  /** What was set with `metadata`, names lowercase. */
+  metadata: Record<string, string>
+  cacheControl?: string
+  contentDisposition?: string
+  contentEncoding?: string
+  contentLanguage?: string
+  /** Absent for `STANDARD`, which S3 doesn't report. */
+  storageClass?: string
+}
+
+/** The `S3ObjectOptions` go into the form's fields and its policy. */
+export interface UploadFormOptions extends S3ObjectOptions {
   /** Seconds the form stays valid. Default 3600, at most 604800 (7 days). */
   expiresIn?: number
   /** Largest file accepted, in bytes. The bucket refuses anything bigger. */
@@ -219,13 +346,13 @@ export interface CompletedPart {
  */
 export interface Multipart {
   /** Start an upload; returns its `uploadId`. */
-  create(key: string, options?: { contentType?: string }): Promise<string>
+  create(key: string, options?: S3PutOptions): Promise<string>
   /** A signed URL to `PUT` part `partNumber` (1 to 10000) to. Every part but the last is at least 5 MiB. */
   partUrl(
     key: string,
     uploadId: string,
     partNumber: number,
-    options?: Omit<UploadUrlOptions, 'contentType'>,
+    options?: Pick<UploadUrlOptions, 'expiresIn' | 'size'>,
   ): Promise<string>
   /** The parts the bucket has so far, in order. */
   listParts(key: string, uploadId: string): Promise<UploadedPart[]>
@@ -237,6 +364,9 @@ export interface Multipart {
 
 /** {@link Storage} plus uploads that go from the browser straight to the bucket. */
 export interface S3Storage extends Storage {
+  put(key: string, body: Body, options?: S3PutOptions): Promise<void>
+  putIfAbsent(key: string, body: Body, options?: S3PutOptions): Promise<boolean>
+  stat(key: string): Promise<S3FileInfo | null>
   /** A signed URL the browser can `PUT` one file to, up to 5 GiB. */
   uploadUrl(key: string, options?: UploadUrlOptions): Promise<string>
   /**
@@ -252,15 +382,28 @@ export interface S3Storage extends Storage {
    * S3 needs every part but the last to be at least 5 MiB; sources under
    * that (other than the last) are streamed through instead.
    */
-  compose(key: string, sources: readonly string[], options?: PutOptions): Promise<void>
+  compose(key: string, sources: readonly string[], options?: S3PutOptions): Promise<void>
   /**
    * Create the bucket if it doesn't exist: `true` when this call created it.
    * For a fresh MinIO in development or tests; a production bucket is
    * provisioned with its policies, not at boot.
    */
   ensureBucket(): Promise<boolean>
+  /**
+   * Delete many files, up to 1000 per request (S3's DeleteObjects) instead of
+   * one request each. Keys that don't exist count as deleted, as with
+   * `delete()`. Throws listing the keys the bucket refused.
+   */
+  deleteMany(keys: readonly string[]): Promise<void>
   /** The bucket's address, e.g. `https://avatars.s3.eu-west-1.amazonaws.com`: equal for two storages on one bucket. */
   readonly location: string
+  /**
+   * The unsigned address of a public file (`acl: 'public-read'`, or a bucket
+   * policy that allows reading it): `publicUrl` if set, else the bucket's
+   * address, plus the encoded key. Nothing is checked: for a private file
+   * the address answers 403. Use `url()` for those.
+   */
+  publicUrl(key: string): string
 }
 
 // S3's minimum part size; `put()` streams in parts of this size.
@@ -270,7 +413,9 @@ const MAX_PARTS = 10_000
 const MAX_COPY = 5 * 1024 ** 3
 const BUCKET = Symbol('bucket')
 
-const xmlEscape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+// \t, \n and \r as references too: written raw, an XML parser turns `\r\n` into
+// `\n`, and the bucket would read another key than the one sent.
+const xmlEscape = (value: string) => value.replace(/[&<>"'\t\n\r]/g, (c) => `&#${c.charCodeAt(0)};`)
 const xmlUnescape = (value: string) =>
   value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(amp|lt|gt|quot|apos));/gi, (_, dec, hex, name) =>
     dec
@@ -279,12 +424,18 @@ const xmlUnescape = (value: string) =>
         ? String.fromCodePoint(parseInt(hex, 16))
         : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[name.toLowerCase() as 'amp']!,
   )
-/** The text of each `<name>` element; S3's responses are flat enough for this. */
+/**
+ * The raw inner XML of each `<name>` element, not decoded: a container
+ * (`<Part>`, `<Error>`) whose leaves {@link tag} then decodes, once.
+ * S3's responses are flat enough for this.
+ */
 const tags = (xml: string, name: string) =>
-  [...xml.matchAll(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'g'))].map((m) =>
-    xmlUnescape(m[1]),
-  )
-const tag = (xml: string, name: string) => tags(xml, name)[0]
+  [...xml.matchAll(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'g'))].map((m) => m[1]!)
+/** The decoded text of the first `<name>` element; `undefined` (typed as a string, as before) when there's none. */
+const tag = (xml: string, name: string): string => {
+  const raw = tags(xml, name)[0]
+  return (raw === undefined ? undefined : xmlUnescape(raw)) as string
+}
 
 function checkExpires(expiresIn = 3600) {
   if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > MAX_EXPIRES) {
@@ -316,6 +467,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
   }
   const { timeoutMs } = options
+  const maxAttempts = options.maxAttempts ?? 3
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+    throw new Error('s3Storage: maxAttempts must be a whole number, at least 1')
+  }
   if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs < 1)) {
     throw new Error('s3Storage: timeoutMs must be a whole number of milliseconds, at least 1')
   }
@@ -327,8 +482,46 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       ? `${origin}/${encodeSegment(options.bucket)}`
       : origin.replace('://', `://${options.bucket}.`)
   const fetchFn = options.fetch ?? globalThis.fetch
+  if (options.publicUrl !== undefined && !URL.canParse(options.publicUrl)) {
+    throw new Error(`s3Storage: publicUrl must be a URL, not '${options.publicUrl}'`)
+  }
+  const publicBase = new URL(options.publicUrl ?? base)
+  /** `publicBase` with the encoded key appended to its path, its query and fragment kept. */
+  const publicUrlOf = (key: string) => {
+    const url = new URL(publicBase)
+    url.pathname = `${url.pathname.replace(/\/+$/, '')}/${encodeKey(key)}`
+    return url.href
+  }
+  objectHeaders({ storageClass: options.storageClass }) // checked once, up front
   const partSize = options.partSize ?? PART_SIZE
+  if (options.acl !== undefined && !isS3Acl(options.acl)) {
+    throw new Error(
+      `s3Storage: acl must be one of ${ACLS.join(', ')}, not '${String(options.acl)}'`,
+    )
+  }
+  const acl = options.acl
   const sse = encryptionHeaders(options.serverSideEncryption)
+  /** The ACL a write gets: its own, else the storage's. */
+  const aclFor = (own: S3Acl | undefined): S3Acl | undefined => {
+    if (own !== undefined && !isS3Acl(own)) {
+      throw new Error(`s3Storage: acl must be one of ${ACLS.join(', ')}, not '${String(own)}'`)
+    }
+    return own ?? acl
+  }
+  /** A write's options, with the storage's defaults where it has none. */
+  const withDefaults = (own: S3ObjectOptions): S3ObjectOptions => ({
+    ...own,
+    storageClass: own.storageClass ?? options.storageClass,
+  })
+  /** Sent, signed, on every request that creates an object: encryption, then the file's own. */
+  const writeHeaders = (own: S3ObjectOptions = {}): Record<string, string> => {
+    const chosen = aclFor(own.acl)
+    return {
+      ...sse,
+      ...(chosen ? { 'x-amz-acl': chosen } : {}),
+      ...objectHeaders(withDefaults(own)),
+    }
+  }
   const partConcurrency = options.partConcurrency ?? 4
   if (!Number.isInteger(partSize) || partSize < PART_SIZE) {
     throw new Error(`s3Storage: partSize must be a whole number of bytes, at least ${PART_SIZE}`)
@@ -337,6 +530,12 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     throw new Error('s3Storage: partConcurrency must be a whole number, at least 1')
   }
   /** The keys to sign with now, the region and the time. */
+  /**
+   * The bucket's clock minus ours, learned from a clock-skew error and added
+   * to every signature's time after it, signed URLs included — as the AWS SDK
+   * does — so a host whose clock drifted past S3's 15 minutes keeps working.
+   */
+  let clockOffset = 0
   const signing = async () => {
     const keys = options.credentials
       ? await options.credentials()
@@ -345,7 +544,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
           secretAccessKey: options.secretAccessKey!,
           sessionToken: options.sessionToken,
         }
-    return { ...keys, region, date: new Date() }
+    return { ...keys, region, date: new Date(Date.now() + clockOffset) }
   }
   // The bucket itself (for listing) is BUCKET, never a key: every key goes
   // through encodeKey's check, so `''` can't address the bucket.
@@ -357,15 +556,107 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
 
   interface Request {
     query?: Record<string, string>
-    /** `x-amz-*` headers to send, signed. */
+    /** Headers to send, signed. */
     amz?: Record<string, string>
     /** Sent unsigned, besides the signed ones. */
     headers?: Record<string, string>
     body?: Uint8Array
     contentType?: string
+    /**
+     * CopyObject, UploadPartCopy, CompleteMultipartUpload: S3 can answer 200
+     * and put the failure in the body, or send no body when it aborted.
+     */
+    errorIn200?: boolean
   }
 
+  /** {@link sendOnce}, again on a failure worth retrying — see `maxAttempts`. */
   async function send(method: string, key: string | typeof BUCKET, request: Request = {}) {
+    const createOnly = request.headers?.['if-none-match'] !== undefined
+    for (let attempt = 1; ; attempt++) {
+      const last = attempt >= maxAttempts
+      let classified: { res: Response; retry: boolean }
+      try {
+        classified = await classify(
+          method,
+          await sendOnce(method, key, request),
+          request,
+          createOnly,
+        )
+      } catch (err) {
+        // No answer at all: a create-only write may have landed anyway.
+        if (last || createOnly) throw err
+        await backoff(attempt)
+        continue
+      }
+      if (last || !classified.retry) return classified.res
+      await classified.res.body?.cancel()
+      await backoff(attempt)
+    }
+  }
+
+  /**
+   * Whether `res` is worth sending again, as the AWS SDK decides: 5xx but 501,
+   * 429, S3's 400 `RequestTimeout`, a clock-skew error (after learning the
+   * offset), and a 200 that carries a failure (see `errorIn200`), taken as a
+   * 503. A create-only write is sent again only when S3 refused it before
+   * writing: 503, 429, `RequestTimeout`, clock skew. A body read here is put
+   * back into the response returned.
+   */
+  async function classify(
+    method: string,
+    res: Response,
+    request: Request,
+    createOnly: boolean,
+  ): Promise<{ res: Response; retry: boolean }> {
+    const again = (text: string, status: number) =>
+      new Response(status === 204 || method === 'HEAD' ? null : text, {
+        status,
+        statusText: res.statusText,
+        headers: res.headers,
+      })
+    if (res.ok && request.errorIn200) {
+      const text = await res.text()
+      const failed =
+        text.trim() === '' ||
+        (/<\/Error>\s*$/.test(text) && tag(text, 'Code') !== 'PreconditionFailed')
+      // A failure either way; create-only isn't sent again, since the write
+      // may have happened before S3 failed, and a retry would find it taken.
+      return failed
+        ? { res: again(text, 503), retry: !createOnly }
+        : { res: again(text, res.status), retry: false }
+    }
+    if (res.status === 503 || res.status === 429) return { res, retry: true }
+    if (res.status >= 500 && res.status <= 504 && res.status !== 501) {
+      return { res, retry: !createOnly }
+    }
+    if (res.status === 403 && method === 'HEAD') {
+      // No body to name the error: a 403 whose Date is more than S3's 15
+      // minutes from our signing time is taken as clock skew, as the SDK
+      // does for an error it can only suspect.
+      const serverTime = Date.parse(res.headers.get('date') ?? '')
+      if (
+        !Number.isNaN(serverTime) &&
+        Math.abs(serverTime - (Date.now() + clockOffset)) > SKEW_LIMIT
+      ) {
+        clockOffset = serverTime - Date.now()
+        return { res, retry: true }
+      }
+      return { res, retry: false }
+    }
+    if (res.status === 400 || res.status === 403) {
+      const text = await res.text()
+      const code = tag(text, 'Code')
+      const serverTime = Date.parse(res.headers.get('date') ?? '')
+      if (CLOCK_SKEW.has(code) && !Number.isNaN(serverTime)) {
+        clockOffset = serverTime - Date.now()
+        return { res: again(text, res.status), retry: true }
+      }
+      return { res: again(text, res.status), retry: code === 'RequestTimeout' }
+    }
+    return { res, retry: false }
+  }
+
+  async function sendOnce(method: string, key: string | typeof BUCKET, request: Request) {
     const url = urlOf(key, request.query)
     const payloadHash = request.body ? await sha256(request.body) : EMPTY_HASH
     const now = await signing()
@@ -465,6 +756,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       query: { uploadId },
       body: toBytes(body),
       ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
+      errorIn200: true,
     })
     if (createOnly && (res.status === 412 || res.status === 409)) {
       await res.body?.cancel()
@@ -483,11 +775,16 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   }
 
   /** One PUT; with `createOnly`, `false` when the key exists (412) or is being created (409). */
-  async function putOnce(key: string, bytes: Uint8Array, contentType?: string, createOnly = false) {
+  async function putOnce(
+    key: string,
+    bytes: Uint8Array,
+    putOptions: S3PutOptions,
+    createOnly = false,
+  ) {
     const res = await send('PUT', key, {
       body: bytes,
-      amz: sse,
-      contentType,
+      amz: writeHeaders(putOptions),
+      contentType: putOptions.contentType,
       ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
     })
     if (createOnly && (res.status === 412 || res.status === 409)) {
@@ -503,7 +800,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     async create(key, createOptions = {}) {
       const res = await call('POST', key, {
         query: { uploads: '' },
-        amz: sse,
+        amz: writeHeaders(createOptions),
         contentType: createOptions.contentType,
       })
       const uploadId = tag(await res.text(), 'UploadId')
@@ -551,7 +848,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   async function putStream(
     key: string,
     body: AsyncIterable<Uint8Array>,
-    contentType?: string,
+    putOptions: S3PutOptions,
     createOnly = false,
   ): Promise<boolean> {
     let buffered: Uint8Array[] = []
@@ -566,7 +863,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       const partNumber = checkPartNumber(nextPart++)
       buffered = []
       size = 0
-      uploadId ??= multipart.create(key, { contentType })
+      uploadId ??= multipart.create(key, putOptions)
       const upload = uploadId.then(async (id) => {
         const query = { partNumber: String(partNumber), uploadId: id }
         const res = await call('PUT', key, { query, body: bytes })
@@ -595,7 +892,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         }
         if (failed) throw failed.error
       }
-      if (!uploadId) return await putOnce(key, concatBytes(buffered), contentType, createOnly)
+      if (!uploadId) return await putOnce(key, concatBytes(buffered), putOptions, createOnly)
       if (size > 0) sendPart()
       await Promise.all(inFlight)
       if (failed) throw failed.error
@@ -613,7 +910,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   /** `x-amz-copy-source` for an object in this bucket. */
   const copySource = (source: string) => `/${encodeSegment(options.bucket)}/${encodeKey(source)}`
 
-  async function compose(key: string, sources: readonly string[], putOptions: PutOptions = {}) {
+  async function compose(key: string, sources: readonly string[], putOptions: S3PutOptions = {}) {
     if (sources.length === 0) throw new Error('s3Storage: compose() needs at least one source')
     const sizes = await Promise.all(
       sources.map(async (source) => {
@@ -640,9 +937,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         amz: {
           'x-amz-copy-source': copySource(sources[0]),
           'x-amz-metadata-directive': 'REPLACE',
-          ...sse,
+          ...writeHeaders(putOptions),
         },
         contentType: putOptions.contentType ?? 'application/octet-stream',
+        errorIn200: true,
       })
       const xml = await res.text()
       if (xml.includes('<Error>'))
@@ -661,7 +959,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       })).filter((range) => range.to >= range.from)
     })
     if (ranges.length > MAX_PARTS) return streamed()
-    const uploadId = await multipart.create(key, { contentType: putOptions.contentType })
+    const uploadId = await multipart.create(key, putOptions)
     try {
       const parts: CompletedPart[] = []
       // ponytail: partConcurrency copies at a time, like put()'s parts.
@@ -676,6 +974,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
                 'x-amz-copy-source': copySource(source),
                 'x-amz-copy-source-range': `bytes=${from}-${to}`,
               },
+              errorIn200: true,
             })
             const xml = await res.text()
             const etag = tag(xml, 'ETag')
@@ -716,7 +1015,13 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       'x-amz-credential': credential,
       'x-amz-date': stamp,
       ...(keys.sessionToken ? { 'x-amz-security-token': keys.sessionToken } : {}),
-      ...sse,
+      // A POST form names some fields differently from the headers.
+      ...Object.fromEntries(
+        Object.entries(writeHeaders(formOptions)).map(([name, value]) => [
+          FORM_FIELDS[name] ?? name,
+          value,
+        ]),
+      ),
     }
     if (contentType !== undefined) {
       if (!/^[\w.+-]+\/[\w.+-]+$/.test(contentType)) {
@@ -747,46 +1052,65 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
   }
 
-  const statOf = async (key: string): Promise<FileInfo | null> => {
+  const statOf = async (key: string): Promise<S3FileInfo | null> => {
     const res = await call('HEAD', key, {}, true)
     if (res.status === 404) return null
+    // fromEntries defines own properties: a name like `__proto__` stays a name.
+    const metadata: Record<string, string> = Object.fromEntries(
+      [...res.headers]
+        .filter(([name]) => name.startsWith('x-amz-meta-'))
+        .map(([name, value]) => [name.slice('x-amz-meta-'.length), value]),
+    )
+    const header = (name: string) => res.headers.get(name) ?? undefined
     return {
       key,
       size: Number(res.headers.get('content-length') ?? 0),
       lastModified: new Date(res.headers.get('last-modified') ?? 0),
-      contentType: res.headers.get('content-type') ?? undefined,
+      contentType: header('content-type'),
+      metadata,
+      ...(header('cache-control') ? { cacheControl: header('cache-control') } : {}),
+      ...(header('content-disposition')
+        ? { contentDisposition: header('content-disposition') }
+        : {}),
+      ...(header('content-encoding') ? { contentEncoding: header('content-encoding') } : {}),
+      ...(header('content-language') ? { contentLanguage: header('content-language') } : {}),
+      ...(header('x-amz-storage-class') ? { storageClass: header('x-amz-storage-class') } : {}),
     }
   }
 
   const storage: S3Storage = {
     location: base,
+    publicUrl: publicUrlOf,
     compose,
     uploadForm,
     async put(key, body, putOptions = {}) {
       if (isStream(body)) {
-        await putStream(key, body, putOptions.contentType)
+        await putStream(key, body, putOptions)
         return
       }
-      await call('PUT', key, { body: toBytes(body), amz: sse, contentType: putOptions.contentType })
+      await call('PUT', key, {
+        body: toBytes(body),
+        amz: writeHeaders(putOptions),
+        contentType: putOptions.contentType,
+      })
     },
     async putIfAbsent(key, body, putOptions = {}) {
       // S3 conditional writes: 412 when the key exists, 409 when another
       // conditional write to it is in progress — both mean someone else has it.
       // A stream larger than a part goes up in parts, conditional on completing.
-      if (isStream(body)) return putStream(key, body, putOptions.contentType, true)
-      return putOnce(key, toBytes(body), putOptions.contentType, true)
+      if (isStream(body)) return putStream(key, body, putOptions, true)
+      return putOnce(key, toBytes(body), putOptions, true)
     },
     async get(key) {
-      const res = await call('GET', key, {}, true)
+      const res = await call('GET', key, { query: STORED_BYTES }, true)
       return res.status === 404 ? null : new Uint8Array(await res.arrayBuffer())
     },
     async getStream(key, range) {
       const r = checkRange(range)
-      const res = await send(
-        'GET',
-        key,
-        r ? { headers: { range: `bytes=${r.start}-${r.end ?? ''}` } } : {},
-      )
+      const res = await send('GET', key, {
+        query: STORED_BYTES,
+        ...(r ? { headers: { range: `bytes=${r.start}-${r.end ?? ''}` } } : {}),
+      })
       // 416: the range starts past the end — nothing to read, as on disk.
       if (res.status === 404 || res.status === 416) {
         await res.body?.cancel()
@@ -806,6 +1130,57 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
     async delete(key) {
       await call('DELETE', key, {}, true)
+    },
+    async deleteMany(keys) {
+      for (const key of keys) {
+        checkKey(key)
+        // XML 1.0 can't carry these at all, not even as references.
+        const unsendable = [...key].some(
+          (c) =>
+            (c < ' ' && c !== '\t' && c !== '\n' && c !== '\r') || c === '\uFFFE' || c === '\uFFFF',
+        )
+        if (unsendable) {
+          throw new Error(
+            `s3Storage: deleteMany can't send key '${key}': it has a control character`,
+          )
+        }
+      }
+      const unique = [...new Set(keys)]
+      const refused: string[] = []
+      for (let i = 0; i < unique.length; i += 1000) {
+        const body = toBytes(
+          '<Delete><Quiet>true</Quiet>' +
+            unique
+              .slice(i, i + 1000)
+              .map((key) => `<Object><Key>${xmlEscape(key)}</Key></Object>`)
+              .join('') +
+            '</Delete>',
+        )
+        // S3 requires Content-MD5 (or a flexible checksum) here; every S3 API takes MD5.
+        let res: Response
+        try {
+          res = await call('POST', BUCKET, {
+            query: { delete: '' },
+            body,
+            amz: { 'content-md5': btoa(String.fromCharCode(...md5(body))) },
+            contentType: 'application/xml',
+          })
+        } catch (err) {
+          // Keys an earlier batch refused would otherwise go unreported.
+          if (refused.length === 0) throw err
+          throw new Error(
+            `s3Storage: deleteMany could not delete ${refused.join(', ')}, then: ${(err as Error).message}`,
+            { cause: err },
+          )
+        }
+        // Quiet mode lists only failures, as <Error> entries.
+        for (const error of tags(await res.text(), 'Error')) {
+          refused.push(`${tag(error, 'Key')} (${tag(error, 'Code')})`)
+        }
+      }
+      if (refused.length > 0) {
+        throw new Error(`s3Storage: deleteMany could not delete ${refused.join(', ')}`)
+      }
     },
     async list(listOptions = {}) {
       const delimiter = checkDelimiter(listOptions.delimiter)
@@ -842,9 +1217,19 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       return presignFor('GET', urlOf(key, query), urlOptions.expiresIn ?? 3600)
     },
     async uploadUrl(key, uploadOptions = {}) {
-      return presignFor('PUT', urlOf(key), uploadOptions.expiresIn ?? 3600, {
+      // `x-amz-*` go in the query, signed without the browser having to send
+      // them; other headers can't, so the browser sends those as signed.
+      const chosen = aclFor(uploadOptions.acl)
+      const query: Record<string, string> = chosen ? { 'x-amz-acl': chosen } : {}
+      const headers: Record<string, string> = {}
+      for (const [name, value] of Object.entries(objectHeaders(withDefaults(uploadOptions)))) {
+        if (name.startsWith('x-amz-')) query[name] = value
+        else headers[name] = value
+      }
+      return presignFor('PUT', urlOf(key, query), uploadOptions.expiresIn ?? 3600, {
         ...sizeHeader(uploadOptions.size),
         ...(uploadOptions.contentType ? { 'content-type': uploadOptions.contentType } : {}),
+        ...headers,
       })
     },
     multipart,
@@ -868,6 +1253,74 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
   }
   return storage
+}
+
+/** Full jitter: a random wait up to 100 ms × 2^(attempt − 1), at most 20 s. */
+const backoff = (attempt: number) =>
+  new Promise((done) =>
+    setTimeout(done, Math.random() * Math.min(20_000, 100 * 2 ** (attempt - 1))),
+  )
+
+/**
+ * For our own reads: S3 answers with `Content-Encoding: identity` instead of
+ * the file's (`gzip`, …), so `fetch` doesn't decompress and `get` returns the
+ * bytes stored, as written.
+ */
+const STORED_BYTES = { 'response-content-encoding': 'identity' }
+
+/** How far S3 lets a signature's time be from its own: 15 minutes. */
+const SKEW_LIMIT = 15 * 60 * 1000
+
+/** S3's answers to a request signed too far from its own time. */
+const CLOCK_SKEW = new Set(['RequestTimeTooSkewed', 'RequestExpired', 'RequestInTheFuture'])
+
+/** A POST form's field for a header, where the two differ. */
+const FORM_FIELDS: Record<string, string> = {
+  'x-amz-acl': 'acl',
+  'cache-control': 'Cache-Control',
+  'content-disposition': 'Content-Disposition',
+  'content-encoding': 'Content-Encoding',
+  'content-language': 'Content-Language',
+}
+
+/** The headers a file's {@link S3ObjectOptions} (but `acl`) are sent as, checked. */
+function objectHeaders(own: S3ObjectOptions): Record<string, string> {
+  const out: Record<string, string> = {}
+  const plain: Array<[keyof S3ObjectOptions, string]> = [
+    ['cacheControl', 'cache-control'],
+    ['contentDisposition', 'content-disposition'],
+    ['contentEncoding', 'content-encoding'],
+    ['contentLanguage', 'content-language'],
+  ]
+  for (const [option, header] of plain) {
+    const value = own[option]
+    if (value === undefined) continue
+    if (typeof value !== 'string' || !/^[\x20-\x7e]*$/.test(value)) {
+      throw new Error(`s3Storage: ${option} must be printable ASCII`)
+    }
+    out[header] = value
+  }
+  if (own.storageClass !== undefined) {
+    if (typeof own.storageClass !== 'string' || !/^[A-Z][A-Z0-9_]*$/.test(own.storageClass)) {
+      throw new Error(
+        `s3Storage: storageClass must be an S3 storage class like 'STANDARD_IA', not '${String(own.storageClass)}'`,
+      )
+    }
+    out['x-amz-storage-class'] = own.storageClass
+  }
+  let bytes = 0
+  for (const [name, value] of Object.entries(own.metadata ?? {})) {
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
+      throw new Error(`s3Storage: metadata name '${name}' must be letters, digits, '-', '_' or '.'`)
+    }
+    if (typeof value !== 'string' || !/^[\x20-\x7e]*$/.test(value)) {
+      throw new Error(`s3Storage: metadata '${name}' must be printable ASCII`)
+    }
+    bytes += name.length + value.length
+    out[`x-amz-meta-${name.toLowerCase()}`] = value
+  }
+  if (bytes > 2048) throw new Error("s3Storage: metadata is over S3's 2 KB limit")
+  return out
 }
 
 /** The headers S3 reads `serverSideEncryption` from, checked once up front. */
