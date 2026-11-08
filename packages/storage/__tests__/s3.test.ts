@@ -1008,3 +1008,50 @@ describe('s3Storage storageClass and publicUrl', () => {
     expect(() => server({ publicUrl: 'cdn' })).toThrow('publicUrl must be a URL')
   })
 })
+
+describe('s3Storage deleteMany', () => {
+  function server(...replies: string[]) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response(replies.shift() ?? '<DeleteResult/>')
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+
+  it('sends one checksummed DeleteObjects per 1000 keys, each key once', async () => {
+    const { files, calls } = server()
+    const keys = Array.from({ length: 1500 }, (_, i) => `k/${i}&`)
+    await files.deleteMany([...keys, 'k/0&'])
+    expect(calls).toHaveLength(2)
+    expect(calls[0]!.method).toBe('POST')
+    expect(new URL(calls[0]!.url).search).toBe('?delete=')
+    const body = await calls[0]!.text()
+    expect(body.match(/<Object>/g)).toHaveLength(1000)
+    expect(body).toContain('<Quiet>true</Quiet><Object><Key>k/0&#38;</Key></Object>')
+    expect((await calls[1]!.text()).match(/<Object>/g)).toHaveLength(500)
+    const digest = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)),
+    )
+    expect(calls[0]!.headers.get('x-amz-checksum-sha256')).toBe(
+      btoa(String.fromCharCode(...digest)),
+    )
+    await files.deleteMany([])
+    expect(calls).toHaveLength(2)
+  })
+
+  it('throws naming the keys the bucket refused', async () => {
+    const { files } = server(
+      '<DeleteResult><Error><Key>a</Key><Code>AccessDenied</Code><Message>no</Message></Error></DeleteResult>',
+    )
+    await expect(files.deleteMany(['a', 'b'])).rejects.toThrow(
+      'deleteMany could not delete a (AccessDenied)',
+    )
+  })
+})

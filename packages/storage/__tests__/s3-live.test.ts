@@ -410,6 +410,13 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     expect(await files.exists(`${run}h/public.txt`)).toBe(true)
   })
 
+  it('deleteMany removes many files in one request, missing ones included', async () => {
+    const keys = Array.from({ length: 5 }, (_, i) => `${run}many/${i} &.txt`)
+    for (const key of keys) await files.put(key, 'x')
+    await files.deleteMany([...keys, `${run}many/never`])
+    expect((await files.list({ prefix: `${run}many/` })).files).toEqual([])
+  })
+
   it('cleans up', async () => {
     for (let page = await files.list({ prefix: run }); ;) {
       for (const file of page.files) await files.delete(file.key)

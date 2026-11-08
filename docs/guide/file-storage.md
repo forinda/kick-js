@@ -597,6 +597,21 @@ info?.cacheControl
 
 Through `uploadUrl`, `metadata` and `acl` are signed into the URL. The four headers are signed as headers, so the browser's `PUT` must send them as given, like `contentType`. Through `uploadForm` they're form fields, and part of the policy.
 
+### Deleting many files: `deleteMany`
+
+`deleteMany(keys)` deletes up to 1000 files per request (S3's DeleteObjects) instead of one request each, for clearing a user's uploads or a prefix you listed:
+
+```ts
+let cursor: string | undefined
+do {
+  const page = await files.list({ prefix: `users/${id}/`, cursor })
+  await files.deleteMany(page.files.map((f) => f.key))
+  cursor = page.cursor
+} while (cursor)
+```
+
+Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries an `x-amz-checksum-sha256` of its body, which S3 requires here; AWS S3, R2 and MinIO accept it.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:

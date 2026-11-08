@@ -382,6 +382,12 @@ export interface S3Storage extends Storage {
    * provisioned with its policies, not at boot.
    */
   ensureBucket(): Promise<boolean>
+  /**
+   * Delete many files, up to 1000 per request (S3's DeleteObjects) instead of
+   * one request each. Keys that don't exist count as deleted, as with
+   * `delete()`. Throws listing the keys the bucket refused.
+   */
+  deleteMany(keys: readonly string[]): Promise<void>
   /** The bucket's address, e.g. `https://avatars.s3.eu-west-1.amazonaws.com`: equal for two storages on one bucket. */
   readonly location: string
   /**
@@ -1023,6 +1029,39 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     },
     async delete(key) {
       await call('DELETE', key, {}, true)
+    },
+    async deleteMany(keys) {
+      for (const key of keys) checkKey(key)
+      const unique = [...new Set(keys)]
+      const refused: string[] = []
+      for (let i = 0; i < unique.length; i += 1000) {
+        const body = toBytes(
+          '<Delete><Quiet>true</Quiet>' +
+            unique
+              .slice(i, i + 1000)
+              .map((key) => `<Object><Key>${xmlEscape(key)}</Key></Object>`)
+              .join('') +
+            '</Delete>',
+        )
+        // S3 needs a checksum of the body here; WebCrypto has SHA-256, not MD5.
+        const digest = await sha256(body)
+        const checksum = btoa(
+          String.fromCharCode(...(digest.match(/../g) ?? []).map((h) => parseInt(h, 16))),
+        )
+        const res = await call('POST', BUCKET, {
+          query: { delete: '' },
+          body,
+          amz: { 'x-amz-checksum-sha256': checksum },
+          contentType: 'application/xml',
+        })
+        // Quiet mode lists only failures, as <Error> entries.
+        for (const error of tags(await res.text(), 'Error')) {
+          refused.push(`${tag(error, 'Key')} (${tag(error, 'Code')})`)
+        }
+      }
+      if (refused.length > 0) {
+        throw new Error(`s3Storage: deleteMany could not delete ${refused.join(', ')}`)
+      }
     },
     async list(listOptions = {}) {
       const delimiter = checkDelimiter(listOptions.delimiter)
