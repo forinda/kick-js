@@ -51,7 +51,7 @@ const DESCRIPTIONS: Record<string, string> = {
   sessionToken: 'Session token for temporary credentials',
   forcePathStyle:
     '<endpoint>/<bucket>/<key> addressing; default true with S3_ENDPOINT, false for AWS',
-  acl: 'Canned ACL for every file written, e.g. public-read; unset uses the bucket default (private)',
+  acl: "Canned ACL for every file written, e.g. public-read; unset uses the bucket's default ACL (private, though a bucket policy can still allow reads)",
 }
 
 /** String fields, written out so the app can use any schema library or none. Empty is unset. */
@@ -180,8 +180,10 @@ export function s3FromSettings(
  * })
  * ```
  *
- * Only the bucket is checked: with it set, a missing or invalid variable
- * still stops startup rather than quietly falling back to another driver.
+ * Only the bucket is checked: with it set, an invalid variable (one key
+ * without the other, an endpoint that isn't a URL) still stops startup rather
+ * than quietly falling back to another driver. With neither key set (an IAM
+ * role), startup passes and the first call needs `credentials`.
  */
 export function s3Configured(
   section: Settings<SettingsOf<typeof S3Settings>> = S3Settings,

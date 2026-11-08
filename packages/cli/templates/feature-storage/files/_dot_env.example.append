@@ -13,5 +13,5 @@
 # S3_SESSION_TOKEN=
 # <endpoint>/<bucket>/<key> addressing; default true with S3_ENDPOINT, false for AWS
 # S3_FORCE_PATH_STYLE=
-# Canned ACL for every file written, e.g. public-read; unset uses the bucket default (private)
+# Canned ACL for every file written, e.g. public-read; unset uses the bucket's default ACL (private, though a bucket policy can still allow reads)
 # S3_ACL=

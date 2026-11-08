@@ -66,11 +66,14 @@ export interface S3StorageOptions {
   /**
    * The canned ACL every file this storage writes gets, e.g. `'public-read'`
    * for files served straight from the bucket or its CDN. Without it the
-   * bucket's default applies, which is private on AWS, DigitalOcean Spaces and
-   * MinIO. Applies to `put`, `putIfAbsent`, `compose`, `multipart.create`,
-   * `uploadForm` and `uploadUrl` (signed into the URL, so the browser sends
-   * nothing extra). AWS buckets with Object Ownership set to "bucket owner
-   * enforced" (the default for new buckets) refuse ACLs: use a bucket policy there.
+   * bucket's default ACL applies, which is private on AWS, DigitalOcean Spaces
+   * and MinIO (a bucket policy can still make files readable). Applies to
+   * `put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadForm` and
+   * `uploadUrl` (signed into the URL's query, as the AWS SDK's presigner does).
+   * AWS buckets with Object Ownership set to "bucket owner enforced" (the
+   * default for new buckets) refuse every ACL but `bucket-owner-full-control`,
+   * and Block Public Access (also on by default) refuses public ones: see the
+   * guide's "Public files".
    */
   acl?: S3Acl
   /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */

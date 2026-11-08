@@ -545,7 +545,9 @@ const url = await files.uploadUrl(`avatars/${id}.png`, {
 
 The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws. A public file's address is `${files.location}/${key}` (encode each segment of the key), with no signature.
 
-New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control`. There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
+New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control` (which those buckets accept). There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
+
+New AWS buckets also have Block Public Access on, at the bucket and usually the account level (and an AWS Organization can enforce it). `BlockPublicAcls` refuses a write with a public ACL such as `public-read`, even after Object Ownership allows ACLs; `BlockPublicPolicy` refuses a bucket policy that grants public reads. To serve files publicly, turn off the setting your approach needs (`BlockPublicAcls` and `IgnorePublicAcls` for ACLs, `BlockPublicPolicy` and `RestrictPublicBuckets` for a policy) on the bucket, and on the account if it's set there. Many setups keep the bucket private and serve through CloudFront with origin access control instead.
 
 ### IAM roles instead of keys
 
@@ -592,7 +594,7 @@ bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] }
 
 When the app only uses the bucket sometimes — `s3Configured() ? s3FromSettings() : diskStorage(…)` — declare it `S3Settings.optional()` — `StorageAdapter({ storage, settings: [S3Settings.optional()] })`, as the generated file does — so `kick env example` still lists the variables ([optional sections](./configuration.md#read-only-on-some-paths-optional)). An optional section doesn't stop startup: the same problems are reported when the bucket is first used.
 
-`s3Configured(section?)` is true when the section's bucket is set, as `S3_BUCKET` or the secret file `S3_BUCKET_FILE`, so the choice doesn't read `process.env` by hand or miss a bucket kept in a secret. Only the bucket is checked: with it set, a missing key still stops startup instead of falling back to disk.
+`s3Configured(section?)` is true when the section's bucket is set, as `S3_BUCKET` or the secret file `S3_BUCKET_FILE`, so the choice doesn't read `process.env` by hand or miss a bucket kept in a secret. Only the bucket is checked: with it set, an invalid variable (one key without the other, an endpoint that isn't a URL) still stops startup instead of falling back to disk. With neither key set, startup passes, since that's how a host with an IAM role runs, and the first call fails unless `credentials` is passed (below).
 
 The values are read from the environment when the app starts, and again on every `kick dev` rebuild: after a `.env` edit, `s3FromSettings()` sends the next request with the new values.
 
