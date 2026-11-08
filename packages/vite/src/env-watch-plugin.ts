@@ -1,4 +1,3 @@
-import fs from 'node:fs'
 import path from 'node:path'
 import { reloadEnv } from '@forinda/kickjs'
 import type { Plugin } from 'vite'
@@ -30,17 +29,14 @@ export function envWatchPlugin(): Plugin {
     configureServer(server) {
       const root = server.config.root
 
-      for (const file of envFiles) {
-        const filePath = path.resolve(root, file)
-        if (fs.existsSync(filePath)) {
-          server.watcher.add(filePath)
-        }
-      }
+      // Watched whether or not they exist yet: creating the first `.env`
+      // (or deleting `.env.local`) reloads too, not only editing one.
+      for (const file of envFiles) server.watcher.add(path.resolve(root, file))
 
-      server.watcher.on('change', (changedPath) => {
+      const onEnvFile = (event: string) => (changedPath: string) => {
         const basename = path.basename(changedPath)
         if (envFiles.includes(basename)) {
-          server.config.logger.info(`  .env changed (${basename}), triggering reload...`, {
+          server.config.logger.info(`  .env ${event} (${basename}), triggering reload...`, {
             timestamp: true,
           })
 
@@ -67,7 +63,10 @@ export function envWatchPlugin(): Plugin {
 
           server.ws.send({ type: 'full-reload' })
         }
-      })
+      }
+      server.watcher.on('change', onEnvFile('changed'))
+      server.watcher.on('add', onEnvFile('created'))
+      server.watcher.on('unlink', onEnvFile('deleted'))
     },
   }
 }
