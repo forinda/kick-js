@@ -54,14 +54,14 @@ Three drivers implement it:
 // src/adapters/storage.ts
 import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
 import { diskStorage } from '@forinda/kickjs-storage/disk'
-import { S3Settings, s3FromSettings } from '@forinda/kickjs-storage/settings'
+import { S3Settings, s3Configured, s3FromSettings } from '@forinda/kickjs-storage/settings'
 
 export { STORAGE } from '@forinda/kickjs-storage/adapter'
 export type { Storage } from '@forinda/kickjs-storage'
 
 export const storageAdapter = () =>
   StorageAdapter({
-    storage: process.env.S3_BUCKET ? s3FromSettings() : diskStorage({ root: 'uploads' }),
+    storage: s3Configured() ? s3FromSettings() : diskStorage({ root: 'uploads' }),
     settings: [S3Settings.optional()],
   })
 ```
@@ -524,6 +524,29 @@ Without `keyId`, `aws:kms` uses the account's default S3 key. The headers go, si
 
 AWS S3 supports both types. MinIO supports them only with a KMS configured. Some S3-compatible services support neither and reject the write, so check the provider before turning this on.
 
+### Public files: `acl`
+
+A bucket keeps new files private unless told otherwise, on AWS, DigitalOcean Spaces and MinIO. For files served straight from the bucket or its CDN (avatars, public images), set a canned ACL on the storage:
+
+```ts
+const files = s3Storage({ bucket: 'avatars', region, acl: 'public-read' })
+```
+
+Every write then carries a signed `x-amz-acl`: `put`, `putIfAbsent`, `compose`, `multipart.create`, the `acl` field of `uploadForm`, and `uploadUrl`, where it's signed into the URL so the browser sends nothing extra. One write can pick its own, over the storage's or without one set:
+
+```ts
+await files.put(`avatars/${id}.png`, bytes, { contentType: 'image/png', acl: 'public-read' })
+await files.put(`invoices/${id}.pdf`, pdf, { acl: 'private' })
+const url = await files.uploadUrl(`avatars/${id}.png`, {
+  contentType: 'image/png',
+  acl: 'public-read',
+})
+```
+
+The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws. A public file's address is `${files.location}/${key}` (encode each segment of the key), with no signature.
+
+New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control`. There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
@@ -555,6 +578,7 @@ S3_SECRET_ACCESS_KEY=...
 # S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
 # S3_SESSION_TOKEN=...
 # S3_FORCE_PATH_STYLE=true
+# S3_ACL=public-read
 ```
 
 ```ts
@@ -564,9 +588,13 @@ import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
 ```
 
-`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. Declared either way, a missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. Declared either way, a missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, an `S3_FORCE_PATH_STYLE` other than `true` / `false`, or an `S3_ACL` that isn't a canned ACL, stops startup with every problem listed.
 
-When the app only uses the bucket sometimes — `S3_BUCKET ? s3FromSettings() : diskStorage(…)` — declare it `S3Settings.optional()` — `StorageAdapter({ storage, settings: [S3Settings.optional()] })`, as the generated file does — so `kick env example` still lists the variables ([optional sections](./configuration.md#read-only-on-some-paths-optional)). An optional section doesn't stop startup: the same problems are reported when the bucket is first used.
+When the app only uses the bucket sometimes — `s3Configured() ? s3FromSettings() : diskStorage(…)` — declare it `S3Settings.optional()` — `StorageAdapter({ storage, settings: [S3Settings.optional()] })`, as the generated file does — so `kick env example` still lists the variables ([optional sections](./configuration.md#read-only-on-some-paths-optional)). An optional section doesn't stop startup: the same problems are reported when the bucket is first used.
+
+`s3Configured(section?)` is true when the section's bucket is set, as `S3_BUCKET` or the secret file `S3_BUCKET_FILE`, so the choice doesn't read `process.env` by hand or miss a bucket kept in a secret. Only the bucket is checked: with it set, a missing key still stops startup instead of falling back to disk.
+
+The values are read from the environment when the app starts, and again on every `kick dev` rebuild: after a `.env` edit, `s3FromSettings()` sends the next request with the new values.
 
 On a host with an IAM role, leave both keys unset and pass the provider as an option: `s3FromSettings(S3Settings, { credentials: fromNodeProviderChain(), timeoutMs: 5000 })`. Keys set in the environment win over `credentials`. With neither, the first call fails.
 

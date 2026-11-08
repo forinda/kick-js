@@ -9,6 +9,7 @@ import {
   encodeSegment,
   isStream,
   toBytes,
+  type Body,
 } from './keys'
 
 export interface S3StorageOptions {
@@ -62,9 +63,43 @@ export interface S3StorageOptions {
    * services support neither.
    */
   serverSideEncryption?: { type: 'AES256' } | { type: 'aws:kms'; keyId?: string }
+  /**
+   * The canned ACL every file this storage writes gets, e.g. `'public-read'`
+   * for files served straight from the bucket or its CDN. Without it the
+   * bucket's default applies, which is private on AWS, DigitalOcean Spaces and
+   * MinIO. Applies to `put`, `putIfAbsent`, `compose`, `multipart.create`,
+   * `uploadForm` and `uploadUrl` (signed into the URL, so the browser sends
+   * nothing extra). AWS buckets with Object Ownership set to "bucket owner
+   * enforced" (the default for new buckets) refuse ACLs: use a bucket policy there.
+   */
+  acl?: S3Acl
   /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */
   partConcurrency?: number
 }
+
+/** S3's canned ACLs. */
+export type S3Acl =
+  | 'private'
+  | 'public-read'
+  | 'public-read-write'
+  | 'authenticated-read'
+  | 'aws-exec-read'
+  | 'bucket-owner-read'
+  | 'bucket-owner-full-control'
+
+const ACLS: readonly string[] = [
+  'private',
+  'public-read',
+  'public-read-write',
+  'authenticated-read',
+  'aws-exec-read',
+  'bucket-owner-read',
+  'bucket-owner-full-control',
+] satisfies S3Acl[]
+
+/** True for one of S3's canned ACLs. */
+export const isS3Acl = (value: unknown): value is S3Acl =>
+  typeof value === 'string' && ACLS.includes(value)
 
 export interface S3Credentials {
   accessKeyId: string
@@ -174,6 +209,14 @@ export interface UploadUrlOptions {
   size?: number
   /** Signed into the URL: the browser must send this `Content-Type`, and the file is served with it. */
   contentType?: string
+  /** This file's canned ACL, instead of the storage's `acl`. */
+  acl?: S3Acl
+}
+
+/** {@link PutOptions} plus what only a bucket keeps. */
+export interface S3PutOptions extends PutOptions {
+  /** This file's canned ACL, instead of the storage's `acl`. */
+  acl?: S3Acl
 }
 
 export interface UploadFormOptions {
@@ -190,6 +233,8 @@ export interface UploadFormOptions {
    * allowlist, then sign that one.
    */
   contentType?: string
+  /** This file's canned ACL, instead of the storage's `acl`. */
+  acl?: S3Acl
 }
 
 /** What a browser form POSTs to: the URL, and fields to send before the file. */
@@ -219,13 +264,13 @@ export interface CompletedPart {
  */
 export interface Multipart {
   /** Start an upload; returns its `uploadId`. */
-  create(key: string, options?: { contentType?: string }): Promise<string>
+  create(key: string, options?: S3PutOptions): Promise<string>
   /** A signed URL to `PUT` part `partNumber` (1 to 10000) to. Every part but the last is at least 5 MiB. */
   partUrl(
     key: string,
     uploadId: string,
     partNumber: number,
-    options?: Omit<UploadUrlOptions, 'contentType'>,
+    options?: Omit<UploadUrlOptions, 'contentType' | 'acl'>,
   ): Promise<string>
   /** The parts the bucket has so far, in order. */
   listParts(key: string, uploadId: string): Promise<UploadedPart[]>
@@ -237,6 +282,8 @@ export interface Multipart {
 
 /** {@link Storage} plus uploads that go from the browser straight to the bucket. */
 export interface S3Storage extends Storage {
+  put(key: string, body: Body, options?: S3PutOptions): Promise<void>
+  putIfAbsent(key: string, body: Body, options?: S3PutOptions): Promise<boolean>
   /** A signed URL the browser can `PUT` one file to, up to 5 GiB. */
   uploadUrl(key: string, options?: UploadUrlOptions): Promise<string>
   /**
@@ -252,7 +299,7 @@ export interface S3Storage extends Storage {
    * S3 needs every part but the last to be at least 5 MiB; sources under
    * that (other than the last) are streamed through instead.
    */
-  compose(key: string, sources: readonly string[], options?: PutOptions): Promise<void>
+  compose(key: string, sources: readonly string[], options?: S3PutOptions): Promise<void>
   /**
    * Create the bucket if it doesn't exist: `true` when this call created it.
    * For a fresh MinIO in development or tests; a production bucket is
@@ -328,7 +375,25 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       : origin.replace('://', `://${options.bucket}.`)
   const fetchFn = options.fetch ?? globalThis.fetch
   const partSize = options.partSize ?? PART_SIZE
+  if (options.acl !== undefined && !isS3Acl(options.acl)) {
+    throw new Error(
+      `s3Storage: acl must be one of ${ACLS.join(', ')}, not '${String(options.acl)}'`,
+    )
+  }
+  const acl = options.acl
   const sse = encryptionHeaders(options.serverSideEncryption)
+  /** The ACL a write gets: its own, else the storage's. */
+  const aclFor = (own: S3Acl | undefined): S3Acl | undefined => {
+    if (own !== undefined && !isS3Acl(own)) {
+      throw new Error(`s3Storage: acl must be one of ${ACLS.join(', ')}, not '${String(own)}'`)
+    }
+    return own ?? acl
+  }
+  /** Sent, signed, on every request that creates an object. */
+  const writeHeaders = (own?: S3Acl): Record<string, string> => {
+    const chosen = aclFor(own)
+    return { ...sse, ...(chosen ? { 'x-amz-acl': chosen } : {}) }
+  }
   const partConcurrency = options.partConcurrency ?? 4
   if (!Number.isInteger(partSize) || partSize < PART_SIZE) {
     throw new Error(`s3Storage: partSize must be a whole number of bytes, at least ${PART_SIZE}`)
@@ -483,11 +548,16 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   }
 
   /** One PUT; with `createOnly`, `false` when the key exists (412) or is being created (409). */
-  async function putOnce(key: string, bytes: Uint8Array, contentType?: string, createOnly = false) {
+  async function putOnce(
+    key: string,
+    bytes: Uint8Array,
+    putOptions: S3PutOptions,
+    createOnly = false,
+  ) {
     const res = await send('PUT', key, {
       body: bytes,
-      amz: sse,
-      contentType,
+      amz: writeHeaders(putOptions.acl),
+      contentType: putOptions.contentType,
       ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
     })
     if (createOnly && (res.status === 412 || res.status === 409)) {
@@ -503,7 +573,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     async create(key, createOptions = {}) {
       const res = await call('POST', key, {
         query: { uploads: '' },
-        amz: sse,
+        amz: writeHeaders(createOptions.acl),
         contentType: createOptions.contentType,
       })
       const uploadId = tag(await res.text(), 'UploadId')
@@ -551,7 +621,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   async function putStream(
     key: string,
     body: AsyncIterable<Uint8Array>,
-    contentType?: string,
+    putOptions: S3PutOptions,
     createOnly = false,
   ): Promise<boolean> {
     let buffered: Uint8Array[] = []
@@ -566,7 +636,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       const partNumber = checkPartNumber(nextPart++)
       buffered = []
       size = 0
-      uploadId ??= multipart.create(key, { contentType })
+      uploadId ??= multipart.create(key, putOptions)
       const upload = uploadId.then(async (id) => {
         const query = { partNumber: String(partNumber), uploadId: id }
         const res = await call('PUT', key, { query, body: bytes })
@@ -595,7 +665,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         }
         if (failed) throw failed.error
       }
-      if (!uploadId) return await putOnce(key, concatBytes(buffered), contentType, createOnly)
+      if (!uploadId) return await putOnce(key, concatBytes(buffered), putOptions, createOnly)
       if (size > 0) sendPart()
       await Promise.all(inFlight)
       if (failed) throw failed.error
@@ -613,7 +683,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
   /** `x-amz-copy-source` for an object in this bucket. */
   const copySource = (source: string) => `/${encodeSegment(options.bucket)}/${encodeKey(source)}`
 
-  async function compose(key: string, sources: readonly string[], putOptions: PutOptions = {}) {
+  async function compose(key: string, sources: readonly string[], putOptions: S3PutOptions = {}) {
     if (sources.length === 0) throw new Error('s3Storage: compose() needs at least one source')
     const sizes = await Promise.all(
       sources.map(async (source) => {
@@ -640,7 +710,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         amz: {
           'x-amz-copy-source': copySource(sources[0]),
           'x-amz-metadata-directive': 'REPLACE',
-          ...sse,
+          ...writeHeaders(putOptions.acl),
         },
         contentType: putOptions.contentType ?? 'application/octet-stream',
       })
@@ -661,7 +731,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       })).filter((range) => range.to >= range.from)
     })
     if (ranges.length > MAX_PARTS) return streamed()
-    const uploadId = await multipart.create(key, { contentType: putOptions.contentType })
+    const uploadId = await multipart.create(key, putOptions)
     try {
       const parts: CompletedPart[] = []
       // ponytail: partConcurrency copies at a time, like put()'s parts.
@@ -716,7 +786,13 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       'x-amz-credential': credential,
       'x-amz-date': stamp,
       ...(keys.sessionToken ? { 'x-amz-security-token': keys.sessionToken } : {}),
-      ...sse,
+      // A POST form names the ACL `acl`, not `x-amz-acl`.
+      ...Object.fromEntries(
+        Object.entries(writeHeaders(formOptions.acl)).map(([name, value]) => [
+          name === 'x-amz-acl' ? 'acl' : name,
+          value,
+        ]),
+      ),
     }
     if (contentType !== undefined) {
       if (!/^[\w.+-]+\/[\w.+-]+$/.test(contentType)) {
@@ -764,17 +840,21 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     uploadForm,
     async put(key, body, putOptions = {}) {
       if (isStream(body)) {
-        await putStream(key, body, putOptions.contentType)
+        await putStream(key, body, putOptions)
         return
       }
-      await call('PUT', key, { body: toBytes(body), amz: sse, contentType: putOptions.contentType })
+      await call('PUT', key, {
+        body: toBytes(body),
+        amz: writeHeaders(putOptions.acl),
+        contentType: putOptions.contentType,
+      })
     },
     async putIfAbsent(key, body, putOptions = {}) {
       // S3 conditional writes: 412 when the key exists, 409 when another
       // conditional write to it is in progress — both mean someone else has it.
       // A stream larger than a part goes up in parts, conditional on completing.
-      if (isStream(body)) return putStream(key, body, putOptions.contentType, true)
-      return putOnce(key, toBytes(body), putOptions.contentType, true)
+      if (isStream(body)) return putStream(key, body, putOptions, true)
+      return putOnce(key, toBytes(body), putOptions, true)
     },
     async get(key) {
       const res = await call('GET', key, {}, true)
@@ -842,7 +922,10 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       return presignFor('GET', urlOf(key, query), urlOptions.expiresIn ?? 3600)
     },
     async uploadUrl(key, uploadOptions = {}) {
-      return presignFor('PUT', urlOf(key), uploadOptions.expiresIn ?? 3600, {
+      // In the query, so it's signed without the browser having to send a header.
+      const chosen = aclFor(uploadOptions.acl)
+      const query: Record<string, string> = chosen ? { 'x-amz-acl': chosen } : {}
+      return presignFor('PUT', urlOf(key, query), uploadOptions.expiresIn ?? 3600, {
         ...sizeHeader(uploadOptions.size),
         ...(uploadOptions.contentType ? { 'content-type': uploadOptions.contentType } : {}),
       })

@@ -659,3 +659,134 @@ describe('s3Storage serverSideEncryption', () => {
     )
   })
 })
+
+describe('s3Storage acl', () => {
+  function server(...replies: Array<[number, string, Record<string, string>?]>) {
+    const calls: Request[] = []
+    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push(new Request(input, init))
+      const [status, body, headers] = replies.shift() ?? [200, '']
+      return new Response(status === 204 ? null : body, { status, headers })
+    }) as unknown as typeof globalThis.fetch
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      acl: 'public-read',
+      fetch,
+    })
+    return { files, calls }
+  }
+  const sent = (req: Request) => ({
+    acl: req.headers.get('x-amz-acl'),
+    signed: /SignedHeaders=[^,]*x-amz-acl/.test(req.headers.get('authorization') ?? ''),
+  })
+
+  it('sends a signed x-amz-acl on put, putIfAbsent, copies and multipart starts', async () => {
+    const { files, calls } = server(
+      [200, ''],
+      [200, ''],
+      [200, '', { 'content-length': '10' }],
+      [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+      [200, '<R><UploadId>u1</UploadId></R>'],
+    )
+    await files.put('a', 'x')
+    await files.putIfAbsent('b', 'y')
+    await files.compose('c', ['a'])
+    await files.multipart.create('d')
+    const expected = { acl: 'public-read', signed: true }
+    expect(sent(calls[0]!)).toEqual(expected)
+    expect(sent(calls[1]!)).toEqual(expected)
+    expect(sent(calls[3]!)).toEqual(expected) // the CopyObject
+    expect(sent(calls[4]!)).toEqual(expected)
+  })
+
+  it('signs it into upload URLs and puts it in upload forms as `acl`', async () => {
+    const { files } = server()
+    const url = new URL(await files.uploadUrl('up/a'))
+    expect(url.searchParams.get('x-amz-acl')).toBe('public-read')
+    const form = await files.uploadForm('up/b', { maxSize: 10 })
+    expect(form.fields.acl).toBe('public-read')
+    expect(form.fields['x-amz-acl']).toBeUndefined()
+    expect(JSON.parse(atob(form.fields.policy!)).conditions).toContainEqual({ acl: 'public-read' })
+  })
+
+  it('sends nothing without it, and refuses an unknown ACL', async () => {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response('')
+      }) as unknown as typeof globalThis.fetch,
+    })
+    await files.put('a', 'x')
+    expect(calls[0]!.headers.get('x-amz-acl')).toBeNull()
+    expect(await files.uploadUrl('a')).not.toContain('x-amz-acl')
+    expect(() =>
+      s3Storage({ bucket: 'b', accessKeyId: 'i', secretAccessKey: 's', acl: 'public' as never }),
+    ).toThrow('acl must be one of private, public-read')
+  })
+})
+
+describe('s3Storage acl per call', () => {
+  it('overrides the storage default on each kind of write', async () => {
+    const calls: Request[] = []
+    const replies: Array<[number, string, Record<string, string>?]> = [
+      [200, ''],
+      [200, ''],
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '', { 'content-length': '10' }],
+      [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+    ]
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      acl: 'public-read',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        const [status, body, headers] = replies.shift() ?? [200, '']
+        return new Response(body, { status, headers })
+      }) as unknown as typeof globalThis.fetch,
+    })
+    await files.put('a', 'x', { acl: 'private' })
+    await files.putIfAbsent('b', 'y', { acl: 'private' })
+    await files.multipart.create('c', { acl: 'private' })
+    await files.compose('d', ['a'], { acl: 'private' })
+    expect(calls.map((c) => c.headers.get('x-amz-acl'))).toEqual([
+      'private',
+      'private',
+      'private',
+      null, // the HEAD of the source
+      'private',
+    ])
+    const url = new URL(await files.uploadUrl('e', { acl: 'private' }))
+    expect(url.searchParams.get('x-amz-acl')).toBe('private')
+    expect((await files.uploadForm('f', { maxSize: 1, acl: 'private' })).fields.acl).toBe('private')
+    // Without one, the storage's.
+    expect((await files.uploadForm('g', { maxSize: 1 })).fields.acl).toBe('public-read')
+    await expect(files.put('h', 'x', { acl: 'nope' as never })).rejects.toThrow(
+      'acl must be one of',
+    )
+  })
+
+  it('sends one on a storage that has none', async () => {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response('')
+      }) as unknown as typeof globalThis.fetch,
+    })
+    await files.put('a', 'x', { acl: 'public-read' })
+    expect(calls[0]!.headers.get('x-amz-acl')).toBe('public-read')
+  })
+})

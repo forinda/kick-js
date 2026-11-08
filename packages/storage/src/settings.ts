@@ -13,9 +13,9 @@
  *
  * @module @forinda/kickjs-storage/settings
  */
-import { defineSettings, type Settings, type SettingsOf } from '@forinda/kickjs'
+import { defineSettings, originsOf, type Settings, type SettingsOf } from '@forinda/kickjs'
 import type { KickSchema, SchemaIssue } from '@forinda/kickjs-schema'
-import { s3Storage, type S3Storage, type S3StorageOptions } from './s3'
+import { isS3Acl, s3Storage, type S3Acl, type S3Storage, type S3StorageOptions } from './s3'
 
 type S3Fields = {
   bucket: string
@@ -25,6 +25,7 @@ type S3Fields = {
   secretAccessKey?: string
   sessionToken?: string
   forcePathStyle?: boolean
+  acl?: S3Acl
 }
 
 // The keys come as a pair, or not at all: without them, s3FromSettings needs `credentials`.
@@ -36,6 +37,7 @@ const OPTIONAL = [
   'endpoint',
   'sessionToken',
   'forcePathStyle',
+  'acl',
 ]
 
 // What `kick env example` writes above each variable.
@@ -49,6 +51,7 @@ const DESCRIPTIONS: Record<string, string> = {
   sessionToken: 'Session token for temporary credentials',
   forcePathStyle:
     '<endpoint>/<bucket>/<key> addressing; default true with S3_ENDPOINT, false for AWS',
+  acl: 'Canned ACL for every file written, e.g. public-read; unset uses the bucket default (private)',
 }
 
 /** String fields, written out so the app can use any schema library or none. Empty is unset. */
@@ -69,6 +72,12 @@ const schema: KickSchema<S3Fields> = {
         else issues.push({ path: [key], message: 'Expected true or false', code: 'type' })
       } else if (typeof raw !== 'string') {
         issues.push({ path: [key], message: 'Expected a string', code: 'type' })
+      } else if (key === 'acl' && !isS3Acl(raw)) {
+        issues.push({
+          path: [key],
+          message: 'Expected a canned ACL, e.g. public-read',
+          code: 'format',
+        })
       } else if (key === 'endpoint' && !URL.canParse(raw)) {
         issues.push({ path: [key], message: 'Expected a URL', code: 'format' })
       } else {
@@ -98,7 +107,7 @@ const schema: KickSchema<S3Fields> = {
 
 /**
  * `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
- * `S3_SESSION_TOKEN`, `S3_FORCE_PATH_STYLE`. Leave both keys unset on a host
+ * `S3_SESSION_TOKEN`, `S3_FORCE_PATH_STYLE`, `S3_ACL`. Leave both keys unset on a host
  * with an IAM role and pass `credentials` to {@link s3FromSettings}.
  */
 export const S3Settings = defineSettings('S3', schema)
@@ -157,4 +166,30 @@ export function s3FromSettings(
   }
   // For StorageAdapter: the section to declare, so the app validates it at startup.
   return Object.assign(wrapper, { [Symbol.for('kickjs-storage.settings')]: section })
+}
+
+/**
+ * Whether a bucket is configured for `section` — `S3_BUCKET` (or
+ * `S3_BUCKET_FILE`) is set — to pick a driver at startup without reading
+ * `process.env` by hand:
+ *
+ * ```ts
+ * StorageAdapter({
+ *   storage: s3Configured() ? s3FromSettings() : diskStorage({ root: 'uploads' }),
+ *   settings: [S3Settings.optional()],
+ * })
+ * ```
+ *
+ * Only the bucket is checked: with it set, a missing or invalid variable
+ * still stops startup rather than quietly falling back to another driver.
+ */
+export function s3Configured(
+  section: Settings<SettingsOf<typeof S3Settings>> = S3Settings,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const bucket = `${section.prefix}_BUCKET`
+  return originsOf(
+    section.describe().filter((v) => v.name === bucket),
+    env,
+  ).some((v) => v.origin !== 'unset')
 }

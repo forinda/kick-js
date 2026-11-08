@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Application, Container } from '@forinda/kickjs'
-import { S3Settings, s3FromSettings } from '../src/settings'
+import { S3Settings, s3Configured, s3FromSettings } from '../src/settings'
 
 beforeEach(() => Container.reset())
 afterEach(() => vi.unstubAllEnvs())
@@ -70,6 +70,7 @@ it('reads a second bucket under its own prefix', () => {
     'R2_S3_ENDPOINT',
     'R2_S3_SESSION_TOKEN',
     'R2_S3_FORCE_PATH_STYLE',
+    'R2_S3_ACL',
   ])
 })
 
@@ -90,4 +91,45 @@ it('reads S3_FORCE_PATH_STYLE as a boolean', () => {
       forcePathStyle: 'yes',
     }),
   ).toThrow('true or false')
+})
+
+it('reads S3_ACL and refuses one S3 would reject', () => {
+  vi.stubEnv('S3_BUCKET', 'b')
+  vi.stubEnv('S3_ACL', 'public-read')
+  expect(S3Settings.load().acl).toBe('public-read')
+  vi.stubEnv('S3_ACL', 'public')
+  expect(() => S3Settings.load()).toThrow(/S3_ACL: Expected a canned ACL/)
+})
+
+it('s3Configured: true once a bucket is set, directly or as a _FILE secret', () => {
+  vi.stubEnv('S3_BUCKET', '')
+  vi.stubEnv('S3_BUCKET_FILE', '')
+  expect(s3Configured()).toBe(false)
+  vi.stubEnv('S3_BUCKET', 'b')
+  expect(s3Configured()).toBe(true)
+  vi.stubEnv('S3_BUCKET', '')
+  vi.stubEnv('S3_BUCKET_FILE', '/run/secrets/bucket')
+  expect(s3Configured()).toBe(true)
+  // Another instance checks its own prefix.
+  expect(s3Configured(S3Settings.scoped('R2'))).toBe(false)
+})
+
+it('follows a changed env when the app rebuilds (kick dev after a .env edit)', async () => {
+  const urls: string[] = []
+  const fetch = (async (url: URL) => {
+    urls.push(String(url))
+    return new Response(null, { status: 404 })
+  }) as unknown as typeof globalThis.fetch
+  vi.stubEnv('S3_BUCKET', 'first')
+  vi.stubEnv('S3_ENDPOINT', 'http://minio.test')
+  vi.stubEnv('S3_ACCESS_KEY_ID', 'id')
+  vi.stubEnv('S3_SECRET_ACCESS_KEY', 'secret')
+  const files = s3FromSettings(S3Settings, { fetch })
+  const app = new Application({ modules: [], settings: [S3Settings] })
+  await app.setup()
+  await files.exists('k')
+  vi.stubEnv('S3_BUCKET', 'second')
+  await app.rebuild()
+  await files.exists('k')
+  expect(urls).toEqual(['http://minio.test/first/k', 'http://minio.test/second/k'])
 })
