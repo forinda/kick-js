@@ -406,7 +406,9 @@ const MAX_PARTS = 10_000
 const MAX_COPY = 5 * 1024 ** 3
 const BUCKET = Symbol('bucket')
 
-const xmlEscape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+// \t, \n and \r as references too: written raw, an XML parser turns `\r\n` into
+// `\n`, and the bucket would read another key than the one sent.
+const xmlEscape = (value: string) => value.replace(/[&<>"'\t\n\r]/g, (c) => `&#${c.charCodeAt(0)};`)
 const xmlUnescape = (value: string) =>
   value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(amp|lt|gt|quot|apos));/gi, (_, dec, hex, name) =>
     dec
@@ -1031,7 +1033,16 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       await call('DELETE', key, {}, true)
     },
     async deleteMany(keys) {
-      for (const key of keys) checkKey(key)
+      for (const key of keys) {
+        checkKey(key)
+        // XML 1.0 can't carry these at all, not even as references.
+        const unsendable = [...key].some((c) => c < ' ' && c !== '\t' && c !== '\n' && c !== '\r')
+        if (unsendable) {
+          throw new Error(
+            `s3Storage: deleteMany can't send key '${key}': it has a control character`,
+          )
+        }
+      }
       const unique = [...new Set(keys)]
       const refused: string[] = []
       for (let i = 0; i < unique.length; i += 1000) {

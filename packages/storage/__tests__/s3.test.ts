@@ -1055,3 +1055,23 @@ describe('s3Storage deleteMany', () => {
     )
   })
 })
+
+describe('s3Storage deleteMany keys with control characters', () => {
+  it('sends \r, \n and \t as references, and refuses what XML cannot carry', async () => {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response('<DeleteResult/>')
+      }) as unknown as typeof globalThis.fetch,
+    })
+    await files.deleteMany(['a\r\nb\tc'])
+    expect(await calls[0]!.text()).toContain('<Key>a&#13;&#10;b&#9;c</Key>')
+    await expect(files.deleteMany(['a\u0001b'])).rejects.toThrow('control character')
+    expect(calls).toHaveLength(1)
+  })
+})
