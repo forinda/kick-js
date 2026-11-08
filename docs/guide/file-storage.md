@@ -54,14 +54,14 @@ Three drivers implement it:
 // src/adapters/storage.ts
 import { StorageAdapter } from '@forinda/kickjs-storage/adapter'
 import { diskStorage } from '@forinda/kickjs-storage/disk'
-import { S3Settings, s3FromSettings } from '@forinda/kickjs-storage/settings'
+import { S3Settings, s3Configured, s3FromSettings } from '@forinda/kickjs-storage/settings'
 
 export { STORAGE } from '@forinda/kickjs-storage/adapter'
 export type { Storage } from '@forinda/kickjs-storage'
 
 export const storageAdapter = () =>
   StorageAdapter({
-    storage: process.env.S3_BUCKET ? s3FromSettings() : diskStorage({ root: 'uploads' }),
+    storage: s3Configured() ? s3FromSettings() : diskStorage({ root: 'uploads' }),
     settings: [S3Settings.optional()],
   })
 ```
@@ -384,7 +384,7 @@ The browser splits the file and sends each part to its URL. It keeps the `ETag` 
   ]
   ```
 
-- **Abandoned uploads.** Parts of an upload that is never completed or aborted stay in the bucket and are billed. Add a lifecycle rule that aborts incomplete multipart uploads after a day or so (`AbortIncompleteMultipartUpload` on S3, and the same option on R2).
+- **Abandoned uploads.** Parts of an upload that is never completed or aborted stay in the bucket and are billed. Add a lifecycle rule that aborts incomplete multipart uploads after a day or so (`AbortIncompleteMultipartUpload` on S3, and the same option on R2). It also catches the rare upload the storage can't abort itself: if S3 starts an upload but the answer is lost, the retry starts another, and the first one's ID never reaches the storage. That can happen for browser multipart, a streamed `put` and `compose`.
 
 ## Resumable uploads through your server: tus
 
@@ -524,6 +524,96 @@ Without `keyId`, `aws:kms` uses the account's default S3 key. The headers go, si
 
 AWS S3 supports both types. MinIO supports them only with a KMS configured. Some S3-compatible services support neither and reject the write, so check the provider before turning this on.
 
+### Public files: `acl`
+
+A bucket keeps new files private unless told otherwise, on AWS, DigitalOcean Spaces and MinIO. For files served straight from the bucket or its CDN (avatars, public images), set a canned ACL on the storage:
+
+```ts
+const files = s3Storage({ bucket: 'avatars', region, acl: 'public-read' })
+```
+
+Every write then carries a signed `x-amz-acl`: `put`, `putIfAbsent`, `compose`, `multipart.create`, the `acl` field of `uploadForm`, and `uploadUrl`, where it's signed into the URL so the browser sends nothing extra. One write can pick its own, over the storage's or without one set:
+
+```ts
+await files.put(`avatars/${id}.png`, bytes, { contentType: 'image/png', acl: 'public-read' })
+await files.put(`invoices/${id}.pdf`, pdf, { acl: 'private' })
+const url = await files.uploadUrl(`avatars/${id}.png`, {
+  contentType: 'image/png',
+  acl: 'public-read',
+})
+```
+
+The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws.
+
+New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control` (which those buckets accept). There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
+
+New AWS buckets also have Block Public Access on, at the bucket and usually the account level (and an AWS Organization can enforce it). `BlockPublicAcls` refuses a write with a public ACL such as `public-read`, even after Object Ownership allows ACLs; `BlockPublicPolicy` refuses a bucket policy that grants public reads. To serve files publicly, turn off the setting your approach needs (`BlockPublicAcls` and `IgnorePublicAcls` for ACLs, `BlockPublicPolicy` and `RestrictPublicBuckets` for a policy) on the bucket, and on the account if it's set there. Many setups keep the bucket private and serve through CloudFront with origin access control instead.
+
+A public file's address is `files.publicUrl(key)`: unsigned, the key encoded. Pass `publicUrl` (or set `S3_PUBLIC_URL`) to serve them from a CDN or your own domain instead of the bucket:
+
+```ts
+const files = s3Storage({
+  bucket: 'avatars',
+  region,
+  acl: 'public-read',
+  publicUrl: 'https://cdn.example.com',
+})
+files.publicUrl('u1/me.png') // https://cdn.example.com/u1/me.png
+```
+
+Nothing is checked: a private file's public address answers 403. Use `url()` for those.
+
+### Storage classes
+
+`storageClass` on the storage, or on one write, picks how S3 keeps the file: `STANDARD_IA` or `ONEZONE_IA` for files read rarely, `GLACIER_IR` for archives that still need reading in milliseconds, `GLACIER` and `DEEP_ARCHIVE` for ones that can wait. `stat()` returns it, except for `STANDARD`, which S3 doesn't report:
+
+```ts
+const archive = s3Storage({ bucket: 'backups', region, storageClass: 'GLACIER_IR' })
+await files.put(`exports/${id}.zip`, zip, { storageClass: 'STANDARD_IA' })
+```
+
+A file in `GLACIER` or `DEEP_ARCHIVE` has to be restored before `get()` can read it, which this storage doesn't do. Other S3 APIs have their own classes (R2 has `STANDARD` and `STANDARD_IA`), so any upper-case name is sent as given and the bucket rejects one it doesn't know. `S3_STORAGE_CLASS` sets it from the environment.
+
+### Per-file headers and metadata
+
+`put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm` also take `storageClass` and how the bucket serves the file, and your own name/value pairs kept with it:
+
+```ts
+await files.put(`avatars/${id}.png`, bytes, {
+  contentType: 'image/png',
+  cacheControl: 'public, max-age=31536000, immutable',
+  metadata: { owner: userId },
+})
+await files.put(`exports/${id}.csv.gz`, gzipped, {
+  contentType: 'text/csv',
+  contentEncoding: 'gzip',
+  contentDisposition: 'attachment; filename="export.csv"',
+})
+
+const info = await files.stat(`avatars/${id}.png`)
+info?.metadata.owner // 'u1'; names come back lowercase
+info?.cacheControl
+```
+
+`cacheControl`, `contentDisposition`, `contentEncoding` and `contentLanguage` are the headers the bucket serves the file with. `metadata` is sent as `x-amz-meta-*`: names are letters, digits, `-`, `_` and `.`, values printable ASCII, at most 2 KB in all. Anything else throws before the request is sent. `compose` replaces what the sources had with what you pass. `get` and `getStream` return a file's bytes as stored: a `gzip`-encoded file comes back gzipped, for you to decompress. Browsers fetching it through `url()` or `publicUrl()` decompress it themselves.
+
+Through `uploadUrl`, `metadata` and `acl` are signed into the URL. The four headers are signed as headers, so the browser's `PUT` must send them as given, like `contentType`. Through `uploadForm` they're form fields, and part of the policy.
+
+### Deleting many files: `deleteMany`
+
+`deleteMany(keys)` deletes up to 1000 files per request (S3's DeleteObjects) instead of one request each, for clearing a user's uploads or a prefix you listed:
+
+```ts
+let cursor: string | undefined
+do {
+  const page = await files.list({ prefix: `users/${id}/`, cursor })
+  await files.deleteMany(page.files.map((f) => f.key))
+  cursor = page.cursor
+} while (cursor)
+```
+
+Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries the `Content-MD5` of its body, which S3 requires here and every S3-compatible API accepts. If a later batch fails, the error still names the keys earlier batches refused. Keys with control characters other than tab, newline and carriage return, or U+FFFE / U+FFFF, can't be sent in DeleteObjects' XML: delete those one by one with `delete()`.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
@@ -542,6 +632,23 @@ s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials: fromNodeProvide
 s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials, timeoutMs: 5000 })
 ```
 
+### Retries
+
+A request is sent again, up to `maxAttempts` tries (default 3), after a random wait that doubles each time, when the AWS SDK would send it again:
+
+- it can't connect, or times out
+- 500, 502, 503 or 504 (S3's `SlowDown` is a 503), or 429
+- S3's 400 `RequestTimeout`: the connection went idle before the body arrived
+- a copy or multipart completion answers 200 with an error, or with no body, which S3 does when it fails partway
+
+Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
+
+`putIfAbsent` is sent again only when S3 refused it before writing: 503, 429, `RequestTimeout`, or clock skew. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote. A large `putIfAbsent` whose completion fails that way throws, and its upload is aborted. `PreconditionFailed`, another writer winning, is an answer, not a failure: `putIfAbsent` returns `false`.
+
+#### Clock skew
+
+S3 refuses a request signed more than 15 minutes from its own time. On that error (`RequestTimeTooSkewed`), the storage takes the bucket's time from the response's `Date` header, signs the retry with it, and keeps the offset for every later request and signed URL, as the SDK does. A `HEAD` (`stat`, `exists`) has no body to name the error, so a 403 whose `Date` is more than 15 minutes from the storage's time counts as skew there. A host whose clock drifted keeps working. Fix the clock anyway: other services check time too.
+
 ## Config from the environment
 
 `@forinda/kickjs-storage/settings` has a [settings section](./configuration.md) for a bucket. It is validated when the app starts and listed by `kick env example`:
@@ -555,6 +662,9 @@ S3_SECRET_ACCESS_KEY=...
 # S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
 # S3_SESSION_TOKEN=...
 # S3_FORCE_PATH_STYLE=true
+# S3_ACL=public-read
+# S3_STORAGE_CLASS=STANDARD_IA
+# S3_PUBLIC_URL=https://cdn.example.com
 ```
 
 ```ts
@@ -564,9 +674,13 @@ import { s3FromSettings } from '@forinda/kickjs-storage/settings'
 bootstrap({ modules, adapters: [StorageAdapter({ storage: s3FromSettings() })] })
 ```
 
-`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. Declared either way, a missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, or an `S3_FORCE_PATH_STYLE` other than `true` / `false`, stops startup with every problem listed.
+`s3FromSettings()` reads the section on first use, after the app has bound it, and `StorageAdapter` declares the section, so the app validates it at startup. Without the adapter, list it yourself: `bootstrap({ settings: [S3Settings] })`. Declared either way, a missing `S3_BUCKET`, only one of `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY`, an `S3_ENDPOINT` that isn't a URL, an `S3_FORCE_PATH_STYLE` other than `true` / `false`, or an `S3_ACL` that isn't a canned ACL, stops startup with every problem listed.
 
-When the app only uses the bucket sometimes — `S3_BUCKET ? s3FromSettings() : diskStorage(…)` — declare it `S3Settings.optional()` — `StorageAdapter({ storage, settings: [S3Settings.optional()] })`, as the generated file does — so `kick env example` still lists the variables ([optional sections](./configuration.md#read-only-on-some-paths-optional)). An optional section doesn't stop startup: the same problems are reported when the bucket is first used.
+When the app only uses the bucket sometimes — `s3Configured() ? s3FromSettings() : diskStorage(…)` — declare it `S3Settings.optional()` — `StorageAdapter({ storage, settings: [S3Settings.optional()] })`, as the generated file does — so `kick env example` still lists the variables ([optional sections](./configuration.md#read-only-on-some-paths-optional)). An optional section doesn't stop startup: the same problems are reported when the bucket is first used.
+
+`s3Configured(section?)` is true when the section's bucket is set, as `S3_BUCKET` or the secret file `S3_BUCKET_FILE`, so the choice doesn't read `process.env` by hand or miss a bucket kept in a secret. Only the bucket is checked: with it set, an invalid variable (one key without the other, an endpoint that isn't a URL) still stops startup instead of falling back to disk. With neither key set, startup passes, since that's how a host with an IAM role runs, and the first call fails unless `credentials` is passed (below).
+
+The values are read from the environment when the app starts, and again on every `kick dev` rebuild: after a `.env` edit, `s3FromSettings()` sends the next request with the new values.
 
 On a host with an IAM role, leave both keys unset and pass the provider as an option: `s3FromSettings(S3Settings, { credentials: fromNodeProviderChain(), timeoutMs: 5000 })`. Keys set in the environment win over `credentials`. With neither, the first call fails.
 

@@ -75,6 +75,7 @@ import { StartupTimeline, type StartupTimelineSnapshot } from './startup-timelin
 import { ROUTE_URLS, RouteUrls, type RouteName, type UrlForArgs } from './url-for'
 import {
   isOptionalSettings,
+  _forgetLoadedSettings,
   loadSettings,
   originsOf,
   type ConfigVar,
@@ -1359,6 +1360,9 @@ export class Application {
     this.settingsPrefixes = new Map()
     this.settingsProvided = new Map()
     this.settingsOptional = new Set()
+    // Optional and undeclared sections aren't bound: get() loads them, and
+    // must load them again now, or a rebuild after a .env edit keeps the old value.
+    _forgetLoadedSettings()
     // Settings sections declared by bootstrap, plugins and enabled adapters:
     // validated now — a bad value fails startup with the full list — and bound
     // before any hook runs. Modules' sections are bound before they register.
