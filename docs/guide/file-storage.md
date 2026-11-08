@@ -543,13 +543,38 @@ const url = await files.uploadUrl(`avatars/${id}.png`, {
 })
 ```
 
-The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws. A public file's address is `${files.location}/${key}` (encode each segment of the key), with no signature.
+The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws.
 
 New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control`. There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
 
+A public file's address is `files.publicUrl(key)`: unsigned, the key encoded. Pass `publicUrl` (or set `S3_PUBLIC_URL`) to serve them from a CDN or your own domain instead of the bucket:
+
+```ts
+const files = s3Storage({
+  bucket: 'avatars',
+  region,
+  acl: 'public-read',
+  publicUrl: 'https://cdn.example.com',
+})
+files.publicUrl('u1/me.png') // https://cdn.example.com/u1/me.png
+```
+
+Nothing is checked: a private file's public address answers 403. Use `url()` for those.
+
+### Storage classes
+
+`storageClass` on the storage, or on one write, picks how S3 keeps the file: `STANDARD_IA` or `ONEZONE_IA` for files read rarely, `GLACIER_IR` for archives that still need reading in milliseconds, `GLACIER` and `DEEP_ARCHIVE` for ones that can wait. `stat()` returns it, except for `STANDARD`, which S3 doesn't report:
+
+```ts
+const archive = s3Storage({ bucket: 'backups', region, storageClass: 'GLACIER_IR' })
+await files.put(`exports/${id}.zip`, zip, { storageClass: 'STANDARD_IA' })
+```
+
+A file in `GLACIER` or `DEEP_ARCHIVE` has to be restored before `get()` can read it, which this storage doesn't do. Other S3 APIs have their own classes (R2 has `STANDARD` and `STANDARD_IA`), so any upper-case name is sent as given and the bucket rejects one it doesn't know. `S3_STORAGE_CLASS` sets it from the environment.
+
 ### Per-file headers and metadata
 
-`put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm` also take how the bucket serves the file, and your own name/value pairs kept with it:
+`put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm` also take `storageClass` and how the bucket serves the file, and your own name/value pairs kept with it:
 
 ```ts
 await files.put(`avatars/${id}.png`, bytes, {
@@ -610,6 +635,8 @@ S3_SECRET_ACCESS_KEY=...
 # S3_SESSION_TOKEN=...
 # S3_FORCE_PATH_STYLE=true
 # S3_ACL=public-read
+# S3_STORAGE_CLASS=STANDARD_IA
+# S3_PUBLIC_URL=https://cdn.example.com
 ```
 
 ```ts

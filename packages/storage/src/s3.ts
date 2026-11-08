@@ -83,9 +83,38 @@ export interface S3StorageOptions {
    * enforced" (the default for new buckets) refuse ACLs: use a bucket policy there.
    */
   acl?: S3Acl
+  /**
+   * The storage class every file this storage writes gets, e.g.
+   * `'STANDARD_IA'` for files read rarely. Unset, the bucket's default
+   * (`STANDARD` on AWS). A write's own `storageClass` wins.
+   */
+  storageClass?: S3StorageClass
+  /**
+   * Where public files are served from, for {@link S3Storage.publicUrl}: a CDN
+   * or custom domain, e.g. `https://cdn.example.com` or
+   * `https://files.example.com/avatars`. Default the bucket's own address.
+   */
+  publicUrl?: string
   /** Parts uploaded at once by `put()` with a stream. Default 4; memory use is about `partSize` × this. */
   partConcurrency?: number
 }
+
+/**
+ * S3's storage classes. Other S3 APIs have their own (R2: `STANDARD`,
+ * `STANDARD_IA`), so any UPPER_SNAKE name is accepted. A file in `GLACIER`
+ * or `DEEP_ARCHIVE` has to be restored before it can be read.
+ */
+export type S3StorageClass =
+  | 'STANDARD'
+  | 'STANDARD_IA'
+  | 'ONEZONE_IA'
+  | 'INTELLIGENT_TIERING'
+  | 'GLACIER_IR'
+  | 'GLACIER'
+  | 'DEEP_ARCHIVE'
+  | 'REDUCED_REDUNDANCY'
+  | 'EXPRESS_ONEZONE'
+  | (string & {})
 
 /** S3's canned ACLs. */
 export type S3Acl =
@@ -230,6 +259,8 @@ export interface S3ObjectOptions {
    * lowercase. Values are printable ASCII. At most 2 KB in all.
    */
   metadata?: Record<string, string>
+  /** This file's storage class, instead of the storage's `storageClass`. */
+  storageClass?: S3StorageClass
 }
 
 /**
@@ -260,6 +291,8 @@ export interface S3FileInfo extends FileInfo {
   contentDisposition?: string
   contentEncoding?: string
   contentLanguage?: string
+  /** Absent for `STANDARD`, which S3 doesn't report. */
+  storageClass?: string
 }
 
 /** The `S3ObjectOptions` go into the form's fields and its policy. */
@@ -351,6 +384,13 @@ export interface S3Storage extends Storage {
   ensureBucket(): Promise<boolean>
   /** The bucket's address, e.g. `https://avatars.s3.eu-west-1.amazonaws.com`: equal for two storages on one bucket. */
   readonly location: string
+  /**
+   * The unsigned address of a public file (`acl: 'public-read'`, or a bucket
+   * policy that allows reading it): `publicUrl` if set, else the bucket's
+   * address, plus the encoded key. Nothing is checked: for a private file
+   * the address answers 403. Use `url()` for those.
+   */
+  publicUrl(key: string): string
 }
 
 // S3's minimum part size; `put()` streams in parts of this size.
@@ -421,6 +461,11 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       ? `${origin}/${encodeSegment(options.bucket)}`
       : origin.replace('://', `://${options.bucket}.`)
   const fetchFn = options.fetch ?? globalThis.fetch
+  if (options.publicUrl !== undefined && !URL.canParse(options.publicUrl)) {
+    throw new Error(`s3Storage: publicUrl must be a URL, not '${options.publicUrl}'`)
+  }
+  const publicBase = (options.publicUrl ?? base).replace(/\/+$/, '')
+  objectHeaders({ storageClass: options.storageClass }) // checked once, up front
   const partSize = options.partSize ?? PART_SIZE
   if (options.acl !== undefined && !isS3Acl(options.acl)) {
     throw new Error(
@@ -436,10 +481,19 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     }
     return own ?? acl
   }
+  /** A write's options, with the storage's defaults where it has none. */
+  const withDefaults = (own: S3ObjectOptions): S3ObjectOptions => ({
+    ...own,
+    storageClass: own.storageClass ?? options.storageClass,
+  })
   /** Sent, signed, on every request that creates an object: encryption, then the file's own. */
   const writeHeaders = (own: S3ObjectOptions = {}): Record<string, string> => {
     const chosen = aclFor(own.acl)
-    return { ...sse, ...(chosen ? { 'x-amz-acl': chosen } : {}), ...objectHeaders(own) }
+    return {
+      ...sse,
+      ...(chosen ? { 'x-amz-acl': chosen } : {}),
+      ...objectHeaders(withDefaults(own)),
+    }
   }
   const partConcurrency = options.partConcurrency ?? 4
   if (!Number.isInteger(partSize) || partSize < PART_SIZE) {
@@ -912,11 +966,13 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
         : {}),
       ...(header('content-encoding') ? { contentEncoding: header('content-encoding') } : {}),
       ...(header('content-language') ? { contentLanguage: header('content-language') } : {}),
+      ...(header('x-amz-storage-class') ? { storageClass: header('x-amz-storage-class') } : {}),
     }
   }
 
   const storage: S3Storage = {
     location: base,
+    publicUrl: (key) => `${publicBase}/${encodeKey(key)}`,
     compose,
     uploadForm,
     async put(key, body, putOptions = {}) {
@@ -1008,7 +1064,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       const chosen = aclFor(uploadOptions.acl)
       const query: Record<string, string> = chosen ? { 'x-amz-acl': chosen } : {}
       const headers: Record<string, string> = {}
-      for (const [name, value] of Object.entries(objectHeaders(uploadOptions))) {
+      for (const [name, value] of Object.entries(objectHeaders(withDefaults(uploadOptions)))) {
         if (name.startsWith('x-amz-')) query[name] = value
         else headers[name] = value
       }
@@ -1072,6 +1128,14 @@ function objectHeaders(own: S3ObjectOptions): Record<string, string> {
       throw new Error(`s3Storage: ${option} must be printable ASCII`)
     }
     out[header] = value
+  }
+  if (own.storageClass !== undefined) {
+    if (typeof own.storageClass !== 'string' || !/^[A-Z][A-Z0-9_]*$/.test(own.storageClass)) {
+      throw new Error(
+        `s3Storage: storageClass must be an S3 storage class like 'STANDARD_IA', not '${String(own.storageClass)}'`,
+      )
+    }
+    out['x-amz-storage-class'] = own.storageClass
   }
   let bytes = 0
   for (const [name, value] of Object.entries(own.metadata ?? {})) {

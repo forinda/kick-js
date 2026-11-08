@@ -952,3 +952,59 @@ describe('s3Storage per-file headers and metadata', () => {
     await expect(files.put('a', 'x', { cacheControl: 'a\nb' })).rejects.toThrow('cacheControl')
   })
 })
+
+describe('s3Storage storageClass and publicUrl', () => {
+  function server(extra: Partial<Parameters<typeof s3Storage>[0]> = {}) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      ...extra,
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response('', {
+          headers: { 'content-length': '1', 'x-amz-storage-class': 'STANDARD_IA' },
+        })
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+
+  it('sends the storage default, a write’s own over it, and reads it back', async () => {
+    const { files, calls } = server({ storageClass: 'STANDARD_IA' })
+    await files.put('a', 'x')
+    await files.put('b', 'x', { storageClass: 'GLACIER_IR' })
+    expect(calls.map((c) => c.headers.get('x-amz-storage-class'))).toEqual([
+      'STANDARD_IA',
+      'GLACIER_IR',
+    ])
+    expect(calls[0]!.headers.get('authorization')).toContain('x-amz-storage-class')
+    expect(new URL(await files.uploadUrl('c')).searchParams.get('x-amz-storage-class')).toBe(
+      'STANDARD_IA',
+    )
+    expect((await files.uploadForm('d', { maxSize: 1 })).fields['x-amz-storage-class']).toBe(
+      'STANDARD_IA',
+    )
+    expect((await files.stat('a'))!.storageClass).toBe('STANDARD_IA')
+  })
+
+  it('refuses a name S3 would reject, up front for the storage', async () => {
+    expect(() => server({ storageClass: 'cold' })).toThrow(
+      'storageClass must be an S3 storage class',
+    )
+    await expect(server().files.put('a', 'x', { storageClass: 'cold' })).rejects.toThrow(
+      'storageClass',
+    )
+  })
+
+  it('publicUrl: the bucket address or the configured one, plus the encoded key', () => {
+    expect(server().files.publicUrl('avatars/a b.png')).toBe(
+      'http://s3.test/files/avatars/a%20b.png',
+    )
+    const cdn = server({ publicUrl: 'https://cdn.example.com/files/' })
+    expect(cdn.files.publicUrl('a b.png')).toBe('https://cdn.example.com/files/a%20b.png')
+    expect(() => server({ publicUrl: 'cdn' })).toThrow('publicUrl must be a URL')
+  })
+})
