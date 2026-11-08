@@ -71,6 +71,8 @@ it('reads a second bucket under its own prefix', () => {
     'R2_S3_SESSION_TOKEN',
     'R2_S3_FORCE_PATH_STYLE',
     'R2_S3_ACL',
+    'R2_S3_STORAGE_CLASS',
+    'R2_S3_PUBLIC_URL',
   ])
 })
 
@@ -132,4 +134,17 @@ it('follows a changed env when the app rebuilds (kick dev after a .env edit)', a
   await app.rebuild()
   await files.exists('k')
   expect(urls).toEqual(['http://minio.test/first/k', 'http://minio.test/second/k'])
+})
+
+it('reads S3_STORAGE_CLASS and S3_PUBLIC_URL', () => {
+  vi.stubEnv('S3_BUCKET', 'b')
+  vi.stubEnv('S3_STORAGE_CLASS', 'STANDARD_IA')
+  vi.stubEnv('S3_PUBLIC_URL', 'https://cdn.example.com')
+  expect(S3Settings.load()).toMatchObject({
+    storageClass: 'STANDARD_IA',
+    publicUrl: 'https://cdn.example.com',
+  })
+  vi.stubEnv('S3_STORAGE_CLASS', 'cold')
+  vi.stubEnv('S3_PUBLIC_URL', 'cdn')
+  expect(() => S3Settings.load()).toThrow(/S3_STORAGE_CLASS[\s\S]*S3_PUBLIC_URL/)
 })

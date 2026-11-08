@@ -15,3 +15,7 @@
 # S3_FORCE_PATH_STYLE=
 # Canned ACL for every file written, e.g. public-read; unset uses the bucket's default ACL (private, though a bucket policy can still allow reads)
 # S3_ACL=
+# Storage class for every file written, e.g. STANDARD_IA; unset uses the bucket default
+# S3_STORAGE_CLASS=
+# Address public files are served from (a CDN), for publicUrl(); default the bucket
+# S3_PUBLIC_URL=
