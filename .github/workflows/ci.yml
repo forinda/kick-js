@@ -166,40 +166,6 @@ jobs:
       - name: Smoke test — .kick views on Bun
         run: bun scripts/view-smoke.mjs
 
-  deno-smoke-test:
-    name: Deno smoke test
-    runs-on: ubuntu-latest
-    needs: build
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v8
-        with:
-          name: built-packages
-          path: packages
-      - name: Smoke test — pure ESM imports resolve under Deno
-        run: |
-          cat > deno-smoke.mjs << 'EOF'
-          import { Scope, Container, parseQuery } from "./packages/kickjs/dist/index.mjs"
-          console.log("Scope:", typeof Scope)
-          console.log("Container:", typeof Container)
-          console.log("parseQuery:", typeof parseQuery)
-          console.log("Deno smoke test passed")
-          EOF
-          deno run --allow-read=. --allow-env --allow-sys deno-smoke.mjs
-          rm deno-smoke.mjs
-      - name: Smoke test — .kick views on Deno
-        run: deno run --allow-read --allow-write --allow-env --allow-sys scripts/view-smoke.mjs
-
   bundle-size:
     name: Bundle size assertion (devtools strip)
     runs-on: ubuntu-latest

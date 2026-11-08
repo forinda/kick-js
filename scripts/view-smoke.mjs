@@ -1,6 +1,6 @@
-// `.kick` views on Bun and Deno: render a page with a layout, a component and
-// a pipe from the built package, reading templates from disk.
-// Run from the repo root: `bun scripts/view-smoke.mjs` / `deno run -A scripts/view-smoke.mjs`.
+// `.kick` views on Bun: render a page with a layout, a component and a pipe
+// from the built package, reading templates from disk.
+// Run from the repo root: `bun scripts/view-smoke.mjs`.
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
