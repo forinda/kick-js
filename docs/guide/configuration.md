@@ -410,7 +410,7 @@ const { url, pool } = DbSettings.get()
 
 #### After a `.env` edit
 
-Under `kick dev`, saving `.env` re-reads the environment and rebuilds the app: every section is read and validated again, optional and undeclared ones included, and services are created again in a fresh container. Code that reads a section **when it runs** sees the new values with no restart:
+Under `kick dev`, saving, creating or deleting a `.env` file in the project root (`.env`, `.env.local`, `.env.<mode>`) re-reads the environment and rebuilds the app: declared sections are read and validated again, so a bad value fails the rebuild, and services are created again in a fresh container. Optional and undeclared sections are read again too, but validated on their next `get()`, as at startup, so a bad value there fails the code that uses it, not the rebuild. Code that reads a section **when it runs** sees the new values with no restart:
 
 - an injected section (`@Inject(DbSettings)`) is the new value in the rebuilt service
 - `DbSettings.get()` returns the new value from the next call
@@ -434,7 +434,7 @@ export class Database {
 
 The same goes for a client built from a section: build it in a service or a factory (`container.registerFactory(...)`) so the rebuild builds it again. `s3FromSettings()` from `@forinda/kickjs-storage/settings` does this itself: it builds the storage on first use and again whenever its section's value changes.
 
-Outside `kick dev`, the environment is read once when the app starts: a deployed app takes new values on restart. A script that wants fresh values mid-run calls `reloadEnv()`, then `get()`.
+Outside `kick dev`, the environment is read once when the app starts: a deployed app takes new values on restart. A script that wants fresh values mid-run calls `reloadEnv()`, then `get()`, for a section it hasn't bound. If the script started an app, its sections are bound and `get()` returns the binding: `DbSettings.load()` parses the current environment instead (injected values stay as they were).
 
 ### Listing every variable: `.env.example`
 
