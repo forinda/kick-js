@@ -134,7 +134,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: oven-sh/setup-bun@v2
+      # From npm, not setup-bun: setup-bun downloads Bun's GitHub release
+      # assets, which have answered 504 for every version during outages.
+      - run: npm install --global bun
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v8
         with:
@@ -211,7 +213,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: oven-sh/setup-bun@v2
+      # From npm, not setup-bun: setup-bun downloads Bun's GitHub release
+      # assets, which have answered 504 for every version during outages.
+      - run: npm install --global bun
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v8
         with:
