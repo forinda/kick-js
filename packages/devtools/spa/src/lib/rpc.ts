@@ -235,7 +235,12 @@ export type ValueOrigin = 'env' | 'file' | 'provided' | 'default' | 'unset'
 
 export interface ConfigOrigins {
   env: Array<{ name: string; origin: ValueOrigin }>
-  sections: Array<{ prefix: string; vars: Array<{ name: string; origin: ValueOrigin }> }>
+  /** Bound sections, then ones declared `.optional()` and not bound (`optional: true`). */
+  sections: Array<{
+    prefix: string
+    optional?: true
+    vars: Array<{ name: string; origin: ValueOrigin }>
+  }>
 }
 
 export const rpc = {

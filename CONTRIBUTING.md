@@ -181,7 +181,7 @@ checklist. Keep a pull request to one change; a stack of small dependent pull
 requests reviews faster than one large one.
 
 CI runs formatting, oxlint, the token lint, typecheck, the tests, the build,
-Bun and Deno smoke tests and the bundle-size check, and the scaffold matrix's
+Bun smoke tests and the bundle-size check, and the scaffold matrix's
 smoke scenario when the CLI changed. A maintainer reviews and merges.
 
 Commit messages have no `Co-Authored-By` trailer naming an AI assistant. A
