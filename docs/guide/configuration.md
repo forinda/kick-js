@@ -408,6 +408,34 @@ const { url, pool } = DbSettings.get()
 
 `get()` returns what injected code sees — the value validated at startup, or a replacement bound in the container (below) — so it's cheap and never disagrees with DI. Called before the app starts (a CLI script, a seed file), the first call loads and validates it. `DbSettings.load(env?)` parses afresh — from `process.env`, or an env object you pass — when you need the current values instead.
 
+#### After a `.env` edit
+
+Under `kick dev`, saving `.env` re-reads the environment and rebuilds the app: every section is read and validated again, optional and undeclared ones included, and services are created again in a fresh container. Code that reads a section **when it runs** sees the new values with no restart:
+
+- an injected section (`@Inject(DbSettings)`) is the new value in the rebuilt service
+- `DbSettings.get()` returns the new value from the next call
+
+What doesn't follow is a value captured once, outside the app, in a module the reload doesn't re-run:
+
+```ts
+// ✗ read once when the file is imported: stays the old value after a .env edit
+const { url } = DbSettings.get()
+export const pool = createPool(url)
+
+// ✓ read when the app builds it: rebuilt with the new value
+@Service()
+export class Database {
+  readonly pool: Pool
+  constructor(@Inject(DbSettings) db: SettingsOf<typeof DbSettings>) {
+    this.pool = createPool(db.url)
+  }
+}
+```
+
+The same goes for a client built from a section: build it in a service or a factory (`container.registerFactory(...)`) so the rebuild builds it again. `s3FromSettings()` from `@forinda/kickjs-storage/settings` does this itself: it builds the storage on first use and again whenever its section's value changes.
+
+Outside `kick dev`, the environment is read once when the app starts: a deployed app takes new values on restart. A script that wants fresh values mid-run calls `reloadEnv()`, then `get()`.
+
 ### Listing every variable: `.env.example`
 
 `kick env example` writes `.env.example` from the env schema and the declared sections — required variables bare, optional ones commented with their default — and `--check` fails CI when it's stale. In code, `app.describeConfig()` returns the same list without reading or validating the environment. See [kick env example](./cli-commands.md#kick-env-example).

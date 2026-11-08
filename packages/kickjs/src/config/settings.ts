@@ -229,7 +229,17 @@ export function originsOf(
 }
 
 /** Values validated at startup (or on first `get()`), by prefix. */
-const cached = new WeakMap<Settings<unknown>, unknown>()
+let cached = new WeakMap<Settings<unknown>, unknown>()
+
+/**
+ * @internal Forget values `get()` loaded itself — sections that are optional
+ * or undeclared, so never bound — so the next `get()` reads the environment
+ * again. Called when an app binds its settings (each start and `kick dev`
+ * rebuild) and by `reloadEnv()`; bound sections are re-read by the binding.
+ */
+export function _forgetLoadedSettings(): void {
+  cached = new WeakMap()
+}
 
 /**
  * The env an optional section was declared against — the web entry's

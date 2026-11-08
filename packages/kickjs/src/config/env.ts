@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { z } from 'zod'
 import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
-import { _useSecretFileReader, describeSchemaVars, type ConfigVar } from './settings'
+import {
+  _forgetLoadedSettings,
+  _useSecretFileReader,
+  describeSchemaVars,
+  type ConfigVar,
+} from './settings'
 import { Container } from '../core/container'
 import type { EnvKey } from '../core/decorators'
 
@@ -473,6 +478,8 @@ export function reloadEnv(): void {
   // under a test run it could clobber pinned `.env.test` values with
   // the developer's own.
   tryLoadDotenv(true)
+  // Sections get() loaded itself read process.env too: read them again.
+  _forgetLoadedSettings()
 
   // Drop the parsed snapshot but keep the schema. Re-parse eagerly so
   // existing consumers (including ConfigService getters and @Value

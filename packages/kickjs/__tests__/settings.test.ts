@@ -15,6 +15,7 @@ import {
   createToken,
   defineAdapter,
   defineSettings,
+  reloadEnv,
   type SettingsOf,
 } from '../src/index'
 import { createWebApp } from '../src/web'
@@ -438,5 +439,31 @@ describe('optional sections', () => {
         adapters: [{ name: 'A', settings: () => [Smtp] }],
       }).setup(),
     ).rejects.toThrow(/KT_SMTP_HOST/)
+  })
+})
+
+describe('values after a reload', () => {
+  it('get() follows a rebuild, for bound and optional sections alike', async () => {
+    const Bound = defineSettings('KT_RL_BOUND', z.object({ v: z.string() }))
+    const Optional = defineSettings('KT_RL_OPT', z.object({ v: z.string() }))
+    vi.stubEnv('KT_RL_BOUND_V', 'one')
+    vi.stubEnv('KT_RL_OPT_V', 'one')
+    const app = new Application({ modules: [], settings: [Bound, Optional.optional()] })
+    await app.setup()
+    expect([Bound.get().v, Optional.get().v]).toEqual(['one', 'one'])
+    vi.stubEnv('KT_RL_BOUND_V', 'two')
+    vi.stubEnv('KT_RL_OPT_V', 'two')
+    await app.rebuild()
+    expect([Bound.get().v, Optional.get().v]).toEqual(['two', 'two'])
+  })
+
+  it('reloadEnv() makes an unbound section read the environment again', () => {
+    const Script = defineSettings('KT_RL_SCRIPT', z.object({ v: z.string() }))
+    vi.stubEnv('KT_RL_SCRIPT_V', 'one')
+    expect(Script.get().v).toBe('one')
+    vi.stubEnv('KT_RL_SCRIPT_V', 'two')
+    expect(Script.get().v).toBe('one') // cached until something reloads
+    reloadEnv()
+    expect(Script.get().v).toBe('two')
   })
 })
