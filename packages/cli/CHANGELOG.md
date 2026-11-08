@@ -1,5 +1,18 @@
 # @forinda/kickjs-cli
 
+## 8.17.4
+
+### Patch Changes
+
+- [#1130](https://github.com/forinda/kick-js/pull/1130) [`0c163d4`](https://github.com/forinda/kick-js/commit/0c163d40062ea47f7afcebc5494500956c1d91ce) Thanks [@forinda](https://github.com/forinda)! - `acl` for S3 buckets: a canned ACL (`'public-read'`, …) sent, signed, on every write a storage makes — `put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadForm` and `uploadUrl` (signed into the URL). Each of those also takes its own `acl`, over the storage's. `S3Settings` reads it from `S3_ACL`.
+  
+  `s3Configured(section?)` from `@forinda/kickjs-storage/settings`: true when the section's bucket is set (`S3_BUCKET` or `S3_BUCKET_FILE`). The `kick add storage` file now picks its driver with it instead of reading `process.env.S3_BUCKET`, which missed a bucket kept in a secret file.
+
+- [#1133](https://github.com/forinda/kick-js/pull/1133) [`6fcf09c`](https://github.com/forinda/kick-js/commit/6fcf09c9b7c1a9bf92b47ad89786510f58b7d624) Thanks [@forinda](https://github.com/forinda)! - S3 buckets: `storageClass` (`'STANDARD_IA'`, `'GLACIER_IR'`, …) on the storage and on each write, returned by `stat()`; and `publicUrl(key)`, the unsigned address of a public file, from the bucket or a `publicUrl` option such as a CDN. `S3Settings` reads `S3_STORAGE_CLASS` and `S3_PUBLIC_URL`, and the `kick add storage` `.env.example` lists them.
+- Updated dependencies [[`bf2d2aa`](https://github.com/forinda/kick-js/commit/bf2d2aaa103528d60688ade5db015a9122c564f7), [`2d1cf0b`](https://github.com/forinda/kick-js/commit/2d1cf0b9f92d006fd1dd2e6f7c2f722865a51e57)]:
+  - @forinda/kickjs@10.14.2
+  - @forinda/kickjs-db@8.12.4
+
 ## 8.17.3
 
 ### Patch Changes

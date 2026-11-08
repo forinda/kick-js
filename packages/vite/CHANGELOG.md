@@ -1,5 +1,11 @@
 # @forinda/kickjs-vite
 
+## 8.5.2
+
+### Patch Changes
+
+- [#1136](https://github.com/forinda/kick-js/pull/1136) [`407d717`](https://github.com/forinda/kick-js/commit/407d717b0197e14f417bcb32296b87a2b4a8d337) Thanks [@forinda](https://github.com/forinda)! - `envWatchPlugin()` reloads when an env file is created or deleted, not only when one that existed at startup changes. Creating the first `.env`, or deleting `.env.local`, under `kick dev` now takes effect without a restart.
+
 ## 8.5.1
 
 ### Patch Changes

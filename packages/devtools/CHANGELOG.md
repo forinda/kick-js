@@ -1,5 +1,13 @@
 # @forinda/kickjs-devtools
 
+## 7.19.2
+
+### Patch Changes
+
+- [#1131](https://github.com/forinda/kick-js/pull/1131) [`bf2d2aa`](https://github.com/forinda/kick-js/commit/bf2d2aaa103528d60688ade5db015a9122c564f7) Thanks [@forinda](https://github.com/forinda)! - `app.configOrigins()` lists sections declared `.optional()` too, marked `optional: true`, after the bound ones. They were left out, so the devtools Config panel didn't show a section like the `kick add storage` file's `S3Settings.optional()` while files were on disk. The panel labels them "(optional)".
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.3.0
+
 ## 7.19.1
 
 ### Patch Changes
