@@ -347,6 +347,84 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     expect((await post(pdf, 'svg', { 'Content-Type': 'image/svg+xml' })).status).toBe(403)
   })
 
+  it('keeps per-file headers and metadata, and serves the headers', async () => {
+    const options = {
+      contentType: 'text/plain',
+      cacheControl: 'public, max-age=60',
+      contentDisposition: 'attachment; filename="h.txt"',
+      contentLanguage: 'en',
+      metadata: { Owner: 'u1' },
+    }
+    await files.put(`${run}h/put.txt`, 'hi', options)
+    await files.put(`${run}h/stream.bin`, Readable.from([new Uint8Array(6 * MiB)]), options)
+    for (const key of [`${run}h/put.txt`, `${run}h/stream.bin`]) {
+      expect(await files.stat(key)).toMatchObject({
+        cacheControl: options.cacheControl,
+        contentDisposition: options.contentDisposition,
+        contentLanguage: 'en',
+        metadata: { owner: 'u1' },
+      })
+    }
+    const res = await fetch(await files.url(`${run}h/put.txt`))
+    expect(res.headers.get('cache-control')).toBe(options.cacheControl)
+    expect(res.headers.get('content-disposition')).toBe(options.contentDisposition)
+    await res.body?.cancel()
+
+    await files.compose(`${run}h/copy.txt`, [`${run}h/put.txt`], { metadata: { copied: 'yes' } })
+    expect((await files.stat(`${run}h/copy.txt`))!.metadata).toEqual({ copied: 'yes' })
+  })
+
+  it('takes metadata, headers and an acl through uploadUrl and uploadForm', async () => {
+    const url = await files.uploadUrl(`${run}h/browser.txt`, {
+      acl: 'public-read',
+      cacheControl: 'no-cache',
+      metadata: { from: 'browser' },
+    })
+    const put = await fetch(url, {
+      method: 'PUT',
+      body: 'b',
+      headers: { 'cache-control': 'no-cache' },
+    })
+    expect(put.status).toBe(200)
+    expect(await files.stat(`${run}h/browser.txt`)).toMatchObject({
+      cacheControl: 'no-cache',
+      metadata: { from: 'browser' },
+    })
+
+    const form = await files.uploadForm(`${run}h/form.txt`, {
+      maxSize: 10,
+      acl: 'public-read',
+      cacheControl: 'no-store',
+      metadata: { from: 'form' },
+    })
+    const data = new FormData()
+    for (const [name, value] of Object.entries(form.fields)) data.append(name, value)
+    data.append('file', new Blob(['f']))
+    expect((await fetch(form.url, { method: 'POST', body: data })).status).toBe(204)
+    expect(await files.stat(`${run}h/form.txt`)).toMatchObject({
+      cacheControl: 'no-store',
+      metadata: { from: 'form' },
+    })
+    // The bucket takes a write that sets a canned ACL.
+    await files.put(`${run}h/public.txt`, 'p', { acl: 'public-read' })
+    expect(await files.exists(`${run}h/public.txt`)).toBe(true)
+  })
+
+  it('deleteMany removes many files in one request, missing ones included', async () => {
+    const keys = Array.from({ length: 5 }, (_, i) => `${run}many/${i} &.txt`)
+    for (const key of keys) await files.put(key, 'x')
+    await files.deleteMany([...keys, `${run}many/never`])
+    expect((await files.list({ prefix: `${run}many/` })).files).toEqual([])
+  })
+
+  it('deleteMany deletes the key sent, not one an XML parser normalised it to', async () => {
+    await files.put(`${run}cr/a\r\nb`, 'crlf')
+    await files.put(`${run}cr/a\nb`, 'lf')
+    await files.deleteMany([`${run}cr/a\r\nb`])
+    expect(await files.exists(`${run}cr/a\r\nb`)).toBe(false)
+    expect(await files.exists(`${run}cr/a\nb`)).toBe(true)
+  })
+
   it('cleans up', async () => {
     for (let page = await files.list({ prefix: run }); ;) {
       for (const file of page.files) await files.delete(file.key)
