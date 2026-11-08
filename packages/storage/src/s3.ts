@@ -511,6 +511,12 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     throw new Error('s3Storage: partConcurrency must be a whole number, at least 1')
   }
   /** The keys to sign with now, the region and the time. */
+  /**
+   * The bucket's clock minus ours, learned from a clock-skew error and added
+   * to every signature's time after it, signed URLs included — as the AWS SDK
+   * does — so a host whose clock drifted past S3's 15 minutes keeps working.
+   */
+  let clockOffset = 0
   const signing = async () => {
     const keys = options.credentials
       ? await options.credentials()
@@ -519,7 +525,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
           secretAccessKey: options.secretAccessKey!,
           sessionToken: options.sessionToken,
         }
-    return { ...keys, region, date: new Date() }
+    return { ...keys, region, date: new Date(Date.now() + clockOffset) }
   }
   // The bucket itself (for listing) is BUCKET, never a key: every key goes
   // through encodeKey's check, so `''` can't address the bucket.
@@ -537,28 +543,83 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
     headers?: Record<string, string>
     body?: Uint8Array
     contentType?: string
+    /**
+     * CopyObject, UploadPartCopy, CompleteMultipartUpload: S3 can answer 200
+     * and put the failure in the body, or send no body when it aborted.
+     */
+    errorIn200?: boolean
   }
 
   /** {@link sendOnce}, again on a failure worth retrying — see `maxAttempts`. */
   async function send(method: string, key: string | typeof BUCKET, request: Request = {}) {
     const createOnly = request.headers?.['if-none-match'] !== undefined
-    const retryable = (status: number) =>
-      createOnly ? status === 503 : status >= 500 && status <= 504 && status !== 501
     for (let attempt = 1; ; attempt++) {
       const last = attempt >= maxAttempts
-      let res: Response
+      let classified: { res: Response; retry: boolean }
       try {
-        res = await sendOnce(method, key, request)
+        classified = await classify(
+          method,
+          await sendOnce(method, key, request),
+          request,
+          createOnly,
+        )
       } catch (err) {
         // No answer at all: a create-only write may have landed anyway.
         if (last || createOnly) throw err
         await backoff(attempt)
         continue
       }
-      if (last || !retryable(res.status)) return res
-      await res.body?.cancel()
+      if (last || !classified.retry) return classified.res
+      await classified.res.body?.cancel()
       await backoff(attempt)
     }
+  }
+
+  /**
+   * Whether `res` is worth sending again, as the AWS SDK decides: 5xx but 501,
+   * 429, S3's 400 `RequestTimeout`, a clock-skew error (after learning the
+   * offset), and a 200 that carries a failure (see `errorIn200`), taken as a
+   * 503. A create-only write is sent again only when S3 refused it before
+   * writing: 503, 429, `RequestTimeout`, clock skew. A body read here is put
+   * back into the response returned.
+   */
+  async function classify(
+    method: string,
+    res: Response,
+    request: Request,
+    createOnly: boolean,
+  ): Promise<{ res: Response; retry: boolean }> {
+    const again = (text: string, status: number) =>
+      new Response(status === 204 || method === 'HEAD' ? null : text, {
+        status,
+        statusText: res.statusText,
+        headers: res.headers,
+      })
+    if (res.ok && request.errorIn200) {
+      const text = await res.text()
+      const failed =
+        text.trim() === '' ||
+        (/<\/Error>\s*$/.test(text) && tag(text, 'Code') !== 'PreconditionFailed')
+      // Not for create-only: the write may have happened before S3 failed.
+      return failed && !createOnly
+        ? { res: again(text, 503), retry: true }
+        : { res: again(text, res.status), retry: false }
+    }
+    if (res.status === 503 || res.status === 429) return { res, retry: true }
+    if (res.status >= 500 && res.status <= 504 && res.status !== 501) {
+      return { res, retry: !createOnly }
+    }
+    if ((res.status === 400 || res.status === 403) && method !== 'HEAD') {
+      const text = await res.text()
+      const code = tag(text, 'Code')
+      const serverTime = Date.parse(res.headers.get('date') ?? '')
+      if (CLOCK_SKEW.has(code) && !Number.isNaN(serverTime)) {
+        clockOffset = serverTime - Date.now()
+        return { res: again(text, res.status), retry: true }
+      }
+      return { res: again(text, res.status), retry: code === 'RequestTimeout' }
+    }
+    return { res, retry: false }
   }
 
   async function sendOnce(method: string, key: string | typeof BUCKET, request: Request) {
@@ -661,6 +722,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
       query: { uploadId },
       body: toBytes(body),
       ...(createOnly ? { headers: { 'if-none-match': '*' } } : {}),
+      errorIn200: true,
     })
     if (createOnly && (res.status === 412 || res.status === 409)) {
       await res.body?.cancel()
@@ -844,6 +906,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
           ...writeHeaders(putOptions),
         },
         contentType: putOptions.contentType ?? 'application/octet-stream',
+        errorIn200: true,
       })
       const xml = await res.text()
       if (xml.includes('<Error>'))
@@ -877,6 +940,7 @@ export function s3Storage(options: S3StorageOptions): S3Storage {
                 'x-amz-copy-source': copySource(source),
                 'x-amz-copy-source-range': `bytes=${from}-${to}`,
               },
+              errorIn200: true,
             })
             const xml = await res.text()
             const etag = tag(xml, 'ETag')
@@ -1152,6 +1216,9 @@ const backoff = (attempt: number) =>
   new Promise((done) =>
     setTimeout(done, Math.random() * Math.min(20_000, 100 * 2 ** (attempt - 1))),
   )
+
+/** S3's answers to a request signed too far from its own time. */
+const CLOCK_SKEW = new Set(['RequestTimeTooSkewed', 'RequestExpired', 'RequestInTheFuture'])
 
 /** A POST form's field for a header, where the two differ. */
 const FORM_FIELDS: Record<string, string> = {

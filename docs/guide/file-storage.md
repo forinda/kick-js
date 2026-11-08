@@ -632,9 +632,20 @@ s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials, timeoutMs: 5000
 
 ### Retries
 
-A request that can't connect, times out, or gets a 500, 502, 503 or 504 is sent again, up to `maxAttempts` tries (default 3), after a random wait that doubles each time. That's what the AWS SDK does, and it rides out S3's `SlowDown` (a 503) and a dropped connection. Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
+A request is sent again, up to `maxAttempts` tries (default 3), after a random wait that doubles each time, when the AWS SDK would send it again:
 
-`putIfAbsent` is retried only on a 503, which S3 sends before writing. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote.
+- it can't connect, or times out
+- 500, 502, 503 or 504 (S3's `SlowDown` is a 503), or 429
+- S3's 400 `RequestTimeout`: the connection went idle before the body arrived
+- a copy or multipart completion answers 200 with an error, or with no body, which S3 does when it fails partway
+
+Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
+
+`putIfAbsent` is sent again only when S3 refused it before writing: 503, 429, `RequestTimeout`, or clock skew. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote.
+
+#### Clock skew
+
+S3 refuses a request signed more than 15 minutes from its own time. On that error (`RequestTimeTooSkewed`), the storage takes the bucket's time from the response's `Date` header, signs the retry with it, and keeps the offset for every later request and signed URL, as the SDK does. A host whose clock drifted keeps working. Fix the clock anyway: other services check time too.
 
 ## Config from the environment
 

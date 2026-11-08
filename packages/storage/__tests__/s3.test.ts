@@ -342,14 +342,16 @@ describe('s3Storage', () => {
       ])
     })
 
-    it('throws when complete answers 200 with an error body', async () => {
-      const { files, calls } = scripted([
+    it('retries, then throws, when complete keeps answering 200 with an error body', async () => {
+      const error: [number, string] = [
         200,
         '<Error><Code>InvalidPart</Code><Message>gone</Message></Error>',
-      ])
+      ]
+      const { files, calls } = scripted(error, error, error)
       await expect(
         files.multipart.complete('k', 'u', [{ partNumber: 1, etag: '"e"' }]),
-      ).rejects.toThrow('InvalidPart gone')
+      ).rejects.toThrow(/503[\s\S]*InvalidPart/)
+      expect(calls).toHaveLength(3)
       expect(await calls[0].text()).toBe(
         '<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&#34;e&#34;</ETag></Part></CompleteMultipartUpload>',
       )
@@ -1073,5 +1075,115 @@ describe('s3Storage deleteMany keys with control characters', () => {
     expect(await calls[0]!.text()).toContain('<Key>a&#13;&#10;b&#9;c</Key>')
     await expect(files.deleteMany(['a\u0001b'])).rejects.toThrow('control character')
     expect(calls).toHaveLength(1)
+  })
+})
+
+describe('s3Storage failures the AWS SDK retries', () => {
+  function server(...replies: Array<[number, string, Record<string, string>?]>) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        const [status, body, headers] = replies.shift() ?? [200, '']
+        return new Response(status === 204 ? null : body, { status, headers })
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+  beforeEach(() => void vi.spyOn(Math, 'random').mockReturnValue(0))
+  afterEach(() => vi.restoreAllMocks())
+  const parts = [{ partNumber: 1, etag: '"e"' }]
+  const done: [number, string] = [200, '<CompleteMultipartUploadResult/>']
+
+  it('an empty 200 from complete or a copy is a failure, retried', async () => {
+    const complete = server([200, ''], done)
+    await complete.files.multipart.complete('k', 'u', parts)
+    expect(complete.calls).toHaveLength(2)
+
+    const copy = server(
+      [200, '', { 'content-length': '3' }], // HEAD of the source
+      [200, ''],
+      [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+    )
+    await copy.files.compose('c', ['a'])
+    expect(copy.calls.map((c) => c.method)).toEqual(['HEAD', 'PUT', 'PUT'])
+
+    const never = server([200, ''], [200, ''], [200, ''])
+    await expect(never.files.multipart.complete('k', 'u', parts)).rejects.toThrow('503')
+  })
+
+  it('a 200 with an error from a part copy is retried', async () => {
+    const big = String(6 * 1024 * 1024)
+    const { files, calls } = server(
+      [200, '', { 'content-length': big }],
+      [200, '', { 'content-length': big }],
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '<Error><Code>InternalError</Code></Error>'],
+      [200, '<CopyPartResult><ETag>"p1"</ETag></CopyPartResult>'],
+      [200, '<CopyPartResult><ETag>"p2"</ETag></CopyPartResult>'],
+      done,
+    )
+    await files.compose('c', ['a', 'b'])
+    expect(calls).toHaveLength(7)
+  })
+
+  it('retries 429 and RequestTimeout, not other 400s', async () => {
+    const throttled = server([429, ''], [200, ''])
+    await throttled.files.put('a', 'x')
+    expect(throttled.calls).toHaveLength(2)
+    const idle = server([400, '<Error><Code>RequestTimeout</Code></Error>'], [200, ''])
+    await idle.files.put('a', 'x')
+    expect(idle.calls).toHaveLength(2)
+    const bad = server([400, '<Error><Code>InvalidArgument</Code><Message>no</Message></Error>'])
+    await expect(bad.files.put('a', 'x')).rejects.toThrow('InvalidArgument')
+    expect(bad.calls).toHaveLength(1)
+  })
+
+  it('learns the bucket clock from a skew error and signs with it from then on', async () => {
+    const serverTime = new Date(Date.now() + 60 * 60 * 1000) // an hour ahead
+    const { files, calls } = server(
+      [403, '<Error><Code>RequestTimeTooSkewed</Code></Error>', { date: serverTime.toUTCString() }],
+      [200, ''],
+      [200, ''],
+    )
+    await files.put('a', 'x')
+    await files.put('b', 'x')
+    const signedAt = (req: Request) => {
+      const d = req.headers.get('x-amz-date')!
+      return Date.parse(
+        `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${d.slice(9, 11)}:${d.slice(11, 13)}:${d.slice(13, 15)}Z`,
+      )
+    }
+    expect(Math.abs(signedAt(calls[0]!) - Date.now())).toBeLessThan(5_000)
+    for (const req of calls.slice(1)) {
+      expect(Math.abs(signedAt(req) - serverTime.getTime())).toBeLessThan(5_000)
+    }
+    const url = new URL(await files.url('a'))
+    expect(url.searchParams.get('X-Amz-Date')!.slice(0, 13)).toBe(
+      calls[2]!.headers.get('x-amz-date')!.slice(0, 13),
+    )
+  })
+
+  it('a create-only complete is not retried after a 200 failure or a 500', async () => {
+    const big = new Uint8Array(5 * 1024 * 1024)
+    // putIfAbsent of a large stream completes with If-None-Match.
+    const stream = server(
+      [404, ''], // HEAD: not there yet
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '', { etag: '"p1"' }],
+      [200, '', { etag: '"p2"' }],
+      [200, '<Error><Code>InternalError</Code></Error>'],
+      [204, ''], // abort
+    )
+    await expect(
+      stream.files.putIfAbsent('k', Readable.from([big, new Uint8Array(1)])),
+    ).rejects.toThrow('InternalError')
+    expect(stream.calls.filter((c) => new URL(c.url).search.startsWith('?uploadId'))).toHaveLength(
+      2, // one complete, one abort
+    )
   })
 })
