@@ -384,7 +384,7 @@ The browser splits the file and sends each part to its URL. It keeps the `ETag` 
   ]
   ```
 
-- **Abandoned uploads.** Parts of an upload that is never completed or aborted stay in the bucket and are billed. Add a lifecycle rule that aborts incomplete multipart uploads after a day or so (`AbortIncompleteMultipartUpload` on S3, and the same option on R2).
+- **Abandoned uploads.** Parts of an upload that is never completed or aborted stay in the bucket and are billed. Add a lifecycle rule that aborts incomplete multipart uploads after a day or so (`AbortIncompleteMultipartUpload` on S3, and the same option on R2). It also catches the rare upload the storage can't abort itself: if S3 starts an upload but the answer is lost, the retry starts another, and the first one's ID never reaches the storage. That can happen for browser multipart, a streamed `put` and `compose`.
 
 ## Resumable uploads through your server: tus
 
@@ -595,7 +595,7 @@ info?.metadata.owner // 'u1'; names come back lowercase
 info?.cacheControl
 ```
 
-`cacheControl`, `contentDisposition`, `contentEncoding` and `contentLanguage` are the headers the bucket serves the file with. `metadata` is sent as `x-amz-meta-*`: names are letters, digits, `-`, `_` and `.`, values printable ASCII, at most 2 KB in all. Anything else throws before the request is sent. `compose` replaces what the sources had with what you pass.
+`cacheControl`, `contentDisposition`, `contentEncoding` and `contentLanguage` are the headers the bucket serves the file with. `metadata` is sent as `x-amz-meta-*`: names are letters, digits, `-`, `_` and `.`, values printable ASCII, at most 2 KB in all. Anything else throws before the request is sent. `compose` replaces what the sources had with what you pass. `get` and `getStream` return a file's bytes as stored: a `gzip`-encoded file comes back gzipped, for you to decompress. Browsers fetching it through `url()` or `publicUrl()` decompress it themselves.
 
 Through `uploadUrl`, `metadata` and `acl` are signed into the URL. The four headers are signed as headers, so the browser's `PUT` must send them as given, like `contentType`. Through `uploadForm` they're form fields, and part of the policy.
 
@@ -612,7 +612,7 @@ do {
 } while (cursor)
 ```
 
-Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries an `x-amz-checksum-sha256` of its body, which S3 requires here. AWS S3 documents it and MinIO accepts it; check other S3-compatible services before relying on it.
+Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries the `Content-MD5` of its body, which S3 requires here and every S3-compatible API accepts. If a later batch fails, the error still names the keys earlier batches refused. Keys with control characters other than tab, newline and carriage return, or U+FFFE / U+FFFF, can't be sent in DeleteObjects' XML: delete those one by one with `delete()`.
 
 ### IAM roles instead of keys
 
@@ -643,11 +643,11 @@ A request is sent again, up to `maxAttempts` tries (default 3), after a random w
 
 Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
 
-`putIfAbsent` is sent again only when S3 refused it before writing: 503, 429, `RequestTimeout`, or clock skew. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote.
+`putIfAbsent` is sent again only when S3 refused it before writing: 503, 429, `RequestTimeout`, or clock skew. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote. A large `putIfAbsent` whose completion fails that way throws, and its upload is aborted. `PreconditionFailed`, another writer winning, is an answer, not a failure: `putIfAbsent` returns `false`.
 
 #### Clock skew
 
-S3 refuses a request signed more than 15 minutes from its own time. On that error (`RequestTimeTooSkewed`), the storage takes the bucket's time from the response's `Date` header, signs the retry with it, and keeps the offset for every later request and signed URL, as the SDK does. A host whose clock drifted keeps working. Fix the clock anyway: other services check time too.
+S3 refuses a request signed more than 15 minutes from its own time. On that error (`RequestTimeTooSkewed`), the storage takes the bucket's time from the response's `Date` header, signs the retry with it, and keeps the offset for every later request and signed URL, as the SDK does. A `HEAD` (`stat`, `exists`) has no body to name the error, so a 403 whose `Date` is more than 15 minutes from the storage's time counts as skew there. A host whose clock drifted keeps working. Fix the clock anyway: other services check time too.
 
 ## Config from the environment
 

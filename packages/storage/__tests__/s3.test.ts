@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { s3Storage } from '../src/index'
@@ -1038,12 +1039,10 @@ describe('s3Storage deleteMany', () => {
     expect(body.match(/<Object>/g)).toHaveLength(1000)
     expect(body).toContain('<Quiet>true</Quiet><Object><Key>k/0&#38;</Key></Object>')
     expect((await calls[1]!.text()).match(/<Object>/g)).toHaveLength(500)
-    const digest = new Uint8Array(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)),
+    expect(calls[0]!.headers.get('content-md5')).toBe(
+      createHash('md5').update(body).digest('base64'),
     )
-    expect(calls[0]!.headers.get('x-amz-checksum-sha256')).toBe(
-      btoa(String.fromCharCode(...digest)),
-    )
+    expect(calls[0]!.headers.get('authorization')).toContain('content-md5')
     await files.deleteMany([])
     expect(calls).toHaveLength(2)
   })
@@ -1184,6 +1183,125 @@ describe('s3Storage failures the AWS SDK retries', () => {
     ).rejects.toThrow('InternalError')
     expect(stream.calls.filter((c) => new URL(c.url).search.startsWith('?uploadId'))).toHaveLength(
       2, // one complete, one abort
+    )
+  })
+})
+
+describe('s3Storage review fixes', () => {
+  function server(...replies: Array<[number, string, Record<string, string>?]>) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        const [status, body, headers] = replies.shift() ?? [200, '']
+        return new Response(status === 204 || init?.method === 'HEAD' ? null : body, {
+          status,
+          headers,
+        })
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+  beforeEach(() => void vi.spyOn(Math, 'random').mockReturnValue(0))
+  afterEach(() => vi.restoreAllMocks())
+
+  it('deleteMany names keys an earlier batch refused when a later one fails', async () => {
+    const { files } = server(
+      [200, '<DeleteResult><Error><Key>k/0</Key><Code>AccessDenied</Code></Error></DeleteResult>'],
+      [400, '<Error><Code>MalformedXML</Code></Error>'],
+    )
+    const keys = Array.from({ length: 1001 }, (_, i) => `k/${i}`)
+    await expect(files.deleteMany(keys)).rejects.toThrow(
+      /could not delete k\/0 \(AccessDenied\), then: .*MalformedXML/,
+    )
+  })
+
+  it('deleteMany decodes a refused key once, and refuses U+FFFE / U+FFFF keys', async () => {
+    const { files, calls } = server([
+      200,
+      '<DeleteResult><Error><Key>a&amp;amp;b</Key><Code>AccessDenied</Code></Error></DeleteResult>',
+    ])
+    await expect(files.deleteMany(['a&amp;b'])).rejects.toThrow('could not delete a&amp;b (')
+    await expect(files.deleteMany(['a￾b'])).rejects.toThrow('control character')
+    expect(calls).toHaveLength(1)
+  })
+
+  it('a create-only completion that answers empty fails, unretried, and aborts', async () => {
+    const big = new Uint8Array(5 * 1024 * 1024)
+    const { files, calls } = server(
+      [404, ''], // HEAD: not there
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '', { etag: '"p1"' }],
+      [200, '', { etag: '"p2"' }],
+      [200, ''], // complete: empty
+      [204, ''], // abort
+    )
+    await expect(files.putIfAbsent('k', Readable.from([big, new Uint8Array(1)]))).rejects.toThrow(
+      '503',
+    )
+    expect(calls.at(-1)!.method).toBe('DELETE')
+    expect(
+      calls.filter((c) => c.method === 'POST' && new URL(c.url).search.startsWith('?uploadId')),
+    ).toHaveLength(1)
+  })
+
+  it('learns the clock from a HEAD 403 whose Date is past S3’s limit', async () => {
+    const ahead = new Date(Date.now() + 60 * 60 * 1000)
+    const { files, calls } = server(
+      [403, '', { date: ahead.toUTCString() }],
+      [200, '', { 'content-length': '1' }],
+    )
+    expect(await files.exists('a')).toBe(true)
+    expect(calls).toHaveLength(2)
+    expect(calls[1]!.headers.get('x-amz-date')!.slice(0, 11)).toBe(
+      ahead.toISOString().replace(/[-:]/g, '').slice(0, 11),
+    )
+    // A 403 with a close Date is just a 403.
+    const denied = server([403, '', { date: new Date().toUTCString() }])
+    await expect(denied.files.exists('a')).rejects.toThrow('403')
+    expect(denied.calls).toHaveLength(1)
+  })
+
+  it('publicUrl appends to the path, keeping a query or fragment', () => {
+    const files = s3Storage({
+      bucket: 'b',
+      accessKeyId: 'i',
+      secretAccessKey: 's',
+      publicUrl: 'https://cdn.example.com/files?v=1#x',
+    })
+    expect(files.publicUrl('a b.png')).toBe('https://cdn.example.com/files/a%20b.png?v=1#x')
+  })
+
+  it('stat keeps a __proto__ metadata name as a name', async () => {
+    const { files } = server([200, '', { 'content-length': '1', 'x-amz-meta-__proto__': 'v' }])
+    const info = await files.stat('a')
+    expect(Object.hasOwn(info!.metadata, '__proto__')).toBe(true)
+    expect(info!.metadata['__proto__']).toBe('v')
+  })
+
+  it('reads ask for the stored bytes, not a decoded body', async () => {
+    const { files, calls } = server([200, 'x'], [200, 'x'])
+    await files.get('a')
+    await files.getStream('a')
+    for (const req of calls)
+      expect(new URL(req.url).searchParams.get('response-content-encoding')).toBe('identity')
+  })
+
+  it('signs runs of spaces in a header value as one, as S3 checks them', async () => {
+    const date = new Date('2026-01-01T00:00:00Z')
+    const sign = (value: string) =>
+      signV4('PUT', new URL('http://s3.test/b/k'), { 'cache-control': value }, 'UNSIGNED-PAYLOAD', {
+        region: 'us-east-1',
+        accessKeyId: 'i',
+        secretAccessKey: 's',
+        date,
+      })
+    expect((await sign('public,  max-age=60')).signature).toBe(
+      (await sign('public, max-age=60')).signature,
     )
   })
 })

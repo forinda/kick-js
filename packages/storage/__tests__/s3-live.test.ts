@@ -425,6 +425,18 @@ describe.skipIf(!endpoint && !containers)('s3Storage against a live bucket', () 
     expect(await files.exists(`${run}cr/a\nb`)).toBe(true)
   })
 
+  it('get and getStream return gzip-encoded files as stored, not decompressed', async () => {
+    const { gzipSync } = await import('node:zlib')
+    const gz = new Uint8Array(gzipSync('hello, gzip'))
+    await files.put(`${run}gz/a.txt`, gz, { contentType: 'text/plain', contentEncoding: 'gzip' })
+    expect(await files.get(`${run}gz/a.txt`)).toEqual(gz)
+    const streamed = new Uint8Array(
+      await new Response(await files.getStream(`${run}gz/a.txt`)).arrayBuffer(),
+    )
+    expect(streamed).toEqual(gz)
+    expect((await files.stat(`${run}gz/a.txt`))!.contentEncoding).toBe('gzip')
+  })
+
   it('cleans up', async () => {
     for (let page = await files.list({ prefix: run }); ;) {
       for (const file of page.files) await files.delete(file.key)
