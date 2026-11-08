@@ -543,13 +543,38 @@ const url = await files.uploadUrl(`avatars/${id}.png`, {
 })
 ```
 
-The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws. A public file's address is `${files.location}/${key}` (encode each segment of the key), with no signature.
+The canned ACLs are `private`, `public-read`, `public-read-write`, `authenticated-read`, `aws-exec-read`, `bucket-owner-read` and `bucket-owner-full-control`; anything else throws.
 
 New AWS buckets have Object Ownership set to "bucket owner enforced", which turns ACLs off and refuses any write that sets one other than `bucket-owner-full-control`. There, make a prefix public with a bucket policy instead, or switch Object Ownership to "bucket owner preferred".
 
+A public file's address is `files.publicUrl(key)`: unsigned, the key encoded. Pass `publicUrl` (or set `S3_PUBLIC_URL`) to serve them from a CDN or your own domain instead of the bucket:
+
+```ts
+const files = s3Storage({
+  bucket: 'avatars',
+  region,
+  acl: 'public-read',
+  publicUrl: 'https://cdn.example.com',
+})
+files.publicUrl('u1/me.png') // https://cdn.example.com/u1/me.png
+```
+
+Nothing is checked: a private file's public address answers 403. Use `url()` for those.
+
+### Storage classes
+
+`storageClass` on the storage, or on one write, picks how S3 keeps the file: `STANDARD_IA` or `ONEZONE_IA` for files read rarely, `GLACIER_IR` for archives that still need reading in milliseconds, `GLACIER` and `DEEP_ARCHIVE` for ones that can wait. `stat()` returns it, except for `STANDARD`, which S3 doesn't report:
+
+```ts
+const archive = s3Storage({ bucket: 'backups', region, storageClass: 'GLACIER_IR' })
+await files.put(`exports/${id}.zip`, zip, { storageClass: 'STANDARD_IA' })
+```
+
+A file in `GLACIER` or `DEEP_ARCHIVE` has to be restored before `get()` can read it, which this storage doesn't do. Other S3 APIs have their own classes (R2 has `STANDARD` and `STANDARD_IA`), so any upper-case name is sent as given and the bucket rejects one it doesn't know. `S3_STORAGE_CLASS` sets it from the environment.
+
 ### Per-file headers and metadata
 
-`put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm` also take how the bucket serves the file, and your own name/value pairs kept with it:
+`put`, `putIfAbsent`, `compose`, `multipart.create`, `uploadUrl` and `uploadForm` also take `storageClass` and how the bucket serves the file, and your own name/value pairs kept with it:
 
 ```ts
 await files.put(`avatars/${id}.png`, bytes, {
@@ -572,6 +597,21 @@ info?.cacheControl
 
 Through `uploadUrl`, `metadata` and `acl` are signed into the URL. The four headers are signed as headers, so the browser's `PUT` must send them as given, like `contentType`. Through `uploadForm` they're form fields, and part of the policy.
 
+### Deleting many files: `deleteMany`
+
+`deleteMany(keys)` deletes up to 1000 files per request (S3's DeleteObjects) instead of one request each, for clearing a user's uploads or a prefix you listed:
+
+```ts
+let cursor: string | undefined
+do {
+  const page = await files.list({ prefix: `users/${id}/`, cursor })
+  await files.deleteMany(page.files.map((f) => f.key))
+  cursor = page.cursor
+} while (cursor)
+```
+
+Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries an `x-amz-checksum-sha256` of its body, which S3 requires here. AWS S3 documents it and MinIO accepts it; check other S3-compatible services before relying on it.
+
 ### IAM roles instead of keys
 
 On ECS, EC2 or EKS with a role, pass `credentials` instead of `accessKeyId` / `secretAccessKey`: a function that returns the current keys. It is called before every request and signed URL, so it must cache and refresh them itself. The AWS provider chain does both:
@@ -592,9 +632,20 @@ s3Storage({ bucket: 'avatars', region: 'eu-west-1', credentials, timeoutMs: 5000
 
 ### Retries
 
-A request that can't connect, times out, or gets a 500, 502, 503 or 504 is sent again, up to `maxAttempts` tries (default 3), after a random wait that doubles each time. That's what the AWS SDK does, and it rides out S3's `SlowDown` (a 503) and a dropped connection. Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
+A request is sent again, up to `maxAttempts` tries (default 3), after a random wait that doubles each time, when the AWS SDK would send it again:
 
-`putIfAbsent` is retried only on a 503, which S3 sends before writing. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote.
+- it can't connect, or times out
+- 500, 502, 503 or 504 (S3's `SlowDown` is a 503), or 429
+- S3's 400 `RequestTimeout`: the connection went idle before the body arrived
+- a copy or multipart completion answers 200 with an error, or with no body, which S3 does when it fails partway
+
+Each try is signed afresh. Set `maxAttempts: 1` to turn retries off.
+
+`putIfAbsent` is sent again only when S3 refused it before writing: 503, 429, `RequestTimeout`, or clock skew. After any other failure the write may have happened, and a retry would find the key taken and return `false` for a file this call wrote.
+
+#### Clock skew
+
+S3 refuses a request signed more than 15 minutes from its own time. On that error (`RequestTimeTooSkewed`), the storage takes the bucket's time from the response's `Date` header, signs the retry with it, and keeps the offset for every later request and signed URL, as the SDK does. A host whose clock drifted keeps working. Fix the clock anyway: other services check time too.
 
 ## Config from the environment
 
@@ -610,6 +661,8 @@ S3_SECRET_ACCESS_KEY=...
 # S3_SESSION_TOKEN=...
 # S3_FORCE_PATH_STYLE=true
 # S3_ACL=public-read
+# S3_STORAGE_CLASS=STANDARD_IA
+# S3_PUBLIC_URL=https://cdn.example.com
 ```
 
 ```ts

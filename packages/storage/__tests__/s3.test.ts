@@ -342,14 +342,16 @@ describe('s3Storage', () => {
       ])
     })
 
-    it('throws when complete answers 200 with an error body', async () => {
-      const { files, calls } = scripted([
+    it('retries, then throws, when complete keeps answering 200 with an error body', async () => {
+      const error: [number, string] = [
         200,
         '<Error><Code>InvalidPart</Code><Message>gone</Message></Error>',
-      ])
+      ]
+      const { files, calls } = scripted(error, error, error)
       await expect(
         files.multipart.complete('k', 'u', [{ partNumber: 1, etag: '"e"' }]),
-      ).rejects.toThrow('InvalidPart gone')
+      ).rejects.toThrow(/503[\s\S]*InvalidPart/)
+      expect(calls).toHaveLength(3)
       expect(await calls[0].text()).toBe(
         '<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&#34;e&#34;</ETag></Part></CompleteMultipartUpload>',
       )
@@ -950,5 +952,238 @@ describe('s3Storage per-file headers and metadata', () => {
     )
     await expect(files.put('a', 'x', { metadata: { n: 'x'.repeat(2048) } })).rejects.toThrow('2 KB')
     await expect(files.put('a', 'x', { cacheControl: 'a\nb' })).rejects.toThrow('cacheControl')
+  })
+})
+
+describe('s3Storage storageClass and publicUrl', () => {
+  function server(extra: Partial<Parameters<typeof s3Storage>[0]> = {}) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      ...extra,
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response('', {
+          headers: { 'content-length': '1', 'x-amz-storage-class': 'STANDARD_IA' },
+        })
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+
+  it('sends the storage default, a write’s own over it, and reads it back', async () => {
+    const { files, calls } = server({ storageClass: 'STANDARD_IA' })
+    await files.put('a', 'x')
+    await files.put('b', 'x', { storageClass: 'GLACIER_IR' })
+    expect(calls.map((c) => c.headers.get('x-amz-storage-class'))).toEqual([
+      'STANDARD_IA',
+      'GLACIER_IR',
+    ])
+    expect(calls[0]!.headers.get('authorization')).toContain('x-amz-storage-class')
+    expect(new URL(await files.uploadUrl('c')).searchParams.get('x-amz-storage-class')).toBe(
+      'STANDARD_IA',
+    )
+    expect((await files.uploadForm('d', { maxSize: 1 })).fields['x-amz-storage-class']).toBe(
+      'STANDARD_IA',
+    )
+    expect((await files.stat('a'))!.storageClass).toBe('STANDARD_IA')
+  })
+
+  it('refuses a name S3 would reject, up front for the storage', async () => {
+    expect(() => server({ storageClass: 'cold' })).toThrow(
+      'storageClass must be an S3 storage class',
+    )
+    await expect(server().files.put('a', 'x', { storageClass: 'cold' })).rejects.toThrow(
+      'storageClass',
+    )
+  })
+
+  it('publicUrl: the bucket address or the configured one, plus the encoded key', () => {
+    expect(server().files.publicUrl('avatars/a b.png')).toBe(
+      'http://s3.test/files/avatars/a%20b.png',
+    )
+    const cdn = server({ publicUrl: 'https://cdn.example.com/files/' })
+    expect(cdn.files.publicUrl('a b.png')).toBe('https://cdn.example.com/files/a%20b.png')
+    expect(() => server({ publicUrl: 'cdn' })).toThrow('publicUrl must be a URL')
+  })
+})
+
+describe('s3Storage deleteMany', () => {
+  function server(...replies: string[]) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response(replies.shift() ?? '<DeleteResult/>')
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+
+  it('sends one checksummed DeleteObjects per 1000 keys, each key once', async () => {
+    const { files, calls } = server()
+    const keys = Array.from({ length: 1500 }, (_, i) => `k/${i}&`)
+    await files.deleteMany([...keys, 'k/0&'])
+    expect(calls).toHaveLength(2)
+    expect(calls[0]!.method).toBe('POST')
+    expect(new URL(calls[0]!.url).search).toBe('?delete=')
+    const body = await calls[0]!.text()
+    expect(body.match(/<Object>/g)).toHaveLength(1000)
+    expect(body).toContain('<Quiet>true</Quiet><Object><Key>k/0&#38;</Key></Object>')
+    expect((await calls[1]!.text()).match(/<Object>/g)).toHaveLength(500)
+    const digest = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)),
+    )
+    expect(calls[0]!.headers.get('x-amz-checksum-sha256')).toBe(
+      btoa(String.fromCharCode(...digest)),
+    )
+    await files.deleteMany([])
+    expect(calls).toHaveLength(2)
+  })
+
+  it('throws naming the keys the bucket refused', async () => {
+    const { files } = server(
+      '<DeleteResult><Error><Key>a</Key><Code>AccessDenied</Code><Message>no</Message></Error></DeleteResult>',
+    )
+    await expect(files.deleteMany(['a', 'b'])).rejects.toThrow(
+      'deleteMany could not delete a (AccessDenied)',
+    )
+  })
+})
+
+describe('s3Storage deleteMany keys with control characters', () => {
+  it('sends \r, \n and \t as references, and refuses what XML cannot carry', async () => {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        return new Response('<DeleteResult/>')
+      }) as unknown as typeof globalThis.fetch,
+    })
+    await files.deleteMany(['a\r\nb\tc'])
+    expect(await calls[0]!.text()).toContain('<Key>a&#13;&#10;b&#9;c</Key>')
+    await expect(files.deleteMany(['a\u0001b'])).rejects.toThrow('control character')
+    expect(calls).toHaveLength(1)
+  })
+})
+
+describe('s3Storage failures the AWS SDK retries', () => {
+  function server(...replies: Array<[number, string, Record<string, string>?]>) {
+    const calls: Request[] = []
+    const files = s3Storage({
+      bucket: 'files',
+      accessKeyId: 'id',
+      secretAccessKey: 'secret',
+      endpoint: 'http://s3.test',
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+        calls.push(new Request(input, init))
+        const [status, body, headers] = replies.shift() ?? [200, '']
+        return new Response(status === 204 ? null : body, { status, headers })
+      }) as unknown as typeof globalThis.fetch,
+    })
+    return { files, calls }
+  }
+  beforeEach(() => void vi.spyOn(Math, 'random').mockReturnValue(0))
+  afterEach(() => vi.restoreAllMocks())
+  const parts = [{ partNumber: 1, etag: '"e"' }]
+  const done: [number, string] = [200, '<CompleteMultipartUploadResult/>']
+
+  it('an empty 200 from complete or a copy is a failure, retried', async () => {
+    const complete = server([200, ''], done)
+    await complete.files.multipart.complete('k', 'u', parts)
+    expect(complete.calls).toHaveLength(2)
+
+    const copy = server(
+      [200, '', { 'content-length': '3' }], // HEAD of the source
+      [200, ''],
+      [200, '<CopyObjectResult><ETag>"x"</ETag></CopyObjectResult>'],
+    )
+    await copy.files.compose('c', ['a'])
+    expect(copy.calls.map((c) => c.method)).toEqual(['HEAD', 'PUT', 'PUT'])
+
+    const never = server([200, ''], [200, ''], [200, ''])
+    await expect(never.files.multipart.complete('k', 'u', parts)).rejects.toThrow('503')
+  })
+
+  it('a 200 with an error from a part copy is retried', async () => {
+    const big = String(6 * 1024 * 1024)
+    const { files, calls } = server(
+      [200, '', { 'content-length': big }],
+      [200, '', { 'content-length': big }],
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '<Error><Code>InternalError</Code></Error>'],
+      [200, '<CopyPartResult><ETag>"p1"</ETag></CopyPartResult>'],
+      [200, '<CopyPartResult><ETag>"p2"</ETag></CopyPartResult>'],
+      done,
+    )
+    await files.compose('c', ['a', 'b'])
+    expect(calls).toHaveLength(7)
+  })
+
+  it('retries 429 and RequestTimeout, not other 400s', async () => {
+    const throttled = server([429, ''], [200, ''])
+    await throttled.files.put('a', 'x')
+    expect(throttled.calls).toHaveLength(2)
+    const idle = server([400, '<Error><Code>RequestTimeout</Code></Error>'], [200, ''])
+    await idle.files.put('a', 'x')
+    expect(idle.calls).toHaveLength(2)
+    const bad = server([400, '<Error><Code>InvalidArgument</Code><Message>no</Message></Error>'])
+    await expect(bad.files.put('a', 'x')).rejects.toThrow('InvalidArgument')
+    expect(bad.calls).toHaveLength(1)
+  })
+
+  it('learns the bucket clock from a skew error and signs with it from then on', async () => {
+    const serverTime = new Date(Date.now() + 60 * 60 * 1000) // an hour ahead
+    const { files, calls } = server(
+      [403, '<Error><Code>RequestTimeTooSkewed</Code></Error>', { date: serverTime.toUTCString() }],
+      [200, ''],
+      [200, ''],
+    )
+    await files.put('a', 'x')
+    await files.put('b', 'x')
+    const signedAt = (req: Request) => {
+      const d = req.headers.get('x-amz-date')!
+      return Date.parse(
+        `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${d.slice(9, 11)}:${d.slice(11, 13)}:${d.slice(13, 15)}Z`,
+      )
+    }
+    expect(Math.abs(signedAt(calls[0]!) - Date.now())).toBeLessThan(5_000)
+    for (const req of calls.slice(1)) {
+      expect(Math.abs(signedAt(req) - serverTime.getTime())).toBeLessThan(5_000)
+    }
+    const url = new URL(await files.url('a'))
+    expect(url.searchParams.get('X-Amz-Date')!.slice(0, 13)).toBe(
+      calls[2]!.headers.get('x-amz-date')!.slice(0, 13),
+    )
+  })
+
+  it('a create-only complete is not retried after a 200 failure or a 500', async () => {
+    const big = new Uint8Array(5 * 1024 * 1024)
+    // putIfAbsent of a large stream completes with If-None-Match.
+    const stream = server(
+      [404, ''], // HEAD: not there yet
+      [200, '<R><UploadId>u1</UploadId></R>'],
+      [200, '', { etag: '"p1"' }],
+      [200, '', { etag: '"p2"' }],
+      [200, '<Error><Code>InternalError</Code></Error>'],
+      [204, ''], // abort
+    )
+    await expect(
+      stream.files.putIfAbsent('k', Readable.from([big, new Uint8Array(1)])),
+    ).rejects.toThrow('InternalError')
+    expect(stream.calls.filter((c) => new URL(c.url).search.startsWith('?uploadId'))).toHaveLength(
+      2, // one complete, one abort
+    )
   })
 })

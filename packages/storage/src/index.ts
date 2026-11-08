@@ -37,6 +37,7 @@ export {
   type S3PutOptions,
   type S3ObjectOptions,
   type S3FileInfo,
+  type S3StorageClass,
   type CompletedPart,
   type S3Credentials,
   type Multipart,
