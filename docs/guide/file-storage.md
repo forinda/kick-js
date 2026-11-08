@@ -610,7 +610,7 @@ do {
 } while (cursor)
 ```
 
-Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries an `x-amz-checksum-sha256` of its body, which S3 requires here; AWS S3, R2 and MinIO accept it.
+Keys that don't exist count as deleted, as with `delete()`. If the bucket refuses some keys, the rest are still deleted and the call throws naming the refused ones. The request carries an `x-amz-checksum-sha256` of its body, which S3 requires here. AWS S3 documents it and MinIO accepts it; check other S3-compatible services before relying on it.
 
 ### IAM roles instead of keys
 
