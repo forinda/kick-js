@@ -74,7 +74,7 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-testing": "workspace:*",
-    "@swc/core": "^1.16.20",
+    "@swc/core": "^1.16.22",
     "@types/node": "^26.6.6",
     "@types/supertest": "^7.2.1",
     "supertest": "^7.3.1",
@@ -82,7 +82,7 @@
     "tus-js-client": "^4.3.1",
     "typescript": "^7.0.2",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "publishConfig": {
     "access": "public"

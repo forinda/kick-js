@@ -58,15 +58,15 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
-    "@swc/core": "^1.16.20",
+    "@swc/core": "^1.16.22",
     "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
     "ioredis": "^6.0.0",
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5",
-    "ws": "^8.22.0"
+    "vitest": "^5.1.0",
+    "ws": "^8.22.1"
   },
   "publishConfig": {
     "access": "public"

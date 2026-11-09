@@ -525,12 +525,12 @@
   "devDependencies": {
     "@forinda/kickjs-view-language-server": "workspace:*",
     "@types/node": "^26.6.6",
-    "@types/vscode": "^1.144.0",
+    "@types/vscode": "^1.145.0",
     "@vscode/vsce": "^4.1.0",
     "sharp": "^0.35.5",
     "tm-grammars": "^1.32.22",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "vscode-tmlanguage-snapshot": "^2.0.0"
   },
   "private": true,
