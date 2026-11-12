@@ -47,7 +47,7 @@ describe('KickError', () => {
     expect(err.message).toContain('No widgets available')
     expect(err.message).toContain('Cause:')
     expect(err.message).toContain('Fix:')
-    expect(err.message).not.toMatch(/\[/) // no ANSI escapes
+    expect(err.message).not.toContain('\u001b[') // no ANSI escapes
   })
 
   it("omits a section when its field isn't provided", () => {
@@ -87,7 +87,7 @@ describe('formatKickError', () => {
 
   it('emits ANSI codes when `color: true`', () => {
     const out = formatKickError({ code: 'TEST', summary: 'x' }, { color: true })
-    expect(out).toMatch(/\[/)
+    expect(out).toContain('\u001b[')
   })
 
   it('emits NO ANSI codes when `color: false`', () => {
@@ -95,19 +95,19 @@ describe('formatKickError', () => {
       { code: 'TEST', summary: 'x', cause: 'y', fix: 'z' },
       { color: false },
     )
-    expect(out).not.toMatch(/\[/)
+    expect(out).not.toContain('\u001b[')
   })
 
   it('honors NO_COLOR env var when `color` is unspecified', () => {
     process.env.NO_COLOR = '1'
     const out = formatKickError({ code: 'TEST', summary: 'x' })
-    expect(out).not.toMatch(/\[/)
+    expect(out).not.toContain('\u001b[')
   })
 
   it('honors FORCE_COLOR env var when `color` is unspecified', () => {
     process.env.FORCE_COLOR = '1'
     const out = formatKickError({ code: 'TEST', summary: 'x', cause: 'y' })
-    expect(out).toMatch(/\[/)
+    expect(out).toContain('\u001b[')
   })
 
   afterEach(() => {

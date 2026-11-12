@@ -32,6 +32,7 @@ export function registerInitCommand(program: Command): void {
     .option('-f, --force', 'Remove existing files without prompting')
     .option('-t, --template <type>', 'Project template: rest | minimal | fullstack | inertia')
     .option('--runtime <engine>', 'HTTP runtime: express | fastify | h3')
+    .option('--client <framework>', 'Inertia template pages: react | vue | svelte (default react)')
     .option('-r, --repo <type>', 'Repository name (inmemory, or any DB name e.g. postgres)')
     .option(
       '-s, --schema <lib>',
@@ -75,6 +76,15 @@ export function registerInitCommand(program: Command): void {
         deploy = opts.deploy ? parseDeployTargets(opts.deploy) : []
       } catch (err) {
         log.error((err as Error).message)
+        outro('Aborted.')
+        process.exitCode = 1
+        return
+      }
+      const CLIENTS = ['react', 'vue', 'svelte'] as const
+      type InertiaClient = (typeof CLIENTS)[number]
+      let client: InertiaClient | undefined = opts.client
+      if (client !== undefined && !CLIENTS.includes(client)) {
+        log.error(`Unknown --client '${String(client)}'. Use ${CLIENTS.join(', ')}.`)
         outro('Aborted.')
         process.exitCode = 1
         return
@@ -170,11 +180,27 @@ export function registerInitCommand(program: Command): void {
               {
                 value: 'inertia',
                 label: 'Inertia',
-                hint: 'server-driven React pages, one app, SSR',
+                hint: 'server-driven React, Vue or Svelte pages, one app, SSR',
               },
             ],
           })
         }
+      }
+
+      // ── Inertia pages ─────────────────────────────────────────────
+      if (template === 'inertia' && client === undefined) {
+        client = yes
+          ? 'react'
+          : ((await select({
+              message: 'Pages written in',
+              options: [
+                { value: 'react', label: 'React' },
+                { value: 'vue', label: 'Vue' },
+                { value: 'svelte', label: 'Svelte' },
+              ],
+            })) as InertiaClient)
+      } else if (template !== 'inertia' && client !== undefined) {
+        log.warn('--client applies to the inertia template only; ignoring it.')
       }
 
       // ── HTTP runtime ──────────────────────────────────────────────
@@ -395,6 +421,7 @@ export function registerInitCommand(program: Command): void {
         initGit,
         installDeps,
         template,
+        client,
         defaultRepo,
         packages: selectedPackages,
         schemaLib,

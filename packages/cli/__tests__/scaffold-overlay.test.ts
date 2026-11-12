@@ -388,6 +388,9 @@ describe('the shipped layers', () => {
     expect(project.files.get('tsconfig.json')).toContain('"jsx": "react-jsx"')
     expect(project.files.get('vite.config.ts')).toContain('react()')
     expect(project.scripts.build).toContain('--ssr src/client/ssr.tsx')
+    expect(entry).toContain(
+      "entry: 'src/client/main.tsx',\n      ssr: { entry: 'src/client/ssr.tsx' },",
+    )
     // `kick g deploy` builds the platform scripts on this one, so they build
     // the client manifest the adapter reads at startup (deploy-generator.test.ts).
     expect(project.files.get('.env')).toContain('SESSION_SECRET={{sessionSecret}}')
@@ -441,6 +444,57 @@ describe('the shipped layers', () => {
       ).toBe(true)
     }
   })
+
+  it.each([
+    ['vue', '@inertiajs/vue3', '@vitejs/plugin-vue', 'vue()', '.vue'],
+    ['svelte', '@inertiajs/svelte', '@sveltejs/vite-plugin-svelte', 'svelte()', '.svelte'],
+  ] as const)(
+    'render the inertia template with %s pages and no React',
+    (client, adapter, plugin, call, ext) => {
+      const project = renderLayers(
+        scaffoldLayers({
+          template: 'inertia',
+          client,
+          runtime: 'express',
+          schemaLib: 'zod',
+          packages: [],
+        }),
+      )
+      const entry = project.files.get('src/index.ts')!
+      expect(entry).toContain(
+        "entry: 'src/client/main.ts',\n      ssr: { entry: 'src/client/ssr.ts' },",
+      )
+      expect(entry).not.toContain('@kick:')
+      expect(project.scripts.build).toContain('--ssr src/client/ssr.ts')
+      for (const path of [
+        'src/client/main.ts',
+        'src/client/ssr.ts',
+        'src/client/app.css',
+        `src/client/Layout${ext}`,
+        `src/client/pages/Home${ext}`,
+        `src/client/pages/Error${ext}`,
+        `src/client/pages/Posts/Index${ext}`,
+        'src/modules/pages/pages.controller.ts',
+      ]) {
+        expect(project.files.has(path), path).toBe(true)
+      }
+      expect([...project.files.keys()].filter((path) => path.endsWith('.tsx'))).toEqual([])
+      expect(project.files.get('vite.config.ts')).toContain(call)
+      expect(project.files.get('vite.client.config.ts')).toContain(call)
+      expect(project.dependencies).toEqual(
+        expect.arrayContaining(['@forinda/kickjs-inertia', adapter]),
+      )
+      expect(project.devDependencies).toContain(plugin)
+      const all = [...project.dependencies, ...project.devDependencies]
+      expect(all.filter((pkg) => pkg.includes('react'))).toEqual([])
+      for (const pkg of all) {
+        expect(
+          (SIBLING_PACKAGES as readonly string[]).includes(pkg) || pkg in THIRD_PARTY_PACKAGES,
+          pkg,
+        ).toBe(true)
+      }
+    },
+  )
 
   it('ship one env schema per schema library', () => {
     for (const lib of ['zod', 'valibot', 'yup'] as const) {

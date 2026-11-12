@@ -1,4 +1,4 @@
-/* Global styles, imported by main.tsx (browser) and ssr.tsx (server).
+/* Global styles, imported by the browser entry (main) and the server-render entry (ssr).
  * Tailwind: {{packageManager}} add -D tailwindcss @tailwindcss/vite, add tailwindcss() to
  * the plugins in vite.config.ts and vite.client.config.ts, then replace this
  * file's contents with: @import "tailwindcss";

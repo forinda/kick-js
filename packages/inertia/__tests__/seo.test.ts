@@ -284,6 +284,50 @@ for (const rt of RUNTIMES)
       expect(res.text).toContain('content="#fff"')
     })
 
+    it('drops tags a server-rendered head sets in one string (Svelte)', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.ts',
+          bundle: ssrBundle([
+            '<!--1b2c--><title>From Svelte</title><meta name="description" content="From Svelte"><!---->',
+          ]),
+        },
+      })
+      const res = await app.get('/notes/1').expect(200)
+      expect(res.text.match(/<title/g)).toHaveLength(1)
+      expect(res.text.match(/name="description"/g)).toHaveLength(1)
+      expect(res.text).toContain('content="From Svelte"')
+      expect(res.text).toContain('property="og:type" content="article"')
+    })
+
+    it('reads a `>` inside a quoted value, and skips tags in comments and scripts', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.ts',
+          bundle: ssrBundle([
+            '<meta content="A > B" name="description">',
+            '<!-- <title>old</title> -->',
+            '<script>const t = \'<meta property="og:type" content="x">\'</script>',
+          ]),
+        },
+      })
+      const res = await app.get('/notes/1').expect(200)
+      expect(res.text.match(/name="description"/g)).toHaveLength(1)
+      expect(res.text).toContain('property="og:type" content="article"')
+      expect(res.text).toContain('<title data-inertia="">')
+    })
+
+    it('reads `<!--` inside a quoted value as text', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.ts',
+          bundle: ssrBundle(['<meta name="description" content="<!--"><!-- marker -->']),
+        },
+      })
+      const res = await app.get('/notes/1').expect(200)
+      expect(res.text.match(/name="description"/g)).toHaveLength(1)
+    })
+
     it('answers /sitemap.xml with escaped, absolute URLs', async () => {
       const res = await (await makeApp()).get('/sitemap.xml').expect(200)
       expect(res.headers['content-type']).toMatch(/^application\/xml/)

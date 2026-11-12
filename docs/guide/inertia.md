@@ -11,25 +11,27 @@
 ## Start from the template
 
 ```bash
-kick new my-app --template inertia
+kick new my-app --template inertia                  # React pages
+kick new my-app --template inertia --client vue     # Vue pages
+kick new my-app --template inertia --client svelte  # Svelte 5 pages
 ```
 
-The template is a React app wired with everything on this page: server-side rendering, an error page, validation errors and flash messages through the session, and a `/api/v1` module next to the pages.
+The template is an app wired with everything on this page: server-side rendering, an error page, validation errors and flash messages through the session, and a `/api/v1` module next to the pages.
 
 ```
 src/
   index.ts              # bootstrap() with InertiaAdapter
   modules/pages/        # PagesController — the routes that render pages
   client/
-    main.tsx            # createInertiaApp — the browser entry
-    ssr.tsx             # the server render entry
-    Layout.tsx
-    pages/              # Home.tsx, Posts/Index.tsx, Error.tsx
+    main.tsx            # createInertiaApp — the browser entry (main.ts for Vue and Svelte)
+    ssr.tsx             # the server render entry (ssr.ts)
+    Layout.tsx          # Layout.vue / Layout.svelte
+    pages/              # Home, Posts/Index, Error — .tsx, .vue or .svelte
 vite.config.ts          # kick dev: the API and the pages on one server
 vite.client.config.ts   # production builds of the pages
 ```
 
-`kick dev` serves both through one Vite server. Saving a page or a stylesheet updates the open browser tab in place — React Fast Refresh keeps component state and form input — and saving server code reloads the app. `pnpm build` builds the server, the browser bundle (`dist/client`) and the SSR bundle (`dist/ssr/ssr.js`).
+`kick dev` serves both through one Vite server. Saving a page or a stylesheet updates the open browser tab in place — React Fast Refresh, and Vue's and Svelte's hot updates, keep component state — and saving server code reloads the app. `pnpm build` builds the server, the browser bundle (`dist/client`) and the SSR bundle (`dist/ssr/ssr.js`).
 
 ## Add it to an existing app
 
@@ -488,6 +490,53 @@ export default (page: Page) =>
     setup: ({ App, props }) => <App {...props} />,
   })
 ```
+
+With Vue, render with `createSSRApp` and `vue/server-renderer`; with Svelte, `svelte/server`:
+
+::: code-group
+
+```ts [Vue]
+// src/client/ssr.ts
+import './app.css'
+import { createInertiaApp } from '@inertiajs/vue3'
+import type { Page } from '@inertiajs/core'
+import { createSSRApp, h, type DefineComponent } from 'vue'
+import { renderToString } from 'vue/server-renderer'
+
+const pages = import.meta.glob<DefineComponent>('./pages/**/*.vue', {
+  eager: true,
+  import: 'default',
+})
+
+export default (page: Page) =>
+  createInertiaApp({
+    page,
+    render: renderToString,
+    resolve: (name) => pages[`./pages/${name}.vue`]!,
+    setup: ({ App, props, plugin }) => createSSRApp({ render: () => h(App, props) }).use(plugin),
+  })
+```
+
+```ts [Svelte]
+// src/client/ssr.ts
+import './app.css'
+import { createInertiaApp, type ResolvedComponent } from '@inertiajs/svelte'
+import type { Page } from '@inertiajs/core'
+import { render } from 'svelte/server'
+
+const pages = import.meta.glob<ResolvedComponent>('./pages/**/*.svelte', { eager: true })
+
+export default (page: Page) =>
+  createInertiaApp({
+    page,
+    resolve: (name) => pages[`./pages/${name}.svelte`]!,
+    setup: ({ App, props }) => render(App, { props }),
+  })
+```
+
+:::
+
+Svelte has no `<Head>`: the template's `Seo.svelte` writes the meta with `<svelte:head>`, and the adapter drops its own copy of each tag that renders.
 
 In dev the entry is loaded through Vite. In production the adapter loads the built bundle — `dist/ssr/ssr.js` by default, or `ssr.bundle`. A render that throws falls back to client rendering for that request.
 
