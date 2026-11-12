@@ -75,7 +75,7 @@ Create a new KickJS project:
 kick new my-app                          # Interactive prompts for everything
 kick new my-app --yes                    # Pick all defaults (rest + inmemory)
 kick new my-app --yes --template minimal # Minimal template, no prompts
-kick new my-app --template inertia       # Server-rendered React pages — see Inertia guide
+kick new my-app --template inertia       # Server-rendered React, Vue or Svelte pages (--client) — see Inertia guide
 kick new .                               # Scaffold in current directory
 kick new my-app --pm pnpm                # Skip PM prompt only
 kick new my-app -t rest --pm pnpm --no-git --install  # Fully scriptable
@@ -114,6 +114,7 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 | -------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------- |
 | `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`, `inertia`                            | Prompted (or `minimal` with `--yes`)     |
 | `--runtime <engine>`             | HTTP engine: `express`, `fastify`, `h3`                                                | Prompted (or `express` with `--yes`)     |
+| `--client <framework>`           | Inertia template pages: `react`, `vue`, `svelte`                                       | Prompted (or `react` with `--yes`)       |
 | `-s, --schema <lib>`             | Schema library: `zod`, `valibot`, `yup`                                                | Prompted (or `zod` with `--yes`)         |
 | `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`)                 | Prompted (or `inmemory` with `--yes`)    |
 | `-d, --directory <dir>`          | Target directory                                                                       | Project name                             |

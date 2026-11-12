@@ -1,0 +1,13 @@
+{
+  "dependencies": ["@inertiajs/svelte", "svelte"],
+  "devDependencies": ["@sveltejs/vite-plugin-svelte"],
+  "scripts": {
+    "build": "kick build && vite build --config vite.client.config.ts && vite build --config vite.client.config.ts --ssr src/client/ssr.ts"
+  },
+  "integrations": [
+    {
+      "slot": "inertia-client",
+      "code": "entry: 'src/client/main.ts',\nssr: { entry: 'src/client/ssr.ts' }"
+    }
+  ]
+}

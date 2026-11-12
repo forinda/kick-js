@@ -94,6 +94,19 @@ const SCENARIOS = {
       '/robots.txt': 'Sitemap: ',
     },
   },
+  // Vue and Svelte pages: the same routes, rendered on the server by each.
+  'inertia-vue': {
+    args: ['--template', 'inertia', '--client', 'vue'],
+    buildScript: true,
+    get: ['/', '/posts'],
+    contains: { '/': 'data-server-rendered', '/posts': 'name="description"' },
+  },
+  'inertia-svelte': {
+    args: ['--template', 'inertia', '--client', 'svelte'],
+    buildScript: true,
+    get: ['/', '/posts'],
+    contains: { '/': 'data-server-rendered', '/posts': 'name="description"' },
+  },
   fullstack: {
     args: [
       '--template',

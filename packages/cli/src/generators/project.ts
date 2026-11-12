@@ -99,6 +99,13 @@ export const THIRD_PARTY_PACKAGES: Record<string, { fallback: string; cap?: stri
   // Inertia template — the client adapter and its protocol types.
   '@inertiajs/react': { fallback: '^3.9.0', cap: '^3' },
   '@inertiajs/core': { fallback: '^3.9.0', cap: '^3' },
+  '@inertiajs/vue3': { fallback: '^3.9.0', cap: '^3' },
+  '@inertiajs/svelte': { fallback: '^3.9.0', cap: '^3' },
+  // Capped: the Vue and Svelte pages are written against these majors (Svelte 5 runes).
+  vue: { fallback: '^3.5.0', cap: '^3' },
+  '@vitejs/plugin-vue': { fallback: '^6.0.0' },
+  svelte: { fallback: '^5.46.4', cap: '^5' },
+  '@sveltejs/vite-plugin-svelte': { fallback: '^7.0.0' },
   // Toolchain.
   '@types/node': { fallback: '^25.0.0' },
   '@types/supertest': { fallback: '^7.2.1' },
@@ -339,6 +346,7 @@ function tagExportsSubpath(name: string, tag: string, subpath: string): boolean 
 
 type ProjectTemplate = 'rest' | 'minimal' | 'inertia'
 type SchemaLib = 'zod' | 'valibot' | 'yup'
+type InertiaClient = 'react' | 'vue' | 'svelte'
 
 interface InitProjectOptions {
   name: string
@@ -347,6 +355,8 @@ interface InitProjectOptions {
   initGit?: boolean
   installDeps?: boolean
   template?: ProjectTemplate
+  /** What the inertia template's pages are written in. Defaults to `react`. */
+  client?: InertiaClient
   defaultRepo?: string
   packages?: string[]
   /** Schema library to scaffold env / DTOs with. Defaults to `zod`. */
@@ -396,6 +406,7 @@ export async function initProject(
     directory,
     packageManager = 'pnpm',
     template = 'rest',
+    client = 'react',
     defaultRepo = 'inmemory',
     packages = [],
     schemaLib = 'zod',
@@ -482,7 +493,10 @@ export async function initProject(
     )
   }
   const project = renderLayers(
-    [...scaffoldLayers({ template, runtime, schemaLib, packages }), ...(options.extraLayers ?? [])],
+    [
+      ...scaffoldLayers({ template, client, runtime, schemaLib, packages }),
+      ...(options.extraLayers ?? []),
+    ],
     {
       vars: { name, version: cliPkg.version },
       extra: [
@@ -520,7 +534,11 @@ export async function initProject(
     runtime,
     packageManager,
     ...commandVars(packageManager),
-    templateLabel: { rest: 'REST API', minimal: 'Minimal', inertia: 'Inertia (React)' }[template],
+    templateLabel: {
+      rest: 'REST API',
+      minimal: 'Minimal',
+      inertia: `Inertia (${{ react: 'React', vue: 'Vue', svelte: 'Svelte' }[client]})`,
+    }[template],
     // A fresh secret per project, written to the gitignored .env.
     sessionSecret: randomBytes(32).toString('hex'),
     packages: [...project.dependencies, ...project.devDependencies]
@@ -688,6 +706,8 @@ export function spaIntegration(clientDir: string): Integration {
  */
 export function scaffoldLayers(selection: {
   template: ProjectTemplate
+  /** The inertia template's pages; React unless set. */
+  client?: InertiaClient
   runtime: 'express' | 'fastify' | 'h3'
   schemaLib: SchemaLib
   packages: readonly string[]
@@ -695,6 +715,7 @@ export function scaffoldLayers(selection: {
   return [
     'base',
     `template-${selection.template}`,
+    ...(selection.template === 'inertia' ? [`inertia-${selection.client ?? 'react'}`] : []),
     `runtime-${selection.runtime}`,
     `schema-${selection.schemaLib}`,
     ...selection.packages

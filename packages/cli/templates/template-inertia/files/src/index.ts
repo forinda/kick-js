@@ -22,12 +22,13 @@ export const app = await bootstrap({
   adapters: [
     InertiaAdapter({
       title: '{{name}}',
-      entry: 'src/client/main.tsx',
+      // The pages' browser entry, and the entry that renders them on the server.
+      // @kick:inertia-client
       head: '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />',
       // Canonical URLs and absolute image URLs start here — not at the Host header.
       baseUrl: getEnv('APP_URL'),
       // Every page's meta starts from these; a controller adds its own with
-      // inertia(component, props, { meta }), and src/client/Seo.tsx keeps the
+      // inertia(component, props, { meta }), and the Seo component in src/client keeps the
       // browser's <head> in sync on client-side visits.
       meta: {
         lang: 'en',
@@ -42,8 +43,7 @@ export const app = await bootstrap({
       },
       // Props every page receives.
       share: () => ({ appName: '{{name}}' }),
-      ssr: { entry: 'src/client/ssr.tsx' },
-      // Unknown URLs and thrown errors render src/client/pages/Error.tsx
+      // Unknown URLs and thrown errors render the Error page in src/client/pages
       // (through inertiaNotFound / inertiaErrorHandler below).
       errorPage: 'Error',
     }),

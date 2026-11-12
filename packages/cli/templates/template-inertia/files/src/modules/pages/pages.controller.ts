@@ -15,7 +15,7 @@ export class PagesController {
 
   @Get('/')
   home() {
-    // Renders src/client/pages/Home.tsx with these props.
+    // Renders the Home page in src/client/pages with these props.
     return inertia(
       'Home',
       { greeting: 'Welcome to {{name}}' },

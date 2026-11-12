@@ -32,6 +32,7 @@ export function registerInitCommand(program: Command): void {
     .option('-f, --force', 'Remove existing files without prompting')
     .option('-t, --template <type>', 'Project template: rest | minimal | fullstack | inertia')
     .option('--runtime <engine>', 'HTTP runtime: express | fastify | h3')
+    .option('--client <framework>', 'Inertia template pages: react | vue | svelte (default react)')
     .option('-r, --repo <type>', 'Repository name (inmemory, or any DB name e.g. postgres)')
     .option(
       '-s, --schema <lib>',
@@ -170,11 +171,36 @@ export function registerInitCommand(program: Command): void {
               {
                 value: 'inertia',
                 label: 'Inertia',
-                hint: 'server-driven React pages, one app, SSR',
+                hint: 'server-driven React, Vue or Svelte pages, one app, SSR',
               },
             ],
           })
         }
+      }
+
+      // ── Inertia pages ─────────────────────────────────────────────
+      const CLIENTS = ['react', 'vue', 'svelte'] as const
+      let client: (typeof CLIENTS)[number] = 'react'
+      if (template === 'inertia') {
+        if (opts.client !== undefined) {
+          if (!CLIENTS.includes(opts.client)) {
+            log.error(`Unknown --client '${String(opts.client)}'. Use ${CLIENTS.join(', ')}.`)
+            outro('Aborted.')
+            return
+          }
+          client = opts.client
+        } else if (!yes) {
+          client = (await select({
+            message: 'Pages written in',
+            options: [
+              { value: 'react', label: 'React' },
+              { value: 'vue', label: 'Vue' },
+              { value: 'svelte', label: 'Svelte' },
+            ],
+          })) as (typeof CLIENTS)[number]
+        }
+      } else if (opts.client !== undefined) {
+        log.warn('--client applies to the inertia template only; ignoring it.')
       }
 
       // ── HTTP runtime ──────────────────────────────────────────────
@@ -395,6 +421,7 @@ export function registerInitCommand(program: Command): void {
         initGit,
         installDeps,
         template,
+        client,
         defaultRepo,
         packages: selectedPackages,
         schemaLib,

@@ -17,7 +17,8 @@ import { spawnSync } from 'node:child_process'
 import { CLI_BIN, WORKSPACE_ROOT, runCli } from './helpers'
 
 const BIN = resolve(WORKSPACE_ROOT, 'node_modules', '.bin')
-const TEMPLATES = ['rest', 'minimal', 'inertia'] as const
+// `<template>-<inertia client>` for the Vue and Svelte pages.
+const TEMPLATES = ['rest', 'minimal', 'inertia', 'inertia-vue', 'inertia-svelte'] as const
 
 function run(cwd: string, bin: string, args: string[]) {
   const r = spawnSync(join(BIN, bin), args, { cwd, encoding: 'utf-8' })
@@ -30,9 +31,20 @@ const app = (t: string) => join(root, `app-${t}`)
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'kick-tooling-'))
   for (const t of TEMPLATES) {
+    const [template, client] = t.split('-')
     const r = spawnSync(
       'node',
-      [CLI_BIN, 'new', `app-${t}`, '--yes', '-t', t, '--no-install', '--no-git'],
+      [
+        CLI_BIN,
+        'new',
+        `app-${t}`,
+        '--yes',
+        '-t',
+        template!,
+        ...(client ? ['--client', client] : []),
+        '--no-install',
+        '--no-git',
+      ],
       { cwd: root, encoding: 'utf-8', env: { ...process.env, NO_COLOR: '1' } },
     )
     if (r.status !== 0) throw new Error(`kick new -t ${t} failed:\n${r.stdout}${r.stderr}`)

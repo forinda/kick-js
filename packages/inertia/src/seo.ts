@@ -221,9 +221,19 @@ function tagKey(tag: string): string | null {
   return name ? headKey(name.toLowerCase(), attr) : null
 }
 
-/** `tags` minus the ones `winners` (a server-rendered `<Head>`) already set. */
+/**
+ * `tags` minus the ones `winners` (a server-rendered `<Head>`) already set.
+ * A winner may hold several tags: Svelte renders its whole `<svelte:head>`
+ * as one string.
+ */
 export function dedupeHead(tags: string[], winners: string[]): string[] {
-  const taken = new Set(winners.map((t) => tagKey(t.trim())).filter(Boolean))
+  const opening = /<(?:title|meta|link|script)\b[^>]*>/gi
+  const taken = new Set(
+    winners
+      .flatMap((t) => t.match(opening) ?? [])
+      .map((t) => tagKey(t))
+      .filter(Boolean),
+  )
   return tags.filter((t) => !taken.has(tagKey(t)))
 }
 

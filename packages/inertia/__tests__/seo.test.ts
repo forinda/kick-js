@@ -284,6 +284,22 @@ for (const rt of RUNTIMES)
       expect(res.text).toContain('content="#fff"')
     })
 
+    it('drops tags a server-rendered head sets in one string (Svelte)', async () => {
+      const app = await makeApp({
+        ssr: {
+          entry: 'src/client/ssr.ts',
+          bundle: ssrBundle([
+            '<!--1b2c--><title>From Svelte</title><meta name="description" content="From Svelte"><!---->',
+          ]),
+        },
+      })
+      const res = await app.get('/notes/1').expect(200)
+      expect(res.text.match(/<title/g)).toHaveLength(1)
+      expect(res.text.match(/name="description"/g)).toHaveLength(1)
+      expect(res.text).toContain('content="From Svelte"')
+      expect(res.text).toContain('property="og:type" content="article"')
+    })
+
     it('answers /sitemap.xml with escaped, absolute URLs', async () => {
       const res = await (await makeApp()).get('/sitemap.xml').expect(200)
       expect(res.headers['content-type']).toMatch(/^application\/xml/)
