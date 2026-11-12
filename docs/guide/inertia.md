@@ -123,6 +123,7 @@ export class PagesModule implements AppModule {
 
 ```tsx [React]
 // src/client/main.tsx
+import './app.css'
 import { createInertiaApp } from '@inertiajs/react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 
@@ -144,6 +145,7 @@ createInertiaApp({
 
 ```ts [Vue]
 // src/client/main.ts
+import './app.css'
 import { createInertiaApp } from '@inertiajs/vue3'
 import type { DefineComponent } from 'vue'
 
@@ -161,6 +163,7 @@ createInertiaApp({
 
 ```ts [Svelte]
 // src/client/main.ts
+import './app.css'
 import { createInertiaApp, type ResolvedComponent } from '@inertiajs/svelte'
 
 const pages = import.meta.glob<ResolvedComponent>('./pages/**/*.svelte')
