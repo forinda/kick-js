@@ -74,9 +74,9 @@
   },
   "dependencies": {
     "@forinda/kickjs-cli-kit": "workspace:*",
-    "commander": "^15.0.0",
+    "commander": "^15.1.0",
     "jiti": "^2.7.0",
-    "kysely": "0.29.7"
+    "kysely": "0.29.8"
   },
   "peerDependencies": {
     "@electric-sql/pglite": ">=0.5.5",
@@ -116,7 +116,7 @@
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
-    "kysely": "^0.29.7",
+    "kysely": "^0.29.8",
     "kysely-d1": "^0.4.0",
     "miniflare": "^4.20260730.0",
     "mysql2": "^3.24.6",
